@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from supabase import create_client, Client
@@ -137,13 +137,38 @@ def fetch_flexible_budgets(
     return [BudgetRow(**r) for r in rows]
 
 
-def deduct_from_budget(budget_id: str, amount: float) -> None:
+def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: float) -> None:
     """
-    Add `amount` to a budget's spent_amount.
-    remaining_amount is a generated column — auto-recomputed by Postgres.
+    Reallocate `amount` from a flexible budget to cover a deficit in `to_budget_id`.
+    Atomically shifts `allocated_amount` between the two budgets so total household
+    spend remains strictly pegged to actual transactions without phantom expenses.
     """
     client = get_client()
-    # Read current spent, then update (supabase-py doesn't support `spent + amount` natively)
+    try:
+        client.rpc("reallocate_budget", {
+            "p_from_id": from_budget_id,
+            "p_to_id": to_budget_id,
+            "p_amount": amount,
+        }).execute()
+    except Exception as exc:
+        logger.warning("RPC reallocate_budget unavailable (%s), falling back to two-step update.", exc)
+        from_row = client.table("budgets").select("allocated_amount").eq("id", from_budget_id).single().execute()
+        to_row = client.table("budgets").select("allocated_amount").eq("id", to_budget_id).single().execute()
+        client.table("budgets").update({
+            "allocated_amount": from_row.data["allocated_amount"] - amount
+        }).eq("id", from_budget_id).execute()
+        client.table("budgets").update({
+            "allocated_amount": to_row.data["allocated_amount"] + amount
+        }).eq("id", to_budget_id).execute()
+
+    logger.info("Reallocated %.2f from budget %s to %s.", amount, from_budget_id, to_budget_id)
+
+
+def deduct_from_budget(budget_id: str, amount: float) -> None:
+    """
+    Legacy helper: Add `amount` to a budget's spent_amount.
+    """
+    client = get_client()
     current = client.table("budgets").select("spent_amount").eq("id", budget_id).single().execute()
     current_spent = current.data["spent_amount"]
     new_spent = current_spent + amount
@@ -199,12 +224,13 @@ def is_duplicate_sms(raw_sms: str, household_id: str, window_seconds: int = 60) 
     Prevents double-logging if the device retransmits the same SMS.
     """
     client = get_client()
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window_seconds)).isoformat()
     response = (
         client.table("transactions")
         .select("id")
         .eq("household_id", household_id)
         .eq("raw_sms", raw_sms)
-        .gte("created_at", f"now() - interval '{window_seconds} seconds'")
+        .gte("created_at", cutoff)
         .limit(1)
         .execute()
     )

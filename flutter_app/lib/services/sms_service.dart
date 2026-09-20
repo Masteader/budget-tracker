@@ -141,32 +141,61 @@ class SmsService {
       return;
     }
 
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        await _enqueueOffline(body, sender, timestamp);
+        return;
+      }
 
-    final profile = await Supabase.instance.client
-        .from('users')
-        .select('household_id')
-        .eq('id', user.id)
-        .single();
+      final profile = await Supabase.instance.client
+          .from('users')
+          .select('household_id')
+          .eq('id', user.id)
+          .maybeSingle();
 
-    final householdId = profile['household_id'] as String?;
-    if (householdId == null) return;
+      final householdId = profile?['household_id'] as String?;
+      if (householdId == null) {
+        await _enqueueOffline(body, sender, timestamp);
+        return;
+      }
 
-    final receivedAt =
-        DateTime.fromMillisecondsSinceEpoch(timestamp).toIso8601String();
+      final receivedAt =
+          DateTime.fromMillisecondsSinceEpoch(timestamp).toIso8601String();
 
-    final result = await ApiService.instance.postSms(
-      rawSms: body,
-      sender: sender,
-      receivedAt: receivedAt,
-      householdId: householdId,
-    );
+      final result = await ApiService.instance.postSms(
+        rawSms: body,
+        sender: sender,
+        receivedAt: receivedAt,
+        householdId: householdId,
+      );
 
-    _smsController.add(result);
+      if (result['status'] == 'error') {
+        debugPrint('[SmsService] Webhook error (${result['message']}); caching to offline queue.');
+        await _enqueueOffline(body, sender, timestamp);
+      }
+
+      _smsController.add(result);
+    } catch (e) {
+      debugPrint('[SmsService] Error processing SMS: $e; caching to offline queue.');
+      await _enqueueOffline(body, sender, timestamp);
+    }
+  }
+
+  Future<void> _enqueueOffline(String body, String sender, int timestamp) async {
+    try {
+      await _serviceChannel.invokeMethod('enqueueSms', {
+        'body': body,
+        'sender': sender,
+        'timestamp': timestamp,
+      });
+    } catch (e) {
+      debugPrint('[SmsService] Could not enqueue offline SMS: $e');
+    }
   }
 
   void dispose() {
     _smsController.close();
   }
 }
+

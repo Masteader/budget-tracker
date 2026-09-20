@@ -2,12 +2,9 @@
 /// Uses Supabase Realtime streams to update instantly when new data arrives.
 library;
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';

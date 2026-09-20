@@ -171,6 +171,85 @@ CREATE TRIGGER on_transaction_insert
 
 
 -- =============================================================================
+-- FUNCTION: reallocate_budget
+-- Atomically shifts allocated amount from a flexible budget to cover a deficit.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.reallocate_budget(
+    p_from_id UUID,
+    p_to_id UUID,
+    p_amount NUMERIC
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    UPDATE public.budgets
+    SET allocated_amount = allocated_amount - p_amount
+    WHERE id = p_from_id;
+
+    UPDATE public.budgets
+    SET allocated_amount = allocated_amount + p_amount
+    WHERE id = p_to_id;
+END;
+$$;
+
+
+-- =============================================================================
+-- FUNCTIONS: Household onboarding (bypasses initial RLS chicken-and-egg safely)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.create_household_and_claim(p_name TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_hh public.households%ROWTYPE;
+BEGIN
+    INSERT INTO public.households (name)
+    VALUES (p_name)
+    RETURNING * INTO v_hh;
+
+    UPDATE public.users
+    SET household_id = v_hh.id,
+        role = 'admin'
+    WHERE id = auth.uid();
+
+    RETURN to_jsonb(v_hh);
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.join_household_by_code(p_invite_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_hh public.households%ROWTYPE;
+BEGIN
+    SELECT * INTO v_hh
+    FROM public.households
+    WHERE lower(invite_code) = lower(trim(p_invite_code));
+
+    IF v_hh.id IS NULL THEN
+        RAISE EXCEPTION 'Invalid invite code';
+    END IF;
+
+    UPDATE public.users
+    SET household_id = v_hh.id,
+        role = 'member'
+    WHERE id = auth.uid();
+
+    RETURN to_jsonb(v_hh);
+END;
+$$;
+
+
+-- =============================================================================
 -- ROW LEVEL SECURITY
 -- =============================================================================
 

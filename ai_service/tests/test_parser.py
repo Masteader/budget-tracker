@@ -99,6 +99,8 @@ def mock_supabase(monkeypatch):
                         lambda raw, hid: False)
     monkeypatch.setattr(db, "deduct_from_budget",
                         lambda bid, amount: None)
+    monkeypatch.setattr(db, "reallocate_budget",
+                        lambda from_id, to_id, amount: None)
 
     return {
         "grocery_code": grocery_code,
@@ -287,3 +289,71 @@ async def test_otp_sms_rejected(mock_supabase):
     body = response.json()
     assert body["status"] == "rejected"
     assert body.get("transaction_id") is None
+
+
+# =============================================================================
+# TEST 6 — Budget reallocation on deficit
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_budget_reallocation_triggers(mock_supabase, monkeypatch):
+    """
+    When transaction amount exceeds remaining budget, reallocation pulls funds
+    from flexible budgets.
+    """
+    from models import BudgetRow
+    import supabase_client as db
+
+    # Low balance budget for Grocery
+    tight_budget = BudgetRow(
+        id=BUDGET_ID,
+        household_id=HOUSEHOLD_ID,
+        month="2026-09-01",
+        category_code="OPEX-GROCERY",
+        allocated_amount=500.0,
+        spent_amount=480.0,
+        remaining_amount=20.0,
+    )
+    # Flexible budget with headroom
+    flex_budget = BudgetRow(
+        id="flex-budget-1234",
+        household_id=HOUSEHOLD_ID,
+        month="2026-09-01",
+        category_code="OPEX-DINING",
+        allocated_amount=400.0,
+        spent_amount=100.0,
+        remaining_amount=300.0,
+    )
+
+    reallocated_calls = []
+    monkeypatch.setattr(db, "fetch_budget", lambda hid, code, month: tight_budget)
+    monkeypatch.setattr(db, "fetch_flexible_budgets", lambda hid, month, exclude_code=None: [flex_budget])
+    monkeypatch.setattr(
+        db, "reallocate_budget",
+        lambda from_id, to_id, amount: reallocated_calls.append((from_id, to_id, amount))
+    )
+
+    # 100 SAR purchase on a 20 SAR remaining budget -> deficit is 80 SAR
+    raw_sms = "SNB: Purchase of SAR 100.00 at Tamimi Markets approved."
+
+    with patch("litellm.completion",
+               return_value=_mock_llm_response(100.0, "SAR", "Tamimi")):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/webhook/sms",
+                json=_make_payload(raw_sms, sender="SNB"),
+            )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["is_reallocated"] is True
+    assert len(reallocated_calls) == 1
+    # Check that 80 SAR was transferred from flex_budget to tight_budget
+    from_id, to_id, amt = reallocated_calls[0]
+    assert from_id == flex_budget.id
+    assert to_id == tight_budget.id
+    assert amt == 80.0
+

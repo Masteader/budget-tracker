@@ -59,8 +59,12 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
 
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:
-    """Return True if the HMAC-SHA256 signature matches, or if no secret is configured."""
+    """Return True if the HMAC-SHA256 signature matches, or if no secret is configured in dev."""
+    env = os.environ.get("ENV", "development").lower()
     if not WEBHOOK_SECRET:
+        if env == "production":
+            logger.error("WEBHOOK_SECRET is not set in production — rejecting request.")
+            return False
         logger.warning("WEBHOOK_SECRET not set — skipping signature verification (dev mode).")
         return True
     if not signature_header:
@@ -73,6 +77,7 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
 
     expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, provided_sig)
+
 
 
 # =============================================================================

@@ -38,6 +38,14 @@ class MainActivity : FlutterActivity() {
                         val queued = SmsQueue.drainAll(applicationContext)
                         result.success(queued)
                     }
+                    "enqueueSms" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val body = args?.get("body") as? String ?: ""
+                        val sender = args?.get("sender") as? String ?: ""
+                        val timestamp = (args?.get("timestamp") as? Number)?.toLong() ?: System.currentTimeMillis()
+                        SmsQueue.enqueue(applicationContext, body, sender, timestamp)
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }

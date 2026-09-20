@@ -255,13 +255,15 @@ def reallocate_if_needed(state: AgentState) -> dict[str, Any]:
         if remaining_deficit <= 0:
             break
         deduction = min(remaining_deficit, flex_budget.remaining_amount)
-        db.deduct_from_budget(flex_budget.id, deduction)
+        if state.budget_id:
+            db.reallocate_budget(flex_budget.id, state.budget_id, deduction)
         remaining_deficit -= deduction
         if source_budget is None:
             source_budget = flex_budget  # track primary source for tagging
         logger.info(
-            "[reallocate] Deducted %.2f from '%s' (id=%s).",
+            "[reallocate] Reallocated %.2f from '%s' (id=%s) to '%s' (id=%s).",
             deduction, flex_budget.category_code, flex_budget.id,
+            state.category_code, state.budget_id,
         )
 
     return {

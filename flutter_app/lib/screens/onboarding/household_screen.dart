@@ -40,18 +40,26 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     if (name.isEmpty) return;
     setState(() => _loading = true);
     try {
-      final uid = supabase.auth.currentUser!.id;
-      // 1. Create household
-      final hh = await supabase
-          .from('households')
-          .insert({'name': name})
-          .select()
-          .single();
-      // 2. Link user to household as admin
-      await supabase
-          .from('users')
-          .update({'household_id': hh['id'], 'role': 'admin'})
-          .eq('id', uid);
+      Map<String, dynamic> hh;
+      try {
+        final res = await supabase.rpc(
+          'create_household_and_claim',
+          params: {'p_name': name},
+        );
+        hh = Map<String, dynamic>.from(res as Map);
+      } catch (_) {
+        final uid = supabase.auth.currentUser!.id;
+        final res = await supabase
+            .from('households')
+            .insert({'name': name})
+            .select()
+            .single();
+        hh = res;
+        await supabase
+            .from('users')
+            .update({'household_id': hh['id'], 'role': 'admin'})
+            .eq('id', uid);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Household "${hh['name']}" created! Code: ${hh['invite_code']}')),
@@ -59,6 +67,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
       }
     } on PostgrestException catch (e) {
       _showError(e.message);
+    } catch (e) {
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -72,20 +82,27 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     }
     setState(() => _loading = true);
     try {
-      final uid = supabase.auth.currentUser!.id;
-      // 1. Find household by invite code
-      final hh = await supabase
-          .from('households')
-          .select()
-          .eq('invite_code', code)
-          .single();
-      // 2. Link user
-      await supabase
-          .from('users')
-          .update({'household_id': hh['id'], 'role': 'member'})
-          .eq('id', uid);
+      try {
+        await supabase.rpc(
+          'join_household_by_code',
+          params: {'p_invite_code': code},
+        );
+      } catch (_) {
+        final uid = supabase.auth.currentUser!.id;
+        final hh = await supabase
+            .from('households')
+            .select()
+            .eq('invite_code', code)
+            .single();
+        await supabase
+            .from('users')
+            .update({'household_id': hh['id'], 'role': 'member'})
+            .eq('id', uid);
+      }
     } on PostgrestException catch (e) {
       _showError(e.message);
+    } catch (e) {
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
