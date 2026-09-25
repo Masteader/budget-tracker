@@ -250,97 +250,129 @@ $$;
 
 
 -- =============================================================================
--- ROW LEVEL SECURITY
+-- ROW LEVEL SECURITY HELPERS (prevents infinite recursion in RLS policies)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.get_auth_user_household_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT household_id FROM public.users WHERE id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_auth_user_role()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT role FROM public.users WHERE id = auth.uid();
+$$;
+
+
+-- =============================================================================
+-- ROW LEVEL SECURITY POLICIES
 -- =============================================================================
 
 -- ── households ──────────────────────────────────────────────────────────────
 ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
 
--- Members can view their own household
+DROP POLICY IF EXISTS "households_select_own" ON public.households;
 CREATE POLICY "households_select_own"
     ON public.households FOR SELECT
     USING (
-        id = (SELECT household_id FROM public.users WHERE id = auth.uid())
+        id = public.get_auth_user_household_id()
     );
 
--- Any authenticated user can create a household (during onboarding)
+DROP POLICY IF EXISTS "households_insert_authenticated" ON public.households;
 CREATE POLICY "households_insert_authenticated"
     ON public.households FOR INSERT
     WITH CHECK (auth.role() = 'authenticated');
 
--- Only admins can update household info
+DROP POLICY IF EXISTS "households_update_admin" ON public.households;
 CREATE POLICY "households_update_admin"
     ON public.households FOR UPDATE
     USING (
-        id = (SELECT household_id FROM public.users WHERE id = auth.uid() AND role = 'admin')
+        id = public.get_auth_user_household_id()
+        AND public.get_auth_user_role() = 'admin'
     );
 
 
 -- ── users ────────────────────────────────────────────────────────────────────
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- Users see only household members
+DROP POLICY IF EXISTS "users_select_household" ON public.users;
 CREATE POLICY "users_select_household"
     ON public.users FOR SELECT
     USING (
-        household_id = (SELECT household_id FROM public.users WHERE id = auth.uid())
-        OR id = auth.uid()  -- always see own row even before joining household
+        id = auth.uid()
+        OR (household_id IS NOT NULL AND household_id = public.get_auth_user_household_id())
     );
 
--- User can only insert their own row (handled by trigger — belt-and-suspenders)
+DROP POLICY IF EXISTS "users_insert_own" ON public.users;
 CREATE POLICY "users_insert_own"
     ON public.users FOR INSERT
     WITH CHECK (id = auth.uid());
 
--- User can update their own row; admin can update household members
+DROP POLICY IF EXISTS "users_update_own_or_admin" ON public.users;
 CREATE POLICY "users_update_own_or_admin"
     ON public.users FOR UPDATE
     USING (
         id = auth.uid()
-        OR household_id = (SELECT household_id FROM public.users WHERE id = auth.uid() AND role = 'admin')
+        OR (
+            public.get_auth_user_role() = 'admin'
+            AND household_id = public.get_auth_user_household_id()
+        )
     );
 
 
 -- ── cost_control_codes ───────────────────────────────────────────────────────
 ALTER TABLE public.cost_control_codes ENABLE ROW LEVEL SECURITY;
 
--- All authenticated users can read categories (needed for categorization UI)
+DROP POLICY IF EXISTS "cost_control_codes_select_authenticated" ON public.cost_control_codes;
 CREATE POLICY "cost_control_codes_select_authenticated"
     ON public.cost_control_codes FOR SELECT
     USING (auth.role() = 'authenticated');
-
--- Write is service-role only (no policy = blocked for all JWT users)
 
 
 -- ── budgets ──────────────────────────────────────────────────────────────────
 ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "budgets_select_household" ON public.budgets;
 CREATE POLICY "budgets_select_household"
     ON public.budgets FOR SELECT
     USING (
-        household_id = (SELECT household_id FROM public.users WHERE id = auth.uid())
+        household_id = public.get_auth_user_household_id()
     );
 
+DROP POLICY IF EXISTS "budgets_insert_admin" ON public.budgets;
 CREATE POLICY "budgets_insert_admin"
     ON public.budgets FOR INSERT
     WITH CHECK (
-        household_id = (SELECT household_id FROM public.users WHERE id = auth.uid() AND role = 'admin')
+        household_id = public.get_auth_user_household_id()
+        AND public.get_auth_user_role() = 'admin'
     );
 
+DROP POLICY IF EXISTS "budgets_update_admin" ON public.budgets;
 CREATE POLICY "budgets_update_admin"
     ON public.budgets FOR UPDATE
     USING (
-        household_id = (SELECT household_id FROM public.users WHERE id = auth.uid() AND role = 'admin')
+        household_id = public.get_auth_user_household_id()
+        AND public.get_auth_user_role() = 'admin'
     );
 
 
 -- ── transactions ─────────────────────────────────────────────────────────────
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "transactions_select_household" ON public.transactions;
 CREATE POLICY "transactions_select_household"
     ON public.transactions FOR SELECT
     USING (
-        household_id = (SELECT household_id FROM public.users WHERE id = auth.uid())
+        household_id = public.get_auth_user_household_id()
     );
 
 -- Inserts come from the Python service role key — no JWT insert policy needed
