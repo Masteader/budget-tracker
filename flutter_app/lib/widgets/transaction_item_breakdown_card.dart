@@ -9,6 +9,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final String source;
   final List<Map<String, dynamic>> items;
   final bool isReallocated;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const TransactionItemBreakdownCard({
     super.key,
@@ -19,6 +21,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.source = 'chat',
     this.items = const [],
     this.isReallocated = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   IconData get _sourceIcon {
@@ -195,6 +199,31 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         ),
                       );
                     }),
+                  ],
+                ),
+              ),
+            ],
+            if (onEdit != null || onDelete != null) ...[
+              const Divider(color: Color(0xFF21262D), height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (onEdit != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B949E)),
+                        label: const Text('Edit', style: TextStyle(color: Color(0xFFC9D1D9), fontSize: 12)),
+                        onPressed: onEdit,
+                      ),
+                    if (onDelete != null) ...[
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                        label: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                        onPressed: onDelete,
+                      ),
+                    ],
                   ],
                 ),
               ),
