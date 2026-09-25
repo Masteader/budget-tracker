@@ -46,6 +46,7 @@ def test_parse_chat_expense_mocked(mock_completion):
     assert result.merchant == "Dunkin"
     assert result.total_amount == 19.0
     assert result.category_code == "OPEX-DINING"
+    assert result.spent_by == "both"  # default fallback if omitted from mocked JSON
     assert len(result.items) == 2
     assert result.items[0].name == "Ice Latte"
     assert result.items[1].price == 3.0

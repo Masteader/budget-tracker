@@ -183,8 +183,9 @@ def process_receipt_scan(
             is_reallocated = True
             reallocated_from_id = flexible[0].id
 
+    spent_by = "both" if any(k in category_code for k in ("GROCERY", "UTILITIES", "MISC")) else "me"
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items)
-    audit_text = f"Receipt Scan: {merchant} | Items: [{items_summary}]" if items_summary else f"Receipt Scan: {merchant}"
+    audit_text = f"Receipt Scan: {merchant} | SpentBy: {spent_by} | Items: [{items_summary}]" if items_summary else f"Receipt Scan: {merchant} | SpentBy: {spent_by}"
 
     tx_id = insert_transaction(
         household_id=household_id,
@@ -198,6 +199,7 @@ def process_receipt_scan(
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",
         items=items,
+        spent_by=spent_by,
     )
 
     if items:
@@ -209,6 +211,7 @@ def process_receipt_scan(
         "merchant": merchant,
         "amount": total_amount,
         "category_code": category_code,
+        "spent_by": spent_by,
         "items": items,
         "is_reallocated": is_reallocated,
         "message": f"Recorded SAR {total_amount:.2f} from scanned receipt ({merchant}).",

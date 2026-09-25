@@ -32,6 +32,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late TextEditingController _merchantCtrl;
   late TextEditingController _amountCtrl;
   late String _selectedCategory;
+  late String _selectedSpentBy;
   late List<Map<String, dynamic>> _items;
   bool _isSaving = false;
 
@@ -52,6 +53,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
     _selectedCategory = widget.transaction.categoryCode ?? 'OPEX-MISC';
+    _selectedSpentBy = widget.transaction.spentBy.isNotEmpty ? widget.transaction.spentBy : 'both';
     _items = widget.transaction.items
         .map((it) => Map<String, dynamic>.from(it))
         .toList();
@@ -87,13 +89,29 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
     setState(() => _isSaving = true);
 
+    final basePayload = <String, dynamic>{
+      'merchant': _merchantCtrl.text.trim(),
+      'amount': amount,
+      'category_code': _selectedCategory,
+      'items': _items,
+    };
+
     try {
-      await supabase.from('transactions').update({
-        'merchant': _merchantCtrl.text.trim(),
-        'amount': amount,
-        'category_code': _selectedCategory,
-        'items': _items,
-      }).eq('id', widget.transaction.id);
+      try {
+        await supabase.from('transactions').update({
+          ...basePayload,
+          'spent_by': _selectedSpentBy,
+        }).eq('id', widget.transaction.id);
+      } catch (_) {
+        // Fallback: update raw_sms with SpentBy tag
+        final raw = widget.transaction.rawSms ?? '';
+        final cleanRaw = raw.replaceAll(RegExp(r'\|\s*SpentBy:\s*(me|partner|both)', caseSensitive: false), '').trim();
+        final newRaw = '$cleanRaw | SpentBy: $_selectedSpentBy';
+        await supabase.from('transactions').update({
+          ...basePayload,
+          'raw_sms': newRaw,
+        }).eq('id', widget.transaction.id);
+      }
 
       if (mounted) {
         Navigator.pop(context);
@@ -161,6 +179,42 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         );
       }
     }
+  }
+
+  Widget _buildSpentByOption(String key, String title, IconData icon, Color activeColor) {
+    final isSelected = _selectedSpentBy.toLowerCase() == key;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedSpentBy = key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? activeColor : const Color(0xFF30363D),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: isSelected ? activeColor : const Color(0xFF8B949E)),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -255,6 +309,28 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               onChanged: (val) {
                 if (val != null) setState(() => _selectedCategory = val);
               },
+            ),
+            const SizedBox(height: 16),
+
+            // Who spent this attribution selector
+            Text(
+              'WHO SPENT THIS?',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF8B949E),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildSpentByOption('me', 'Me', Icons.person_outline, const Color(0xFF58A6FF)),
+                const SizedBox(width: 8),
+                _buildSpentByOption('partner', 'Partner', Icons.favorite_outline, const Color(0xFFBC8CFF)),
+                const SizedBox(width: 8),
+                _buildSpentByOption('both', 'Both (Shared)', Icons.people_alt_outlined, const Color(0xFF00C896)),
+              ],
             ),
             const SizedBox(height: 20),
 

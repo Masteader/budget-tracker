@@ -15,9 +15,11 @@ class Transaction {
   final String? reallocatedFromBudgetId;
   final DateTime createdAt;
   final String source;
+  final String spentBy; // 'me' | 'partner' | 'both'
   final List<Map<String, dynamic>> items;
   final String? receiptUrl;
   final String? dedupFingerprint;
+  final String? rawSms;
 
   const Transaction({
     required this.id,
@@ -31,9 +33,11 @@ class Transaction {
     this.reallocatedFromBudgetId,
     required this.createdAt,
     this.source = 'sms',
+    this.spentBy = 'both',
     this.items = const [],
     this.receiptUrl,
     this.dedupFingerprint,
+    this.rawSms,
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -44,6 +48,58 @@ class Transaction {
               ? item
               : Map<String, dynamic>.from(item as Map))
           .toList();
+    }
+
+    final raw = map['raw_sms'] as String? ?? '';
+
+    // Fallback: parse itemized breakdown from audit raw_sms if items column is empty
+    if (parsedItems.isEmpty && raw.contains('Items: [')) {
+      final start = raw.lastIndexOf('Items: [');
+      final end = raw.indexOf(']', start);
+      if (start != -1 && end != -1) {
+        final content = raw.substring(start + 8, end);
+        final itemRegex = RegExp(
+          r'(\d+(?:\.\d+)?)\s*x\s+([^()]+?)\s*\((?:SAR\s*)?([0-9.]+)(?:\s*SAR)?\)',
+          caseSensitive: false,
+        );
+        for (final match in itemRegex.allMatches(content)) {
+          final qty = double.tryParse(match.group(1) ?? '1') ?? 1.0;
+          final name = match.group(2)?.trim() ?? 'Item';
+          final price = double.tryParse(match.group(3) ?? '0') ?? 0.0;
+          parsedItems.add({
+            'name': name,
+            'quantity': qty,
+            'price': price,
+          });
+        }
+      }
+    }
+
+    // Determine channel source
+    String detectedSource = map['source'] as String? ?? 'sms';
+    if (detectedSource == 'sms') {
+      if (raw.startsWith('Chat:')) {
+        detectedSource = 'chat';
+      } else if (raw.startsWith('Receipt Scan:')) {
+        detectedSource = 'receipt_scan';
+      }
+    }
+
+    // Determine who spent this ('me' | 'partner' | 'both')
+    String detectedSpentBy = map['spent_by'] as String? ?? '';
+    if (detectedSpentBy.isEmpty) {
+      final spentByRegex = RegExp(r'SpentBy:\s*(me|partner|both)', caseSensitive: false);
+      final match = spentByRegex.firstMatch(raw);
+      if (match != null) {
+        detectedSpentBy = match.group(1)!.toLowerCase();
+      } else {
+        final cat = map['category_code'] as String? ?? '';
+        if (cat.contains('GROCERY') || cat.contains('UTILITIES') || raw.toLowerCase().contains('both') || raw.toLowerCase().contains('cleaning')) {
+          detectedSpentBy = 'both';
+        } else {
+          detectedSpentBy = 'me';
+        }
+      }
     }
 
     return Transaction(
@@ -57,10 +113,12 @@ class Transaction {
       isReallocated: map['is_reallocated'] as bool? ?? false,
       reallocatedFromBudgetId: map['reallocated_from_budget_id'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
-      source: map['source'] as String? ?? 'sms',
+      source: detectedSource,
+      spentBy: detectedSpentBy,
       items: parsedItems,
       receiptUrl: map['receipt_url'] as String?,
       dedupFingerprint: map['dedup_fingerprint'] as String?,
+      rawSms: raw,
     );
   }
 }

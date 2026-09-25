@@ -244,6 +244,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                               currency: tx.currency,
                               categoryCode: tx.categoryCode,
                               source: tx.source,
+                              spentBy: tx.spentBy,
                               items: tx.items,
                               isReallocated: tx.isReallocated,
                               onEdit: () => EditTransactionSheet.show(context, tx),

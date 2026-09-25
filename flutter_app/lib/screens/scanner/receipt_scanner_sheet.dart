@@ -357,6 +357,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           amount: amount,
           categoryCode: categoryCode,
           source: 'receipt_scan',
+          spentBy: (_scanResult != null ? _scanResult!['spent_by'] as String? : null) ?? 'both',
           items: items,
         ),
         const SizedBox(height: 16),

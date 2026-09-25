@@ -205,6 +205,7 @@ def insert_transaction(
     source: str = "sms",
     items: Optional[list] = None,
     receipt_url: Optional[str] = None,
+    spent_by: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -227,6 +228,8 @@ def insert_transaction(
         payload["items"] = items
     if receipt_url:
         payload["receipt_url"] = receipt_url
+    if spent_by:
+        payload["spent_by"] = spent_by
 
     try:
         response = client.table("transactions").insert(payload).execute()

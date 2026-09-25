@@ -326,6 +326,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 amount: msg.transactionData!['amount'] as double,
                 categoryCode: msg.transactionData!['category_code'] as String?,
                 source: 'chat',
+                spentBy: (msg.transactionData!['spent_by'] as String?) ?? 'me',
                 items: (msg.transactionData!['items'] as List)
                     .map((e) => Map<String, dynamic>.from(e as Map))
                     .toList(),
