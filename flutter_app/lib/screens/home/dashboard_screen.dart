@@ -78,48 +78,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 color: Colors.white,
               ),
             ),
-            const SizedBox(height: 20),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C896).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
                 ),
-                child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
+                title: const Text('AI Conversational Chat', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: const Text('Say what you bought (e.g. Dunkin 19 SAR latte)', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
+                  );
+                },
               ),
-              title: const Text('AI Conversational Chat', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-              subtitle: const Text('Say what you bought (e.g. Dunkin 19 SAR latte)', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
-                );
-              },
             ),
             const SizedBox(height: 8),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1F6FEB).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F6FEB).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
                 ),
-                child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
+                title: const Text('Scan Paper Invoice / Receipt', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: const Text('Take a camera photo to extract itemized breakdown', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (_householdId != null) {
+                    ReceiptScannerSheet.show(context, _householdId!);
+                  }
+                },
               ),
-              title: const Text('Scan Paper Invoice / Receipt', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-              subtitle: const Text('Take a camera photo to extract itemized breakdown', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (_householdId != null) {
-                  ReceiptScannerSheet.show(context, _householdId!);
-                }
-              },
             ),
           ],
         ),
