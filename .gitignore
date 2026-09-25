@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .env
+**/.env
 venv/
 env/
 .pytest_cache/
@@ -13,8 +14,8 @@ env/
 .flutter-plugins
 .flutter-plugins-dependencies
 build/
-android/local.properties
-android/.gradle/
+**/local.properties
+**/android/.gradle/
 *.lock
 
 # OS & Editor

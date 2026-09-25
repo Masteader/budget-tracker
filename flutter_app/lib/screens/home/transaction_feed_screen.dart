@@ -3,10 +3,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../widgets/transaction_item_breakdown_card.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
   const TransactionFeedScreen({super.key});
@@ -85,21 +85,20 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 );
               }
 
-              return AnimatedList(
-                initialItemCount: transactions.length,
-                itemBuilder: (ctx, i, animation) {
-                  final tx = transactions[i];
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                            begin: const Offset(0, -0.3), end: Offset.zero)
-                        .animate(CurvedAnimation(
-                            parent: animation, curve: Curves.easeOut)),
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: _TransactionTile(tx: tx),
-                    ),
-                  );
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {});
                 },
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: transactions.length,
+                  separatorBuilder: (ctx, _) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final tx = transactions[i];
+                    return _TransactionTile(tx: tx);
+                  },
+                ),
               );
             },
           );
@@ -115,105 +114,16 @@ class _TransactionTile extends StatelessWidget {
   final Transaction tx;
   const _TransactionTile({required this.tx});
 
-  IconData get _icon {
-    final code = tx.categoryCode ?? '';
-    if (code.contains('GROCERY')) return Icons.shopping_basket_outlined;
-    if (code.contains('DINING')) return Icons.restaurant_outlined;
-    if (code.contains('FUEL')) return Icons.local_gas_station_outlined;
-    if (code.contains('UTILITIES')) return Icons.bolt_outlined;
-    if (code.contains('ENTERTAINMENT')) return Icons.movie_outlined;
-    if (code.contains('HEALTH')) return Icons.local_pharmacy_outlined;
-    if (code.contains('EDUCATION')) return Icons.school_outlined;
-    if (code.contains('SHOPPING')) return Icons.shopping_bag_outlined;
-    return Icons.payments_outlined;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: tx.isReallocated
-              ? Colors.orange.withOpacity(0.4)
-              : const Color(0xFF30363D),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Category icon
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF00C896).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(_icon, color: const Color(0xFF00C896), size: 22),
-          ),
-          const SizedBox(width: 14),
-
-          // Merchant + category
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tx.merchant ?? 'Unknown',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(
-                      tx.categoryCode?.replaceFirst(RegExp(r'^[A-Z]+-'), '') ?? '—',
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 12),
-                    ),
-                    if (tx.isReallocated) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text('Reallocated',
-                            style: TextStyle(
-                                color: Colors.orange, fontSize: 10,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Amount + time
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${tx.currency} ${tx.amount.toStringAsFixed(2)}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Colors.redAccent),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                timeago.format(tx.createdAt),
-                style: const TextStyle(
-                    color: Color(0xFF8B949E), fontSize: 11),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return TransactionItemBreakdownCard(
+      merchant: tx.merchant ?? 'Unknown',
+      amount: tx.amount,
+      currency: tx.currency,
+      categoryCode: tx.categoryCode,
+      source: tx.source,
+      items: tx.items,
+      isReallocated: tx.isReallocated,
     );
   }
 }

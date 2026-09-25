@@ -16,15 +16,15 @@ class BudgetManagementScreen extends StatefulWidget {
 }
 
 class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
-  late Future<_BudgetPageData> _dataFuture;
+  late Future<_BudgetStaticData> _staticFuture;
 
   @override
   void initState() {
     super.initState();
-    _dataFuture = _loadData();
+    _staticFuture = _loadStaticData();
   }
 
-  Future<_BudgetPageData> _loadData() async {
+  Future<_BudgetStaticData> _loadStaticData() async {
     final user = supabase.auth.currentUser!;
     final profile = await supabase
         .from('users')
@@ -36,22 +36,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     final role = profile['role'] as String? ?? 'member';
     final month = DateFormat('yyyy-MM-01').format(DateTime.now());
 
-    final budgetsRaw = await supabase
-        .from('budgets')
-        .select()
-        .eq('household_id', hid)
-        .eq('month', month);
-
     final codesRaw = await supabase
         .from('cost_control_codes')
         .select('code, category')
         .order('code');
 
-    return _BudgetPageData(
+    return _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
       month: month,
-      budgets: (budgetsRaw as List).map((r) => Budget.fromMap(r)).toList(),
       allCodes: (codesRaw as List)
           .map<Map<String, String>>((r) => {
                 'code': r['code'] as String,
@@ -62,7 +55,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   }
 
   Future<void> _editBudget(
-    _BudgetPageData data,
+    _BudgetStaticData data,
     Budget? existing,
     String categoryCode,
   ) async {
@@ -112,29 +105,40 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         'spent_amount': 0,
       });
     }
-    setState(() => _dataFuture = _loadData());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Budget Allocations')),
-      body: FutureBuilder<_BudgetPageData>(
-        future: _dataFuture,
-        builder: (ctx, snap) {
-          if (!snap.hasData) {
+      body: FutureBuilder<_BudgetStaticData>(
+        future: _staticFuture,
+        builder: (ctx, staticSnap) {
+          if (!staticSnap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snap.data!;
-          final fmt  = NumberFormat('#,##0.00', 'en_US');
+          final staticData = staticSnap.data!;
+          final fmt = NumberFormat('#,##0.00', 'en_US');
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: data.allCodes.length,
-            itemBuilder: (ctx, i) {
-              final code     = data.allCodes[i]['code'] as String;
-              final category = data.allCodes[i]['category'] as String;
-              final existing = data.budgets.where((b) => b.categoryCode == code).firstOrNull;
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: supabase
+                .from('budgets')
+                .stream(primaryKey: ['id'])
+                .eq('household_id', staticData.householdId),
+            builder: (ctx, budgetSnap) {
+              final budgets = (budgetSnap.data ?? [])
+                  .map(Budget.fromMap)
+                  .where((b) => b.month == staticData.month)
+                  .toList();
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: staticData.allCodes.length,
+                itemBuilder: (ctx, i) {
+                  final code = staticData.allCodes[i]['code'] as String;
+                  final category = staticData.allCodes[i]['category'] as String;
+                  final existing =
+                      budgets.where((b) => b.categoryCode == code).firstOrNull;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -168,11 +172,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         ],
                       ),
                     ),
-                    if (data.isAdmin)
+                    if (staticData.isAdmin)
                       IconButton(
                         icon: const Icon(Icons.edit_outlined,
                             color: Color(0xFF8B949E)),
-                        onPressed: () => _editBudget(data, existing, code),
+                        onPressed: () => _editBudget(staticData, existing, code),
                       ),
                   ],
                 ),
@@ -180,23 +184,23 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             },
           );
         },
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 }
 
-class _BudgetPageData {
+class _BudgetStaticData {
   final String householdId;
   final bool isAdmin;
   final String month;
-  final List<Budget> budgets;
   final List<Map<String, String>> allCodes;
 
-  _BudgetPageData({
+  _BudgetStaticData({
     required this.householdId,
     required this.isAdmin,
     required this.month,
-    required this.budgets,
     required this.allCodes,
   });
 }

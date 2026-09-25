@@ -120,7 +120,7 @@ def extract_fields(state: AgentState) -> dict[str, Any]:
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0,
+            temperature=1.0,
             max_tokens=300,
         )
         raw_json = response.choices[0].message.content.strip()

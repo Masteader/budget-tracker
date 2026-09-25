@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import time
@@ -172,6 +173,78 @@ async def webhook_sms(request: Request) -> SMSWebhookResponse:
         reallocated_from_category=final_state.reallocated_from_category,
         message="Transaction recorded successfully.",
     )
+
+
+@app.post(
+    "/agent/chat-transaction",
+    tags=["chat"],
+    summary="Process natural language conversational expense message.",
+)
+async def chat_transaction(request: Request):
+    """
+    Parse a user chat message into an itemized transaction.
+    Extracts merchant, total, line items, and checks for duplicates.
+    """
+    raw_body = await request.body()
+    sig_header = request.headers.get("X-Signature")
+    if not _verify_signature(raw_body, sig_header):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid HMAC signature.")
+
+    try:
+        body = json.loads(raw_body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    message = body.get("message")
+    household_id = body.get("household_id")
+    if not message or not household_id:
+        raise HTTPException(status_code=400, detail="message and household_id are required.")
+
+    from chat_parser import process_chat_transaction
+    result = process_chat_transaction(
+        household_id=household_id,
+        message=message,
+        user_id=body.get("user_id"),
+        allow_duplicate=bool(body.get("allow_duplicate", False)),
+        enrich_tx_id=body.get("enrich_tx_id"),
+    )
+    return result
+
+
+@app.post(
+    "/agent/scan-receipt",
+    tags=["receipt"],
+    summary="Process camera or gallery receipt invoice image.",
+)
+async def scan_receipt(request: Request):
+    """
+    Analyze receipt image using multimodal Gemini vision.
+    Extracts line items, store name, totals, and prevents duplicate charges.
+    """
+    raw_body = await request.body()
+    sig_header = request.headers.get("X-Signature")
+    if not _verify_signature(raw_body, sig_header):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid HMAC signature.")
+
+    try:
+        body = json.loads(raw_body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    image_base64 = body.get("image_base64")
+    household_id = body.get("household_id")
+    if not image_base64 or not household_id:
+        raise HTTPException(status_code=400, detail="image_base64 and household_id are required.")
+
+    from receipt_scanner import process_receipt_scan
+    result = process_receipt_scan(
+        household_id=household_id,
+        image_base64=image_base64,
+        user_id=body.get("user_id"),
+        allow_duplicate=bool(body.get("allow_duplicate", False)),
+        enrich_tx_id=body.get("enrich_tx_id"),
+    )
+    return result
 
 
 # =============================================================================

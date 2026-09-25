@@ -14,6 +14,10 @@ class Transaction {
   final bool isReallocated;
   final String? reallocatedFromBudgetId;
   final DateTime createdAt;
+  final String source;
+  final List<Map<String, dynamic>> items;
+  final String? receiptUrl;
+  final String? dedupFingerprint;
 
   const Transaction({
     required this.id,
@@ -26,20 +30,39 @@ class Transaction {
     required this.isReallocated,
     this.reallocatedFromBudgetId,
     required this.createdAt,
+    this.source = 'sms',
+    this.items = const [],
+    this.receiptUrl,
+    this.dedupFingerprint,
   });
 
-  factory Transaction.fromMap(Map<String, dynamic> map) => Transaction(
-        id: map['id'] as String,
-        householdId: map['household_id'] as String,
-        amount: (map['amount'] as num).toDouble(),
-        currency: map['currency'] as String? ?? 'SAR',
-        merchant: map['merchant'] as String?,
-        categoryCode: map['category_code'] as String?,
-        timestamp: DateTime.parse(map['timestamp'] as String),
-        isReallocated: map['is_reallocated'] as bool? ?? false,
-        reallocatedFromBudgetId: map['reallocated_from_budget_id'] as String?,
-        createdAt: DateTime.parse(map['created_at'] as String),
-      );
+  factory Transaction.fromMap(Map<String, dynamic> map) {
+    List<Map<String, dynamic>> parsedItems = [];
+    if (map['items'] != null && map['items'] is List) {
+      parsedItems = (map['items'] as List)
+          .map((item) => item is Map<String, dynamic>
+              ? item
+              : Map<String, dynamic>.from(item as Map))
+          .toList();
+    }
+
+    return Transaction(
+      id: map['id'] as String,
+      householdId: map['household_id'] as String,
+      amount: (map['amount'] as num).toDouble(),
+      currency: map['currency'] as String? ?? 'SAR',
+      merchant: map['merchant'] as String?,
+      categoryCode: map['category_code'] as String?,
+      timestamp: DateTime.parse(map['timestamp'] as String),
+      isReallocated: map['is_reallocated'] as bool? ?? false,
+      reallocatedFromBudgetId: map['reallocated_from_budget_id'] as String?,
+      createdAt: DateTime.parse(map['created_at'] as String),
+      source: map['source'] as String? ?? 'sms',
+      items: parsedItems,
+      receiptUrl: map['receipt_url'] as String?,
+      dedupFingerprint: map['dedup_fingerprint'] as String?,
+    );
+  }
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────

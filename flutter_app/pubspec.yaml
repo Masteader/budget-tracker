@@ -36,6 +36,8 @@ dependencies:
   timeago: ^3.6.1         # "2 minutes ago" labels
   shimmer: ^3.0.0         # Loading skeleton screens
   google_fonts: ^6.2.1    # Typography
+  image_picker: ^1.1.2    # Camera & gallery invoice receipt scanning
+  shared_preferences: ^2.2.2 # Local channel ingestion preferences
 
 dev_dependencies:
   flutter_test:

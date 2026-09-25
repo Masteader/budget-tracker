@@ -47,6 +47,9 @@ class SMSWebhookResponse(BaseModel):
     merchant: Optional[str] = Field(None)
     is_reallocated: bool = Field(False)
     reallocated_from_category: Optional[str] = Field(None)
+    source: str = Field("sms", description="'sms' | 'chat' | 'receipt_scan' | 'manual'")
+    items: list[dict] = Field(default_factory=list, description="Itemized breakdown")
+    receipt_url: Optional[str] = None
     message: Optional[str] = Field(None, description="Human-readable status detail.")
 
 
@@ -66,6 +69,9 @@ class AgentState(BaseModel):
     received_at: str
     household_id: str
     device_id: Optional[str] = None
+    source: str = "sms"
+    items: list[dict] = Field(default_factory=list)
+    receipt_url: Optional[str] = None
 
     # ── Extracted by LiteLLM ───────────────────────────────────────────────
     amount: Optional[float] = None

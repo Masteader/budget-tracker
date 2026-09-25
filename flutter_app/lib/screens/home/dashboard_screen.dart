@@ -9,6 +9,9 @@ import 'package:intl/intl.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../services/sms_service.dart';
+import '../chat/chat_entry_screen.dart';
+import '../scanner/receipt_scanner_sheet.dart';
+import '../settings/ingestion_settings_screen.dart';
 import 'transaction_feed_screen.dart';
 import 'budget_management_screen.dart';
 
@@ -21,12 +24,107 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  String? _householdId;
 
   @override
   void initState() {
     super.initState();
     // Drain any SMS that arrived while the app was closed
     SmsService.instance.drainOfflineQueue();
+    _fetchHouseholdId();
+  }
+
+  Future<void> _fetchHouseholdId() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final data = await supabase
+          .from('users')
+          .select('household_id')
+          .eq('id', uid)
+          .single();
+      if (mounted) {
+        setState(() => _householdId = data['household_id'] as String?);
+      }
+    } catch (_) {}
+  }
+
+  void _showAddExpenseModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF30363D),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Add Transaction',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C896).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
+              ),
+              title: const Text('AI Conversational Chat', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+              subtitle: const Text('Say what you bought (e.g. Dunkin 19 SAR latte)', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F6FEB).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
+              ),
+              title: const Text('Scan Paper Invoice / Receipt', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+              subtitle: const Text('Take a camera photo to extract itemized breakdown', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (_householdId != null) {
+                  ReceiptScannerSheet.show(context, _householdId!);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -38,7 +136,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      body: screens[_selectedIndex],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: screens,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF00C896),
+        foregroundColor: Colors.black,
+        icon: const Icon(Icons.add_rounded, size: 22),
+        label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _showAddExpenseModal(context),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
@@ -186,6 +294,14 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.tune_rounded, color: Color(0xFF8B949E)),
+          tooltip: 'Ingestion & Channels',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const IngestionSettingsScreen()),
+          ),
+        ),
         IconButton(
           icon: const Icon(Icons.logout),
           onPressed: () => supabase.auth.signOut(),

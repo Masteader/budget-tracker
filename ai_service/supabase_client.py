@@ -50,15 +50,26 @@ def fetch_all_cost_control_codes() -> list[CostControlCode]:
 def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[CostControlCode]:
     """
     Find the best-matching CostControlCode for a merchant name.
-    Strategy: case-insensitive substring match against keywords array.
-    Returns the first match found; 'OPEX-MISC' used as fallback by caller.
+    Requires word-boundary matching for short keywords (< 4 chars) to prevent false positives (e.g. 'du' matching 'Dunkin').
     """
+    import re
     merchant_lower = merchant.lower().strip()
+    
+    # Sort codes with longer keywords first for specificity
     for code in codes:
-        for kw in code.keywords:
-            if kw.lower() in merchant_lower or merchant_lower in kw.lower():
-                logger.debug("Merchant '%s' matched keyword '%s' → %s", merchant, kw, code.code)
-                return code
+        for kw in sorted(code.keywords, key=len, reverse=True):
+            kw_clean = kw.lower().strip()
+            if not kw_clean:
+                continue
+            if len(kw_clean) < 4:
+                # Require word boundary
+                if re.search(rf"\b{re.escape(kw_clean)}\b", merchant_lower):
+                    logger.debug("Merchant '%s' matched short keyword '%s' → %s", merchant, kw, code.code)
+                    return code
+            else:
+                if kw_clean in merchant_lower or merchant_lower in kw_clean:
+                    logger.debug("Merchant '%s' matched keyword '%s' → %s", merchant, kw, code.code)
+                    return code
     return None
 
 
@@ -191,6 +202,9 @@ def insert_transaction(
     raw_sms: str,
     is_reallocated: bool = False,
     reallocated_from_budget_id: Optional[str] = None,
+    source: str = "sms",
+    items: Optional[list] = None,
+    receipt_url: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -207,13 +221,34 @@ def insert_transaction(
         "raw_sms": raw_sms,
         "is_reallocated": is_reallocated,
         "reallocated_from_budget_id": reallocated_from_budget_id,
+        "source": source,
     }
+    if items:
+        payload["items"] = items
+    if receipt_url:
+        payload["receipt_url"] = receipt_url
 
-    response = client.table("transactions").insert(payload).execute()
+    try:
+        response = client.table("transactions").insert(payload).execute()
+    except Exception as exc:
+        logger.warning("Insert with new schema columns failed (%s), falling back to base columns.", exc)
+        base_payload = {
+            "household_id": household_id,
+            "amount": amount,
+            "currency": currency,
+            "merchant": merchant,
+            "category_code": category_code,
+            "timestamp": timestamp,
+            "raw_sms": raw_sms,
+            "is_reallocated": is_reallocated,
+            "reallocated_from_budget_id": reallocated_from_budget_id,
+        }
+        response = client.table("transactions").insert(base_payload).execute()
+
     transaction_id = response.data[0]["id"]
     logger.info(
-        "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s reallocated=%s",
-        transaction_id, amount, currency, merchant, category_code, is_reallocated,
+        "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s reallocated=%s source=%s",
+        transaction_id, amount, currency, merchant, category_code, is_reallocated, source,
     )
     return transaction_id
 
