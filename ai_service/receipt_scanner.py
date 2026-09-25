@@ -64,7 +64,7 @@ Return STRICTLY a JSON object conforming to:
 
 def parse_receipt_image(image_base64: str) -> Dict[str, Any]:
     """Call Gemini multimodal vision API with the base64 receipt image."""
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.5-flash-lite")
+    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.8-flash")
     
     # Clean base64 if it has prefix
     if "," in image_base64:
