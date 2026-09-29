@@ -34,24 +34,27 @@ class ChatLineItem(BaseModel):
     price: float = Field(..., description="Total price for this item line in SAR")
 
 class ParsedChatExpense(BaseModel):
-    is_transaction: bool = Field(True, description="Whether the text represents a financial expense")
+    is_transaction: bool = Field(True, description="Whether the text represents a financial expense to record")
+    is_simulation: bool = Field(False, description="Whether the user is asking an affordability simulation question like 'Can I buy a 1200 SAR iPad?' or 'أقدر اشتري ايباد بـ 1200 ريال؟'")
+    simulated_amount: Optional[float] = Field(None, description="Simulated purchase price in SAR")
+    simulated_item: Optional[str] = Field(None, description="Simulated item or merchant name")
     merchant: str = Field("Unknown Merchant", description="Store or merchant name")
-    total_amount: float = Field(..., description="Total amount in SAR")
+    total_amount: float = Field(0.0, description="Total amount in SAR")
     currency: str = "SAR"
-    category_code: str = Field("OPEX-MISC", description="Category code like OPEX-DINING, OPEX-GROCERY, etc.")
+    category_code: str = Field("OPEX-MISC", description="Category code like OPEX-DINING, OPEX-GROCERY, OPEX-SHOPPING, etc.")
     spent_by: str = Field("both", description="Who spent this: 'me', 'partner', or 'both'")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
 
 SYSTEM_PROMPT = """You are an intelligent financial assistant for a Saudi budget tracker.
-Parse natural language expense logs into structured financial transactions with line-item breakdowns.
+Parse natural language expense logs into structured financial transactions with line-item breakdowns, OR detect pre-purchase affordability simulation questions.
 
 Categories available:
 - OPEX-GROCERY: Supermarkets, groceries, food stores (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim)
 - OPEX-DINING: Restaurants, cafes, fast food, coffee shops, bakeries, delivery (Dunkin, Starbucks, Albaik, McDonald's, Jahez, Hungerstation)
 - OPEX-FUEL: Fuel stations, gas, transport, taxi, Uber, Careem, trains (Aramco, Sahel, Uber, Careem)
 - OPEX-UTILITIES: Electricity, water, internet, mobile bills (STC, Mobily, Zain, SEC)
-- OPEX-SHOPPING: Retail, clothing, electronics, books (Jarir, Extra, Noon, Amazon)
+- OPEX-SHOPPING: Retail, clothing, electronics, books, iPad, gadgets (Jarir, Extra, Noon, Amazon, Apple)
 - OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming, concerts (Muvi, Vox, Netflix, PlayStation, Shahid)
 - OPEX-HEALTH: Pharmacies, clinics, doctors, hospitals, medicine (Nahdi, Al Dawaa, Habib)
 - OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance, home services).
@@ -61,15 +64,26 @@ Attribution ("spent_by"):
 - "partner": When the user mentions their partner/wife/husband bought or spent it (e.g., "my partner bought", "wife spent", "partner got").
 - "both": Shared household expenses (e.g., groceries, supermarket, house cleaning, maid, utilities, home maintenance, or when user mentions "we spent", "for both of us", "shared", "house"). If it's a household category like groceries or house cleaning and unspecified, default to "both".
 
-Input examples:
+PRE-PURCHASE AFFORDABILITY SIMULATION:
+If the user asks whether they can afford or buy an item, or asking if their budget permits a potential purchase:
+Examples:
+- "Can I buy a 1200 SAR iPad?" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
+- "أقدر اشتري ايباد بـ 1200 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
+- "Can I afford dinner for 350 SAR?" -> is_transaction: false, is_simulation: true, simulated_amount: 350.0, simulated_item: "Dinner", total_amount: 350.0, category_code: "OPEX-DINING"
+- "هل ميزانيتي تسمح اشتري لابتوب بـ 4500 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 4500.0, simulated_item: "Laptop", total_amount: 4500.0, category_code: "OPEX-SHOPPING"
+
+Expense Input examples:
 "merchant dunkin and i spent 19 sar total, 16 ice latte and 3 donut"
 -> merchant: "Dunkin'", total_amount: 19.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "Ice Latte", "quantity": 1, "price": 16.0}, {"name": "Donut", "quantity": 1, "price": 3.0}]
 
+"شريت من دانكن 19 ريال ايس لاتيه 16 ودونات 3"
+-> merchant: "Dunkin'", total_amount: 19.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "Ice Latte", "quantity": 1, "price": 16.0}, {"name": "Donut", "quantity": 1, "price": 3.0}]
+
+"فاتورة بنده 85 ريال: حليب بـ 15 وجبنة بـ 25 ودجاج بـ 45"
+-> merchant: "Panda", total_amount: 85.0, category_code: "OPEX-GROCERY", spent_by: "both", items: [{"name": "Milk", "quantity": 1, "price": 15.0}, {"name": "Cheese", "quantity": 1, "price": 25.0}, {"name": "Chicken", "quantity": 1, "price": 45.0}]
+
 "house cleaning 150 sar"
 -> merchant: "House Cleaning", total_amount: 150.0, category_code: "OPEX-MISC", spent_by: "both", items: [{"name": "House Cleaning", "quantity": 1, "price": 150.0}]
-
-"Bought groceries from Danube for 145 SAR: 2 milk 20 sar, bread 5 sar, chicken 120 sar"
--> merchant: "Danube", total_amount: 145.0, category_code: "OPEX-GROCERY", spent_by: "both", items: [{"name": "Milk", "quantity": 2, "price": 20.0}, {"name": "Bread", "quantity": 1, "price": 5.0}, {"name": "Chicken", "quantity": 1, "price": 120.0}]
 
 "partner bought perfume 250 sar"
 -> merchant: "Perfume Shop", total_amount: 250.0, category_code: "OPEX-SHOPPING", spent_by: "partner", items: [{"name": "Perfume", "quantity": 1, "price": 250.0}]
@@ -77,6 +91,9 @@ Input examples:
 Return STRICTLY valid JSON conforming to:
 {
   "is_transaction": true,
+  "is_simulation": false,
+  "simulated_amount": null,
+  "simulated_item": null,
   "merchant": "...",
   "total_amount": 0.0,
   "currency": "SAR",
@@ -88,10 +105,50 @@ Return STRICTLY valid JSON conforming to:
 """
 
 def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
-    """Robust heuristic fallback parser for natural language expense logs."""
+    """Robust heuristic fallback parser for natural language expense logs and simulation queries."""
     import re
     raw = text.strip()
     lower = raw.lower()
+
+    # Affordability simulation check (e.g. "Can I buy a 1200 SAR iPad?", "أقدر اشتري ايباد بـ 1200 ريال؟")
+    sim_keywords = [
+        "can i afford", "can i buy", "could i buy", "should i buy", "can we afford",
+        "أقدر اشتري", "اقدر اشتري", "هل اقدر", "هل أقدر", "يمديني اشتري",
+        "ينفع اشتري", "ميزانية ل", "ميزانيه ل", "هل في ميزانية", "هل تكفي الميزانية",
+        "أشتري ولا", "اشتري ولا", "اقدر اجيب", "أقدر أجيب"
+    ]
+    if any(k in lower for k in sim_keywords):
+        num_matches = re.findall(r'([0-9]+(?:\.[0-9]+)?)', raw)
+        sim_amt = float(num_matches[0]) if num_matches else 0.0
+
+        cleaned_item = raw
+        for k in sim_keywords + ["sar", "riyal", "ريال", "رس", "?", "؟", "بـ", "ب", "for", "price"]:
+            cleaned_item = re.sub(re.escape(k), "", cleaned_item, flags=re.IGNORECASE)
+        cleaned_item = re.sub(r'[0-9]+(?:\.[0-9]+)?', '', cleaned_item).strip()
+        if not cleaned_item or len(cleaned_item) < 2:
+            cleaned_item = "Simulated Item"
+
+        cat_code = "OPEX-SHOPPING"
+        if any(w in cleaned_item.lower() for w in ("dinner", "lunch", "coffee", "restaurant", "مطعم", "عشاء", "غداء", "قهوة", "food")):
+            cat_code = "OPEX-DINING"
+        elif any(w in cleaned_item.lower() for w in ("flight", "travel", "hotel", "سفر", "طيران", "فندق")):
+            cat_code = "OPEX-MISC"
+        elif any(w in cleaned_item.lower() for w in ("grocer", "supermarket", "بنده", "تميمي", "مقاضي", "danube")):
+            cat_code = "OPEX-GROCERY"
+
+        return ParsedChatExpense(
+            is_transaction=False,
+            is_simulation=True,
+            simulated_amount=sim_amt,
+            simulated_item=cleaned_item.title() if cleaned_item else "Item",
+            merchant=cleaned_item.title() if cleaned_item else "Item",
+            total_amount=sim_amt,
+            currency="SAR",
+            category_code=cat_code,
+            spent_by="me",
+            items=[],
+            notes="Heuristic simulation detection",
+        )
 
     # Attribution: me, partner, or both
     spent_by = "both"
@@ -229,6 +286,36 @@ def process_chat_transaction(
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
     """
     parsed = parse_chat_expense(message)
+    if parsed.is_simulation:
+        from salary_cycle import simulate_affordability
+        sim_amt = parsed.simulated_amount or parsed.total_amount
+        sim_item = parsed.simulated_item or parsed.merchant or "Item"
+        sim_res = simulate_affordability(
+            household_id=household_id,
+            target_amount=sim_amt,
+            item_name=sim_item,
+            category_code=parsed.category_code,
+        )
+        is_arabic = any(ord(c) > 127 for c in message)
+        advice = sim_res["advice_ar"] if is_arabic else sim_res["advice_en"]
+        return {
+            "status": "simulation",
+            "is_simulation": True,
+            "simulation": sim_res,
+            "merchant": sim_item,
+            "amount": sim_amt,
+            "category_code": parsed.category_code,
+            "verdict": sim_res["verdict"],
+            "message": advice,
+            "advice_en": sim_res["advice_en"],
+            "advice_ar": sim_res["advice_ar"],
+            "days_to_payday": sim_res["days_to_payday"],
+            "current_total_remaining": sim_res["current_total_remaining"],
+            "post_purchase_remaining": sim_res["post_purchase_remaining"],
+            "current_daily_allowance": sim_res["current_daily_allowance"],
+            "post_purchase_daily_allowance": sim_res["post_purchase_daily_allowance"],
+        }
+
     if not parsed.is_transaction:
         return {
             "status": "non_transactional",

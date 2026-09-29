@@ -38,6 +38,9 @@ dependencies:
   google_fonts: ^6.2.1    # Typography
   image_picker: ^1.1.2    # Camera & gallery invoice receipt scanning
   shared_preferences: ^2.2.2 # Local channel ingestion preferences
+  mobile_scanner: ^7.4.2
+  permission_handler: ^11.3.1
+  speech_to_text: ^7.5.0
 
 dev_dependencies:
   flutter_test:

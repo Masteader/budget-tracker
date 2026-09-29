@@ -16,12 +16,12 @@ def find_duplicate_candidate(
     household_id: str,
     amount: float,
     merchant: Optional[str] = None,
-    window_minutes: int = 120,
+    window_minutes: int = 1440,
 ) -> Optional[Dict[str, Any]]:
     """
     Search for a recent transaction for the household with the same amount (±0.05)
-    within the last `window_minutes`.
-    If merchant is provided, also checks for merchant keyword overlap.
+    within the last `window_minutes` (default 24 hours).
+    If merchant is provided, checks for merchant keyword overlap to avoid false positives.
     """
     client = get_client()
     now = datetime.now(timezone.utc)
@@ -35,7 +35,7 @@ def find_duplicate_candidate(
             .eq("household_id", household_id)
             .gte("timestamp", cutoff)
             .order("timestamp", desc=True)
-            .limit(20)
+            .limit(50)
             .execute()
         )
         rows = response.data or []
@@ -48,14 +48,14 @@ def find_duplicate_candidate(
     for row in rows:
         row_amount = float(row.get("amount", 0.0))
         if abs(row_amount - amount) <= 0.05:
-            # Exact or near-identical amount within time window
             row_merchant = (row.get("merchant") or "").lower().strip()
             
-            # If no merchant specified on either, or merchants have substring overlap
+            # If no merchant specified on either
             if not merchant_clean or not row_merchant:
                 logger.info("Found duplicate candidate by amount: tx_id=%s, amount=%.2f", row["id"], row_amount)
                 return row
             
+            # Check for name overlap
             if merchant_clean in row_merchant or row_merchant in merchant_clean:
                 logger.info(
                     "Found duplicate candidate by amount & merchant (%s ~ %s): tx_id=%s",
@@ -63,9 +63,6 @@ def find_duplicate_candidate(
                 )
                 return row
                 
-            # If amounts match within same hour, high likelihood of candidate
-            return row
-
     return None
 
 

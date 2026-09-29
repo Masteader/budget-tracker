@@ -15,6 +15,9 @@
     <!-- ── Camera Permission for Receipt Scanner ─────────────────────────────── -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- ── Microphone Permission for Voice Invoice Entry ──────────────────────── -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- ── Network ──────────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -22,6 +25,13 @@
     <!-- ── Wake lock (keep service alive) ──────────────────────────────────── -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ── Speech Recognition Service Query (Android 11+) ───────────────────── -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:label="Budget Tracker"

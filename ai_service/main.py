@@ -231,20 +231,118 @@ async def scan_receipt(request: Request):
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
-    image_base64 = body.get("image_base64")
+    images_base64 = body.get("images_base64")
+    if not images_base64 and body.get("image_base64"):
+        images_base64 = [body.get("image_base64")]
+    if not images_base64:
+        images_base64 = []
+
+    qr_code_raw = body.get("qr_code_raw")
     household_id = body.get("household_id")
-    if not image_base64 or not household_id:
-        raise HTTPException(status_code=400, detail="image_base64 and household_id are required.")
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+
+    if not images_base64 and not qr_code_raw:
+        raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
     from receipt_scanner import process_receipt_scan
     result = process_receipt_scan(
         household_id=household_id,
-        image_base64=image_base64,
+        images_base64=images_base64,
+        qr_code_raw=qr_code_raw,
         user_id=body.get("user_id"),
         allow_duplicate=bool(body.get("allow_duplicate", False)),
         enrich_tx_id=body.get("enrich_tx_id"),
     )
     return result
+
+
+@app.get(
+    "/budgets/salary-cycle-forecast",
+    tags=["budgets"],
+    summary="Get active Saudi salary cycle stats, burn rate velocity, and projected run-out date.",
+)
+async def salary_cycle_forecast(household_id: str):
+    """Returns salary cycle progress, days to 27th payday, burn rate, and pace indicator."""
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import get_salary_cycle_forecast
+    try:
+        return get_salary_cycle_forecast(household_id)
+    except Exception as exc:
+        logger.error("Failed to generate salary cycle forecast: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/budgets/simulate-affordability",
+    tags=["budgets"],
+    summary="Pre-purchase affordability simulator ('Can I Afford This?').",
+)
+async def simulate_purchase_affordability(request: Request):
+    """
+    Evaluates purchase against active salary cycle cushion, flexible budget pools, and days to 27th.
+    """
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    household_id = body.get("household_id")
+    target_amount = float(body.get("target_amount") or 0.0)
+    item_name = body.get("item_name") or "Item"
+    category_code = body.get("category_code")
+
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+
+    from salary_cycle import simulate_affordability
+    return simulate_affordability(
+        household_id=household_id,
+        target_amount=target_amount,
+        item_name=item_name,
+        category_code=category_code,
+    )
+
+
+@app.get(
+    "/households/{household_id}/settlement",
+    tags=["settlement"],
+    summary="Calculate shared partner expense balance and settle-up payment note.",
+)
+async def household_settlement(household_id: str, split_ratio: float = 0.50):
+    """
+    Aggregates transactions in the active salary cycle by spent_by ('me', 'partner', 'both').
+    Returns net balance, who owes whom, and copyable STC Pay / Urpay / IBAN transfer note.
+    """
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from settlement_engine import calculate_partner_settlement
+    try:
+        return calculate_partner_settlement(household_id, split_ratio=split_ratio)
+    except Exception as exc:
+        logger.error("Failed to compute partner settlement: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/analytics/price-history",
+    tags=["analytics"],
+    summary="Query grocery price history, inflation percentage, and store comparisons.",
+)
+async def grocery_price_history(household_id: str, item_filter: str | None = None):
+    """
+    Groups line items across receipts, voice, and chat logs by normalized product name and store.
+    Computes price trends, cheapest store (Panda vs Danube vs Tamimi), and inflation rate.
+    """
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from price_tracker import get_grocery_price_history
+    try:
+        return get_grocery_price_history(household_id, item_filter=item_filter)
+    except Exception as exc:
+        logger.error("Failed to fetch grocery price history: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # =============================================================================

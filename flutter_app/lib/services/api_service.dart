@@ -229,14 +229,19 @@ class ApiService {
   // ── POST /agent/scan-receipt ──────────────────────────────────────────────
 
   Future<Map<String, dynamic>> scanReceipt({
-    required String imageBase64,
+    List<String>? imagesBase64,
+    String? imageBase64,
+    String? qrCodeRaw,
     required String householdId,
     String? userId,
     bool allowDuplicate = false,
     String? enrichTxId,
   }) async {
+    final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     final payload = jsonEncode({
-      'image_base64': imageBase64,
+      'images_base64': list,
+      if (list.isNotEmpty) 'image_base64': list.first,
+      if (qrCodeRaw != null && qrCodeRaw.trim().isNotEmpty) 'qr_code_raw': qrCodeRaw.trim(),
       'household_id': householdId,
       if (userId != null) 'user_id': userId,
       'allow_duplicate': allowDuplicate,
@@ -257,9 +262,103 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 45));
 
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode >= 400) {
+        return {
+          'status': 'error',
+          'message': decoded['detail']?.toString() ?? decoded['message']?.toString() ?? 'Server error (${response.statusCode})',
+        };
+      }
+      return decoded;
     } on Exception catch (e) {
       return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── GET /budgets/salary-cycle-forecast ──────────────────────────────────
+
+  Future<Map<String, dynamic>> getSalaryCycleForecast(String householdId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/budgets/salary-cycle-forecast?household_id=$householdId'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── POST /budgets/simulate-affordability ─────────────────────────────────
+
+  Future<Map<String, dynamic>> simulateAffordability({
+    required String householdId,
+    required double targetAmount,
+    String itemName = 'Item',
+    String? categoryCode,
+  }) async {
+    final payload = jsonEncode({
+      'household_id': householdId,
+      'target_amount': targetAmount,
+      'item_name': itemName,
+      if (categoryCode != null) 'category_code': categoryCode,
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/budgets/simulate-affordability'),
+            headers: {'Content-Type': 'application/json'},
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── GET /households/{household_id}/settlement ───────────────────────────
+
+  Future<Map<String, dynamic>> getPartnerSettlement(String householdId, {double splitRatio = 0.50}) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/households/$householdId/settlement?split_ratio=$splitRatio'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── GET /analytics/price-history ────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getGroceryPriceHistory(String householdId, {String? itemFilter}) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/analytics/price-history')
+          .replace(queryParameters: {
+        'household_id': householdId,
+        if (itemFilter != null && itemFilter.isNotEmpty) 'item_filter': itemFilter,
+      });
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
     }
   }
 }

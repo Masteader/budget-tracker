@@ -9,8 +9,12 @@ import 'package:intl/intl.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../services/sms_service.dart';
+import '../../services/offline_sync_service.dart';
+import '../../widgets/salary_cycle_widget.dart';
+import '../../widgets/partner_settlement_card.dart';
 import '../chat/chat_entry_screen.dart';
-import '../scanner/receipt_scanner_sheet.dart';
+import '../scanner/multi_page_receipt_scanner_screen.dart';
+import '../analytics/grocery_price_intelligence_screen.dart';
 import '../settings/ingestion_settings_screen.dart';
 import 'transaction_feed_screen.dart';
 import 'budget_management_screen.dart';
@@ -31,6 +35,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     // Drain any SMS that arrived while the app was closed
     SmsService.instance.drainOfflineQueue();
+    // Drain any offline SQLite transaction queue
+    OfflineSyncService.instance.flushQueue();
+    OfflineSyncService.instance.updatePendingCount();
+
+    OfflineSyncService.instance.onItemsFlushed.listen((count) {
+      if (mounted && count > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Synced $count queued offline transaction(s) with cloud!'),
+            backgroundColor: const Color(0xFF00C896),
+          ),
+        );
+      }
+    });
+
     _fetchHouseholdId();
   }
 
@@ -71,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Add Transaction',
+              'Add Transaction & Financial Tools',
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -91,8 +110,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
                 ),
-                title: const Text('AI Conversational Chat', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-                subtitle: const Text('Say what you bought (e.g. Dunkin 19 SAR latte)', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                title: const Text('AI Chat & Pre-Purchase Simulator', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: const Text('Log expenses or ask "Can I buy a 1200 SAR iPad?"', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
                 trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -103,7 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Material(
               color: Colors.transparent,
               child: ListTile(
@@ -117,13 +136,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
                 ),
-                title: const Text('Scan Paper Invoice / Receipt', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-                subtitle: const Text('Take a camera photo to extract itemized breakdown', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                title: const Text('Continuous Multi-Page Receipt Stitcher', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: const Text('Snap sequential shots of long 60+ item grocery receipts', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
                 trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
                 onTap: () {
                   Navigator.pop(ctx);
                   if (_householdId != null) {
-                    ReceiptScannerSheet.show(context, _householdId!);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MultiPageReceiptScannerScreen(householdId: _householdId!),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 6),
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.analytics_outlined, color: Colors.amber, size: 22),
+                ),
+                title: const Text('Grocery Price Intelligence & Inflation', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: const Text('Compare prices across Panda, Danube, and Tamimi', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (_householdId != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => GroceryPriceIntelligenceScreen(householdId: _householdId!),
+                      ),
+                    );
                   }
                 },
               ),
@@ -140,6 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const _BudgetDashboard(),
       const TransactionFeedScreen(),
       const BudgetManagementScreen(),
+      const IngestionSettingsScreen(),
     ];
 
     return Scaffold(
@@ -147,18 +202,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         index: _selectedIndex,
         children: screens,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF00C896),
-        foregroundColor: Colors.black,
-        icon: const Icon(Icons.add_rounded, size: 22),
-        label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _showAddExpenseModal(context),
-      ),
+      floatingActionButton: _selectedIndex == 3
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+              icon: const Icon(Icons.add_rounded, size: 22),
+              label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _showAddExpenseModal(context),
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
         backgroundColor: const Color(0xFF161B22),
-        indicatorColor: const Color(0xFF00C896).withOpacity(0.2),
+        indicatorColor: const Color(0xFF00C896).withValues(alpha: 0.2),
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.dashboard_outlined),
@@ -172,6 +229,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icon(Icons.tune_outlined),
               selectedIcon: Icon(Icons.tune, color: Color(0xFF00C896)),
               label: 'Budgets'),
+          NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings, color: Color(0xFF00C896)),
+              label: 'Settings'),
         ],
       ),
     );
@@ -238,10 +299,118 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                         sliver: SliverToBoxAdapter(
-                          child: _SummaryCard(budgets: budgetSnap.data!
-                              .map(Budget.fromMap)
-                              .where((b) => b.month == _currentMonth)
-                              .toList()),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ValueListenableBuilder<int>(
+                                valueListenable: OfflineSyncService.instance.pendingCountNotifier,
+                                builder: (ctx, pending, _) {
+                                  if (pending == 0) return const SizedBox.shrink();
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 18),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            '$pending transaction(s) queued offline',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => OfflineSyncService.instance.flushQueue(),
+                                          child: const Text('Sync Now', style: TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                              _SummaryCard(budgets: budgetSnap.data!
+                                  .map(Budget.fromMap)
+                                  .where((b) => b.month == _currentMonth)
+                                  .toList()),
+                              const SizedBox(height: 12),
+                              SalaryCycleWidget(householdId: hid),
+                              const SizedBox(height: 12),
+                              PartnerSettlementCard(householdId: hid),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => GroceryPriceIntelligenceScreen(householdId: hid),
+                                        ),
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF161B22),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: const Color(0xFF30363D)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.trending_up_rounded, color: Color(0xFF00C896), size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Price Tracker',
+                                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => MultiPageReceiptScannerScreen(householdId: hid),
+                                        ),
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF161B22),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: const Color(0xFF30363D)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Multi-Shot Scan',
+                                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       SliverPadding(
@@ -328,7 +497,6 @@ class _SmsStatusIndicator extends StatefulWidget {
 class _SmsStatusIndicatorState extends State<_SmsStatusIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
-  bool _active = false;
 
   @override
   void initState() {
@@ -336,7 +504,6 @@ class _SmsStatusIndicatorState extends State<_SmsStatusIndicator>
     _pulse = AnimationController(
         vsync: this, duration: const Duration(seconds: 1))
       ..repeat(reverse: true);
-    _active = SmsService.instance.isListening;
   }
 
   @override
@@ -347,51 +514,56 @@ class _SmsStatusIndicatorState extends State<_SmsStatusIndicator>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        if (_active) {
-          await SmsService.instance.stopService();
-        } else {
-          await SmsService.instance.startService();
-        }
-        setState(() => _active = SmsService.instance.isListening);
-      },
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (ctx, _) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: (_active ? const Color(0xFF00C896) : Colors.redAccent)
-                .withOpacity(0.15 + _pulse.value * 0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: _active ? const Color(0xFF00C896) : Colors.redAccent,
-              width: 1,
+    return ValueListenableBuilder<bool>(
+      valueListenable: SmsService.instance.listeningNotifier,
+      builder: (ctx, active, _) {
+        return GestureDetector(
+          onTap: () async {
+            if (active) {
+              await SmsService.instance.stopService();
+            } else {
+              await SmsService.instance.startService();
+            }
+          },
+          child: AnimatedBuilder(
+            animation: _pulse,
+            builder: (ctx, _) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: (active ? const Color(0xFF00C896) : Colors.redAccent)
+                    .withValues(alpha: 0.15 + _pulse.value * 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: active ? const Color(0xFF00C896) : Colors.redAccent,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: active ? const Color(0xFF00C896) : Colors.redAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    active ? 'SMS ON' : 'SMS OFF',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: active ? const Color(0xFF00C896) : Colors.redAccent,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6, height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _active ? const Color(0xFF00C896) : Colors.redAccent,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _active ? 'SMS ON' : 'SMS OFF',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _active ? const Color(0xFF00C896) : Colors.redAccent,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -445,7 +617,7 @@ class _SummaryCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.2),
+                color: Colors.red.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(

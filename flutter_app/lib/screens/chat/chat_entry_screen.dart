@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
+
+import '../../services/offline_sync_service.dart';
 
 class ChatMessage {
   final bool isUser;
@@ -11,6 +15,7 @@ class ChatMessage {
   final Map<String, dynamic>? transactionData;
   final bool isDuplicatePrompt;
   final Map<String, dynamic>? candidateData;
+  final Map<String, dynamic>? simulationData;
 
   ChatMessage({
     required this.isUser,
@@ -18,6 +23,7 @@ class ChatMessage {
     this.transactionData,
     this.isDuplicatePrompt = false,
     this.candidateData,
+    this.simulationData,
   });
 }
 
@@ -35,9 +41,19 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   bool _isLoading = false;
   String? _householdId;
 
+  // Speech-to-text state
+  late final stt.SpeechToText _speech;
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  String _selectedLocale = 'ar_SA'; // 'ar_SA' (Saudi Arabic) or 'en_US' (English)
+  double _soundLevel = 0.0;
+
   final List<String> _quickChips = [
+    "Can I buy a 1200 SAR iPad?",
+    "أقدر اشتري ايباد بـ 1200 ريال؟",
     "Dunkin 19 SAR: 16 latte, 3 donut",
     "Danube 145 SAR: 2 milk 20, chicken 125",
+    "فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25",
     "Albaik 28 SAR combo meal",
     "Aramco 50 SAR 91 fuel",
   ];
@@ -45,12 +61,186 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   @override
   void initState() {
     super.initState();
+    _speech = stt.SpeechToText();
+    _initSpeech();
     _fetchHousehold();
     _messages.add(
       ChatMessage(
         isUser: false,
-        text: "👋 Hi! You can tell me what you spent in plain English or Arabic.\n"
-            "Try: 'merchant dunkin and i spent 19 sar total, 16 ice latte and 3 donut'",
+        text: "👋 Hi! You can speak or type your expenses in English or Arabic.\n"
+            "Tap the 🎙️ mic button or try: 'فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25' or 'Dunkin 19 SAR: 16 latte and 3 donut'",
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    if (_isListening) {
+      _speech.stop();
+    }
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      final available = await _speech.initialize(
+        onStatus: (status) {
+          if (mounted) {
+            setState(() {
+              if (status == 'notListening' || status == 'done') {
+                _isListening = false;
+              }
+            });
+          }
+        },
+        onError: (val) {
+          if (mounted) {
+            setState(() {
+              _isListening = false;
+            });
+            debugPrint("SpeechToText onError: ${val.errorMsg}");
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _speechAvailable = available;
+        });
+      }
+    } catch (e) {
+      debugPrint("Speech init exception: $e");
+    }
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      return;
+    }
+
+    // Check microphone permission
+    final micStatus = await Permission.microphone.status;
+    if (!micStatus.isGranted) {
+      final requested = await Permission.microphone.request();
+      if (!requested.isGranted) {
+        if (requested.isPermanentlyDenied && mounted) {
+          _showMicrophonePermissionDialog();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Microphone permission required for voice entry.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!_speechAvailable) {
+      await _initSpeech();
+      if (!_speechAvailable && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Speech recognition is initializing or not available on device.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+    }
+
+    final initialText = _controller.text.trim();
+    setState(() {
+      _isListening = true;
+    });
+
+    try {
+      final options = stt.SpeechListenOptions(
+        localeId: _selectedLocale,
+        listenMode: stt.ListenMode.dictation,
+        pauseFor: const Duration(seconds: 4),
+        partialResults: true,
+        cancelOnError: false,
+      );
+
+      await _speech.listen(
+        listenOptions: options,
+        onResult: (result) {
+          if (mounted) {
+            setState(() {
+              final words = result.recognizedWords;
+              if (initialText.isEmpty) {
+                _controller.text = words;
+              } else {
+                _controller.text = '$initialText $words';
+              }
+              _controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: _controller.text.length),
+              );
+            });
+          }
+        },
+        onSoundLevelChange: (level) {
+          if (mounted) {
+            setState(() {
+              _soundLevel = level;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+    }
+  }
+
+  void _showMicrophonePermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF30363D)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.mic_off, color: Colors.orange, size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Microphone Permission',
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Microphone access is required to speak your invoice items into the chat. Please tap "Open Settings" to enable Microphone access.',
+          style: TextStyle(color: Color(0xFF8B949E), fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
       ),
     );
   }
@@ -83,6 +273,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   }
 
   Future<void> _sendMessage(String text, {bool allowDuplicate = false, String? enrichTxId}) async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    }
+
     final message = text.trim();
     if (message.isEmpty || _householdId == null) return;
 
@@ -112,7 +307,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
 
-      if (status == 'duplicate_candidate') {
+      if (status == 'simulation') {
+        _messages.add(
+          ChatMessage(
+            isUser: false,
+            text: res['message'] ?? 'Affordability simulation complete.',
+            simulationData: res,
+          ),
+        );
+      } else if (status == 'duplicate_candidate') {
         _messages.add(
           ChatMessage(
             isUser: false,
@@ -142,12 +345,28 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
       } else {
-        _messages.add(
-          ChatMessage(
-            isUser: false,
-            text: res['message'] ?? 'Could not parse transaction details.',
-          ),
-        );
+        // Check for offline network error and save to SQLite queue
+        final errText = res['message']?.toString() ?? '';
+        if (errText.contains('connect') || errText.contains('offline') || errText.contains('SocketException') || errText.contains('timeout')) {
+          OfflineSyncService.instance.enqueue(
+            endpoint: 'chat',
+            payload: {'message': message, 'user_id': user?.id},
+            householdId: _householdId!,
+          );
+          _messages.add(
+            ChatMessage(
+              isUser: false,
+              text: '📶 Offline: Stored in local SQLite queue. Will sync automatically when network returns.',
+            ),
+          );
+        } else {
+          _messages.add(
+            ChatMessage(
+              isUser: false,
+              text: res['message'] ?? 'Could not parse transaction details.',
+            ),
+          );
+        }
       }
     });
 
@@ -163,9 +382,66 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           children: [
             const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 20),
             const SizedBox(width: 8),
-            Text('AI Transaction Chat', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            Text('AI Transaction Chat', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 17)),
           ],
         ),
+        actions: [
+          // Language selector toggle pill
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF21262D),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF30363D)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedLocale = 'ar_SA');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLocale == 'ar_SA' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇸🇦 ع',
+                      style: TextStyle(
+                        color: _selectedLocale == 'ar_SA' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedLocale = 'en_US');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLocale == 'en_US' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇺🇸 EN',
+                      style: TextStyle(
+                        color: _selectedLocale == 'en_US' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         backgroundColor: const Color(0xFF161B22),
         elevation: 0,
       ),
@@ -224,6 +500,54 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 },
               ),
             ),
+            // Live Listening Banner
+            if (_isListening)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 10 + (_soundLevel.clamp(0.0, 10.0) * 0.8),
+                      height: 10 + (_soundLevel.clamp(0.0, 10.0) * 0.8),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _selectedLocale == 'ar_SA'
+                            ? "🎙️ جاري الاستماع باللغة العربية... تحدث الآن"
+                            : "🎙️ Listening in English... Speak your items",
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _toggleListening,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C896),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Done',
+                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             // Input bar
             Container(
@@ -241,7 +565,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       onSubmitted: (v) => _sendMessage(v),
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: "e.g. Dunkin 19 SAR, 16 latte 3 donut...",
+                        hintText: _selectedLocale == 'ar_SA'
+                            ? "تحدث أو اكتب: بنده 85 ريال حليب 15..."
+                            : "Speak or type: Dunkin 19 SAR...",
                         hintStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                         filled: true,
                         fillColor: const Color(0xFF0D1117),
@@ -262,6 +588,38 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // Animated Microphone Button
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      color: _isListening ? Colors.redAccent : const Color(0xFF21262D),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _isListening ? Colors.red : const Color(0xFF30363D),
+                        width: 1.5,
+                      ),
+                      boxShadow: _isListening
+                          ? [
+                              BoxShadow(
+                                color: Colors.redAccent.withValues(alpha: 0.5),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none_rounded,
+                        color: _isListening ? Colors.white : const Color(0xFF00C896),
+                        size: 20,
+                      ),
+                      tooltip: _isListening ? 'Stop Listening' : 'Voice Input',
+                      onPressed: _toggleListening,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Send Button
                   Container(
                     decoration: const BoxDecoration(
                       color: Color(0xFF00C896),
@@ -269,6 +627,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
+                      tooltip: 'Send',
                       onPressed: () => _sendMessage(_controller.text),
                     ),
                   ),
@@ -319,6 +678,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 14, height: 1.4),
               ),
             ),
+            if (msg.simulationData != null) ...[
+              const SizedBox(height: 6),
+              _buildSimulationCard(msg.simulationData!),
+            ],
             if (msg.transactionData != null) ...[
               const SizedBox(height: 6),
               TransactionItemBreakdownCard(
@@ -343,6 +706,107 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     );
   }
 
+  Widget _buildSimulationCard(Map<String, dynamic> sim) {
+    final verdict = sim['verdict'] as String? ?? 'comfortable';
+    final targetAmt = (sim['amount'] as num?)?.toDouble() ?? 0.0;
+    final item = sim['merchant'] as String? ?? 'Item';
+    final daysToPayday = sim['days_to_payday'] as int? ?? 0;
+    final dailyCurrent = (sim['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
+    final dailyPost = (sim['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
+
+    Color badgeColor = const Color(0xFF00C896);
+    IconData badgeIcon = Icons.check_circle_outline_rounded;
+    String verdictLabel = "Comfortably Affordable";
+
+    if (verdict == 'caution') {
+      badgeColor = Colors.orange;
+      badgeIcon = Icons.warning_amber_rounded;
+      verdictLabel = "Caution (Reallocation Needed)";
+    } else if (verdict == 'unaffordable' || verdict == 'not_recommended') {
+      badgeColor = Colors.redAccent;
+      badgeIcon = Icons.cancel_outlined;
+      verdictLabel = "Unaffordable / Exceeds Budget";
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(badgeIcon, color: badgeColor, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Pre-Purchase Simulator',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  verdictLabel,
+                  style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '$item • SAR ${targetAmt.toStringAsFixed(2)}',
+            style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Days to 27th Payday: $daysToPayday days away',
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1117),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
+                  children: [
+                    const Text('Daily Allowance Now', style: TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
+                    const SizedBox(height: 2),
+                    Text('SAR ${dailyCurrent.toStringAsFixed(1)}/d', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+                const Icon(Icons.arrow_forward_rounded, color: Color(0xFF8B949E), size: 14),
+                Column(
+                  children: [
+                    const Text('After Purchase', style: TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
+                    const SizedBox(height: 2),
+                    Text('SAR ${dailyPost.toStringAsFixed(1)}/d', style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDuplicateResolutionBar(Map<String, dynamic> candidateData) {
     final candidateId = candidateData['candidate_transaction_id'] as String?;
     final parsed = candidateData['parsed_data'] as Map<String, dynamic>?;
@@ -352,7 +816,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF21262D),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.5)),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

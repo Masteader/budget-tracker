@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../services/csv_export_service.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import 'edit_transaction_sheet.dart';
 
@@ -710,6 +711,38 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           color: _selectedSort != 'newest'
                                               ? const Color(0xFF00C896)
                                               : const Color(0xFFC9D1D9),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () {
+                                  if (txSnap.data != null && txSnap.data!.isNotEmpty) {
+                                    CsvExportService.showExportDialog(context, txSnap.data!, monthLabel: 'All Records');
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161B22),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF30363D)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.file_download_outlined, size: 14, color: Color(0xFF58A6FF)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Export CSV',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF58A6FF),
                                         ),
                                       ),
                                     ],

@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 
@@ -57,8 +58,8 @@ class SmsService {
     return otpKeywords.any((k) => lower.contains(k)) || otpRegex.hasMatch(body);
   }
 
-  bool _isListening = false;
-  bool get isListening => _isListening;
+  final ValueNotifier<bool> listeningNotifier = ValueNotifier<bool>(false);
+  bool get isListening => listeningNotifier.value;
 
   final StreamController<Map<String, dynamic>> _smsController =
       StreamController.broadcast();
@@ -68,8 +69,17 @@ class SmsService {
 
   // ── Initialise ────────────────────────────────────────────────────────────
 
-  void init() {
+  Future<void> init() async {
     _channel.setMethodCallHandler(_handleNativeCall);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('channel_sms_enabled') ?? true;
+      if (enabled) {
+        await startService();
+      } else {
+        await stopService();
+      }
+    } catch (_) {}
   }
 
   // ── Start / Stop service ──────────────────────────────────────────────────
@@ -77,9 +87,11 @@ class SmsService {
   Future<void> startService() async {
     try {
       await _serviceChannel.invokeMethod('startService');
-      _isListening = true;
+      listeningNotifier.value = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('channel_sms_enabled', true);
     } on PlatformException {
-      _isListening = false;
+      listeningNotifier.value = false;
       rethrow;
     }
   }
@@ -88,7 +100,9 @@ class SmsService {
     try {
       await _serviceChannel.invokeMethod('stopService');
     } finally {
-      _isListening = false;
+      listeningNotifier.value = false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('channel_sms_enabled', false);
     }
   }
 
