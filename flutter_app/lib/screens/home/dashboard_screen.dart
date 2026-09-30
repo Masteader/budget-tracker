@@ -14,6 +14,7 @@ import '../../widgets/salary_cycle_widget.dart';
 import '../../widgets/partner_settlement_card.dart';
 import '../chat/chat_entry_screen.dart';
 import '../scanner/multi_page_receipt_scanner_screen.dart';
+import '../scanner/receipt_scanner_sheet.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
 import '../settings/ingestion_settings_screen.dart';
 import 'transaction_feed_screen.dart';
@@ -71,118 +72,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _showAddExpenseModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: const Color(0xFF161B22),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFF30363D),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Add Transaction & Financial Tools',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF30363D),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                title: const Text('AI Chat & Pre-Purchase Simulator', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-                subtitle: const Text('Log expenses or ask "Can I buy a 1200 SAR iPad?"', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 6),
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F6FEB).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
+              const SizedBox(height: 16),
+              Text(
+                'Add Transaction',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
-                title: const Text('Continuous Multi-Page Receipt Stitcher', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-                subtitle: const Text('Snap sequential shots of long 60+ item grocery receipts', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (_householdId != null) {
+              ),
+              const SizedBox(height: 16),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C896).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
+                  ),
+                  title: const Text('AI Conversational Chat & Simulator', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                  subtitle: const Text('Say what you spent or ask "Can I afford this?"', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                  onTap: () {
+                    Navigator.pop(ctx);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => MultiPageReceiptScannerScreen(householdId: _householdId!),
-                      ),
+                      MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
                     );
-                  }
-                },
-              ),
-            ),
-            const SizedBox(height: 6),
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.analytics_outlined, color: Colors.amber, size: 22),
+                  },
                 ),
-                title: const Text('Grocery Price Intelligence & Inflation', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
-                subtitle: const Text('Compare prices across Panda, Danube, and Tamimi', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (_householdId != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => GroceryPriceIntelligenceScreen(householdId: _householdId!),
-                      ),
-                    );
-                  }
-                },
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1F6FEB).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 22),
+                  ),
+                  title: const Text('Scan VAT Invoice / Receipt (ZATCA & Multi-Page)', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                  subtitle: const Text('ZATCA QR camera, manual code input, or multi-page photos', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (_householdId != null) {
+                      ReceiptScannerSheet.show(context, _householdId!);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

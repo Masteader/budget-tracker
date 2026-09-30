@@ -7,15 +7,17 @@ const supabaseUrl = String.fromEnvironment(
   defaultValue: 'https://qnhyiszgiymsypcwnntu.supabase.co',
 );
 
-const supabaseAnonKey = String.fromEnvironment(
-  'SUPABASE_ANON_KEY',
-  defaultValue:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaHlpc3pnaXltc3lwY3dubnR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MjM2NjYsImV4cCI6MjEwNTQ5OTY2Nn0.bOazpdgpRKOB2n60ZgGL3Vgjd4oPp5yxZ0VqpeyLz_U',
+const supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: 'sb_publishable_MKtHOBzNx__wuWOMTGo3eA_2T8KD0lY',
 );
+
+/// Deprecated: use [supabasePublishableKey] instead.
+const supabaseAnonKey = supabasePublishableKey;
 
 const fastapiWebhookUrl = String.fromEnvironment(
   'FASTAPI_WEBHOOK_URL',
-  defaultValue: 'http://192.168.0.143:8000/webhook/sms',
+  defaultValue: 'https://annotate-armhole-nest.ngrok-free.dev/webhook/sms',
 );
 
 const webhookSecret = String.fromEnvironment(

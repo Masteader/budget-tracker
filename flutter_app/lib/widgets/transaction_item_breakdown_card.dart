@@ -119,10 +119,12 @@ class TransactionItemBreakdownCard extends StatelessWidget {
           color: isReallocated ? Colors.orange.withValues(alpha: 0.5) : const Color(0xFF30363D),
         ),
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: items.isNotEmpty,
+      child: Material(
+        color: Colors.transparent,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: items.isNotEmpty,
           leading: Container(
             width: 42,
             height: 42,
@@ -403,6 +405,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

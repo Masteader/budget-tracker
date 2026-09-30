@@ -49,6 +49,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2")
+
+@app.middleware("http")
+async def firewall_token_middleware(request: Request, call_next):
+    # Allow local inspection, health check and docs
+    path = request.url.path
+    if path in ["/health", "/docs", "/openapi.json", "/redoc"] or request.method == "OPTIONS":
+        return await call_next(request)
+
+    # Check if request arrived via reverse proxy or public tunnel
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    client_host = request.client.host if request.client else ""
+    is_tunnel_or_proxy = bool(forwarded_for) or (client_host not in ["127.0.0.1", "localhost", "::1", "testclient"])
+
+    # Verify secret token for any non-local or proxied traffic
+    provided_token = request.headers.get("X-App-Token")
+    if is_tunnel_or_proxy and provided_token != APP_AUTH_TOKEN:
+        logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
+        from starlette.responses import JSONResponse
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Forbidden: Untrusted endpoint access."}
+        )
+
+    return await call_next(request)
+
 
 # =============================================================================
 # HMAC SIGNATURE VERIFICATION

@@ -18,6 +18,17 @@ class ApiService {
     return fastapiWebhookUrl;
   }
 
+  static const String appAuthToken = 'bt_sec_99a81f3d4c72e01b88e2';
+
+  Map<String, String> _buildHeaders({String? signature}) {
+    return {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      'X-App-Token': appAuthToken,
+      if (signature != null) 'X-Signature': signature,
+    };
+  }
+
   // ── HMAC-SHA256 signature ────────────────────────────────────────────────
 
   String _sign(String body) {
@@ -51,10 +62,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse(fastapiWebhookUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Signature': signature,
-            },
+            headers: _buildHeaders(signature: signature),
             body: payload,
           )
           .timeout(const Duration(seconds: 15));
@@ -88,13 +96,10 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/agent/chat-transaction'),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Signature': signature,
-            },
+            headers: _buildHeaders(signature: signature),
             body: payload,
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 20));
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['status'] == 'error' && data['message'] != null && (data['message'] as String).contains('Failed to connect')) {
@@ -190,7 +195,7 @@ class ApiService {
     final auditText = itemsSummary.isNotEmpty ? 'Chat: $message | SpentBy: $spentBy | Items: [$itemsSummary]' : 'Chat: $message | SpentBy: $spentBy';
 
     try {
-      final insertData = <String, dynamic>{
+      final baseData = <String, dynamic>{
         'household_id': householdId,
         'amount': totalAmount,
         'currency': 'SAR',
@@ -198,17 +203,27 @@ class ApiService {
         'category_code': categoryCode,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
-        'source': 'chat',
-        'items': items,
       };
 
       try {
+        // Try modern schema with items, spent_by, source
         await supabase.from('transactions').insert({
-          ...insertData,
+          ...baseData,
+          'source': 'chat',
+          'items': items,
           'spent_by': spentBy,
         });
-      } catch (_) {
-        await supabase.from('transactions').insert(insertData);
+      } catch (colErr) {
+        // If items or spent_by columns don't exist yet in Supabase schema cache
+        try {
+          await supabase.from('transactions').insert({
+            ...baseData,
+            'source': 'chat',
+          });
+        } catch (_) {
+          // Fallback to strict base table columns
+          await supabase.from('transactions').insert(baseData);
+        }
       }
 
       return {
@@ -219,7 +234,7 @@ class ApiService {
         'spent_by': spentBy,
         'items': items,
         'is_reallocated': false,
-        'message': 'Recorded SAR ${totalAmount.toStringAsFixed(2)} at $merchant (Direct Cloud Sync).',
+        'message': 'Recorded SAR ${totalAmount.toStringAsFixed(2)} at $merchant.',
       };
     } catch (e) {
       return {'status': 'error', 'message': 'Cloud sync failed: $e'};
@@ -254,10 +269,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/agent/scan-receipt'),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Signature': signature,
-            },
+            headers: _buildHeaders(signature: signature),
             body: payload,
           )
           .timeout(const Duration(seconds: 45));
@@ -280,7 +292,10 @@ class ApiService {
   Future<Map<String, dynamic>> getSalaryCycleForecast(String householdId) async {
     try {
       final response = await http
-          .get(Uri.parse('$_baseUrl/budgets/salary-cycle-forecast?household_id=$householdId'))
+          .get(
+            Uri.parse('$_baseUrl/budgets/salary-cycle-forecast?household_id=$householdId'),
+            headers: _buildHeaders(),
+          )
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
@@ -311,7 +326,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/budgets/simulate-affordability'),
-            headers: {'Content-Type': 'application/json'},
+            headers: _buildHeaders(),
             body: payload,
           )
           .timeout(const Duration(seconds: 8));
@@ -327,7 +342,10 @@ class ApiService {
   Future<Map<String, dynamic>> getPartnerSettlement(String householdId, {double splitRatio = 0.50}) async {
     try {
       final response = await http
-          .get(Uri.parse('$_baseUrl/households/$householdId/settlement?split_ratio=$splitRatio'))
+          .get(
+            Uri.parse('$_baseUrl/households/$householdId/settlement?split_ratio=$splitRatio'),
+            headers: _buildHeaders(),
+          )
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
@@ -349,7 +367,9 @@ class ApiService {
         if (itemFilter != null && itemFilter.isNotEmpty) 'item_filter': itemFilter,
       });
 
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(uri, headers: _buildHeaders())
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) {

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
+import '../../widgets/zatca_qr_camera_scanner.dart';
 
 class MultiPageReceiptScannerScreen extends StatefulWidget {
   final String householdId;
@@ -168,6 +169,16 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           'Continuous Long Receipt Stitcher',
           style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00C896)),
+            tooltip: 'Scan ZATCA QR',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(

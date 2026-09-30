@@ -373,7 +373,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final itemsSummary = items.map((e) => '${e['quantity']}x ${e['name']} (${e['price']} SAR)').join(', ');
       final auditText = 'Invoice Scan: $merchant (${items.length} items) | Items: [$itemsSummary]';
 
-      final res = await supabase.from('transactions').insert({
+      final baseData = <String, dynamic>{
         'household_id': widget.householdId,
         'amount': total,
         'currency': 'SAR',
@@ -381,10 +381,26 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'category_code': 'OPEX-GROCERY',
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
-        'source': 'receipt_scan',
-        'spent_by': 'both',
-        'items': items,
-      }).select().single();
+      };
+
+      Map<String, dynamic> res;
+      try {
+        res = await supabase.from('transactions').insert({
+          ...baseData,
+          'source': 'receipt_scan',
+          'spent_by': 'both',
+          'items': items,
+        }).select().single();
+      } catch (_) {
+        try {
+          res = await supabase.from('transactions').insert({
+            ...baseData,
+            'source': 'receipt_scan',
+          }).select().single();
+        } catch (_) {
+          res = await supabase.from('transactions').insert(baseData).select().single();
+        }
+      }
 
       final txId = res['id'] as String?;
       if (txId != null) {

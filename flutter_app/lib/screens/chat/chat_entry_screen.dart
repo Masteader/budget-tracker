@@ -739,18 +739,21 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(badgeIcon, color: badgeColor, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Pre-Purchase Simulator',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              Icon(badgeIcon, color: badgeColor, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Purchase Simulator',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -759,7 +762,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 ),
                 child: Text(
                   verdictLabel,
-                  style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -782,22 +789,44 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Column(
-                  children: [
-                    const Text('Daily Allowance Now', style: TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
-                    const SizedBox(height: 2),
-                    Text('SAR ${dailyCurrent.toStringAsFixed(1)}/d', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Daily Allowance Now',
+                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-                const Icon(Icons.arrow_forward_rounded, color: Color(0xFF8B949E), size: 14),
-                Column(
-                  children: [
-                    const Text('After Purchase', style: TextStyle(color: Color(0xFF8B949E), fontSize: 10)),
-                    const SizedBox(height: 2),
-                    Text('SAR ${dailyPost.toStringAsFixed(1)}/d', style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.arrow_forward_rounded, color: Color(0xFF8B949E), size: 14),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text(
+                        'After Purchase',
+                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SAR ${dailyPost.toStringAsFixed(1)}/d',
+                        style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
