@@ -262,6 +262,64 @@ class CategoryBreakdownItem {
       allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
 }
 
+const Map<String, List<String>> kSubCategoriesByParent = {
+  'OPEX-GROCERY': [
+    'Meat & Poultry',
+    'Fresh Produce & Fruits',
+    'Dairy & Eggs',
+    'Snacks, Chips & Sweets',
+    'Beverages & Water',
+    'Pantry & Staples',
+    'Cleaning Supplies',
+  ],
+  'OPEX-UTILITIES': [
+    'Housing Rent',
+    'Electricity (SEC)',
+    'Home Fiber Internet',
+    'Mobile SIMs & Data',
+    'Water & Municipal Bills',
+  ],
+  'OPEX-DINING': [
+    'Restaurants & Meals',
+    'Coffee & Bakeries',
+    'Delivery Apps',
+  ],
+  'OPEX-FUEL': [
+    'Gasoline & Fuel',
+    'Car Maintenance & Oil',
+    'Ride Hailing (Uber/Bolt)',
+  ],
+  'OPEX-HEALTH': [
+    'Prescriptions & Medicines',
+    'Clinics & Dental',
+  ],
+  'OPEX-SHOPPING': [
+    'Clothing & Fashion',
+    'Electronics & Gadgets',
+    'Home Goods & Furniture',
+  ],
+  'OPEX-ENTERTAINMENT': [
+    'Cinema & Outings',
+    'Gaming & Subscriptions',
+    'Events & Activities',
+  ],
+  'CAPEX-EDUCATION': [
+    'Tuition Fees',
+    'Books & Courses',
+    'School Supplies',
+  ],
+  'OPEX-GOV': [
+    'Iqama & Visas',
+    'Vehicle Registration',
+    'Government Fees',
+  ],
+  'OPEX-MISC': [
+    'Personal Care',
+    'Gifts & Donations',
+    'General Miscellaneous',
+  ],
+};
+
 
 // ── Household ────────────────────────────────────────────────────────────────
 

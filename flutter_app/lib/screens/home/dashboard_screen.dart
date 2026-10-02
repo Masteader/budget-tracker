@@ -311,6 +311,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                       const SliverFillRemaining(
                           child: Center(child: CircularProgressIndicator()))
                     else ...[
+                      _buildSalaryCycleBar(),
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                         sliver: SliverToBoxAdapter(
@@ -495,77 +496,105 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   }
 
   Widget _buildAppBar(String hid) {
+    return SliverAppBar(
+      pinned: true,
+      backgroundColor: const Color(0xFF0D1117),
+      elevation: 0,
+      title: Text(
+        'Budget Tracker',
+        style: GoogleFonts.outfit(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, color: Color(0xFF8B949E)),
+          tooltip: 'Sign Out',
+          onPressed: () => supabase.auth.signOut(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSalaryCycleBar() {
     final currentCycle = _selectedCycle;
     final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
     final subText = currentCycle != null
         ? '${currentCycle.cycleStart.substring(5)} - ${currentCycle.cycleEnd.substring(5)}'
-        : 'Payday 27th Cycle';
+        : 'Payday 27th Cycle (27th - 26th)';
     final isCurrent = currentCycle?.isCurrent ?? true;
 
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: 124,
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF30363D)),
+        ),
+        child: Row(
           children: [
             IconButton(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
               onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                   ? () => setState(() => _currentCycleIndex++)
                   : null,
             ),
-            const SizedBox(width: 6),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      titleText,
-                      style: GoogleFonts.outfit(
-                          fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
-                    ),
-                    if (isCurrent) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C896).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.6)),
-                        ),
-                        child: const Text(
-                          'ACTIVE',
-                          style: TextStyle(
-                            color: Color(0xFF00C896),
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        titleText,
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
                         ),
                       ),
+                      if (isCurrent) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.6)),
+                          ),
+                          child: const Text(
+                            'ACTIVE',
+                            style: TextStyle(
+                              color: Color(0xFF00C896),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                Text(
-                  subText,
-                  style: const TextStyle(
-                    color: Color(0xFF8B949E),
-                    fontSize: 10,
-                    fontWeight: FontWeight.normal,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    subText,
+                    style: const TextStyle(
+                      color: Color(0xFF8B949E),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 6),
             IconButton(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
               onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                   ? () => setState(() => _currentCycleIndex--)
@@ -573,30 +602,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
             ),
           ],
         ),
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF0D1117), Color(0xFF0A1628)],
-            ),
-          ),
-        ),
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.tune_rounded, color: Color(0xFF8B949E)),
-          tooltip: 'Ingestion & Channels',
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const IngestionSettingsScreen()),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.logout),
-          onPressed: () => supabase.auth.signOut(),
-        ),
-      ],
     );
   }
 
@@ -712,6 +718,7 @@ class _BudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final hasRollover = budget.previousCycleDelta != 0.0;
+    final subCategories = kSubCategoriesByParent[budget.categoryCode] ?? const <String>[];
 
     return Material(
       color: Colors.transparent,
@@ -811,6 +818,55 @@ class _BudgetCard extends StatelessWidget {
                       style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
                 ],
               ),
+              if (subCategories.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1117),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF21262D)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Sub-Categories',
+                            style: TextStyle(color: Color(0xFF00C896), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          Spacer(),
+                          Text(
+                            'Breakdown',
+                            style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                          ),
+                          SizedBox(width: 2),
+                          Icon(Icons.chevron_right, size: 14, color: Color(0xFF8B949E)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 4,
+                        children: subCategories.map((s) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161B22),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            s,
+                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                          ),
+                        )).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
