@@ -220,6 +220,7 @@ class _BudgetDashboard extends StatefulWidget {
 
 class _BudgetDashboardState extends State<_BudgetDashboard> {
   late Future<String> _householdId;
+  DateTime _selectedMonth = DateTime.now();
 
   @override
   void initState() {
@@ -238,7 +239,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   }
 
   String get _currentMonth =>
-      DateFormat('yyyy-MM-01').format(DateTime.now());
+      DateFormat('yyyy-MM-01').format(_selectedMonth);
 
   @override
   Widget build(BuildContext context) {
@@ -417,14 +418,41 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       pinned: true,
       expandedHeight: 120,
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              DateFormat('MMMM yyyy').format(DateTime.now()),
-              style: GoogleFonts.outfit(
-                  fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
+                  onPressed: () {
+                    setState(() {
+                      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+                    });
+                  },
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  DateFormat('MMMM yyyy').format(_selectedMonth),
+                  style: GoogleFonts.outfit(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
+                  onPressed: () {
+                    setState(() {
+                      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+                    });
+                  },
+                ),
+              ],
             ),
             _SmsStatusIndicator(),
           ],
