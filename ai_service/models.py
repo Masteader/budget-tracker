@@ -125,3 +125,52 @@ class BudgetRow(BaseModel):
     allocated_amount: float
     spent_amount: float
     remaining_amount: float
+    cycle_key: Optional[str] = None
+    previous_cycle_delta: float = 0.0
+    is_active: bool = True
+
+
+# =============================================================================
+# SALARY CYCLE & SUB-BUDGET BREAKDOWN MODELS
+# =============================================================================
+
+class SalaryCycleInfo(BaseModel):
+    cycle_key: str
+    cycle_start: str
+    cycle_end: str
+    label: str
+    month_name: str
+    is_current: Optional[bool] = None
+
+
+class SubCategoryBreakdownItem(BaseModel):
+    sub_code: Optional[str] = None
+    name: str
+    spent_amount: float
+    transaction_count: int
+
+
+class CategoryBreakdownItem(BaseModel):
+    category_code: str
+    category_name: str
+    allocated_amount: float
+    spent_amount: float
+    remaining_amount: float
+    previous_cycle_delta: float = 0.0
+    sub_categories: list[SubCategoryBreakdownItem] = Field(default_factory=list)
+
+
+class BudgetBreakdownResponse(BaseModel):
+    cycle_key: str
+    cycle_info: SalaryCycleInfo
+    categories: list[CategoryBreakdownItem]
+
+
+class CategoryCreateRequest(BaseModel):
+    household_id: str
+    code: str
+    category: str
+    allocated_amount: float = 0.0
+    is_flexible: bool = True
+    keywords: list[str] = Field(default_factory=list)
+

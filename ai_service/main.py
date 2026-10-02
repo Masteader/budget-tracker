@@ -14,16 +14,19 @@ import json
 import logging
 import os
 import time
+from typing import Optional
 
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
+
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
 from graph import sms_graph
-from models import AgentState, SMSWebhookRequest, SMSWebhookResponse
+from models import AgentState, SMSWebhookRequest, SMSWebhookResponse, CategoryCreateRequest
+
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -298,6 +301,69 @@ async def salary_cycle_forecast(household_id: str):
     except Exception as exc:
         logger.error("Failed to generate salary cycle forecast: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/budgets/cycles",
+    tags=["budgets"],
+    summary="List active and available salary cycles for a household.",
+)
+async def list_salary_cycles(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import get_available_cycles_for_household
+    try:
+        return get_available_cycles_for_household(household_id)
+    except Exception as exc:
+        logger.error("Failed to list cycles: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/budgets/breakdown",
+    tags=["budgets"],
+    summary="Get budget categories and sub-budget spending breakdown for a salary cycle.",
+)
+async def get_budget_breakdown(household_id: str, cycle_key: Optional[str] = None):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import get_cycle_breakdown
+    try:
+        return get_cycle_breakdown(household_id, cycle_key)
+    except Exception as exc:
+        logger.error("Failed to get budget breakdown: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/budgets/categories",
+    tags=["budgets"],
+    summary="Add a new category and initial budget allocation.",
+)
+async def add_budget_category(req: CategoryCreateRequest):
+    from salary_cycle import add_category_and_budget
+    try:
+        return add_category_and_budget(req)
+    except Exception as exc:
+        logger.error("Failed to add category: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete(
+    "/budgets/categories/{category_code}",
+    tags=["budgets"],
+    summary="Deactivate or remove a category allocation for a household.",
+)
+async def delete_budget_category(category_code: str, household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import archive_category_for_household
+    try:
+        return archive_category_for_household(household_id, category_code)
+    except Exception as exc:
+        logger.error("Failed to delete category: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 @app.post(

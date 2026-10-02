@@ -361,7 +361,10 @@ def process_receipt_scan(
         raw_sms=audit_text,
         is_reallocated=is_reallocated,
         reallocated_from_budget_id=reallocated_from_id,
+        source="receipt_scan",
+        items=items,
     )
+
 
     if items:
         enrich_transaction_items(tx_id, items)

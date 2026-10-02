@@ -206,12 +206,33 @@ def insert_transaction(
     items: Optional[list] = None,
     receipt_url: Optional[str] = None,
     spent_by: Optional[str] = None,
+    sub_category: Optional[str] = None,
+    cycle_key: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
     The on_transaction_insert trigger automatically updates budgets.spent_amount.
     """
     client = get_client()
+
+    # Automatically derive cycle_key from timestamp if not supplied
+    if not cycle_key:
+        try:
+            from salary_cycle import get_cycle_for_date
+            tx_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            cycle_key = get_cycle_for_date(tx_dt.date())["cycle_key"]
+        except Exception:
+            from salary_cycle import get_cycle_for_date
+            cycle_key = get_cycle_for_date()["cycle_key"]
+
+    # Automatically derive sub_category from keywords if not supplied
+    if not sub_category and category_code:
+        try:
+            from salary_cycle import match_sub_category
+            sub_category = match_sub_category(category_code, f"{merchant} {raw_sms}", items)
+        except Exception:
+            pass
+
     payload = {
         "household_id": household_id,
         "amount": amount,
@@ -230,6 +251,10 @@ def insert_transaction(
         payload["receipt_url"] = receipt_url
     if spent_by:
         payload["spent_by"] = spent_by
+    if sub_category:
+        payload["sub_category"] = sub_category
+    if cycle_key:
+        payload["cycle_key"] = cycle_key
 
     try:
         response = client.table("transactions").insert(payload).execute()
@@ -250,8 +275,8 @@ def insert_transaction(
 
     transaction_id = response.data[0]["id"]
     logger.info(
-        "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s reallocated=%s source=%s",
-        transaction_id, amount, currency, merchant, category_code, is_reallocated, source,
+        "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s sub_category=%s cycle=%s reallocated=%s source=%s",
+        transaction_id, amount, currency, merchant, category_code, sub_category, cycle_key, is_reallocated, source,
     )
     return transaction_id
 

@@ -279,3 +279,282 @@ def simulate_affordability(
         "advice_en": advice_en,
         "advice_ar": advice_ar,
     }
+
+
+def get_cycle_info_for_key(cycle_key: str) -> Dict[str, Any]:
+    """
+    Given a cycle_key like '2026-10', compute cycle dates (Sep 27 to Oct 26) and labels.
+    """
+    parts = cycle_key.split("-")
+    year = int(parts[0])
+    month = int(parts[1])
+    
+    prev_year = year - (1 if month == 1 else 0)
+    prev_month = 12 if month == 1 else month - 1
+    start_date = date(prev_year, prev_month, 27)
+    end_date = date(year, month, 26)
+    cycle_month_name = date(year, month, 1).strftime("%B %Y")
+    
+    return {
+        "cycle_key": cycle_key,
+        "cycle_start": start_date.isoformat(),
+        "cycle_end": end_date.isoformat(),
+        "label": f"{cycle_month_name} Budget ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')})",
+        "month_name": cycle_month_name,
+    }
+
+
+def get_available_cycles_for_household(household_id: str) -> Dict[str, Any]:
+    """
+    Returns the active salary cycle and all historical available cycles for a household.
+    """
+    from supabase_client import get_client, ensure_household_cycle_budgets
+    
+    ensure_household_cycle_budgets(household_id)
+    current_cycle = get_cycle_for_date()
+    
+    client = get_client()
+    res = client.table("budgets").select("cycle_key, month").eq("household_id", household_id).execute()
+    keys = set()
+    for row in res.data or []:
+        ck = row.get("cycle_key")
+        if ck and len(ck) == 7:
+            keys.add(ck)
+        elif row.get("month"):
+            keys.add(row["month"][:7])
+            
+    keys.add(current_cycle["cycle_key"])
+    
+    sorted_keys = sorted(list(keys), reverse=True)
+    cycles = []
+    for k in sorted_keys:
+        info = get_cycle_info_for_key(k)
+        info["is_current"] = (k == current_cycle["cycle_key"])
+        cycles.append(info)
+        
+    return {
+        "current_cycle": current_cycle,
+        "cycles": cycles,
+    }
+
+
+def match_sub_category(category_code: str, text: str, items: Optional[list] = None) -> Optional[str]:
+    """
+    Matches merchant, SMS text, or item descriptions against seeded sub-category keywords.
+    """
+    from supabase_client import get_client
+    client = get_client()
+    try:
+        subs = client.table("cost_control_sub_categories").select("*").eq("parent_code", category_code).execute().data or []
+    except Exception:
+        return None
+        
+    search_corpus = (text or "").lower()
+    if items:
+        for it in items:
+            search_corpus += " " + str(it.get("name", "")).lower()
+            
+    for sub in subs:
+        keywords = sub.get("keywords") or []
+        for kw in keywords:
+            if kw.lower() in search_corpus:
+                return sub["sub_code"]
+    return None
+
+
+def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Fetches categories and aggregates sub-budget spending for the given salary cycle.
+    """
+    from supabase_client import get_client, ensure_household_cycle_budgets
+    
+    current_cycle = get_cycle_for_date()
+    target_key = cycle_key or current_cycle["cycle_key"]
+    cycle_info = get_cycle_info_for_key(target_key)
+    
+    if target_key == current_cycle["cycle_key"]:
+        ensure_household_cycle_budgets(household_id)
+        
+    client = get_client()
+    
+    # 1. Fetch budgets for this cycle
+    budgets_resp = client.table("budgets").select("*").eq("household_id", household_id).execute()
+    all_budgets = budgets_resp.data or []
+    
+    cycle_budgets = [
+        b for b in all_budgets 
+        if (b.get("cycle_key") == target_key or (not b.get("cycle_key") and b.get("month", "")[:7] == target_key))
+        and b.get("is_active", True) is not False
+    ]
+    
+    if not cycle_budgets and target_key == current_cycle["cycle_key"]:
+        cycle_budgets = ensure_household_cycle_budgets(household_id)
+        
+    # 2. Category names lookup
+    codes_resp = client.table("cost_control_codes").select("code, category").execute()
+    cat_names = {c["code"]: c["category"] for c in (codes_resp.data or [])}
+    
+    # 3. Sub-categories definitions
+    sub_resp = client.table("cost_control_sub_categories").select("*").execute()
+    sub_defs_by_parent = {}
+    for s in (sub_resp.data or []):
+        p = s["parent_code"]
+        if p not in sub_defs_by_parent:
+            sub_defs_by_parent[p] = []
+        sub_defs_by_parent[p].append(s)
+        
+    # 4. Fetch transactions in this cycle date range
+    start_ts = f"{cycle_info['cycle_start']}T00:00:00"
+    end_ts = f"{cycle_info['cycle_end']}T23:59:59"
+    txs_resp = client.table("transactions").select("*").eq("household_id", household_id).gte("timestamp", start_ts).lte("timestamp", end_ts).execute()
+    txs = txs_resp.data or []
+    
+    txs_cycle_resp = client.table("transactions").select("*").eq("household_id", household_id).eq("cycle_key", target_key).execute()
+    existing_ids = {t["id"] for t in txs}
+    for t in (txs_cycle_resp.data or []):
+        if t["id"] not in existing_ids:
+            txs.append(t)
+            
+    cat_sub_spending = {}
+    for tx in txs:
+        c_code = tx.get("category_code") or "OPEX-MISC"
+        s_code = tx.get("sub_category")
+        amt = float(tx.get("amount") or 0.0)
+        
+        key = (c_code, s_code or "other")
+        if key not in cat_sub_spending:
+            cat_sub_spending[key] = {"spent": 0.0, "count": 0}
+        cat_sub_spending[key]["spent"] += amt
+        cat_sub_spending[key]["count"] += 1
+
+    # 5. Build category breakdown items
+    categories = []
+    for b in cycle_budgets:
+        c_code = b["category_code"]
+        c_name = cat_names.get(c_code, c_code)
+        allocated = float(b.get("allocated_amount") or 0.0)
+        prev_delta = float(b.get("previous_cycle_delta") or 0.0)
+        
+        sub_items = []
+        predefined = sub_defs_by_parent.get(c_code, [])
+        used_sub_codes = set()
+        
+        for pre in predefined:
+            sc_code = pre["sub_code"]
+            used_sub_codes.add(sc_code)
+            sp_data = cat_sub_spending.get((c_code, sc_code), {"spent": 0.0, "count": 0})
+            sub_items.append({
+                "sub_code": sc_code,
+                "name": pre["name_en"],
+                "spent_amount": round(sp_data["spent"], 2),
+                "transaction_count": sp_data["count"],
+            })
+            
+        other_sp = cat_sub_spending.get((c_code, "other"), {"spent": 0.0, "count": 0})
+        for (c, sc), data in cat_sub_spending.items():
+            if c == c_code and sc != "other" and sc not in used_sub_codes:
+                sub_items.append({
+                    "sub_code": sc,
+                    "name": sc.replace("_", " ").title(),
+                    "spent_amount": round(data["spent"], 2),
+                    "transaction_count": data["count"],
+                })
+                
+        if other_sp["spent"] > 0 or other_sp["count"] > 0 or not sub_items:
+            sub_items.append({
+                "sub_code": "other",
+                "name": "General / Other",
+                "spent_amount": round(other_sp["spent"], 2),
+                "transaction_count": other_sp["count"],
+            })
+            
+        total_sub_spent = sum(item["spent_amount"] for item in sub_items)
+        actual_spent = max(total_sub_spent, float(b.get("spent_amount") or 0.0))
+        remaining = allocated - actual_spent
+        
+        categories.append({
+            "category_code": c_code,
+            "category_name": c_name,
+            "allocated_amount": allocated,
+            "spent_amount": round(actual_spent, 2),
+            "remaining_amount": round(remaining, 2),
+            "previous_cycle_delta": prev_delta,
+            "sub_categories": sub_items,
+        })
+        
+    return {
+        "cycle_key": target_key,
+        "cycle_info": cycle_info,
+        "categories": categories,
+    }
+
+
+def add_category_and_budget(req: Any) -> Dict[str, Any]:
+    from supabase_client import get_client
+    client = get_client()
+    
+    keywords = req.keywords or [req.category.lower()]
+    existing_code = client.table("cost_control_codes").select("id").eq("code", req.code).execute().data
+    if existing_code:
+        client.table("cost_control_codes").update({
+            "category": req.category,
+            "keywords": keywords,
+            "is_flexible": req.is_flexible,
+        }).eq("code", req.code).execute()
+    else:
+        client.table("cost_control_codes").insert({
+            "code": req.code,
+            "category": req.category,
+            "keywords": keywords,
+            "is_flexible": req.is_flexible,
+        }).execute()
+    
+    current_cycle = get_cycle_for_date()
+    today = datetime.now(timezone.utc).date()
+    month_str = today.replace(day=1).isoformat()
+    
+    existing_b = (
+        client.table("budgets")
+        .select("id")
+        .eq("household_id", req.household_id)
+        .eq("category_code", req.code)
+        .eq("cycle_key", current_cycle["cycle_key"])
+        .execute()
+        .data
+    )
+    if existing_b:
+        client.table("budgets").update({
+            "allocated_amount": req.allocated_amount,
+            "is_active": True,
+        }).eq("id", existing_b[0]["id"]).execute()
+    else:
+        budget_payload = {
+            "household_id": req.household_id,
+            "month": month_str,
+            "cycle_key": current_cycle["cycle_key"],
+            "category_code": req.code,
+            "allocated_amount": req.allocated_amount,
+            "spent_amount": 0.0,
+            "previous_cycle_delta": 0.0,
+            "is_active": True,
+        }
+        client.table("budgets").insert(budget_payload).execute()
+    
+    return {
+        "status": "success",
+        "category_code": req.code,
+        "category": req.category,
+        "allocated_amount": req.allocated_amount,
+    }
+
+
+
+def archive_category_for_household(household_id: str, category_code: str) -> Dict[str, Any]:
+    from supabase_client import get_client
+    client = get_client()
+    client.table("budgets").update({"is_active": False}).eq("household_id", household_id).eq("category_code", category_code).execute()
+    return {
+        "status": "success",
+        "message": f"Category {category_code} archived successfully.",
+    }
+
