@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
@@ -331,59 +332,25 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     Budget? existing,
     String categoryCode,
   ) async {
-    final ctrl = TextEditingController(
-      text: existing?.allocatedAmount.toStringAsFixed(2) ?? '',
+    final match = data.allCodes.firstWhere(
+      (c) => c['code'] == categoryCode,
+      orElse: () => {'category': categoryCode},
     );
+    final catName = match['category'] ?? categoryCode;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
-        title: Text('Set budget: $categoryCode'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            hintText: 'Amount (SAR)',
-            prefixText: 'SAR ',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save')),
-        ],
-      ),
+    await SubBudgetAllocationDialog.show(
+      context,
+      householdId: data.householdId,
+      categoryCode: categoryCode,
+      categoryName: catName,
+      existingBudget: existing,
+      cycleKey: _currentCycleKey,
+      onSaved: () {
+        if (mounted) setState(() {});
+      },
     );
-
-    if (confirmed != true) return;
-    final amount = double.tryParse(ctrl.text);
-    if (amount == null || amount < 0) return;
-
-    if (existing != null) {
-      await supabase
-          .from('budgets')
-          .update({
-            'allocated_amount': amount,
-            'is_active': true,
-            'cycle_key': _currentCycleKey,
-          })
-          .eq('id', existing.id);
-    } else {
-      await supabase.from('budgets').insert({
-        'household_id': data.householdId,
-        'month': _currentMonthStr,
-        'cycle_key': _currentCycleKey,
-        'category_code': categoryCode,
-        'allocated_amount': amount,
-        'spent_amount': 0,
-        'is_active': true,
-      });
-    }
   }
+
 
   @override
   Widget build(BuildContext context) {
