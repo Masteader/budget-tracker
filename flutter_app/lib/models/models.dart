@@ -133,6 +133,9 @@ class Budget {
   final double allocatedAmount;
   final double spentAmount;
   final double remainingAmount;
+  final String? cycleKey;
+  final double previousCycleDelta;
+  final bool isActive;
 
   const Budget({
     required this.id,
@@ -142,6 +145,9 @@ class Budget {
     required this.allocatedAmount,
     required this.spentAmount,
     required this.remainingAmount,
+    this.cycleKey,
+    this.previousCycleDelta = 0.0,
+    this.isActive = true,
   });
 
   factory Budget.fromMap(Map<String, dynamic> map) => Budget(
@@ -152,11 +158,110 @@ class Budget {
         allocatedAmount: (map['allocated_amount'] as num).toDouble(),
         spentAmount: (map['spent_amount'] as num).toDouble(),
         remainingAmount: (map['remaining_amount'] as num).toDouble(),
+        cycleKey: map['cycle_key'] as String?,
+        previousCycleDelta: (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
+        isActive: map['is_active'] as bool? ?? true,
       );
 
   double get usagePercent =>
       allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
 }
+
+// ── Salary Cycle & Sub-Budgets ───────────────────────────────────────────────
+
+class SalaryCycleInfo {
+  final String cycleKey;
+  final String cycleStart;
+  final String cycleEnd;
+  final String label;
+  final String monthName;
+  final bool isCurrent;
+
+  const SalaryCycleInfo({
+    required this.cycleKey,
+    required this.cycleStart,
+    required this.cycleEnd,
+    required this.label,
+    required this.monthName,
+    this.isCurrent = false,
+  });
+
+  factory SalaryCycleInfo.fromMap(Map<String, dynamic> map) => SalaryCycleInfo(
+        cycleKey: map['cycle_key'] as String? ?? '',
+        cycleStart: map['cycle_start'] as String? ?? '',
+        cycleEnd: map['cycle_end'] as String? ?? '',
+        label: map['label'] as String? ?? '',
+        monthName: map['month_name'] as String? ?? '',
+        isCurrent: map['is_current'] as bool? ?? false,
+      );
+}
+
+class SubCategoryBreakdownItem {
+  final String? subCode;
+  final String name;
+  final double spentAmount;
+  final int transactionCount;
+
+  const SubCategoryBreakdownItem({
+    this.subCode,
+    required this.name,
+    required this.spentAmount,
+    required this.transactionCount,
+  });
+
+  factory SubCategoryBreakdownItem.fromMap(Map<String, dynamic> map) =>
+      SubCategoryBreakdownItem(
+        subCode: map['sub_code'] as String?,
+        name: map['name'] as String? ?? '',
+        spentAmount: (map['spent_amount'] as num?)?.toDouble() ?? 0.0,
+        transactionCount: (map['transaction_count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class CategoryBreakdownItem {
+  final String categoryCode;
+  final String categoryName;
+  final double allocatedAmount;
+  final double spentAmount;
+  final double remainingAmount;
+  final double previousCycleDelta;
+  final List<SubCategoryBreakdownItem> subCategories;
+
+  const CategoryBreakdownItem({
+    required this.categoryCode,
+    required this.categoryName,
+    required this.allocatedAmount,
+    required this.spentAmount,
+    required this.remainingAmount,
+    this.previousCycleDelta = 0.0,
+    this.subCategories = const [],
+  });
+
+  factory CategoryBreakdownItem.fromMap(Map<String, dynamic> map) {
+    List<SubCategoryBreakdownItem> subs = [];
+    if (map['sub_categories'] != null && map['sub_categories'] is List) {
+      subs = (map['sub_categories'] as List)
+          .map((item) => SubCategoryBreakdownItem.fromMap(
+              Map<String, dynamic>.from(item as Map)))
+          .toList();
+    }
+
+    return CategoryBreakdownItem(
+      categoryCode: map['category_code'] as String? ?? '',
+      categoryName: map['category_name'] as String? ?? '',
+      allocatedAmount: (map['allocated_amount'] as num?)?.toDouble() ?? 0.0,
+      spentAmount: (map['spent_amount'] as num?)?.toDouble() ?? 0.0,
+      remainingAmount: (map['remaining_amount'] as num?)?.toDouble() ?? 0.0,
+      previousCycleDelta:
+          (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
+      subCategories: subs,
+    );
+  }
+
+  double get usagePercent =>
+      allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
+}
+
 
 // ── Household ────────────────────────────────────────────────────────────────
 

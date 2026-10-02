@@ -381,4 +381,101 @@ class ApiService {
       return [];
     }
   }
+
+  // ── GET /budgets/cycles ───────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getSalaryCycles(String householdId) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/budgets/cycles?household_id=$householdId');
+      final response = await http
+          .get(uri, headers: _buildHeaders())
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── GET /budgets/breakdown ────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getBudgetBreakdown(
+    String householdId, {
+    String? cycleKey,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/budgets/breakdown').replace(queryParameters: {
+        'household_id': householdId,
+        if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+      });
+      final response = await http
+          .get(uri, headers: _buildHeaders())
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── POST /budgets/categories ──────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> addBudgetCategory({
+    required String householdId,
+    required String code,
+    required String category,
+    required double allocatedAmount,
+    bool isFlexible = true,
+    List<String> keywords = const [],
+  }) async {
+    final payload = jsonEncode({
+      'household_id': householdId,
+      'code': code,
+      'category': category,
+      'allocated_amount': allocatedAmount,
+      'is_flexible': isFlexible,
+      'keywords': keywords,
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/budgets/categories'),
+            headers: _buildHeaders(),
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── DELETE /budgets/categories/{code} ─────────────────────────────────────
+
+  Future<Map<String, dynamic>> archiveBudgetCategory(
+    String householdId,
+    String categoryCode,
+  ) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/budgets/categories/$categoryCode?household_id=$householdId');
+      final response = await http
+          .delete(uri, headers: _buildHeaders())
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
+
