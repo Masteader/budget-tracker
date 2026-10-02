@@ -369,6 +369,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       ),
     );
   }
+}
 
 class _BudgetStaticData {
   final String householdId;
