@@ -25,6 +25,37 @@ def adjust_saudi_payday(target_date: date) -> date:
     return target_date
 
 
+def get_cycle_for_date(target_date: Optional[date] = None) -> Dict[str, Any]:
+    """
+    Computes Saudi 27th salary cycle boundaries (27th of M-1 to 26th of M).
+    Cycle is designated by Month M (the Payday Month).
+    Example: Sep 27 - Oct 26 is named 'October 2026 Budget' (cycle_key: '2026-10').
+    """
+    today = target_date or datetime.now(timezone.utc).date()
+    if today.day >= 27:
+        start_date = today.replace(day=27)
+        year = today.year + (1 if today.month == 12 else 0)
+        month = 1 if today.month == 12 else today.month + 1
+        end_date = date(year, month, 26)
+        cycle_key = f"{year:04d}-{month:02d}"
+        cycle_month_name = date(year, month, 1).strftime("%B %Y")
+    else:
+        year = today.year - (1 if today.month == 1 else 0)
+        prev_month = 12 if today.month == 1 else today.month - 1
+        start_date = date(year, prev_month, 27)
+        end_date = today.replace(day=26)
+        cycle_key = f"{today.year:04d}-{today.month:02d}"
+        cycle_month_name = today.strftime("%B %Y")
+
+    return {
+        "cycle_key": cycle_key,
+        "cycle_start": start_date.isoformat(),
+        "cycle_end": end_date.isoformat(),
+        "label": f"{cycle_month_name} Budget ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')})",
+        "month_name": cycle_month_name,
+    }
+
+
 def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
     """
     Computes current Saudi salary cycle dates (27th to 26th).
@@ -32,20 +63,15 @@ def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
     If current day is < 27, cycle started on 27th of previous month.
     """
     today = current or datetime.now(timezone.utc).date()
-    
+    cycle_info = get_cycle_for_date(today)
+    start_date = date.fromisoformat(cycle_info["cycle_start"])
+    end_date = date.fromisoformat(cycle_info["cycle_end"])
+
     if today.day >= 27:
-        start_date = today.replace(day=27)
-        # End date is 26th of next month
         year = today.year + (1 if today.month == 12 else 0)
         month = 1 if today.month == 12 else today.month + 1
-        end_date = date(year, month, 26)
         nominal_payday = date(year, month, 27)
     else:
-        # Start date was 27th of previous month
-        year = today.year - (1 if today.month == 1 else 0)
-        month = 12 if today.month == 1 else today.month - 1
-        start_date = date(year, month, 27)
-        end_date = today.replace(day=26)
         nominal_payday = today.replace(day=27)
 
     actual_payday = adjust_saudi_payday(nominal_payday)
@@ -57,6 +83,8 @@ def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
         "today": today.isoformat(),
         "cycle_start": start_date.isoformat(),
         "cycle_end": end_date.isoformat(),
+        "cycle_key": cycle_info["cycle_key"],
+        "cycle_label": cycle_info["label"],
         "nominal_payday": nominal_payday.isoformat(),
         "payday": actual_payday.isoformat(),
         "actual_payday": actual_payday.isoformat(),
@@ -75,15 +103,25 @@ def get_salary_cycle_forecast(household_id: str, current: Optional[date] = None)
     today = current or datetime.now(timezone.utc).date()
     client = get_client()
 
-    # Query budgets for current month
-    month_start = today.replace(day=1).isoformat()
+    # Query budgets for current cycle
     budgets_resp = (
         client.table("budgets")
         .select("*")
         .eq("household_id", household_id)
-        .eq("month", month_start)
+        .eq("cycle_key", cycle["cycle_key"])
         .execute()
     )
+
+    if not budgets_resp.data:
+        # Fallback query by month
+        month_start = today.replace(day=1).isoformat()
+        budgets_resp = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("month", month_start)
+            .execute()
+        )
     budgets = budgets_resp.data or []
 
     total_allocated = sum(float(b.get("allocated_amount", 0.0)) for b in budgets)

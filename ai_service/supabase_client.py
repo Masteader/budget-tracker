@@ -273,3 +273,69 @@ def is_duplicate_sms(raw_sms: str, household_id: str, window_seconds: int = 60) 
         .execute()
     )
     return bool(response.data)
+
+
+def ensure_household_cycle_budgets(household_id: str, target_date: Optional[date] = None) -> list[dict]:
+    """
+    Ensure budget allocation rows exist for the 27th salary cycle corresponding to target_date.
+    If rows exist for cycle_key, return them.
+    If missing, automatically roll over from the most recent active cycle:
+    - Sets allocated_amount to previous allocated_amount
+    - Sets spent_amount = 0.0
+    - Computes previous_cycle_delta = (prev_allocated - prev_spent)
+    - Sets cycle_key and month
+    """
+    from salary_cycle import get_cycle_for_date
+    cycle_info = get_cycle_for_date(target_date)
+    cycle_key = cycle_info["cycle_key"]
+    client = get_client()
+
+    # 1. Check existing for this cycle
+    existing = client.table("budgets").select("*").eq("household_id", household_id).eq("cycle_key", cycle_key).execute().data
+    if existing:
+        return existing
+
+    # Fallback check by month
+    target_d = target_date or datetime.now(timezone.utc).date()
+    month_str = target_d.replace(day=1).isoformat()
+    existing_month = client.table("budgets").select("*").eq("household_id", household_id).eq("month", month_str).execute().data
+    if existing_month:
+        # Backfill cycle_key on them
+        client.table("budgets").update({"cycle_key": cycle_key}).eq("household_id", household_id).eq("month", month_str).execute()
+        for b in existing_month:
+            b["cycle_key"] = cycle_key
+        return existing_month
+
+    # 2. Find latest previous cycle to roll over from
+    all_prev = client.table("budgets").select("*").eq("household_id", household_id).order("month", desc=True).execute().data
+    if not all_prev:
+        return []
+
+    # Group by latest month / cycle
+    latest_month = all_prev[0]["month"]
+    latest_rows = [b for b in all_prev if b["month"] == latest_month and b.get("is_active", True)]
+
+    # 3. Create new cycle rows with rollover
+    new_rows = []
+    for prev in latest_rows:
+        prev_allocated = float(prev.get("allocated_amount") or 0.0)
+        prev_spent = float(prev.get("spent_amount") or 0.0)
+        delta = round(prev_allocated - prev_spent, 2)
+
+        new_rows.append({
+            "household_id": household_id,
+            "month": month_str,
+            "cycle_key": cycle_key,
+            "category_code": prev["category_code"],
+            "allocated_amount": prev_allocated,
+            "spent_amount": 0.0,
+            "previous_cycle_delta": delta,
+            "is_active": True,
+        })
+
+    if new_rows:
+        inserted = client.table("budgets").insert(new_rows).execute().data
+        logger.info("Auto-rolled over %d budgets for household=%s cycle=%s", len(new_rows), household_id, cycle_key)
+        return inserted
+
+    return []
