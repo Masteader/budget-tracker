@@ -420,41 +420,35 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
-                  onPressed: () {
-                    setState(() {
-                      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
-                    });
-                  },
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  DateFormat('MMMM yyyy').format(_selectedMonth),
-                  style: GoogleFonts.outfit(
-                      fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
-                  onPressed: () {
-                    setState(() {
-                      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
-                    });
-                  },
-                ),
-              ],
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
+              onPressed: () {
+                setState(() {
+                  _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+                });
+              },
             ),
-            _SmsStatusIndicator(),
+            const SizedBox(width: 4),
+            Text(
+              DateFormat('MMMM yyyy').format(_selectedMonth),
+              style: GoogleFonts.outfit(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
+              onPressed: () {
+                setState(() {
+                  _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+                });
+              },
+            ),
           ],
         ),
         background: Container(
@@ -481,87 +475,6 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           onPressed: () => supabase.auth.signOut(),
         ),
       ],
-    );
-  }
-}
-
-// ─── SMS Status Indicator ──────────────────────────────────────────────────
-
-class _SmsStatusIndicator extends StatefulWidget {
-  @override
-  State<_SmsStatusIndicator> createState() => _SmsStatusIndicatorState();
-}
-
-class _SmsStatusIndicatorState extends State<_SmsStatusIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-        vsync: this, duration: const Duration(seconds: 1))
-      ..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: SmsService.instance.listeningNotifier,
-      builder: (ctx, active, _) {
-        return GestureDetector(
-          onTap: () async {
-            if (active) {
-              await SmsService.instance.stopService();
-            } else {
-              await SmsService.instance.startService();
-            }
-          },
-          child: AnimatedBuilder(
-            animation: _pulse,
-            builder: (ctx, _) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: (active ? const Color(0xFF00C896) : Colors.redAccent)
-                    .withValues(alpha: 0.15 + _pulse.value * 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: active ? const Color(0xFF00C896) : Colors.redAccent,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: active ? const Color(0xFF00C896) : Colors.redAccent,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    active ? 'SMS ON' : 'SMS OFF',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: active ? const Color(0xFF00C896) : Colors.redAccent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
