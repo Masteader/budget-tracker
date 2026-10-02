@@ -477,5 +477,38 @@ class ApiService {
       return {'status': 'error', 'message': e.toString()};
     }
   }
+
+  // ── POST /budgets/sub-allocations ─────────────────────────────────────────
+
+  Future<Map<String, dynamic>> saveSubAllocations({
+    required String householdId,
+    required String categoryCode,
+    required Map<String, double> subAllocations,
+    String? cycleKey,
+  }) async {
+    final payload = jsonEncode({
+      'household_id': householdId,
+      'category_code': categoryCode,
+      'sub_allocations': subAllocations,
+      if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/budgets/sub-allocations'),
+            headers: _buildHeaders(),
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
+
 

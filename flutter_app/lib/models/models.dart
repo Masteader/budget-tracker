@@ -136,6 +136,7 @@ class Budget {
   final String? cycleKey;
   final double previousCycleDelta;
   final bool isActive;
+  final Map<String, double> subAllocations;
 
   const Budget({
     required this.id,
@@ -148,6 +149,7 @@ class Budget {
     this.cycleKey,
     this.previousCycleDelta = 0.0,
     this.isActive = true,
+    this.subAllocations = const {},
   });
 
   factory Budget.fromMap(Map<String, dynamic> map) => Budget(
@@ -161,6 +163,10 @@ class Budget {
         cycleKey: map['cycle_key'] as String?,
         previousCycleDelta: (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
         isActive: map['is_active'] as bool? ?? true,
+        subAllocations: (map['sub_allocations'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, (v as num).toDouble()),
+            ) ??
+            const {},
       );
 
   double get usagePercent =>
@@ -199,12 +205,14 @@ class SalaryCycleInfo {
 class SubCategoryBreakdownItem {
   final String? subCode;
   final String name;
+  final double allocatedAmount;
   final double spentAmount;
   final int transactionCount;
 
   const SubCategoryBreakdownItem({
     this.subCode,
     required this.name,
+    this.allocatedAmount = 0.0,
     required this.spentAmount,
     required this.transactionCount,
   });
@@ -213,10 +221,15 @@ class SubCategoryBreakdownItem {
       SubCategoryBreakdownItem(
         subCode: map['sub_code'] as String?,
         name: map['name'] as String? ?? '',
+        allocatedAmount: (map['allocated_amount'] as num?)?.toDouble() ?? 0.0,
         spentAmount: (map['spent_amount'] as num?)?.toDouble() ?? 0.0,
         transactionCount: (map['transaction_count'] as num?)?.toInt() ?? 0,
       );
+
+  double get usagePercent =>
+      allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
 }
+
 
 class CategoryBreakdownItem {
   final String categoryCode;
