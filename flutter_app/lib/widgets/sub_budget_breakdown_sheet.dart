@@ -211,17 +211,40 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                   icon: const Icon(Icons.edit_outlined, color: Color(0xFF00C896), size: 20),
                   tooltip: 'Edit Sub-Allocations',
                   onPressed: () async {
+                    Budget? existing;
+                    if (_categoryData != null) {
+                      final allocMap = <String, double>{};
+                      for (final s in _categoryData!.subCategories) {
+                        if (s.subCode != null && s.allocatedAmount > 0) {
+                          allocMap[s.subCode!] = s.allocatedAmount;
+                        }
+                      }
+                      existing = Budget(
+                        id: '',
+                        householdId: widget.householdId,
+                        month: '${widget.cycleKey ?? "2026-10"}-01',
+                        categoryCode: widget.categoryCode,
+                        allocatedAmount: _categoryData!.allocatedAmount,
+                        spentAmount: _categoryData!.spentAmount,
+                        remainingAmount: _categoryData!.remainingAmount,
+                        cycleKey: widget.cycleKey,
+                        subAllocations: allocMap,
+                      );
+                    }
+
                     final updated = await SubBudgetAllocationDialog.show(
                       context,
                       householdId: widget.householdId,
                       categoryCode: widget.categoryCode,
                       categoryName: _categoryData?.categoryName ?? widget.categoryCode,
+                      existingBudget: existing,
                       cycleKey: widget.cycleKey,
                     );
                     if (updated == true) {
                       _loadBreakdown();
                     }
                   },
+
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Color(0xFF8B949E)),

@@ -115,6 +115,53 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     });
   }
 
+  static const Map<String, List<Map<String, String>>> kDefaultSubCategoriesCatalog = {
+  'OPEX-UTILITIES': [
+    {'sub_code': 'housing_rent', 'name_en': 'Housing Rent', 'name_ar': 'إيجار السكن'},
+    {'sub_code': 'electricity_sec', 'name_en': 'Electricity (SEC)', 'name_ar': 'فاتورة الكهرباء'},
+    {'sub_code': 'fiber_internet', 'name_en': 'Home Fiber Internet', 'name_ar': 'الإنترنت المنزلي'},
+    {'sub_code': 'mobile_sims', 'name_en': 'Mobile SIMs & Data', 'name_ar': 'باقات الجوال والاتصالات'},
+    {'sub_code': 'water_municipal', 'name_en': 'Water & Municipal Bills', 'name_ar': 'المياه والخدمات البلدية'},
+  ],
+  'OPEX-DINING': [
+    {'sub_code': 'restaurants_dinners', 'name_en': 'Restaurants & Meals', 'name_ar': 'المطاعم والوجبات'},
+    {'sub_code': 'coffee_bakeries', 'name_en': 'Coffee & Bakeries', 'name_ar': 'القهوة والمخابز'},
+    {'sub_code': 'delivery_apps', 'name_en': 'Delivery Apps', 'name_ar': 'تطبيقات التوصيل'},
+  ],
+  'OPEX-GROCERY': [
+    {'sub_code': 'meat', 'name_en': 'Meat & Poultry', 'name_ar': 'اللحوم والدواجن'},
+    {'sub_code': 'vegetables_fruit', 'name_en': 'Fresh Produce & Fruits', 'name_ar': 'الخضار والفواكه'},
+    {'sub_code': 'dairy_eggs', 'name_en': 'Dairy & Eggs', 'name_ar': 'الألبان والبيض'},
+    {'sub_code': 'snacks_chips', 'name_en': 'Snacks, Chips & Sweets', 'name_ar': 'الشيبس والسناكات والحلويات'},
+    {'sub_code': 'beverages', 'name_en': 'Beverages & Water', 'name_ar': 'المشروبات والمياه'},
+    {'sub_code': 'pantry_staples', 'name_en': 'Pantry & Staples', 'name_ar': 'التموين والمؤن'},
+    {'sub_code': 'cleaning_household', 'name_en': 'Cleaning Supplies', 'name_ar': 'المنظفات ومستلزمات المنزل'},
+  ],
+  'OPEX-FUEL': [
+    {'sub_code': 'gas_fuel', 'name_en': 'Gasoline & Fuel', 'name_ar': 'بنزين ووقود'},
+    {'sub_code': 'car_maintenance', 'name_en': 'Car Maintenance & Oil', 'name_ar': 'صيانة وتغيير الزيت'},
+    {'sub_code': 'ride_hailing', 'name_en': 'Ride Hailing (Uber/Bolt)', 'name_ar': 'تطبيقات النقل والتوصيل'},
+  ],
+  'OPEX-HEALTH': [
+    {'sub_code': 'prescriptions_meds', 'name_en': 'Prescriptions & Medicines', 'name_ar': 'الأدوية والوصفات'},
+    {'sub_code': 'clinics_dental', 'name_en': 'Clinics & Dental', 'name_ar': 'العيادات والأسنان'},
+  ],
+  'OPEX-SHOPPING': [
+    {'sub_code': 'clothing_fashion', 'name_en': 'Clothing & Fashion', 'name_ar': 'الملابس والأزياء'},
+    {'sub_code': 'electronics_gadgets', 'name_en': 'Electronics & Gadgets', 'name_ar': 'الإلكترونيات والتقنية'},
+    {'sub_code': 'home_furniture', 'name_en': 'Home Goods & Furniture', 'name_ar': 'الأثاث والمفروشات'},
+  ],
+  'OPEX-ENTERTAINMENT': [
+    {'sub_code': 'cinema_outings', 'name_en': 'Cinema & Outings', 'name_ar': 'سينما ونزهات'},
+    {'sub_code': 'gaming_subscriptions', 'name_en': 'Gaming & Subscriptions', 'name_ar': 'ألعاب واشتراكات'},
+    {'sub_code': 'events_activities', 'name_en': 'Events & Activities', 'name_ar': 'فعاليات وأنشطة'},
+  ],
+  'CAPEX-EDUCATION': [
+    {'sub_code': 'tuition_fees', 'name_en': 'Tuition Fees', 'name_ar': 'رسوم دراسية'},
+    {'sub_code': 'books_supplies', 'name_en': 'Books & Supplies', 'name_ar': 'كتب ومستلزمات'},
+  ],
+};
+
   Future<void> _loadSubCategories() async {
     try {
       final res = await supabase
@@ -123,11 +170,22 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           .eq('parent_code', widget.categoryCode)
           .order('id');
 
+      List<Map<String, String>> rawDefs = [];
+      if (res is List && res.isNotEmpty) {
+        rawDefs = res.map((row) => {
+          'sub_code': row['sub_code'] as String,
+          'name_en': row['name_en'] as String? ?? (row['sub_code'] as String),
+          'name_ar': row['name_ar'] as String? ?? '',
+        }).toList();
+      } else {
+        rawDefs = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
+      }
+
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
-      final list = (res as List).map((row) {
-        final code = row['sub_code'] as String;
-        final nameEn = row['name_en'] as String? ?? code;
-        final nameAr = row['name_ar'] as String? ?? '';
+      final list = rawDefs.map((row) {
+        final code = row['sub_code']!;
+        final nameEn = row['name_en']!;
+        final nameAr = row['name_ar'] ?? '';
         final existingVal = existingAllocs[code];
         final ctrl = TextEditingController(
           text: (existingVal != null && existingVal > 0)
@@ -151,15 +209,37 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         _recomputeTotal();
       }
     } catch (e) {
+      final defaultList = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
+      final existingAllocs = widget.existingBudget?.subAllocations ?? {};
+      final list = defaultList.map((row) {
+        final code = row['sub_code']!;
+        final nameEn = row['name_en']!;
+        final nameAr = row['name_ar'] ?? '';
+        final existingVal = existingAllocs[code];
+        final ctrl = TextEditingController(
+          text: (existingVal != null && existingVal > 0)
+              ? existingVal.toStringAsFixed(2)
+              : '',
+        );
+        ctrl.addListener(_recomputeTotal);
+        return _SubCategoryItemDef(
+          subCode: code,
+          nameEn: nameEn,
+          nameAr: nameAr,
+          controller: ctrl,
+        );
+      }).toList();
+
       if (mounted) {
         setState(() {
+          _subItems.addAll(list);
           _isLoading = false;
-          _errorMessage = 'Could not load sub-categories catalog: $e';
         });
         _recomputeTotal();
       }
     }
   }
+
 
   Future<void> _handleSave() async {
     setState(() {
@@ -198,16 +278,32 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             'is_active': true,
           }).eq('id', widget.existingBudget!.id);
         } else {
-          await supabase.from('budgets').insert({
-            'household_id': widget.householdId,
-            'category_code': widget.categoryCode,
-            'allocated_amount': amount,
-            'spent_amount': 0.0,
-            'month': monthStr,
-            'cycle_key': cycleKey,
-            'is_active': true,
-          });
+          final existingCheck = await supabase
+              .from('budgets')
+              .select('id')
+              .eq('household_id', widget.householdId)
+              .eq('category_code', widget.categoryCode)
+              .maybeSingle();
+
+          if (existingCheck != null) {
+            await supabase.from('budgets').update({
+              'allocated_amount': amount,
+              'cycle_key': cycleKey,
+              'is_active': true,
+            }).eq('id', existingCheck['id']);
+          } else {
+            await supabase.from('budgets').insert({
+              'household_id': widget.householdId,
+              'category_code': widget.categoryCode,
+              'allocated_amount': amount,
+              'spent_amount': 0.0,
+              'month': monthStr,
+              'cycle_key': cycleKey,
+              'is_active': true,
+            });
+          }
         }
+
       }
 
       if (mounted) {
@@ -317,40 +413,49 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                   ),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'TOTAL MAIN CATEGORY BUDGET',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF00C896),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'TOTAL MAIN CATEGORY BUDGET',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF00C896),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Auto-sums all sub-categories',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF8B949E),
-                            fontSize: 11,
+                          const SizedBox(height: 4),
+                          Text(
+                            'Auto-sums all sub-categories',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF8B949E),
+                              fontSize: 11,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    Text(
-                      'SAR ${_currencyFmt.format(_totalSum)}',
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'SAR ${_currencyFmt.format(_totalSum)}',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
+
               ),
             ),
             const SizedBox(height: 16),
@@ -551,10 +656,14 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                               width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                             )
-                          : Text(
-                              'Save SAR ${_currencyFmt.format(_totalSum)}',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Save SAR ${_currencyFmt.format(_totalSum)}',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
+
                     ),
                   ),
                 ],
