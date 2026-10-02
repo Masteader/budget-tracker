@@ -438,6 +438,9 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
         sub_items = []
         predefined = sub_defs_by_parent.get(c_code, [])
         used_sub_codes = set()
+        sub_allocs = b.get("sub_allocations") or {}
+        if not isinstance(sub_allocs, dict):
+            sub_allocs = {}
         
         for pre in predefined:
             sc_code = pre["sub_code"]
@@ -446,6 +449,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
             sub_items.append({
                 "sub_code": sc_code,
                 "name": pre["name_en"],
+                "allocated_amount": float(sub_allocs.get(sc_code, 0.0)),
                 "spent_amount": round(sp_data["spent"], 2),
                 "transaction_count": sp_data["count"],
             })
@@ -456,6 +460,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
                 sub_items.append({
                     "sub_code": sc,
                     "name": sc.replace("_", " ").title(),
+                    "allocated_amount": float(sub_allocs.get(sc, 0.0)),
                     "spent_amount": round(data["spent"], 2),
                     "transaction_count": data["count"],
                 })
@@ -464,6 +469,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
             sub_items.append({
                 "sub_code": "other",
                 "name": "General / Other",
+                "allocated_amount": float(sub_allocs.get("other", 0.0)),
                 "spent_amount": round(other_sp["spent"], 2),
                 "transaction_count": other_sp["count"],
             })
@@ -557,4 +563,77 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
         "status": "success",
         "message": f"Category {category_code} archived successfully.",
     }
+
+
+def save_sub_allocations(
+    household_id: str,
+    category_code: str,
+    sub_allocations: Dict[str, float],
+    cycle_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Saves sub-category allocations for a category in the specified cycle.
+    Automatically sets the parent budget's allocated_amount to the sum of sub-allocations.
+    """
+    from supabase_client import get_client
+    
+    current_cycle = get_cycle_for_date()
+    target_key = cycle_key or current_cycle["cycle_key"]
+    
+    clean_sub_allocations = {k: round(float(v), 2) for k, v in sub_allocations.items()}
+    total_allocated = round(sum(clean_sub_allocations.values()), 2)
+    
+    client = get_client()
+    
+    res = (
+        client.table("budgets")
+        .select("*")
+        .eq("household_id", household_id)
+        .eq("category_code", category_code)
+        .execute()
+    )
+    matching = [
+        row for row in (res.data or [])
+        if row.get("cycle_key") == target_key or (not row.get("cycle_key") and row.get("month", "")[:7] == target_key)
+    ]
+    
+    month_start = f"{target_key}-01"
+    
+    if matching:
+        budget_id = matching[0]["id"]
+        # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
+        update_data = {
+            "allocated_amount": total_allocated,
+            "sub_allocations": clean_sub_allocations,
+            "cycle_key": target_key,
+            "is_active": True,
+        }
+        client.table("budgets").update(update_data).eq("id", budget_id).execute()
+    else:
+        cat_resp = client.table("cost_control_codes").select("id").eq("code", category_code).maybe_single().execute()
+        cat_id = cat_resp.data.get("id") if cat_resp.data else None
+        
+        insert_data = {
+            "household_id": household_id,
+            "category_code": category_code,
+            "allocated_amount": total_allocated,
+            "sub_allocations": clean_sub_allocations,
+            "spent_amount": 0.0,
+            "month": month_start,
+            "cycle_key": target_key,
+            "is_active": True,
+        }
+        if cat_id:
+            insert_data["category_id"] = cat_id
+            
+        client.table("budgets").insert(insert_data).execute()
+        
+    return {
+        "status": "success",
+        "category_code": category_code,
+        "cycle_key": target_key,
+        "allocated_amount": total_allocated,
+        "sub_allocations": clean_sub_allocations,
+    }
+
 

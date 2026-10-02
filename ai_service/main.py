@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()  # Load .env before any other imports that read env vars
 
 from graph import sms_graph
-from models import AgentState, SMSWebhookRequest, SMSWebhookResponse, CategoryCreateRequest
+from models import AgentState, SMSWebhookRequest, SMSWebhookResponse, CategoryCreateRequest, SubAllocationsRequest
 
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
@@ -347,6 +347,26 @@ async def add_budget_category(req: CategoryCreateRequest):
     except Exception as exc:
         logger.error("Failed to add category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/budgets/sub-allocations",
+    tags=["budgets"],
+    summary="Set sub-category budget allocations and automatically recompute parent budget amount.",
+)
+async def set_sub_allocations(req: SubAllocationsRequest):
+    from salary_cycle import save_sub_allocations
+    try:
+        return save_sub_allocations(
+            household_id=req.household_id,
+            category_code=req.category_code,
+            sub_allocations=req.sub_allocations,
+            cycle_key=req.cycle_key,
+        )
+    except Exception as exc:
+        logger.error("Failed to save sub-allocations: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 @app.delete(

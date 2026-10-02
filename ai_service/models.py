@@ -146,6 +146,7 @@ class SalaryCycleInfo(BaseModel):
 class SubCategoryBreakdownItem(BaseModel):
     sub_code: Optional[str] = None
     name: str
+    allocated_amount: float = 0.0
     spent_amount: float
     transaction_count: int
 
@@ -173,4 +174,12 @@ class CategoryCreateRequest(BaseModel):
     allocated_amount: float = 0.0
     is_flexible: bool = True
     keywords: list[str] = Field(default_factory=list)
+
+
+class SubAllocationsRequest(BaseModel):
+    household_id: str
+    category_code: str
+    cycle_key: Optional[str] = None
+    sub_allocations: dict[str, float]
+
 
