@@ -17,8 +17,11 @@ import '../scanner/multi_page_receipt_scanner_screen.dart';
 import '../scanner/receipt_scanner_sheet.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
 import '../settings/ingestion_settings_screen.dart';
+import '../../services/api_service.dart';
+import '../../widgets/sub_budget_breakdown_sheet.dart';
 import 'transaction_feed_screen.dart';
 import 'budget_management_screen.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -220,7 +223,8 @@ class _BudgetDashboard extends StatefulWidget {
 
 class _BudgetDashboardState extends State<_BudgetDashboard> {
   late Future<String> _householdId;
-  DateTime _selectedMonth = DateTime.now();
+  List<SalaryCycleInfo> _cycles = [];
+  int _currentCycleIndex = 0;
 
   @override
   void initState() {
@@ -235,11 +239,51 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .select('household_id')
         .eq('id', uid)
         .single();
-    return data['household_id'] as String;
+    final hid = data['household_id'] as String;
+    _fetchCycles(hid);
+    return hid;
   }
 
-  String get _currentMonth =>
-      DateFormat('yyyy-MM-01').format(_selectedMonth);
+  Future<void> _fetchCycles(String hid) async {
+    try {
+      final res = await ApiService.instance.getSalaryCycles(hid);
+      if (res['cycles'] != null) {
+        final list = (res['cycles'] as List)
+            .map((c) => SalaryCycleInfo.fromMap(Map<String, dynamic>.from(c as Map)))
+            .toList();
+        if (mounted && list.isNotEmpty) {
+          setState(() {
+            _cycles = list;
+            final idx = list.indexWhere((c) => c.isCurrent);
+            _currentCycleIndex = idx != -1 ? idx : 0;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  SalaryCycleInfo? get _selectedCycle =>
+      _cycles.isNotEmpty && _currentCycleIndex < _cycles.length
+          ? _cycles[_currentCycleIndex]
+          : null;
+
+  String get _currentCycleKey {
+    if (_selectedCycle != null) return _selectedCycle!.cycleKey;
+    final now = DateTime.now();
+    if (now.day >= 27) {
+      final next = DateTime(now.year, now.month + 1, 1);
+      return DateFormat('yyyy-MM').format(next);
+    }
+    return DateFormat('yyyy-MM').format(now);
+  }
+
+  bool _matchesSelectedCycle(Budget b) {
+    final key = _currentCycleKey;
+    if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
+      return b.cycleKey == key;
+    }
+    return b.month.startsWith(key);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +350,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               ),
                               _SummaryCard(budgets: budgetSnap.data!
                                   .map(Budget.fromMap)
-                                  .where((b) => b.month == _currentMonth)
+                                  .where((b) => b.isActive && _matchesSelectedCycle(b))
                                   .toList()),
                               const SizedBox(height: 12),
                               SalaryCycleWidget(householdId: hid),
@@ -386,20 +430,57 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                       ),
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (ctx, i) {
-                              final budget = Budget.fromMap(budgetSnap.data![i]);
-                              if (budget.month != _currentMonth) {
-                                return const SizedBox.shrink();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _BudgetCard(budget: budget),
+                        sliver: Builder(
+                          builder: (context) {
+                            final cycleBudgets = budgetSnap.data!
+                                .map(Budget.fromMap)
+                                .where((b) => b.isActive && _matchesSelectedCycle(b))
+                                .toList();
+                            if (cycleBudgets.isEmpty) {
+                              return SliverToBoxAdapter(
+                                child: Container(
+                                  padding: const EdgeInsets.all(24),
+                                  margin: const EdgeInsets.only(bottom: 20),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161B22),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFF30363D)),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Icon(Icons.calendar_today_outlined, color: Color(0xFF8B949E), size: 36),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No allocations for $_currentCycleKey',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Budgets auto-rollover on payday (27th). You can also add categories from the Budgets tab.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               );
-                            },
-                            childCount: budgetSnap.data!.length,
-                          ),
+                            }
+                            return SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (ctx, i) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _BudgetCard(
+                                      budget: cycleBudgets[i],
+                                      householdId: hid,
+                                      cycleKey: _currentCycleKey,
+                                    ),
+                                  );
+                                },
+                                childCount: cycleBudgets.length,
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -414,11 +495,18 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   }
 
   Widget _buildAppBar(String hid) {
+    final currentCycle = _selectedCycle;
+    final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
+    final subText = currentCycle != null
+        ? '${currentCycle.cycleStart.substring(5)} - ${currentCycle.cycleEnd.substring(5)}'
+        : 'Payday 27th Cycle';
+    final isCurrent = currentCycle?.isCurrent ?? true;
+
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 120,
+      expandedHeight: 124,
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -426,28 +514,62 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
-              onPressed: () {
-                setState(() {
-                  _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
-                });
-              },
+              onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
+                  ? () => setState(() => _currentCycleIndex++)
+                  : null,
             ),
-            const SizedBox(width: 4),
-            Text(
-              DateFormat('MMMM yyyy').format(_selectedMonth),
-              style: GoogleFonts.outfit(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+            const SizedBox(width: 6),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      titleText,
+                      style: GoogleFonts.outfit(
+                          fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                    if (isCurrent) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.6)),
+                        ),
+                        child: const Text(
+                          'ACTIVE',
+                          style: TextStyle(
+                            color: Color(0xFF00C896),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Text(
+                  subText,
+                  style: const TextStyle(
+                    color: Color(0xFF8B949E),
+                    fontSize: 10,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
-              onPressed: () {
-                setState(() {
-                  _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
-                });
-              },
+              onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
+                  ? () => setState(() => _currentCycleIndex--)
+                  : null,
             ),
           ],
         ),
@@ -477,6 +599,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       ],
     );
   }
+
 }
 
 // ─── Summary Card ─────────────────────────────────────────────────────────────
@@ -570,7 +693,14 @@ class _StatItem extends StatelessWidget {
 
 class _BudgetCard extends StatelessWidget {
   final Budget budget;
-  const _BudgetCard({required this.budget});
+  final String householdId;
+  final String? cycleKey;
+
+  const _BudgetCard({
+    required this.budget,
+    required this.householdId,
+    this.cycleKey,
+  });
 
   Color get _barColor {
     if (budget.usagePercent >= 1.0) return Colors.redAccent;
@@ -581,52 +711,111 @@ class _BudgetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+    final hasRollover = budget.previousCycleDelta != 0.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        onTap: () {
+          SubBudgetBreakdownSheet.show(
+            context,
+            householdId: householdId,
+            categoryCode: budget.categoryCode,
+            cycleKey: cycleKey,
+            allocatedAmount: budget.allocatedAmount,
+            previousCycleDelta: budget.previousCycleDelta,
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                budget.categoryCode.replaceFirst(RegExp(r'^[A-Z]+-'), ''),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            budget.categoryCode.replaceFirst(RegExp(r'^[A-Z]+-'), ''),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (hasRollover) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: budget.previousCycleDelta > 0
+                                  ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                  : Colors.redAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              budget.previousCycleDelta > 0
+                                  ? '+SAR ${fmt.format(budget.previousCycleDelta)}'
+                                  : '-SAR ${fmt.format(budget.previousCycleDelta.abs())}',
+                              style: TextStyle(
+                                color: budget.previousCycleDelta > 0
+                                    ? const Color(0xFF00C896)
+                                    : Colors.redAccent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${(budget.usagePercent * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                            color: _barColor, fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, size: 16, color: Color(0xFF8B949E)),
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                '${(budget.usagePercent * 100).toStringAsFixed(0)}%',
-                style: TextStyle(
-                    color: _barColor, fontWeight: FontWeight.w700, fontSize: 14),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: budget.usagePercent,
+                  backgroundColor: const Color(0xFF30363D),
+                  valueColor: AlwaysStoppedAnimation(_barColor),
+                  minHeight: 8,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('SAR ${fmt.format(budget.spentAmount)} spent',
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                  Text('of SAR ${fmt.format(budget.allocatedAmount)}',
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: budget.usagePercent,
-              backgroundColor: const Color(0xFF30363D),
-              valueColor: AlwaysStoppedAnimation(_barColor),
-              minHeight: 8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('SAR ${fmt.format(budget.spentAmount)} spent',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-              Text('of SAR ${fmt.format(budget.allocatedAmount)}',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+
