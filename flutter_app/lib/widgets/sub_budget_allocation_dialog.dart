@@ -240,6 +240,87 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     }
   }
 
+  Future<void> _promptAddSubCategory() async {
+    final nameCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(text: '100');
+
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Add Sub-Category for ${widget.categoryName}',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Sub-Category Name',
+                hintText: 'e.g. Fiber Internet, Specialty Coffee',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Initial Allocation',
+                prefixText: 'SAR ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (res != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    final amount = double.tryParse(amountCtrl.text) ?? 0.0;
+    final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-').toLowerCase();
+    final subCode = 'sub-$slug';
+
+    // Insert into cost_control_sub_categories silently
+    try {
+      await supabase.from('cost_control_sub_categories').insert({
+        'parent_code': widget.categoryCode,
+        'sub_code': subCode,
+        'name_en': name,
+        'name_ar': name,
+        'keywords': [name.toLowerCase()],
+      });
+    } catch (_) {}
+
+    final ctrl = TextEditingController(text: amount > 0 ? amount.toStringAsFixed(2) : '');
+    ctrl.addListener(_recomputeTotal);
+
+    setState(() {
+      _subItems.add(_SubCategoryItemDef(
+        subCode: subCode,
+        nameEn: name,
+        nameAr: name,
+        controller: ctrl,
+      ));
+    });
+    _recomputeTotal();
+  }
 
   Future<void> _handleSave() async {
     setState(() {
@@ -530,9 +611,21 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                          itemCount: _subItems.length,
+                          itemCount: _subItems.length + 1,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (ctx, i) {
+                            if (i == _subItems.length) {
+                              return OutlinedButton.icon(
+                                onPressed: _promptAddSubCategory,
+                                icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF00C896)),
+                                label: const Text('Add Custom Sub-Category', style: TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold)),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(color: Color(0xFF30363D)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              );
+                            }
                             final item = _subItems[i];
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

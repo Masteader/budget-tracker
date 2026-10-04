@@ -200,6 +200,27 @@ class SalaryCycleInfo {
         monthName: map['month_name'] as String? ?? '',
         isCurrent: map['is_current'] as bool? ?? false,
       );
+
+  int get daysTotal {
+    try {
+      final start = DateTime.parse(cycleStart);
+      final end = DateTime.parse(cycleEnd);
+      return end.difference(start).inDays + 1;
+    } catch (_) {
+      return 30;
+    }
+  }
+
+  int get daysElapsed {
+    try {
+      final start = DateTime.parse(cycleStart);
+      final now = DateTime.now();
+      final diff = now.difference(start).inDays + 1;
+      return diff.clamp(1, daysTotal);
+    } catch (_) {
+      return 1;
+    }
+  }
 }
 
 class SubCategoryBreakdownItem {

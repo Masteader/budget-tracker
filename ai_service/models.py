@@ -183,3 +183,13 @@ class SubAllocationsRequest(BaseModel):
     sub_allocations: dict[str, float]
 
 
+class SubCategoryCreateRequest(BaseModel):
+    household_id: str
+    parent_code: str
+    name_en: str
+    allocated_amount: float = 0.0
+    sub_code: Optional[str] = None
+    cycle_key: Optional[str] = None
+
+
+

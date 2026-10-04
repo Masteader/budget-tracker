@@ -56,3 +56,22 @@ def test_add_and_archive_category():
     assert del_resp.status_code == 200
     assert del_resp.json()["status"] == "success"
 
+
+def test_add_sub_category_endpoint():
+    payload = {
+        "household_id": HOUSEHOLD_ID,
+        "parent_code": "OPEX-UTILITIES",
+        "name_en": "District Cooling",
+        "allocated_amount": 120.0,
+        "cycle_key": "2026-10",
+    }
+    resp = client.post("/budgets/sub-categories", json=payload, headers=AUTH_HEADERS)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["category_code"] == "OPEX-UTILITIES"
+    assert "sub_allocations" in data
+    assert "sub-district-cooling" in data["sub_allocations"]
+    assert data["sub_allocations"]["sub-district-cooling"] == 120.0
+
+

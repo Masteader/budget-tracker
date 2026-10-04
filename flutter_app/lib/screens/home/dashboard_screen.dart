@@ -175,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         index: _selectedIndex,
         children: screens,
       ),
-      floatingActionButton: _selectedIndex == 3
+      floatingActionButton: (_selectedIndex == 2 || _selectedIndex == 3)
           ? null
           : FloatingActionButton.extended(
               backgroundColor: const Color(0xFF00C896),
@@ -349,10 +349,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   );
                                 },
                               ),
-                              _SummaryCard(budgets: budgetSnap.data!
-                                  .map(Budget.fromMap)
-                                  .where((b) => b.isActive && _matchesSelectedCycle(b))
-                                  .toList()),
+                              _SummaryCard(
+                                budgets: budgetSnap.data!
+                                    .map(Budget.fromMap)
+                                    .where((b) => b.isActive && _matchesSelectedCycle(b))
+                                    .toList(),
+                                cycle: _selectedCycle,
+                              ),
                               const SizedBox(height: 12),
                               SalaryCycleWidget(householdId: hid),
                               const SizedBox(height: 12),
@@ -612,17 +615,32 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
 class _SummaryCard extends StatelessWidget {
   final List<Budget> budgets;
-  const _SummaryCard({required this.budgets});
+  final SalaryCycleInfo? cycle;
+  const _SummaryCard({required this.budgets, this.cycle});
 
   @override
   Widget build(BuildContext context) {
     final totalAllocated = budgets.fold(0.0, (s, b) => s + b.allocatedAmount);
     final totalSpent     = budgets.fold(0.0, (s, b) => s + b.spentAmount);
-    final daysInMonth    = DateUtils.getDaysInMonth(
-        DateTime.now().year, DateTime.now().month);
-    final daysElapsed    = DateTime.now().day;
-    final dailyBurn      = daysElapsed > 0 ? totalSpent / daysElapsed : 0.0;
-    final projectedSpend = dailyBurn * daysInMonth;
+
+    final daysTotal   = cycle?.daysTotal ?? 30;
+    final daysElapsed = (cycle?.daysElapsed ?? 1).clamp(1, daysTotal);
+
+    // Separate fixed lump-sum monthly commitments (rent, utilities) from variable daily expenses
+    const fixedCodes = {'HOUSING-RENT', 'HOUSING', 'OPEX-UTILITIES', 'UTILITIES-BILLS'};
+    double fixedSpent = 0.0;
+    double variableSpent = 0.0;
+    for (final b in budgets) {
+      if (fixedCodes.contains(b.categoryCode)) {
+        fixedSpent += b.spentAmount;
+      } else {
+        variableSpent += b.spentAmount;
+      }
+    }
+
+    // Daily burn is computed from variable living expenses so rent doesn't distort projections
+    final dailyBurn = daysElapsed > 0 ? variableSpent / daysElapsed : 0.0;
+    final projectedSpend = fixedSpent + (dailyBurn * daysTotal);
     final fmt            = NumberFormat('#,##0.00', 'en_US');
 
     return Container(

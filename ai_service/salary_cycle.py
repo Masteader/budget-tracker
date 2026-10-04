@@ -128,17 +128,27 @@ def get_salary_cycle_forecast(household_id: str, current: Optional[date] = None)
     total_spent = sum(float(b.get("spent_amount", 0.0)) for b in budgets)
     total_remaining = max(0.0, total_allocated - total_spent)
 
+    FIXED_CODES = {"HOUSING-RENT", "HOUSING", "UTILITIES-BILLS", "UTILITIES"}
+    fixed_spent = sum(float(b.get("spent_amount", 0.0)) for b in budgets if b.get("category_code") in FIXED_CODES)
+    variable_spent = sum(float(b.get("spent_amount", 0.0)) for b in budgets if b.get("category_code") not in FIXED_CODES)
+    
+    fixed_allocated = sum(float(b.get("allocated_amount", 0.0)) for b in budgets if b.get("category_code") in FIXED_CODES)
+    variable_allocated = sum(float(b.get("allocated_amount", 0.0)) for b in budgets if b.get("category_code") not in FIXED_CODES)
+    
+    target_allocated = variable_allocated if variable_allocated > 0 else total_allocated
+    target_spent = variable_spent if variable_allocated > 0 else total_spent
+
     days_total = cycle["days_total"]
     days_elapsed = cycle["days_elapsed"]
     days_remaining = cycle["days_remaining"]
 
-    # Daily burn rates
-    daily_budget_target = total_allocated / max(1, days_total)
-    actual_burn_rate = total_spent / max(1, days_elapsed)
+    # Daily burn rates based on recurring variable living expenses
+    daily_budget_target = target_allocated / max(1, days_total)
+    actual_burn_rate = target_spent / max(1, days_elapsed)
     daily_remaining_allowance = total_remaining / max(1, days_remaining) if days_remaining > 0 else 0.0
 
-    # Projected spend at current velocity
-    projected_spend = actual_burn_rate * days_total
+    # Projected spend: Fixed actual (committed) + projected variable spend over cycle
+    projected_spend = fixed_spent + (actual_burn_rate * days_total) if variable_allocated > 0 else actual_burn_rate * days_total
     projected_savings = total_allocated - projected_spend
 
     # Run-out date forecast
@@ -559,10 +569,77 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
     from supabase_client import get_client
     client = get_client()
     client.table("budgets").update({"is_active": False}).eq("household_id", household_id).eq("category_code", category_code).execute()
+
+    # If category has no recorded transactions, remove custom/test records so it vanishes completely
+    tx_check = client.table("transactions").select("id").eq("household_id", household_id).eq("category_code", category_code).limit(1).execute()
+    if not (tx_check.data or []):
+        client.table("budgets").delete().eq("household_id", household_id).eq("category_code", category_code).execute()
+        client.table("cost_control_sub_categories").delete().eq("parent_code", category_code).execute()
+        if category_code.startswith("OPEX-") or category_code.startswith("CAT-"):
+            client.table("cost_control_codes").delete().eq("code", category_code).execute()
+
     return {
         "status": "success",
         "message": f"Category {category_code} archived successfully.",
+        "category_code": category_code,
     }
+
+
+def add_sub_category_for_household(
+    household_id: str,
+    parent_code: str,
+    name_en: str,
+    allocated_amount: float = 0.0,
+    sub_code: Optional[str] = None,
+    cycle_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Creates a new sub-category definition under a parent category and assigns an initial allocation.
+    """
+    from supabase_client import get_client
+    import re
+    client = get_client()
+
+    if not sub_code:
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", name_en.strip().lower()).strip("-")
+        sub_code = f"sub-{slug}"
+
+    # Upsert into cost_control_sub_categories
+    existing_sub = client.table("cost_control_sub_categories").select("id").eq("parent_code", parent_code).eq("sub_code", sub_code).execute().data
+    if not existing_sub:
+        client.table("cost_control_sub_categories").insert({
+            "parent_code": parent_code,
+            "sub_code": sub_code,
+            "name_en": name_en,
+            "name_ar": name_en,
+            "keywords": [name_en.lower()],
+        }).execute()
+
+
+    current_cycle = get_cycle_for_date()
+    target_key = cycle_key or current_cycle["cycle_key"]
+
+    res = (
+        client.table("budgets")
+        .select("*")
+        .eq("household_id", household_id)
+        .eq("category_code", parent_code)
+        .execute()
+    )
+    matching = [
+        row for row in (res.data or [])
+        if row.get("cycle_key") == target_key or (not row.get("cycle_key") and row.get("month", "")[:7] == target_key)
+    ]
+
+    sub_allocs = {}
+    if matching:
+        sub_allocs = matching[0].get("sub_allocations") or {}
+        if not isinstance(sub_allocs, dict):
+            sub_allocs = {}
+
+    sub_allocs[sub_code] = round(float(allocated_amount), 2)
+    return save_sub_allocations(household_id, parent_code, sub_allocs, target_key)
+
 
 
 def save_sub_allocations(

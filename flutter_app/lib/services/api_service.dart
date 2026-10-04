@@ -509,6 +509,43 @@ class ApiService {
       return {'status': 'error', 'message': e.toString()};
     }
   }
+
+  // ── POST /budgets/sub-categories ──────────────────────────────────────────
+
+  Future<Map<String, dynamic>> addSubCategory({
+    required String householdId,
+    required String parentCode,
+    required String nameEn,
+    required double allocatedAmount,
+    String? subCode,
+    String? cycleKey,
+  }) async {
+    final payload = jsonEncode({
+      'household_id': householdId,
+      'parent_code': parentCode,
+      'name_en': nameEn,
+      'allocated_amount': allocatedAmount,
+      if (subCode != null && subCode.isNotEmpty) 'sub_code': subCode,
+      if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/budgets/sub-categories'),
+            headers: _buildHeaders(),
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
+
 
 

@@ -50,15 +50,27 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         .select('code, category')
         .order('code');
 
+    final inactiveBudgets = await supabase
+        .from('budgets')
+        .select('category_code')
+        .eq('household_id', hid)
+        .eq('is_active', false);
+    final inactiveCodes = (inactiveBudgets as List)
+        .map((r) => r['category_code'] as String)
+        .toSet();
+
+    final activeCodes = (codesRaw as List)
+        .where((r) => !inactiveCodes.contains(r['code']))
+        .map<Map<String, String>>((r) => {
+              'code': r['code'] as String,
+              'category': r['category'] as String,
+            })
+        .toList();
+
     return _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
-      allCodes: (codesRaw as List)
-          .map<Map<String, String>>((r) => {
-                'code': r['code'] as String,
-                'category': r['category'] as String,
-              })
-          .toList(),
+      allCodes: activeCodes,
     );
   }
 
@@ -151,121 +163,272 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   }
 
   Future<void> _showAddCategoryDialog(_BudgetStaticData staticData) async {
-    final nameCtrl = TextEditingController();
-    final codeCtrl = TextEditingController();
-    final amountCtrl = TextEditingController(text: '500');
+    int activeTab = 0; // 0: Category, 1: Sub-Category
+    final catNameCtrl = TextEditingController();
+    final catAmountCtrl = TextEditingController(text: '500');
     bool isFlexible = true;
 
-    final confirmed = await showDialog<bool>(
+    String selectedParentCode = staticData.allCodes.isNotEmpty ? staticData.allCodes.first['code']! : '';
+    final subNameCtrl = TextEditingController();
+    final subAmountCtrl = TextEditingController(text: '150');
+    bool isSubmitting = false;
+
+    await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF161B22),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Add New Budget Category', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                activeTab == 0 ? 'Add Budget Category' : 'Add Sub-Category',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              // Clean Segmented toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1117),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF30363D)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setDialogState(() => activeTab = 0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: activeTab == 0 ? const Color(0xFF00C896) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Main Category',
+                              style: TextStyle(
+                                color: activeTab == 0 ? Colors.black : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setDialogState(() => activeTab = 1),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: activeTab == 1 ? const Color(0xFF00C896) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Sub-Category',
+                              style: TextStyle(
+                                color: activeTab == 1 ? Colors.black : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Category Name',
-                    hintText: 'e.g. Pets & Veterinary, Gym, Car Care',
+            child: activeTab == 0
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: catNameCtrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Category Name',
+                          hintText: 'e.g. Pet Care, Fitness & Gym',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: catAmountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Monthly Allocation',
+                          prefixText: 'SAR ',
+                          hintText: '500.00',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Flexible Pool', style: TextStyle(color: Colors.white, fontSize: 13)),
+                        subtitle: const Text('Allow automatic reallocations if another category exceeds budget', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                        value: isFlexible,
+                        activeThumbColor: const Color(0xFF00C896),
+                        onChanged: (v) => setDialogState(() => isFlexible = v),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        dropdownColor: const Color(0xFF161B22),
+                        value: selectedParentCode.isNotEmpty ? selectedParentCode : null,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Parent Category',
+                        ),
+                        items: staticData.allCodes.map((c) {
+                          return DropdownMenuItem<String>(
+                            value: c['code'],
+                            child: Text(c['category'] ?? c['code']!, style: const TextStyle(color: Colors.white)),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => selectedParentCode = val);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: subNameCtrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Sub-Category Name',
+                          hintText: 'e.g. Specialty Coffee, Dog Food',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: subAmountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Allocated Amount',
+                          prefixText: 'SAR ',
+                          hintText: '150.00',
+                        ),
+                      ),
+                    ],
                   ),
-                  onChanged: (val) {
-                    if (codeCtrl.text.isEmpty || codeCtrl.text.startsWith('OPEX-')) {
-                      final slug = val.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
-                      codeCtrl.text = slug.isNotEmpty ? 'OPEX-$slug' : '';
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: codeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Cost Code',
-                    hintText: 'e.g. OPEX-PETS',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Monthly Allocation',
-                    prefixText: 'SAR ',
-                    hintText: '500.00',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Flexible Pool', style: TextStyle(color: Colors.white, fontSize: 13)),
-                  subtitle: const Text('Allow automatic reallocations if another category exceeds budget', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                  value: isFlexible,
-                  activeThumbColor: const Color(0xFF00C896),
-                  onChanged: (v) => setDialogState(() => isFlexible = v),
-                ),
-              ],
-            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (activeTab == 0) {
+                        final name = catNameCtrl.text.trim();
+                        final amount = double.tryParse(catAmountCtrl.text) ?? 0.0;
+                        if (name.isEmpty) return;
+
+                        setDialogState(() => isSubmitting = true);
+                        final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+                        final code = 'OPEX-$slug';
+
+                        try {
+                          final res = await ApiService.instance.addBudgetCategory(
+                            householdId: staticData.householdId,
+                            code: code,
+                            category: name,
+                            allocatedAmount: amount,
+                            isFlexible: isFlexible,
+                            keywords: [name.toLowerCase(), code.toLowerCase()],
+                          );
+                          if (res['status'] == 'success') {
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _staticFuture = _loadStaticData();
+                            });
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Added category "$name" (SAR $amount)!'),
+                                  backgroundColor: const Color(0xFF00C896),
+                                ),
+                              );
+                            }
+                          } else {
+                            throw Exception(res['message'] ?? 'Failed to add category');
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                            );
+                          }
+                        }
+                      } else {
+                        final subName = subNameCtrl.text.trim();
+                        final subAmount = double.tryParse(subAmountCtrl.text) ?? 0.0;
+                        if (subName.isEmpty || selectedParentCode.isEmpty) return;
+
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          final res = await ApiService.instance.addSubCategory(
+                            householdId: staticData.householdId,
+                            parentCode: selectedParentCode,
+                            nameEn: subName,
+                            allocatedAmount: subAmount,
+                            cycleKey: _currentCycleKey,
+                          );
+                          if (res['status'] == 'success') {
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _staticFuture = _loadStaticData();
+                            });
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Added sub-category "$subName" to budget!'),
+                                  backgroundColor: const Color(0xFF00C896),
+                                ),
+                              );
+                            }
+                          } else {
+                            throw Exception(res['message'] ?? 'Failed to add sub-category');
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                            );
+                          }
+                        }
+                      }
+                    },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
-              child: const Text('Create Category', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : Text(activeTab == 0 ? 'Create Category' : 'Add Sub-Category', style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
       ),
     );
-
-    if (confirmed != true) return;
-    final name = nameCtrl.text.trim();
-    var code = codeCtrl.text.trim().toUpperCase();
-    if (!code.startsWith('OPEX-')) code = 'OPEX-$code';
-    final amount = double.tryParse(amountCtrl.text) ?? 0.0;
-
-    if (name.isEmpty || code.isEmpty) return;
-
-    try {
-      final res = await ApiService.instance.addBudgetCategory(
-        householdId: staticData.householdId,
-        code: code,
-        category: name,
-        allocatedAmount: amount,
-        isFlexible: isFlexible,
-        keywords: [name.toLowerCase(), code.toLowerCase()],
-      );
-
-      if (res['status'] == 'success') {
-        setState(() {
-          _staticFuture = _loadStaticData();
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Added category "$name" with SAR $amount budget!'),
-              backgroundColor: const Color(0xFF00C896),
-            ),
-          );
-        }
-      } else {
-        throw Exception(res['message'] ?? 'Failed to add category');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add category: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
   }
 
   Future<void> _archiveCategory(
@@ -307,6 +470,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
       if (res['status'] == 'success') {
         setState(() {
+          staticData.allCodes.removeWhere((c) => c['code'] == categoryCode);
           _staticFuture = _loadStaticData();
         });
         if (mounted) {
@@ -374,6 +538,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Budget Allocations'),
+            actions: [
+              if (staticData.isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF00C896)),
+                  tooltip: 'Add Category or Sub-Category',
+                  onPressed: () => _showAddCategoryDialog(staticData),
+                ),
+            ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(56),
               child: Container(
