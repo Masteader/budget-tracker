@@ -340,29 +340,6 @@ def process_chat_transaction(
             "message": f"Successfully enriched existing transaction with {len(items_dicts)} items.",
         }
 
-    # Duplicate check
-    if not allow_duplicate:
-        candidate = find_duplicate_candidate(household_id, parsed.total_amount, parsed.merchant)
-        if candidate:
-            logger.info("Duplicate candidate found for chat transaction: %s", candidate["id"])
-            return {
-                "status": "duplicate_candidate",
-                "candidate_transaction_id": candidate["id"],
-                "candidate_merchant": candidate.get("merchant"),
-                "candidate_amount": candidate.get("amount"),
-                "candidate_timestamp": candidate.get("timestamp"),
-                "parsed_data": {
-                    "merchant": parsed.merchant,
-                    "amount": parsed.total_amount,
-                    "category_code": parsed.category_code,
-                    "items": items_dicts,
-                },
-                "message": (
-                    f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
-                    f"was already recorded recently. Would you like to enrich it or log a separate expense?"
-                ),
-            }
-
     merchant = (override_merchant or parsed.merchant).strip()
     spent_by = (override_spent_by or parsed.spent_by).lower()
     if spent_by not in ("me", "partner", "both"):
@@ -385,6 +362,29 @@ def process_chat_transaction(
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm store name and who spent it:",
         }
+
+    # Duplicate check
+    if not allow_duplicate:
+        candidate = find_duplicate_candidate(household_id, parsed.total_amount, parsed.merchant)
+        if candidate:
+            logger.info("Duplicate candidate found for chat transaction: %s", candidate["id"])
+            return {
+                "status": "duplicate_candidate",
+                "candidate_transaction_id": candidate["id"],
+                "candidate_merchant": candidate.get("merchant"),
+                "candidate_amount": candidate.get("amount"),
+                "candidate_timestamp": candidate.get("timestamp"),
+                "parsed_data": {
+                    "merchant": parsed.merchant,
+                    "amount": parsed.total_amount,
+                    "category_code": parsed.category_code,
+                    "items": items_dicts,
+                },
+                "message": (
+                    f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
+                    f"was already recorded recently. Would you like to enrich it or log a separate expense?"
+                ),
+            }
 
     now_iso = datetime.now(timezone.utc).isoformat()
     now_date = datetime.now(timezone.utc).date()

@@ -28,6 +28,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
   final Set<String> _deletedTxIds = {};
+  Key _streamRefreshKey = UniqueKey();
 
   final List<Map<String, String>> _categoryOptions = const [
     {'code': 'ALL', 'label': 'All'},
@@ -525,9 +526,39 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     );
   }
 
-  Future<void> _deleteTransaction(BuildContext context, Transaction tx) async {
+  Future<void> _deleteTransaction(BuildContext context, Transaction tx, {bool requireConfirm = false}) async {
+    if (requireConfirm) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          title: const Text('Delete Transaction', style: TextStyle(color: Colors.white)),
+          content: Text(
+            'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
+            style: const TextStyle(color: Color(0xFF8B949E)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx, false),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(dCtx, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
     setState(() {
       _deletedTxIds.add(tx.id);
+      _streamRefreshKey = UniqueKey();
     });
 
     try {
@@ -543,6 +574,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               onPressed: () async {
                 setState(() {
                   _deletedTxIds.remove(tx.id);
+                  _streamRefreshKey = UniqueKey();
                 });
                 await supabase.from('transactions').insert({
                   'household_id': tx.householdId,
@@ -564,6 +596,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     } catch (e) {
       setState(() {
         _deletedTxIds.remove(tx.id);
+        _streamRefreshKey = UniqueKey();
       });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -657,6 +690,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               // Transaction Stream & Content
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
+                  key: _streamRefreshKey,
                   stream: supabase
                       .from('transactions')
                       .stream(primaryKey: ['id'])
@@ -790,7 +824,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 )
                               : RefreshIndicator(
                                   color: const Color(0xFF00C896),
-                                  onRefresh: () async => setState(() {}),
+                                  onRefresh: () async => setState(() {
+                                    _streamRefreshKey = UniqueKey();
+                                  }),
                                   child: ListView.separated(
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -855,14 +891,19 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
                                           onEdit: () async {
-                                            final deleted = await EditTransactionSheet.show(context, tx);
-                                            if (deleted == true && mounted) {
+                                            final res = await EditTransactionSheet.show(context, tx);
+                                            if (res == 'deleted' && mounted) {
                                               setState(() {
                                                 _deletedTxIds.add(tx.id);
+                                                _streamRefreshKey = UniqueKey();
+                                              });
+                                            } else if (res == 'updated' && mounted) {
+                                              setState(() {
+                                                _streamRefreshKey = UniqueKey();
                                               });
                                             }
                                           },
-                                          onDelete: () => _deleteTransaction(context, tx),
+                                          onDelete: () => _deleteTransaction(context, tx, requireConfirm: true),
                                         ),
                                       );
                                     },

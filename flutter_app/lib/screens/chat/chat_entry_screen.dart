@@ -276,29 +276,41 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     });
   }
 
-  Future<void> _sendMessage(String text, {bool allowDuplicate = false, String? enrichTxId}) async {
+  Future<void> _sendMessage(
+    String text, {
+    bool allowDuplicate = false,
+    String? enrichTxId,
+    bool previewOnly = true,
+  }) async {
     if (_isListening) {
       await _speech.stop();
       setState(() => _isListening = false);
     }
 
     final message = text.trim();
-    if (message.isEmpty || _householdId == null) return;
+    if (message.isEmpty && enrichTxId == null) return;
+    if (_householdId == null) return;
 
-    if (enrichTxId == null && !allowDuplicate) {
-      setState(() {
-        _messages.add(ChatMessage(isUser: true, text: message));
-        _isLoading = true;
-      });
-      _controller.clear();
-      _scrollToBottom();
+    if (enrichTxId == null) {
+      if (message.isNotEmpty && !allowDuplicate) {
+        setState(() {
+          _messages.add(ChatMessage(isUser: true, text: message));
+          _isLoading = true;
+        });
+        _controller.clear();
+        _scrollToBottom();
+      } else {
+        setState(() {
+          _isLoading = true;
+        });
+      }
     } else {
       setState(() {
         _isLoading = true;
       });
     }
 
-    final isPreview = (enrichTxId == null && !allowDuplicate);
+    final isPreview = (enrichTxId == null && previewOnly);
     final user = supabase.auth.currentUser;
     final res = await ApiService.instance.postChatTransaction(
       message: message,
@@ -983,7 +995,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     final originalMsg = parsed != null
                         ? "${parsed['merchant']} ${parsed['amount']} SAR"
                         : "Expense";
-                    _sendMessage(originalMsg, allowDuplicate: true);
+                    _sendMessage(originalMsg, allowDuplicate: true, previewOnly: true);
                   },
                 ),
               ),

@@ -189,11 +189,30 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             onPressed: () {
               final text = ctrl.text.trim();
               final decoded = decodeZatcaTlv(text);
+              final sellerName = decoded?['seller'] as String? ?? 'Store Name';
+              final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
+              final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
               setState(() {
                 _zatcaQrRaw = text;
                 _zatcaDecoded = decoded;
-                if (decoded != null && decoded['seller'] != null && decoded['seller'].toString().trim().isNotEmpty) {
-                  _merchantController.text = decoded['seller'].toString().trim();
+                _merchantController.text = sellerName;
+                if (decoded != null) {
+                  _scanResult = {
+                    'status': 'preview',
+                    'merchant': sellerName,
+                    'amount': total,
+                    'vat_amount': vat,
+                    'category_code': 'OPEX-GROCERY',
+                    'spent_by': _selectedSpentBy,
+                    'items': [
+                      {
+                        'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                        'quantity': 1.0,
+                        'price': total,
+                      }
+                    ],
+                    'zatca_verified': decoded,
+                  };
                 }
               });
               Navigator.pop(ctx);
@@ -258,88 +277,33 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
     if (scannedCode != null && scannedCode.isNotEmpty) {
       final decoded = decodeZatcaTlv(scannedCode);
+      final sellerName = decoded?['seller'] as String? ?? 'Store Name';
+      final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
+      final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
+
       setState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
-        if (decoded != null && decoded['seller'] != null && decoded['seller'].toString().trim().isNotEmpty) {
-          _merchantController.text = decoded['seller'].toString().trim();
+        _merchantController.text = sellerName;
+        if (decoded != null) {
+          _scanResult = {
+            'status': 'preview',
+            'merchant': sellerName,
+            'amount': total,
+            'vat_amount': vat,
+            'category_code': 'OPEX-GROCERY',
+            'spent_by': _selectedSpentBy,
+            'items': [
+              {
+                'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                'quantity': 1.0,
+                'price': total,
+              }
+            ],
+            'zatca_verified': decoded,
+          };
         }
       });
-      if (decoded != null && mounted) {
-        final wantPhoto = await showDialog<bool>(
-          context: context,
-          useRootNavigator: true,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF161B22),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 22),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    decoded['seller'] ?? 'ZATCA Invoice',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D1117),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF30363D)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Total with VAT:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
-                      Text(
-                        'SAR ${(decoded['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                        style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Would you like to snap a photo of the receipt body now so AI can extract the item names and prices under this store?',
-                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, height: 1.4),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Total Only', style: TextStyle(color: Color(0xFF8B949E))),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.camera_alt_rounded, size: 16),
-                label: const Text('Snap Items', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-
-        if (wantPhoto == true && mounted) {
-          await _addPhoto(ImageSource.camera);
-          if (_imageFiles.isNotEmpty && mounted) {
-            await _analyzeReceipt();
-          }
-        }
-      }
     }
   }
 
@@ -1217,6 +1181,28 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
         if (!isSuccess) ...[
           _buildConfirmationInputs(),
+          if (!isCandidate && isZatcaVerified && _imageFiles.isEmpty) ...[
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1F6FEB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.camera_alt_rounded, size: 18),
+              label: const Text(
+                '📸 Snap Receipt Photo to Extract Items with AI',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              onPressed: () async {
+                await _addPhoto(ImageSource.camera);
+                if (_imageFiles.isNotEmpty && mounted) {
+                  await _analyzeReceipt();
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
 
         TransactionItemBreakdownCard(
