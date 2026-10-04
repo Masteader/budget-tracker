@@ -5,11 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/zatca_decoder.dart';
+import '../../widgets/receipt_photo_strip.dart';
+import '../../widgets/scanner/duplicate_candidate_card.dart';
+import '../../widgets/store_attribution_card.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
+import '../../widgets/zatca_status_badge.dart';
 
 class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
@@ -60,33 +68,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     super.dispose();
   }
 
-  static Map<String, dynamic>? decodeZatcaTlv(String base64Str) {
+  void _notifyGlobalProviders() {
+    if (!mounted) return;
     try {
-      final bytes = base64Decode(base64Str.trim());
-      final tags = <int, String>{};
-      int idx = 0;
-      while (idx < bytes.length) {
-        if (idx + 1 >= bytes.length) break;
-        final tag = bytes[idx];
-        final len = bytes[idx + 1];
-        if (idx + 2 + len > bytes.length) break;
-        final val = utf8.decode(bytes.sublist(idx + 2, idx + 2 + len), allowMalformed: true);
-        tags[tag] = val;
-        idx += 2 + len;
-      }
-      final totalVal = double.tryParse(tags[4] ?? '');
-      final vatVal = double.tryParse(tags[5] ?? '');
-      if (tags[1] != null && totalVal != null) {
-        return {
-          'seller': tags[1],
-          'vat_number': tags[2],
-          'timestamp': tags[3],
-          'total': totalVal,
-          'vat': vatVal,
-        };
-      }
+      context.read<TransactionProvider>().refresh();
+      context.read<BudgetProvider>().refresh();
     } catch (_) {}
-    return null;
   }
 
   Future<void> _addPhoto(ImageSource source) async {
@@ -188,7 +175,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
             onPressed: () {
               final text = ctrl.text.trim();
-              final decoded = decodeZatcaTlv(text);
+              final decoded = ZatcaDecoder.decodeTlv(text);
               final sellerName = decoded?['seller'] as String? ?? 'Store Name';
               final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
               final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
@@ -276,7 +263,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
     );
     if (scannedCode != null && scannedCode.isNotEmpty) {
-      final decoded = decodeZatcaTlv(scannedCode);
+      final decoded = ZatcaDecoder.decodeTlv(scannedCode);
       final sellerName = decoded?['seller'] as String? ?? 'Store Name';
       final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
       final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
@@ -362,7 +349,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   }
 
   Future<void> _confirmSave({bool allowDuplicate = false, String? enrichTxId}) async {
-    if (_isAnalyzing) return; // Prevent double-clicking
+    if (_isAnalyzing) return;
     setState(() {
       _isAnalyzing = true;
       _errorMessage = null;
@@ -399,13 +386,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               backgroundColor: const Color(0xFF00C896),
             ),
           );
+          _notifyGlobalProviders();
           Navigator.pop(context);
         } else if (res['status'] == 'duplicate_candidate') {
           setState(() {
             _scanResult = res;
           });
         } else {
-          // If microservice returned an error, fallback to direct cloud database insertion
           await _fallbackSaveToSupabase();
         }
       }
@@ -495,6 +482,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             backgroundColor: const Color(0xFF00C896),
           ),
         );
+        _notifyGlobalProviders();
         Navigator.pop(context);
       }
     } catch (e) {
@@ -555,124 +543,22 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
             // ── ZATCA QR Status Badge ──
             if (_zatcaDecoded != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ZATCA Verified: ${_zatcaDecoded!['seller'] ?? 'Merchant'}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                          ),
-                          Text(
-                            'Total: SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}  •  VAT: SAR ${(_zatcaDecoded!['vat'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                            style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18, color: Color(0xFF8B949E)),
-                      onPressed: () => setState(() {
-                        _zatcaQrRaw = null;
-                        _zatcaDecoded = null;
-                      }),
-                    ),
-                  ],
-                ),
+              ZatcaStatusBadge(
+                seller: _zatcaDecoded!['seller'] ?? 'Merchant',
+                total: (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0,
+                vat: (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0,
+                onDismiss: () => setState(() {
+                  _zatcaQrRaw = null;
+                  _zatcaDecoded = null;
+                }),
               ),
 
             // ── Photo Grid / Thumbnails ──
-            if (_imageFiles.isNotEmpty) ...[
-              SizedBox(
-                height: 110,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _imageFiles.length + 1,
-                  separatorBuilder: (ctx, _) => const SizedBox(width: 10),
-                  itemBuilder: (ctx, i) {
-                    if (i == _imageFiles.length) {
-                      return InkWell(
-                        onTap: () => _addPhoto(ImageSource.camera),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 85,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0D1117),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF30363D), style: BorderStyle.solid),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_a_photo_outlined, color: Color(0xFF00C896), size: 26),
-                              SizedBox(height: 4),
-                              Text('Add Page', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-
-                    return Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            _imageFiles[i],
-                            width: 85,
-                            height: 110,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          left: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'P${i + 1}',
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GestureDetector(
-                            onTap: () => _removePhoto(i),
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.redAccent,
-                              ),
-                              child: const Icon(Icons.close, size: 14, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            ReceiptPhotoStrip(
+              imageFiles: _imageFiles,
+              onAddPhoto: () => _addPhoto(ImageSource.camera),
+              onRemovePhoto: _removePhoto,
+            ),
 
             // ── Capture Controls ──
             if (!_isAnalyzing && _scanResult == null) ...[
@@ -747,7 +633,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               // ── ZATCA QR & Photo Actions ──
               if (_zatcaDecoded != null && _scanResult == null) ...[
                 const SizedBox(height: 12),
-                _buildConfirmationInputs(),
+                StoreAttributionCard(
+                  merchantController: _merchantController,
+                  selectedSpentBy: _selectedSpentBy,
+                  onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+                ),
                 if (_imageFiles.isEmpty) ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -926,101 +816,6 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
   }
 
-  Widget _buildSpentByOption(String key, String title, IconData icon, Color activeColor) {
-    final isSelected = _selectedSpentBy.toLowerCase() == key;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedSpentBy = key),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? activeColor : const Color(0xFF30363D),
-              width: isSelected ? 1.5 : 1.0,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: isSelected ? activeColor : const Color(0xFF8B949E)),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildConfirmationInputs() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF30363D)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.storefront_outlined, color: Color(0xFF00C896), size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Store & Attribution Details',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _merchantController,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: 'Store Name / Merchant',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-              prefixIcon: const Icon(Icons.store_outlined, color: Color(0xFF00C896), size: 20),
-              filled: true,
-              fillColor: const Color(0xFF0D1117),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00C896))),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'SPENT BY WHO?',
-            style: GoogleFonts.outfit(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF8B949E)),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildSpentByOption('me', 'Me', Icons.person_outline, const Color(0xFF58A6FF)),
-              const SizedBox(width: 8),
-              _buildSpentByOption('partner', 'Partner', Icons.favorite_outline, const Color(0xFFBC8CFF)),
-              const SizedBox(width: 8),
-              _buildSpentByOption('both', 'Both (Shared)', Icons.group_outlined, const Color(0xFF00C896)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResultContent() {
     final status = _scanResult!['status'] as String? ?? '';
     final isCandidate = status == 'duplicate_candidate';
@@ -1040,7 +835,6 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final categoryCode = _scanResult!['category_code'] ??
         _scanResult!['parsed_data']?['category_code'];
 
-    // ── Safe type conversion to avoid List<dynamic> subtype cast error ──
     final dynamic rawItems = _scanResult!['items'] ?? _scanResult!['parsed_data']?['items'];
     final List<Map<String, dynamic>> items = (rawItems is List)
         ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
@@ -1086,101 +880,32 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         ],
 
         if (isCandidate) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Matching Transaction Found',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.orange),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _scanResult!['message'] ?? 'An identical amount was recorded recently.',
-                  style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C896),
-                          foregroundColor: Colors.black,
-                        ),
-                        onPressed: () {
-                          final cId = _scanResult!['candidate_transaction_id'];
-                          _confirmSave(enrichTxId: cId);
-                        },
-                        child: Text(
-                          'Attach ${items.length} Items to SMS',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
-                        onPressed: () => _confirmSave(allowDuplicate: true),
-                        child: const Text('Log as Separate', style: TextStyle(fontSize: 11)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          DuplicateCandidateCard(
+            message: _scanResult!['message'] ?? 'An identical amount was recorded recently.',
+            itemCount: items.length,
+            onEnrich: () {
+              final cId = _scanResult!['candidate_transaction_id'];
+              _confirmSave(enrichTxId: cId);
+            },
+            onLogSeparate: () => _confirmSave(allowDuplicate: true),
           ),
-          const SizedBox(height: 12),
         ],
 
         if (!isSuccess && !isCandidate && isZatcaVerified) ...[
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00C896).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.35)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ZATCA Verified Merchant: $merchant',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                      ),
-                      Text(
-                        'Total: SAR ${amount.toStringAsFixed(2)}  •  ${items.length} items extracted with AI',
-                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          ZatcaStatusBadge(
+            seller: merchant,
+            total: amount,
+            vat: (_zatcaDecoded?['vat'] as num?)?.toDouble() ?? (amount * 0.15 / 1.15),
+            customSubtitle: 'Total: SAR ${amount.toStringAsFixed(2)}  •  ${items.length} items extracted with AI',
           ),
         ],
 
         if (!isSuccess) ...[
-          _buildConfirmationInputs(),
+          StoreAttributionCard(
+            merchantController: _merchantController,
+            selectedSpentBy: _selectedSpentBy,
+            onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+          ),
           if (!isCandidate && isZatcaVerified && _imageFiles.isEmpty) ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(

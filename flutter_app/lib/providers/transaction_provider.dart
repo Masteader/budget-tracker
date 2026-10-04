@@ -78,6 +78,9 @@ class TransactionProvider extends ChangeNotifier {
     _subscribeRealtime();
   }
 
+  /// Refresh transactions alias for uniform provider API.
+  Future<void> refresh() => fetchTransactions();
+
   /// Fetch latest transactions from Supabase.
   Future<void> fetchTransactions() async {
     if (_householdId == null) return;

@@ -1,35 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../main.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
-import '../../widgets/transaction_item_breakdown_card.dart';
-
 import '../../services/offline_sync_service.dart';
-
-class ChatMessage {
-  final bool isUser;
-  final String text;
-  final Map<String, dynamic>? transactionData;
-  final bool isDuplicatePrompt;
-  final Map<String, dynamic>? candidateData;
-  final Map<String, dynamic>? simulationData;
-  final bool isPendingConfirmation;
-  final Map<String, dynamic>? pendingData;
-
-  ChatMessage({
-    required this.isUser,
-    required this.text,
-    this.transactionData,
-    this.isDuplicatePrompt = false,
-    this.candidateData,
-    this.simulationData,
-    this.isPendingConfirmation = false,
-    this.pendingData,
-  });
-}
+import '../../widgets/chat/chat_message_bubble.dart';
+import '../../widgets/chat/voice_listening_banner.dart';
 
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
@@ -127,7 +108,6 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       return;
     }
 
-    // Check microphone permission
     final micStatus = await Permission.microphone.status;
     if (!micStatus.isGranted) {
       final requested = await Permission.microphone.request();
@@ -276,6 +256,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     });
   }
 
+  void _refreshGlobalProviders() {
+    if (!mounted) return;
+    try {
+      context.read<TransactionProvider>().refresh();
+      context.read<BudgetProvider>().refresh();
+    } catch (_) {}
+  }
+
   Future<void> _sendMessage(
     String text, {
     bool allowDuplicate = false,
@@ -367,14 +355,19 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               'category_code': res['category_code'],
               'items': parsedItems,
               'is_reallocated': res['is_reallocated'] ?? false,
+              'spent_by': res['spent_by'] ?? 'both',
               'source': 'chat',
             },
           ),
         );
+        _refreshGlobalProviders();
       } else {
         // Check for offline network error and save to SQLite queue
         final errText = res['message']?.toString() ?? '';
-        if (errText.contains('connect') || errText.contains('offline') || errText.contains('SocketException') || errText.contains('timeout')) {
+        if (errText.contains('connect') ||
+            errText.contains('offline') ||
+            errText.contains('SocketException') ||
+            errText.contains('timeout')) {
           OfflineSyncService.instance.enqueue(
             endpoint: 'chat',
             payload: {'message': message, 'user_id': user?.id},
@@ -449,6 +442,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         } else {
           _messages.add(confirmedMsg);
         }
+        _refreshGlobalProviders();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -496,9 +490,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedLocale = 'ar_SA');
-                  },
+                  onTap: () => setState(() => _selectedLocale = 'ar_SA'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -516,9 +508,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedLocale = 'en_US');
-                  },
+                  onTap: () => setState(() => _selectedLocale = 'en_US'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -552,11 +542,23 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 itemCount: _messages.length,
                 itemBuilder: (ctx, idx) {
                   final msg = _messages[idx];
-                  if (msg.isUser) {
-                    return _buildUserBubble(msg.text);
-                  } else {
-                    return _buildAssistantBubble(msg);
-                  }
+                  return ChatMessageBubble(
+                    message: msg,
+                    onConfirmPending: (store, spentBy) {
+                      _confirmPendingExpense(msg, store, spentBy);
+                    },
+                    onCancelPending: () {
+                      setState(() {
+                        _messages.remove(msg);
+                      });
+                    },
+                    onEnrichCandidate: (candidateId) {
+                      _sendMessage("", enrichTxId: candidateId);
+                    },
+                    onLogAsNewCandidate: (originalMsg) {
+                      _sendMessage(originalMsg, allowDuplicate: true, previewOnly: true);
+                    },
+                  );
                 },
               ),
             ),
@@ -598,53 +600,12 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               ),
             ),
             // Live Listening Banner
-            if (_isListening)
-              Container(
-                margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 10 + (_soundLevel.clamp(0.0, 10.0) * 0.8),
-                      height: 10 + (_soundLevel.clamp(0.0, 10.0) * 0.8),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _selectedLocale == 'ar_SA'
-                            ? "🎙️ جاري الاستماع باللغة العربية... تحدث الآن"
-                            : "🎙️ Listening in English... Speak your items",
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    InkWell(
-                      onTap: _toggleListening,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C896),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Done',
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            VoiceListeningBanner(
+              isListening: _isListening,
+              soundLevel: _soundLevel,
+              selectedLocale: _selectedLocale,
+              onToggleListening: _toggleListening,
+            ),
             const SizedBox(height: 8),
             // Input bar
             Container(
@@ -736,520 +697,4 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       ),
     );
   }
-
-  Widget _buildUserBubble(String text) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12, left: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1F6FEB),
-          borderRadius: BorderRadius.circular(16).copyWith(bottomRight: Radius.zero),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAssistantBubble(ChatMessage msg) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12, right: 30),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF161B22),
-                borderRadius: BorderRadius.circular(16).copyWith(bottomLeft: Radius.zero),
-                border: Border.all(color: const Color(0xFF30363D)),
-              ),
-              child: Text(
-                msg.text,
-                style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 14, height: 1.4),
-              ),
-            ),
-            if (msg.simulationData != null) ...[
-              const SizedBox(height: 6),
-              _buildSimulationCard(msg.simulationData!),
-            ],
-            if (msg.isPendingConfirmation && msg.pendingData != null) ...[
-              const SizedBox(height: 8),
-              PendingExpenseConfirmationCard(
-                pendingData: msg.pendingData!,
-                onConfirm: (confirmedMerchant, confirmedSpentBy) {
-                  _confirmPendingExpense(msg, confirmedMerchant, confirmedSpentBy);
-                },
-                onCancel: () {
-                  setState(() {
-                    _messages.remove(msg);
-                  });
-                },
-              ),
-            ],
-            if (msg.transactionData != null) ...[
-              const SizedBox(height: 6),
-              TransactionItemBreakdownCard(
-                merchant: msg.transactionData!['merchant'] as String,
-                amount: msg.transactionData!['amount'] as double,
-                categoryCode: msg.transactionData!['category_code'] as String?,
-                source: 'chat',
-                spentBy: (msg.transactionData!['spent_by'] as String?) ?? 'me',
-                items: (msg.transactionData!['items'] as List)
-                    .map((e) => Map<String, dynamic>.from(e as Map))
-                    .toList(),
-                isReallocated: msg.transactionData!['is_reallocated'] as bool? ?? false,
-                initiallyExpanded: true,
-              ),
-            ],
-            if (msg.isDuplicatePrompt && msg.candidateData != null) ...[
-              const SizedBox(height: 8),
-              _buildDuplicateResolutionBar(msg.candidateData!),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSimulationCard(Map<String, dynamic> sim) {
-    final verdict = sim['verdict'] as String? ?? 'comfortable';
-    final targetAmt = (sim['amount'] as num?)?.toDouble() ?? 0.0;
-    final item = sim['merchant'] as String? ?? 'Item';
-    final daysToPayday = sim['days_to_payday'] as int? ?? 0;
-    final dailyCurrent = (sim['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
-    final dailyPost = (sim['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
-
-    Color badgeColor = const Color(0xFF00C896);
-    IconData badgeIcon = Icons.check_circle_outline_rounded;
-    String verdictLabel = "Comfortably Affordable";
-
-    if (verdict == 'caution') {
-      badgeColor = Colors.orange;
-      badgeIcon = Icons.warning_amber_rounded;
-      verdictLabel = "Caution (Reallocation Needed)";
-    } else if (verdict == 'unaffordable' || verdict == 'not_recommended') {
-      badgeColor = Colors.redAccent;
-      badgeIcon = Icons.cancel_outlined;
-      verdictLabel = "Unaffordable / Exceeds Budget";
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(badgeIcon, color: badgeColor, size: 16),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Purchase Simulator',
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  verdictLabel,
-                  style: TextStyle(
-                    color: badgeColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '$item • SAR ${targetAmt.toStringAsFixed(2)}',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Days to 27th Payday: $daysToPayday days away',
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0D1117),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Daily Allowance Now',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(Icons.arrow_forward_rounded, color: Color(0xFF8B949E), size: 14),
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'After Purchase',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'SAR ${dailyPost.toStringAsFixed(1)}/d',
-                        style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDuplicateResolutionBar(Map<String, dynamic> candidateData) {
-    final candidateId = candidateData['candidate_transaction_id'] as String?;
-    final parsed = candidateData['parsed_data'] as Map<String, dynamic>?;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF21262D),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Duplicate Prevention Check',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.orange, fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  icon: const Icon(Icons.attach_file, size: 16),
-                  label: const Text('Enrich Existing SMS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    if (candidateId != null) {
-                      _sendMessage("", enrichTxId: candidateId);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF8B949E)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  child: const Text('Log as New', style: TextStyle(fontSize: 12)),
-                  onPressed: () {
-                    final originalMsg = parsed != null
-                        ? "${parsed['merchant']} ${parsed['amount']} SAR"
-                        : "Expense";
-                    _sendMessage(originalMsg, allowDuplicate: true, previewOnly: true);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-class PendingExpenseConfirmationCard extends StatefulWidget {
-  final Map<String, dynamic> pendingData;
-  final void Function(String confirmedMerchant, String confirmedSpentBy) onConfirm;
-  final VoidCallback onCancel;
-
-  const PendingExpenseConfirmationCard({
-    super.key,
-    required this.pendingData,
-    required this.onConfirm,
-    required this.onCancel,
-  });
-
-  @override
-  State<PendingExpenseConfirmationCard> createState() => _PendingExpenseConfirmationCardState();
-}
-
-class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmationCard> {
-  late final TextEditingController _merchantController;
-  late String _selectedSpentBy;
-
-  @override
-  void initState() {
-    super.initState();
-    final defaultMerchant = widget.pendingData['merchant'] as String? ?? 'Store Name';
-    _merchantController = TextEditingController(text: defaultMerchant);
-    _selectedSpentBy = (widget.pendingData['spent_by'] as String? ?? 'both').toLowerCase();
-    if (!['me', 'partner', 'both'].contains(_selectedSpentBy)) {
-      _selectedSpentBy = 'both';
-    }
-  }
-
-  @override
-  void dispose() {
-    _merchantController.dispose();
-    super.dispose();
-  }
-
-  Widget _buildSpentByOption(String key, String title, IconData icon, Color activeColor) {
-    final isSelected = _selectedSpentBy == key;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedSpentBy = key),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? activeColor : const Color(0xFF30363D),
-              width: isSelected ? 1.5 : 1.0,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: isSelected ? activeColor : const Color(0xFF8B949E)),
-              const SizedBox(height: 3),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final amount = (widget.pendingData['amount'] as num?)?.toDouble() ?? 0.0;
-    final rawItems = widget.pendingData['items'] as List?;
-    final items = rawItems != null
-        ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
-        : <Map<String, dynamic>>[];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.edit_note_rounded, color: Color(0xFF00C896), size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Confirm Expense Details',
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'SAR ${amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFF00C896),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Store Name field
-          TextField(
-            controller: _merchantController,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'Store Name / Merchant',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-              prefixIcon: const Icon(Icons.storefront_outlined, color: Color(0xFF00C896), size: 18),
-              filled: true,
-              fillColor: const Color(0xFF0D1117),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00C896))),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Items Preview (if any)
-          if (items.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF21262D)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${items.length} item(s) found:',
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  ...items.map((it) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${it['quantity']}x ${it['name']}',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                            ),
-                            Text(
-                              'SAR ${(it['price'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                              style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // Spent By selector
-          Text(
-            'SPENT BY WHO?',
-            style: GoogleFonts.outfit(fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF8B949E)),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              _buildSpentByOption('me', 'Me', Icons.person_outline, const Color(0xFF58A6FF)),
-              const SizedBox(width: 6),
-              _buildSpentByOption('partner', 'Partner', Icons.favorite_outline, const Color(0xFFBC8CFF)),
-              const SizedBox(width: 6),
-              _buildSpentByOption('both', 'Both (Shared)', Icons.group_outlined, const Color(0xFF00C896)),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Confirm button
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.check_circle_rounded, size: 16),
-                  label: const Text('Confirm & Add Expense', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  onPressed: () {
-                    final store = _merchantController.text.trim();
-                    widget.onConfirm(store.isNotEmpty ? store : 'Store Name', _selectedSpentBy);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: widget.onCancel,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF8B949E),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                ),
-                child: const Text('Cancel', style: TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
