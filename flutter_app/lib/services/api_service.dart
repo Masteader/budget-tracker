@@ -545,6 +545,28 @@ class ApiService {
       return {'status': 'error', 'message': e.toString()};
     }
   }
+
+  // ── GET /budgets/sub-categories ───────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/budgets/sub-categories?parent_code=$parentCode'),
+            headers: _buildHeaders(),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data['status'] == 'success' && data['sub_categories'] is List) {
+          return (data['sub_categories'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
 }
 
 

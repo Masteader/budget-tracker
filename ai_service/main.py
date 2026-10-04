@@ -396,6 +396,21 @@ async def add_sub_category(req: SubCategoryCreateRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get(
+    "/budgets/sub-categories",
+    tags=["budgets"],
+    summary="Get all sub-categories for a parent category code.",
+)
+async def get_sub_categories_route(parent_code: str):
+    from salary_cycle import get_sub_categories_for_parent
+    try:
+        return {
+            "status": "success",
+            "sub_categories": get_sub_categories_for_parent(parent_code),
+        }
+    except Exception as exc:
+        logger.error("Failed to get sub-categories: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.delete(

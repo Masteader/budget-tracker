@@ -5,8 +5,11 @@ Calculates days to payday, burn rates, projected run-out dates, and budget healt
 
 from __future__ import annotations
 import calendar
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from supabase_client import get_client, fetch_flexible_budgets
 
@@ -565,18 +568,91 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
 
 
 
+def get_sub_categories_for_parent(parent_code: str) -> List[Dict[str, Any]]:
+    """
+    Fetches all sub-category definitions for a parent category code.
+    """
+    from supabase_client import get_client
+    client = get_client()
+    try:
+        resp = (
+            client.table("cost_control_sub_categories")
+            .select("sub_code, name_en, name_ar")
+            .eq("parent_code", parent_code)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        logger.warning(f"Error fetching sub-categories for {parent_code}: {e}")
+        return []
+
+
 def archive_category_for_household(household_id: str, category_code: str) -> Dict[str, Any]:
     from supabase_client import get_client
     client = get_client()
-    client.table("budgets").update({"is_active": False}).eq("household_id", household_id).eq("category_code", category_code).execute()
 
-    # If category has no recorded transactions, remove custom/test records so it vanishes completely
-    tx_check = client.table("transactions").select("id").eq("household_id", household_id).eq("category_code", category_code).limit(1).execute()
-    if not (tx_check.data or []):
-        client.table("budgets").delete().eq("household_id", household_id).eq("category_code", category_code).execute()
-        client.table("cost_control_sub_categories").delete().eq("parent_code", category_code).execute()
-        if category_code.startswith("OPEX-") or category_code.startswith("CAT-"):
-            client.table("cost_control_codes").delete().eq("code", category_code).execute()
+    current_cycle = get_cycle_for_date()
+    target_key = current_cycle["cycle_key"]
+    month_start = f"{target_key}-01"
+
+    # 1. Update or create an inactive record in budgets so the UI reliably knows it is inactive
+    existing_budgets = (
+        client.table("budgets")
+        .select("id")
+        .eq("household_id", household_id)
+        .eq("category_code", category_code)
+        .execute()
+    )
+
+    if existing_budgets.data:
+        client.table("budgets").update({
+            "is_active": False,
+            "allocated_amount": 0.0,
+            "sub_allocations": {},
+        }).eq("household_id", household_id).eq("category_code", category_code).execute()
+    else:
+        cat_resp = (
+            client.table("cost_control_codes")
+            .select("id")
+            .eq("code", category_code)
+            .maybe_single()
+            .execute()
+        )
+        cat_id = cat_resp.data.get("id") if cat_resp.data else None
+        insert_data = {
+            "household_id": household_id,
+            "category_code": category_code,
+            "allocated_amount": 0.0,
+            "spent_amount": 0.0,
+            "month": month_start,
+            "cycle_key": target_key,
+            "is_active": False,
+            "sub_allocations": {},
+        }
+        if cat_id:
+            insert_data["category_id"] = cat_id
+        client.table("budgets").insert(insert_data).execute()
+
+    # 2. If it is a non-standard custom category and has zero transactions anywhere, clean up custom definition
+    standard_codes = {
+        "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
+        "OPEX-SHOPPING", "OPEX-ENTERTAINMENT", "OPEX-HEALTH", "CAPEX-EDUCATION",
+        "OPEX-GOV", "OPEX-MISC"
+    }
+    if category_code not in standard_codes:
+        tx_check = (
+            client.table("transactions")
+            .select("id")
+            .eq("category_code", category_code)
+            .limit(1)
+            .execute()
+        )
+        if not (tx_check.data or []):
+            try:
+                client.table("cost_control_sub_categories").delete().eq("parent_code", category_code).execute()
+                client.table("cost_control_codes").delete().eq("code", category_code).execute()
+            except Exception as e:
+                logger.warning(f"Could not purge custom category {category_code}: {e}")
 
     return {
         "status": "success",

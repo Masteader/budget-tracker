@@ -164,24 +164,82 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
   Future<void> _loadSubCategories() async {
     try {
-      final res = await supabase
-          .from('cost_control_sub_categories')
-          .select('sub_code, name_en, name_ar')
-          .eq('parent_code', widget.categoryCode)
-          .order('id');
+      // 1. Fetch sub-categories from backend API (uses service-role key, bypassing RLS)
+      final apiSubs = await ApiService.instance.getSubCategories(widget.categoryCode);
 
       List<Map<String, String>> rawDefs = [];
-      if (res is List && res.isNotEmpty) {
-        rawDefs = res.map((row) => {
+      if (apiSubs.isNotEmpty) {
+        rawDefs = apiSubs.map((row) => {
           'sub_code': row['sub_code'] as String,
           'name_en': row['name_en'] as String? ?? (row['sub_code'] as String),
           'name_ar': row['name_ar'] as String? ?? '',
         }).toList();
       } else {
-        rawDefs = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
+        // Fallback to Supabase direct query or local default catalog
+        try {
+          final res = await supabase
+              .from('cost_control_sub_categories')
+              .select('sub_code, name_en, name_ar')
+              .eq('parent_code', widget.categoryCode);
+          if (res is List && res.isNotEmpty) {
+            rawDefs = res.map((row) => {
+              'sub_code': row['sub_code'] as String,
+              'name_en': row['name_en'] as String? ?? (row['sub_code'] as String),
+              'name_ar': row['name_ar'] as String? ?? '',
+            }).toList();
+          }
+        } catch (_) {}
+
+        if (rawDefs.isEmpty) {
+          rawDefs = List<Map<String, String>>.from(
+            kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [],
+          );
+        }
       }
 
-      final existingAllocs = widget.existingBudget?.subAllocations ?? {};
+      // 2. Fetch the latest budget row for this household & cycle to get any saved subAllocations
+      Map<String, double> existingAllocs = Map<String, double>.from(
+        widget.existingBudget?.subAllocations ?? {},
+      );
+      try {
+        final cycleKey = widget.cycleKey;
+        var query = supabase
+            .from('budgets')
+            .select('sub_allocations')
+            .eq('household_id', widget.householdId)
+            .eq('category_code', widget.categoryCode);
+        if (cycleKey != null && cycleKey.isNotEmpty) {
+          query = query.eq('cycle_key', cycleKey);
+        }
+        final bData = await query.maybeSingle();
+        if (bData != null && bData['sub_allocations'] is Map) {
+          final dbAllocs = (bData['sub_allocations'] as Map<String, dynamic>).map(
+            (k, v) => MapEntry(k, (v as num).toDouble()),
+          );
+          existingAllocs = {...existingAllocs, ...dbAllocs};
+        }
+      } catch (_) {}
+
+      // 3. Ensure any sub-category present in existingAllocs is included in rawDefs
+      for (final entry in existingAllocs.entries) {
+        if (!rawDefs.any((d) => d['sub_code'] == entry.key)) {
+          final cleanName = entry.key
+              .replaceAll('sub-', '')
+              .replaceAll('_', ' ')
+              .replaceAll('-', ' ')
+              .trim();
+          final formattedName = cleanName
+              .split(' ')
+              .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+              .join(' ');
+          rawDefs.add({
+            'sub_code': entry.key,
+            'name_en': formattedName,
+            'name_ar': '',
+          });
+        }
+      }
+
       final list = rawDefs.map((row) {
         final code = row['sub_code']!;
         final nameEn = row['name_en']!;
@@ -203,6 +261,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
       if (mounted) {
         setState(() {
+          _subItems.clear();
           _subItems.addAll(list);
           _isLoading = false;
         });
@@ -232,6 +291,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
       if (mounted) {
         setState(() {
+          _subItems.clear();
           _subItems.addAll(list);
           _isLoading = false;
         });
@@ -297,15 +357,16 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-').toLowerCase();
     final subCode = 'sub-$slug';
 
-    // Insert into cost_control_sub_categories silently
+    // Persist to cost_control_sub_categories via ApiService
     try {
-      await supabase.from('cost_control_sub_categories').insert({
-        'parent_code': widget.categoryCode,
-        'sub_code': subCode,
-        'name_en': name,
-        'name_ar': name,
-        'keywords': [name.toLowerCase()],
-      });
+      await ApiService.instance.addSubCategory(
+        householdId: widget.householdId,
+        parentCode: widget.categoryCode,
+        nameEn: name,
+        allocatedAmount: amount,
+        subCode: subCode,
+        cycleKey: widget.cycleKey,
+      );
     } catch (_) {}
 
     final ctrl = TextEditingController(text: amount > 0 ? amount.toStringAsFixed(2) : '');

@@ -623,8 +623,17 @@ class _SummaryCard extends StatelessWidget {
     final totalAllocated = budgets.fold(0.0, (s, b) => s + b.allocatedAmount);
     final totalSpent     = budgets.fold(0.0, (s, b) => s + b.spentAmount);
 
+    final now = DateTime.now();
+    DateTime fallbackCycleStart;
+    if (now.day >= 27) {
+      fallbackCycleStart = DateTime(now.year, now.month, 27);
+    } else {
+      fallbackCycleStart = DateTime(now.year, now.month - 1, 27);
+    }
+    final fallbackDaysElapsed = now.difference(fallbackCycleStart).inDays + 1;
+
     final daysTotal   = cycle?.daysTotal ?? 30;
-    final daysElapsed = (cycle?.daysElapsed ?? 1).clamp(1, daysTotal);
+    final daysElapsed = (cycle?.daysElapsed ?? fallbackDaysElapsed).clamp(1, daysTotal);
 
     // Separate fixed lump-sum monthly commitments (rent, utilities) from variable daily expenses
     const fixedCodes = {'HOUSING-RENT', 'HOUSING', 'OPEX-UTILITIES', 'UTILITIES-BILLS'};
