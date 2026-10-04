@@ -467,11 +467,19 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
+        titleSpacing: 0,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 20),
-            const SizedBox(width: 8),
-            Text('AI Transaction Chat', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 17)),
+            const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 18),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'AI Transaction Chat',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
