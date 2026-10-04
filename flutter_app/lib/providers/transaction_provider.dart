@@ -22,44 +22,61 @@ class TransactionProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Transaction> get transactions => _transactions;
+  List<Transaction> _filteredTransactions = [];
+
   String get searchQuery => _searchQuery;
   String? get categoryFilter => _categoryFilter;
   String? get spentByFilter => _spentByFilter;
 
-  List<Transaction> get filteredTransactions {
-    return _transactions.where((tx) {
-      if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
+  List<Transaction> get filteredTransactions => _filteredTransactions;
+
+  void _recomputeFiltered() {
+    final hasSearch = _searchQuery.isNotEmpty;
+    final q = hasSearch ? _searchQuery.toLowerCase() : '';
+    final hasCategory = _categoryFilter != null && _categoryFilter!.isNotEmpty;
+    final hasSpentBy = _spentByFilter != null && _spentByFilter != 'all';
+    final targetSpentBy = hasSpentBy ? _spentByFilter!.toLowerCase() : '';
+
+    if (!hasSearch && !hasCategory && !hasSpentBy) {
+      _filteredTransactions = List.unmodifiable(_transactions);
+      return;
+    }
+
+    _filteredTransactions = _transactions.where((tx) {
+      if (hasSearch) {
         final merchantMatch = (tx.merchant ?? '').toLowerCase().contains(q);
         final rawMatch = (tx.rawSms ?? '').toLowerCase().contains(q);
         final itemMatch = tx.items.any((it) => (it['name']?.toString() ?? '').toLowerCase().contains(q));
         if (!merchantMatch && !rawMatch && !itemMatch) return false;
       }
 
-      if (_categoryFilter != null && _categoryFilter!.isNotEmpty) {
+      if (hasCategory) {
         if (tx.categoryCode != _categoryFilter) return false;
       }
 
-      if (_spentByFilter != null && _spentByFilter != 'all') {
-        if (tx.spentBy.toLowerCase() != _spentByFilter!.toLowerCase()) return false;
+      if (hasSpentBy) {
+        if (tx.spentBy.toLowerCase() != targetSpentBy) return false;
       }
 
       return true;
-    }).toList();
+    }).toList(growable: false);
   }
 
   void setSearchQuery(String query) {
     _searchQuery = query.trim();
+    _recomputeFiltered();
     notifyListeners();
   }
 
   void setCategoryFilter(String? categoryCode) {
     _categoryFilter = categoryCode;
+    _recomputeFiltered();
     notifyListeners();
   }
 
   void setSpentByFilter(String? spentBy) {
     _spentByFilter = spentBy;
+    _recomputeFiltered();
     notifyListeners();
   }
 
@@ -67,6 +84,7 @@ class TransactionProvider extends ChangeNotifier {
     _searchQuery = '';
     _categoryFilter = null;
     _spentByFilter = 'all';
+    _recomputeFiltered();
     notifyListeners();
   }
 
@@ -98,6 +116,7 @@ class TransactionProvider extends ChangeNotifier {
       _transactions = (data as List)
           .map((row) => Transaction.fromMap(Map<String, dynamic>.from(row as Map)))
           .toList();
+      _recomputeFiltered();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -142,6 +161,7 @@ class TransactionProvider extends ChangeNotifier {
         final idx = _transactions.indexWhere((t) => t.id == tx.id);
         if (idx == -1) {
           _transactions.insert(0, tx);
+          _recomputeFiltered();
           notifyListeners();
         }
       }
@@ -152,6 +172,7 @@ class TransactionProvider extends ChangeNotifier {
         final idx = _transactions.indexWhere((t) => t.id == tx.id);
         if (idx != -1) {
           _transactions[idx] = tx;
+          _recomputeFiltered();
           notifyListeners();
         }
       }
@@ -160,6 +181,7 @@ class TransactionProvider extends ChangeNotifier {
       final deletedId = oldRecord['id'] as String?;
       if (deletedId != null) {
         _transactions.removeWhere((t) => t.id == deletedId);
+        _recomputeFiltered();
         notifyListeners();
       }
     }
@@ -172,6 +194,7 @@ class TransactionProvider extends ChangeNotifier {
     if (existingIdx == -1) return false;
 
     final removedTx = _transactions.removeAt(existingIdx);
+    _recomputeFiltered();
     notifyListeners();
 
     try {
@@ -181,6 +204,7 @@ class TransactionProvider extends ChangeNotifier {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');
       // Rollback
       _transactions.insert(existingIdx, removedTx);
+      _recomputeFiltered();
       notifyListeners();
       return false;
     }
@@ -220,6 +244,7 @@ class TransactionProvider extends ChangeNotifier {
     );
 
     _transactions[existingIdx] = updated;
+    _recomputeFiltered();
     notifyListeners();
 
     try {
@@ -235,6 +260,7 @@ class TransactionProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[TransactionProvider] Update failed, rolling back: $e');
       _transactions[existingIdx] = original;
+      _recomputeFiltered();
       notifyListeners();
       return false;
     }

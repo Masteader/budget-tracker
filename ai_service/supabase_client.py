@@ -35,16 +35,31 @@ def get_client() -> Client:
 # COST CONTROL CODES
 # =============================================================================
 
-def fetch_all_cost_control_codes() -> list[CostControlCode]:
+# ─── Cost Control Codes Cache ───────────────────────────────────────────────
+_cached_cost_codes: Optional[list[CostControlCode]] = None
+_cached_cost_codes_time: Optional[float] = None
+_CACHE_TTL_SECONDS = 300.0  # 5 minutes
+
+
+def fetch_all_cost_control_codes(force_refresh: bool = False) -> list[CostControlCode]:
     """
-    Load the full cost_control_codes table into memory.
-    Called once at startup and cached — table rarely changes.
+    Load the full cost_control_codes table into memory with a 5-minute TTL cache.
+    Eliminates repetitive network queries for static categories during SMS/chat parsing.
     """
+    global _cached_cost_codes, _cached_cost_codes_time
+    import time
+    now = time.time()
+    if not force_refresh and _cached_cost_codes is not None and _cached_cost_codes_time is not None:
+        if now - _cached_cost_codes_time < _CACHE_TTL_SECONDS:
+            return _cached_cost_codes
+
     client = get_client()
     response = client.table("cost_control_codes").select("*").execute()
     rows = response.data or []
-    logger.debug("Fetched %d cost control codes.", len(rows))
-    return [CostControlCode(**row) for row in rows]
+    _cached_cost_codes = [CostControlCode(**row) for row in rows]
+    _cached_cost_codes_time = now
+    logger.debug("Fetched and cached %d cost control codes (TTL %ds).", len(rows), int(_CACHE_TTL_SECONDS))
+    return _cached_cost_codes
 
 
 def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[CostControlCode]:
