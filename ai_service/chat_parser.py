@@ -281,6 +281,9 @@ def process_chat_transaction(
     user_id: Optional[str] = None,
     allow_duplicate: bool = False,
     enrich_tx_id: Optional[str] = None,
+    preview_only: bool = False,
+    override_merchant: Optional[str] = None,
+    override_spent_by: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -360,10 +363,28 @@ def process_chat_transaction(
                 ),
             }
 
+    merchant = (override_merchant or parsed.merchant).strip()
+    spent_by = (override_spent_by or parsed.spent_by).lower()
+    if spent_by not in ("me", "partner", "both"):
+        spent_by = "both"
+
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
-    matched = match_category(parsed.merchant, codes)
+    matched = match_category(merchant, codes)
     category_code = matched.code if matched else parsed.category_code
+
+    # If preview only, return structured data asking user for confirmation
+    if preview_only:
+        return {
+            "status": "pending_confirmation",
+            "merchant": merchant,
+            "amount": parsed.total_amount,
+            "category_code": category_code,
+            "spent_by": spent_by,
+            "items": items_dicts,
+            "original_message": message,
+            "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm store name and who spent it:",
+        }
 
     now_iso = datetime.now(timezone.utc).isoformat()
     now_date = datetime.now(timezone.utc).date()
@@ -384,7 +405,6 @@ def process_chat_transaction(
 
     # Format raw text for audit trail
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
-    spent_by = parsed.spent_by.lower() if parsed.spent_by in ("me", "partner", "both") else "both"
     audit_text = f"Chat: {message} | SpentBy: {spent_by} | Items: [{items_summary}]" if items_summary else f"Chat: {message} | SpentBy: {spent_by}"
 
     # Insert transaction
@@ -392,7 +412,7 @@ def process_chat_transaction(
         household_id=household_id,
         amount=parsed.total_amount,
         currency="SAR",
-        merchant=parsed.merchant,
+        merchant=merchant,
         category_code=category_code,
         timestamp=now_iso,
         raw_sms=audit_text,
@@ -410,11 +430,11 @@ def process_chat_transaction(
     return {
         "status": "success",
         "transaction_id": tx_id,
-        "merchant": parsed.merchant,
+        "merchant": merchant,
         "amount": parsed.total_amount,
         "category_code": category_code,
         "spent_by": spent_by,
         "items": items_dicts,
         "is_reallocated": is_reallocated,
-        "message": f"Recorded SAR {parsed.total_amount:.2f} at {parsed.merchant} under {category_code} ({spent_by.capitalize()}).",
+        "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by.capitalize()}).",
     }

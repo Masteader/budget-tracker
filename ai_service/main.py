@@ -244,6 +244,9 @@ async def chat_transaction(request: Request):
         user_id=body.get("user_id"),
         allow_duplicate=bool(body.get("allow_duplicate", False)),
         enrich_tx_id=body.get("enrich_tx_id"),
+        preview_only=bool(body.get("preview_only", False)),
+        override_merchant=body.get("merchant"),
+        override_spent_by=body.get("spent_by"),
     )
     return result
 
@@ -290,6 +293,9 @@ async def scan_receipt(request: Request):
         user_id=body.get("user_id"),
         allow_duplicate=bool(body.get("allow_duplicate", False)),
         enrich_tx_id=body.get("enrich_tx_id"),
+        preview_only=bool(body.get("preview_only", False)),
+        override_merchant=body.get("merchant"),
+        override_spent_by=body.get("spent_by"),
     )
     return result
 

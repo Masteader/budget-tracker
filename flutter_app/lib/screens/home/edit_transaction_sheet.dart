@@ -12,8 +12,8 @@ class EditTransactionSheet extends StatefulWidget {
     required this.transaction,
   });
 
-  static Future<void> show(BuildContext context, Transaction transaction) {
-    return showModalBottomSheet(
+  static Future<bool?> show(BuildContext context, Transaction transaction) {
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF161B22),
@@ -163,7 +163,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     try {
       await supabase.from('transactions').delete().eq('id', widget.transaction.id);
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Transaction removed and budget restored.'),

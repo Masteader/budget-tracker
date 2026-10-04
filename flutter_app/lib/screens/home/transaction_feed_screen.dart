@@ -27,6 +27,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   String _selectedDatePeriod = 'ALL'; // 'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM'
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
+  final Set<String> _deletedTxIds = {};
 
   final List<Map<String, String>> _categoryOptions = const [
     {'code': 'ALL', 'label': 'All'},
@@ -79,7 +80,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }
 
   List<Transaction> _filterAndSort(List<Transaction> list) {
-    var result = List<Transaction>.from(list);
+    var result = list.where((t) => !_deletedTxIds.contains(t.id)).toList();
 
     // 1. Category Filter
     if (_selectedCategoryFilter != 'ALL') {
@@ -525,6 +526,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }
 
   Future<void> _deleteTransaction(BuildContext context, Transaction tx) async {
+    setState(() {
+      _deletedTxIds.add(tx.id);
+    });
+
     try {
       await supabase.from('transactions').delete().eq('id', tx.id);
       if (context.mounted) {
@@ -536,6 +541,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               label: 'UNDO',
               textColor: const Color(0xFF00C896),
               onPressed: () async {
+                setState(() {
+                  _deletedTxIds.remove(tx.id);
+                });
                 await supabase.from('transactions').insert({
                   'household_id': tx.householdId,
                   'amount': tx.amount,
@@ -554,6 +562,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         );
       }
     } catch (e) {
+      setState(() {
+        _deletedTxIds.remove(tx.id);
+      });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.redAccent),
@@ -843,7 +854,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           spentBy: tx.spentBy,
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
-                                          onEdit: () => EditTransactionSheet.show(context, tx),
+                                          onEdit: () async {
+                                            final deleted = await EditTransactionSheet.show(context, tx);
+                                            if (deleted == true && mounted) {
+                                              setState(() {
+                                                _deletedTxIds.add(tx.id);
+                                              });
+                                            }
+                                          },
                                           onDelete: () => _deleteTransaction(context, tx),
                                         ),
                                       );

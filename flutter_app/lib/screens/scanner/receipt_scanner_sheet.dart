@@ -45,6 +45,21 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   Map<String, dynamic>? _scanResult;
   String? _errorMessage;
 
+  late final TextEditingController _merchantController;
+  String _selectedSpentBy = 'both';
+
+  @override
+  void initState() {
+    super.initState();
+    _merchantController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _merchantController.dispose();
+    super.dispose();
+  }
+
   static Map<String, dynamic>? decodeZatcaTlv(String base64Str) {
     try {
       final bytes = base64Decode(base64Str.trim());
@@ -177,6 +192,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               setState(() {
                 _zatcaQrRaw = text;
                 _zatcaDecoded = decoded;
+                if (decoded != null && decoded['seller'] != null && decoded['seller'].toString().trim().isNotEmpty) {
+                  _merchantController.text = decoded['seller'].toString().trim();
+                }
               });
               Navigator.pop(ctx);
             },
@@ -243,6 +261,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       setState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
+        if (decoded != null && decoded['seller'] != null && decoded['seller'].toString().trim().isNotEmpty) {
+          _merchantController.text = decoded['seller'].toString().trim();
+        }
       });
       if (decoded != null && mounted) {
         final wantPhoto = await showDialog<bool>(
@@ -347,6 +368,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         qrCodeRaw: _zatcaQrRaw,
         householdId: widget.householdId,
         userId: user?.id,
+        previewOnly: true,
       );
 
       setState(() {
@@ -355,6 +377,16 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           _errorMessage = res['message'] ?? 'Failed to analyze receipt.';
         } else {
           _scanResult = res;
+          final detectedMerchant = _zatcaDecoded?['seller'] as String? ??
+              res['merchant'] as String? ??
+              res['parsed_data']?['merchant'] as String? ??
+              '';
+          if (detectedMerchant.trim().isNotEmpty) {
+            _merchantController.text = detectedMerchant.trim();
+          }
+          if (res['spent_by'] != null) {
+            _selectedSpentBy = (res['spent_by'] as String).toLowerCase();
+          }
         }
       });
     } catch (e) {
@@ -379,6 +411,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         base64List.add(base64Encode(bytes));
       }
       final user = supabase.auth.currentUser;
+      final confirmedMerchant = _merchantController.text.trim();
 
       final res = await ApiService.instance.scanReceipt(
         imagesBase64: base64List,
@@ -387,6 +420,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         userId: user?.id,
         allowDuplicate: allowDuplicate,
         enrichTxId: enrichTxId,
+        merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
+        spentBy: _selectedSpentBy,
+        previewOnly: false,
       );
 
       setState(() => _isAnalyzing = false);
@@ -416,9 +452,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _fallbackSaveToSupabase() async {
     try {
-      final merchant = _zatcaDecoded?['seller'] as String? ??
-          _scanResult?['merchant'] as String? ??
-          'VAT Tax Invoice';
+      final merchant = _merchantController.text.trim().isNotEmpty
+          ? _merchantController.text.trim()
+          : (_zatcaDecoded?['seller'] as String? ??
+              _scanResult?['merchant'] as String? ??
+              'VAT Tax Invoice');
       final total = (_zatcaDecoded?['total'] as num?)?.toDouble() ??
           (_scanResult?['amount'] as num?)?.toDouble() ??
           0.0;
@@ -455,7 +493,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         res = await supabase.from('transactions').insert({
           ...baseData,
           'source': 'receipt_scan',
-          'spent_by': 'both',
+          'spent_by': _selectedSpentBy,
           'items': items,
         }).select().single();
       } catch (_) {
@@ -463,6 +501,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           res = await supabase.from('transactions').insert({
             ...baseData,
             'source': 'receipt_scan',
+            'spent_by': _selectedSpentBy,
           }).select().single();
         } catch (_) {
           res = await supabase.from('transactions').insert(baseData).select().single();
@@ -744,6 +783,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               // ── ZATCA QR & Photo Actions ──
               if (_zatcaDecoded != null && _scanResult == null) ...[
                 const SizedBox(height: 12),
+                _buildConfirmationInputs(),
                 if (_imageFiles.isEmpty) ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -922,6 +962,101 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
   }
 
+  Widget _buildSpentByOption(String key, String title, IconData icon, Color activeColor) {
+    final isSelected = _selectedSpentBy.toLowerCase() == key;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedSpentBy = key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? activeColor : const Color(0xFF30363D),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: isSelected ? activeColor : const Color(0xFF8B949E)),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConfirmationInputs() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF30363D)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.storefront_outlined, color: Color(0xFF00C896), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Store & Attribution Details',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _merchantController,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Store Name / Merchant',
+              labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              prefixIcon: const Icon(Icons.store_outlined, color: Color(0xFF00C896), size: 20),
+              filled: true,
+              fillColor: const Color(0xFF0D1117),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF30363D))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00C896))),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'SPENT BY WHO?',
+            style: GoogleFonts.outfit(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF8B949E)),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildSpentByOption('me', 'Me', Icons.person_outline, const Color(0xFF58A6FF)),
+              const SizedBox(width: 8),
+              _buildSpentByOption('partner', 'Partner', Icons.favorite_outline, const Color(0xFFBC8CFF)),
+              const SizedBox(width: 8),
+              _buildSpentByOption('both', 'Both (Shared)', Icons.group_outlined, const Color(0xFF00C896)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildResultContent() {
     final status = _scanResult!['status'] as String? ?? '';
     final isCandidate = status == 'duplicate_candidate';
@@ -1080,12 +1215,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           ),
         ],
 
+        if (!isSuccess) ...[
+          _buildConfirmationInputs(),
+        ],
+
         TransactionItemBreakdownCard(
-          merchant: merchant,
+          merchant: _merchantController.text.trim().isNotEmpty
+              ? _merchantController.text.trim()
+              : merchant,
           amount: amount,
           categoryCode: categoryCode,
           source: 'receipt_scan',
-          spentBy: (_scanResult != null ? _scanResult!['spent_by'] as String? : null) ?? 'both',
+          spentBy: _selectedSpentBy,
           items: items,
         ),
         const SizedBox(height: 16),

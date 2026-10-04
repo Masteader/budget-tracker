@@ -196,6 +196,9 @@ def process_receipt_scan(
     user_id: Optional[str] = None,
     allow_duplicate: bool = False,
     enrich_tx_id: Optional[str] = None,
+    preview_only: bool = False,
+    override_merchant: Optional[str] = None,
+    override_spent_by: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -252,7 +255,10 @@ def process_receipt_scan(
             "message": "Please provide receipt image(s) or a ZATCA QR code.",
         }
 
-    merchant = parsed.get("merchant") or "Scanned Merchant"
+    merchant = (override_merchant or parsed.get("merchant") or "Scanned Merchant").strip()
+    spent_by = (override_spent_by or "both").lower()
+    if spent_by not in ("me", "partner", "both"):
+        spent_by = "both"
     total_amount = float(parsed.get("total_amount") or 0.0)
     category_code = parsed.get("category_code") or "OPEX-MISC"
     raw_items = parsed.get("items") or []
@@ -294,6 +300,20 @@ def process_receipt_scan(
             "parsed_data": parsed,
         }
 
+    # If preview only, return structured data before inserting
+    if preview_only:
+        return {
+            "status": "preview",
+            "merchant": merchant,
+            "amount": total_amount,
+            "vat_amount": float(parsed.get("vat_amount") or 0.0),
+            "category_code": category_code,
+            "spent_by": spent_by,
+            "items": items,
+            "zatca_verified": parsed.get("zatca_verified"),
+            "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
+        }
+
     # Explicit enrichment
     if enrich_tx_id:
         success = enrich_transaction_items(enrich_tx_id, items)
@@ -303,6 +323,7 @@ def process_receipt_scan(
             "merchant": merchant,
             "amount": total_amount,
             "category_code": category_code,
+            "spent_by": spent_by,
             "items": items,
             "zatca_verified": parsed.get("zatca_verified"),
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
@@ -323,6 +344,7 @@ def process_receipt_scan(
                     "merchant": merchant,
                     "amount": total_amount,
                     "category_code": category_code,
+                    "spent_by": spent_by,
                     "items": items,
                     "zatca_verified": parsed.get("zatca_verified"),
                 },
@@ -330,6 +352,7 @@ def process_receipt_scan(
                 "merchant": merchant,
                 "amount": total_amount,
                 "category_code": category_code,
+                "spent_by": spent_by,
                 "message": (
                     f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
                     f"was already recorded. Would you like to attach these {len(items)} items or log as separate expense?"
@@ -375,6 +398,7 @@ def process_receipt_scan(
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",
         items=items,
+        spent_by=spent_by,
     )
 
 

@@ -289,7 +289,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     children: [
                       DropdownButtonFormField<String>(
                         dropdownColor: const Color(0xFF161B22),
-                        value: selectedParentCode.isNotEmpty ? selectedParentCode : null,
+                        initialValue: selectedParentCode.isNotEmpty ? selectedParentCode : null,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
                           labelText: 'Parent Category',
@@ -357,7 +357,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             keywords: [name.toLowerCase(), code.toLowerCase()],
                           );
                           if (res['status'] == 'success') {
-                            Navigator.pop(ctx);
+                            if (ctx.mounted) Navigator.pop(ctx);
                             setState(() {
                               _staticFuture = _loadStaticData();
                             });
@@ -395,7 +395,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             cycleKey: _currentCycleKey,
                           );
                           if (res['status'] == 'success') {
-                            Navigator.pop(ctx);
+                            if (ctx.mounted) Navigator.pop(ctx);
                             setState(() {
                               _staticFuture = _loadStaticData();
                             });

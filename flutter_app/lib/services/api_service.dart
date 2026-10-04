@@ -81,6 +81,9 @@ class ApiService {
     String? userId,
     bool allowDuplicate = false,
     String? enrichTxId,
+    bool previewOnly = true,
+    String? merchant,
+    String? spentBy,
   }) async {
     final payload = jsonEncode({
       'message': message,
@@ -88,6 +91,9 @@ class ApiService {
       if (userId != null) 'user_id': userId,
       'allow_duplicate': allowDuplicate,
       if (enrichTxId != null) 'enrich_tx_id': enrichTxId,
+      'preview_only': previewOnly,
+      if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
+      if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
     });
 
     final signature = _sign(payload);
@@ -251,6 +257,9 @@ class ApiService {
     String? userId,
     bool allowDuplicate = false,
     String? enrichTxId,
+    bool previewOnly = false,
+    String? merchant,
+    String? spentBy,
   }) async {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     final payload = jsonEncode({
@@ -261,6 +270,9 @@ class ApiService {
       if (userId != null) 'user_id': userId,
       'allow_duplicate': allowDuplicate,
       if (enrichTxId != null) 'enrich_tx_id': enrichTxId,
+      'preview_only': previewOnly,
+      if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
+      if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
     });
 
     final signature = _sign(payload);
