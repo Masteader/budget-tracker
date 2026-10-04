@@ -4,9 +4,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../services/csv_export_service.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import 'edit_transaction_sheet.dart';
@@ -19,16 +22,12 @@ class TransactionFeedScreen extends StatefulWidget {
 }
 
 class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
-  late Future<String> _householdId;
-
   // Filters & Sorting state
   String _selectedCategoryFilter = 'ALL';
   String _selectedSort = 'newest'; // 'newest' | 'oldest' | 'highest' | 'lowest'
   String _selectedDatePeriod = 'ALL'; // 'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM'
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
-  final Set<String> _deletedTxIds = {};
-  Key _streamRefreshKey = UniqueKey();
 
   final List<Map<String, String>> _categoryOptions = const [
     {'code': 'ALL', 'label': 'All'},
@@ -40,22 +39,6 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     {'code': 'OPEX-HEALTH', 'label': '💊 Health'},
     {'code': 'OPEX-MISC', 'label': '📦 Other'},
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _householdId = _fetchHouseholdId();
-  }
-
-  Future<String> _fetchHouseholdId() async {
-    final uid = supabase.auth.currentUser!.id;
-    final data = await supabase
-        .from('users')
-        .select('household_id')
-        .eq('id', uid)
-        .single();
-    return data['household_id'] as String;
-  }
 
   String get _sortLabel {
     switch (_selectedSort) {
@@ -81,7 +64,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }
 
   List<Transaction> _filterAndSort(List<Transaction> list) {
-    var result = list.where((t) => !_deletedTxIds.contains(t.id)).toList();
+    var result = List<Transaction>.from(list);
 
     // 1. Category Filter
     if (_selectedCategoryFilter != 'ALL') {
@@ -527,6 +510,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }
 
   Future<void> _deleteTransaction(BuildContext context, Transaction tx, {bool requireConfirm = false}) async {
+    final txProvider = context.read<TransactionProvider>();
+    final budgetProvider = context.read<BudgetProvider>();
+
     if (requireConfirm) {
       final confirm = await showDialog<bool>(
         context: context,
@@ -556,53 +542,46 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (confirm != true) return;
     }
 
-    setState(() {
-      _deletedTxIds.add(tx.id);
-      _streamRefreshKey = UniqueKey();
-    });
+    final success = await txProvider.deleteTransaction(tx.id);
+    if (!success) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete transaction.'), backgroundColor: Colors.redAccent),
+        );
+      }
+      return;
+    }
 
-    try {
-      await supabase.from('transactions').delete().eq('id', tx.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Deleted SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}'),
-            backgroundColor: const Color(0xFF21262D),
-            action: SnackBarAction(
-              label: 'UNDO',
-              textColor: const Color(0xFF00C896),
-              onPressed: () async {
-                setState(() {
-                  _deletedTxIds.remove(tx.id);
-                  _streamRefreshKey = UniqueKey();
-                });
-                await supabase.from('transactions').insert({
-                  'household_id': tx.householdId,
-                  'amount': tx.amount,
-                  'currency': tx.currency,
-                  'merchant': tx.merchant,
-                  'category_code': tx.categoryCode,
-                  'timestamp': tx.timestamp.toIso8601String(),
-                  'source': tx.source,
-                  'items': tx.items,
-                  'receipt_url': tx.receiptUrl,
-                  'spent_by': tx.spentBy,
-                });
-              },
-            ),
+    // Instantly refresh budget calculations across the app
+    budgetProvider.refresh();
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deleted SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}'),
+          backgroundColor: const Color(0xFF21262D),
+          action: SnackBarAction(
+            label: 'UNDO',
+            textColor: const Color(0xFF00C896),
+            onPressed: () async {
+              await supabase.from('transactions').insert({
+                'household_id': tx.householdId,
+                'amount': tx.amount,
+                'currency': tx.currency,
+                'merchant': tx.merchant,
+                'category_code': tx.categoryCode,
+                'timestamp': tx.timestamp.toIso8601String(),
+                'source': tx.source,
+                'items': tx.items,
+                'receipt_url': tx.receiptUrl,
+                'spent_by': tx.spentBy,
+              });
+              await txProvider.fetchTransactions();
+              budgetProvider.refresh();
+            },
           ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _deletedTxIds.remove(tx.id);
-        _streamRefreshKey = UniqueKey();
-      });
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -643,15 +622,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<String>(
-        future: _householdId,
-        builder: (ctx, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)));
-          }
-          final hid = snap.data!;
-          return Column(
-            children: [
+      body: Column(
+        children: [
               // Horizontal Category Chips
               Container(
                 height: 48,
@@ -687,24 +659,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 ),
               ),
 
-              // Transaction Stream & Content
+              // Centralized Provider State Feed
               Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
-                  key: _streamRefreshKey,
-                  stream: supabase
-                      .from('transactions')
-                      .stream(primaryKey: ['id'])
-                      .eq('household_id', hid)
-                      .order('timestamp', ascending: false)
-                      .limit(200),
-                  builder: (ctx, txSnap) {
-                    if (!txSnap.hasData) {
+                child: Consumer<TransactionProvider>(
+                  builder: (ctx, txProvider, _) {
+                    if (txProvider.isLoading && txProvider.transactions.isEmpty) {
                       return const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)));
                     }
-                    final rawList = txSnap.data!.map(Transaction.fromMap).toList();
-                    final transactions = _filterAndSort(rawList);
 
-                    // Calculate total spent for visible items
+                    final transactions = _filterAndSort(txProvider.transactions);
                     final visibleTotal = transactions.fold<double>(0.0, (sum, t) => sum + t.amount);
 
                     return Column(
@@ -768,8 +731,19 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                               const SizedBox(width: 8),
                               InkWell(
                                 onTap: () {
-                                  if (txSnap.data != null && txSnap.data!.isNotEmpty) {
-                                    CsvExportService.showExportDialog(context, txSnap.data!, monthLabel: 'All Records');
+                                  if (txProvider.transactions.isNotEmpty) {
+                                    final exportList = txProvider.transactions.map((t) => {
+                                      'id': t.id,
+                                      'amount': t.amount,
+                                      'currency': t.currency,
+                                      'merchant': t.merchant,
+                                      'category_code': t.categoryCode,
+                                      'timestamp': t.timestamp.toIso8601String(),
+                                      'source': t.source,
+                                      'spent_by': t.spentBy,
+                                      'raw_sms': t.rawSms,
+                                    }).toList();
+                                    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
                                   }
                                 },
                                 borderRadius: BorderRadius.circular(8),
@@ -824,9 +798,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 )
                               : RefreshIndicator(
                                   color: const Color(0xFF00C896),
-                                  onRefresh: () async => setState(() {
-                                    _streamRefreshKey = UniqueKey();
-                                  }),
+                                  onRefresh: () async {
+                                    await Future.wait([
+                                      context.read<TransactionProvider>().fetchTransactions(),
+                                      context.read<BudgetProvider>().refresh(),
+                                    ]);
+                                  },
                                   child: ListView.separated(
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -892,15 +869,16 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           isReallocated: tx.isReallocated,
                                           onEdit: () async {
                                             final res = await EditTransactionSheet.show(context, tx);
-                                            if (res == 'deleted' && mounted) {
-                                              setState(() {
-                                                _deletedTxIds.add(tx.id);
-                                                _streamRefreshKey = UniqueKey();
-                                              });
-                                            } else if (res == 'updated' && mounted) {
-                                              setState(() {
-                                                _streamRefreshKey = UniqueKey();
-                                              });
+                                            if (res == 'deleted') {
+                                              if (context.mounted) {
+                                                context.read<TransactionProvider>().deleteTransaction(tx.id);
+                                                context.read<BudgetProvider>().refresh();
+                                              }
+                                            } else if (res == 'updated') {
+                                              if (context.mounted) {
+                                                context.read<TransactionProvider>().fetchTransactions();
+                                                context.read<BudgetProvider>().refresh();
+                                              }
                                             }
                                           },
                                           onDelete: () => _deleteTransaction(context, tx, requireConfirm: true),
@@ -916,9 +894,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
     );
   }
 }

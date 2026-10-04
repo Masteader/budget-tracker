@@ -6,8 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import 'package:provider/provider.dart';
+
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../services/sms_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/salary_cycle_widget.dart';
@@ -45,6 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     OfflineSyncService.instance.onItemsFlushed.listen((count) {
       if (mounted && count > 0) {
+        context.read<TransactionProvider>().fetchTransactions();
+        context.read<BudgetProvider>().refresh();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Synced $count queued offline transaction(s) with cloud!'),

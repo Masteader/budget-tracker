@@ -5,8 +5,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'providers/budget_provider.dart';
+import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
@@ -81,11 +84,17 @@ class BudgetTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Budget Tracker',
-      debugShowCheckedModeBanner: false,
-      theme: _theme,
-      home: const _AuthGate(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => BudgetProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Budget Tracker',
+        debugShowCheckedModeBanner: false,
+        theme: _theme,
+        home: const _AuthGate(),
+      ),
     );
   }
 }
@@ -117,10 +126,19 @@ class _AuthGate extends StatelessWidget {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-            final householdId = profileSnap.data?['household_id'];
+            final householdId = profileSnap.data?['household_id'] as String?;
             if (householdId == null) {
               return const HouseholdScreen();
             }
+
+            // Populate centralized state providers
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                context.read<TransactionProvider>().init(householdId);
+                context.read<BudgetProvider>().init(householdId);
+              }
+            });
+
             return const DashboardScreen();
           },
         );
