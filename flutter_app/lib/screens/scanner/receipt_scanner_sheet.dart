@@ -245,12 +245,79 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         _zatcaDecoded = decoded;
       });
       if (decoded != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Verified: ${decoded['seller']} (SAR ${(decoded['total'] as num?)?.toStringAsFixed(2)})'),
-            backgroundColor: const Color(0xFF00C896),
+        final wantPhoto = await showDialog<bool>(
+          context: context,
+          useRootNavigator: true,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF161B22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    decoded['seller'] ?? 'ZATCA Invoice',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1117),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF30363D)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total with VAT:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+                      Text(
+                        'SAR ${(decoded['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                        style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Would you like to snap a photo of the receipt body now so AI can extract the item names and prices under this store?',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, height: 1.4),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Total Only', style: TextStyle(color: Color(0xFF8B949E))),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00C896),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                label: const Text('Snap Items', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
         );
+
+        if (wantPhoto == true && mounted) {
+          await _addPhoto(ImageSource.camera);
+          if (_imageFiles.isNotEmpty && mounted) {
+            await _analyzeReceipt();
+          }
+        }
       }
     }
   }
@@ -674,27 +741,59 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ],
               ),
 
-              // ── Direct Confirm for ZATCA QR (Zero-friction invoice entry with dedup) ──
-              if (_zatcaDecoded != null) ...[
+              // ── ZATCA QR & Photo Actions ──
+              if (_zatcaDecoded != null && _scanResult == null) ...[
                 const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (_imageFiles.isEmpty) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1F6FEB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                    label: const Text(
+                      '📸 Snap Receipt Photo to Extract Items',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    onPressed: _isAnalyzing ? null : () async {
+                      await _addPhoto(ImageSource.camera);
+                      if (_imageFiles.isNotEmpty && mounted) {
+                        await _analyzeReceipt();
+                      }
+                    },
                   ),
-                  icon: const Icon(Icons.check_circle_outline, size: 20),
-                  label: Text(
-                    'Confirm & Add Invoice (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'})',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B949E),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: Text(
+                      'Save Total Only (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}) without items',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: _isAnalyzing ? null : () => _confirmSave(allowDuplicate: false),
                   ),
-                  onPressed: _isAnalyzing ? null : () => _confirmSave(allowDuplicate: false),
-                ),
-              ],
-
-              // ── Photo AI Analysis Button (For multi-page 60+ item breakdown) ──
-              if (_imageFiles.isNotEmpty) ...[
+                ] else ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C896),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.auto_awesome, size: 20),
+                    label: Text(
+                      'Extract Items with AI & Verify (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'})',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    onPressed: _isAnalyzing ? null : _analyzeReceipt,
+                  ),
+                ],
+              ] else if (_imageFiles.isNotEmpty && _zatcaDecoded == null && _scanResult == null) ...[
                 const SizedBox(height: 10),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -826,12 +925,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   Widget _buildResultContent() {
     final status = _scanResult!['status'] as String? ?? '';
     final isCandidate = status == 'duplicate_candidate';
+    final isSuccess = status == 'success' || status == 'enriched';
 
-    final merchant = _scanResult!['merchant'] ??
+    final merchant = _zatcaDecoded?['seller'] as String? ??
+        _scanResult!['merchant'] ??
         _scanResult!['parsed_data']?['merchant'] ??
         'Merchant';
 
-    final num amountNum = (_scanResult!['amount'] ??
+    final num amountNum = (_zatcaDecoded?['total'] as num?) ??
+        (_scanResult!['amount'] ??
         _scanResult!['parsed_data']?['amount'] ??
         0.0) as num;
     final amount = amountNum.toDouble();
@@ -845,9 +947,45 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
         : <Map<String, dynamic>>[];
 
+    final isZatcaVerified = _zatcaDecoded != null || _scanResult!['zatca_verified'] != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isSuccess) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C896).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF00C896)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF00C896), size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Invoice Saved Successfully!',
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${items.length} items logged under $merchant (SAR ${amount.toStringAsFixed(2)})${isZatcaVerified ? ' • ZATCA Verified' : ''}',
+                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         if (isCandidate) ...[
           Container(
             padding: const EdgeInsets.all(12),
@@ -909,6 +1047,39 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           const SizedBox(height: 12),
         ],
 
+        if (!isSuccess && !isCandidate && isZatcaVerified) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C896).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ZATCA Verified Merchant: $merchant',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                      ),
+                      Text(
+                        'Total: SAR ${amount.toStringAsFixed(2)}  •  ${items.length} items extracted with AI',
+                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         TransactionItemBreakdownCard(
           merchant: merchant,
           amount: amount,
@@ -919,31 +1090,49 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         ),
         const SizedBox(height: 16),
 
-        if (!isCandidate && status != 'success') ...[
-          ElevatedButton(
+        if (isSuccess) ...[
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C896),
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () => _confirmSave(allowDuplicate: true),
-            child: Text(
-              'Confirm & Save ${items.length} Items (SAR ${amount.toStringAsFixed(2)})',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            icon: const Icon(Icons.check_circle_outline, size: 20),
+            label: const Text(
+              'Done / View in Dashboard',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+          const SizedBox(height: 8),
+        ] else if (!isCandidate) ...[
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+            label: Text(
+              'Confirm & Save ${items.length} Items (SAR ${amount.toStringAsFixed(2)})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            onPressed: () => _confirmSave(allowDuplicate: true),
           ),
           const SizedBox(height: 8),
         ],
 
-        TextButton(
+        TextButton.icon(
+          icon: const Icon(Icons.refresh_rounded, size: 16),
           onPressed: () => setState(() {
             _imageFiles.clear();
             _zatcaQrRaw = null;
             _zatcaDecoded = null;
             _scanResult = null;
           }),
-          child: const Text('Scan Another Receipt', style: TextStyle(color: Color(0xFF8B949E))),
+          label: const Text('Scan Another Receipt', style: TextStyle(color: Color(0xFF8B949E))),
         ),
         const SizedBox(height: 16),
       ],

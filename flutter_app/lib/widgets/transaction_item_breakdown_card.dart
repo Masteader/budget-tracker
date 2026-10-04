@@ -79,7 +79,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         bg = const Color(0xFF00C896).withValues(alpha: 0.16);
         fg = const Color(0xFF00C896);
         icon = Icons.people_alt_outlined;
-        label = detailed ? 'Shared / Household (Both)' : 'Both';
+        label = detailed ? 'Household (Both)' : 'Both';
         break;
     }
 

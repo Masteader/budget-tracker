@@ -129,8 +129,20 @@ def parse_receipt_images(
     """Call Gemini multimodal vision API with 1 or more receipt images."""
     model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.5-flash-lite")
     
+    prompt_text = RECEIPT_PROMPT
+    if qr_code_raw:
+        zatca_hint = decode_zatca_tlv(qr_code_raw)
+        if zatca_hint and zatca_hint.get("seller_name"):
+            prompt_text += (
+                f"\n\nPRIORITY CONTEXT: This receipt is verified via Saudi ZATCA e-invoicing for store: "
+                f"'{zatca_hint['seller_name']}' with total: SAR {zatca_hint.get('total_amount', 0.0)} "
+                f"and 15% VAT: SAR {zatca_hint.get('vat_amount', 0.0)}. "
+                f"Focus especially on accurately extracting all individual line items, their quantities, "
+                f"and their individual prices under this store."
+            )
+
     content: List[Dict[str, Any]] = [
-        {"type": "text", "text": RECEIPT_PROMPT}
+        {"type": "text", "text": prompt_text}
     ]
 
     for img in images_base64:

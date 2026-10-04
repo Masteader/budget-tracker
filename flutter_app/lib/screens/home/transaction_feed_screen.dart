@@ -669,15 +669,18 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                           child: Row(
                             children: [
-                              Text(
-                                '${transactions.length} ${transactions.length == 1 ? "expense" : "expenses"} • SAR ${visibleTotal.toStringAsFixed(2)}',
-                                style: GoogleFonts.outfit(
-                                  color: const Color(0xFF8B949E),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                              Expanded(
+                                child: Text(
+                                  '${transactions.length} ${transactions.length == 1 ? "expense" : "expenses"} • SAR ${visibleTotal.toStringAsFixed(2)}',
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFF8B949E),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const Spacer(),
+                              const SizedBox(width: 8),
                               InkWell(
                                 onTap: _showSortFilterModal,
                                 borderRadius: BorderRadius.circular(8),
