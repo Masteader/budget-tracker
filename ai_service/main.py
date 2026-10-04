@@ -8,6 +8,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -60,7 +61,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2")
+APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
+if not APP_AUTH_TOKEN:
+    logger.warning("APP_AUTH_TOKEN is not configured in environment; external reverse-proxy / tunnel probes will be rejected.")
 
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
@@ -76,7 +79,7 @@ async def firewall_token_middleware(request: Request, call_next):
 
     # Verify secret token for any non-local or proxied traffic
     provided_token = request.headers.get("X-App-Token")
-    if is_tunnel_or_proxy and provided_token != APP_AUTH_TOKEN:
+    if is_tunnel_or_proxy and (not APP_AUTH_TOKEN or provided_token != APP_AUTH_TOKEN):
         logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
@@ -238,7 +241,8 @@ async def chat_transaction(request: Request):
         raise HTTPException(status_code=400, detail="message and household_id are required.")
 
     from chat_parser import process_chat_transaction
-    result = process_chat_transaction(
+    result = await asyncio.to_thread(
+        process_chat_transaction,
         household_id=household_id,
         message=message,
         user_id=body.get("user_id"),
@@ -286,7 +290,8 @@ async def scan_receipt(request: Request):
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
     from receipt_scanner import process_receipt_scan
-    result = process_receipt_scan(
+    result = await asyncio.to_thread(
+        process_receipt_scan,
         household_id=household_id,
         images_base64=images_base64,
         qr_code_raw=qr_code_raw,
@@ -311,7 +316,7 @@ async def salary_cycle_forecast(household_id: str):
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import get_salary_cycle_forecast
     try:
-        return get_salary_cycle_forecast(household_id)
+        return await asyncio.to_thread(get_salary_cycle_forecast, household_id)
     except Exception as exc:
         logger.error("Failed to generate salary cycle forecast: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -327,7 +332,7 @@ async def list_salary_cycles(household_id: str):
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import get_available_cycles_for_household
     try:
-        return get_available_cycles_for_household(household_id)
+        return await asyncio.to_thread(get_available_cycles_for_household, household_id)
     except Exception as exc:
         logger.error("Failed to list cycles: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -343,7 +348,7 @@ async def get_budget_breakdown(household_id: str, cycle_key: Optional[str] = Non
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import get_cycle_breakdown
     try:
-        return get_cycle_breakdown(household_id, cycle_key)
+        return await asyncio.to_thread(get_cycle_breakdown, household_id, cycle_key)
     except Exception as exc:
         logger.error("Failed to get budget breakdown: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -357,7 +362,7 @@ async def get_budget_breakdown(household_id: str, cycle_key: Optional[str] = Non
 async def add_budget_category(req: CategoryCreateRequest):
     from salary_cycle import add_category_and_budget
     try:
-        return add_category_and_budget(req)
+        return await asyncio.to_thread(add_category_and_budget, req)
     except Exception as exc:
         logger.error("Failed to add category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -371,7 +376,8 @@ async def add_budget_category(req: CategoryCreateRequest):
 async def set_sub_allocations(req: SubAllocationsRequest):
     from salary_cycle import save_sub_allocations
     try:
-        return save_sub_allocations(
+        return await asyncio.to_thread(
+            save_sub_allocations,
             household_id=req.household_id,
             category_code=req.category_code,
             sub_allocations=req.sub_allocations,
@@ -390,7 +396,8 @@ async def set_sub_allocations(req: SubAllocationsRequest):
 async def add_sub_category(req: SubCategoryCreateRequest):
     from salary_cycle import add_sub_category_for_household
     try:
-        return add_sub_category_for_household(
+        return await asyncio.to_thread(
+            add_sub_category_for_household,
             household_id=req.household_id,
             parent_code=req.parent_code,
             name_en=req.name_en,
@@ -411,9 +418,10 @@ async def add_sub_category(req: SubCategoryCreateRequest):
 async def get_sub_categories_route(parent_code: str):
     from salary_cycle import get_sub_categories_for_parent
     try:
+        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code)
         return {
             "status": "success",
-            "sub_categories": get_sub_categories_for_parent(parent_code),
+            "sub_categories": sub_cats,
         }
     except Exception as exc:
         logger.error("Failed to get sub-categories: %s", exc)
@@ -428,7 +436,8 @@ async def get_sub_categories_route(parent_code: str):
 async def rename_sub_category_endpoint(req: SubCategoryRenameRequest):
     from salary_cycle import rename_sub_category
     try:
-        return rename_sub_category(
+        return await asyncio.to_thread(
+            rename_sub_category,
             parent_code=req.parent_code,
             sub_code=req.sub_code,
             name_en=req.name_en,
@@ -454,7 +463,8 @@ async def remove_sub_category_endpoint(
         raise HTTPException(status_code=400, detail="household_id, parent_code, and sub_code are required.")
     from salary_cycle import remove_sub_category_for_household
     try:
-        return remove_sub_category_for_household(
+        return await asyncio.to_thread(
+            remove_sub_category_for_household,
             household_id=household_id,
             parent_code=parent_code,
             sub_code=sub_code,
@@ -475,7 +485,7 @@ async def delete_budget_category(category_code: str, household_id: str):
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import archive_category_for_household
     try:
-        return archive_category_for_household(household_id, category_code)
+        return await asyncio.to_thread(archive_category_for_household, household_id, category_code)
     except Exception as exc:
         logger.error("Failed to delete category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -505,7 +515,8 @@ async def simulate_purchase_affordability(request: Request):
         raise HTTPException(status_code=400, detail="household_id is required.")
 
     from salary_cycle import simulate_affordability
-    return simulate_affordability(
+    return await asyncio.to_thread(
+        simulate_affordability,
         household_id=household_id,
         target_amount=target_amount,
         item_name=item_name,
@@ -527,7 +538,7 @@ async def household_settlement(household_id: str, split_ratio: float = 0.50):
         raise HTTPException(status_code=400, detail="household_id is required.")
     from settlement_engine import calculate_partner_settlement
     try:
-        return calculate_partner_settlement(household_id, split_ratio=split_ratio)
+        return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
     except Exception as exc:
         logger.error("Failed to compute partner settlement: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -547,7 +558,7 @@ async def grocery_price_history(household_id: str, item_filter: str | None = Non
         raise HTTPException(status_code=400, detail="household_id is required.")
     from price_tracker import get_grocery_price_history
     try:
-        return get_grocery_price_history(household_id, item_filter=item_filter)
+        return await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter)
     except Exception as exc:
         logger.error("Failed to fetch grocery price history: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
