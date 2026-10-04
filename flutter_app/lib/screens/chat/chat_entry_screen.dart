@@ -805,6 +805,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     .map((e) => Map<String, dynamic>.from(e as Map))
                     .toList(),
                 isReallocated: msg.transactionData!['is_reallocated'] as bool? ?? false,
+                initiallyExpanded: true,
               ),
             ],
             if (msg.isDuplicatePrompt && msg.candidateData != null) ...[

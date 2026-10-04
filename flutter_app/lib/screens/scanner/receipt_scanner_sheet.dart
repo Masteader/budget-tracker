@@ -1214,6 +1214,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           source: 'receipt_scan',
           spentBy: _selectedSpentBy,
           items: items,
+          initiallyExpanded: true,
         ),
         const SizedBox(height: 16),
 

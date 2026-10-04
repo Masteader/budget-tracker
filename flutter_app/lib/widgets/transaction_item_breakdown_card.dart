@@ -10,6 +10,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final String spentBy;
   final List<Map<String, dynamic>> items;
   final bool isReallocated;
+  final bool initiallyExpanded;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -23,6 +24,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.spentBy = 'both',
     this.items = const [],
     this.isReallocated = false,
+    this.initiallyExpanded = false,
     this.onEdit,
     this.onDelete,
   });
@@ -124,8 +126,12 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            initiallyExpanded: items.isNotEmpty,
-          leading: Container(
+            initiallyExpanded: initiallyExpanded,
+            iconColor: const Color(0xFF00C896),
+            collapsedIconColor: const Color(0xFF8B949E),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            leading: Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
