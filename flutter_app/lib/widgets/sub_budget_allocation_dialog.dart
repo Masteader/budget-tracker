@@ -55,8 +55,8 @@ class SubBudgetAllocationDialog extends StatefulWidget {
 
 class _SubCategoryItemDef {
   final String subCode;
-  final String nameEn;
-  final String nameAr;
+  String nameEn;
+  String nameAr;
   final TextEditingController controller;
 
   _SubCategoryItemDef({
@@ -181,7 +181,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               .from('cost_control_sub_categories')
               .select('sub_code, name_en, name_ar')
               .eq('parent_code', widget.categoryCode);
-          if (res is List && res.isNotEmpty) {
+          if (res.isNotEmpty) {
             rawDefs = res.map((row) => {
               'sub_code': row['sub_code'] as String,
               'name_en': row['name_en'] as String? ?? (row['sub_code'] as String),
@@ -381,6 +381,196 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       ));
     });
     _recomputeTotal();
+    widget.onSaved?.call();
+  }
+
+  Future<void> _promptRenameSubCategory(_SubCategoryItemDef item) async {
+    final nameCtrl = TextEditingController(text: item.nameEn);
+
+    final res = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Rename Sub-Category',
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Code: ${item.subCode}',
+              style: GoogleFonts.inter(color: const Color(0xFF8B949E), fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Sub-Category Name',
+                hintText: 'Enter new name',
+                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                filled: true,
+                fillColor: const Color(0xFF0D1117),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF30363D)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Rename', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (res != true) return;
+    final newName = nameCtrl.text.trim();
+    if (newName.isEmpty || newName == item.nameEn) return;
+
+    try {
+      final resp = await ApiService.instance.renameSubCategory(
+        parentCode: widget.categoryCode,
+        subCode: item.subCode,
+        nameEn: newName,
+      );
+
+      if (resp['status'] == 'success') {
+        setState(() {
+          item.nameEn = newName;
+        });
+        widget.onSaved?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Renamed to "$newName"'),
+              backgroundColor: const Color(0xFF1F6FEB),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to rename: ${resp['message']}'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error renaming: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _promptRemoveSubCategory(_SubCategoryItemDef item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Remove Sub-Category?',
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Text(
+          'Are you sure you want to remove "${item.nameEn}"?\n\nThis will remove its allocation from the ${widget.categoryName} budget.',
+          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final resp = await ApiService.instance.removeSubCategory(
+        householdId: widget.householdId,
+        parentCode: widget.categoryCode,
+        subCode: item.subCode,
+        cycleKey: widget.cycleKey,
+      );
+
+      if (resp['status'] == 'success') {
+        setState(() {
+          item.controller.removeListener(_recomputeTotal);
+          item.controller.dispose();
+          _subItems.remove(item);
+        });
+        _recomputeTotal();
+        widget.onSaved?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Removed "${item.nameEn}"'),
+              backgroundColor: const Color(0xFF238636),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to remove: ${resp['message']}'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleSave() async {
@@ -701,13 +891,46 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          item.nameEn,
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                item.nameEn,
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => _promptRenameSubCategory(item),
+                                              child: const Padding(
+                                                padding: EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                                child: Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 15,
+                                                  color: Color(0xFF8B949E),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => _promptRemoveSubCategory(item),
+                                              child: const Padding(
+                                                padding: EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                                child: Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  size: 16,
+                                                  color: Color(0xFFF85149),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                         if (item.nameAr.isNotEmpty) ...[
                                           const SizedBox(height: 2),
@@ -722,9 +945,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 8),
                                   SizedBox(
-                                    width: 125,
+                                    width: 115,
                                     height: 44,
                                     child: TextField(
                                       controller: item.controller,

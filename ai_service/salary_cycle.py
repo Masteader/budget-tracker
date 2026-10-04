@@ -611,14 +611,6 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
             "sub_allocations": {},
         }).eq("household_id", household_id).eq("category_code", category_code).execute()
     else:
-        cat_resp = (
-            client.table("cost_control_codes")
-            .select("id")
-            .eq("code", category_code)
-            .maybe_single()
-            .execute()
-        )
-        cat_id = cat_resp.data.get("id") if cat_resp.data else None
         insert_data = {
             "household_id": household_id,
             "category_code": category_code,
@@ -629,8 +621,6 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
             "is_active": False,
             "sub_allocations": {},
         }
-        if cat_id:
-            insert_data["category_id"] = cat_id
         client.table("budgets").insert(insert_data).execute()
 
     # 2. If it is a non-standard custom category and has zero transactions anywhere, clean up custom definition
@@ -717,6 +707,95 @@ def add_sub_category_for_household(
     return save_sub_allocations(household_id, parent_code, sub_allocs, target_key)
 
 
+def rename_sub_category(
+    parent_code: str,
+    sub_code: str,
+    name_en: str,
+    name_ar: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Renames an existing sub-category in cost_control_sub_categories.
+    """
+    from supabase_client import get_client
+    client = get_client()
+
+    update_data: Dict[str, Any] = {"name_en": name_en.strip()}
+    if name_ar is not None:
+        update_data["name_ar"] = name_ar.strip()
+    else:
+        update_data["name_ar"] = name_en.strip()
+
+    client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
+
+    return {
+        "status": "success",
+        "parent_code": parent_code,
+        "sub_code": sub_code,
+        "name_en": name_en.strip(),
+    }
+
+
+def remove_sub_category_for_household(
+    household_id: str,
+    parent_code: str,
+    sub_code: str,
+    cycle_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Removes a sub-category from a household's cycle budget and purges its definition if unused.
+    """
+    from supabase_client import get_client
+    client = get_client()
+
+    current_cycle = get_cycle_for_date()
+    target_key = cycle_key or current_cycle["cycle_key"]
+
+    # 1. Remove from budgets.sub_allocations and recalculate parent allocated_amount
+    res = (
+        client.table("budgets")
+        .select("*")
+        .eq("household_id", household_id)
+        .eq("category_code", parent_code)
+        .execute()
+    )
+    matching = [
+        row for row in (res.data or [])
+        if row.get("cycle_key") == target_key or (not row.get("cycle_key") and row.get("month", "")[:7] == target_key)
+    ]
+
+    if matching:
+        budget_row = matching[0]
+        sub_allocs = budget_row.get("sub_allocations") or {}
+        if isinstance(sub_allocs, dict) and sub_code in sub_allocs:
+            del sub_allocs[sub_code]
+            new_total = round(sum(float(v) for v in sub_allocs.values()), 2)
+            client.table("budgets").update({
+                "sub_allocations": sub_allocs,
+                "allocated_amount": new_total,
+            }).eq("id", budget_row["id"]).execute()
+
+    # 2. Check if transactions reference this sub_category
+    tx_check = (
+        client.table("transactions")
+        .select("id")
+        .eq("household_id", household_id)
+        .eq("category_code", parent_code)
+        .eq("sub_category", sub_code)
+        .limit(1)
+        .execute()
+    )
+    if not (tx_check.data or []):
+        try:
+            client.table("cost_control_sub_categories").delete().eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
+        except Exception as e:
+            logger.warning(f"Could not delete sub-category {sub_code}: {e}")
+
+    return {
+        "status": "success",
+        "parent_code": parent_code,
+        "sub_code": sub_code,
+    }
+
 
 def save_sub_allocations(
     household_id: str,
@@ -763,9 +842,6 @@ def save_sub_allocations(
         }
         client.table("budgets").update(update_data).eq("id", budget_id).execute()
     else:
-        cat_resp = client.table("cost_control_codes").select("id").eq("code", category_code).maybe_single().execute()
-        cat_id = cat_resp.data.get("id") if cat_resp.data else None
-        
         insert_data = {
             "household_id": household_id,
             "category_code": category_code,
@@ -776,9 +852,6 @@ def save_sub_allocations(
             "cycle_key": target_key,
             "is_active": True,
         }
-        if cat_id:
-            insert_data["category_id"] = cat_id
-            
         client.table("budgets").insert(insert_data).execute()
         
     return {

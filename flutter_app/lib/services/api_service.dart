@@ -567,6 +567,70 @@ class ApiService {
     } catch (_) {}
     return [];
   }
+
+  // ── PATCH /budgets/sub-categories ────────────────────────────────────────
+
+  Future<Map<String, dynamic>> renameSubCategory({
+    required String parentCode,
+    required String subCode,
+    required String nameEn,
+    String? nameAr,
+  }) async {
+    final payload = jsonEncode({
+      'parent_code': parentCode,
+      'sub_code': subCode,
+      'name_en': nameEn,
+      if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
+    });
+
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('$_baseUrl/budgets/sub-categories'),
+            headers: _buildHeaders(),
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // ── DELETE /budgets/sub-categories ─────────────────────────────────────────
+
+  Future<Map<String, dynamic>> removeSubCategory({
+    required String householdId,
+    required String parentCode,
+    required String subCode,
+    String? cycleKey,
+  }) async {
+    try {
+      final queryParams = {
+        'household_id': householdId,
+        'parent_code': parentCode,
+        'sub_code': subCode,
+        if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+      };
+      final uri = Uri.parse('$_baseUrl/budgets/sub-categories')
+          .replace(queryParameters: queryParams);
+      final response = await http
+          .delete(
+            uri,
+            headers: _buildHeaders(),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
 
 

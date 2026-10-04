@@ -75,3 +75,34 @@ def test_add_sub_category_endpoint():
     assert data["sub_allocations"]["sub-district-cooling"] == 120.0
 
 
+def test_rename_and_remove_sub_category():
+    # 1. Add custom sub-category
+    add_payload = {
+        "household_id": HOUSEHOLD_ID,
+        "parent_code": "OPEX-UTILITIES",
+        "name_en": "Chilled Water",
+        "allocated_amount": 75.0,
+        "cycle_key": "2026-10",
+    }
+    resp = client.post("/budgets/sub-categories", json=add_payload, headers=AUTH_HEADERS)
+    assert resp.status_code == 200
+
+    # 2. Rename sub-category
+    rename_payload = {
+        "parent_code": "OPEX-UTILITIES",
+        "sub_code": "sub-chilled-water",
+        "name_en": "Central Chilled Water",
+    }
+    patch_resp = client.patch("/budgets/sub-categories", json=rename_payload, headers=AUTH_HEADERS)
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["name_en"] == "Central Chilled Water"
+
+    # 3. Remove sub-category
+    del_resp = client.delete(
+        f"/budgets/sub-categories?household_id={HOUSEHOLD_ID}&parent_code=OPEX-UTILITIES&sub_code=sub-chilled-water&cycle_key=2026-10",
+        headers=AUTH_HEADERS,
+    )
+    assert del_resp.status_code == 200
+    assert del_resp.json()["status"] == "success"
+
+

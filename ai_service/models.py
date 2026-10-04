@@ -192,4 +192,11 @@ class SubCategoryCreateRequest(BaseModel):
     cycle_key: Optional[str] = None
 
 
+class SubCategoryRenameRequest(BaseModel):
+    parent_code: str
+    sub_code: str
+    name_en: str
+    name_ar: Optional[str] = None
+
+
 

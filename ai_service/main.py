@@ -32,6 +32,7 @@ from models import (
     CategoryCreateRequest,
     SubAllocationsRequest,
     SubCategoryCreateRequest,
+    SubCategoryRenameRequest,
 )
 
 
@@ -410,6 +411,51 @@ async def get_sub_categories_route(parent_code: str):
         }
     except Exception as exc:
         logger.error("Failed to get sub-categories: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.patch(
+    "/budgets/sub-categories",
+    tags=["budgets"],
+    summary="Rename an existing sub-category.",
+)
+async def rename_sub_category_endpoint(req: SubCategoryRenameRequest):
+    from salary_cycle import rename_sub_category
+    try:
+        return rename_sub_category(
+            parent_code=req.parent_code,
+            sub_code=req.sub_code,
+            name_en=req.name_en,
+            name_ar=req.name_ar,
+        )
+    except Exception as exc:
+        logger.error("Failed to rename sub-category: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete(
+    "/budgets/sub-categories",
+    tags=["budgets"],
+    summary="Remove a sub-category from budget and purge if unused.",
+)
+async def remove_sub_category_endpoint(
+    household_id: str,
+    parent_code: str,
+    sub_code: str,
+    cycle_key: Optional[str] = None,
+):
+    if not household_id or not parent_code or not sub_code:
+        raise HTTPException(status_code=400, detail="household_id, parent_code, and sub_code are required.")
+    from salary_cycle import remove_sub_category_for_household
+    try:
+        return remove_sub_category_for_household(
+            household_id=household_id,
+            parent_code=parent_code,
+            sub_code=sub_code,
+            cycle_key=cycle_key,
+        )
+    except Exception as exc:
+        logger.error("Failed to remove sub-category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
