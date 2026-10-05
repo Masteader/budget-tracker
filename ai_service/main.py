@@ -339,6 +339,36 @@ async def list_salary_cycles(household_id: str):
 
 
 @app.get(
+    "/budgets/recurring-bills",
+    tags=["budgets"],
+    summary="Get detected recurring household bills, cycle payment status, and reserved allowance.",
+)
+async def get_recurring_bills(household_id: str, as_of_date: Optional[str] = None):
+    """
+    Analyzes historical transactions for recurring cadence (telecom, utilities, subscriptions)
+    and reports upcoming vs paid bills for the active Saudi salary cycle.
+    """
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from recurring_detector import fetch_household_recurring_bills
+    from datetime import date
+
+    target_date = None
+    if as_of_date:
+        try:
+            target_date = date.fromisoformat(as_of_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="as_of_date must be in YYYY-MM-DD format.")
+
+    try:
+        return await asyncio.to_thread(fetch_household_recurring_bills, household_id, target_date)
+    except Exception as exc:
+        logger.error("Failed to fetch recurring bills: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+
+@app.get(
     "/budgets/breakdown",
     tags=["budgets"],
     summary="Get budget categories and sub-budget spending breakdown for a salary cycle.",
