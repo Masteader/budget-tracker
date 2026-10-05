@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../models/recurring_bill.dart';
+import '../../models/installment_plan.dart';
 import 'base_api_client.dart';
 
 class BudgetApiClient {
@@ -250,6 +251,37 @@ class BudgetApiClient {
       return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
     } catch (e) {
       return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  Future<List<InstallmentPlan>> fetchInstallments({required String householdId}) async {
+    try {
+      final res = await baseClient.get(
+        '/budgets/installments',
+        queryParams: {'household_id': householdId},
+      );
+      if (res['plans'] is List) {
+        return (res['plans'] as List)
+            .map((e) => InstallmentPlan.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) async {
+    final res = await baseClient.post('/budgets/installments', planData);
+    return InstallmentPlan.fromJson(res);
+  }
+
+  Future<InstallmentPlan?> payInstallment(String planId) async {
+    try {
+      final res = await baseClient.post('/budgets/installments/$planId/pay', {});
+      return InstallmentPlan.fromJson(res);
+    } catch (_) {
+      return null;
     }
   }
 }

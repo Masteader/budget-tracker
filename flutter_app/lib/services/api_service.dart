@@ -13,6 +13,7 @@ import 'api/chat_api_client.dart';
 import 'api/receipt_api_client.dart';
 import 'api/transaction_api_client.dart';
 import '../models/recurring_bill.dart';
+import '../models/installment_plan.dart';
 
 class ApiService {
   ApiService._();
@@ -138,6 +139,15 @@ class ApiService {
 
   Future<RecurringBillsSummary> fetchRecurringBills({required String householdId, String? asOfDate}) =>
       budget.fetchRecurringBills(householdId: householdId, asOfDate: asOfDate);
+
+  Future<List<InstallmentPlan>> getInstallments(String householdId) =>
+      budget.fetchInstallments(householdId: householdId);
+
+  Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) =>
+      budget.createInstallmentPlan(planData);
+
+  Future<InstallmentPlan?> payInstallment(String planId) =>
+      budget.payInstallment(planId);
 
   Future<Map<String, dynamic>> simulateAffordability({
     required String householdId,
