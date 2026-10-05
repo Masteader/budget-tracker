@@ -4,7 +4,7 @@ Prevents double-counting when transactions arrive via SMS, Chat, or Receipt Scan
 Supports auto-enrichment of existing SMS transactions with line items.
 """
 
-from __future__ import annotations
+import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
@@ -12,29 +12,61 @@ from supabase_client import get_client
 
 logger = logging.getLogger(__name__)
 
+def compute_zatca_fingerprint(
+    vat_number: Optional[str],
+    invoice_timestamp: Optional[str],
+    total_amount: float,
+) -> str:
+    """
+    Deterministic SHA-256 fingerprint for a Saudi ZATCA e-invoicing Phase 1/2 QR code.
+    Combines 15-digit VAT number, invoice timestamp, and total amount.
+    """
+    clean_vat = (vat_number or "").strip()
+    clean_ts = (invoice_timestamp or "").strip()
+    clean_total = f"{float(total_amount):.2f}"
+    raw = f"zatca:{clean_vat}:{clean_ts}:{clean_total}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
 def find_duplicate_candidate(
     household_id: str,
     amount: float,
     merchant: Optional[str] = None,
     window_minutes: int = 1440,
+    zatca_fingerprint: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Search for a recent transaction for the household with the same amount (±0.05)
-    within the last `window_minutes` (default 24 hours).
-    If merchant is provided, checks for merchant keyword overlap to avoid false positives.
+    Search for an existing duplicate transaction:
+    1. If zatca_fingerprint is provided: exact match on dedup_fingerprint across all time.
+    2. Fuzzy match: Search recent transactions for the household with the same amount (±0.05)
+       within the last `window_minutes` (default 24 hours), matching merchant keyword overlap.
     """
     client = get_client()
-    now = datetime.now(timezone.utc)
-    cutoff = (now - timedelta(minutes=window_minutes)).isoformat()
 
+    # Priority 1: Exact ZATCA fingerprint match
+    if zatca_fingerprint:
+        try:
+            response = (
+                client.table("transactions")
+                .select("*")
+                .eq("household_id", household_id)
+                .eq("dedup_fingerprint", zatca_fingerprint)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                candidate = response.data[0]
+                logger.info("Found exact ZATCA duplicate candidate: tx_id=%s", candidate["id"])
+                return candidate
+        except Exception as exc:
+            logger.warning("Failed querying dedup_fingerprint: %s", exc)
+
+    # Priority 2: Recent transactions by amount & merchant
     try:
-        # Fetch transactions within time window
         response = (
             client.table("transactions")
             .select("*")
             .eq("household_id", household_id)
-            .gte("timestamp", cutoff)
-            .order("timestamp", desc=True)
+            .order("created_at", desc=True)
             .limit(50)
             .execute()
         )
@@ -43,9 +75,26 @@ def find_duplicate_candidate(
         logger.error("Failed to query recent transactions for dedup: %s", exc)
         return None
 
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=window_minutes) if window_minutes else None
     merchant_clean = (merchant or "").lower().strip()
 
     for row in rows:
+        # Check time window if cutoff is specified
+        if cutoff:
+            row_dt = None
+            for dt_field in ("timestamp", "created_at"):
+                raw_val = row.get(dt_field)
+                if raw_val:
+                    try:
+                        row_dt = datetime.fromisoformat(str(raw_val).replace("Z", "+00:00"))
+                        break
+                    except Exception:
+                        pass
+
+            if row_dt and row_dt < cutoff:
+                continue
+
         row_amount = float(row.get("amount", 0.0))
         if abs(row_amount - amount) <= 0.05:
             row_merchant = (row.get("merchant") or "").lower().strip()
@@ -64,6 +113,7 @@ def find_duplicate_candidate(
                 return row
                 
     return None
+
 
 
 def enrich_transaction_items(

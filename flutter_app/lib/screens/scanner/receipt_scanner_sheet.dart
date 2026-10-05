@@ -164,6 +164,37 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.paste, size: 14, color: Color(0xFF58A6FF)),
+                  label: const Text('From Clipboard', style: TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data?.text != null) {
+                      ctrl.text = data!.text!.trim();
+                    }
+                  },
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 14, color: Color(0xFF00C896)),
+                  label: const Text('Sample eXtra', style: TextStyle(fontSize: 11, color: Color(0xFF00C896))),
+                  onPressed: () {
+                    ctrl.text = 'ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=';
+                  },
+                ),
+              ],
+            ),
           ],
         ),
         actions: [
@@ -175,34 +206,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
             onPressed: () {
               final text = ctrl.text.trim();
+              Navigator.pop(ctx);
+              if (text.isEmpty) return;
               final decoded = ZatcaDecoder.decodeTlv(text);
               final sellerName = decoded?['seller'] as String? ?? 'Store Name';
-              final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
-              final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
               setState(() {
                 _zatcaQrRaw = text;
                 _zatcaDecoded = decoded;
-                _merchantController.text = sellerName;
-                if (decoded != null) {
-                  _scanResult = {
-                    'status': 'preview',
-                    'merchant': sellerName,
-                    'amount': total,
-                    'vat_amount': vat,
-                    'category_code': 'OPEX-GROCERY',
-                    'spent_by': _selectedSpentBy,
-                    'items': [
-                      {
-                        'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
-                        'quantity': 1.0,
-                        'price': total,
-                      }
-                    ],
-                    'zatca_verified': decoded,
-                  };
+                if (sellerName.isNotEmpty && sellerName != 'Store Name') {
+                  _merchantController.text = sellerName;
                 }
               });
-              Navigator.pop(ctx);
+              _analyzeReceipt();
             },
             child: const Text('Apply QR Code', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -265,32 +280,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     if (scannedCode != null && scannedCode.isNotEmpty) {
       final decoded = ZatcaDecoder.decodeTlv(scannedCode);
       final sellerName = decoded?['seller'] as String? ?? 'Store Name';
-      final total = (decoded?['total'] as num?)?.toDouble() ?? 0.0;
-      final vat = (decoded?['vat'] as num?)?.toDouble() ?? 0.0;
 
       setState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
-        _merchantController.text = sellerName;
-        if (decoded != null) {
-          _scanResult = {
-            'status': 'preview',
-            'merchant': sellerName,
-            'amount': total,
-            'vat_amount': vat,
-            'category_code': 'OPEX-GROCERY',
-            'spent_by': _selectedSpentBy,
-            'items': [
-              {
-                'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
-                'quantity': 1.0,
-                'price': total,
-              }
-            ],
-            'zatca_verified': decoded,
-          };
+        if (sellerName.isNotEmpty && sellerName != 'Store Name') {
+          _merchantController.text = sellerName;
         }
       });
+      _analyzeReceipt();
     }
   }
 
@@ -341,10 +339,38 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         }
       });
     } catch (e) {
-      setState(() {
-        _isAnalyzing = false;
-        _errorMessage = 'Scan failed: $e';
-      });
+      if (_zatcaDecoded != null) {
+        final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
+        final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
+        final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
+        final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
+        if (!isDup && mounted) {
+          setState(() {
+            _isAnalyzing = false;
+            _scanResult = {
+              'status': 'preview',
+              'merchant': sellerName,
+              'amount': total,
+              'vat_amount': vat,
+              'category_code': 'OPEX-GROCERY',
+              'spent_by': _selectedSpentBy,
+              'items': [
+                {
+                  'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                  'quantity': 1.0,
+                  'price': total,
+                }
+              ],
+              'zatca_verified': _zatcaDecoded,
+            };
+          });
+        }
+      } else {
+        setState(() {
+          _isAnalyzing = false;
+          _errorMessage = 'Scan failed: $e';
+        });
+      }
     }
   }
 
@@ -393,15 +419,56 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _scanResult = res;
           });
         } else {
-          await _fallbackSaveToSupabase();
+          await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate);
         }
       }
     } catch (_) {
-      await _fallbackSaveToSupabase();
+      await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate);
     }
   }
 
-  Future<void> _fallbackSaveToSupabase() async {
+  Future<bool> _checkFallbackDuplicateCandidate(String merchant, double total, double vat) async {
+    if (total <= 0) return false;
+    try {
+      final recentRows = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('household_id', widget.householdId)
+          .order('created_at', ascending: false)
+          .limit(30);
+
+      for (final row in (recentRows as List)) {
+        final rowAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+        if ((rowAmt - total).abs() <= 0.05) {
+          final rowMerchant = (row['merchant'] as String? ?? '').toLowerCase();
+          final cleanMerchant = merchant.toLowerCase();
+          if (rowMerchant.isEmpty || cleanMerchant.contains(rowMerchant) || rowMerchant.contains(cleanMerchant)) {
+            if (mounted) {
+              setState(() {
+                _isAnalyzing = false;
+                _scanResult = {
+                  'status': 'duplicate_candidate',
+                  'candidate_transaction_id': row['id'],
+                  'candidate_merchant': row['merchant'],
+                  'candidate_amount': rowAmt,
+                  'candidate_timestamp': row['timestamp'],
+                  'merchant': merchant,
+                  'amount': total,
+                  'items': _scanResult?['items'],
+                  'message':
+                      "A transaction of SAR ${rowAmt.toStringAsFixed(2)} at '$merchant' was already recorded. Attach items or log as separate?",
+                };
+              });
+            }
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> _fallbackSaveToSupabase({bool allowDuplicate = false}) async {
     try {
       final merchant = _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
@@ -414,6 +481,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final vat = (_zatcaDecoded?['vat'] as num?)?.toDouble() ??
           (_scanResult?['vat_amount'] as num?)?.toDouble() ??
           (total > 0 ? (total * 0.15 / 1.15) : 0.0);
+
+      if (!allowDuplicate && total > 0) {
+        final isDup = await _checkFallbackDuplicateCandidate(merchant, total, vat);
+        if (isDup) return;
+      }
 
       final dynamic rawItems = _scanResult?['items'];
       final List<Map<String, dynamic>> items = (rawItems is List && rawItems.isNotEmpty)
@@ -428,6 +500,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       final itemsSummary = items.map((e) => '${e['quantity']}x ${e['name']} (${e['price']} SAR)').join(', ');
       final auditText = 'Invoice Scan: $merchant (${items.length} items) | Items: [$itemsSummary]';
+
 
       final baseData = <String, dynamic>{
         'household_id': widget.householdId,
@@ -972,8 +1045,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               'Confirm & Save ${items.length} Items (SAR ${amount.toStringAsFixed(2)})',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
-            onPressed: () => _confirmSave(allowDuplicate: true),
+            onPressed: () => _confirmSave(allowDuplicate: false),
           ),
+
           const SizedBox(height: 8),
         ],
 

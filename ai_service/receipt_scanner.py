@@ -17,9 +17,8 @@ from typing import Optional, List, Dict, Any
 import litellm
 from dotenv import load_dotenv
 
-load_dotenv()
+from dedup_engine import find_duplicate_candidate, enrich_transaction_items, compute_zatca_fingerprint
 
-from dedup_engine import find_duplicate_candidate, enrich_transaction_items
 from supabase_client import (
     fetch_all_cost_control_codes,
     match_category,
@@ -300,19 +299,15 @@ def process_receipt_scan(
             "parsed_data": parsed,
         }
 
-    # If preview only, return structured data before inserting
-    if preview_only:
-        return {
-            "status": "preview",
-            "merchant": merchant,
-            "amount": total_amount,
-            "vat_amount": float(parsed.get("vat_amount") or 0.0),
-            "category_code": category_code,
-            "spent_by": spent_by,
-            "items": items,
-            "zatca_verified": parsed.get("zatca_verified"),
-            "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
-        }
+    # Compute deterministic ZATCA fingerprint if ZATCA QR was decoded
+    zatca_info = parsed.get("zatca_verified")
+    zatca_fp = None
+    if zatca_info and zatca_info.get("vat_number"):
+        zatca_fp = compute_zatca_fingerprint(
+            vat_number=zatca_info.get("vat_number"),
+            invoice_timestamp=zatca_info.get("timestamp"),
+            total_amount=total_amount,
+        )
 
     # Explicit enrichment
     if enrich_tx_id:
@@ -329,35 +324,60 @@ def process_receipt_scan(
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
         }
 
-    # Deduplication check against recent SMS transactions
+    # Deduplication check (evaluated during BOTH preview and save unless allow_duplicate=True)
+    candidate = None
     if not allow_duplicate:
-        candidate = find_duplicate_candidate(household_id, total_amount, merchant)
-        if candidate:
-            logger.info("Duplicate candidate found for scanned receipt: %s", candidate["id"])
-            return {
-                "status": "duplicate_candidate",
-                "candidate_transaction_id": candidate["id"],
-                "candidate_merchant": candidate.get("merchant"),
-                "candidate_amount": candidate.get("amount"),
-                "candidate_timestamp": candidate.get("timestamp"),
-                "parsed_data": {
-                    "merchant": merchant,
-                    "amount": total_amount,
-                    "category_code": category_code,
-                    "spent_by": spent_by,
-                    "items": items,
-                    "zatca_verified": parsed.get("zatca_verified"),
-                },
-                "items": items,
+        candidate = find_duplicate_candidate(
+            household_id=household_id,
+            amount=total_amount,
+            merchant=merchant,
+            zatca_fingerprint=zatca_fp,
+        )
+
+    if candidate:
+        logger.info("Duplicate candidate found for scanned receipt: %s", candidate["id"])
+        cand_ts = str(candidate.get("timestamp") or candidate.get("created_at") or "")[:10]
+        ts_suffix = f" on {cand_ts}" if cand_ts else ""
+        return {
+            "status": "duplicate_candidate",
+            "candidate_transaction_id": candidate["id"],
+            "candidate_merchant": candidate.get("merchant"),
+            "candidate_amount": candidate.get("amount"),
+            "candidate_timestamp": candidate.get("timestamp"),
+            "candidate_source": candidate.get("source"),
+            "parsed_data": {
                 "merchant": merchant,
                 "amount": total_amount,
                 "category_code": category_code,
                 "spent_by": spent_by,
-                "message": (
-                    f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
-                    f"was already recorded. Would you like to attach these {len(items)} items or log as separate expense?"
-                ),
-            }
+                "items": items,
+                "zatca_verified": parsed.get("zatca_verified"),
+            },
+            "items": items,
+            "merchant": merchant,
+            "amount": total_amount,
+            "category_code": category_code,
+            "spent_by": spent_by,
+            "message": (
+                f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
+                f"was already recorded{ts_suffix}. "
+                f"Would you like to attach these {len(items)} items or log as separate expense?"
+            ),
+        }
+
+    # If preview only (and no duplicate candidate found), return structured data before inserting
+    if preview_only:
+        return {
+            "status": "preview",
+            "merchant": merchant,
+            "amount": total_amount,
+            "vat_amount": float(parsed.get("vat_amount") or 0.0),
+            "category_code": category_code,
+            "spent_by": spent_by,
+            "items": items,
+            "zatca_verified": parsed.get("zatca_verified"),
+            "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
+        }
 
     # Match category with keyword taxonomy
     codes = fetch_all_cost_control_codes()
@@ -399,7 +419,9 @@ def process_receipt_scan(
         source="receipt_scan",
         items=items,
         spent_by=spent_by,
+        dedup_fingerprint=zatca_fp,
     )
+
 
 
     if items:

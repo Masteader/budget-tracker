@@ -89,3 +89,38 @@ def test_parse_receipt_hybrid_zatca_and_items(mock_completion):
     assert result["items"][0]["name"] == "Almarai Fresh Milk 2L"
     assert "zatca_verified" in result
     assert result["zatca_verified"]["vat_number"] == "300012345600003"
+
+
+@patch("receipt_scanner.find_duplicate_candidate")
+@patch("receipt_scanner.parse_receipt_image")
+def test_process_receipt_scan_duplicate_candidate_in_preview(mock_parse, mock_find_dup):
+    from receipt_scanner import process_receipt_scan
+
+    mock_parse.return_value = {
+        "merchant": "United Electronics Co. eXtra",
+        "total_amount": 7408.0,
+        "vat_amount": 966.26,
+        "category_code": "OPEX-SHOPPING",
+        "items": [{"name": "iPad Pro", "quantity": 1.0, "price": 7408.0}],
+    }
+
+    mock_find_dup.return_value = {
+        "id": "tx-existing-extra",
+        "merchant": "United Electronics Co. eXtra",
+        "amount": 7408.0,
+        "timestamp": "2026-10-04T22:19:34Z",
+        "source": "receipt_scan",
+    }
+
+    res = process_receipt_scan(
+        images_base64=["fake_image"],
+        household_id="hh-123",
+        preview_only=True,
+        allow_duplicate=False,
+    )
+
+    assert res["status"] == "duplicate_candidate"
+    assert res["candidate_transaction_id"] == "tx-existing-extra"
+    assert res["amount"] == 7408.0
+    mock_find_dup.assert_called_once()
+

@@ -223,6 +223,7 @@ def insert_transaction(
     spent_by: Optional[str] = None,
     sub_category: Optional[str] = None,
     cycle_key: Optional[str] = None,
+    dedup_fingerprint: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -270,6 +271,9 @@ def insert_transaction(
         payload["sub_category"] = sub_category
     if cycle_key:
         payload["cycle_key"] = cycle_key
+    if dedup_fingerprint:
+        payload["dedup_fingerprint"] = dedup_fingerprint
+
 
     try:
         response = client.table("transactions").insert(payload).execute()
