@@ -12,6 +12,7 @@ import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
 import 'api/receipt_api_client.dart';
 import 'api/transaction_api_client.dart';
+import '../models/recurring_bill.dart';
 
 class ApiService {
   ApiService._();
@@ -131,6 +132,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> fetchBudgetBreakdown({required String householdId, String? cycleKey}) =>
       budget.fetchBudgetBreakdown(householdId: householdId, cycleKey: cycleKey);
+
+  Future<RecurringBillsSummary> getRecurringBills(String householdId, {String? asOfDate}) =>
+      budget.fetchRecurringBills(householdId: householdId, asOfDate: asOfDate);
+
+  Future<RecurringBillsSummary> fetchRecurringBills({required String householdId, String? asOfDate}) =>
+      budget.fetchRecurringBills(householdId: householdId, asOfDate: asOfDate);
 
   Future<Map<String, dynamic>> simulateAffordability({
     required String householdId,

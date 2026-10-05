@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../models/recurring_bill.dart';
 import 'base_api_client.dart';
 
 class BudgetApiClient {
@@ -7,6 +8,18 @@ class BudgetApiClient {
 
   BudgetApiClient({BaseApiClient? baseClient})
       : baseClient = baseClient ?? BaseApiClient();
+
+  Future<RecurringBillsSummary> fetchRecurringBills({
+    required String householdId,
+    String? asOfDate,
+  }) async {
+    final params = <String, dynamic>{'household_id': householdId};
+    if (asOfDate != null && asOfDate.isNotEmpty) {
+      params['as_of_date'] = asOfDate;
+    }
+    final res = await baseClient.get('/budgets/recurring-bills', queryParams: params);
+    return RecurringBillsSummary.fromMap(res);
+  }
 
   Future<Map<String, dynamic>> fetchSalaryCycleForecast({
     required String householdId,
