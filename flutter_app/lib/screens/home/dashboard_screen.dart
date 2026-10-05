@@ -17,6 +17,7 @@ import '../../services/sms_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/dashboard_action_sheet.dart';
+import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/salary_cycle_widget.dart';
@@ -301,6 +302,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               SalaryCycleWidget(householdId: hid),
                               const SizedBox(height: 12),
                               PartnerSettlementCard(householdId: hid),
+                              const SizedBox(height: 12),
+                              RecurringBillsCard(householdId: hid),
                               const SizedBox(height: 12),
                               Row(
                                 children: [
