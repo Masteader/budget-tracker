@@ -13,6 +13,7 @@ import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
+import 'services/offline_sync_service.dart';
 import 'services/sms_service.dart';
 import 'supabase_config.dart';
 
@@ -30,6 +31,9 @@ Future<void> main() async {
 
   // SMS bridge
   SmsService.instance.init();
+
+  // Offline SQLite Queue & Sync Engine
+  OfflineSyncService.instance.initialize();
 
   runApp(const BudgetTrackerApp());
 }
