@@ -21,7 +21,11 @@ class EditTransactionSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => EditTransactionSheet(transaction: transaction),
+      builder: (_) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: EditTransactionSheet(transaction: transaction),
+      ),
     );
   }
 
@@ -460,15 +464,19 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 20,
-        right: 20,
-        top: 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 16,
+        ),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -721,6 +729,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

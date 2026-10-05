@@ -181,8 +181,9 @@ class InstallmentService:
             note_suffix = f" [Financed via {provider}: Installment 1 of {installment_count}. Full price: SAR {total_amount:,.2f}]"
             
             # Fetch existing transaction
-            tx = sb.table("transactions").select("raw_sms").eq("id", tx_id).single().execute()
+            tx = sb.table("transactions").select("raw_sms, household_id").eq("id", tx_id).single().execute()
             raw_sms = (tx.data.get("raw_sms") or "") + note_suffix
+            household_id = tx.data.get("household_id")
 
             sb.table("transactions").update({
                 "amount": monthly_amount,
@@ -193,8 +194,31 @@ class InstallmentService:
                 "Adjusted original transaction %s from %s to monthly installment %s",
                 tx_id, total_amount, monthly_amount
             )
+
+            if household_id:
+                cls.recalculate_budgets(household_id)
         except Exception as e:
             logger.warning("Failed to adjust original transaction %s: %s", tx_id, e)
+
+    @classmethod
+    def recalculate_budgets(cls, household_id: str) -> None:
+        """Recalculates spent_amount for all categories in a household from transactions."""
+        try:
+            sb = supabase_client.get_client()
+            tx_res = sb.table("transactions").select("category_code, amount").eq("household_id", household_id).execute()
+            spent_by_cat: Dict[str, float] = {}
+            for t in (tx_res.data or []):
+                cat = t.get("category_code") or "OPEX-MISC"
+                spent_by_cat[cat] = spent_by_cat.get(cat, 0.0) + float(t.get("amount") or 0.0)
+
+            budgets = sb.table("budgets").select("id, category_code").eq("household_id", household_id).execute().data
+            for b in (budgets or []):
+                cat = b.get("category_code")
+                actual_spent = round(spent_by_cat.get(cat, 0.0), 2)
+                sb.table("budgets").update({"spent_amount": actual_spent}).eq("id", b["id"]).execute()
+            logger.info("Recalculated budgets for household %s", household_id)
+        except Exception as e:
+            logger.warning("Could not recalculate budgets for household %s: %s", household_id, e)
 
     @classmethod
     def list_plans(cls, household_id: str) -> List[InstallmentPlan]:

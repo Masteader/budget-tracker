@@ -92,7 +92,7 @@
     "total_amount": 7408.0,
     "installment_count": 4,
     "monthly_amount": 1852.0,
-    "paid_installments": 1,
+    "paid_installments": 3,
     "day_of_month": 27,
     "start_date": "2026-10-05",
     "status": "ACTIVE",
@@ -100,5 +100,39 @@
     "original_transaction_id": "b2b284d9-aaf0-4245-91bd-f397b7b2cc03",
     "notes": "iPhone 16 Pro Max 4-month BNPL via Tamara (SAR 1,852.00/mo)",
     "created_at": "2026-10-05T04:40:47.101719"
+  },
+  {
+    "id": "d705f992-482d-40ee-9641-dfbf54618d5b",
+    "household_id": "hh_test_123",
+    "merchant": "United Electronics Co. eXtra",
+    "provider": "Tamara",
+    "total_amount": 7408.0,
+    "installment_count": 4,
+    "monthly_amount": 1852.0,
+    "paid_installments": 2,
+    "day_of_month": 27,
+    "start_date": "2026-10-05",
+    "status": "ACTIVE",
+    "category_code": "OPEX-SHOPPING",
+    "original_transaction_id": null,
+    "notes": null,
+    "created_at": "2026-10-05T06:36:48.504237"
+  },
+  {
+    "id": "41ff1892-fa17-443a-a098-d9264733030d",
+    "household_id": "hh_test_123",
+    "merchant": "United Electronics Co. eXtra",
+    "provider": "Tamara",
+    "total_amount": 7408.0,
+    "installment_count": 4,
+    "monthly_amount": 1852.0,
+    "paid_installments": 2,
+    "day_of_month": 27,
+    "start_date": "2026-10-05",
+    "status": "ACTIVE",
+    "category_code": "OPEX-SHOPPING",
+    "original_transaction_id": null,
+    "notes": null,
+    "created_at": "2026-10-05T06:40:46.904541"
   }
 ]

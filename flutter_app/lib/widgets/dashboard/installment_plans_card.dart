@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../models/installment_plan.dart';
 import '../../services/api_service.dart';
 
@@ -61,6 +62,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
 
   @override
   Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00', 'en_US');
     return FutureBuilder<List<InstallmentPlan>>(
       future: _futurePlans,
       builder: (context, snapshot) {
@@ -122,7 +124,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             Text(
                               activePlans.isEmpty
                                   ? 'All installments cleared'
-                                  : 'SAR ${totalMonthlyCommitment.toStringAsFixed(2)} / mo scheduled',
+                                  : 'SAR ${fmt.format(totalMonthlyCommitment)} / mo scheduled',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty
@@ -198,7 +200,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   ),
                                 ),
                                 Text(
-                                  'SAR ${plan.monthlyAmount.toStringAsFixed(2)} / mo',
+                                  'SAR ${fmt.format(plan.monthlyAmount)} / mo',
                                   style: GoogleFonts.outfit(
                                     fontWeight: FontWeight.bold,
                                     color: const Color(0xFF00C896),
@@ -233,7 +235,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   ),
                                 ),
                                 Text(
-                                  'Remaining: SAR ${plan.remainingAmount.toStringAsFixed(2)}',
+                                  'Remaining: SAR ${fmt.format(plan.remainingAmount)}',
                                   style: const TextStyle(
                                     color: Color(0xFFC9D1D9),
                                     fontSize: 11,

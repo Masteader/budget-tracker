@@ -442,6 +442,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                           },
                         ),
                       ),
+                      const SliverToBoxAdapter(
+                        child: SizedBox(height: 80),
+                      ),
                     ],
                   ],
                 );

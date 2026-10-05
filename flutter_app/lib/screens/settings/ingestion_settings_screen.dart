@@ -94,7 +94,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (user != null) {
         final data = await supabase
             .from('users')
-            .select('household_id, email, role')
+            .select('household_id, display_name, role')
             .eq('id', user.id)
             .maybeSingle();
         if (data != null && mounted) {
@@ -102,7 +102,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           setState(() {
             _householdId = hid;
             _userRole = data['role'] as String? ?? 'member';
-            _userEmail = data['email'] as String? ?? user.email;
+            _userEmail = user.email ?? (data['display_name'] as String?) ?? 'User';
           });
           if (hid != null) {
             await _loadHouseholdDetails(hid);
@@ -121,7 +121,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           .maybeSingle();
       final membersData = await supabase
           .from('users')
-          .select('email, role')
+          .select('display_name, role')
           .eq('household_id', hid);
 
       if (mounted) {
@@ -129,7 +129,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _householdName = hh?['name'] as String? ?? 'My Household';
           _inviteCode = hh?['invite_code'] as String? ?? '--------';
           _members = (membersData as List?)
-                  ?.map((e) => Map<String, dynamic>.from(e as Map))
+                  ?.map((e) {
+                    final map = Map<String, dynamic>.from(e as Map);
+                    return {
+                      'email': (map['display_name'] as String?) ?? 'Member',
+                      'role': map['role'] ?? 'member',
+                    };
+                  })
                   .toList() ??
               [];
         });

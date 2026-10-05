@@ -806,7 +806,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   },
                                   child: ListView.separated(
                                     physics: const AlwaysScrollableScrollPhysics(),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
                                     itemCount: transactions.length,
                                     separatorBuilder: (ctx, _) => const SizedBox(height: 6),
                                     itemBuilder: (ctx, i) {

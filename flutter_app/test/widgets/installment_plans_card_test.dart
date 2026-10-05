@@ -43,7 +43,7 @@ void main() {
       expect(find.text('United Electronics Co. eXtra'), findsOneWidget);
 
       // Verify payment details
-      expect(find.text('SAR 1852.00 / mo'), findsOneWidget);
+      expect(find.text('SAR 1,852.00 / mo'), findsOneWidget);
       expect(find.text('Installment 1 of 4 paid'), findsOneWidget);
 
       // Verify Pay button
