@@ -367,6 +367,63 @@ async def get_recurring_bills(household_id: str, as_of_date: Optional[str] = Non
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get(
+    "/budgets/installments",
+    tags=["installments"],
+    summary="List active and completed BNPL installment plans for a household.",
+)
+async def list_installments(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from installment_service import InstallmentService
+    try:
+        plans = await asyncio.to_thread(InstallmentService.list_plans, household_id)
+        return [p.model_dump() for p in plans]
+    except Exception as exc:
+        logger.error("Failed to list installment plans: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/budgets/installments",
+    tags=["installments"],
+    summary="Create a new BNPL installment plan (e.g. Tamara/Tabby) and amortize purchase.",
+)
+async def create_installment_plan(request: Request):
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    from installment_service import InstallmentService, InstallmentPlanCreate
+    try:
+        req = InstallmentPlanCreate(**body)
+        plan = await asyncio.to_thread(InstallmentService.create_plan, req)
+        return plan.model_dump()
+    except Exception as exc:
+        logger.error("Failed to create installment plan: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post(
+    "/budgets/installments/{plan_id}/pay",
+    tags=["installments"],
+    summary="Record an installment payment towards a plan.",
+)
+async def pay_installment_endpoint(plan_id: str):
+    from installment_service import InstallmentService
+    try:
+        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Installment plan not found.")
+        return plan.model_dump()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to pay installment: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 
 @app.get(
     "/budgets/breakdown",
