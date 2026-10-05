@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../services/api_service.dart';
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
@@ -217,6 +218,246 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  Widget _buildProviderRadio(String provider, Color color, String currentSelected, ValueChanged<String> onSelected) {
+    final isSelected = currentSelected == provider;
+    return Expanded(
+      child: InkWell(
+        onTap: () => onSelected(provider),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withValues(alpha: 0.15) : const Color(0xFF0D1117),
+            border: Border.all(color: isSelected ? color : const Color(0xFF30363D)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            provider,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? color : Colors.white,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _convertToInstallmentPlan() async {
+    final amount = double.tryParse(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid amount first.')),
+      );
+      return;
+    }
+
+    String selectedProvider = 'Tamara';
+    int selectedCount = 4;
+    bool isProcessing = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setModalState) {
+            final monthly = amount / selectedCount;
+            final remainingBalance = amount - monthly;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+                left: 20,
+                right: 20,
+                top: 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF30363D),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Convert to BNPL Installment Plan',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Amortize this purchase across monthly installments to prevent budget blowouts.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Provider Selector
+                  Text('PROVIDER', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E), letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildProviderRadio('Tamara', const Color(0xFFFF6B6B), selectedProvider, (p) {
+                        setModalState(() => selectedProvider = p);
+                      }),
+                      const SizedBox(width: 8),
+                      _buildProviderRadio('Tabby', const Color(0xFF00E676), selectedProvider, (p) {
+                        setModalState(() => selectedProvider = p);
+                      }),
+                      const SizedBox(width: 8),
+                      _buildProviderRadio('Bank / Other', const Color(0xFF58A6FF), selectedProvider, (p) {
+                        setModalState(() => selectedProvider = p);
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Duration selector
+                  Text('INSTALLMENT DURATION', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E), letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [3, 4, 6].map((count) {
+                      final isSelected = selectedCount == count;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: InkWell(
+                            onTap: () => setModalState(() => selectedCount = count),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.2) : const Color(0xFF0D1117),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$count Months',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSelected ? const Color(0xFF00C896) : Colors.white,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Plan Summary Box
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1117),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF30363D)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('First Month (This Cycle):', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            Text('SAR ${monthly.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Deferred to Next Cycles (${selectedCount - 1} mo):', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            Text('SAR ${remainingBalance.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                        const Divider(color: Color(0xFF21262D), height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Immediate Budget Headroom:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            Text('+SAR ${remainingBalance.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C896),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: isProcessing ? null : () async {
+                      setModalState(() => isProcessing = true);
+                      try {
+                        await ApiService.instance.createInstallmentPlan({
+                          'household_id': widget.transaction.householdId,
+                          'merchant': _merchantCtrl.text.trim(),
+                          'provider': selectedProvider,
+                          'total_amount': amount,
+                          'installment_count': selectedCount,
+                          'paid_installments': 1,
+                          'category_code': _selectedCategory,
+                          'original_transaction_id': widget.transaction.id,
+                          'adjust_original_transaction': true,
+                          'notes': 'Converted from transaction via mobile app',
+                        });
+                        if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                        if (mounted) {
+                          Navigator.pop(context, 'updated');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Successfully converted to $selectedProvider $selectedCount-month plan!'),
+                              backgroundColor: const Color(0xFF00C896),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setModalState(() => isProcessing = false);
+                        if (sheetCtx.mounted) {
+                          ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                            SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      }
+                    },
+                    child: isProcessing
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Text('Confirm Installment Plan', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -284,6 +525,46 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 filled: true,
                 fillColor: const Color(0xFF0D1117),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // BNPL / Installment Action Banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1117),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF30363D)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.credit_score_rounded, color: Color(0xFFFF6B6B), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'BNPL Installment Plan',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Text(
+                          'Split into 3 or 4 monthly payments (Tamara / Tabby)',
+                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _convertToInstallmentPlan,
+                    child: const Text('Convert', style: TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),

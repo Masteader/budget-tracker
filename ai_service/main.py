@@ -378,7 +378,7 @@ async def list_installments(household_id: str):
     from installment_service import InstallmentService
     try:
         plans = await asyncio.to_thread(InstallmentService.list_plans, household_id)
-        return [p.model_dump() for p in plans]
+        return {"plans": [p.model_dump() for p in plans], "count": len(plans)}
     except Exception as exc:
         logger.error("Failed to list installment plans: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

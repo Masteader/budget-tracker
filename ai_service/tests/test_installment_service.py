@@ -93,7 +93,9 @@ def test_installments_api():
     # 3. List plans
     list_res = client.get("/budgets/installments?household_id=hh_test_123")
     assert list_res.status_code == 200
-    plans = list_res.json()
+    data = list_res.json()
+    assert "plans" in data
+    plans = data["plans"]
     assert any(p["id"] == plan_id for p in plans)
 
     # 4. Pay installment
