@@ -10,6 +10,8 @@ import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
+import '../../widgets/settings/household_management_card.dart';
+import '../onboarding/household_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
   const IngestionSettingsScreen({super.key});
@@ -34,6 +36,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   String? _householdId;
   String? _userEmail;
+  String? _householdName;
+  String? _inviteCode;
+  String _userRole = 'member';
+  List<Map<String, dynamic>> _members = [];
 
   @override
   void initState() {
@@ -88,15 +94,45 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (user != null) {
         final data = await supabase
             .from('users')
-            .select('household_id, email')
+            .select('household_id, email, role')
             .eq('id', user.id)
             .maybeSingle();
         if (data != null && mounted) {
+          final hid = data['household_id'] as String?;
           setState(() {
-            _householdId = data['household_id'] as String?;
+            _householdId = hid;
+            _userRole = data['role'] as String? ?? 'member';
             _userEmail = data['email'] as String? ?? user.email;
           });
+          if (hid != null) {
+            await _loadHouseholdDetails(hid);
+          }
         }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadHouseholdDetails(String hid) async {
+    try {
+      final hh = await supabase
+          .from('households')
+          .select('name, invite_code')
+          .eq('id', hid)
+          .maybeSingle();
+      final membersData = await supabase
+          .from('users')
+          .select('email, role')
+          .eq('household_id', hid);
+
+      if (mounted) {
+        setState(() {
+          _householdName = hh?['name'] as String? ?? 'My Household';
+          _inviteCode = hh?['invite_code'] as String? ?? '--------';
+          _members = (membersData as List?)
+                  ?.map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList() ??
+              [];
+        });
       }
     } catch (_) {}
   }
@@ -229,6 +265,222 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     );
   }
 
+  void _copyInviteCode() {
+    if (_inviteCode != null && _inviteCode != '--------') {
+      Clipboard.setData(ClipboardData(text: _inviteCode!));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invite code "$_inviteCode" copied! Share with your partner.'),
+          backgroundColor: const Color(0xFF00C896),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmLeaveHousehold() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFF85149)),
+            const SizedBox(width: 8),
+            Text('Leave Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to leave this household? You will no longer have access to its shared budgets and transactions until you are re-invited.',
+          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF85149),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Leave', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null) return;
+      try {
+        await supabase
+            .from('users')
+            .update({'household_id': null, 'role': null})
+            .eq('id', uid);
+
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HouseholdScreen()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to leave household: $e'), backgroundColor: Colors.redAccent),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showJoinHouseholdDialog() async {
+    final codeCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Text('Join Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter the 8-character invite code:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 8,
+              style: GoogleFonts.jetBrainsMono(color: Colors.white, fontSize: 16, letterSpacing: 2),
+              decoration: const InputDecoration(
+                hintText: 'e.g. A1B2C3D4',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Join', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              final code = codeCtrl.text.trim().toUpperCase();
+              if (code.length != 8) return;
+              Navigator.pop(ctx);
+              try {
+                try {
+                  await supabase.rpc('join_household_by_code', params: {'p_invite_code': code});
+                } catch (_) {
+                  final uid = supabase.auth.currentUser!.id;
+                  final hh = await supabase
+                      .from('households')
+                      .select()
+                      .eq('invite_code', code)
+                      .single();
+                  await supabase
+                      .from('users')
+                      .update({'household_id': hh['id'], 'role': 'member'})
+                      .eq('id', uid);
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Joined household!'), backgroundColor: Color(0xFF00C896)),
+                  );
+                  _loadUserInfo();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to join: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCreateHouseholdDialog() async {
+    final nameCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Text('New Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter a name for the new household:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'e.g. Summer Beach House',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(ctx);
+              try {
+                final uid = supabase.auth.currentUser!.id;
+                final res = await supabase
+                    .from('households')
+                    .insert({'name': name})
+                    .select()
+                    .single();
+                await supabase
+                    .from('users')
+                    .update({'household_id': res['id'], 'role': 'admin'})
+                    .eq('id', uid);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Created household "${res['name']}"!'), backgroundColor: const Color(0xFF00C896)),
+                  );
+                  _loadUserInfo();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to create: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -255,6 +507,59 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         children: [
+          // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
+          _buildSectionHeader('HOUSEHOLD & MEMBERSHIP'),
+          const SizedBox(height: 6),
+          Text(
+            'Manage your shared budget group, invite others with your code, or switch households.',
+            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF8B949E)),
+          ),
+          const SizedBox(height: 12),
+          if (_householdId != null) ...[
+            HouseholdManagementCard(
+              householdName: _householdName ?? 'Household',
+              inviteCode: _inviteCode ?? '--------',
+              userRole: _userRole,
+              members: _members,
+              onCopyInviteCode: _copyInviteCode,
+              onLeaveHousehold: _confirmLeaveHousehold,
+              onSwitchHousehold: _showJoinHouseholdDialog,
+              onCreateHousehold: _showCreateHouseholdDialog,
+            ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161B22),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF30363D)),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'You have not joined any household yet.',
+                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C896),
+                      foregroundColor: Colors.black,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HouseholdScreen()),
+                      );
+                    },
+                    child: const Text('Join or Create Household', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 28),
+
           // ── 1. HARDWARE & APP PERMISSIONS ──
           _buildSectionHeader('HARDWARE & APP PERMISSIONS'),
           const SizedBox(height: 6),
