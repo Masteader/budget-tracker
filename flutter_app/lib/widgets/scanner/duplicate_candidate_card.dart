@@ -7,6 +7,7 @@ class DuplicateCandidateCard extends StatelessWidget {
   final int itemCount;
   final VoidCallback onEnrich;
   final VoidCallback onLogSeparate;
+  final VoidCallback? onDiscard;
 
   const DuplicateCandidateCard({
     super.key,
@@ -14,6 +15,7 @@ class DuplicateCandidateCard extends StatelessWidget {
     required this.itemCount,
     required this.onEnrich,
     required this.onLogSeparate,
+    this.onDiscard,
   });
 
   @override
@@ -70,6 +72,22 @@ class DuplicateCandidateCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onDiscard != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFF85149),
+                  side: BorderSide(color: const Color(0xFFF85149).withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                ),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Discard Duplicate', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                onPressed: onDiscard,
+              ),
+            ),
+          ],
         ],
       ),
     );

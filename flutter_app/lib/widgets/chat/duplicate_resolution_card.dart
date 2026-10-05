@@ -6,12 +6,14 @@ class DuplicateResolutionCard extends StatelessWidget {
   final Map<String, dynamic> candidateData;
   final ValueChanged<String> onEnrich;
   final ValueChanged<String> onLogAsNew;
+  final VoidCallback? onDiscard;
 
   const DuplicateResolutionCard({
     super.key,
     required this.candidateData,
     required this.onEnrich,
     required this.onLogAsNew,
+    this.onDiscard,
   });
 
   @override
@@ -77,6 +79,22 @@ class DuplicateResolutionCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onDiscard != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFF85149),
+                  side: BorderSide(color: const Color(0xFFF85149).withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                ),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Discard', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                onPressed: onDiscard,
+              ),
+            ),
+          ],
         ],
       ),
     );

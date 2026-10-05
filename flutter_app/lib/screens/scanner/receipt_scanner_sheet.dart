@@ -961,6 +961,16 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               _confirmSave(enrichTxId: cId);
             },
             onLogSeparate: () => _confirmSave(allowDuplicate: true),
+            onDiscard: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Duplicate receipt scan discarded.'),
+                  backgroundColor: Color(0xFF21262D),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
           ),
         ],
 

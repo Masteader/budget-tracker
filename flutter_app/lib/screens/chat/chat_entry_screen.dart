@@ -558,6 +558,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     onLogAsNewCandidate: (originalMsg) {
                       _sendMessage(originalMsg, allowDuplicate: true, previewOnly: true);
                     },
+                    onDiscardCandidate: () {
+                      setState(() {
+                        _messages.remove(msg);
+                        _messages.add(
+                          ChatMessage(
+                            isUser: false,
+                            text: 'Duplicate expense discarded.',
+                          ),
+                        );
+                      });
+                    },
                   );
                 },
               ),

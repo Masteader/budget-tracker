@@ -35,6 +35,7 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onCancelPending;
   final ValueChanged<String>? onEnrichCandidate;
   final ValueChanged<String>? onLogAsNewCandidate;
+  final VoidCallback? onDiscardCandidate;
 
   const ChatMessageBubble({
     super.key,
@@ -43,6 +44,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onCancelPending,
     this.onEnrichCandidate,
     this.onLogAsNewCandidate,
+    this.onDiscardCandidate,
   });
 
   @override
@@ -118,6 +120,7 @@ class ChatMessageBubble extends StatelessWidget {
                 candidateData: message.candidateData!,
                 onEnrich: onEnrichCandidate!,
                 onLogAsNew: onLogAsNewCandidate ?? (_) {},
+                onDiscard: onDiscardCandidate,
               ),
             ],
           ],
