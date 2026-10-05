@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../models/budget.dart';
+import '../../models/models.dart';
 import '../sub_budget_breakdown_sheet.dart';
 
 /// Interactive budget card per category displaying spent vs allocated,

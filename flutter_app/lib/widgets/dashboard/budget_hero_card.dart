@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../models/budget.dart';
-import '../../models/salary_cycle_info.dart';
+import '../../models/models.dart';
 
 class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;

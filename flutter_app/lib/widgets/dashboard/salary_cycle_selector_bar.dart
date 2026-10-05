@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../models/salary_cycle_info.dart';
+import '../../models/models.dart';
 
 /// Reusable selector bar for switching between salary cycles (payday 27th - 26th).
 class SalaryCycleSelectorBar extends StatelessWidget {
