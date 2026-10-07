@@ -16,6 +16,7 @@ class ReceiptApiClient {
     bool previewOnly = false,
     String? merchant,
     String? spentBy,
+    String? receiptUrl,
   }) async {
     final payload = <String, dynamic>{
       'images_base64': imagesBase64,
@@ -27,6 +28,7 @@ class ReceiptApiClient {
       if (enrichTxId != null) 'enrich_tx_id': enrichTxId,
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
       if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
+      if (receiptUrl != null && receiptUrl.trim().isNotEmpty) 'receipt_url': receiptUrl.trim(),
     };
 
     return baseClient.post(

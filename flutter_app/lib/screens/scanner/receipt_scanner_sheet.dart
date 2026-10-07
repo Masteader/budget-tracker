@@ -11,6 +11,7 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/receipt_storage_service.dart';
 import '../../services/zatca_decoder.dart';
 import '../../widgets/receipt_photo_strip.dart';
 import '../../widgets/scanner/duplicate_candidate_card.dart';
@@ -97,9 +98,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     try {
       final picked = await _picker.pickImage(
         source: source,
-        imageQuality: 88,
-        maxWidth: 1600,
-        maxHeight: 1600,
+        imageQuality: 78,
+        maxWidth: 1280,
+        maxHeight: 1280,
       );
       if (picked == null) return;
 
@@ -381,7 +382,19 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       _errorMessage = null;
     });
 
+    String? uploadedReceiptUrl;
     try {
+      if (_imageFiles.isNotEmpty) {
+        try {
+          uploadedReceiptUrl = await ReceiptStorageService().uploadReceipt(
+            imageFile: _imageFiles.first,
+            householdId: widget.householdId,
+          );
+        } catch (e) {
+          debugPrint('[ReceiptScannerSheet] Storage upload error: $e');
+        }
+      }
+
       final List<String> base64List = [];
       for (final file in _imageFiles) {
         final bytes = await file.readAsBytes();
@@ -400,6 +413,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
         spentBy: _selectedSpentBy,
         previewOnly: false,
+        receiptUrl: uploadedReceiptUrl,
       );
 
       setState(() => _isAnalyzing = false);
@@ -419,11 +433,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _scanResult = res;
           });
         } else {
-          await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate);
+          await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
         }
       }
     } catch (_) {
-      await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate);
+      await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
     }
   }
 
@@ -468,8 +482,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     return false;
   }
 
-  Future<void> _fallbackSaveToSupabase({bool allowDuplicate = false}) async {
+  Future<void> _fallbackSaveToSupabase({bool allowDuplicate = false, String? receiptUrl}) async {
     try {
+      if (receiptUrl == null && _imageFiles.isNotEmpty) {
+        try {
+          receiptUrl = await ReceiptStorageService().uploadReceipt(
+            imageFile: _imageFiles.first,
+            householdId: widget.householdId,
+          );
+        } catch (_) {}
+      }
+
       final merchant = _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
           : (_zatcaDecoded?['seller'] as String? ??
@@ -499,8 +522,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ];
 
       final itemsSummary = items.map((e) => '${e['quantity']}x ${e['name']} (${e['price']} SAR)').join(', ');
-      final auditText = 'Invoice Scan: $merchant (${items.length} items) | Items: [$itemsSummary]';
-
+      String auditText = 'Invoice Scan: $merchant (${items.length} items) | Items: [$itemsSummary]';
+      if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) {
+        auditText += ' | ZATCA QR: $_zatcaQrRaw';
+      }
 
       final baseData = <String, dynamic>{
         'household_id': widget.householdId,
@@ -510,6 +535,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'category_code': 'OPEX-GROCERY',
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
+        if (receiptUrl != null && receiptUrl.isNotEmpty) 'receipt_url': receiptUrl,
       };
 
       Map<String, dynamic> res;

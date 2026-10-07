@@ -91,6 +91,7 @@ class ApiService {
     bool previewOnly = false,
     String? merchant,
     String? spentBy,
+    String? receiptUrl,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -103,6 +104,7 @@ class ApiService {
       previewOnly: previewOnly,
       merchant: merchant,
       spentBy: spentBy,
+      receiptUrl: receiptUrl,
     );
   }
 
