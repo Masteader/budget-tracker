@@ -17,13 +17,14 @@ const supabaseAnonKey = supabasePublishableKey;
 
 const fastapiBaseUrl = String.fromEnvironment(
   'FASTAPI_BASE_URL',
-  defaultValue: 'https://budget-tracker-ai-vwup.onrender.com',
+  defaultValue: 'https://budget.fmsco.com.sa',
 );
 
 const fastapiWebhookUrl = String.fromEnvironment(
   'FASTAPI_WEBHOOK_URL',
-  defaultValue: 'https://budget-tracker-ai-vwup.onrender.com/webhook/sms',
+  defaultValue: 'https://budget.fmsco.com.sa/webhook/sms',
 );
+
 
 const webhookSecret = String.fromEnvironment(
   'WEBHOOK_SECRET',

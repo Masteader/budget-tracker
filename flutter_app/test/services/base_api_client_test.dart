@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/services/api/base_api_client.dart';
+import 'package:budget_tracker/supabase_config.dart';
+
 
 void main() {
   group('BaseApiClient Tests', () {
@@ -31,7 +33,8 @@ void main() {
 
     test('Base URL resolves to live backend without /webhook/sms', () {
       final client = BaseApiClient();
-      expect(client.baseUrl, equals('https://budget-tracker-ai-vwup.onrender.com'));
+      expect(client.baseUrl, equals(fastapiBaseUrl));
     });
+
   });
 }
