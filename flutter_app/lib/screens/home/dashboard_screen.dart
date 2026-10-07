@@ -1,4 +1,4 @@
-/// Main dashboard — budget progress bars, burn rate, SMS service status.
+/// Main dashboard — budget progress bars, burn rate, expense status.
 /// Uses Supabase Realtime streams to update instantly when new data arrives.
 library;
 
@@ -13,7 +13,6 @@ import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
-import '../../services/sms_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/dashboard_action_sheet.dart';
@@ -42,8 +41,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Drain any SMS that arrived while the app was closed
-    SmsService.instance.drainOfflineQueue();
     // Drain any offline SQLite transaction queue
     OfflineSyncService.instance.flushQueue();
     OfflineSyncService.instance.updatePendingCount();

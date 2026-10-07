@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items, compute_zatca_fingerprint
 
@@ -59,14 +60,15 @@ def test_find_duplicate_candidate_found(mock_get_client):
     mock_select.eq.return_value = mock_eq
     mock_eq.order.return_value = mock_order
     mock_order.limit.return_value = mock_limit
+    now_str = datetime.now(timezone.utc).isoformat()
     mock_limit.execute.return_value = MagicMock(data=[
         {
             "id": "tx-1234",
             "household_id": "hh-abc",
             "amount": 19.0,
             "merchant": "Dunkin Donuts",
-            "timestamp": "2026-10-05T01:00:00Z",
-            "created_at": "2026-10-05T01:00:00Z",
+            "timestamp": now_str,
+            "created_at": now_str,
         }
     ])
     mock_get_client.return_value = mock_client

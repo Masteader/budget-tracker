@@ -8,6 +8,9 @@ class BaseApiClient {
   static const String appAuthToken = 'bt_sec_99a81f3d4c72e01b88e2';
 
   String get baseUrl {
+    if (fastapiBaseUrl.isNotEmpty) {
+      return fastapiBaseUrl;
+    }
     if (fastapiWebhookUrl.endsWith('/webhook/sms')) {
       return fastapiWebhookUrl.substring(0, fastapiWebhookUrl.length - '/webhook/sms'.length);
     }
@@ -45,6 +48,21 @@ class BaseApiClient {
       final response = await http
           .post(url, headers: buildHeaders(signature: signature), body: payload)
           .timeout(timeout);
+      if (response.statusCode >= 400) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+        } catch (_) {}
+        return {
+          'status': 'error',
+          'status_code': response.statusCode,
+          'message': response.statusCode == 502
+              ? 'AI backend is waking up (cold start) or temporarily unavailable. Please retry in 15 seconds.'
+              : 'Server response error (${response.statusCode})',
+        };
+      }
       return jsonDecode(response.body) as Map<String, dynamic>;
     } on Exception catch (e) {
       return {'status': 'error', 'message': e.toString()};
@@ -63,9 +81,25 @@ class BaseApiClient {
 
     try {
       final response = await http.get(uri, headers: buildHeaders()).timeout(timeout);
+      if (response.statusCode >= 400) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+        } catch (_) {}
+        return {
+          'status': 'error',
+          'status_code': response.statusCode,
+          'message': response.statusCode == 502
+              ? 'AI backend is waking up (cold start) or temporarily unavailable. Please retry in 15 seconds.'
+              : 'Server response error (${response.statusCode})',
+        };
+      }
       return jsonDecode(response.body) as Map<String, dynamic>;
     } on Exception catch (e) {
       return {'status': 'error', 'message': e.toString()};
     }
   }
 }
+

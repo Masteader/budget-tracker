@@ -1,4 +1,4 @@
-/// App entry point. Initialises Supabase, starts the SMS service,
+/// App entry point. Initialises Supabase, starts the offline sync engine,
 /// and routes to Auth or Home based on session state.
 library;
 
@@ -14,7 +14,6 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
 import 'services/offline_sync_service.dart';
-import 'services/sms_service.dart';
 import 'supabase_config.dart';
 
 Future<void> main() async {
@@ -28,9 +27,6 @@ Future<void> main() async {
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
   );
-
-  // SMS bridge
-  SmsService.instance.init();
 
   // Offline SQLite Queue & Sync Engine
   OfflineSyncService.instance.initialize();

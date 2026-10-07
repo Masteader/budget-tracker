@@ -61,9 +61,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
+APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2").strip()
 if not APP_AUTH_TOKEN:
     logger.warning("APP_AUTH_TOKEN is not configured in environment; external reverse-proxy / tunnel probes will be rejected.")
+
 
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
@@ -241,18 +242,23 @@ async def chat_transaction(request: Request):
         raise HTTPException(status_code=400, detail="message and household_id are required.")
 
     from chat_parser import process_chat_transaction
-    result = await asyncio.to_thread(
-        process_chat_transaction,
-        household_id=household_id,
-        message=message,
-        user_id=body.get("user_id"),
-        allow_duplicate=bool(body.get("allow_duplicate", False)),
-        enrich_tx_id=body.get("enrich_tx_id"),
-        preview_only=bool(body.get("preview_only", False)),
-        override_merchant=body.get("merchant"),
-        override_spent_by=body.get("spent_by"),
-    )
-    return result
+    try:
+        result = await asyncio.to_thread(
+            process_chat_transaction,
+            household_id=household_id,
+            message=message,
+            user_id=body.get("user_id"),
+            allow_duplicate=bool(body.get("allow_duplicate", False)),
+            enrich_tx_id=body.get("enrich_tx_id"),
+            preview_only=bool(body.get("preview_only", False)),
+            override_merchant=body.get("merchant"),
+            override_spent_by=body.get("spent_by"),
+        )
+        return result
+    except Exception as exc:
+        logger.error("Failed to process chat transaction: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 @app.post(

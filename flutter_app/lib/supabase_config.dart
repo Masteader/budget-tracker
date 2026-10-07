@@ -15,9 +15,14 @@ const supabasePublishableKey = String.fromEnvironment(
 /// Deprecated: use [supabasePublishableKey] instead.
 const supabaseAnonKey = supabasePublishableKey;
 
+const fastapiBaseUrl = String.fromEnvironment(
+  'FASTAPI_BASE_URL',
+  defaultValue: 'https://budget-tracker-ai-vwup.onrender.com',
+);
+
 const fastapiWebhookUrl = String.fromEnvironment(
   'FASTAPI_WEBHOOK_URL',
-  defaultValue: 'https://annotate-armhole-nest.ngrok-free.dev/webhook/sms',
+  defaultValue: 'https://budget-tracker-ai-vwup.onrender.com/webhook/sms',
 );
 
 const webhookSecret = String.fromEnvironment(

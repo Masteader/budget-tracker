@@ -30,8 +30,8 @@ void main() {
         householdId: 'h-1',
       );
       await queueManager.enqueue(
-        operationType: 'sms',
-        payload: {'raw_sms': 'Paid 100 SAR'},
+        operationType: 'receipt',
+        payload: {'qr_code_raw': 'AQJTYW5k...'},
         householdId: 'h-1',
       );
 
@@ -48,7 +48,7 @@ void main() {
       final count = await worker.drainQueue();
 
       expect(count, equals(2));
-      expect(dispatched, equals(['chat', 'sms']));
+      expect(dispatched, equals(['chat', 'receipt']));
       expect(await flushedFuture, equals(2));
 
       final remaining = await queueManager.getPendingCount();

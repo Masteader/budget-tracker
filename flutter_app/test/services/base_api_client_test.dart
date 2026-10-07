@@ -28,5 +28,10 @@ void main() {
 
       expect(headers['X-Signature'], equals('sha256=abcdef123456'));
     });
+
+    test('Base URL resolves to live backend without /webhook/sms', () {
+      final client = BaseApiClient();
+      expect(client.baseUrl, equals('https://budget-tracker-ai-vwup.onrender.com'));
+    });
   });
 }

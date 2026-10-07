@@ -1,5 +1,5 @@
 name: budget_tracker
-description: Household budget tracker with AI-powered Saudi bank SMS parsing.
+description: Household budget tracker with AI-powered receipt scanning, voice entry, and expense chat.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -16,7 +16,7 @@ dependencies:
   # ── HTTP ─────────────────────────────────────────────────────────────────────
   http: ^1.2.1
 
-  # ── Local storage (offline SMS queue) ────────────────────────────────────────
+  # ── Local storage (offline transaction queue) ────────────────────────────────
   sqflite: ^2.3.3+1
   path: ^1.9.0
 

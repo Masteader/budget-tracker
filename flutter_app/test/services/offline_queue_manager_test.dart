@@ -60,8 +60,8 @@ void main() {
 
     test('Transitions status: syncing -> failed (with retry increment) -> success', () async {
       final id = await queueManager.enqueue(
-        operationType: 'sms',
-        payload: {'raw_sms': 'Debit 50 SAR'},
+        operationType: 'receipt',
+        payload: {'qr_code_raw': 'Invoice-123'},
         householdId: 'h-1',
       );
 

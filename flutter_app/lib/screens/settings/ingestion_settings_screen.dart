@@ -5,7 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../main.dart';
-import '../../services/sms_service.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/partner_settlement_card.dart';
@@ -22,7 +21,6 @@ class IngestionSettingsScreen extends StatefulWidget {
 
 class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     with WidgetsBindingObserver {
-  bool _smsEnabled = true;
   bool _chatEnabled = true;
   bool _scannerEnabled = true;
   String _dedupPolicy = 'auto_enrich'; // 'auto_enrich' | 'prompt' | 'strict'
@@ -31,7 +29,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   // Permission statuses
   PermissionStatus _cameraStatus = PermissionStatus.denied;
   PermissionStatus _microphoneStatus = PermissionStatus.denied;
-  PermissionStatus _smsStatus = PermissionStatus.denied;
   PermissionStatus _notificationStatus = PermissionStatus.denied;
 
   String? _householdId;
@@ -48,13 +45,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     _loadPreferences();
     _checkPermissions();
     _loadUserInfo();
-    SmsService.instance.listeningNotifier.addListener(_onSmsListeningChanged);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    SmsService.instance.listeningNotifier.removeListener(_onSmsListeningChanged);
     super.dispose();
   }
 
@@ -66,23 +61,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     }
   }
 
-  void _onSmsListeningChanged() {
-    if (mounted) {
-      setState(() => _smsEnabled = SmsService.instance.listeningNotifier.value);
-    }
-  }
-
   Future<void> _checkPermissions() async {
     final camera = await Permission.camera.status;
     final microphone = await Permission.microphone.status;
-    final sms = await Permission.sms.status;
     final notification = await Permission.notification.status;
 
     if (mounted) {
       setState(() {
         _cameraStatus = camera;
         _microphoneStatus = microphone;
-        _smsStatus = sms;
         _notificationStatus = notification;
       });
     }
@@ -147,7 +134,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _smsEnabled = SmsService.instance.listeningNotifier.value;
         _chatEnabled = prefs.getBool('channel_chat_enabled') ?? true;
         _scannerEnabled = prefs.getBool('channel_scanner_enabled') ?? true;
         _dedupPolicy = prefs.getString('dedup_policy') ?? 'auto_enrich';
@@ -162,14 +148,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       await prefs.setBool(key, value);
     } else if (value is String) {
       await prefs.setString(key, value);
-    }
-  }
-
-  void _toggleSms(bool value) async {
-    if (!value) {
-      await SmsService.instance.stopService();
-    } else {
-      await SmsService.instance.startService();
     }
   }
 
@@ -210,27 +188,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           title: 'Microphone Permission Denied',
           message:
               'Microphone access has been permanently denied. Please tap "Open Settings" to enable Microphone access for Budget Tracker in Android Settings.',
-        );
-      }
-    }
-  }
-
-  Future<void> _requestSmsPermission() async {
-    final status = await Permission.sms.request();
-    if (mounted) {
-      setState(() => _smsStatus = status);
-      if (status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('SMS permission granted! Bank interceptor is ready.'),
-            backgroundColor: Color(0xFF00C896),
-          ),
-        );
-      } else if (status.isPermanentlyDenied) {
-        _showPermissionDialog(
-          title: 'SMS Permission Denied',
-          message:
-              'SMS access has been permanently denied. Please tap "Open Settings" to enable SMS access in Android Settings.',
         );
       }
     }
@@ -570,7 +527,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _buildSectionHeader('HARDWARE & APP PERMISSIONS'),
           const SizedBox(height: 6),
           Text(
-            'Check and manage camera and SMS access for expense scanning.',
+            'Check and manage camera and microphone access for expense scanning and AI voice input.',
             style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF8B949E)),
           ),
           const SizedBox(height: 12),
@@ -604,22 +561,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           const SizedBox(height: 10),
 
-          // SMS Permission Card
-          _buildPermissionCard(
-            icon: Icons.sms_outlined,
-            title: 'SMS Access (Read & Receive)',
-            subtitle: 'Allows automatic background detection of bank transaction alerts.',
-            status: _smsStatus,
-            onRequest: _requestSmsPermission,
-            onOpenSettings: openAppSettings,
-          ),
-          const SizedBox(height: 10),
-
           // Notification Permission Card
           _buildPermissionCard(
             icon: Icons.notifications_active_outlined,
             title: 'Notifications',
-            subtitle: 'Keeps background SMS monitoring service running reliably.',
+            subtitle: 'Receive budget threshold alerts and offline sync status.',
             status: _notificationStatus,
             onRequest: () async {
               final status = await Permission.notification.request();
@@ -631,14 +577,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
           // ── 2. ACTIVE INPUT CHANNELS ──
           _buildSectionHeader('EXPENSE INGESTION CHANNELS'),
-          const SizedBox(height: 10),
-          _buildChannelTile(
-            icon: Icons.sms_outlined,
-            title: 'Bank SMS Interception',
-            subtitle: 'Automatically captures incoming debit/credit card SMS.',
-            value: _smsEnabled,
-            onChanged: _toggleSms,
-          ),
           const SizedBox(height: 10),
           _buildChannelTile(
             icon: Icons.chat_bubble_outline,
@@ -675,7 +613,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             policy: 'auto_enrich',
             title: 'Smart Auto-Enrichment (Recommended)',
             description:
-                'If an SMS is already logged, scanning a receipt or chatting line items will attach the details to the SMS without creating a double charge.',
+                'If a matching recent transaction exists, scanning a receipt or chatting line items will attach the details without creating a double charge.',
           ),
           const SizedBox(height: 8),
           _buildPolicyTile(
@@ -689,7 +627,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             policy: 'strict',
             title: 'Strict Channel Isolation',
             description:
-                'Prevent manual chat/scan entry when SMS interceptor is active to avoid double-entry.',
+                'Flag any duplicate merchant and amount entries between receipt scanning and AI chat.',
           ),
           // ── PARTNER FAIR-SHARE SETTLEMENT ──
           if (_householdId != null) ...[
