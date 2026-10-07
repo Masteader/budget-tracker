@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'receipt_photo_viewer_dialog.dart';
 
 class TransactionItemBreakdownCard extends StatelessWidget {
   final String merchant;
@@ -11,6 +12,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final bool isReallocated;
   final bool initiallyExpanded;
+  final String? receiptUrl;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -25,6 +27,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.items = const [],
     this.isReallocated = false,
     this.initiallyExpanded = false,
+    this.receiptUrl,
     this.onEdit,
     this.onDelete,
   });
@@ -213,6 +216,30 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (receiptUrl != null && receiptUrl!.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF58A6FF).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.3), width: 0.8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Receipt',
+                          style: TextStyle(
+                            color: Color(0xFF58A6FF),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -377,6 +404,90 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                  if (receiptUrl != null && receiptUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'RECEIPT PHOTO',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF8B949E),
+                          ),
+                        ),
+                        Text(
+                          'Tap to zoom',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: const Color(0xFF58A6FF),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () => ReceiptPhotoViewerDialog.show(
+                        context,
+                        receiptUrl: receiptUrl!,
+                        merchant: merchant,
+                        amount: amount,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D1117),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF21262D)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                receiptUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (ctx, _, __) => const Center(
+                                  child: Icon(Icons.broken_image_outlined, color: Color(0xFF8B949E), size: 32),
+                                ),
+                              ),
+                              Container(
+                                color: Colors.black.withValues(alpha: 0.25),
+                              ),
+                              Positioned(
+                                right: 8,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161B22).withValues(alpha: 0.85),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF30363D)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.zoom_in, color: Color(0xFF58A6FF), size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'View Full',
+                                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],

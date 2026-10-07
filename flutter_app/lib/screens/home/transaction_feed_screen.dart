@@ -867,6 +867,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           spentBy: tx.spentBy,
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
+                                          receiptUrl: tx.receiptUrl,
                                           onEdit: () async {
                                             final res = await EditTransactionSheet.show(context, tx);
                                             if (res == 'deleted') {
