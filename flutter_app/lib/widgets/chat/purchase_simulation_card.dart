@@ -83,7 +83,7 @@ class PurchaseSimulationCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Days to 27th Payday: $daysToPayday days away',
+            'Days to Payday: $daysToPayday days away',
             style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
           const SizedBox(height: 10),

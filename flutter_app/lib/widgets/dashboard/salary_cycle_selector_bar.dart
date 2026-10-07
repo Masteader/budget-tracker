@@ -25,7 +25,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
     final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
     final subText = currentCycle != null
         ? '${currentCycle!.cycleStart.substring(5)} - ${currentCycle!.cycleEnd.substring(5)}'
-        : 'Payday 27th Cycle (27th - 26th)';
+        : 'Active Salary Cycle';
     final isCurrent = currentCycle?.isCurrent ?? true;
 
     return Container(

@@ -158,3 +158,22 @@ def test_scan_receipt_success(mock_dedup, mock_insert, mock_parse):
     assert data["merchant"] == "Tamimi Markets"
     assert data["amount"] == 85.50
     assert len(data["items"]) == 2
+
+
+def test_get_and_update_household_payday():
+    # 1. Update payday to 1st of month
+    put_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 1})
+    assert put_res.status_code == 200
+    assert put_res.json()["payday_day"] == 1
+    assert put_res.json()["status"] == "success"
+
+    # 2. Get payday
+    get_res = client.get(f"/households/{HOUSEHOLD_ID}/payday")
+    assert get_res.status_code == 200
+    assert get_res.json()["payday_day"] == 1
+
+    # 3. Restore to default 27
+    restore_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 27})
+    assert restore_res.status_code == 200
+    assert restore_res.json()["payday_day"] == 27
+

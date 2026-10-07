@@ -199,4 +199,5 @@ class SubCategoryRenameRequest(BaseModel):
     name_ar: Optional[str] = None
 
 
-
+class PaydayUpdateRequest(BaseModel):
+    payday_day: int = Field(..., ge=1, le=31, description="Configured monthly payday day (1-31)")

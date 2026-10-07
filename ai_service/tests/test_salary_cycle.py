@@ -62,3 +62,36 @@ def test_ensure_household_cycle_budgets_existing():
     budgets = ensure_household_cycle_budgets(hid, date(2026, 10, 2))
     assert len(budgets) >= 1
     assert all(b.get("cycle_key") == "2026-10" for b in budgets)
+
+
+def test_custom_payday_first_of_month():
+    # If payday is 1st of month: Oct 15 is in Oct 1 - Oct 31 cycle
+    info = get_cycle_for_date(date(2026, 10, 15), payday_day=1)
+    assert info["cycle_key"] == "2026-10"
+    assert info["cycle_start"] == "2026-10-01"
+    assert info["cycle_end"] == "2026-10-31"
+    assert info["payday_day"] == 1
+
+
+def test_custom_payday_25th():
+    # Payday 25th: Oct 15 is before Oct 25, so in cycle starting Sep 25 - Oct 24
+    info_pre = get_cycle_for_date(date(2026, 10, 15), payday_day=25)
+    assert info_pre["cycle_key"] == "2026-10"
+    assert info_pre["cycle_start"] == "2026-09-25"
+    assert info_pre["cycle_end"] == "2026-10-24"
+    assert info_pre["payday_day"] == 25
+
+    # Oct 25 transitions to next cycle: Oct 25 - Nov 24
+    info_post = get_cycle_for_date(date(2026, 10, 25), payday_day=25)
+    assert info_post["cycle_key"] == "2026-11"
+    assert info_post["cycle_start"] == "2026-10-25"
+    assert info_post["cycle_end"] == "2026-11-24"
+
+
+def test_custom_payday_clamp_and_dates():
+    from salary_cycle import get_salary_cycle_dates
+    # Payday 31 in September (30 days) clamps to Sep 30
+    dates = get_salary_cycle_dates(date(2026, 9, 10), payday_day=31)
+    assert dates["payday_day"] == 31
+    assert "2026-09-30" in dates["nominal_payday"] or "2026-09-30" in dates["cycle_end"]
+

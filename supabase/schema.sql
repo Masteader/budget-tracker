@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS public.households (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT NOT NULL,
     invite_code TEXT UNIQUE NOT NULL DEFAULT substr(md5(random()::text), 1, 8),
+    payday_day  INTEGER NOT NULL DEFAULT 27 CHECK (payday_day >= 1 AND payday_day <= 31),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE  public.households IS 'A shared budget group (family / flatmates).';
 COMMENT ON COLUMN public.households.invite_code IS '8-char code to invite new members.';
+COMMENT ON COLUMN public.households.payday_day IS 'Configured monthly salary day (1-31).';
 
 
 -- =============================================================================
@@ -34,11 +36,13 @@ CREATE TABLE IF NOT EXISTS public.users (
     household_id UUID REFERENCES public.households(id) ON DELETE SET NULL,
     display_name TEXT NOT NULL,
     role         TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    payday_day   INTEGER DEFAULT 27 CHECK (payday_day >= 1 AND payday_day <= 31),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE  public.users IS 'App-level user profile linked to Supabase Auth.';
 COMMENT ON COLUMN public.users.role IS '''admin'' can edit budgets; ''member'' is read-only.';
+COMMENT ON COLUMN public.users.payday_day IS 'User preferred monthly salary payday (1-31).';
 
 
 -- =============================================================================

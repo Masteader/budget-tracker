@@ -47,6 +47,20 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
     }
   }
 
+  static String _ordinal(int day) {
+    if (day >= 11 && day <= 13) return '${day}th';
+    switch (day % 10) {
+      case 1:
+        return '${day}st';
+      case 2:
+        return '${day}nd';
+      case 3:
+        return '${day}rd';
+      default:
+        return '${day}th';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -73,6 +87,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
 
     final cycle = _data!['cycle'] as Map<String, dynamic>;
     final daysRemaining = cycle['days_remaining'] as int? ?? 0;
+    final paydayDay = cycle['payday_day'] as int? ?? 27;
     final daysElapsed = cycle['days_elapsed'] as int? ?? 1;
     final daysTotal = cycle['days_total'] as int? ?? 30;
     final progress = (daysElapsed / daysTotal).clamp(0.0, 1.0);
@@ -192,7 +207,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$daysRemaining Days to Payday (27th)',
+                      '$daysRemaining Days to Payday (${_ordinal(paydayDay)})',
                       style: GoogleFonts.outfit(
                         color: Colors.white,
                         fontSize: 14,

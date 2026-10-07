@@ -34,6 +34,7 @@ from models import (
     SubAllocationsRequest,
     SubCategoryCreateRequest,
     SubCategoryRenameRequest,
+    PaydayUpdateRequest,
 )
 
 
@@ -322,13 +323,13 @@ async def scan_receipt(request: Request):
     tags=["budgets"],
     summary="Get active Saudi salary cycle stats, burn rate velocity, and projected run-out date.",
 )
-async def salary_cycle_forecast(household_id: str):
-    """Returns salary cycle progress, days to 27th payday, burn rate, and pace indicator."""
+async def salary_cycle_forecast(household_id: str, payday_day: Optional[int] = None):
+    """Returns salary cycle progress, days to payday, burn rate, and pace indicator."""
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import get_salary_cycle_forecast
     try:
-        return await asyncio.to_thread(get_salary_cycle_forecast, household_id)
+        return await asyncio.to_thread(get_salary_cycle_forecast, household_id, None, payday_day)
     except Exception as exc:
         logger.error("Failed to generate salary cycle forecast: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -339,15 +340,41 @@ async def salary_cycle_forecast(household_id: str):
     tags=["budgets"],
     summary="List active and available salary cycles for a household.",
 )
-async def list_salary_cycles(household_id: str):
+async def list_salary_cycles(household_id: str, payday_day: Optional[int] = None):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     from salary_cycle import get_available_cycles_for_household
     try:
-        return await asyncio.to_thread(get_available_cycles_for_household, household_id)
+        return await asyncio.to_thread(get_available_cycles_for_household, household_id, payday_day)
     except Exception as exc:
         logger.error("Failed to list cycles: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/households/{household_id}/payday",
+    tags=["households"],
+    summary="Get configured monthly payday day for a household.",
+)
+async def get_household_payday_endpoint(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import get_household_payday
+    day = await asyncio.to_thread(get_household_payday, household_id)
+    return {"household_id": household_id, "payday_day": day}
+
+
+@app.put(
+    "/households/{household_id}/payday",
+    tags=["households"],
+    summary="Update configured monthly payday day for a household.",
+)
+async def update_household_payday_endpoint(household_id: str, payload: PaydayUpdateRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import set_household_payday
+    saved_day = await asyncio.to_thread(set_household_payday, household_id, payload.payday_day)
+    return {"household_id": household_id, "payday_day": saved_day, "status": "success"}
 
 
 @app.get(

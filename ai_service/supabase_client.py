@@ -5,6 +5,7 @@ All DB operations use the SERVICE ROLE KEY — bypasses RLS intentionally.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -326,18 +327,20 @@ def is_duplicate_sms(raw_sms: str, household_id: str, window_seconds: int = 60) 
     return bool(response.data)
 
 
-def ensure_household_cycle_budgets(household_id: str, target_date: Optional[date] = None) -> list[dict]:
+def ensure_household_cycle_budgets(
+    household_id: str,
+    target_date: Optional[date] = None,
+    payday_day: Optional[int] = None,
+) -> list[dict]:
     """
-    Ensure budget allocation rows exist for the 27th salary cycle corresponding to target_date.
+    Ensure budget allocation rows exist for the salary cycle corresponding to target_date.
     If rows exist for cycle_key, return them.
-    If missing, automatically roll over from the most recent active cycle:
-    - Sets allocated_amount to previous allocated_amount
-    - Sets spent_amount = 0.0
-    - Computes previous_cycle_delta = (prev_allocated - prev_spent)
-    - Sets cycle_key and month
+    If missing, automatically roll over from the most recent active cycle.
     """
     from salary_cycle import get_cycle_for_date
-    cycle_info = get_cycle_for_date(target_date)
+    if payday_day is None:
+        payday_day = get_household_payday(household_id)
+    cycle_info = get_cycle_for_date(target_date, payday_day=payday_day)
     cycle_key = cycle_info["cycle_key"]
     client = get_client()
 
@@ -390,3 +393,72 @@ def ensure_household_cycle_budgets(household_id: str, target_date: Optional[date
         return inserted
 
     return []
+
+
+# =============================================================================
+# HOUSEHOLD PAYDAY CONFIGURATION
+# =============================================================================
+
+HOUSEHOLD_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "data", "household_settings.json")
+
+
+def get_household_payday(household_id: str) -> int:
+    """
+    Retrieves the payday day (1-31) for a household.
+    Checks Supabase households.payday_day, falls back to local JSON cache, defaults to 27.
+    """
+    if not household_id:
+        return 27
+    try:
+        client = get_client()
+        res = client.table("households").select("payday_day").eq("id", household_id).maybe_single().execute()
+        if res.data and res.data.get("payday_day") is not None:
+            return int(res.data["payday_day"])
+    except Exception:
+        pass
+
+    try:
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                if household_id in settings and "payday_day" in settings[household_id]:
+                    return int(settings[household_id]["payday_day"])
+    except Exception:
+        pass
+
+    return 27
+
+
+def set_household_payday(household_id: str, payday_day: int) -> int:
+    """
+    Sets the payday day (1-31) for a household.
+    Updates Supabase if column exists, and always caches in household_settings.json.
+    """
+    if not household_id:
+        return 27
+    payday_day = max(1, min(31, int(payday_day)))
+
+    # 1. Update local storage
+    try:
+        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
+        settings = {}
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        if household_id not in settings:
+            settings[household_id] = {}
+        settings[household_id]["payday_day"] = payday_day
+        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist household_settings.json: {e}")
+
+    # 2. Update Supabase
+    try:
+        client = get_client()
+        client.table("households").update({"payday_day": payday_day}).eq("id", household_id).execute()
+    except Exception as e:
+        logger.info(f"Supabase households.payday_day column update skipped (pending migration): {e}")
+
+    return payday_day
+

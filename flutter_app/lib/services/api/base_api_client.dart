@@ -101,5 +101,41 @@ class BaseApiClient {
       return {'status': 'error', 'message': e.toString()};
     }
   }
+
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? body,
+    bool shouldSign = false,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final encoded = jsonEncode(body ?? {});
+    final signature = shouldSign ? sign(encoded) : null;
+    try {
+      final response = await http
+          .put(
+            Uri.parse(path.startsWith('http') ? path : '$baseUrl$path'),
+            headers: buildHeaders(signature: signature),
+            body: encoded,
+          )
+          .timeout(timeout);
+      if (response.statusCode >= 400) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+        } catch (_) {}
+        return {
+          'status': 'error',
+          'status_code': response.statusCode,
+          'message': 'Server response error (${response.statusCode})',
+        };
+      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } on Exception catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
+
 

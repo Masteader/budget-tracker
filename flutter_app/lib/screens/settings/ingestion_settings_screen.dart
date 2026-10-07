@@ -5,11 +5,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../main.dart';
+import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/settings/household_management_card.dart';
+import '../../widgets/settings/payday_settings_card.dart';
 import '../onboarding/household_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
@@ -37,6 +39,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   String? _inviteCode;
   String _userRole = 'member';
   List<Map<String, dynamic>> _members = [];
+  int _paydayDay = 27;
 
   @override
   void initState() {
@@ -127,7 +130,45 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               [];
         });
       }
+
+      // Load configured monthly payday
+      int payday = 27;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        payday = prefs.getInt('payday_day') ?? 27;
+        final serverDay = await ApiService.instance.getHouseholdPayday(hid);
+        if (serverDay >= 1 && serverDay <= 31) {
+          payday = serverDay;
+          await prefs.setInt('payday_day', payday);
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _paydayDay = payday);
+      }
     } catch (_) {}
+  }
+
+  Future<bool> _savePayday(int newDay) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('payday_day', newDay);
+      if (mounted) setState(() => _paydayDay = newDay);
+
+      if (_householdId != null) {
+        await ApiService.instance.setHouseholdPayday(_householdId!, newDay);
+        try {
+          await supabase.from('households').update({'payday_day': newDay}).eq('id', _householdId!);
+        } catch (_) {}
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save payday: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+      return false;
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -488,6 +529,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               onLeaveHousehold: _confirmLeaveHousehold,
               onSwitchHousehold: _showJoinHouseholdDialog,
               onCreateHousehold: _showCreateHouseholdDialog,
+            ),
+            const SizedBox(height: 16),
+            PaydaySettingsCard(
+              initialPayday: _paydayDay,
+              onSavePayday: _savePayday,
             ),
           ] else ...[
             Container(

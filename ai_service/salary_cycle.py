@@ -28,27 +28,55 @@ def adjust_saudi_payday(target_date: date) -> date:
     return target_date
 
 
-def get_cycle_for_date(target_date: Optional[date] = None) -> Dict[str, Any]:
+def _clamp_day(year: int, month: int, day: int) -> int:
+    max_days = calendar.monthrange(year, month)[1]
+    return min(max(1, day), max_days)
+
+
+def get_cycle_for_date(target_date: Optional[date] = None, payday_day: int = 27) -> Dict[str, Any]:
     """
-    Computes Saudi 27th salary cycle boundaries (27th of M-1 to 26th of M).
-    Cycle is designated by Month M (the Payday Month).
-    Example: Sep 27 - Oct 26 is named 'October 2026 Budget' (cycle_key: '2026-10').
+    Computes salary cycle boundaries for a given payday day (default 27).
+    - If payday_day == 1, cycle is the calendar month (1st to last day of month).
+    - If payday_day > 1, cycle is from payday_day of previous month to day before payday of this month (or from this month to next month if today >= payday).
     """
+    payday_day = max(1, min(31, int(payday_day)))
     today = target_date or datetime.now(timezone.utc).date()
-    if today.day >= 27:
-        start_date = today.replace(day=27)
-        year = today.year + (1 if today.month == 12 else 0)
-        month = 1 if today.month == 12 else today.month + 1
-        end_date = date(year, month, 26)
-        cycle_key = f"{year:04d}-{month:02d}"
-        cycle_month_name = date(year, month, 1).strftime("%B %Y")
-    else:
-        year = today.year - (1 if today.month == 1 else 0)
-        prev_month = 12 if today.month == 1 else today.month - 1
-        start_date = date(year, prev_month, 27)
-        end_date = today.replace(day=26)
+
+    if payday_day == 1:
+        start_date = date(today.year, today.month, 1)
+        max_days = calendar.monthrange(today.year, today.month)[1]
+        end_date = date(today.year, today.month, max_days)
         cycle_key = f"{today.year:04d}-{today.month:02d}"
-        cycle_month_name = today.strftime("%B %Y")
+        cycle_month_name = date(today.year, today.month, 1).strftime("%B %Y")
+    else:
+        clamped_today_payday = _clamp_day(today.year, today.month, payday_day)
+        if today.day >= clamped_today_payday:
+            start_date = date(today.year, today.month, clamped_today_payday)
+            next_year = today.year + (1 if today.month == 12 else 0)
+            next_month = 1 if today.month == 12 else today.month + 1
+            clamped_next_payday = _clamp_day(next_year, next_month, payday_day)
+            end_date = date(next_year, next_month, clamped_next_payday) - timedelta(days=1)
+
+            if payday_day <= 15:
+                cycle_key = f"{today.year:04d}-{today.month:02d}"
+                cycle_month_name = date(today.year, today.month, 1).strftime("%B %Y")
+            else:
+                cycle_key = f"{next_year:04d}-{next_month:02d}"
+                cycle_month_name = date(next_year, next_month, 1).strftime("%B %Y")
+        else:
+            clamped_next_payday = clamped_today_payday
+            end_date = date(today.year, today.month, clamped_next_payday) - timedelta(days=1)
+            prev_year = today.year - (1 if today.month == 1 else 0)
+            prev_month = 12 if today.month == 1 else today.month - 1
+            clamped_prev_payday = _clamp_day(prev_year, prev_month, payday_day)
+            start_date = date(prev_year, prev_month, clamped_prev_payday)
+
+            if payday_day <= 15:
+                cycle_key = f"{prev_year:04d}-{prev_month:02d}"
+                cycle_month_name = date(prev_year, prev_month, 1).strftime("%B %Y")
+            else:
+                cycle_key = f"{today.year:04d}-{today.month:02d}"
+                cycle_month_name = date(today.year, today.month, 1).strftime("%B %Y")
 
     return {
         "cycle_key": cycle_key,
@@ -56,26 +84,32 @@ def get_cycle_for_date(target_date: Optional[date] = None) -> Dict[str, Any]:
         "cycle_end": end_date.isoformat(),
         "label": f"{cycle_month_name} Budget ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')})",
         "month_name": cycle_month_name,
+        "payday_day": payday_day,
     }
 
 
-def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
+def get_salary_cycle_dates(current: Optional[date] = None, payday_day: int = 27) -> Dict[str, Any]:
     """
-    Computes current Saudi salary cycle dates (27th to 26th).
-    If current day is >= 27, cycle started on 27th of this month.
-    If current day is < 27, cycle started on 27th of previous month.
+    Computes active salary cycle dates, days remaining to payday, and elapsed days.
     """
+    payday_day = max(1, min(31, int(payday_day)))
     today = current or datetime.now(timezone.utc).date()
-    cycle_info = get_cycle_for_date(today)
+    cycle_info = get_cycle_for_date(today, payday_day=payday_day)
     start_date = date.fromisoformat(cycle_info["cycle_start"])
     end_date = date.fromisoformat(cycle_info["cycle_end"])
 
-    if today.day >= 27:
-        year = today.year + (1 if today.month == 12 else 0)
-        month = 1 if today.month == 12 else today.month + 1
-        nominal_payday = date(year, month, 27)
+    if payday_day == 1:
+        next_year = today.year + (1 if today.month == 12 else 0)
+        next_month = 1 if today.month == 12 else today.month + 1
+        nominal_payday = date(next_year, next_month, 1)
     else:
-        nominal_payday = today.replace(day=27)
+        clamped_today_payday = _clamp_day(today.year, today.month, payday_day)
+        if today.day >= clamped_today_payday:
+            next_year = today.year + (1 if today.month == 12 else 0)
+            next_month = 1 if today.month == 12 else today.month + 1
+            nominal_payday = date(next_year, next_month, _clamp_day(next_year, next_month, payday_day))
+        else:
+            nominal_payday = date(today.year, today.month, clamped_today_payday)
 
     actual_payday = adjust_saudi_payday(nominal_payday)
     days_total = (end_date - start_date).days + 1
@@ -88,6 +122,7 @@ def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
         "cycle_end": end_date.isoformat(),
         "cycle_key": cycle_info["cycle_key"],
         "cycle_label": cycle_info["label"],
+        "payday_day": payday_day,
         "nominal_payday": nominal_payday.isoformat(),
         "payday": actual_payday.isoformat(),
         "actual_payday": actual_payday.isoformat(),
@@ -98,11 +133,18 @@ def get_salary_cycle_dates(current: Optional[date] = None) -> Dict[str, Any]:
     }
 
 
-def get_salary_cycle_forecast(household_id: str, current: Optional[date] = None) -> Dict[str, Any]:
+def get_salary_cycle_forecast(
+    household_id: str,
+    current: Optional[date] = None,
+    payday_day: Optional[int] = None,
+) -> Dict[str, Any]:
     """
     Generates spending velocity, burn rate, and run-out projections for the active salary cycle.
     """
-    cycle = get_salary_cycle_dates(current)
+    from supabase_client import get_household_payday
+    if payday_day is None:
+        payday_day = get_household_payday(household_id)
+    cycle = get_salary_cycle_dates(current, payday_day=payday_day)
     today = current or datetime.now(timezone.utc).date()
     client = get_client()
 
@@ -294,38 +336,52 @@ def simulate_affordability(
     }
 
 
-def get_cycle_info_for_key(cycle_key: str) -> Dict[str, Any]:
+def get_cycle_info_for_key(cycle_key: str, payday_day: int = 27) -> Dict[str, Any]:
     """
-    Given a cycle_key like '2026-10', compute cycle dates (Sep 27 to Oct 26) and labels.
+    Given a cycle_key like '2026-10', compute cycle dates and labels.
     """
+    payday_day = max(1, min(31, int(payday_day)))
     parts = cycle_key.split("-")
     year = int(parts[0])
     month = int(parts[1])
-    
-    prev_year = year - (1 if month == 1 else 0)
-    prev_month = 12 if month == 1 else month - 1
-    start_date = date(prev_year, prev_month, 27)
-    end_date = date(year, month, 26)
     cycle_month_name = date(year, month, 1).strftime("%B %Y")
-    
+
+    if payday_day == 1:
+        start_date = date(year, month, 1)
+        end_date = date(year, month, calendar.monthrange(year, month)[1])
+    elif payday_day <= 15:
+        start_date = date(year, month, _clamp_day(year, month, payday_day))
+        next_year = year + (1 if month == 12 else 0)
+        next_month = 1 if month == 12 else month + 1
+        end_date = date(next_year, next_month, _clamp_day(next_year, next_month, payday_day)) - timedelta(days=1)
+    else:
+        prev_year = year - (1 if month == 1 else 0)
+        prev_month = 12 if month == 1 else month - 1
+        start_date = date(prev_year, prev_month, _clamp_day(prev_year, prev_month, payday_day))
+        end_date = date(year, month, _clamp_day(year, month, payday_day)) - timedelta(days=1)
+
     return {
         "cycle_key": cycle_key,
         "cycle_start": start_date.isoformat(),
         "cycle_end": end_date.isoformat(),
         "label": f"{cycle_month_name} Budget ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d')})",
         "month_name": cycle_month_name,
+        "payday_day": payday_day,
     }
 
 
-def get_available_cycles_for_household(household_id: str) -> Dict[str, Any]:
+def get_available_cycles_for_household(household_id: str, payday_day: Optional[int] = None) -> Dict[str, Any]:
     """
     Returns the active salary cycle and all historical available cycles for a household.
     """
-    from supabase_client import get_client, ensure_household_cycle_budgets
-    
-    ensure_household_cycle_budgets(household_id)
-    current_cycle = get_cycle_for_date()
-    
+    from supabase_client import get_client, ensure_household_cycle_budgets, get_household_payday
+
+    if payday_day is None:
+        payday_day = get_household_payday(household_id)
+
+    ensure_household_cycle_budgets(household_id, payday_day=payday_day)
+    current_cycle = get_cycle_for_date(payday_day=payday_day)
+
     client = get_client()
     res = client.table("budgets").select("cycle_key, month").eq("household_id", household_id).execute()
     keys = set()
@@ -335,19 +391,20 @@ def get_available_cycles_for_household(household_id: str) -> Dict[str, Any]:
             keys.add(ck)
         elif row.get("month"):
             keys.add(row["month"][:7])
-            
+
     keys.add(current_cycle["cycle_key"])
-    
+
     sorted_keys = sorted(list(keys), reverse=True)
     cycles = []
     for k in sorted_keys:
-        info = get_cycle_info_for_key(k)
+        info = get_cycle_info_for_key(k, payday_day=payday_day)
         info["is_current"] = (k == current_cycle["cycle_key"])
         cycles.append(info)
-        
+
     return {
         "current_cycle": current_cycle,
         "cycles": cycles,
+        "payday_day": payday_day,
     }
 
 

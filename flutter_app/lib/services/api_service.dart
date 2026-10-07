@@ -108,19 +108,52 @@ class ApiService {
 
   // ── Budgets & Cycles ─────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> getSalaryCycleForecast(String householdId) =>
-      budget.fetchSalaryCycleForecast(householdId: householdId);
+  Future<Map<String, dynamic>> getSalaryCycleForecast(
+    String householdId, {
+    int? paydayDay,
+  }) =>
+      budget.fetchSalaryCycleForecast(
+        householdId: householdId,
+        paydayDay: paydayDay,
+      );
 
-  Future<Map<String, dynamic>> fetchSalaryCycleForecast({required String householdId}) =>
-      budget.fetchSalaryCycleForecast(householdId: householdId);
+  Future<Map<String, dynamic>> fetchSalaryCycleForecast({
+    required String householdId,
+    int? paydayDay,
+  }) =>
+      budget.fetchSalaryCycleForecast(
+        householdId: householdId,
+        paydayDay: paydayDay,
+      );
 
-  Future<Map<String, dynamic>> getSalaryCycles(String householdId) async {
-    final list = await budget.fetchSalaryCycles(householdId: householdId);
+  Future<Map<String, dynamic>> getSalaryCycles(
+    String householdId, {
+    int? paydayDay,
+  }) async {
+    final list = await budget.fetchSalaryCycles(
+      householdId: householdId,
+      paydayDay: paydayDay,
+    );
     return {'status': 'success', 'cycles': list};
   }
 
-  Future<List<Map<String, dynamic>>> fetchSalaryCycles({required String householdId}) =>
-      budget.fetchSalaryCycles(householdId: householdId);
+  Future<List<Map<String, dynamic>>> fetchSalaryCycles({
+    required String householdId,
+    int? paydayDay,
+  }) =>
+      budget.fetchSalaryCycles(
+        householdId: householdId,
+        paydayDay: paydayDay,
+      );
+
+  Future<int> getHouseholdPayday(String householdId) =>
+      budget.fetchHouseholdPayday(householdId: householdId);
+
+  Future<bool> setHouseholdPayday(String householdId, int paydayDay) =>
+      budget.updateHouseholdPayday(
+        householdId: householdId,
+        paydayDay: paydayDay,
+      );
 
   Future<Map<String, dynamic>> getPartnerSettlement(String householdId, {double splitRatio = 0.50}) =>
       budget.fetchPartnerSettlement(householdId: householdId, splitRatio: splitRatio);

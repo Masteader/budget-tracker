@@ -24,24 +24,52 @@ class BudgetApiClient {
 
   Future<Map<String, dynamic>> fetchSalaryCycleForecast({
     required String householdId,
+    int? paydayDay,
   }) async {
+    final params = <String, dynamic>{'household_id': householdId};
+    if (paydayDay != null) {
+      params['payday_day'] = paydayDay;
+    }
     return baseClient.get(
       '/budgets/salary-cycle-forecast',
-      queryParams: {'household_id': householdId},
+      queryParams: params,
     );
   }
 
   Future<List<Map<String, dynamic>>> fetchSalaryCycles({
     required String householdId,
+    int? paydayDay,
   }) async {
+    final params = <String, dynamic>{'household_id': householdId};
+    if (paydayDay != null) {
+      params['payday_day'] = paydayDay;
+    }
     final res = await baseClient.get(
       '/budgets/cycles',
-      queryParams: {'household_id': householdId},
+      queryParams: params,
     );
     if (res['cycles'] is List) {
       return (res['cycles'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
     return [];
+  }
+
+  Future<int> fetchHouseholdPayday({
+    required String householdId,
+  }) async {
+    final res = await baseClient.get('/households/$householdId/payday');
+    return (res['payday_day'] as num?)?.toInt() ?? 27;
+  }
+
+  Future<bool> updateHouseholdPayday({
+    required String householdId,
+    required int paydayDay,
+  }) async {
+    final res = await baseClient.put(
+      '/households/$householdId/payday',
+      body: {'payday_day': paydayDay},
+    );
+    return res['status'] == 'success';
   }
 
   Future<Map<String, dynamic>> fetchPartnerSettlement({

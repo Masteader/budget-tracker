@@ -523,7 +523,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     final headerTitle = cycle?.monthName ?? DateFormat('MMMM yyyy').format(_selectedDate);
     final headerSub = cycle != null
         ? '${cycle.cycleStart.substring(5)} - ${cycle.cycleEnd.substring(5)}'
-        : 'Payday 27th Cycle';
+        : 'Active Salary Cycle';
 
     return FutureBuilder<_BudgetStaticData>(
       future: _staticFuture,
@@ -641,7 +641,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Budgets automatically roll over on the 27th payday. You can copy previous month allocations or add custom categories below.',
+                              'Budgets automatically roll over on monthly payday. You can copy previous month allocations or add custom categories below.',
                               style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                             ),
                             const SizedBox(height: 12),

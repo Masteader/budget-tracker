@@ -412,7 +412,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                       ),
                                       const SizedBox(height: 6),
                                       const Text(
-                                        'Budgets auto-rollover on payday (27th). You can also add categories from the Budgets tab.',
+                                        'Budgets auto-rollover on monthly payday. You can also add categories from the Budgets tab.',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                                       ),
