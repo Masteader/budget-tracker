@@ -177,3 +177,21 @@ def test_get_and_update_household_payday():
     assert restore_res.status_code == 200
     assert restore_res.json()["payday_day"] == 27
 
+
+def test_scan_receipt_with_receipt_url():
+    """Verify /agent/scan-receipt accepts receipt_url and returns it."""
+    payload = {
+        "household_id": HOUSEHOLD_ID,
+        "qr_code_raw": "ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=",
+        "receipt_url": "https://example.supabase.co/storage/v1/object/public/receipts/test.jpg",
+        "preview_only": True,
+    }
+    headers = _make_signed_headers(payload)
+    response = client.post("/agent/scan-receipt", content=json.dumps(payload), headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] in ("preview", "success")
+    assert data.get("receipt_url") == "https://example.supabase.co/storage/v1/object/public/receipts/test.jpg"
+    assert data["merchant"] == "United Electronics Co. eXtra"
+
+

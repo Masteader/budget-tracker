@@ -314,6 +314,7 @@ async def scan_receipt(request: Request):
         preview_only=bool(body.get("preview_only", False)),
         override_merchant=body.get("merchant"),
         override_spent_by=body.get("spent_by"),
+        receipt_url=body.get("receipt_url"),
     )
     return result
 

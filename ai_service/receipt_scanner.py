@@ -198,6 +198,7 @@ def process_receipt_scan(
     preview_only: bool = False,
     override_merchant: Optional[str] = None,
     override_spent_by: Optional[str] = None,
+    receipt_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -352,12 +353,14 @@ def process_receipt_scan(
                 "spent_by": spent_by,
                 "items": items,
                 "zatca_verified": parsed.get("zatca_verified"),
+                "receipt_url": receipt_url,
             },
             "items": items,
             "merchant": merchant,
             "amount": total_amount,
             "category_code": category_code,
             "spent_by": spent_by,
+            "receipt_url": receipt_url,
             "message": (
                 f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
                 f"was already recorded{ts_suffix}. "
@@ -376,6 +379,7 @@ def process_receipt_scan(
             "spent_by": spent_by,
             "items": items,
             "zatca_verified": parsed.get("zatca_verified"),
+            "receipt_url": receipt_url,
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
@@ -420,9 +424,8 @@ def process_receipt_scan(
         items=items,
         spent_by=spent_by,
         dedup_fingerprint=zatca_fp,
+        receipt_url=receipt_url,
     )
-
-
 
     if items:
         enrich_transaction_items(tx_id, items)
@@ -435,6 +438,7 @@ def process_receipt_scan(
         "category_code": category_code,
         "items": items,
         "zatca_verified": parsed.get("zatca_verified"),
+        "receipt_url": receipt_url,
         "is_reallocated": is_reallocated,
         "message": f"Recorded SAR {total_amount:.2f} ({len(items)} items) from scanned receipt ({merchant}).",
     }
