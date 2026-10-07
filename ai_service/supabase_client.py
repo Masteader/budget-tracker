@@ -24,11 +24,18 @@ def get_client() -> Client:
     """Return (or lazily create) the Supabase service-role client."""
     global _client
     if _client is None:
-        url = os.environ["SUPABASE_URL"]
-        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if not url or not key:
+            raise RuntimeError(
+                "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment. "
+                "Please configure them in your server/Render Environment Variables."
+            )
         _client = create_client(url, key)
         logger.info("Supabase client initialised (service role).")
     return _client
+
+
 
 
 # =============================================================================

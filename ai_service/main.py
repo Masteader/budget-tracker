@@ -97,7 +97,12 @@ async def firewall_token_middleware(request: Request, call_next):
 # Flutter sends: X-Signature: sha256=<hmac_hex>
 # =============================================================================
 
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+WEBHOOK_SECRET = os.environ.get(
+    "WEBHOOK_SECRET",
+    "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400",
+)
+
+
 
 
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:
@@ -129,7 +134,8 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
 @app.get("/health", tags=["ops"])
 async def health_check():
     """Liveness probe — returns 200 OK with uptime."""
-    return {"status": "ok", "timestamp": time.time()}
+    return {"status": "ok", "version": "1.0.2", "timestamp": time.time()}
+
 
 
 @app.post(
