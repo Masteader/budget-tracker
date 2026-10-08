@@ -19,6 +19,7 @@ class Transaction {
   final List<Map<String, dynamic>> items;
   final String? receiptUrl;
   final String? dedupFingerprint;
+  final String? qrCodeRaw;
   final String? rawSms;
 
   const Transaction({
@@ -37,6 +38,7 @@ class Transaction {
     this.items = const [],
     this.receiptUrl,
     this.dedupFingerprint,
+    this.qrCodeRaw,
     this.rawSms,
   });
 
@@ -118,6 +120,8 @@ class Transaction {
       items: parsedItems,
       receiptUrl: map['receipt_url'] as String?,
       dedupFingerprint: map['dedup_fingerprint'] as String?,
+      qrCodeRaw: map['qr_code_raw'] as String? ??
+          (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       rawSms: raw,
     );
   }

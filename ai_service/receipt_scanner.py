@@ -278,6 +278,7 @@ def process_receipt_scan(
             "message": "Please provide receipt image(s) or a ZATCA QR code.",
         }
 
+    resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")
     merchant = (override_merchant or parsed.get("merchant") or "Scanned Merchant").strip()
     spent_by = (override_spent_by or "both").lower()
     if spent_by not in ("me", "partner", "both"):
@@ -377,6 +378,7 @@ def process_receipt_scan(
                 "items": items,
                 "zatca_verified": parsed.get("zatca_verified"),
                 "receipt_url": receipt_url,
+                "qr_code_raw": resolved_qr,
             },
             "items": items,
             "merchant": merchant,
@@ -384,6 +386,7 @@ def process_receipt_scan(
             "category_code": category_code,
             "spent_by": spent_by,
             "receipt_url": receipt_url,
+            "qr_code_raw": resolved_qr,
             "message": (
                 f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
                 f"was already recorded{ts_suffix}. "
@@ -403,6 +406,7 @@ def process_receipt_scan(
             "items": items,
             "zatca_verified": parsed.get("zatca_verified"),
             "receipt_url": receipt_url,
+            "qr_code_raw": resolved_qr,
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
@@ -448,6 +452,7 @@ def process_receipt_scan(
         spent_by=spent_by,
         dedup_fingerprint=zatca_fp,
         receipt_url=receipt_url,
+        qr_code_raw=resolved_qr,
     )
 
     if items:
@@ -462,6 +467,7 @@ def process_receipt_scan(
         "items": items,
         "zatca_verified": parsed.get("zatca_verified"),
         "receipt_url": receipt_url,
+        "qr_code_raw": resolved_qr,
         "is_reallocated": is_reallocated,
         "message": f"Recorded SAR {total_amount:.2f} ({len(items)} items) from scanned receipt ({merchant}).",
     }

@@ -17,12 +17,12 @@ const supabaseAnonKey = supabasePublishableKey;
 
 const fastapiBaseUrl = String.fromEnvironment(
   'FASTAPI_BASE_URL',
-  defaultValue: 'https://budget-tracker-production-762b.up.railway.app',
+  defaultValue: 'https://budget.fmsco.com.sa',
 );
 
 const fastapiWebhookUrl = String.fromEnvironment(
   'FASTAPI_WEBHOOK_URL',
-  defaultValue: 'https://budget-tracker-production-762b.up.railway.app/webhook/sms',
+  defaultValue: 'https://budget.fmsco.com.sa/webhook/sms',
 );
 
 

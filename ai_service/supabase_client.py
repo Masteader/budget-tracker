@@ -232,6 +232,7 @@ def insert_transaction(
     sub_category: Optional[str] = None,
     cycle_key: Optional[str] = None,
     dedup_fingerprint: Optional[str] = None,
+    qr_code_raw: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -281,6 +282,8 @@ def insert_transaction(
         payload["cycle_key"] = cycle_key
     if dedup_fingerprint:
         payload["dedup_fingerprint"] = dedup_fingerprint
+    if qr_code_raw:
+        payload["qr_code_raw"] = qr_code_raw
 
 
     try:

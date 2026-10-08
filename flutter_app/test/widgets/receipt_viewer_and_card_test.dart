@@ -35,4 +35,30 @@ void main() {
 
     expect(find.text('Receipt'), findsNothing);
   });
+
+  testWidgets('TransactionItemBreakdownCard shows ZATCA QR badge and opens dialog', (tester) async {
+    const rawQr = 'AQZTYWxsYWgCCzMxMDEyMzQ1Njc4AzEwMjAyNC0xMC0wOFQyMTowMDowMFoEMTAwLjAwBTE1LjAw';
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: TransactionItemBreakdownCard(
+            merchant: 'Sallah Store',
+            amount: 115.00,
+            qrCodeRaw: rawQr,
+          ),
+        ),
+      ),
+    );
+
+    // Verify ZATCA QR badge is shown
+    expect(find.text('ZATCA QR'), findsOneWidget);
+
+    // Tap the badge to open the dialog
+    await tester.tap(find.text('ZATCA QR'));
+    await tester.pumpAndSettle();
+
+    // Verify dialog content
+    expect(find.text('Saudi ZATCA QR'), findsOneWidget);
+    expect(find.text('Copy Base64'), findsOneWidget);
+  });
 }

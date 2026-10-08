@@ -536,6 +536,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
         if (receiptUrl != null && receiptUrl.isNotEmpty) 'receipt_url': receiptUrl,
+        if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) 'qr_code_raw': _zatcaQrRaw,
       };
 
       Map<String, dynamic> res;

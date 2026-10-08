@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/zatca_decoder.dart';
 import 'receipt_photo_viewer_dialog.dart';
 
 class TransactionItemBreakdownCard extends StatelessWidget {
@@ -13,6 +15,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final bool isReallocated;
   final bool initiallyExpanded;
   final String? receiptUrl;
+  final String? qrCodeRaw;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -28,6 +31,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.isReallocated = false,
     this.initiallyExpanded = false,
     this.receiptUrl,
+    this.qrCodeRaw,
     this.onEdit,
     this.onDelete,
   });
@@ -241,6 +245,34 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             'View Receipt',
                             style: TextStyle(
                               color: Color(0xFF58A6FF),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (qrCodeRaw != null && qrCodeRaw!.isNotEmpty)
+                  InkWell(
+                    onTap: () => _showZatcaDialog(context, qrCodeRaw!),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C896).withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.qr_code_2_rounded, size: 11, color: Color(0xFF00C896)),
+                          SizedBox(width: 4),
+                          Text(
+                            'ZATCA QR',
+                            style: TextStyle(
+                              color: Color(0xFF00C896),
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
@@ -500,6 +532,115 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (qrCodeRaw != null && qrCodeRaw!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'ZATCA QR CODE DATA',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF00C896),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: qrCodeRaw!));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('ZATCA QR Base64 copied to clipboard!'),
+                                backgroundColor: Color(0xFF00C896),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF00C896)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Copy Base64',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF00C896),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D1117),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF21262D)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Builder(
+                            builder: (ctx) {
+                              final decoded = ZatcaDecoder.decodeTlv(qrCodeRaw!);
+                              if (decoded == null) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (decoded['seller'] != null)
+                                      Text(
+                                        'Seller: ${decoded['seller']}',
+                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                    if (decoded['vat_number'] != null)
+                                      Text(
+                                        'VAT No: ${decoded['vat_number']}',
+                                        style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11),
+                                      ),
+                                    if (decoded['timestamp'] != null)
+                                      Text(
+                                        'Time: ${decoded['timestamp']}',
+                                        style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11),
+                                      ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 6),
+                                      child: Divider(color: Color(0xFF21262D), height: 1),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          Text(
+                            'Raw Base64 TLV:',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF8B949E),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            qrCodeRaw!,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 10,
+                              color: Color(0xFF79C0FF),
+                            ),
+                            maxLines: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -533,5 +674,106 @@ class TransactionItemBreakdownCard extends StatelessWidget {
       ),
     ),
   );
+  }
+
+  static void _showZatcaDialog(BuildContext context, String rawQr) {
+    final decoded = ZatcaDecoder.decodeTlv(rawQr);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF30363D)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896), size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Saudi ZATCA QR',
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (decoded != null) ...[
+                if (decoded['seller'] != null) ...[
+                  Text('Seller / Merchant:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+                  Text(decoded['seller']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                ],
+                if (decoded['vat_number'] != null) ...[
+                  Text('VAT Registration:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+                  Text(decoded['vat_number']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                ],
+                if (decoded['timestamp'] != null) ...[
+                  Text('Invoice Date:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+                  Text(decoded['timestamp']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13)),
+                  const SizedBox(height: 8),
+                ],
+                if (decoded['total'] != null) ...[
+                  Text('Verified Total (incl. VAT):', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+                  Text(
+                    'SAR ${decoded['total']} (VAT: SAR ${decoded['vat'] ?? '0.00'})',
+                    style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                const Divider(color: Color(0xFF21262D)),
+              ],
+              Text('Raw Base64 TLV String:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1117),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF21262D)),
+                ),
+                child: SelectableText(
+                  rawQr,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 10,
+                    color: Color(0xFF79C0FF),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF00C896)),
+            label: const Text('Copy Base64', style: TextStyle(color: Color(0xFF00C896))),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: rawQr));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('ZATCA Base64 copied to clipboard!'),
+                  backgroundColor: Color(0xFF00C896),
+                ),
+              );
+            },
+          ),
+          TextButton(
+            child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
   }
 }
