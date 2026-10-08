@@ -199,10 +199,10 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await supabase.from('transactions').delete().eq('id', transactionId);
       if (removedTx.receiptUrl != null && removedTx.receiptUrl!.trim().isNotEmpty) {
         ReceiptStorageService().deleteReceiptByUrl(removedTx.receiptUrl!);
       }
+      await supabase.from('transactions').delete().eq('id', transactionId);
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');

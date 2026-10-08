@@ -167,10 +167,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     setState(() => _isSaving = true);
 
     try {
-      await supabase.from('transactions').delete().eq('id', widget.transaction.id);
       if (widget.transaction.receiptUrl != null && widget.transaction.receiptUrl!.trim().isNotEmpty) {
         ReceiptStorageService().deleteReceiptByUrl(widget.transaction.receiptUrl!);
       }
+      await supabase.from('transactions').delete().eq('id', widget.transaction.id);
       if (mounted) {
         Navigator.pop(context, 'deleted');
         ScaffoldMessenger.of(context).showSnackBar(
