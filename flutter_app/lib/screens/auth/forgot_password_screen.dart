@@ -80,7 +80,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (widget.onSendResetCode != null) {
         await widget.onSendResetCode!(email);
       } else {
-        await supabase.auth.resetPasswordForEmail(email);
+        await supabase.auth.signInWithOtp(email: email);
       }
 
       if (!mounted) return;
@@ -91,7 +91,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('6-digit reset code sent to $email'),
+          content: Text('Verification code sent to $email'),
           backgroundColor: const Color(0xFF00C896),
         ),
       );
@@ -122,11 +122,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (widget.onVerifyAndResetPassword != null) {
         await widget.onVerifyAndResetPassword!(email, otp, newPassword);
       } else {
-        await supabase.auth.verifyOTP(
-          email: email,
-          token: otp,
-          type: OtpType.recovery,
-        );
+        try {
+          await supabase.auth.verifyOTP(
+            email: email,
+            token: otp,
+            type: OtpType.email,
+          );
+        } catch (_) {
+          await supabase.auth.verifyOTP(
+            email: email,
+            token: otp,
+            type: OtpType.recovery,
+          );
+        }
         await supabase.auth.updateUser(
           UserAttributes(password: newPassword),
         );
@@ -225,7 +233,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Enter your account email address and we will send you a 6-digit verification code.',
+            'Enter your account email address and we will send you a verification code.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF8B949E), fontSize: 14, height: 1.4),
           ),
@@ -311,7 +319,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'We sent a 6-digit recovery code to ${_emailCtrl.text.trim()}. Check your inbox or spam folder.',
+            'We sent a verification code to ${_emailCtrl.text.trim()}. Check your inbox or spam folder.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFF8B949E), fontSize: 14, height: 1.4),
           ),
@@ -319,20 +327,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TextFormField(
             controller: _otpCtrl,
             keyboardType: TextInputType.number,
-            maxLength: 6,
+            maxLength: 8,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
-              letterSpacing: 8,
+              letterSpacing: 6,
               fontWeight: FontWeight.bold,
             ),
             decoration: InputDecoration(
               counterText: '',
-              hintText: '123456',
+              hintText: 'Code',
               hintStyle: TextStyle(
                 color: const Color(0xFF8B949E).withValues(alpha: 0.5),
-                letterSpacing: 8,
+                letterSpacing: 4,
               ),
               prefixIcon: const Icon(Icons.pin_outlined, color: Color(0xFF8B949E)),
               filled: true,
@@ -351,8 +359,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
             ),
             validator: (v) {
-              if (v == null || v.trim().length != 6) {
-                return 'Enter 6-digit code';
+              if (v == null || v.trim().length < 6 || v.trim().length > 8) {
+                return 'Enter verification code';
               }
               return null;
             },

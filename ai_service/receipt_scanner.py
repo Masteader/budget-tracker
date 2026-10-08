@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items, compute_zatca_fingerprint
 
 from supabase_client import (
+    get_client,
     fetch_all_cost_control_codes,
     match_category,
     insert_transaction,
@@ -208,6 +209,28 @@ def process_receipt_scan(
     4. Auto-enrich or insert transaction
     """
     images_base64 = images_base64 or []
+
+    # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
+    if not receipt_url and images_base64:
+        try:
+            import time, uuid
+            client = get_client()
+            img_data = images_base64[0]
+            if "," in img_data:
+                img_data = img_data.split(",", 1)[1]
+            raw_bytes = base64.b64decode(img_data)
+            ts = int(time.time() * 1000)
+            u = uuid.uuid4().hex[:8]
+            storage_path = f"{household_id}/{ts}_{u}.jpg"
+            client.storage.from_("receipts").upload(
+                storage_path,
+                raw_bytes,
+                file_options={"content-type": "image/jpeg", "upsert": "true"},
+            )
+            receipt_url = client.storage.from_("receipts").get_public_url(storage_path)
+            logger.info("Auto-uploaded receipt photo to storage: %s", receipt_url)
+        except Exception as upload_err:
+            logger.warning("Could not auto-upload receipt image: %s", upload_err)
 
     if images_base64:
         try:
