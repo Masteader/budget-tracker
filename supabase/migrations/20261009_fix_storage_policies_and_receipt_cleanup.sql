@@ -23,10 +23,13 @@ BEGIN
     TO authenticated
     WITH CHECK (
       bucket_id = 'receipts'
-      AND EXISTS (
-        SELECT 1 FROM public.household_members hm
-        WHERE hm.user_id = auth.uid()
-          AND hm.household_id::text = (storage.foldername(name))[1]
+      AND (
+        (storage.foldername(name))[1] = public.get_auth_user_household_id()::text
+        OR EXISTS (
+          SELECT 1 FROM public.users u
+          WHERE u.id = auth.uid()
+            AND u.household_id::text = (storage.foldername(name))[1]
+        )
       )
     );
   END IF;
@@ -46,10 +49,13 @@ BEGIN
     TO authenticated
     USING (
       bucket_id = 'receipts'
-      AND EXISTS (
-        SELECT 1 FROM public.household_members hm
-        WHERE hm.user_id = auth.uid()
-          AND hm.household_id::text = (storage.foldername(name))[1]
+      AND (
+        (storage.foldername(name))[1] = public.get_auth_user_household_id()::text
+        OR EXISTS (
+          SELECT 1 FROM public.users u
+          WHERE u.id = auth.uid()
+            AND u.household_id::text = (storage.foldername(name))[1]
+        )
       )
     );
   END IF;

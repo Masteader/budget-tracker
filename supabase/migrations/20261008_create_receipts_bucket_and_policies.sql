@@ -19,33 +19,13 @@ BEGIN
     TO authenticated
     WITH CHECK (
       bucket_id = 'receipts'
-      AND EXISTS (
-        SELECT 1 FROM public.household_members hm
-        WHERE hm.user_id = auth.uid()
-          AND hm.household_id::text = (storage.foldername(name))[1]
-      )
-    );
-  END IF;
-END $$;
-
--- Policy: Allow authenticated household members to view their receipts
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies 
-    WHERE tablename = 'objects' 
-      AND schemaname = 'storage' 
-      AND policyname = 'Household members can view receipts'
-  ) THEN
-    CREATE POLICY "Household members can view receipts"
-    ON storage.objects FOR SELECT
-    TO authenticated
-    USING (
-      bucket_id = 'receipts'
-      AND EXISTS (
-        SELECT 1 FROM public.household_members hm
-        WHERE hm.user_id = auth.uid()
-          AND hm.household_id::text = (storage.foldername(name))[1]
+      AND (
+        (storage.foldername(name))[1] = public.get_auth_user_household_id()::text
+        OR EXISTS (
+          SELECT 1 FROM public.users u
+          WHERE u.id = auth.uid()
+            AND u.household_id::text = (storage.foldername(name))[1]
+        )
       )
     );
   END IF;
