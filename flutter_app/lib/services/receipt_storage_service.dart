@@ -53,4 +53,43 @@ class ReceiptStorageService {
       return null;
     }
   }
+
+  /// Extracts relative storage path inside the bucket from a public URL or raw path.
+  /// Handles:
+  /// - https://.../storage/v1/object/public/receipts/hh-123/img.jpg -> hh-123/img.jpg
+  /// - hh-123/img.jpg -> hh-123/img.jpg
+  static String? extractStoragePath(String receiptUrl) {
+    final trimmed = receiptUrl.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      final uri = Uri.parse(trimmed);
+      final segments = uri.pathSegments;
+      final idx = segments.indexOf(bucketName);
+      if (idx != -1 && idx + 1 < segments.length) {
+        return segments.sublist(idx + 1).join('/');
+      }
+    } catch (e) {
+      debugPrint('[ReceiptStorageService] Error extracting storage path: $e');
+    }
+    return null;
+  }
+
+  /// Deletes a receipt image from Supabase Storage by its public URL or storage path.
+  /// Gracefully catches exceptions and returns false if removal fails so app workflow continues.
+  Future<bool> deleteReceiptByUrl(String receiptUrl) async {
+    try {
+      final path = extractStoragePath(receiptUrl);
+      if (path == null) return false;
+
+      await _supabase.storage.from(bucketName).remove([path]);
+      debugPrint('[ReceiptStorageService] Deleted receipt from storage: $path');
+      return true;
+    } catch (e) {
+      debugPrint('[ReceiptStorageService] Failed to delete receipt from storage: $e');
+      return false;
+    }
+  }
 }

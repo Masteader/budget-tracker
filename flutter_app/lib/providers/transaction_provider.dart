@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../models/models.dart';
+import '../services/receipt_storage_service.dart';
 
 /// Centralized reactive state provider for all transactions in the household.
 /// Manages list cache, Supabase Realtime synchronization, optimistic deletions, and filtering.
@@ -199,6 +200,9 @@ class TransactionProvider extends ChangeNotifier {
 
     try {
       await supabase.from('transactions').delete().eq('id', transactionId);
+      if (removedTx.receiptUrl != null && removedTx.receiptUrl!.trim().isNotEmpty) {
+        ReceiptStorageService().deleteReceiptByUrl(removedTx.receiptUrl!);
+      }
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');

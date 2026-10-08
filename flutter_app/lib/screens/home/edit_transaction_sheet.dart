@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../services/receipt_storage_service.dart';
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
@@ -167,6 +168,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
     try {
       await supabase.from('transactions').delete().eq('id', widget.transaction.id);
+      if (widget.transaction.receiptUrl != null && widget.transaction.receiptUrl!.trim().isNotEmpty) {
+        ReceiptStorageService().deleteReceiptByUrl(widget.transaction.receiptUrl!);
+      }
       if (mounted) {
         Navigator.pop(context, 'deleted');
         ScaffoldMessenger.of(context).showSnackBar(

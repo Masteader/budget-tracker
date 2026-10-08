@@ -211,7 +211,8 @@ def process_receipt_scan(
     images_base64 = images_base64 or []
 
     # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
-    if not receipt_url and images_base64:
+    # IMPORTANT: Only upload when committing/saving (not during preview) and if client hasn't already uploaded
+    if not preview_only and not receipt_url and images_base64:
         try:
             import time, uuid
             client = get_client()
