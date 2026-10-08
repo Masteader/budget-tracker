@@ -16,7 +16,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Receipt'), findsOneWidget);
+    expect(find.text('View Receipt'), findsOneWidget);
     expect(find.byIcon(Icons.receipt_long_rounded), findsOneWidget);
   });
 

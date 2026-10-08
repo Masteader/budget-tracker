@@ -217,27 +217,36 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     ),
                   ),
                 if (receiptUrl != null && receiptUrl!.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF58A6FF).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.3), width: 0.8),
+                  InkWell(
+                    onTap: () => ReceiptPhotoViewerDialog.show(
+                      context,
+                      receiptUrl: receiptUrl!,
+                      merchant: merchant,
+                      amount: amount,
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
-                        SizedBox(width: 4),
-                        Text(
-                          'Receipt',
-                          style: TextStyle(
-                            color: Color(0xFF58A6FF),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF58A6FF).withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.4), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
+                          SizedBox(width: 4),
+                          Text(
+                            'View Receipt',
+                            style: TextStyle(
+                              color: Color(0xFF58A6FF),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
               ],
