@@ -130,6 +130,29 @@ class BudgetApiClient {
     return [];
   }
 
+  Future<Map<String, dynamic>> optimizeShoppingBasket(
+    String householdId,
+    List<String> items,
+  ) async {
+    final res = await baseClient.post(
+      '/analytics/shopping-basket-optimize',
+      {
+        'household_id': householdId,
+        'items': items,
+      },
+      shouldSign: false,
+      timeout: const Duration(seconds: 10),
+    );
+    return res;
+  }
+
+  String getStatementPdfUrl(String householdId, {String? cycleKey}) {
+    final query = cycleKey != null && cycleKey.isNotEmpty
+        ? '?household_id=$householdId&cycle_key=$cycleKey'
+        : '?household_id=$householdId';
+    return '${baseClient.baseUrl}/reports/statement-pdf$query';
+  }
+
   Future<Map<String, dynamic>> addBudgetCategory({
     required String householdId,
     required String code,

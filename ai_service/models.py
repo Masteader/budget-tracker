@@ -6,7 +6,7 @@ All request/response bodies and internal data structures are defined here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -201,3 +201,9 @@ class SubCategoryRenameRequest(BaseModel):
 
 class PaydayUpdateRequest(BaseModel):
     payday_day: int = Field(..., ge=1, le=31, description="Configured monthly payday day (1-31)")
+
+
+class ShoppingBasketOptimizeRequest(BaseModel):
+    household_id: str
+    items: List[str] = Field(default_factory=list, description="List of grocery item names to price and optimize")
+

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:fl_chart/fl_chart.dart';
+import '../../widgets/app_shimmer.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/analytics/smart_shopping_basket_sheet.dart';
 import '../../services/api_service.dart';
 
 class GroceryPriceIntelligenceScreen extends StatefulWidget {
@@ -63,6 +67,29 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Smart Basket Optimizer',
+            icon: const Icon(Icons.shopping_basket_outlined, color: Color(0xFF00C896)),
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              SmartShoppingBasketSheet.show(context, householdId: widget.householdId);
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF00C896),
+        icon: const Icon(Icons.shopping_basket_rounded, color: Colors.black),
+        label: Text(
+          'Shopping List',
+          style: GoogleFonts.outfit(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          SmartShoppingBasketSheet.show(context, householdId: widget.householdId);
+        },
       ),
       body: Column(
         children: [
@@ -123,6 +150,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                   backgroundColor: const Color(0xFF161B22),
                   side: BorderSide(color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D)),
                   onSelected: (val) {
+                    HapticFeedback.selectionClick();
                     setState(() => _selectedChip = f);
                     _searchCtrl.text = f == 'All' ? '' : f;
                     _loadPrices(query: f == 'All' ? null : f);
@@ -136,24 +164,19 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
           // Item Cards List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)))
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: AppShimmer.listItems(count: 4),
+                  )
                 : _items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.shopping_basket_outlined, size: 48, color: Color(0xFF8B949E)),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No price history found.',
-                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Scan receipts or chat line items to build price intelligence.',
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-                            ),
-                          ],
+                    ? Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: AppEmptyState(
+                          icon: Icons.shopping_basket_outlined,
+                          title: 'No Price History Found',
+                          message: 'Scan receipts or chat line items to automatically build grocery price intelligence.',
+                          actionLabel: 'Refresh',
+                          onAction: () => _loadPrices(),
                         ),
                       )
                     : ListView.separated(
@@ -225,6 +248,24 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
               _buildMetric('Purchases', '$count times'),
             ],
           ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFF30363D), height: 1),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Price Trend Curve',
+                style: TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                'Touch for details',
+                style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 10, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _buildPriceTrendChart(item['history'] as List? ?? [], minPrice, latestPrice),
           if (storeComparison.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(color: Color(0xFF30363D), height: 1),
@@ -271,6 +312,105 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPriceTrendChart(List<dynamic> rawHistory, double minPrice, double maxPrice) {
+    final history = rawHistory.whereType<Map<String, dynamic>>().toList();
+
+    List<FlSpot> spots = [];
+    if (history.length >= 2) {
+      for (int i = 0; i < history.length; i++) {
+        final price = (history[i]['unit_price'] as num?)?.toDouble() ?? 0.0;
+        spots.add(FlSpot(i.toDouble(), price));
+      }
+    } else if (history.isNotEmpty) {
+      final price = (history.first['unit_price'] as num?)?.toDouble() ?? minPrice;
+      spots = [
+        FlSpot(0, price),
+        FlSpot(1, price),
+      ];
+    } else {
+      spots = [
+        FlSpot(0, minPrice),
+        FlSpot(1, maxPrice > minPrice ? maxPrice : (minPrice + 1)),
+      ];
+    }
+
+    final double minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) * 0.9;
+    final double maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.1;
+
+    return Container(
+      height: 90,
+      padding: const EdgeInsets.only(top: 8, right: 12, left: 4, bottom: 4),
+      child: LineChart(
+        LineChartData(
+          gridData: const FlGridData(show: false),
+          titlesData: const FlTitlesData(
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          borderData: FlBorderData(show: false),
+          minY: minY > 0 ? minY : 0,
+          maxY: maxY > minY ? maxY : (minY + 10),
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => const Color(0xFF161B22),
+              tooltipBorder: const BorderSide(color: Color(0xFF30363D)),
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  final idx = spot.x.toInt();
+                  final date = (idx >= 0 && idx < history.length)
+                      ? (history[idx]['date'] ?? '')
+                      : '';
+                  return LineTooltipItem(
+                    'SAR ${spot.y.toStringAsFixed(2)}${date.isNotEmpty ? '\n$date' : ''}',
+                    GoogleFonts.outfit(
+                      color: const Color(0xFF00C896),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              curveSmoothness: 0.35,
+              color: const Color(0xFF00C896),
+              barWidth: 2.5,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) {
+                  return FlDotCirclePainter(
+                    radius: 3.5,
+                    color: const Color(0xFF00C896),
+                    strokeWidth: 1.5,
+                    strokeColor: const Color(0xFF0D1117),
+                  );
+                },
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF00C896).withValues(alpha: 0.25),
+                    const Color(0xFF00C896).withValues(alpha: 0.0),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

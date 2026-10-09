@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/zatca_decoder.dart';
+import 'app_snackbar.dart';
 import 'receipt_photo_viewer_dialog.dart';
 
 class TransactionItemBreakdownCard extends StatelessWidget {
@@ -549,12 +550,11 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         InkWell(
                           onTap: () {
                             Clipboard.setData(ClipboardData(text: qrCodeRaw!));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('ZATCA QR Base64 copied to clipboard!'),
-                                backgroundColor: Color(0xFF00C896),
-                                duration: Duration(seconds: 2),
-                              ),
+                            AppSnackBar.showSuccess(
+                              context,
+                              'ZATCA QR Base64 code copied to clipboard',
+                              title: 'Copied',
+                              duration: const Duration(seconds: 2),
                             );
                           },
                           child: Row(
@@ -760,11 +760,11 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: rawQr));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('ZATCA Base64 copied to clipboard!'),
-                  backgroundColor: Color(0xFF00C896),
-                ),
+              AppSnackBar.showSuccess(
+                context,
+                'ZATCA Base64 string copied to clipboard',
+                title: 'Copied',
+                duration: const Duration(seconds: 2),
               );
             },
           ),

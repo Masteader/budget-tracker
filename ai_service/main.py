@@ -14,12 +14,14 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 from typing import Optional
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status, Response
+from fastapi.responses import HTMLResponse
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -35,6 +37,7 @@ from models import (
     SubCategoryCreateRequest,
     SubCategoryRenameRequest,
     PaydayUpdateRequest,
+    ShoppingBasketOptimizeRequest,
 )
 
 
@@ -55,23 +58,28 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
+allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in production to your Flutter app's origin
-    allow_methods=["POST", "GET"],
+    allow_origins=allow_origins,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2").strip()
-if not APP_AUTH_TOKEN:
-    logger.warning("APP_AUTH_TOKEN is not configured in environment; external reverse-proxy / tunnel probes will be rejected.")
+APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
+if not APP_AUTH_TOKEN and os.environ.get("ENV", "development").lower() != "production":
+    APP_AUTH_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"  # Local/testing fallback only
+elif not APP_AUTH_TOKEN:
+    logger.warning("APP_AUTH_TOKEN is not configured; unauthenticated proxied requests will be rejected.")
 
 
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     # Allow local inspection, health check and docs
     path = request.url.path
-    if path in ["/health", "/docs", "/openapi.json", "/redoc"] or request.method == "OPTIONS":
+    if path in ["/", "/auth/confirm", "/auth/callback", "/health", "/docs", "/openapi.json", "/redoc"] or path.startswith("/auth/") or request.method == "OPTIONS":
         return await call_next(request)
 
     # Check if request arrived via reverse proxy or public tunnel
@@ -79,9 +87,10 @@ async def firewall_token_middleware(request: Request, call_next):
     client_host = request.client.host if request.client else ""
     is_tunnel_or_proxy = bool(forwarded_for) or (client_host not in ["127.0.0.1", "localhost", "::1", "testclient"])
 
-    # Verify secret token for any non-local or proxied traffic
-    provided_token = request.headers.get("X-App-Token")
-    if is_tunnel_or_proxy and (not APP_AUTH_TOKEN or provided_token != APP_AUTH_TOKEN):
+    # Constant-time comparison to prevent side-channel timing attacks (OWASP A02)
+    provided_token = request.headers.get("X-App-Token", "")
+    token_valid = bool(APP_AUTH_TOKEN and hmac.compare_digest(provided_token, APP_AUTH_TOKEN))
+    if is_tunnel_or_proxy and not token_valid:
         logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
@@ -98,12 +107,9 @@ async def firewall_token_middleware(request: Request, call_next):
 # Flutter sends: X-Signature: sha256=<hmac_hex>
 # =============================================================================
 
-WEBHOOK_SECRET = os.environ.get(
-    "WEBHOOK_SECRET",
-    "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400",
-)
-
-
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
+if not WEBHOOK_SECRET and os.environ.get("ENV", "development").lower() != "production":
+    WEBHOOK_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"  # Dev fallback only
 
 
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:
@@ -119,8 +125,9 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
         return False
     try:
         scheme, provided_sig = signature_header.split("=", 1)
-        assert scheme == "sha256"
-    except (ValueError, AssertionError):
+        if scheme != "sha256":
+            return False
+    except (ValueError, AttributeError):
         return False
 
     expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
@@ -131,6 +138,99 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
 # =============================================================================
 # ROUTES
 # =============================================================================
+
+@app.get("/", response_class=HTMLResponse, tags=["ops"])
+@app.get("/auth/confirm", response_class=HTMLResponse, tags=["ops"])
+@app.get("/auth/callback", response_class=HTMLResponse, tags=["ops"])
+async def auth_confirm_landing():
+    """Welcome and email confirmation landing page."""
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Tracker - Email Confirmed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #C9D1D9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 20px;
+      padding: 44px 32px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    .icon-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(0, 200, 150, 0.15);
+      border: 2px solid #00C896;
+      color: #00C896;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      color: #FFFFFF;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .subtitle-ar {
+      color: #00C896;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      direction: rtl;
+    }
+    p {
+      color: #8B949E;
+      font-size: 15px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(88, 166, 255, 0.12);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: #58A6FF;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-circle">✓</div>
+    <h1>Account Verified</h1>
+    <div class="subtitle-ar">تم تأكيد البريد الإلكتروني بنجاح</div>
+    <div class="badge">Budget Tracker</div>
+    <p>Your email has been confirmed. You can now return to the Budget Tracker app on your mobile device to sign in.</p>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
+
 
 @app.get("/health", tags=["ops"])
 async def health_check():
@@ -700,9 +800,59 @@ async def grocery_price_history(household_id: str, item_filter: str | None = Non
         raise HTTPException(status_code=400, detail="household_id is required.")
     from price_tracker import get_grocery_price_history
     try:
-        return await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter)
+        items = await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter)
+        return {"items": items, "count": len(items)}
     except Exception as exc:
         logger.error("Failed to fetch grocery price history: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/analytics/shopping-basket-optimize",
+    tags=["analytics"],
+    summary="Optimize shopping list across major Saudi grocery retailers.",
+)
+async def shopping_basket_optimize(req: ShoppingBasketOptimizeRequest):
+    """
+    Computes total basket pricing at Panda, Danube, Tamimi, Othaim, and Lulu,
+    identifying the cheapest single store and optimal multi-store savings split.
+    """
+    if not req.household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from price_tracker import optimize_shopping_basket
+    try:
+        return await asyncio.to_thread(optimize_shopping_basket, req.household_id, req.items)
+    except Exception as exc:
+        logger.error("Failed to optimize shopping basket: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+
+@app.get(
+    "/reports/statement-pdf",
+    tags=["reports"],
+    summary="Download branded monthly financial statement PDF.",
+)
+async def export_statement_pdf(household_id: str, cycle_key: str | None = None):
+    """
+    Generates a branded monthly PDF statement covering salary cycle spending,
+    partner splits, category utilization, and 15% VAT breakdown.
+    """
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from pdf_statement_generator import generate_monthly_pdf_statement
+    try:
+        pdf_bytes = await asyncio.to_thread(generate_monthly_pdf_statement, household_id, cycle_key=cycle_key)
+        safe_cycle = re.sub(r"[^a-zA-Z0-9_\-]", "", cycle_key or "current")
+        safe_hid = re.sub(r"[^a-zA-Z0-9_\-]", "", household_id)[:8] or "unknown"
+        filename = f"statement_{safe_cycle}_{safe_hid}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logger.error("Failed to generate PDF statement: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

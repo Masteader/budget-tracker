@@ -43,50 +43,63 @@ class ParsedChatExpense(BaseModel):
     currency: str = "SAR"
     category_code: str = Field("OPEX-MISC", description="Category code like OPEX-DINING, OPEX-GROCERY, OPEX-SHOPPING, etc.")
     spent_by: str = Field("both", description="Who spent this: 'me', 'partner', or 'both'")
+    paid_by: str = Field("me", description="Who paid: 'me' or 'partner'")
+    beneficiary: str = Field("both", description="For whom: 'me', 'partner', or 'both'")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
+
+def normalize_arabic_numbers(text: str) -> str:
+    """Converts Eastern Arabic numerals (٠-٩) and Persian numerals to Western digits (0-9)."""
+    eastern_to_western = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+    return text.translate(eastern_to_western)
+
 
 SYSTEM_PROMPT = """You are an intelligent financial assistant for a Saudi budget tracker.
 Parse natural language expense logs into structured financial transactions with line-item breakdowns, OR detect pre-purchase affordability simulation questions.
 
 Categories available:
-- OPEX-GROCERY: Supermarkets, groceries, food stores (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim)
-- OPEX-DINING: Restaurants, cafes, fast food, coffee shops, bakeries, delivery (Dunkin, Starbucks, Albaik, McDonald's, Jahez, Hungerstation)
-- OPEX-FUEL: Fuel stations, gas, transport, taxi, Uber, Careem, trains (Aramco, Sahel, Uber, Careem)
-- OPEX-UTILITIES: Electricity, water, internet, mobile bills (STC, Mobily, Zain, SEC)
-- OPEX-SHOPPING: Retail, clothing, electronics, books, iPad, gadgets (Jarir, Extra, Noon, Amazon, Apple)
+- OPEX-GROCERY: Supermarkets, groceries, food stores (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim, بنده, العثيم, التميمي, مقاضي)
+- OPEX-DINING: Restaurants, cafes, fast food, coffee shops, bakeries, delivery (Dunkin, Starbucks, Albaik, McDonald's, Jahez, Hungerstation, Mrsool, البيك, جاهز, هنقرستيشن)
+- OPEX-FUEL: Fuel stations, gas, transport, taxi, Uber, Careem, trains (Aramco, Sahel, SASCO, Aldrees, ساسكو, الدريس, بنزين 91, بنزين 95)
+- OPEX-UTILITIES: Electricity, water, internet, mobile bills (STC, Mobily, Zain, SEC, الكهرباء, المياه)
+- OPEX-SHOPPING: Retail, clothing, electronics, books, iPad, gadgets (Jarir, Extra, Noon, Amazon, Apple, جرير, اكسترا)
 - OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming, concerts (Muvi, Vox, Netflix, PlayStation, Shahid)
-- OPEX-HEALTH: Pharmacies, clinics, doctors, hospitals, medicine (Nahdi, Al Dawaa, Habib)
+- OPEX-HEALTH: Pharmacies, clinics, doctors, hospitals, medicine (Nahdi, Al Dawaa, Habib, النهدي, الدواء, صيدلية)
 - OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance, home services).
 
-Attribution ("spent_by"):
-- "me": Personal expenses or when the user says "I spent", "my coffee", personal items.
-- "partner": When the user mentions their partner/wife/husband bought or spent it (e.g., "my partner bought", "wife spent", "partner got").
-- "both": Shared household expenses (e.g., groceries, supermarket, house cleaning, maid, utilities, home maintenance, or when user mentions "we spent", "for both of us", "shared", "house"). If it's a household category like groceries or house cleaning and unspecified, default to "both".
+SAUDI COLLOQUIAL ARABIC & VOICE ENTRY SUPPORT:
+Users frequently log transactions in Saudi dialect (اللهجة السعودية الدارجة). Interpret colloquial Saudi verbs and expressions accurately:
+- Verbs: "عبيت" (filled/fueled), "تقضيت" (bought groceries), "حاسبت" (paid), "دفعت" (paid), "سددت" (settled bill), "شريت" (bought), "جبت" (got), "طلبت" (ordered delivery).
+- Slang items: "بنزين 91 / 95" -> OPEX-FUEL, "مقاضي البيت" -> OPEX-GROCERY, "عشاء / غداء / قهوة / شاهي / حلا" -> OPEX-DINING, "بندول" -> OPEX-HEALTH, "فاتورة الكهرب / النت" -> OPEX-UTILITIES.
+- Attribution ("spent_by"):
+  - "دفعتها أنا / دافعه أنا / ع حسابي / لي لحالي" -> "me"
+  - "دفعتها زوجتي / حاسبها زوجي / جابته المدام" -> "partner"
+  - "مقاضي البيت / لنا اثنيننا / مشترك / للبيت" -> "both" (default for grocery/house bills)
+- Local Saudi Merchants:
+  - Groceries: بنده (Panda), العثيم (Othaim), التميمي (Tamimi), الدانوب (Danube), لولو (Lulu), كارفور (Carrefour)
+  - Dining & Delivery: البيك (Albaik), ماك (McDonald's), جاهز (Jahez), هنقرستيشن (HungerStation), مرسول (Mrsool), بارنز (Barn's), دانكن (Dunkin')
+  - Fuel: ساسكو (SASCO), الدريس (Aldrees), نفط (Naft), أرامكو (Aramco), سهل (Sahel)
+  - Health: النهدي (Nahdi), الدواء (Al Dawaa), الحبيب (Al Habib)
+  - Shopping: جرير (Jarir), اكسترا (Extra), نون (Noon)
+  - Utilities: الكهرباء (SEC / Electricity), اس تي سي (STC), موبايلي (Mobily), زين (Zain)
+- Numerical support: Handles both Western digits (123) and Eastern Arabic numerals (١٢٣).
 
 PRE-PURCHASE AFFORDABILITY SIMULATION:
 If the user asks whether they can afford or buy an item, or asking if their budget permits a potential purchase:
 Examples:
 - "Can I buy a 1200 SAR iPad?" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
 - "أقدر اشتري ايباد بـ 1200 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
-- "Can I afford dinner for 350 SAR?" -> is_transaction: false, is_simulation: true, simulated_amount: 350.0, simulated_item: "Dinner", total_amount: 350.0, category_code: "OPEX-DINING"
-- "هل ميزانيتي تسمح اشتري لابتوب بـ 4500 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 4500.0, simulated_item: "Laptop", total_amount: 4500.0, category_code: "OPEX-SHOPPING"
+- "يمديني اطلب عشا بـ 80 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 80.0, simulated_item: "عشا", total_amount: 80.0, category_code: "OPEX-DINING"
 
 Expense Input examples:
-"merchant dunkin and i spent 19 sar total, 16 ice latte and 3 donut"
--> merchant: "Dunkin'", total_amount: 19.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "Ice Latte", "quantity": 1, "price": 16.0}, {"name": "Donut", "quantity": 1, "price": 3.0}]
+"عبيت بنزين 91 بـ 60 ريال من ساسكو"
+-> merchant: "SASCO", total_amount: 60.0, category_code: "OPEX-FUEL", spent_by: "me", items: [{"name": "بنزين 91", "quantity": 1, "price": 60.0}]
 
-"شريت من دانكن 19 ريال ايس لاتيه 16 ودونات 3"
--> merchant: "Dunkin'", total_amount: 19.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "Ice Latte", "quantity": 1, "price": 16.0}, {"name": "Donut", "quantity": 1, "price": 3.0}]
+"تقضينا من بنده مقاضي البيت بـ 85 ريال حليب 15 وجبن 25 ودجاج 45"
+-> merchant: "Panda", total_amount: 85.0, category_code: "OPEX-GROCERY", spent_by: "both", items: [{"name": "حليب", "quantity": 1, "price": 15.0}, {"name": "جبن", "quantity": 1, "price": 25.0}, {"name": "دجاج", "quantity": 1, "price": 45.0}]
 
-"فاتورة بنده 85 ريال: حليب بـ 15 وجبنة بـ 25 ودجاج بـ 45"
--> merchant: "Panda", total_amount: 85.0, category_code: "OPEX-GROCERY", spent_by: "both", items: [{"name": "Milk", "quantity": 1, "price": 15.0}, {"name": "Cheese", "quantity": 1, "price": 25.0}, {"name": "Chicken", "quantity": 1, "price": 45.0}]
-
-"house cleaning 150 sar"
--> merchant: "House Cleaning", total_amount: 150.0, category_code: "OPEX-MISC", spent_by: "both", items: [{"name": "House Cleaning", "quantity": 1, "price": 150.0}]
-
-"partner bought perfume 250 sar"
--> merchant: "Perfume Shop", total_amount: 250.0, category_code: "OPEX-SHOPPING", spent_by: "partner", items: [{"name": "Perfume", "quantity": 1, "price": 250.0}]
+"طلبنا من البيك بـ 54 ريال مسحب وبيبس دفعتها أنا"
+-> merchant: "Albaik", total_amount: 54.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "مسحب وبيبس", "quantity": 1, "price": 54.0}]
 
 Return STRICTLY valid JSON conforming to:
 {
@@ -107,7 +120,7 @@ Return STRICTLY valid JSON conforming to:
 def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
     """Robust heuristic fallback parser for natural language expense logs and simulation queries."""
     import re
-    raw = text.strip()
+    raw = normalize_arabic_numbers(text.strip())
     lower = raw.lower()
 
     # Affordability simulation check (e.g. "Can I buy a 1200 SAR iPad?", "أقدر اشتري ايباد بـ 1200 ريال؟")
@@ -115,7 +128,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         "can i afford", "can i buy", "could i buy", "should i buy", "can we afford",
         "أقدر اشتري", "اقدر اشتري", "هل اقدر", "هل أقدر", "يمديني اشتري",
         "ينفع اشتري", "ميزانية ل", "ميزانيه ل", "هل في ميزانية", "هل تكفي الميزانية",
-        "أشتري ولا", "اشتري ولا", "اقدر اجيب", "أقدر أجيب"
+        "أشتري ولا", "اشتري ولا", "اقدر اجيب", "أقدر أجيب", "يمديني اطلب", "يمديني اجيب"
     ]
     if any(k in lower for k in sim_keywords):
         num_matches = re.findall(r'([0-9]+(?:\.[0-9]+)?)', raw)
@@ -129,7 +142,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             cleaned_item = "Simulated Item"
 
         cat_code = "OPEX-SHOPPING"
-        if any(w in cleaned_item.lower() for w in ("dinner", "lunch", "coffee", "restaurant", "مطعم", "عشاء", "غداء", "قهوة", "food")):
+        if any(w in cleaned_item.lower() for w in ("dinner", "lunch", "coffee", "restaurant", "مطعم", "عشاء", "عشا", "غداء", "غدا", "قهوة", "food")):
             cat_code = "OPEX-DINING"
         elif any(w in cleaned_item.lower() for w in ("flight", "travel", "hotel", "سفر", "طيران", "فندق")):
             cat_code = "OPEX-MISC"
@@ -150,30 +163,78 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             notes="Heuristic simulation detection",
         )
 
-    # Attribution: me, partner, or both
-    spent_by = "both"
-    if any(k in lower for k in ("partner", "wife", "husband", "spouse")):
-        spent_by = "partner"
-    elif any(k in lower for k in ("cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "both", "we ", "house ", "home ")):
+    # Attribution 2D: paid_by and beneficiary
+    paid_by = "me"
+    if any(k in lower for k in ("partner paid", "wife paid", "husband paid", "حاسبتها هي", "دفعتها زوجتي", "دفعه زوجي", "حاسبت زوجتي", "دفعت زوجتي")):
+        paid_by = "partner"
+    elif any(k in lower for k in ("i paid", "i spent", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت انا")):
+        paid_by = "me"
+
+    beneficiary = "me"
+    if any(k in lower for k in ("for my wife", "for partner", "for husband", "for her", "for him", "لزوجتي", "لزوجي", "للشريك", "فستان زوجتي", "هدية")):
+        beneficiary = "partner"
+    elif any(k in lower for k in ("for me", "for myself", "bought myself", "لي لحالي", "شريت لنفسي", "قهوتي", "ملابسي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا")):
+        beneficiary = "me"
+    elif any(k in lower for k in ("cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "both", "we ", "house ", "home ", "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت")):
+        beneficiary = "both"
+    elif any(k in lower for k in ("بنده", "عثيم", "تميمي", "دانوب", "لولو", "كارفور", "بقالة", "سوبرماركت")):
+        beneficiary = "both"
+    else:
+        beneficiary = "me"
+
+    # Backward-compatible spent_by
+    if beneficiary == "both":
         spent_by = "both"
-    elif any(k in lower for k in ("i spent", "me", "my ", "bought myself")):
-        spent_by = "me"
+    elif paid_by == "partner" and beneficiary == "partner":
+        spent_by = "partner"
+    elif paid_by == "me" and beneficiary == "partner":
+        spent_by = "partner"
     else:
         spent_by = "me"
 
     # Merchant extraction
     merchant = "Unknown Merchant"
-    known_merchants = [
-        "Dunkin", "Starbucks", "Albaik", "McDonald's", "Danube", "Tamimi", "Panda", "Carrefour",
-        "Nahdi", "Al Dawaa", "Jarir", "Extra", "Noon", "Amazon", "Aramco", "Sahel", "Uber",
-        "Careem", "STC", "Mobily", "Zain", "House Cleaning",
-    ]
-    for km in known_merchants:
-        if km.lower() in lower:
-            merchant = km
+    known_merchants_map = {
+        "بنده": "Panda", "panda": "Panda",
+        "العثيم": "Othaim", "عثيم": "Othaim", "othaim": "Othaim",
+        "التميمي": "Tamimi", "تميمي": "Tamimi", "tamimi": "Tamimi",
+        "الدانوب": "Danube", "دانوب": "Danube", "danube": "Danube",
+        "كارفور": "Carrefour", "carrefour": "Carrefour",
+        "لولو": "Lulu", "lulu": "Lulu",
+        "البيك": "Albaik", "بيك": "Albaik", "albaik": "Albaik",
+        "ماك": "McDonald's", "ماكدونالدز": "McDonald's", "mcdonald": "McDonald's",
+        "ستاربكس": "Starbucks", "starbucks": "Starbucks",
+        "دانكن": "Dunkin'", "dunkin": "Dunkin'",
+        "جاهز": "Jahez", "jahez": "Jahez",
+        "هنقرستيشن": "HungerStation", "هنقر": "HungerStation", "hungerstation": "HungerStation",
+        "مرسول": "Mrsool", "mrsool": "Mrsool",
+        "شاورمر": "Shawermer",
+        "بارنز": "Barn's",
+        "النهدي": "Nahdi", "نهدي": "Nahdi", "nahdi": "Nahdi",
+        "الدواء": "Al Dawaa", "al dawaa": "Al Dawaa",
+        "جرير": "Jarir", "jarir": "Jarir",
+        "اكسترا": "Extra", "extra": "Extra",
+        "نون": "Noon", "noon": "Noon",
+        "امازون": "Amazon", "amazon": "Amazon",
+        "ساسكو": "SASCO", "sasco": "SASCO",
+        "الدريس": "Aldrees", "دريس": "Aldrees", "aldrees": "Aldrees",
+        "نفط": "Naft",
+        "سهل": "Sahel", "sahel": "Sahel",
+        "ارامكو": "Aramco", "أرامكو": "Aramco", "aramco": "Aramco",
+        "اوبر": "Uber", "أوبر": "Uber", "uber": "Uber",
+        "كريم": "Careem", "careem": "Careem",
+        "اس تي سي": "STC", "stc": "STC",
+        "موبايلي": "Mobily", "mobily": "Mobily",
+        "زين": "Zain", "zain": "Zain",
+        "الكهرباء": "Electricity Bill", "الكهرب": "Electricity Bill",
+    }
+    for km, canonical in known_merchants_map.items():
+        if km in lower or km in raw:
+            merchant = canonical
             break
+
     if merchant == "Unknown Merchant":
-        m_match = re.search(r'(?:merchant|at|from)\s+([A-Za-z0-9\'&]+)', raw, re.IGNORECASE)
+        m_match = re.search(r'(?:merchant|at|from|من|في)\s+([A-Za-z0-9\'\u0600-\u06FF&]+)', raw, re.IGNORECASE)
         if m_match:
             merchant = m_match.group(1).capitalize()
         else:
@@ -183,7 +244,14 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 
     # Total amount extraction
     total_amount = 0.0
-    tot_match = re.search(r'(?:spent|total|for)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:sar|riyal|rs)?\s*(?:total)?', raw, re.IGNORECASE)
+    amt_text = re.sub(r'بنزين\s*(?:91|95)', 'بنزين', raw)
+
+    tot_match = re.search(r'(?:spent|total|for|بـ|ب|قيمة|مبلغ)\s*([0-9]+(?:\.[0-9]+)?)\s*(?:sar|riyal|ريال|رس)?', amt_text, re.IGNORECASE)
+    if not tot_match:
+        tot_match = re.search(r'([0-9]+(?:\.[0-9]+)?)\s*(?:sar|riyal|ريال|رس)', amt_text, re.IGNORECASE)
+    if not tot_match:
+        tot_match = re.search(r'([0-9]+(?:\.[0-9]+)?)', amt_text)
+
     if tot_match:
         try:
             total_amount = float(tot_match.group(1))
@@ -193,12 +261,12 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
     # Line items breakdown
     items: List[ChatLineItem] = []
     # Pattern: <price> <name> (e.g. "16 ice latte and 3 donut")
-    item_matches = list(re.finditer(r'(\d+(?:\.\d+)?)\s*(?:sar)?\s+([a-zA-Z\s]+?)(?:and|,|$)', raw, re.IGNORECASE))
+    item_matches = list(re.finditer(r'(\d+(?:\.\d+)?)\s*(?:sar|ريال)?\s+([a-zA-Z\u0600-\u06FF\s]+?)(?:and|و|,|$)', raw, re.IGNORECASE))
     for m in item_matches:
         try:
             val = float(m.group(1))
             name = m.group(2).strip()
-            if name.lower() in (merchant.lower(), "total", "sar", "spent") or "total" in name.lower():
+            if name.lower() in (merchant.lower(), "total", "sar", "spent", "ريال", "ب") or "total" in name.lower():
                 continue
             if val > 0 and len(name) > 1:
                 items.append(ChatLineItem(name=name.title(), quantity=1.0, price=val))
@@ -207,12 +275,12 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 
     if not items:
         # Fallback Pattern: <name> <price> (e.g. "ice latte 16 sar, donut 3")
-        item_matches_b = list(re.finditer(r'([a-zA-Z\s]+?)\s+(\d+(?:\.\d+)?)\s*(?:sar|riyal)?(?:and|,|$)', raw, re.IGNORECASE))
+        item_matches_b = list(re.finditer(r'([a-zA-Z\u0600-\u06FF\s]+?)\s+(?:بـ|ب)?\s*(\d+(?:\.\d+)?)\s*(?:sar|riyal|ريال)?(?:and|و|,|$)', raw, re.IGNORECASE))
         for m in item_matches_b:
             try:
                 name = m.group(1).strip()
                 val = float(m.group(2))
-                if name.lower() in ("spent", "total", "merchant", "at", "for"):
+                if name.lower() in ("spent", "total", "merchant", "at", "for", "شريت", "دفعت", "من"):
                     continue
                 if val > 0 and len(name) > 1:
                     items.append(ChatLineItem(name=name.title(), quantity=1.0, price=val))
@@ -227,19 +295,32 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         items.append(ChatLineItem(name=merchant, quantity=1.0, price=total_amount))
 
     # Category code
-    cat_code = "OPEX-MISC"
-    if any(k in lower or k in merchant.lower() for k in ("dunkin", "coffee", "latte", "starbucks", "cafe", "dining", "restaurant", "burger", "albaik", "mcdonald")):
-        cat_code = "OPEX-DINING"
-    elif any(k in lower or k in merchant.lower() for k in ("danube", "tamimi", "panda", "carrefour", "grocery", "groceries", "supermarket", "milk", "bread", "chicken")):
-        cat_code = "OPEX-GROCERY"
-    elif any(k in lower or k in merchant.lower() for k in ("fuel", "gas", "petrol", "aramco", "sahel", "uber", "careem", "taxi")):
-        cat_code = "OPEX-FUEL"
-    elif any(k in lower or k in merchant.lower() for k in ("stc", "mobily", "zain", "electric", "water", "bill", "utilities")):
-        cat_code = "OPEX-UTILITIES"
-    elif any(k in lower or k in merchant.lower() for k in ("jarir", "extra", "amazon", "noon", "shopping", "clothes", "perfume")):
-        cat_code = "OPEX-SHOPPING"
-    elif any(k in lower or k in merchant.lower() for k in ("nahdi", "pharmacy", "medicine", "doctor", "clinic", "hospital")):
-        cat_code = "OPEX-HEALTH"
+    merchant_category_map = {
+        "Albaik": "OPEX-DINING", "McDonald's": "OPEX-DINING", "Starbucks": "OPEX-DINING", "Dunkin'": "OPEX-DINING",
+        "Jahez": "OPEX-DINING", "HungerStation": "OPEX-DINING", "Mrsool": "OPEX-DINING", "Shawermer": "OPEX-DINING", "Barn's": "OPEX-DINING",
+        "Panda": "OPEX-GROCERY", "Othaim": "OPEX-GROCERY", "Tamimi": "OPEX-GROCERY", "Danube": "OPEX-GROCERY", "Lulu": "OPEX-GROCERY", "Carrefour": "OPEX-GROCERY",
+        "SASCO": "OPEX-FUEL", "Aldrees": "OPEX-FUEL", "Naft": "OPEX-FUEL", "Sahel": "OPEX-FUEL", "Aramco": "OPEX-FUEL", "Uber": "OPEX-FUEL", "Careem": "OPEX-FUEL",
+        "STC": "OPEX-UTILITIES", "Mobily": "OPEX-UTILITIES", "Zain": "OPEX-UTILITIES", "Electricity Bill": "OPEX-UTILITIES",
+        "Nahdi": "OPEX-HEALTH", "Al Dawaa": "OPEX-HEALTH",
+        "Jarir": "OPEX-SHOPPING", "Extra": "OPEX-SHOPPING", "Noon": "OPEX-SHOPPING", "Amazon": "OPEX-SHOPPING",
+    }
+    cat_code = merchant_category_map.get(merchant)
+    if not cat_code:
+        words_list = lower.split()
+        if any(k in lower for k in ("بنزين", "وقود", "محطة", "سولار", "ديزل", "fuel", "gas", "petrol", "taxi")):
+            cat_code = "OPEX-FUEL"
+        elif any(k in lower for k in ("كهرب", "فاتورة كهرب", "مياه", "انترنت", "نت", "utilities", "bill")):
+            cat_code = "OPEX-UTILITIES"
+        elif any(k in lower for k in ("بقالة", "سوبرماركت", "مقاضي", "حليب", "دجاج", "خبز", "بيض", "grocery", "groceries", "supermarket", "milk", "bread", "chicken")) or "لبن" in words_list or "رز" in words_list:
+            cat_code = "OPEX-GROCERY"
+        elif any(k in lower for k in ("مطعم", "عشاء", "عشا", "غداء", "غدا", "فطور", "كافيه", "قهوة", "شاي", "كوفي", "ايس لاتيه", "حلا", "برجر", "شاورما", "dining", "restaurant", "burger", "cafe")):
+            cat_code = "OPEX-DINING"
+        elif any(k in lower for k in ("صيدلية", "دواء", "علاج", "بندول", "فيتامين", "pharmacy", "medicine", "doctor", "clinic", "hospital")):
+            cat_code = "OPEX-HEALTH"
+        elif any(k in lower for k in ("سوق", "ملابس", "عطر", "شاحن", "جوال", "لابتوب", "ايباد", "shopping", "clothes", "perfume", "electronics")):
+            cat_code = "OPEX-SHOPPING"
+        else:
+            cat_code = "OPEX-MISC"
 
     return ParsedChatExpense(
         is_transaction=True,
@@ -248,6 +329,8 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         currency="SAR",
         category_code=cat_code,
         spent_by=spent_by,
+        paid_by=paid_by,
+        beneficiary=beneficiary,
         items=items,
         notes="Parsed via robust heuristic fallback",
     )
@@ -255,6 +338,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 
 def parse_chat_expense(text: str) -> ParsedChatExpense:
     """Call Gemini to extract structured expense information from user chat text, with graceful fallback."""
+    text = normalize_arabic_numbers(text)
     model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
     
     try:
@@ -404,8 +488,14 @@ def process_chat_transaction(
             reallocated_from_id = flexible[0].id
 
     # Format raw text for audit trail
+    paid_by = getattr(parsed, "paid_by", "me")
+    beneficiary = getattr(parsed, "beneficiary", "both")
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
-    audit_text = f"Chat: {message} | SpentBy: {spent_by} | Items: [{items_summary}]" if items_summary else f"Chat: {message} | SpentBy: {spent_by}"
+    audit_text = (
+        f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by} | Items: [{items_summary}]"
+        if items_summary
+        else f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by}"
+    )
 
     # Insert transaction
     tx_id = insert_transaction(
@@ -421,6 +511,8 @@ def process_chat_transaction(
         source="chat",
         items=items_dicts,
         spent_by=spent_by,
+        paid_by=paid_by,
+        beneficiary=beneficiary,
     )
 
     # Attach items fallback if needed

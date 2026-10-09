@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../widgets/app_snackbar.dart';
 
 class HouseholdScreen extends StatefulWidget {
   const HouseholdScreen({super.key});
@@ -61,8 +62,10 @@ class _HouseholdScreenState extends State<HouseholdScreen>
             .eq('id', uid);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Household "${hh['name']}" created! Code: ${hh['invite_code']}')),
+        AppSnackBar.showSuccess(
+          context,
+          'Household "${hh['name']}" created! Invite code: ${hh['invite_code']}',
+          title: 'Household Ready',
         );
       }
     } on PostgrestException catch (e) {
@@ -109,8 +112,11 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    AppSnackBar.showError(
+      context,
+      msg,
+      title: 'Action Failed',
+    );
   }
 
   @override

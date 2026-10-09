@@ -9,6 +9,8 @@ import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
+import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_shimmer.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -123,8 +125,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
       if (prevBudgets.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('No allocations found in ${DateFormat('MMMM yyyy').format(prevDate)} to copy.')),
+          AppSnackBar.showInfo(
+            context,
+            'No allocations found in ${DateFormat('MMMM yyyy').format(prevDate)} to copy.',
+            title: 'No Prior Allocations',
           );
         }
         return;
@@ -142,17 +146,18 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       await supabase.from('budgets').insert(newEntries);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Copied ${newEntries.length} allocations from ${DateFormat('MMMM yyyy').format(prevDate)}!'),
-            backgroundColor: const Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Copied ${newEntries.length} allocations from ${DateFormat('MMMM yyyy').format(prevDate)}!',
+          title: 'Budget Copied',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error copying allocations: $e'), backgroundColor: Colors.redAccent),
+        AppSnackBar.showError(
+          context,
+          'Error copying allocations: $e',
+          title: 'Copy Failed',
         );
       }
     } finally {
@@ -362,11 +367,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               _staticFuture = _loadStaticData();
                             });
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Added category "$name" (SAR $amount)!'),
-                                  backgroundColor: const Color(0xFF00C896),
-                                ),
+                              AppSnackBar.showSuccess(
+                                context,
+                                'Added category "$name" (SAR ${amount.toStringAsFixed(2)})!',
+                                title: 'Category Created',
                               );
                             }
                           } else {
@@ -375,8 +379,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                            AppSnackBar.showError(
+                              context,
+                              'Failed to add category: $e',
+                              title: 'Add Failed',
                             );
                           }
                         }
@@ -400,11 +406,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               _staticFuture = _loadStaticData();
                             });
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Added sub-category "$subName" to budget!'),
-                                  backgroundColor: const Color(0xFF00C896),
-                                ),
+                              AppSnackBar.showSuccess(
+                                context,
+                                'Added sub-category "$subName" to budget!',
+                                title: 'Sub-Category Added',
                               );
                             }
                           } else {
@@ -413,8 +418,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                            AppSnackBar.showError(
+                              context,
+                              'Failed to add sub-category: $e',
+                              title: 'Add Failed',
                             );
                           }
                         }
@@ -474,18 +481,19 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           _staticFuture = _loadStaticData();
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Category "$categoryName" removed from active budgets.'),
-              backgroundColor: Colors.orange,
-            ),
+          AppSnackBar.showDelete(
+            context,
+            'Category "$categoryName" removed from active budgets.',
+            title: 'Category Removed',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove: $e'), backgroundColor: Colors.redAccent),
+        AppSnackBar.showError(
+          context,
+          'Failed to remove category: $e',
+          title: 'Remove Failed',
         );
       }
     }
@@ -529,8 +537,16 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       future: _staticFuture,
       builder: (ctx, staticSnap) {
         if (!staticSnap.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: const Color(0xFF0D1117),
+            appBar: AppBar(
+              title: const Text('Budget Allocations'),
+              backgroundColor: const Color(0xFF161B22),
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: AppShimmer.listItems(count: 5),
+            ),
           );
         }
         final staticData = staticSnap.data!;

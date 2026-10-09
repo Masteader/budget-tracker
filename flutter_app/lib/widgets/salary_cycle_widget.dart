@@ -233,6 +233,31 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
               ),
             ],
           ),
+          if (paceStatus == 'critical' || paceStatus == 'exhausted') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: paceColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: paceColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: paceColor, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      paceStatus == 'exhausted'
+                          ? 'Alert: Total allocations for this cycle have been exceeded.'
+                          : 'Alert: Burn rate is high! Projected to run out around ${_data!['forecast_run_out_date'] ?? 'before payday'}.',
+                      style: TextStyle(color: paceColor, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -87,6 +87,37 @@ def test_partner_settlement_calculation(mock_client):
     assert res["settlement_amount"] == 100.0
     assert "STC Pay" in res["stc_pay_note"] or "Settlement" in res["stc_pay_note"]
 
+
+@patch("settlement_engine.get_client")
+def test_partner_settlement_2d_attribution(mock_client):
+    mock_table = MagicMock()
+    mock_client.return_value.table.return_value = mock_table
+    mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = [
+        # 1. Groceries 300 SAR for both, I paid -> Partner owes me 150 (50%)
+        {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "paid_by": "me", "beneficiary": "both", "timestamp": "2026-09-28T10:00:00Z"},
+        # 2. Partner dress 200 SAR, I paid -> Partner owes me 200 (100%)
+        {"id": "2", "amount": 200.0, "category_code": "OPEX-SHOPPING", "paid_by": "me", "beneficiary": "partner", "timestamp": "2026-09-28T11:00:00Z"},
+        # 3. Gym shoes 100 SAR for me, Partner paid -> I owe partner 100 (100%)
+        {"id": "3", "amount": 100.0, "category_code": "OPEX-SHOPPING", "paid_by": "partner", "beneficiary": "me", "timestamp": "2026-09-28T12:00:00Z"},
+        # 4. Personal coffee 18 SAR, I paid -> 0 debt impact
+        {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "paid_by": "me", "beneficiary": "me", "timestamp": "2026-09-28T13:00:00Z"},
+    ]
+
+    res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
+    assert res["i_paid_for_partner_100"] == 200.0
+    assert res["partner_paid_for_me_100"] == 100.0
+    assert res["shared_paid_by_me"] == 300.0
+    assert res["me_personal_total"] == 18.0
+    # Owed to me: 200 (dress) + 150 (half groceries) = 350
+    assert res["owed_to_me"] == 350.0
+    # Owed to partner: 100 (shoes)
+    assert res["owed_to_partner"] == 100.0
+    # Net balance: 350 - 100 = 250
+    assert res["net_balance"] == 250.0
+    assert res["who_owes"] == "partner_owes_me"
+    assert res["settlement_amount"] == 250.0
+
+
 def test_item_normalization_and_price_history():
     assert _normalize_item_name("حليب المراعي 2 لتر") == "Milk"
     assert _normalize_item_name("fresh eggs 30 pack") == "Eggs"

@@ -229,6 +229,8 @@ def insert_transaction(
     items: Optional[list] = None,
     receipt_url: Optional[str] = None,
     spent_by: Optional[str] = None,
+    paid_by: Optional[str] = None,
+    beneficiary: Optional[str] = None,
     sub_category: Optional[str] = None,
     cycle_key: Optional[str] = None,
     dedup_fingerprint: Optional[str] = None,
@@ -276,6 +278,10 @@ def insert_transaction(
         payload["receipt_url"] = receipt_url
     if spent_by:
         payload["spent_by"] = spent_by
+    if paid_by:
+        payload["paid_by"] = paid_by
+    if beneficiary:
+        payload["beneficiary"] = beneficiary
     if sub_category:
         payload["sub_category"] = sub_category
     if cycle_key:
@@ -283,6 +289,7 @@ def insert_transaction(
     if dedup_fingerprint:
         payload["dedup_fingerprint"] = dedup_fingerprint
     if qr_code_raw:
+        payload["qr_code_raw"] = qr_code_raw
         payload["qr_code_raw"] = qr_code_raw
 
 

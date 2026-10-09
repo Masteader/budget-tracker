@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/receipt_storage_service.dart';
+import '../../widgets/app_snackbar.dart';
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
@@ -38,7 +40,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late TextEditingController _merchantCtrl;
   late TextEditingController _amountCtrl;
   late String _selectedCategory;
-  late String _selectedSpentBy;
+  late String _selectedPaidBy;
+  late String _selectedBeneficiary;
   late List<Map<String, dynamic>> _items;
   bool _isSaving = false;
 
@@ -59,7 +62,20 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
     _selectedCategory = widget.transaction.categoryCode ?? 'OPEX-MISC';
-    _selectedSpentBy = widget.transaction.spentBy.isNotEmpty ? widget.transaction.spentBy : 'both';
+    _selectedPaidBy = widget.transaction.paidBy.isNotEmpty ? widget.transaction.paidBy : 'me';
+    _selectedBeneficiary = widget.transaction.beneficiary.isNotEmpty ? widget.transaction.beneficiary : 'both';
+    if (widget.transaction.paidBy.isEmpty && widget.transaction.spentBy.isNotEmpty) {
+      if (widget.transaction.spentBy == 'partner') {
+        _selectedPaidBy = 'partner';
+        _selectedBeneficiary = 'partner';
+      } else if (widget.transaction.spentBy == 'both') {
+        _selectedPaidBy = 'me';
+        _selectedBeneficiary = 'both';
+      } else {
+        _selectedPaidBy = 'me';
+        _selectedBeneficiary = 'me';
+      }
+    }
     _items = widget.transaction.items
         .map((it) => Map<String, dynamic>.from(it))
         .toList();
@@ -87,13 +103,22 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   Future<void> _saveChanges() async {
     final amount = double.tryParse(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount.')),
-      );
+      AppSnackBar.showError(context, 'Please enter a valid amount greater than zero.', title: 'Invalid Amount');
       return;
     }
 
     setState(() => _isSaving = true);
+
+    String derivedSpentBy = 'both';
+    if (_selectedBeneficiary == 'both') {
+      derivedSpentBy = 'both';
+    } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'partner') {
+      derivedSpentBy = 'partner';
+    } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'me') {
+      derivedSpentBy = 'me';
+    } else {
+      derivedSpentBy = _selectedBeneficiary;
+    }
 
     final basePayload = <String, dynamic>{
       'merchant': _merchantCtrl.text.trim(),
@@ -106,34 +131,38 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       try {
         await supabase.from('transactions').update({
           ...basePayload,
-          'spent_by': _selectedSpentBy,
+          'paid_by': _selectedPaidBy,
+          'beneficiary': _selectedBeneficiary,
+          'spent_by': derivedSpentBy,
         }).eq('id', widget.transaction.id);
       } catch (_) {
-        // Fallback: update raw_sms with SpentBy tag
+        // Fallback: update raw_sms with PaidBy and Beneficiary tags
         final raw = widget.transaction.rawSms ?? '';
-        final cleanRaw = raw.replaceAll(RegExp(r'\|\s*SpentBy:\s*(me|partner|both)', caseSensitive: false), '').trim();
-        final newRaw = '$cleanRaw | SpentBy: $_selectedSpentBy';
+        final cleanRaw = raw
+            .replaceAll(RegExp(r'\|\s*SpentBy:\s*(me|partner|both)', caseSensitive: false), '')
+            .replaceAll(RegExp(r'\|\s*PaidBy:\s*(me|partner)', caseSensitive: false), '')
+            .replaceAll(RegExp(r'\|\s*Beneficiary:\s*(me|partner|both)', caseSensitive: false), '')
+            .trim();
+        final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SpentBy: $derivedSpentBy';
         await supabase.from('transactions').update({
           ...basePayload,
           'raw_sms': newRaw,
+          'spent_by': derivedSpentBy,
         }).eq('id', widget.transaction.id);
       }
 
       if (mounted) {
         Navigator.pop(context, 'updated');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction updated successfully.'),
-            backgroundColor: Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Transaction updated and budget recomputed.',
+          title: 'Changes Saved',
         );
       }
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.redAccent),
-        );
+        AppSnackBar.showError(context, 'Failed to update transaction: $e', title: 'Update Error');
       }
     }
   }
@@ -173,28 +202,30 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       await supabase.from('transactions').delete().eq('id', widget.transaction.id);
       if (mounted) {
         Navigator.pop(context, 'deleted');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction removed and budget restored.'),
-            backgroundColor: Color(0xFF00C896),
-          ),
+        AppSnackBar.showDelete(
+          context,
+          'SAR ${widget.transaction.amount.toStringAsFixed(2)} at ${widget.transaction.merchant ?? "merchant"} removed.',
+          title: 'Transaction Deleted',
         );
       }
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.redAccent),
-        );
+        AppSnackBar.showError(context, 'Failed to delete transaction: $e', title: 'Delete Error');
       }
     }
   }
 
-  Widget _buildSpentByOption(String key, String title, IconData icon, Color activeColor) {
-    final isSelected = _selectedSpentBy.toLowerCase() == key;
+  Widget _buildSegmentOption({
+    required bool isSelected,
+    required String title,
+    required IconData icon,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedSpentBy = key),
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
@@ -222,6 +253,61 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSettlementPreviewBanner(double amount) {
+    String text;
+    IconData icon;
+    Color color;
+
+    if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
+      final half = amount * 0.5;
+      text = 'Shared 50/50: Partner will owe you SAR ${half.toStringAsFixed(2)}';
+      icon = Icons.handshake_outlined;
+      color = const Color(0xFF00C896);
+    } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'partner') {
+      text = 'Paid for Partner: Partner will owe you full SAR ${amount.toStringAsFixed(2)}';
+      icon = Icons.volunteer_activism_outlined;
+      color = const Color(0xFFBC8CFF);
+    } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'both') {
+      final half = amount * 0.5;
+      text = 'Shared 50/50: You will owe partner SAR ${half.toStringAsFixed(2)}';
+      icon = Icons.handshake_outlined;
+      color = const Color(0xFFFF9E79);
+    } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'me') {
+      text = 'Partner paid for you: You will owe partner full SAR ${amount.toStringAsFixed(2)}';
+      icon = Icons.card_giftcard_rounded;
+      color = const Color(0xFFFF6B6B);
+    } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'me') {
+      text = 'Personal purchase: No shared debt or settlement impact';
+      icon = Icons.person_outline;
+      color = const Color(0xFF58A6FF);
+    } else {
+      text = "Partner's personal purchase: No shared debt or settlement impact";
+      icon = Icons.favorite_outline;
+      color = const Color(0xFFBC8CFF);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -256,9 +342,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   Future<void> _convertToInstallmentPlan() async {
     final amount = double.tryParse(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount first.')),
-      );
+      AppSnackBar.showError(context, 'Please enter a valid amount first.', title: 'Amount Required');
       return;
     }
 
@@ -437,19 +521,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         if (sheetCtx.mounted) Navigator.pop(sheetCtx);
                         if (mounted) {
                           Navigator.pop(context, 'updated');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Successfully converted to $selectedProvider $selectedCount-month plan!'),
-                              backgroundColor: const Color(0xFF00C896),
-                            ),
+                          AppSnackBar.showSuccess(
+                            context,
+                            'Converted to $selectedProvider $selectedCount-month installment plan!',
+                            title: 'Plan Active',
                           );
                         }
                       } catch (e) {
                         setModalState(() => isProcessing = false);
                         if (sheetCtx.mounted) {
-                          ScaffoldMessenger.of(sheetCtx).showSnackBar(
-                            SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
-                          );
+                          AppSnackBar.showError(sheetCtx, 'Failed to convert plan: $e', title: 'Conversion Failed');
                         }
                       }
                     },
@@ -605,9 +686,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Who spent this attribution selector
+            // ── WHO PAID? ────────────────────────────────────────────────
             Text(
-              'WHO SPENT THIS?',
+              'WHO PAID?',
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 letterSpacing: 1,
@@ -618,13 +699,82 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildSpentByOption('me', 'Me', Icons.person_outline, const Color(0xFF58A6FF)),
+                _buildSegmentOption(
+                  isSelected: _selectedPaidBy == 'me',
+                  title: 'I Paid',
+                  icon: Icons.credit_card_rounded,
+                  activeColor: const Color(0xFF58A6FF),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedPaidBy = 'me');
+                  },
+                ),
                 const SizedBox(width: 8),
-                _buildSpentByOption('partner', 'Partner', Icons.favorite_outline, const Color(0xFFBC8CFF)),
-                const SizedBox(width: 8),
-                _buildSpentByOption('both', 'Both (Shared)', Icons.people_alt_outlined, const Color(0xFF00C896)),
+                _buildSegmentOption(
+                  isSelected: _selectedPaidBy == 'partner',
+                  title: 'Partner Paid',
+                  icon: Icons.favorite_outline,
+                  activeColor: const Color(0xFFBC8CFF),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedPaidBy = 'partner');
+                  },
+                ),
               ],
             ),
+            const SizedBox(height: 16),
+
+            // ── FOR WHOM? ────────────────────────────────────────────────
+            Text(
+              'FOR WHOM?',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF8B949E),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildSegmentOption(
+                  isSelected: _selectedBeneficiary == 'me',
+                  title: 'Me (Solo)',
+                  icon: Icons.person_outline,
+                  activeColor: const Color(0xFF58A6FF),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedBeneficiary = 'me');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildSegmentOption(
+                  isSelected: _selectedBeneficiary == 'partner',
+                  title: 'Partner',
+                  icon: Icons.favorite_outline,
+                  activeColor: const Color(0xFFBC8CFF),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedBeneficiary = 'partner');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildSegmentOption(
+                  isSelected: _selectedBeneficiary == 'both',
+                  title: 'Both (Shared)',
+                  icon: Icons.people_alt_outlined,
+                  activeColor: const Color(0xFF00C896),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedBeneficiary = 'both');
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Live Settlement Preview
+            _buildSettlementPreviewBanner(double.tryParse(_amountCtrl.text) ?? 0.0),
             const SizedBox(height: 20),
 
             // Line items header

@@ -221,6 +221,8 @@ class TransactionProvider extends ChangeNotifier {
     required String merchant,
     required String categoryCode,
     required String spentBy,
+    String? paidBy,
+    String? beneficiary,
     String? subCategory,
     List<Map<String, dynamic>>? items,
   }) async {
@@ -241,6 +243,8 @@ class TransactionProvider extends ChangeNotifier {
       createdAt: original.createdAt,
       source: original.source,
       spentBy: spentBy,
+      paidBy: paidBy ?? original.paidBy,
+      beneficiary: beneficiary ?? original.beneficiary,
       items: items ?? original.items,
       receiptUrl: original.receiptUrl,
       dedupFingerprint: original.dedupFingerprint,
@@ -252,14 +256,17 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await supabase.from('transactions').update({
+      final updateData = <String, dynamic>{
         'amount': amount,
         'merchant': merchant,
         'category_code': categoryCode,
         'spent_by': spentBy,
+        if (paidBy != null) 'paid_by': paidBy,
+        if (beneficiary != null) 'beneficiary': beneficiary,
         if (subCategory != null) 'sub_category': subCategory,
         if (items != null) 'items': items,
-      }).eq('id', transactionId);
+      };
+      await supabase.from('transactions').update(updateData).eq('id', transactionId);
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Update failed, rolling back: $e');
@@ -275,6 +282,7 @@ class TransactionProvider extends ChangeNotifier {
     final idx = _transactions.indexWhere((t) => t.id == tx.id);
     if (idx == -1) {
       _transactions.insert(0, tx);
+      _recomputeFiltered();
       notifyListeners();
     }
   }

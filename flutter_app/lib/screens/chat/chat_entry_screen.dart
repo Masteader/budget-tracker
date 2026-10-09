@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/voice_listening_banner.dart';
+import '../../widgets/app_snackbar.dart';
 
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
@@ -115,11 +116,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         if (requested.isPermanentlyDenied && mounted) {
           _showMicrophonePermissionDialog();
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Microphone permission required for voice entry.'),
-              backgroundColor: Colors.orange,
-            ),
+          AppSnackBar.showWarning(
+            context,
+            'Microphone permission required for voice entry.',
+            title: 'Permission Required',
           );
         }
         return;
@@ -129,11 +129,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     if (!_speechAvailable) {
       await _initSpeech();
       if (!_speechAvailable && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Speech recognition is initializing or not available on device.'),
-            backgroundColor: Colors.redAccent,
-          ),
+        AppSnackBar.showInfo(
+          context,
+          'Speech recognition is initializing or not available on device.',
+          title: 'Speech Recognition',
         );
         return;
       }
@@ -444,11 +443,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         }
         _refreshGlobalProviders();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Failed to save transaction.'),
-            backgroundColor: Colors.redAccent,
-          ),
+        AppSnackBar.showError(
+          context,
+          res['message'] ?? 'Failed to save transaction.',
+          title: 'Save Error',
         );
       }
     });

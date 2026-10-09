@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../main.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import 'app_snackbar.dart';
 
 class SubBudgetAllocationDialog extends StatefulWidget {
   final String householdId;
@@ -462,31 +463,28 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         });
         widget.onSaved?.call();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Renamed to "$newName"'),
-              backgroundColor: const Color(0xFF1F6FEB),
-              duration: const Duration(seconds: 2),
-            ),
+          AppSnackBar.showSuccess(
+            context,
+            'Sub-category renamed to "$newName".',
+            title: 'Renamed',
+            duration: const Duration(seconds: 2),
           );
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to rename: ${resp['message']}'),
-              backgroundColor: Colors.redAccent,
-            ),
+          AppSnackBar.showError(
+            context,
+            'Failed to rename: ${resp['message']}',
+            title: 'Rename Failed',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error renaming: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+        AppSnackBar.showError(
+          context,
+          'Error renaming: $e',
+          title: 'Rename Error',
         );
       }
     }
@@ -543,31 +541,28 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         _recomputeTotal();
         widget.onSaved?.call();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Removed "${item.nameEn}"'),
-              backgroundColor: const Color(0xFF238636),
-              duration: const Duration(seconds: 2),
-            ),
+          AppSnackBar.showDelete(
+            context,
+            'Removed "${item.nameEn}" from budget.',
+            title: 'Sub-Category Removed',
+            duration: const Duration(seconds: 3),
           );
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to remove: ${resp['message']}'),
-              backgroundColor: Colors.redAccent,
-            ),
+          AppSnackBar.showError(
+            context,
+            'Failed to remove: ${resp['message']}',
+            title: 'Remove Failed',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error removing: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+        AppSnackBar.showError(
+          context,
+          'Error removing: $e',
+          title: 'Remove Error',
         );
       }
     }
@@ -641,13 +636,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (mounted) {
         widget.onSaved?.call();
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${widget.categoryName} budget saved (SAR ${_currencyFmt.format(_totalSum)})',
-            ),
-            backgroundColor: const Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          '${widget.categoryName} budget saved (SAR ${_currencyFmt.format(_totalSum)})',
+          title: 'Budget Saved',
         );
       }
     } catch (e) {

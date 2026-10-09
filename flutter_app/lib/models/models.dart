@@ -15,7 +15,9 @@ class Transaction {
   final String? reallocatedFromBudgetId;
   final DateTime createdAt;
   final String source;
-  final String spentBy; // 'me' | 'partner' | 'both'
+  final String spentBy; // legacy 'me' | 'partner' | 'both'
+  final String paidBy; // 'me' | 'partner'
+  final String beneficiary; // 'me' | 'partner' | 'both'
   final List<Map<String, dynamic>> items;
   final String? receiptUrl;
   final String? dedupFingerprint;
@@ -35,6 +37,8 @@ class Transaction {
     required this.createdAt,
     this.source = 'sms',
     this.spentBy = 'both',
+    this.paidBy = 'me',
+    this.beneficiary = 'both',
     this.items = const [],
     this.receiptUrl,
     this.dedupFingerprint,
@@ -104,6 +108,36 @@ class Transaction {
       }
     }
 
+    // Determine 2D attribution: paid_by and beneficiary
+    String detectedPaidBy = map['paid_by'] as String? ?? '';
+    String detectedBeneficiary = map['beneficiary'] as String? ?? '';
+
+    if (detectedPaidBy.isEmpty) {
+      final paidByRegex = RegExp(r'PaidBy:\s*(me|partner)', caseSensitive: false);
+      final match = paidByRegex.firstMatch(raw);
+      if (match != null) {
+        detectedPaidBy = match.group(1)!.toLowerCase();
+      } else if (detectedSpentBy == 'partner') {
+        detectedPaidBy = 'partner';
+      } else {
+        detectedPaidBy = 'me';
+      }
+    }
+
+    if (detectedBeneficiary.isEmpty) {
+      final benRegex = RegExp(r'Beneficiary:\s*(me|partner|both)', caseSensitive: false);
+      final match = benRegex.firstMatch(raw);
+      if (match != null) {
+        detectedBeneficiary = match.group(1)!.toLowerCase();
+      } else if (detectedSpentBy == 'partner') {
+        detectedBeneficiary = 'partner';
+      } else if (detectedSpentBy == 'both') {
+        detectedBeneficiary = 'both';
+      } else {
+        detectedBeneficiary = 'me';
+      }
+    }
+
     return Transaction(
       id: map['id'] as String,
       householdId: map['household_id'] as String,
@@ -117,6 +151,8 @@ class Transaction {
       createdAt: DateTime.parse(map['created_at'] as String),
       source: detectedSource,
       spentBy: detectedSpentBy,
+      paidBy: detectedPaidBy,
+      beneficiary: detectedBeneficiary,
       items: parsedItems,
       receiptUrl: map['receipt_url'] as String?,
       dedupFingerprint: map['dedup_fingerprint'] as String?,

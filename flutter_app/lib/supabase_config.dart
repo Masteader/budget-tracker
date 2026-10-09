@@ -25,6 +25,11 @@ const fastapiWebhookUrl = String.fromEnvironment(
   defaultValue: 'https://budget.fmsco.com.sa/webhook/sms',
 );
 
+const authRedirectUrl = String.fromEnvironment(
+  'AUTH_REDIRECT_URL',
+  defaultValue: 'https://budget.fmsco.com.sa',
+);
+
 
 
 const webhookSecret = String.fromEnvironment(

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
+import '../../widgets/app_snackbar.dart';
 
 class MultiPageReceiptScannerScreen extends StatefulWidget {
   final String householdId;
@@ -96,11 +97,10 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
 
       if (mounted) {
         if (res['status'] == 'success') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(res['message'] ?? 'Receipt stitched and saved successfully!'),
-              backgroundColor: const Color(0xFF00C896),
-            ),
+          AppSnackBar.showSuccess(
+            context,
+            res['message'] ?? 'Receipt stitched and saved successfully!',
+            title: 'Receipt Saved',
           );
           Navigator.pop(context, true);
         } else if (res['status'] == 'error') {
@@ -111,11 +111,11 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
             householdId: widget.householdId,
           );
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Offline: Saved receipt shots to local SQLite queue. Will sync automatically.'),
-                backgroundColor: Colors.orange,
-              ),
+            AppSnackBar.showWarning(
+              context,
+              'Saved receipt shots to local offline queue. Will sync automatically once connected.',
+              title: 'Queued Offline',
+              icon: Icons.cloud_off_rounded,
             );
             Navigator.pop(context, true);
           }
@@ -140,11 +140,11 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           householdId: widget.householdId,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Offline: Saved receipt shots to local SQLite queue.'),
-              backgroundColor: Colors.orange,
-            ),
+          AppSnackBar.showWarning(
+            context,
+            'Saved receipt shots to local offline queue.',
+            title: 'Queued Offline',
+            icon: Icons.cloud_off_rounded,
           );
           Navigator.pop(context, true);
         }

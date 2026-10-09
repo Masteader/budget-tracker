@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../widgets/app_snackbar.dart';
 
 typedef SendResetCodeFn = Future<void> Function(String email);
 typedef VerifyAndResetPasswordFn = Future<void> Function(String email, String token, String newPassword);
@@ -89,21 +90,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         _currentStep = 2;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Verification code sent to $email'),
-          backgroundColor: const Color(0xFF00C896),
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        'Verification code sent to $email',
+        title: 'Code Sent',
+        icon: Icons.mark_email_read_outlined,
       );
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
+      AppSnackBar.showError(
+        context,
+        e.message,
+        title: 'Authentication Error',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send reset code: $e'), backgroundColor: Colors.redAccent),
+      AppSnackBar.showError(
+        context,
+        'Failed to send reset code: $e',
+        title: 'Request Failed',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -141,23 +146,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password updated successfully!'),
-          backgroundColor: Color(0xFF00C896),
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        'Password updated successfully! You can now log in.',
+        title: 'Password Updated',
       );
 
       Navigator.of(context).pop();
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
+      AppSnackBar.showError(
+        context,
+        e.message,
+        title: 'Authentication Error',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update password: $e'), backgroundColor: Colors.redAccent),
+      AppSnackBar.showError(
+        context,
+        'Failed to update password: $e',
+        title: 'Update Failed',
       );
     } finally {
       if (mounted) setState(() => _loading = false);

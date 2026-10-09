@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../supabase_config.dart';
+import '../../widgets/app_snackbar.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -59,18 +61,25 @@ class _LoginScreenState extends State<LoginScreen>
         await supabase.auth.signUp(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
+          emailRedirectTo: authRedirectUrl,
           data: {'display_name': _nameCtrl.text.trim()},
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created! Check your email to confirm.')),
+          AppSnackBar.showSuccess(
+            context,
+            'Account created! Check your email to confirm.',
+            title: 'Welcome',
+            icon: Icons.mark_email_read_outlined,
           );
         }
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        AppSnackBar.showError(
+          context,
+          e.message,
+          title: 'Authentication Failed',
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);

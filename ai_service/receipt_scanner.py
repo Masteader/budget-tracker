@@ -75,6 +75,59 @@ def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def stitch_images_vertically(images_base64: List[str]) -> bytes:
+    """
+    Decodes base64 receipt images and stitches them vertically into a single continuous JPEG.
+    If only one image is supplied, decodes and returns it directly.
+    """
+    if not images_base64:
+        return b""
+
+    import io
+    from PIL import Image
+
+    raw_bytes_list: List[bytes] = []
+    for img_data in images_base64:
+        if "," in img_data:
+            img_data = img_data.split(",", 1)[1]
+        try:
+            raw_bytes_list.append(base64.b64decode(img_data))
+        except Exception:
+            pass
+
+    if not raw_bytes_list:
+        return b""
+
+    if len(raw_bytes_list) == 1:
+        return raw_bytes_list[0]
+
+    try:
+        pil_images = [Image.open(io.BytesIO(b)).convert("RGB") for b in raw_bytes_list]
+        base_width = pil_images[0].width
+        resized = []
+        total_height = 0
+        for img in pil_images:
+            if img.width != base_width:
+                w_percent = base_width / float(img.width)
+                h_size = int(float(img.height) * float(w_percent))
+                img = img.resize((base_width, h_size), Image.Resampling.LANCZOS)
+            resized.append(img)
+            total_height += img.height
+
+        combined = Image.new("RGB", (base_width, total_height))
+        y_offset = 0
+        for img in resized:
+            combined.paste(img, (0, y_offset))
+            y_offset += img.height
+
+        out = io.BytesIO()
+        combined.save(out, format="JPEG", quality=85)
+        return out.getvalue()
+    except Exception as e:
+        logger.warning("Vertical stitching failed, falling back to first image: %s", e)
+        return raw_bytes_list[0]
+
+
 RECEIPT_PROMPT = """You are an expert financial receipt & invoice analyzer for Saudi Arabia.
 Inspect the attached receipt/invoice photo(s) carefully.
 NOTE: If there are multiple photos, they represent sequential parts of a single LONG receipt (e.g. top, middle, bottom of a 60+ item grocery receipt).
@@ -216,10 +269,7 @@ def process_receipt_scan(
         try:
             import time, uuid
             client = get_client()
-            img_data = images_base64[0]
-            if "," in img_data:
-                img_data = img_data.split(",", 1)[1]
-            raw_bytes = base64.b64decode(img_data)
+            raw_bytes = stitch_images_vertically(images_base64)
             ts = int(time.time() * 1000)
             u = uuid.uuid4().hex[:8]
             storage_path = f"{household_id}/{ts}_{u}.jpg"
@@ -229,7 +279,7 @@ def process_receipt_scan(
                 file_options={"content-type": "image/jpeg", "upsert": "true"},
             )
             receipt_url = client.storage.from_("receipts").get_public_url(storage_path)
-            logger.info("Auto-uploaded receipt photo to storage: %s", receipt_url)
+            logger.info("Auto-uploaded receipt photo (stitched %d shots) to storage: %s", len(images_base64), receipt_url)
         except Exception as upload_err:
             logger.warning("Could not auto-upload receipt image: %s", upload_err)
 

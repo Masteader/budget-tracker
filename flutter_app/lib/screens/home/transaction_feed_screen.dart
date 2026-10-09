@@ -10,7 +10,12 @@ import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
+import 'package:flutter/services.dart';
+import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
+import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_shimmer.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import 'edit_transaction_sheet.dart';
 
@@ -542,11 +547,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (confirm != true) return;
     }
 
+    HapticFeedback.mediumImpact();
     final success = await txProvider.deleteTransaction(tx.id);
     if (!success) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete transaction.'), backgroundColor: Colors.redAccent),
+        AppSnackBar.showError(
+          context,
+          'Could not delete transaction. Please check your network connection.',
+          title: 'Delete Failed',
         );
       }
       return;
@@ -556,31 +564,33 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     budgetProvider.refresh();
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Deleted SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}'),
-          backgroundColor: const Color(0xFF21262D),
-          action: SnackBarAction(
-            label: 'UNDO',
-            textColor: const Color(0xFF00C896),
-            onPressed: () async {
-              await supabase.from('transactions').insert({
-                'household_id': tx.householdId,
-                'amount': tx.amount,
-                'currency': tx.currency,
-                'merchant': tx.merchant,
-                'category_code': tx.categoryCode,
-                'timestamp': tx.timestamp.toIso8601String(),
-                'source': tx.source,
-                'items': tx.items,
-                'receipt_url': tx.receiptUrl,
-                'spent_by': tx.spentBy,
-              });
-              await txProvider.fetchTransactions();
-              budgetProvider.refresh();
-            },
-          ),
-        ),
+      AppSnackBar.showDelete(
+        context,
+        'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}',
+        title: 'Transaction Removed',
+        onUndo: () async {
+          await supabase.from('transactions').insert({
+            'household_id': tx.householdId,
+            'amount': tx.amount,
+            'currency': tx.currency,
+            'merchant': tx.merchant,
+            'category_code': tx.categoryCode,
+            'timestamp': tx.timestamp.toIso8601String(),
+            'source': tx.source,
+            'items': tx.items,
+            'receipt_url': tx.receiptUrl,
+            'spent_by': tx.spentBy,
+          });
+          await txProvider.fetchTransactions();
+          budgetProvider.refresh();
+          if (context.mounted) {
+            AppSnackBar.showSuccess(
+              context,
+              'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"} has been restored.',
+              title: 'Transaction Restored',
+            );
+          }
+        },
       );
     }
   }
@@ -652,6 +662,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
                       ),
                       onSelected: (val) {
+                        HapticFeedback.selectionClick();
                         setState(() => _selectedCategoryFilter = opt['code']!);
                       },
                     );
@@ -664,7 +675,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 child: Consumer<TransactionProvider>(
                   builder: (ctx, txProvider, _) {
                     if (txProvider.isLoading && txProvider.transactions.isEmpty) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)));
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: AppShimmer.listItems(count: 6),
+                      );
                     }
 
                     final transactions = _filterAndSort(txProvider.transactions);
@@ -771,6 +785,118 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () async {
+                                  final user = supabase.auth.currentUser;
+                                  if (user == null) return;
+                                  final prof = await supabase.from('users').select('household_id').eq('id', user.id).single();
+                                  final hid = prof['household_id'] as String?;
+                                  if (hid != null && context.mounted) {
+                                    final pdfUrl = ApiService.instance.getStatementPdfUrl(hid);
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        backgroundColor: const Color(0xFF161B22),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        title: Row(
+                                          children: [
+                                            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              'Monthly Statement (PDF)',
+                                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Executive monthly statement with partner attribution split, 15% VAT, and category budgets.',
+                                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                                            ),
+                                            const SizedBox(height: 14),
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF0D1117),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: const Color(0xFF30363D)),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.link_rounded, color: Color(0xFF00C896), size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      pdfUrl,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 11, fontFamily: 'monospace'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+                                          ),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF00C896),
+                                              foregroundColor: Colors.black,
+                                            ),
+                                            icon: const Icon(Icons.copy_rounded, size: 16),
+                                            label: const Text('Copy PDF Link', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            onPressed: () async {
+                                              await Clipboard.setData(ClipboardData(text: pdfUrl));
+                                              if (ctx.mounted) {
+                                                Navigator.pop(ctx);
+                                                AppSnackBar.showSuccess(
+                                                  context,
+                                                  'PDF Statement link copied to clipboard. Paste into browser to download.',
+                                                  title: 'Link Copied',
+                                                  icon: Icons.picture_as_pdf_rounded,
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161B22),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF30363D)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.picture_as_pdf_outlined, size: 14, color: Color(0xFFE24A4A)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Export PDF',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFFE24A4A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -778,22 +904,20 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         // List view
                         Expanded(
                           child: transactions.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.search_off_rounded, size: 56, color: Color(0xFF30363D)),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No matching transactions',
-                                        style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 16),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      TextButton(
-                                        onPressed: _resetFilters,
-                                        child: const Text('Reset filters', style: TextStyle(color: Color(0xFF00C896))),
-                                      ),
-                                    ],
+                              ? SingleChildScrollView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: AppEmptyState(
+                                      icon: Icons.search_off_rounded,
+                                      title: 'No Matching Transactions',
+                                      message: 'Try adjusting your filters, date range, or category selection to find what you need.',
+                                      actionLabel: 'Reset Filters',
+                                      onAction: () {
+                                        HapticFeedback.lightImpact();
+                                        _resetFilters();
+                                      },
+                                    ),
                                   ),
                                 )
                               : RefreshIndicator(

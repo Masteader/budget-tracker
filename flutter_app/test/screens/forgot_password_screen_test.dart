@@ -66,6 +66,8 @@ void main() {
       // Transition to Step 2
       await tester.tap(find.text('Send Reset Code'));
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
 
       // Enter OTP
       final textFields = find.byType(TextFormField);
@@ -103,6 +105,8 @@ void main() {
 
       // Go to Step 2
       await tester.tap(find.text('Send Reset Code'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();
 
       final textFields = find.byType(TextFormField);

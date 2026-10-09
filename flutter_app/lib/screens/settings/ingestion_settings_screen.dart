@@ -12,6 +12,7 @@ import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/payday_settings_card.dart';
+import '../../widgets/app_snackbar.dart';
 import '../onboarding/household_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
@@ -163,8 +164,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save payday: $e'), backgroundColor: Colors.redAccent),
+        AppSnackBar.showError(
+          context,
+          'Failed to save payday: $e',
+          title: 'Payday Error',
         );
       }
       return false;
@@ -197,11 +200,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     if (mounted) {
       setState(() => _cameraStatus = status);
       if (status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Camera permission granted! Ready to scan receipts & invoices.'),
-            backgroundColor: Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Camera permission granted! Ready to scan receipts & invoices.',
+          title: 'Camera Enabled',
         );
       } else if (status.isPermanentlyDenied) {
         _showPermissionDialog(
@@ -218,11 +220,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     if (mounted) {
       setState(() => _microphoneStatus = status);
       if (status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Microphone permission granted! Ready for voice invoice entries.'),
-            backgroundColor: Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Microphone permission granted! Ready for voice invoice entries.',
+          title: 'Microphone Enabled',
         );
       } else if (status.isPermanentlyDenied) {
         _showPermissionDialog(
@@ -272,12 +273,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   void _copyInviteCode() {
     if (_inviteCode != null && _inviteCode != '--------') {
       Clipboard.setData(ClipboardData(text: _inviteCode!));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Invite code "$_inviteCode" copied! Share with your partner.'),
-          backgroundColor: const Color(0xFF00C896),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        'Invite code "$_inviteCode" copied! Share with your partner.',
+        title: 'Code Copied',
+        icon: Icons.copy_rounded,
       );
     }
   }
@@ -333,8 +333,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to leave household: $e'), backgroundColor: Colors.redAccent),
+          AppSnackBar.showError(
+            context,
+            'Failed to leave household: $e',
+            title: 'Leave Household Error',
           );
         }
       }
@@ -397,15 +399,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       .eq('id', uid);
                 }
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Joined household!'), backgroundColor: Color(0xFF00C896)),
+                  AppSnackBar.showSuccess(
+                    context,
+                    'You have successfully joined the household!',
+                    title: 'Household Joined',
                   );
                   _loadUserInfo();
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to join: $e'), backgroundColor: Colors.redAccent),
+                  AppSnackBar.showError(
+                    context,
+                    'Failed to join: $e',
+                    title: 'Join Error',
                   );
                 }
               }
@@ -466,15 +472,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     .eq('id', uid);
 
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Created household "${res['name']}"!'), backgroundColor: const Color(0xFF00C896)),
+                  AppSnackBar.showSuccess(
+                    context,
+                    'Created household "${res['name']}"!',
+                    title: 'Household Created',
                   );
                   _loadUserInfo();
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to create: $e'), backgroundColor: Colors.redAccent),
+                  AppSnackBar.showError(
+                    context,
+                    'Failed to create household: $e',
+                    title: 'Creation Error',
                   );
                 }
               }
@@ -729,7 +739,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           CsvExportService.showExportDialog(context, List<Map<String, dynamic>>.from(res), monthLabel: 'Monthly Export');
                         } catch (e) {
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export error: $e')));
+                          AppSnackBar.showError(
+                            context,
+                            'Export error: $e',
+                            title: 'Export Failed',
+                          );
                         }
                       },
                       child: const Text('Export CSV', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -812,8 +826,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       InkWell(
                         onTap: () {
                           Clipboard.setData(ClipboardData(text: _householdId!));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Household ID copied to clipboard!')),
+                          AppSnackBar.showSuccess(
+                            context,
+                            'Household ID copied to clipboard',
+                            title: 'Copied',
+                            icon: Icons.copy_rounded,
                           );
                         },
                         child: const Padding(

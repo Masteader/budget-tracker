@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../widgets/app_snackbar.dart';
 
 class CsvExportService {
   CsvExportService._();
@@ -134,11 +135,11 @@ class CsvExportService {
               await Clipboard.setData(ClipboardData(text: csvContent));
               if (ctx.mounted) {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('CSV report copied to clipboard! Ready to paste in Excel / Google Sheets.'),
-                    backgroundColor: Color(0xFF00C896),
-                  ),
+                AppSnackBar.showSuccess(
+                  context,
+                  'CSV report copied to clipboard. Ready to paste into Excel or Google Sheets.',
+                  title: 'Report Copied',
+                  icon: Icons.table_chart_outlined,
                 );
               }
             },

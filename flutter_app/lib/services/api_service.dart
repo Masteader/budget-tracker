@@ -200,6 +200,12 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getGroceryPriceHistory(String householdId, {String? itemFilter}) =>
       budget.getGroceryPriceHistory(householdId, itemFilter: itemFilter);
 
+  Future<Map<String, dynamic>> optimizeShoppingBasket(String householdId, List<String> items) =>
+      budget.optimizeShoppingBasket(householdId, items);
+
+  String getStatementPdfUrl(String householdId, {String? cycleKey}) =>
+      budget.getStatementPdfUrl(householdId, cycleKey: cycleKey);
+
   Future<Map<String, dynamic>> addBudgetCategory({
     required String householdId,
     required String code,

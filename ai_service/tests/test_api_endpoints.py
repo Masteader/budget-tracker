@@ -195,3 +195,40 @@ def test_scan_receipt_with_receipt_url():
     assert data["merchant"] == "United Electronics Co. eXtra"
 
 
+@patch("main.generate_monthly_pdf_statement", create=True)
+def test_export_statement_pdf(mock_gen):
+    with patch("pdf_statement_generator.generate_monthly_pdf_statement", return_value=b"%PDF-1.4 test"):
+        res = client.get(f"/reports/statement-pdf?household_id={HOUSEHOLD_ID}")
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "application/pdf"
+        assert res.content.startswith(b"%PDF")
+
+
+def test_grocery_price_history_endpoint():
+    res = client.get(f"/analytics/price-history?household_id={HOUSEHOLD_ID}")
+    assert res.status_code == 200
+    data = res.json()
+    assert "items" in data
+    assert isinstance(data["items"], list)
+    assert "count" in data
+
+
+def test_shopping_basket_optimize_endpoint():
+    payload = {
+        "household_id": HOUSEHOLD_ID,
+        "items": ["Milk", "Bread", "Chicken", "Eggs"],
+    }
+    res = client.post("/analytics/shopping-basket-optimize", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert data["items_count"] == 4
+    assert data["cheapest_store"] in ["Panda", "Danube", "Tamimi", "Othaim", "Lulu"]
+    assert data["cheapest_store_total"] > 0
+    assert "store_totals" in data
+    assert "split_optimization" in data
+    assert len(data["split_optimization"]["items"]) == 4
+
+
+
+

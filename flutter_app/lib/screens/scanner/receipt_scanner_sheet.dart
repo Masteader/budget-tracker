@@ -19,6 +19,7 @@ import '../../widgets/store_attribution_card.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
+import '../../widgets/app_snackbar.dart';
 
 class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
@@ -420,11 +421,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       if (mounted) {
         if (res['status'] == 'success' || res['status'] == 'enriched') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(res['message'] ?? 'Invoice transaction saved successfully!'),
-              backgroundColor: const Color(0xFF00C896),
-            ),
+          AppSnackBar.showSuccess(
+            context,
+            res['message'] ?? 'Invoice transaction saved successfully!',
+            title: 'Invoice Saved',
           );
           _notifyGlobalProviders();
           Navigator.pop(context);
@@ -576,11 +576,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       setState(() => _isAnalyzing = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved SAR ${total.toStringAsFixed(2)} at $merchant!'),
-            backgroundColor: const Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Saved SAR ${total.toStringAsFixed(2)} at $merchant!',
+          title: 'Invoice Recorded',
         );
         _notifyGlobalProviders();
         Navigator.pop(context);
@@ -990,12 +989,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             onLogSeparate: () => _confirmSave(allowDuplicate: true),
             onDiscard: () {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Duplicate receipt scan discarded.'),
-                  backgroundColor: Color(0xFF21262D),
-                  behavior: SnackBarBehavior.floating,
-                ),
+              AppSnackBar.showInfo(
+                context,
+                'Duplicate receipt scan discarded.',
+                title: 'Scan Discarded',
+                icon: Icons.delete_sweep_outlined,
               );
             },
           ),

@@ -23,6 +23,10 @@ import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/salary_cycle_widget.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
 import '../scanner/multi_page_receipt_scanner_screen.dart';
+import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_shimmer.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../settings/ingestion_settings_screen.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
@@ -49,11 +53,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted && count > 0) {
         context.read<TransactionProvider>().fetchTransactions();
         context.read<BudgetProvider>().refresh();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Synced $count queued offline transaction(s) with cloud!'),
-            backgroundColor: const Color(0xFF00C896),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Synced $count queued offline transaction(s) with cloud.',
+          title: 'Sync Complete',
+          icon: Icons.cloud_done_rounded,
         );
       }
     });
@@ -92,13 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       floatingActionButton: (_selectedIndex == 2 || _selectedIndex == 3)
           ? null
-          : FloatingActionButton.extended(
-              backgroundColor: const Color(0xFF00C896),
-              foregroundColor: Colors.black,
-              icon: const Icon(Icons.add_rounded, size: 22),
-              label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => DashboardActionSheet.show(context, householdId: _householdId),
-            ),
+          : AppSpeedDialFab(householdId: _householdId),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
@@ -199,9 +197,15 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   bool _matchesSelectedCycle(Budget b) {
     final key = _currentCycleKey;
     if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
-      return b.cycleKey == key;
+      if (b.cycleKey == key) return true;
     }
-    return b.month.startsWith(key);
+    final cycleStart = _selectedCycle?.cycleStart;
+    if (cycleStart != null && cycleStart.length >= 7) {
+      final cycleMonth = cycleStart.substring(0, 7);
+      if (b.month == cycleMonth || b.month.startsWith(cycleMonth)) return true;
+    }
+    final keyPrefix = key.length >= 7 ? key.substring(0, 7) : key;
+    return b.month.startsWith(keyPrefix);
   }
 
   @override
@@ -210,8 +214,20 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       future: _householdId,
       builder: (context, snap) {
         if (!snap.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: const Color(0xFF0D1117),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  children: [
+                    AppShimmer.heroCard(),
+                    const SizedBox(height: 16),
+                    Expanded(child: AppShimmer.listItems(count: 3)),
+                  ],
+                ),
+              ),
+            ),
           );
         }
         final hid = snap.data!;
@@ -228,8 +244,17 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   slivers: [
                     _buildAppBar(hid),
                     if (!budgetSnap.hasData)
-                      const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        sliver: SliverToBoxAdapter(
+                          child: Column(
+                            children: [
+                              AppShimmer.heroCard(),
+                              const SizedBox(height: 16),
+                              AppShimmer.listItems(count: 3),
+                            ],
+                          ),
+                        ),
                       )
                     else ...[
                       SliverToBoxAdapter(
@@ -394,29 +419,12 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 .toList();
                             if (cycleBudgets.isEmpty) {
                               return SliverToBoxAdapter(
-                                child: Container(
-                                  padding: const EdgeInsets.all(24),
-                                  margin: const EdgeInsets.only(bottom: 20),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF161B22),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFF30363D)),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      const Icon(Icons.calendar_today_outlined, color: Color(0xFF8B949E), size: 36),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No allocations for $_currentCycleKey',
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      const Text(
-                                        'Budgets auto-rollover on monthly payday. You can also add categories from the Budgets tab.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-                                      ),
-                                    ],
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 20),
+                                  child: AppEmptyState(
+                                    icon: Icons.calendar_today_outlined,
+                                    title: 'No allocations for $_currentCycleKey',
+                                    message: 'Budgets auto-rollover on monthly payday. You can also add categories from the Budgets tab.',
                                   ),
                                 ),
                               );

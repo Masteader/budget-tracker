@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../app_snackbar.dart';
 
 /// Card for customizing the household/user monthly payday (1-31).
 class PaydaySettingsCard extends StatefulWidget {
@@ -54,15 +55,12 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     if (mounted) {
       setState(() => _saving = false);
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Payday updated to ${getOrdinal(_selectedDay)} of every month!',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            backgroundColor: const Color(0xFF00C896),
-            duration: const Duration(seconds: 3),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          'Payday updated to ${getOrdinal(_selectedDay)} of every month!',
+          title: 'Payday Saved',
+          icon: Icons.calendar_month_rounded,
+          duration: const Duration(seconds: 3),
         );
       }
     }

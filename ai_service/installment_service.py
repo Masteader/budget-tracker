@@ -225,10 +225,10 @@ class InstallmentService:
         try:
             sb = supabase_client.get_client()
             res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
-            if res.data:
+            if res.data is not None:
                 return [InstallmentPlan(**row) for row in res.data]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Supabase installment_plans query failed (%s), using local fallback", e)
 
         # Fallback to local
         plans = cls._read_fallback_plans()
@@ -242,17 +242,17 @@ class InstallmentService:
         # Try Supabase first
         try:
             sb = supabase_client.get_client()
-            res = sb.table("installment_plans").select("*").eq("id", plan_id).single().execute()
-            if res.data:
-                plan = InstallmentPlan(**res.data)
+            res = sb.table("installment_plans").select("*").eq("id", plan_id).execute()
+            if res.data and len(res.data) > 0:
+                plan = InstallmentPlan(**res.data[0])
                 plan.record_payment()
                 sb.table("installment_plans").update({
                     "paid_installments": plan.paid_installments,
                     "status": plan.status,
                 }).eq("id", plan_id).execute()
                 return plan
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Supabase pay_installment failed (%s), using local fallback", e)
 
         # Fallback
         plans = cls._read_fallback_plans()

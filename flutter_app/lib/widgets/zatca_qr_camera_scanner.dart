@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'app_snackbar.dart';
 
 /// Live Camera QR Scanner specifically designed for Saudi ZATCA e-invoicing QR codes.
 class ZatcaQrCameraScanner extends StatefulWidget {
@@ -56,18 +58,12 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
       } catch (_) {}
     } else if (status.isPermanentlyDenied) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Camera permission is permanently denied. Please enable it in Settings.',
-            ),
-            backgroundColor: const Color(0xFF161B22),
-            action: SnackBarAction(
-              label: 'Settings',
-              textColor: const Color(0xFF00C896),
-              onPressed: () => openAppSettings(),
-            ),
-          ),
+        AppSnackBar.showWarning(
+          context,
+          'Camera permission is permanently denied. Please enable it in Settings.',
+          title: 'Camera Permission',
+          actionLabel: 'Settings',
+          onAction: () => openAppSettings(),
         );
       }
     }
@@ -79,6 +75,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
       final code = barcode.rawValue;
       if (code != null && code.trim().isNotEmpty) {
         _isDetected = true;
+        HapticFeedback.heavyImpact();
         Navigator.pop(context, code.trim());
         break;
       }
