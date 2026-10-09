@@ -67,3 +67,63 @@ def test_detect_recurring_bills_known_and_cadence():
     assert res["total_recurring_monthly"] == 465.0
     assert res["paid_this_cycle"] == 400.0
     assert res["reserved_amount"] == 65.0
+
+
+def test_detect_recurring_bills_with_budgets_and_iqama():
+    budgets = [
+        {
+            "category_code": "OPEX-UTILITIES",
+            "cycle_key": "2026-10",
+            "is_active": True,
+            "sub_allocations": {
+                "housing_rent": 3000.0,
+                "electricity_sec": 350.0,
+                "fiber_internet": 250.0,
+            },
+        },
+        {
+            "category_code": "OPEX-GOV",
+            "cycle_key": "2026-10",
+            "is_active": True,
+            "sub_allocations": {
+                "sub-iqama-fees": 400.0,
+            },
+        },
+    ]
+
+    # Only 1 transaction: Housing Rent paid
+    txs = [
+        {
+            "id": "tx-1",
+            "merchant": "Housing Rent",
+            "amount": 3000.0,
+            "category_code": "OPEX-UTILITIES",
+            "sub_category": "housing_rent",
+            "timestamp": "2026-09-29T10:00:00Z",
+        }
+    ]
+
+    res = detect_recurring_bills(txs, as_of_date=date(2026, 10, 5), budgets=budgets)
+    bills = res["bills"]
+    assert len(bills) == 4
+
+    # Housing Rent should be PAID
+    rent = next(b for b in bills if "Rent" in b["merchant"])
+    assert rent["status"] == "PAID_THIS_CYCLE"
+    assert rent["paid_amount"] == 3000.0
+
+    # Electricity and Fiber should be UPCOMING / OVERDUE
+    sec = next(b for b in bills if "Electricity" in b["merchant"])
+    assert sec["status"] in ("UPCOMING", "OVERDUE")
+    assert sec["average_amount"] == 350.0
+
+    # Iqama fees should be included from OPEX-GOV
+    iqama = next(b for b in bills if "iqama" in b["merchant"].lower())
+    assert iqama["category_code"] == "OPEX-GOV"
+    assert iqama["average_amount"] == 400.0
+    assert iqama["status"] == "UPCOMING"
+
+    assert res["total_recurring_monthly"] == 4000.0
+    assert res["paid_this_cycle"] == 3000.0
+    assert res["reserved_amount"] == 1000.0
+

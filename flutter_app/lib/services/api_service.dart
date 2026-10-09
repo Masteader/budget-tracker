@@ -175,6 +175,26 @@ class ApiService {
   Future<RecurringBillsSummary> fetchRecurringBills({required String householdId, String? asOfDate}) =>
       budget.fetchRecurringBills(householdId: householdId, asOfDate: asOfDate);
 
+  Future<List<RecurringBillCandidate>> getRecurringBillCandidates(String householdId) =>
+      budget.fetchRecurringBillCandidates(householdId: householdId);
+
+  Future<void> toggleRecurringBill({
+    required String householdId,
+    required String categoryCode,
+    required String subCode,
+    required bool isRecurring,
+    int? dueDay,
+    String? customName,
+  }) =>
+      budget.toggleRecurringBill(
+        householdId: householdId,
+        categoryCode: categoryCode,
+        subCode: subCode,
+        isRecurring: isRecurring,
+        dueDay: dueDay,
+        customName: customName,
+      );
+
   Future<List<InstallmentPlan>> getInstallments(String householdId) =>
       budget.fetchInstallments(householdId: householdId);
 

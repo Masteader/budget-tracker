@@ -3,10 +3,14 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../widgets/app_snackbar.dart';
+import '../home/dashboard_screen.dart';
 
 class HouseholdScreen extends StatefulWidget {
   const HouseholdScreen({super.key});
@@ -61,11 +65,18 @@ class _HouseholdScreenState extends State<HouseholdScreen>
             .update({'household_id': hh['id'], 'role': 'admin'})
             .eq('id', uid);
       }
+      final householdId = hh['id'] as String;
       if (mounted) {
+        context.read<TransactionProvider>().init(householdId);
+        context.read<BudgetProvider>().init(householdId);
         AppSnackBar.showSuccess(
           context,
           'Household "${hh['name']}" created! Invite code: ${hh['invite_code']}',
           title: 'Household Ready',
+        );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          (route) => false,
         );
       }
     } on PostgrestException catch (e) {
@@ -85,22 +96,39 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     }
     setState(() => _loading = true);
     try {
+      Map<String, dynamic> hh;
       try {
-        await supabase.rpc(
+        final res = await supabase.rpc(
           'join_household_by_code',
           params: {'p_invite_code': code},
         );
+        hh = Map<String, dynamic>.from(res as Map);
       } catch (_) {
         final uid = supabase.auth.currentUser!.id;
-        final hh = await supabase
+        final res = await supabase
             .from('households')
             .select()
             .eq('invite_code', code)
             .single();
+        hh = res;
         await supabase
             .from('users')
             .update({'household_id': hh['id'], 'role': 'member'})
             .eq('id', uid);
+      }
+      final householdId = hh['id'] as String;
+      if (mounted) {
+        context.read<TransactionProvider>().init(householdId);
+        context.read<BudgetProvider>().init(householdId);
+        AppSnackBar.showSuccess(
+          context,
+          'Joined household "${hh['name'] ?? code}" successfully!',
+          title: 'Welcome to Household',
+        );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          (route) => false,
+        );
       }
     } on PostgrestException catch (e) {
       _showError(e.message);

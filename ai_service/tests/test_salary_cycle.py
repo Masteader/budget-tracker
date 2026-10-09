@@ -53,10 +53,14 @@ def test_get_cycle_for_date_year_boundary():
 
 def test_ensure_household_cycle_budgets_existing():
     client = get_client()
-    # Get a real household ID
-    h_res = client.table("households").select("id").limit(1).execute()
-    assert h_res.data
-    hid = h_res.data[0]["id"]
+    # Get a real household ID that has budgets
+    b_res = client.table("budgets").select("household_id").limit(1).execute()
+    if b_res.data:
+        hid = b_res.data[0]["household_id"]
+    else:
+        h_res = client.table("households").select("id").limit(1).execute()
+        assert h_res.data
+        hid = h_res.data[0]["id"]
 
     # When called for current date (Oct 2), October budgets already exist
     budgets = ensure_household_cycle_budgets(hid, date(2026, 10, 2))

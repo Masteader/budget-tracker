@@ -207,3 +207,12 @@ class ShoppingBasketOptimizeRequest(BaseModel):
     household_id: str
     items: List[str] = Field(default_factory=list, description="List of grocery item names to price and optimize")
 
+
+class RecurringBillToggleRequest(BaseModel):
+    household_id: str
+    category_code: str
+    sub_code: str
+    is_recurring: bool = True
+    due_day: Optional[int] = Field(default=None, ge=1, le=31)
+    custom_name: Optional[str] = None
+

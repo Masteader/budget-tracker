@@ -22,6 +22,40 @@ class BudgetApiClient {
     return RecurringBillsSummary.fromMap(res);
   }
 
+  Future<List<RecurringBillCandidate>> fetchRecurringBillCandidates({
+    required String householdId,
+  }) async {
+    final res = await baseClient.get(
+      '/budgets/recurring-bills/candidates',
+      queryParams: {'household_id': householdId},
+    );
+    final list = res['candidates'] as List? ?? [];
+    return list
+        .map((e) => RecurringBillCandidate.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<void> toggleRecurringBill({
+    required String householdId,
+    required String categoryCode,
+    required String subCode,
+    required bool isRecurring,
+    int? dueDay,
+    String? customName,
+  }) async {
+    await baseClient.post(
+      '/budgets/recurring-bills/toggle',
+      {
+        'household_id': householdId,
+        'category_code': categoryCode,
+        'sub_code': subCode,
+        'is_recurring': isRecurring,
+        if (dueDay != null) 'due_day': dueDay,
+        if (customName != null) 'custom_name': customName,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> fetchSalaryCycleForecast({
     required String householdId,
     int? paydayDay,

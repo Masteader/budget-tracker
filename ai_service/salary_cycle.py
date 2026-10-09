@@ -697,6 +697,7 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
         if not (tx_check.data or []):
             try:
                 client.table("cost_control_sub_categories").delete().eq("parent_code", category_code).execute()
+                client.table("budgets").delete().eq("category_code", category_code).execute()
                 client.table("cost_control_codes").delete().eq("code", category_code).execute()
             except Exception as e:
                 logger.warning(f"Could not purge custom category {category_code}: {e}")

@@ -38,6 +38,7 @@ from models import (
     SubCategoryRenameRequest,
     PaydayUpdateRequest,
     ShoppingBasketOptimizeRequest,
+    RecurringBillToggleRequest,
 )
 
 
@@ -504,6 +505,44 @@ async def get_recurring_bills(household_id: str, as_of_date: Optional[str] = Non
         return await asyncio.to_thread(fetch_household_recurring_bills, household_id, target_date)
     except Exception as exc:
         logger.error("Failed to fetch recurring bills: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/budgets/recurring-bills/toggle",
+    tags=["budgets"],
+    summary="Toggle or customize whether a sub-budget appears in recurring bills.",
+)
+async def toggle_recurring_bill(req: RecurringBillToggleRequest):
+    from recurring_detector import toggle_household_recurring_bill
+    try:
+        return await asyncio.to_thread(
+            toggle_household_recurring_bill,
+            household_id=req.household_id,
+            category_code=req.category_code,
+            sub_code=req.sub_code,
+            is_recurring=req.is_recurring,
+            due_day=req.due_day,
+            custom_name=req.custom_name,
+        )
+    except Exception as exc:
+        logger.error("Failed to toggle recurring bill: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/budgets/recurring-bills/candidates",
+    tags=["budgets"],
+    summary="List all sub-budget items eligible to be recurring bills.",
+)
+async def list_recurring_bill_candidates(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from recurring_detector import get_recurring_bill_candidates
+    try:
+        return await asyncio.to_thread(get_recurring_bill_candidates, household_id)
+    except Exception as exc:
+        logger.error("Failed to list recurring bill candidates: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
