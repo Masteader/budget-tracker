@@ -2,7 +2,7 @@
 /// Delegating to specialized domain clients:
 /// - BaseApiClient (HMAC-SHA256 signatures, auth headers, HTTP base methods)
 /// - BudgetApiClient (Salary cycles, burn-rate forecast, settlements, sub-allocations)
-/// - TransactionApiClient (SMS ingestion webhook, offline queue hooks)
+/// - TransactionApiClient (Transaction ingestion and synchronization)
 /// - ReceiptApiClient (Multi-page photo uploads, ZATCA QR analysis)
 /// - ChatApiClient (Conversational expense parser, purchase simulation)
 library;
@@ -24,23 +24,6 @@ class ApiService {
   late final TransactionApiClient transaction = TransactionApiClient(baseClient: base);
   late final ReceiptApiClient receipt = ReceiptApiClient(baseClient: base);
   late final ChatApiClient chat = ChatApiClient(baseClient: base);
-
-  // ── SMS & Transactions ───────────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> postSms({
-    required String rawSms,
-    required String sender,
-    required String receivedAt,
-    required String householdId,
-    String? deviceId,
-  }) =>
-      transaction.postSms(
-        rawSms: rawSms,
-        sender: sender,
-        receivedAt: receivedAt,
-        householdId: householdId,
-        deviceId: deviceId,
-      );
 
   // ── Chat & Simulations ───────────────────────────────────────────────────
 

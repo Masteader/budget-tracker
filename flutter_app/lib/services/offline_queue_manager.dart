@@ -41,7 +41,7 @@ class OfflineQueueManager {
             for (final r in oldRows) {
               final payloadStr = r['payload'] as String? ?? '{}';
               final hid = r['household_id'] as String? ?? '';
-              final endpoint = r['endpoint'] as String? ?? 'sms';
+              final endpoint = r['endpoint'] as String? ?? 'receipt';
               final id = const Uuid().v4();
               final idempotencyKey = OfflineQueueItem.generateIdempotencyKey(
                 operationType: endpoint,

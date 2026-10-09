@@ -128,7 +128,7 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
-  /// Subscribes to Supabase Realtime channel for instant multi-device & SMS syncing.
+  /// Subscribes to Supabase Realtime channel for instant multi-device syncing.
   void _subscribeRealtime() {
     _realtimeChannel?.unsubscribe();
     if (_householdId == null) return;

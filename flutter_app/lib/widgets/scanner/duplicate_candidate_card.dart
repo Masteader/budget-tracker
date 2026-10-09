@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Card displayed when an invoice matches a recent SMS transaction amount.
+/// Card displayed when an invoice matches a recent transaction amount.
 class DuplicateCandidateCard extends StatelessWidget {
   final String message;
   final int itemCount;

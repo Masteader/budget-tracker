@@ -123,14 +123,6 @@ class SyncWorker {
           res['status'] == 'enriched' ||
           res['status'] == 'simulation' ||
           res['status'] == 'preview';
-    } else if (item.operationType == 'sms') {
-      final res = await ApiService.instance.postSms(
-        rawSms: payload['raw_sms'] as String? ?? '',
-        sender: payload['sender'] as String? ?? '',
-        receivedAt: payload['received_at'] as String? ?? '',
-        householdId: hid,
-      );
-      return res['status'] == 'success';
     } else if (item.operationType == 'receipt') {
       final res = await ApiService.instance.scanReceipt(
         imagesBase64: (payload['images_base64'] as List?)?.cast<String>(),

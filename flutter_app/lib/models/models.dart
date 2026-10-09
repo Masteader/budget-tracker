@@ -35,7 +35,7 @@ class Transaction {
     required this.isReallocated,
     this.reallocatedFromBudgetId,
     required this.createdAt,
-    this.source = 'sms',
+    this.source = 'manual',
     this.spentBy = 'both',
     this.paidBy = 'me',
     this.beneficiary = 'both',
@@ -82,8 +82,8 @@ class Transaction {
     }
 
     // Determine channel source
-    String detectedSource = map['source'] as String? ?? 'sms';
-    if (detectedSource == 'sms') {
+    String detectedSource = map['source'] as String? ?? 'manual';
+    if (detectedSource == 'manual' || detectedSource == 'sms') {
       if (raw.startsWith('Chat:')) {
         detectedSource = 'chat';
       } else if (raw.startsWith('Receipt Scan:')) {

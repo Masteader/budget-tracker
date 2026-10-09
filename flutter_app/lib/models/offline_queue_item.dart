@@ -4,7 +4,7 @@ import 'package:crypto/crypto.dart';
 /// Represents a queued offline operation with idempotency tracking and retry metadata.
 class OfflineQueueItem {
   final String id;
-  final String operationType; // 'sms', 'chat', 'receipt'
+  final String operationType; // 'receipt', 'chat', 'manual'
   final Map<String, dynamic> payload;
   final String householdId;
   final String idempotencyKey;
@@ -79,7 +79,7 @@ class OfflineQueueItem {
 
     return OfflineQueueItem(
       id: map['id']?.toString() ?? '',
-      operationType: map['operation_type'] as String? ?? 'sms',
+      operationType: map['operation_type'] as String? ?? 'receipt',
       payload: parsedPayload,
       householdId: map['household_id'] as String? ?? '',
       idempotencyKey: map['idempotency_key'] as String? ?? '',

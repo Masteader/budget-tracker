@@ -1,22 +1,33 @@
 # Budget Tracker
 
 > **AI-powered household expense management for Saudi families.**
-> Bank SMS messages from SNB & Al Rajhi are silently intercepted by your Android phone, parsed by an AI agent (LangGraph + Gemini), and reflected instantly on a real-time Flutter dashboard.
+> Smart receipt scanning with ZATCA QR decoding, conversational AI expense chat, voice logging, and interactive salary-cycle budgeting for modern households.
 
 ---
 
 ## Architecture
 
 ```
-Android Phone                   Python AI Service              Supabase
-┌──────────────────┐            ┌─────────────────────┐       ┌────────────────┐
-│ Flutter App      │ POST SMS   │ FastAPI + LangGraph  │       │ PostgreSQL     │
-│ • SMS Listener   │ ─────────► │ • Extract fields     │ ────► │ • transactions │
-│ • Dashboard      │            │ • Categorise         │       │ • budgets      │
-│ • Live Feed      │ ◄──────────│ • Check budget       │       │ • users        │
-│                  │ Realtime   │ • Reallocate         │       │                │
-└──────────────────┘ Stream     └─────────────────────┘       └────────────────┘
+Android / iOS Phone                 Python AI Service              Supabase
+┌───────────────────────┐           ┌─────────────────────┐       ┌────────────────┐
+│ Flutter App           │ REST /    │ FastAPI + Gemini    │       │ PostgreSQL     │
+│ • Camera / ZATCA QR   │ Multipart │ • Vision Receipt OCR│ ────► │ • transactions │
+│ • Voice / Chat Input  │ ────────► │ • Dialect Chat Agent│       │ • budgets      │
+│ • Dashboard & Bills   │           │ • Bill Reserves     │       │ • users        │
+│ • Live Feed           │ ◄─────────│ • 2D Settlement     │       │                │
+└───────────────────────┘ Realtime  └─────────────────────┘       └────────────────┘
+                          Stream
 ```
+
+---
+
+## Features
+
+- 🧾 **ZATCA QR & Vision OCR Scanner**: Instant TLV decoding and line-item categorization.
+- 💬 **Conversational AI Expense Chat**: Natural Saudi dialect parser with interactive previews.
+- 🎙️ **Voice Entry**: Quick hands-free logging with automatic item and merchant extraction.
+- 📅 **Salary-Cycle & Recurring Bills**: Saudi 27th payday alignment, reserve tracking, and 1-tap bill payments.
+- 🔒 **Privacy-First & Zero SMS Interception**: Completely standalone without background SMS listeners or SMS permissions.
 
 ---
 
@@ -38,11 +49,11 @@ Android Phone                   Python AI Service              Supabase
 ```
 budget-tracker/
 ├── supabase/           # SQL schema, seed data, Realtime config
-├── ai_service/         # Python FastAPI + LangGraph microservice
+├── ai_service/         # Python FastAPI + Gemini AI microservice
 │   └── tests/          # pytest test suite
-└── flutter_app/        # Flutter Android app
-    ├── android/        # Native Kotlin SMS listener
-    └── lib/            # Dart source code
+└── flutter_app/        # Flutter Android/iOS mobile application
+    ├── android/        # Native Android project configuration
+    └── lib/            # Dart source code (screens, widgets, providers)
 ```
 
 ---
@@ -135,8 +146,7 @@ flutter pub get
 flutter run \
   --dart-define=SUPABASE_URL=https://<id>.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=<anon-key> \
-  --dart-define=FASTAPI_WEBHOOK_URL=http://<your-machine-ip>:8000/webhook/sms \
-  --dart-define=WEBHOOK_SECRET=<same-secret-as-in-.env>
+  --dart-define=FASTAPI_BASE_URL=http://<your-machine-ip>:8000
 ```
 
 > **Tip**: On a physical Android device, use your machine's LAN IP address (e.g. `192.168.1.10`) — not `localhost`.
@@ -144,9 +154,10 @@ flutter run \
 
 ### 3.3 Grant Permissions
 
-On first launch the app will request:
-- **Receive SMS** — required for the bank SMS listener
-- **Post Notifications** — required for the foreground service notification (Android 13+)
+On first launch the app may request:
+- **Camera** — required for invoice photo and ZATCA QR code scanning
+- **Microphone** — required for hands-free voice expense logging
+- **Post Notifications** — required for budget cycle & bill reminder alerts (Android 13+)
 
 ---
 
@@ -158,10 +169,7 @@ On first launch the app will request:
 |---|---|---|
 | `SUPABASE_URL` | ✅ | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key (full DB access, never expose to clients) |
-| `LITELLM_MODEL` | ✅ | LiteLLM model string, e.g. `gemini/gemini-2.0-flash` |
-| `GOOGLE_API_KEY` | ✅ | Google AI Studio API key |
-| `WEBHOOK_SECRET` | ✅ | HMAC-SHA256 shared secret (32+ hex chars) |
-| `ALLOWED_SENDERS` | ✅ | Comma-separated SMS sender IDs: `SNB,ALRAJHI,9200` |
+| `GOOGLE_API_KEY` | ✅ | Google AI Studio API key for Gemini models |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
 
@@ -170,46 +178,22 @@ On first launch the app will request:
 | Flag | Required | Description |
 |---|---|---|
 | `SUPABASE_URL` | ✅ | Same as above |
-| `SUPABASE_ANON_KEY` | ✅ | Public anon key (safe for clients) |
-| `FASTAPI_WEBHOOK_URL` | ✅ | Full URL to the FastAPI `/webhook/sms` endpoint |
-| `WEBHOOK_SECRET` | ✅ | Same secret as in the Python `.env` |
-
----
-
-## Manual Test (curl)
-
-Send a mock Al Rajhi SMS directly to the API:
-
-```bash
-# Generate HMAC signature (Python one-liner)
-python3 -c "
-import hmac, hashlib, json
-body = json.dumps({
-  'raw_sms': 'Al Rajhi Bank: SAR 250.00 debited for CARREFOUR purchase. Ref: 555999',
-  'sender': 'ALRAJHI',
-  'received_at': '2026-09-20T18:00:00Z',
-  'household_id': '<your-household-uuid>'
-})
-sig = 'sha256=' + hmac.new(b'<your-webhook-secret>', body.encode(), hashlib.sha256).hexdigest()
-print(f'Body: {body}')
-print(f'Signature: {sig}')
-"
-
-# Then POST it
-curl -X POST http://localhost:8000/webhook/sms \
-  -H "Content-Type: application/json" \
-  -H "X-Signature: sha256=<generated-above>" \
-  -d '{"raw_sms":"Al Rajhi Bank: SAR 250.00 debited for CARREFOUR purchase. Ref: 555999","sender":"ALRAJHI","received_at":"2026-09-20T18:00:00Z","household_id":"<your-uuid>"}'
-```
+| `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients) |
+| `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend |
 
 ---
 
 ## Troubleshooting
 
-### SMS not being intercepted on Android 12+
+### Camera or Microphone not opening
 
-- Check that **RECEIVE_SMS** and **POST_NOTIFICATIONS** permissions are granted in Android Settings → Apps → Budget Tracker → Permissions
-- Ensure the app is not battery-optimised: Settings → Battery → Budget Tracker → **Unrestricted**
+- Check that **Camera** and **Microphone** permissions are granted in Android Settings → Apps → Budget Tracker → Permissions.
+
+### Supabase Realtime not updating the Flutter UI
+
+- Verify both tables are added to the `supabase_realtime` publication (see `realtime_config.md`)
+- Check that your RLS policies allow SELECT for the authenticated user
+- The Python service must use the **service role key** (bypasses RLS); the Flutter SDK uses the **anon key** (subject to RLS)
 
 ### Supabase Realtime not updating the Flutter UI
 
@@ -239,7 +223,7 @@ docker compose up --build
 - The **service role key** must **never** appear in the Flutter app or any client-side code.
 - The **WEBHOOK_SECRET** is an HMAC-SHA256 shared secret — rotate it if compromised.
 - All Supabase tables have **Row Level Security (RLS)** enabled — users can only access their household's data.
-- Raw SMS text is stored for audit purposes. Ensure your Supabase project is in a compliant region.
+- Transaction and receipt audit data is stored securely in Supabase with household-isolated Row Level Security.
 
 ---
 

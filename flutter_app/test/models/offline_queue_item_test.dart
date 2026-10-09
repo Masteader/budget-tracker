@@ -5,19 +5,19 @@ void main() {
   group('OfflineQueueItem Tests', () {
     test('Calculates deterministic SHA-256 idempotency key', () {
       final key1 = OfflineQueueItem.generateIdempotencyKey(
-        operationType: 'sms',
+        operationType: 'receipt',
         householdId: 'house-123',
-        payload: {'raw_sms': 'Purchased 150 SAR at Tamimi', 'sender': 'AlRajhiBank'},
+        payload: {'merchant': 'Tamimi', 'amount': 150.0},
       );
       final key2 = OfflineQueueItem.generateIdempotencyKey(
-        operationType: 'sms',
+        operationType: 'receipt',
         householdId: 'house-123',
-        payload: {'raw_sms': 'Purchased 150 SAR at Tamimi', 'sender': 'AlRajhiBank'},
+        payload: {'merchant': 'Tamimi', 'amount': 150.0},
       );
       final keyDiff = OfflineQueueItem.generateIdempotencyKey(
-        operationType: 'sms',
+        operationType: 'receipt',
         householdId: 'house-123',
-        payload: {'raw_sms': 'Purchased 200 SAR at Tamimi', 'sender': 'AlRajhiBank'},
+        payload: {'merchant': 'Tamimi', 'amount': 200.0},
       );
 
       expect(key1, isNotEmpty);

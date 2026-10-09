@@ -14,7 +14,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: DuplicateCandidateCard(
-              message: 'Matching SMS transaction found: SAR 150.00',
+              message: 'Matching recent transaction found: SAR 150.00',
               itemCount: 3,
               onEnrich: () => enriched = true,
               onLogSeparate: () => loggedSeparate = true,
