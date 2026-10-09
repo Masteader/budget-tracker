@@ -39,7 +39,10 @@ from models import (
     PaydayUpdateRequest,
     ShoppingBasketOptimizeRequest,
     RecurringBillToggleRequest,
+    SupportChatRequest,
+    SupportChatResponse,
 )
+from support_agent import handle_support_query, SUPPORT_EMAIL
 
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
@@ -893,6 +896,27 @@ async def export_statement_pdf(household_id: str, cycle_key: str | None = None):
     except Exception as exc:
         logger.error("Failed to generate PDF statement: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/support/chat",
+    response_model=SupportChatResponse,
+    tags=["support"],
+    summary="AI Support Chatbot and Developer Escalation",
+)
+async def support_chat(payload: SupportChatRequest) -> SupportChatResponse:
+    reply, escalate, summary = await handle_support_query(
+        message=payload.message,
+        household_id=payload.household_id,
+        user_id=payload.user_id,
+        history=payload.history,
+    )
+    return SupportChatResponse(
+        reply=reply,
+        escalate_to_developer=escalate,
+        summary=summary,
+        support_email=SUPPORT_EMAIL,
+    )
 
 
 # =============================================================================

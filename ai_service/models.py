@@ -216,3 +216,17 @@ class RecurringBillToggleRequest(BaseModel):
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     custom_name: Optional[str] = None
 
+
+class SupportChatRequest(BaseModel):
+    message: str
+    household_id: Optional[str] = None
+    user_id: Optional[str] = None
+    history: Optional[List[dict]] = None
+
+
+class SupportChatResponse(BaseModel):
+    reply: str
+    escalate_to_developer: bool = False
+    summary: Optional[str] = None
+    support_email: str = "fmscoinfo@fmsco.com.sa"
+
