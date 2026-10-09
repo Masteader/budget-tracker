@@ -11,6 +11,7 @@ import 'api/base_api_client.dart';
 import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
 import 'api/receipt_api_client.dart';
+import 'api/support_api_client.dart';
 import 'api/transaction_api_client.dart';
 import '../models/recurring_bill.dart';
 import '../models/installment_plan.dart';
@@ -24,6 +25,7 @@ class ApiService {
   late final TransactionApiClient transaction = TransactionApiClient(baseClient: base);
   late final ReceiptApiClient receipt = ReceiptApiClient(baseClient: base);
   late final ChatApiClient chat = ChatApiClient(baseClient: base);
+  late final SupportApiClient support = SupportApiClient(baseClient: base);
 
   // ── Chat & Simulations ───────────────────────────────────────────────────
 
