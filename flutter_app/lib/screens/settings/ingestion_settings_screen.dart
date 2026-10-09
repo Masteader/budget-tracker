@@ -13,7 +13,9 @@ import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
+import 'help_support_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
   const IngestionSettingsScreen({super.key});
@@ -66,17 +68,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   }
 
   Future<void> _checkPermissions() async {
-    final camera = await Permission.camera.status;
-    final microphone = await Permission.microphone.status;
-    final notification = await Permission.notification.status;
+    try {
+      final camera = await Permission.camera.status;
+      final microphone = await Permission.microphone.status;
+      final notification = await Permission.notification.status;
 
-    if (mounted) {
-      setState(() {
-        _cameraStatus = camera;
-        _microphoneStatus = microphone;
-        _notificationStatus = notification;
-      });
-    }
+      if (mounted) {
+        setState(() {
+          _cameraStatus = camera;
+          _microphoneStatus = microphone;
+          _notificationStatus = notification;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadUserInfo() async {
@@ -776,6 +780,109 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                             child: const Text('Sync Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                       ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ── HELP & SUPPORT ──
+          _buildSectionHeader('HELP & SUPPORT'),
+          const SizedBox(height: 6),
+          Text(
+            'Explore user guides, interactive walkthroughs, ask our AI assistant, or email the developer.',
+            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF8B949E)),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF161B22),
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFF30363D)),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C896).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.menu_book_rounded, color: Color(0xFF00C896), size: 20),
+                  ),
+                  title: Text(
+                    'App Guide & Tutorial',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Replay the 5-step interactive feature walkthrough',
+                    style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF8B949E)),
+                  onTap: () => UserGuideWalkthroughDialog.show(context),
+                ),
+                const Divider(color: Color(0xFF21262D), height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.support_agent_rounded, color: Color(0xFF3B82F6), size: 20),
+                  ),
+                  title: Text(
+                    'Help Center & AI Support',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Searchable FAQs, salary cycle guide & AI chatbot',
+                    style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF8B949E)),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HelpSupportScreen(
+                          householdId: _householdId,
+                          userEmail: _userEmail,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(color: Color(0xFF21262D), height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.mail_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                  ),
+                  title: Text(
+                    'Contact Developer',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Email fmscoinfo@fmsco.com.sa for feedback or bug reports',
+                    style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF8B949E)),
+                  onTap: () {
+                    Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
+                    AppSnackBar.showSuccess(
+                      context,
+                      'Developer email copied: fmscoinfo@fmsco.com.sa',
+                      title: 'Copied',
+                      icon: Icons.copy_rounded,
                     );
                   },
                 ),

@@ -28,6 +28,8 @@ import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../settings/ingestion_settings_screen.dart';
+import '../settings/help_support_screen.dart';
+import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
 
@@ -147,6 +149,11 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   void initState() {
     super.initState();
     _householdId = _fetchHouseholdId();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        UserGuideWalkthroughDialog.showIfFirstTime(context);
+      }
+    });
   }
 
   Future<String> _fetchHouseholdId() async {
@@ -475,6 +482,18 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00C896)),
+          tooltip: 'Help & Support',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HelpSupportScreen(householdId: hid),
+              ),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.logout_rounded, color: Color(0xFF8B949E)),
           tooltip: 'Sign Out',
