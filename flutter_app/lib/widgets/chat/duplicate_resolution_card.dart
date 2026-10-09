@@ -52,7 +52,7 @@ class DuplicateResolutionCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.attach_file, size: 16),
-                  label: const Text('Enrich Existing SMS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const Text('Enrich Existing Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () {
                     if (candidateId != null) {
                       onEnrich(candidateId);

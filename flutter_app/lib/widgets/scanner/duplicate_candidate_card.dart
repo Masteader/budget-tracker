@@ -57,7 +57,7 @@ class DuplicateCandidateCard extends StatelessWidget {
                   ),
                   onPressed: onEnrich,
                   child: Text(
-                    'Attach $itemCount Items to SMS',
+                    'Attach $itemCount Items to Transaction',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),

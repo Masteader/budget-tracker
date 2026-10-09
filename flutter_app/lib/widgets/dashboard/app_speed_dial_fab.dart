@@ -9,7 +9,7 @@ import 'dashboard_action_sheet.dart';
 /// Provides direct 1-tap shortcuts to:
 /// 1. 📸 Scan Receipt / Invoice (Camera & Gallery)
 /// 2. 🎙️ Voice Entry (Conversational natural language)
-/// 3. ✏️ Manual Log (SMS / Form entry)
+/// 3. ✏️ Manual Log (Form entry)
 class AppSpeedDialFab extends StatefulWidget {
   final String? householdId;
 

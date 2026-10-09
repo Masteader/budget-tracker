@@ -45,9 +45,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         return Icons.document_scanner_outlined;
       case 'manual':
         return Icons.edit_note;
-      case 'sms':
+      case 'direct':
       default:
-        return Icons.sms_outlined;
+        return Icons.receipt_outlined;
     }
   }
 
@@ -59,9 +59,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         return 'Invoice Scan';
       case 'manual':
         return 'Manual Log';
-      case 'sms':
+      case 'direct':
       default:
-        return 'Bank SMS';
+        return 'Direct Entry';
     }
   }
 
