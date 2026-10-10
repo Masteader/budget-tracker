@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../models/recurring_bill.dart';
 import '../../models/installment_plan.dart';
+import '../../models/models.dart';
 import 'base_api_client.dart';
 
 class BudgetApiClient {
@@ -385,6 +386,61 @@ class BudgetApiClient {
       return InstallmentPlan.fromJson(res);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Map<String, List<CategoryItem>>> fetchHouseholdCategories({
+    required String householdId,
+  }) async {
+    try {
+      final res = await baseClient.get('/households/$householdId/categories');
+      final activeList = (res['active'] as List? ?? [])
+          .map((e) => CategoryItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      final inactiveList = (res['inactive'] as List? ?? [])
+          .map((e) => CategoryItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      return {'active': activeList, 'inactive': inactiveList};
+    } catch (_) {
+      return {'active': [], 'inactive': []};
+    }
+  }
+
+  Future<bool> toggleCategoryStatus({
+    required String householdId,
+    required String categoryCode,
+    required bool isActive,
+  }) async {
+    try {
+      final res = await baseClient.post('/households/$householdId/categories/toggle', {
+        'category_code': categoryCode,
+        'is_active': isActive,
+      });
+      return res['status'] == 'success';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> createCustomCategory({
+    required String householdId,
+    required String code,
+    required String category,
+    List<String> keywords = const [],
+    bool isFlexible = false,
+    double allocatedAmount = 0.0,
+  }) async {
+    try {
+      final res = await baseClient.post('/households/$householdId/categories/custom', {
+        'code': code,
+        'category': category,
+        'keywords': keywords,
+        'is_flexible': isFlexible,
+        'allocated_amount': allocatedAmount,
+      });
+      return res['status'] == 'success';
+    } catch (_) {
+      return false;
     }
   }
 }

@@ -442,3 +442,47 @@ class AppUser {
 
   bool get isAdmin => role == 'admin';
 }
+
+// ── CategoryItem ─────────────────────────────────────────────────────────────
+
+class CategoryItem {
+  final String code;
+  final String name;
+  final bool isSystem;
+  final bool isActive;
+  final String? householdId;
+  final List<String> keywords;
+
+  const CategoryItem({
+    required this.code,
+    required this.name,
+    this.isSystem = false,
+    this.isActive = true,
+    this.householdId,
+    this.keywords = const [],
+  });
+
+  factory CategoryItem.fromJson(Map<String, dynamic> json) {
+    return CategoryItem(
+      code: json['code'] as String? ?? '',
+      name: json['category'] as String? ?? json['name'] as String? ?? '',
+      isSystem: json['is_system'] as bool? ?? false,
+      isActive: json['is_active'] as bool? ?? true,
+      householdId: json['household_id'] as String?,
+      keywords: (json['keywords'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'category': name,
+        'is_system': isSystem,
+        'is_active': isActive,
+        if (householdId != null) 'household_id': householdId,
+        'keywords': keywords,
+      };
+}
+

@@ -15,6 +15,7 @@ import 'api/support_api_client.dart';
 import 'api/transaction_api_client.dart';
 import '../models/recurring_bill.dart';
 import '../models/installment_plan.dart';
+import '../models/models.dart';
 
 class ApiService {
   ApiService._();
@@ -297,5 +298,36 @@ class ApiService {
         parentCode: parentCode,
         subCode: subCode,
         cycleKey: cycleKey,
+      );
+
+  Future<Map<String, List<CategoryItem>>> fetchHouseholdCategories(String householdId) =>
+      budget.fetchHouseholdCategories(householdId: householdId);
+
+  Future<bool> toggleCategoryStatus({
+    required String householdId,
+    required String categoryCode,
+    required bool isActive,
+  }) =>
+      budget.toggleCategoryStatus(
+        householdId: householdId,
+        categoryCode: categoryCode,
+        isActive: isActive,
+      );
+
+  Future<bool> createCustomCategory({
+    required String householdId,
+    required String code,
+    required String category,
+    List<String> keywords = const [],
+    bool isFlexible = false,
+    double allocatedAmount = 0.0,
+  }) =>
+      budget.createCustomCategory(
+        householdId: householdId,
+        code: code,
+        category: category,
+        keywords: keywords,
+        isFlexible: isFlexible,
+        allocatedAmount: allocatedAmount,
       );
 }
