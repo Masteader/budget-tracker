@@ -429,10 +429,28 @@ def process_chat_transaction(
     if spent_by not in ("me", "partner", "both"):
         spent_by = "both"
 
+def check_category_active_status(category_code: str, categories_state: dict) -> bool:
+    """
+    Returns True if category_code is active for the household,
+    False if it is explicitly listed in categories_state['inactive'].
+    """
+    inactive_codes = {c["code"] for c in categories_state.get("inactive", [])}
+    return category_code not in inactive_codes
+
+
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
     category_code = matched.code if matched else parsed.category_code
+
+    # Check if category is inactive for this household
+    is_inactive = False
+    try:
+        from salary_cycle import get_household_categories
+        hh_cats = get_household_categories(household_id)
+        is_inactive = not check_category_active_status(category_code, hh_cats)
+    except Exception as exc:
+        logger.warning(f"Could not check category active status: {exc}")
 
     # If preview only, return structured data asking user for confirmation
     if preview_only:
@@ -441,6 +459,8 @@ def process_chat_transaction(
             "merchant": merchant,
             "amount": parsed.total_amount,
             "category_code": category_code,
+            "is_category_inactive": is_inactive,
+            "suggested_alternative": "OPEX-MISC" if is_inactive else None,
             "spent_by": spent_by,
             "items": items_dicts,
             "original_message": message,

@@ -445,6 +445,22 @@ def process_receipt_scan(
             ),
         }
 
+    # Match category with keyword taxonomy
+    codes = fetch_all_cost_control_codes()
+    matched = match_category(merchant, codes)
+    if matched:
+        category_code = matched.code
+
+    # Check if category is inactive for this household
+    is_inactive = False
+    try:
+        from salary_cycle import get_household_categories
+        hh_cats = get_household_categories(household_id)
+        inactive_codes = {c["code"] for c in hh_cats.get("inactive", [])}
+        is_inactive = category_code in inactive_codes
+    except Exception as exc:
+        logger.warning(f"Could not check category active status: {exc}")
+
     # If preview only (and no duplicate candidate found), return structured data before inserting
     if preview_only:
         return {
@@ -453,6 +469,8 @@ def process_receipt_scan(
             "amount": total_amount,
             "vat_amount": float(parsed.get("vat_amount") or 0.0),
             "category_code": category_code,
+            "is_category_inactive": is_inactive,
+            "suggested_alternative": "OPEX-MISC" if is_inactive else None,
             "spent_by": spent_by,
             "items": items,
             "zatca_verified": parsed.get("zatca_verified"),
@@ -460,12 +478,6 @@ def process_receipt_scan(
             "qr_code_raw": resolved_qr,
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
-
-    # Match category with keyword taxonomy
-    codes = fetch_all_cost_control_codes()
-    matched = match_category(merchant, codes)
-    if matched:
-        category_code = matched.code
 
     now_iso = datetime.now(timezone.utc).isoformat()
     now_date = datetime.now(timezone.utc).date()
