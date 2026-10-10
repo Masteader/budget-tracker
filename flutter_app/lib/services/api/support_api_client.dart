@@ -12,6 +12,7 @@ class SupportApiClient {
     String? householdId,
     String? userId,
     List<Map<String, String>>? history,
+    String? language,
   }) async {
     final url = '$fastapiBaseUrl/support/chat';
     return baseClient.post(
@@ -21,6 +22,7 @@ class SupportApiClient {
         if (householdId != null) 'household_id': householdId,
         if (userId != null) 'user_id': userId,
         if (history != null) 'history': history,
+        if (language != null) 'language': language,
       },
       shouldSign: false,
       timeout: const Duration(seconds: 20),

@@ -69,10 +69,28 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             })
         .toList();
 
+    double income = 0.0;
+    try {
+      final hh = await supabase
+          .from('households')
+          .select('monthly_income')
+          .eq('id', hid)
+          .maybeSingle();
+      if (hh != null && hh['monthly_income'] != null) {
+        income = (hh['monthly_income'] as num).toDouble();
+      }
+    } catch (_) {}
+    if (income <= 0) {
+      try {
+        income = await ApiService.instance.getHouseholdIncome(hid);
+      } catch (_) {}
+    }
+
     return _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
       allCodes: activeCodes,
+      monthlyIncome: income,
     );
   }
 
@@ -682,48 +700,112 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       );
                     }
 
+                    final income = staticData.monthlyIncome;
+                    final hasIncome = income > 0;
+                    final savingsReserve = hasIncome ? (income - totalAllocated) : 0.0;
+                    final isOverAllocated = hasIncome && savingsReserve < 0;
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: const Color(0xFF161B22),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF30363D)),
+                        border: Border.all(
+                          color: isOverAllocated
+                              ? Colors.redAccent.withValues(alpha: 0.6)
+                              : const Color(0xFF30363D),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Total Allocated ($headerTitle)',
-                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total Allocated ($headerTitle)',
+                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'SAR ${fmt.format(totalAllocated)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF00C896),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'SAR ${fmt.format(totalAllocated)}',
-                                style: const TextStyle(
-                                  color: Color(0xFF00C896),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
+                                  return Text(
+                                    '${setCodes.length}/${staticData.allCodes.length} Set',
+                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                                  );
+                                },
                               ),
                             ],
                           ),
-                          Builder(
-                            builder: (context) {
-                              final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
-                              return Text(
-                                '${setCodes.length}/${staticData.allCodes.length} Set',
-                                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-                              );
-                            },
-                          ),
+                          if (hasIncome) ...[
+                            const SizedBox(height: 12),
+                            const Divider(color: Color(0xFF30363D), height: 1),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
+                                      size: 16,
+                                      color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      isOverAllocated ? 'Over-allocated by:' : 'Savings Reserve (Surplus):',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isOverAllocated ? Colors.redAccent : const Color(0xFF8B949E),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  isOverAllocated
+                                      ? '-SAR ${fmt.format(-savingsReserve)}'
+                                      : '+SAR ${fmt.format(savingsReserve)}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isOverAllocated
+                                  ? 'Allocations exceed your monthly salary of SAR ${fmt.format(income)}.'
+                                  : 'Protected buffer against deficit: automatically cushions overspending.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isOverAllocated
+                                    ? Colors.redAccent.withValues(alpha: 0.8)
+                                    : const Color(0xFF8B949E),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                  );
-                }
+                    );
+                  }
 
                 final code = staticData.allCodes[i - 1]['code'] as String;
                 final category = staticData.allCodes[i - 1]['category'] as String;
@@ -833,14 +915,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 }
 
 class _BudgetStaticData {
-
   final String householdId;
   final bool isAdmin;
   final List<Map<String, String>> allCodes;
+  final double monthlyIncome;
 
   _BudgetStaticData({
     required this.householdId,
     required this.isAdmin,
     required this.allCodes,
+    this.monthlyIncome = 0.0,
   });
 }

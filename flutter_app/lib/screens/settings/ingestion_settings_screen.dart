@@ -10,6 +10,10 @@ import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/partner_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
+import 'package:provider/provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
@@ -43,6 +47,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   String _userRole = 'member';
   List<Map<String, dynamic>> _members = [];
   int _paydayDay = 27;
+  double _monthlyIncome = 0.0;
 
   @override
   void initState() {
@@ -150,6 +155,21 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (mounted) {
         setState(() => _paydayDay = payday);
       }
+
+      // Load configured monthly income
+      double income = 0.0;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        income = prefs.getDouble('household_monthly_income') ?? 0.0;
+        final serverIncome = await ApiService.instance.getHouseholdIncome(hid);
+        if (serverIncome > 0) {
+          income = serverIncome;
+          await prefs.setDouble('household_monthly_income', income);
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _monthlyIncome = income);
+      }
     } catch (_) {}
   }
 
@@ -172,6 +192,31 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           context,
           'Failed to save payday: $e',
           title: 'Payday Error',
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _saveIncome(double newIncome) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('household_monthly_income', newIncome);
+      if (mounted) setState(() => _monthlyIncome = newIncome);
+
+      if (_householdId != null) {
+        await ApiService.instance.setHouseholdIncome(_householdId!, newIncome);
+        try {
+          await supabase.from('households').update({'monthly_income': newIncome}).eq('id', _householdId!);
+        } catch (_) {}
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Failed to save income: $e',
+          title: 'Income Error',
         );
       }
       return false;
@@ -549,6 +594,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               initialPayday: _paydayDay,
               onSavePayday: _savePayday,
             ),
+            const SizedBox(height: 16),
+            IncomeSettingsCard(
+              initialIncome: _monthlyIncome,
+              onSaveIncome: _saveIncome,
+            ),
           ] else ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -581,6 +631,17 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ),
             ),
           ],
+          const SizedBox(height: 28),
+
+          // ── APPEARANCE & LANGUAGE ──
+          _buildSectionHeader('APPEARANCE & LANGUAGE'),
+          const SizedBox(height: 6),
+          Text(
+            'Customize your app theme and system language.',
+            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF8B949E)),
+          ),
+          const SizedBox(height: 12),
+          _buildAppearanceAndLanguageCard(),
           const SizedBox(height: 28),
 
           // ── 1. HARDWARE & APP PERMISSIONS ──
@@ -980,6 +1041,233 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         letterSpacing: 1,
         fontWeight: FontWeight.w700,
         color: const Color(0xFF8B949E),
+      ),
+    );
+  }
+
+  Widget _buildAppearanceAndLanguageCard() {
+    final themeProvider = context.watch<ThemeProvider>();
+    final localeProvider = context.watch<LocaleProvider>();
+    final isDark = themeProvider.isDarkMode(context);
+
+    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF30363D) : const Color(0xFFE2E8F0);
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final subtextColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+    final activeBg = const Color(0xFF00C896);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Theme Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.palette_rounded, color: Color(0xFF00C896), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Theme Mode', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                    Text('System default, light mode, or dark mode', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Theme Switcher Buttons (System, Light, Dark)
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0D1117) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                _buildThemeOption(
+                  label: 'System',
+                  icon: Icons.brightness_auto_rounded,
+                  isSelected: themeProvider.themeMode == ThemeMode.system,
+                  onTap: () => themeProvider.setThemeMode(ThemeMode.system),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+                _buildThemeOption(
+                  label: 'Light',
+                  icon: Icons.light_mode_rounded,
+                  isSelected: themeProvider.themeMode == ThemeMode.light,
+                  onTap: () => themeProvider.setThemeMode(ThemeMode.light),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+                _buildThemeOption(
+                  label: 'Dark',
+                  icon: Icons.dark_mode_rounded,
+                  isSelected: themeProvider.themeMode == ThemeMode.dark,
+                  onTap: () => themeProvider.setThemeMode(ThemeMode.dark),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Divider(color: borderColor, height: 1),
+          const SizedBox(height: 16),
+
+          // Language Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.language_rounded, color: Color(0xFF00C896), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('App Language', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                    Text('General application language (EN, AR, UR)', style: TextStyle(color: subtextColor, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Language Switcher Buttons (English, Arabic, Urdu)
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0D1117) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                _buildLanguageOption(
+                  label: 'English',
+                  code: 'en',
+                  flag: '🇺🇸',
+                  isSelected: localeProvider.languageCode == 'en',
+                  onTap: () => localeProvider.setLanguageCode('en'),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+                _buildLanguageOption(
+                  label: 'العربية',
+                  code: 'ar',
+                  flag: '🇸🇦',
+                  isSelected: localeProvider.languageCode == 'ar',
+                  onTap: () => localeProvider.setLanguageCode('ar'),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+                _buildLanguageOption(
+                  label: 'اردو',
+                  code: 'ur',
+                  flag: '🇵🇰',
+                  isSelected: localeProvider.languageCode == 'ur',
+                  onTap: () => localeProvider.setLanguageCode('ur'),
+                  activeBg: activeBg,
+                  textColor: textColor,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeOption({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color activeBg,
+    required Color textColor,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: isSelected ? Colors.black : textColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.black : textColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption({
+    required String label,
+    required String code,
+    required String flag,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color activeBg,
+    required Color textColor,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Center(
+            child: Text(
+              '$flag $label',
+              style: TextStyle(
+                color: isSelected ? Colors.black : textColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

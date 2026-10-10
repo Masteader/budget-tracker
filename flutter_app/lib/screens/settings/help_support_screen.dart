@@ -29,6 +29,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   String _faqQuery = '';
   bool _isSending = false;
+  String _selectedLanguage = 'ar';
 
   final List<_SupportMessage> _messages = [
     const _SupportMessage(
@@ -37,6 +38,25 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
           'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟',
     ),
   ];
+
+  void _onLanguageChanged(String newLang) {
+    if (_selectedLanguage == newLang) return;
+    setState(() {
+      _selectedLanguage = newLang;
+      if (_messages.length == 1 && !_messages.first.isUser) {
+        String welcome =
+            'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟';
+        if (newLang == 'en') {
+          welcome =
+              'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?';
+        } else if (newLang == 'ur') {
+          welcome =
+              'اسمارٹ ہیلپ اور سپورٹ سینٹر میں خوش آمدید! 👋\nمیں آپ کا اسسٹنٹ ہوں۔ آج میں بجٹ، تنخواہ کے سائیکل، یا رسیدوں کے انتظام میں آپ کی کیا مدد کر سکتا ہوں؟';
+        }
+        _messages[0] = _SupportMessage(isUser: false, text: welcome);
+      }
+    });
+  }
 
   static const String developerEmail = 'fmscoinfo@fmsco.com.sa';
 
@@ -168,6 +188,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
       final res = await ApiService.instance.support.postSupportChat(
         message: query,
         householdId: widget.householdId,
+        language: _selectedLanguage,
       );
 
       final reply = res['reply'] as String? ??
@@ -320,6 +341,75 @@ User: ${widget.userEmail ?? "N/A"}
           style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
         ),
         actions: [
+          // Independent language selector toggle pill
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF21262D),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF30363D)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => _onLanguageChanged('ar'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLanguage == 'ar' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇸🇦 ع',
+                      style: TextStyle(
+                        color: _selectedLanguage == 'ar' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _onLanguageChanged('en'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLanguage == 'en' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇺🇸 EN',
+                      style: TextStyle(
+                        color: _selectedLanguage == 'en' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _onLanguageChanged('ur'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLanguage == 'ur' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇵🇰 اردو',
+                      style: TextStyle(
+                        color: _selectedLanguage == 'ur' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.play_circle_outline_rounded,
                 color: Color(0xFF00C896)),

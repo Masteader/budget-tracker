@@ -142,6 +142,15 @@ class ApiService {
         paydayDay: paydayDay,
       );
 
+  Future<double> getHouseholdIncome(String householdId) =>
+      budget.fetchHouseholdIncome(householdId: householdId);
+
+  Future<bool> setHouseholdIncome(String householdId, double monthlyIncome) =>
+      budget.updateHouseholdIncome(
+        householdId: householdId,
+        monthlyIncome: monthlyIncome,
+      );
+
   Future<Map<String, dynamic>> getPartnerSettlement(String householdId, {double splitRatio = 0.50}) =>
       budget.fetchPartnerSettlement(householdId: householdId, splitRatio: splitRatio);
 

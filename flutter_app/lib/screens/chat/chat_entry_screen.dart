@@ -523,6 +523,24 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                   ),
                 ),
+                GestureDetector(
+                  onTap: () => setState(() => _selectedLocale = 'ur_PK'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedLocale == 'ur_PK' ? const Color(0xFF00C896) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '🇵🇰 اردو',
+                      style: TextStyle(
+                        color: _selectedLocale == 'ur_PK' ? Colors.black : const Color(0xFF8B949E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

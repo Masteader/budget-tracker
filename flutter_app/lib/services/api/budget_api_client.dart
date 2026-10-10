@@ -106,6 +106,24 @@ class BudgetApiClient {
     return res['status'] == 'success';
   }
 
+  Future<double> fetchHouseholdIncome({
+    required String householdId,
+  }) async {
+    final res = await baseClient.get('/households/$householdId/income');
+    return (res['monthly_income'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  Future<bool> updateHouseholdIncome({
+    required String householdId,
+    required double monthlyIncome,
+  }) async {
+    final res = await baseClient.put(
+      '/households/$householdId/income',
+      body: {'monthly_income': monthlyIncome},
+    );
+    return res['status'] == 'success';
+  }
+
   Future<Map<String, dynamic>> fetchPartnerSettlement({
     required String householdId,
     double splitRatio = 0.5,

@@ -8,13 +8,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/budget_provider.dart';
+import 'providers/locale_provider.dart';
+import 'providers/theme_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
 import 'services/offline_sync_service.dart';
 import 'supabase_config.dart';
+import 'theme/app_themes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,47 +41,6 @@ Future<void> main() async {
 
 final supabase = Supabase.instance.client;
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-
-final _colorScheme = ColorScheme.fromSeed(
-  seedColor: const Color(0xFF00C896), // Emerald green brand color
-  brightness: Brightness.dark,
-);
-
-ThemeData get _theme => ThemeData(
-      useMaterial3: true,
-      colorScheme: _colorScheme,
-      textTheme: GoogleFonts.outfitTextTheme().apply(
-        bodyColor: Colors.white,
-        displayColor: Colors.white,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF0D1117),
-      appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF0D1117),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        titleTextStyle: GoogleFonts.outfit(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: const Color(0xFF161B22),
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF21262D),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        hintStyle: const TextStyle(color: Color(0xFF8B949E)),
-      ),
-    );
-
 // ─── Root App ─────────────────────────────────────────────────────────────────
 
 class BudgetTrackerApp extends StatelessWidget {
@@ -88,12 +52,28 @@ class BudgetTrackerApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => BudgetProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
+        ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
       ],
-      child: MaterialApp(
-        title: 'Budget Tracker',
-        debugShowCheckedModeBanner: false,
-        theme: _theme,
-        home: const _AuthGate(),
+      child: Consumer2<ThemeProvider, LocaleProvider>(
+        builder: (context, themeProvider, localeProvider, child) {
+          return MaterialApp(
+            title: 'Budget Tracker',
+            debugShowCheckedModeBanner: false,
+            theme: AppThemes.lightTheme,
+            darkTheme: AppThemes.darkTheme,
+            themeMode: themeProvider.themeMode,
+            locale: localeProvider.currentLocale,
+            supportedLocales: LocaleProvider.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const _AuthGate(),
+          );
+        },
       ),
     );
   }
