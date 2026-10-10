@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/voice_listening_banner.dart';
+import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 
 class ChatEntryScreen extends StatefulWidget {
@@ -321,6 +322,31 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
       } else if (status == 'pending_confirmation') {
+        if (res['is_category_inactive'] == true) {
+          final catCode = res['category_code']?.toString() ?? 'Category';
+          final amt = (res['amount'] as num?)?.toDouble() ?? 0.0;
+          final store = res['merchant']?.toString() ?? 'Merchant';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            InactiveCategoryResolutionDialog.show(
+              context: context,
+              categoryName: catCode,
+              amount: amt,
+              merchant: store,
+              onReactivate: () async {
+                if (_householdId != null) {
+                  await ApiService.instance.toggleCategoryStatus(
+                    householdId: _householdId!,
+                    categoryCode: catCode,
+                    isActive: true,
+                  );
+                }
+              },
+              onChangeCategory: () {
+                res['category_code'] = 'OPEX-MISC';
+              },
+            );
+          });
+        }
         _messages.add(
           ChatMessage(
             isUser: false,
