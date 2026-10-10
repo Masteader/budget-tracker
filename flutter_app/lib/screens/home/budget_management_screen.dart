@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
+import '../../widgets/categories/category_library_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 
@@ -541,6 +542,42 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     );
   }
 
+  Future<void> _openCategoryLibrary(_BudgetStaticData data) async {
+    final catData = await ApiService.instance.fetchHouseholdCategories(data.householdId);
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => CategoryLibrarySheet(
+        activeCategories: catData['active'] ?? [],
+        inactiveCategories: catData['inactive'] ?? [],
+        onToggle: (cat, isActive) async {
+          await ApiService.instance.toggleCategoryStatus(
+            householdId: data.householdId,
+            categoryCode: cat.code,
+            isActive: isActive,
+          );
+          if (mounted) {
+            setState(() {
+              _staticFuture = _loadStaticData();
+            });
+            AppSnackBar.showSuccess(
+              context,
+              isActive
+                  ? 'Category "${cat.name}" activated.'
+                  : 'Category "${cat.name}" deactivated.',
+            );
+          }
+        },
+        onAddCustom: () {
+          Navigator.pop(ctx);
+          _showAddCategoryDialog(data);
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -573,6 +610,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           appBar: AppBar(
             title: const Text('Budget Allocations'),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
+                tooltip: 'Category Library',
+                onPressed: () => _openCategoryLibrary(staticData),
+              ),
               if (staticData.isAdmin)
                 IconButton(
                   icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF00C896)),
