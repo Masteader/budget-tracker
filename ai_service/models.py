@@ -222,6 +222,7 @@ class SupportChatRequest(BaseModel):
     household_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[List[dict]] = None
+    language: Optional[str] = "ar"
 
 
 class SupportChatResponse(BaseModel):
@@ -229,4 +230,15 @@ class SupportChatResponse(BaseModel):
     escalate_to_developer: bool = False
     summary: Optional[str] = None
     support_email: str = "fmscoinfo@fmsco.com.sa"
+
+
+class HouseholdIncomeRequest(BaseModel):
+    monthly_income: float = Field(..., ge=0.0, description="Monthly household salary/income in SAR")
+
+
+class HouseholdIncomeResponse(BaseModel):
+    household_id: str
+    monthly_income: float
+    status: str = "success"
+
 

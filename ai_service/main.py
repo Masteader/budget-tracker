@@ -41,6 +41,8 @@ from models import (
     RecurringBillToggleRequest,
     SupportChatRequest,
     SupportChatResponse,
+    HouseholdIncomeRequest,
+    HouseholdIncomeResponse,
 )
 from support_agent import handle_support_query, SUPPORT_EMAIL
 
@@ -483,6 +485,32 @@ async def update_household_payday_endpoint(household_id: str, payload: PaydayUpd
 
 
 @app.get(
+    "/households/{household_id}/income",
+    tags=["households"],
+    summary="Get configured monthly income/salary for a household.",
+)
+async def get_household_income_endpoint(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import get_household_income
+    income = await asyncio.to_thread(get_household_income, household_id)
+    return {"household_id": household_id, "monthly_income": income}
+
+
+@app.put(
+    "/households/{household_id}/income",
+    tags=["households"],
+    summary="Update configured monthly income/salary for a household.",
+)
+async def update_household_income_endpoint(household_id: str, payload: HouseholdIncomeRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import set_household_income
+    saved_income = await asyncio.to_thread(set_household_income, household_id, payload.monthly_income)
+    return {"household_id": household_id, "monthly_income": saved_income, "status": "success"}
+
+
+@app.get(
     "/budgets/recurring-bills",
     tags=["budgets"],
     summary="Get detected recurring household bills, cycle payment status, and reserved allowance.",
@@ -910,6 +938,7 @@ async def support_chat(payload: SupportChatRequest) -> SupportChatResponse:
         household_id=payload.household_id,
         user_id=payload.user_id,
         history=payload.history,
+        language=payload.language or "ar",
     )
     return SupportChatResponse(
         reply=reply,

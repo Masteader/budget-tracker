@@ -472,3 +472,65 @@ def set_household_payday(household_id: str, payday_day: int) -> int:
 
     return payday_day
 
+
+def get_household_income(household_id: str) -> float:
+    """
+    Retrieves the monthly income (SAR) for a household.
+    Checks Supabase households.monthly_income, falls back to local JSON cache, defaults to 0.0.
+    """
+    if not household_id:
+        return 0.0
+    try:
+        client = get_client()
+        res = client.table("households").select("monthly_income").eq("id", household_id).maybe_single().execute()
+        if res.data and res.data.get("monthly_income") is not None:
+            return float(res.data["monthly_income"])
+    except Exception:
+        pass
+
+    try:
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                if household_id in settings and "monthly_income" in settings[household_id]:
+                    return float(settings[household_id]["monthly_income"])
+    except Exception:
+        pass
+
+    return 0.0
+
+
+def set_household_income(household_id: str, monthly_income: float) -> float:
+    """
+    Sets the monthly income (SAR) for a household.
+    Updates Supabase if column exists, and always caches in household_settings.json.
+    """
+    if not household_id:
+        return 0.0
+    monthly_income = max(0.0, float(monthly_income))
+
+    # 1. Update local storage
+    try:
+        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
+        settings = {}
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        if household_id not in settings:
+            settings[household_id] = {}
+        settings[household_id]["monthly_income"] = monthly_income
+        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist household_settings.json for income: {e}")
+
+    # 2. Update Supabase
+    try:
+        client = get_client()
+        client.table("households").update({"monthly_income": monthly_income}).eq("id", household_id).execute()
+    except Exception as e:
+        logger.info(f"Supabase households.monthly_income column update skipped: {e}")
+
+    return monthly_income
+
+
