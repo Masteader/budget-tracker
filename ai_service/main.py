@@ -43,6 +43,8 @@ from models import (
     SupportChatResponse,
     HouseholdIncomeRequest,
     HouseholdIncomeResponse,
+    CategoryToggleRequest,
+    CustomCategoryCreateRequest,
 )
 from support_agent import handle_support_query, SUPPORT_EMAIL
 
@@ -853,6 +855,67 @@ async def household_settlement(household_id: str, split_ratio: float = 0.50):
         return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
     except Exception as exc:
         logger.error("Failed to compute partner settlement: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/households/{household_id}/categories",
+    tags=["categories"],
+    summary="Get active and inactive categories for household.",
+)
+async def get_household_categories_endpoint(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import get_household_categories
+    try:
+        return await asyncio.to_thread(get_household_categories, household_id)
+    except Exception as exc:
+        logger.error("Failed to fetch household categories: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/households/{household_id}/categories/toggle",
+    tags=["categories"],
+    summary="Toggle category active/inactive status for a household.",
+)
+async def toggle_category_endpoint(household_id: str, req: CategoryToggleRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import toggle_category_status
+    try:
+        return await asyncio.to_thread(
+            toggle_category_status,
+            household_id=household_id,
+            category_code=req.category_code,
+            is_active=req.is_active,
+        )
+    except Exception as exc:
+        logger.error("Failed to toggle category status: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post(
+    "/households/{household_id}/categories/custom",
+    tags=["categories"],
+    summary="Create custom root category for a household.",
+)
+async def create_custom_category_endpoint(household_id: str, req: CustomCategoryCreateRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from salary_cycle import create_household_custom_category
+    try:
+        return await asyncio.to_thread(
+            create_household_custom_category,
+            household_id=household_id,
+            code=req.code,
+            category=req.category,
+            keywords=req.keywords,
+            is_flexible=req.is_flexible,
+            allocated_amount=req.allocated_amount,
+        )
+    except Exception as exc:
+        logger.error("Failed to create custom category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

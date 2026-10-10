@@ -921,3 +921,132 @@ def save_sub_allocations(
     }
 
 
+def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Fetches categories available to a household, partitioned into active and inactive.
+    System categories with no explicit setting default to active for core categories,
+    and inactive for newly added developer categories.
+    """
+    client = get_client()
+
+    all_codes_resp = client.table("cost_control_codes").select("*").execute()
+    all_codes = all_codes_resp.data or []
+
+    # Filter for global OR this household
+    hh_codes = [
+        c for c in all_codes
+        if c.get("household_id") is None or c.get("household_id") == household_id
+    ]
+
+    settings_resp = (
+        client.table("household_category_settings")
+        .select("*")
+        .eq("household_id", household_id)
+        .execute()
+    )
+    settings_map = {s["category_code"]: s["is_active"] for s in (settings_resp.data or [])}
+
+    initial_core = {
+        "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
+        "OPEX-SHOPPING", "OPEX-HEALTH", "CAPEX-EDUCATION", "OPEX-MISC"
+    }
+
+    active = []
+    inactive = []
+
+    for cat in hh_codes:
+        code = cat["code"]
+        if code in settings_map:
+            is_active = bool(settings_map[code])
+        else:
+            is_active = code in initial_core
+
+        cat_info = {**cat, "is_active": is_active}
+        if is_active:
+            active.append(cat_info)
+        else:
+            inactive.append(cat_info)
+
+    return {"active": active, "inactive": inactive}
+
+
+def toggle_category_status(household_id: str, category_code: str, is_active: bool) -> Dict[str, Any]:
+    """
+    Toggles active/inactive status for a household category.
+    If set to inactive, also updates the corresponding budget is_active to false.
+    """
+    client = get_client()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    client.table("household_category_settings").upsert({
+        "household_id": household_id,
+        "category_code": category_code,
+        "is_active": is_active,
+        "updated_at": now_iso,
+    }, on_conflict="household_id,category_code").execute()
+
+    if not is_active:
+        client.table("budgets").update({
+            "is_active": False,
+        }).eq("household_id", household_id).eq("category_code", category_code).execute()
+
+    return {
+        "status": "success",
+        "category_code": category_code,
+        "is_active": is_active,
+    }
+
+
+def create_household_custom_category(
+    household_id: str,
+    code: str,
+    category: str,
+    keywords: List[str],
+    is_flexible: bool = False,
+    allocated_amount: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Creates a new custom root category scoped strictly to a household.
+    """
+    client = get_client()
+    clean_code = code.upper().strip()
+    if not clean_code.startswith("CUSTOM-"):
+        clean_code = f"CUSTOM-{clean_code}"
+
+    # Insert into cost_control_codes
+    client.table("cost_control_codes").insert({
+        "code": clean_code,
+        "category": category.strip(),
+        "keywords": keywords,
+        "is_flexible": is_flexible,
+        "is_system": False,
+        "household_id": household_id,
+    }).execute()
+
+    # Set as active in household_category_settings
+    toggle_category_status(household_id, clean_code, is_active=True)
+
+    # If allocated_amount > 0, create budget
+    if allocated_amount > 0:
+        current_cycle = get_cycle_for_date()
+        today = datetime.now(timezone.utc).date()
+        month_str = today.replace(day=1).isoformat()
+        client.table("budgets").insert({
+            "household_id": household_id,
+            "month": month_str,
+            "cycle_key": current_cycle["cycle_key"],
+            "category_code": clean_code,
+            "allocated_amount": allocated_amount,
+            "spent_amount": 0.0,
+            "is_active": True,
+        }).execute()
+
+    return {
+        "status": "success",
+        "code": clean_code,
+        "category": category,
+        "is_active": True,
+    }
+
+
+

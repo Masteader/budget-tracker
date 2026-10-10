@@ -242,3 +242,17 @@ class HouseholdIncomeResponse(BaseModel):
     status: str = "success"
 
 
+class CategoryToggleRequest(BaseModel):
+    category_code: str
+    is_active: bool
+
+
+class CustomCategoryCreateRequest(BaseModel):
+    code: str
+    category: str
+    keywords: List[str] = Field(default_factory=list)
+    is_flexible: bool = False
+    allocated_amount: float = 0.0
+
+
+
