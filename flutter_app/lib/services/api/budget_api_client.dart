@@ -135,6 +135,44 @@ class BudgetApiClient {
     );
   }
 
+  Future<List<HouseholdDependent>> fetchHouseholdDependents({
+    required String householdId,
+  }) async {
+    final res = await baseClient.get('/households/$householdId/dependents');
+    final list = res['dependents'] as List? ?? [];
+    return list
+        .map((e) => HouseholdDependent.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<HouseholdDependent?> createHouseholdDependent({
+    required String householdId,
+    required String name,
+    String? avatarIcon,
+  }) async {
+    final res = await baseClient.post(
+      '/households/$householdId/dependents',
+      {
+        'name': name,
+        if (avatarIcon != null) 'avatar_icon': avatarIcon,
+      },
+    );
+    if (res['dependent'] != null) {
+      return HouseholdDependent.fromMap(Map<String, dynamic>.from(res['dependent'] as Map));
+    }
+    return null;
+  }
+
+  Future<bool> deleteHouseholdDependent({
+    required String householdId,
+    required String dependentId,
+  }) async {
+    final res = await baseClient.delete(
+      '/households/$householdId/dependents/$dependentId',
+    );
+    return res['status'] == 'success';
+  }
+
   Future<Map<String, dynamic>> fetchBudgetBreakdown({
     required String householdId,
     String? cycleKey,

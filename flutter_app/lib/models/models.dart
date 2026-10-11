@@ -10,6 +10,7 @@ class Transaction {
   final String currency;
   final String? merchant;
   final String? categoryCode;
+  final String? subCategory;
   final DateTime timestamp;
   final bool isReallocated;
   final String? reallocatedFromBudgetId;
@@ -17,7 +18,7 @@ class Transaction {
   final String source;
   final String spentBy; // legacy 'me' | 'partner' | 'both'
   final String paidBy; // 'me' | 'partner'
-  final String beneficiary; // 'me' | 'partner' | 'both'
+  final String beneficiary; // 'me' | 'partner' | 'both' | child name
   final List<Map<String, dynamic>> items;
   final String? receiptUrl;
   final String? dedupFingerprint;
@@ -31,6 +32,7 @@ class Transaction {
     required this.currency,
     this.merchant,
     this.categoryCode,
+    this.subCategory,
     required this.timestamp,
     required this.isReallocated,
     this.reallocatedFromBudgetId,
@@ -145,6 +147,7 @@ class Transaction {
       currency: map['currency'] as String? ?? 'SAR',
       merchant: map['merchant'] as String?,
       categoryCode: map['category_code'] as String?,
+      subCategory: map['sub_category'] as String?,
       timestamp: DateTime.parse(map['timestamp'] as String),
       isReallocated: map['is_reallocated'] as bool? ?? false,
       reallocatedFromBudgetId: map['reallocated_from_budget_id'] as String?,
@@ -159,6 +162,77 @@ class Transaction {
       qrCodeRaw: map['qr_code_raw'] as String? ??
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       rawSms: raw,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'amount': amount,
+      'currency': currency,
+      'merchant': merchant,
+      'category_code': categoryCode,
+      'sub_category': subCategory,
+      'timestamp': timestamp.toIso8601String(),
+      'is_reallocated': isReallocated,
+      'reallocated_from_budget_id': reallocatedFromBudgetId,
+      'created_at': createdAt.toIso8601String(),
+      'source': source,
+      'spent_by': spentBy,
+      'paid_by': paidBy,
+      'beneficiary': beneficiary,
+      'items': items,
+      'receipt_url': receiptUrl,
+      'dedup_fingerprint': dedupFingerprint,
+      'qr_code_raw': qrCodeRaw,
+      'raw_sms': rawSms,
+    };
+  }
+
+  Transaction copyWith({
+    String? id,
+    String? householdId,
+    double? amount,
+    String? currency,
+    String? merchant,
+    String? categoryCode,
+    String? subCategory,
+    DateTime? timestamp,
+    bool? isReallocated,
+    String? reallocatedFromBudgetId,
+    DateTime? createdAt,
+    String? source,
+    String? spentBy,
+    String? paidBy,
+    String? beneficiary,
+    List<Map<String, dynamic>>? items,
+    String? receiptUrl,
+    String? dedupFingerprint,
+    String? qrCodeRaw,
+    String? rawSms,
+  }) {
+    return Transaction(
+      id: id ?? this.id,
+      householdId: householdId ?? this.householdId,
+      amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
+      merchant: merchant ?? this.merchant,
+      categoryCode: categoryCode ?? this.categoryCode,
+      subCategory: subCategory ?? this.subCategory,
+      timestamp: timestamp ?? this.timestamp,
+      isReallocated: isReallocated ?? this.isReallocated,
+      reallocatedFromBudgetId: reallocatedFromBudgetId ?? this.reallocatedFromBudgetId,
+      createdAt: createdAt ?? this.createdAt,
+      source: source ?? this.source,
+      spentBy: spentBy ?? this.spentBy,
+      paidBy: paidBy ?? this.paidBy,
+      beneficiary: beneficiary ?? this.beneficiary,
+      items: items ?? this.items,
+      receiptUrl: receiptUrl ?? this.receiptUrl,
+      dedupFingerprint: dedupFingerprint ?? this.dedupFingerprint,
+      qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
+      rawSms: rawSms ?? this.rawSms,
     );
   }
 }
@@ -485,4 +559,43 @@ class CategoryItem {
         'keywords': keywords,
       };
 }
+
+// ── Household Dependent (Children & Dependents) ──────────────────────────────
+
+class HouseholdDependent {
+  final String id;
+  final String householdId;
+  final String name;
+  final String avatarIcon;
+  final DateTime? createdAt;
+
+  const HouseholdDependent({
+    required this.id,
+    required this.householdId,
+    required this.name,
+    this.avatarIcon = 'child',
+    this.createdAt,
+  });
+
+  factory HouseholdDependent.fromMap(Map<String, dynamic> map) {
+    return HouseholdDependent(
+      id: map['id'] as String? ?? '',
+      householdId: map['household_id'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      avatarIcon: map['avatar_icon'] as String? ?? 'child',
+      createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'household_id': householdId,
+      'name': name,
+      'avatar_icon': avatarIcon,
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+    };
+  }
+}
+
 

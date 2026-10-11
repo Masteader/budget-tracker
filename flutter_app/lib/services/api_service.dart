@@ -158,6 +158,15 @@ class ApiService {
   Future<Map<String, dynamic>> fetchPartnerSettlement({required String householdId, double splitRatio = 0.5}) =>
       budget.fetchPartnerSettlement(householdId: householdId, splitRatio: splitRatio);
 
+  Future<List<HouseholdDependent>> getDependents(String householdId) =>
+      budget.fetchHouseholdDependents(householdId: householdId);
+
+  Future<HouseholdDependent?> createDependent(String householdId, String name, {String? avatarIcon}) =>
+      budget.createHouseholdDependent(householdId: householdId, name: name, avatarIcon: avatarIcon);
+
+  Future<bool> deleteDependent(String householdId, String dependentId) =>
+      budget.deleteHouseholdDependent(householdId: householdId, dependentId: dependentId);
+
   Future<Map<String, dynamic>> getBudgetBreakdown(String householdId, {String? cycleKey}) =>
       budget.fetchBudgetBreakdown(householdId: householdId, cycleKey: cycleKey);
 

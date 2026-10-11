@@ -136,6 +136,37 @@ class BaseApiClient {
       return {'status': 'error', 'message': e.toString()};
     }
   }
+
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    Map<String, dynamic>? queryParams,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    var uri = Uri.parse(path.startsWith('http') ? path : '$baseUrl$path');
+    if (queryParams != null && queryParams.isNotEmpty) {
+      uri = uri.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())));
+    }
+
+    try {
+      final response = await http.delete(uri, headers: buildHeaders()).timeout(timeout);
+      if (response.statusCode >= 400) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+        } catch (_) {}
+        return {
+          'status': 'error',
+          'status_code': response.statusCode,
+          'message': 'Server response error (${response.statusCode})',
+        };
+      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } on Exception catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
 
 
