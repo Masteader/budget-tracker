@@ -359,6 +359,15 @@ def parse_chat_expense(text: str) -> ParsedChatExpense:
         return _fallback_heuristic_parse(text)
 
 
+def check_category_active_status(category_code: str, categories_state: dict) -> bool:
+    """
+    Returns True if category_code is active for the household,
+    False if it is explicitly listed in categories_state['inactive'].
+    """
+    inactive_codes = {c["code"] for c in categories_state.get("inactive", [])}
+    return category_code not in inactive_codes
+
+
 def process_chat_transaction(
     household_id: str,
     message: str,
@@ -428,15 +437,6 @@ def process_chat_transaction(
     spent_by = (override_spent_by or parsed.spent_by).lower()
     if spent_by not in ("me", "partner", "both"):
         spent_by = "both"
-
-def check_category_active_status(category_code: str, categories_state: dict) -> bool:
-    """
-    Returns True if category_code is active for the household,
-    False if it is explicitly listed in categories_state['inactive'].
-    """
-    inactive_codes = {c["code"] for c in categories_state.get("inactive", [])}
-    return category_code not in inactive_codes
-
 
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
