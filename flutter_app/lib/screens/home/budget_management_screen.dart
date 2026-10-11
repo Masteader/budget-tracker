@@ -467,9 +467,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Remove $categoryName?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('Deactivate $categoryName?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
-          'This will remove $categoryName from your active budget list for this household. Historic transactions remain preserved.',
+          'This will deactivate $categoryName and move it to your Category Library. Categories are never deleted, so your financial history remains safe and you can reactivate it at any time.',
           style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
         ),
         actions: [
@@ -479,8 +479,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Remove Category', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE3B341)),
+            child: const Text('Deactivate', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
           ),
         ],
       ),
@@ -500,10 +500,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           _staticFuture = _loadStaticData();
         });
         if (mounted) {
-          AppSnackBar.showDelete(
+          AppSnackBar.showSuccess(
             context,
-            'Category "$categoryName" removed from active budgets.',
-            title: 'Category Removed',
+            'Category "$categoryName" moved to Category Library (inactive).',
+            title: 'Category Deactivated',
           );
         }
       }
@@ -511,8 +511,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Failed to remove category: $e',
-          title: 'Remove Failed',
+          'Failed to deactivate category: $e',
+          title: 'Deactivation Failed',
         );
       }
     }
@@ -911,9 +911,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 onPressed: () => _editBudget(staticData, existing, code),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.remove_circle_outline,
-                                    color: Colors.redAccent, size: 20),
-                                tooltip: 'Remove Category',
+                                icon: const Icon(Icons.archive_outlined,
+                                    color: Color(0xFFE3B341), size: 20),
+                                tooltip: 'Deactivate Category',
                                 onPressed: () => _archiveCategory(staticData, code, category),
                               ),
                             ],

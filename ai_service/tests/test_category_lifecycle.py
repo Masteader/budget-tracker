@@ -87,3 +87,24 @@ def test_categories_api_endpoints(monkeypatch):
     resp = client.post("/households/hh-123/categories/custom", json={"code": "FARM", "category": "Farm", "allocated_amount": 200.0})
     assert resp.status_code == 200
 
+
+def test_archive_category_never_deletes_even_with_zero_transactions(monkeypatch):
+    import salary_cycle
+    mock_sb = MagicMock()
+    mock_sb.table("budgets").select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+        {"id": "b-1", "category_code": "CUSTOM-FARM", "allocated_amount": 200.0}
+    ]
+    mock_sb.table("budgets").update.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+    mock_sb.table("household_category_settings").upsert.return_value.execute.return_value.data = [{"status": "ok"}]
+    
+    monkeypatch.setattr(salary_cycle, "get_client", lambda: mock_sb)
+    
+    res = salary_cycle.archive_category_for_household("hh-123", "CUSTOM-FARM")
+    assert res["status"] == "success"
+    assert res["category_code"] == "CUSTOM-FARM"
+    
+    # Verify no delete operations were performed on any category table
+    assert mock_sb.table("cost_control_codes").delete.called is False
+    assert mock_sb.table("budgets").delete.called is False
+    assert mock_sb.table("cost_control_sub_categories").delete.called is False
+

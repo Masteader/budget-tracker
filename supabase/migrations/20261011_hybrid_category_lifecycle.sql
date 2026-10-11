@@ -43,9 +43,11 @@ DROP POLICY IF EXISTS "cost_control_codes_update" ON public.cost_control_codes;
 CREATE POLICY "cost_control_codes_update" ON public.cost_control_codes
   FOR UPDATE USING (household_id IS NOT NULL AND is_system = false);
 
+-- Disallow deletion by end users: categories are permanent taxonomy items
+-- that can only be toggled active or inactive via household_category_settings.
 DROP POLICY IF EXISTS "cost_control_codes_delete" ON public.cost_control_codes;
 CREATE POLICY "cost_control_codes_delete" ON public.cost_control_codes
-  FOR DELETE USING (household_id IS NOT NULL AND is_system = false);
+  FOR DELETE USING (auth.role() = 'service_role');
 
 -- 6. RLS Policies for household_category_settings
 DROP POLICY IF EXISTS "household_category_settings_all" ON public.household_category_settings;

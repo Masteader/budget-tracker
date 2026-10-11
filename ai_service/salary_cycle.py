@@ -645,7 +645,6 @@ def get_sub_categories_for_parent(parent_code: str) -> List[Dict[str, Any]]:
 
 
 def archive_category_for_household(household_id: str, category_code: str) -> Dict[str, Any]:
-    from supabase_client import get_client
     client = get_client()
 
     current_cycle = get_cycle_for_date()
@@ -680,31 +679,14 @@ def archive_category_for_household(household_id: str, category_code: str) -> Dic
         }
         client.table("budgets").insert(insert_data).execute()
 
-    # 2. If it is a non-standard custom category and has zero transactions anywhere, clean up custom definition
-    standard_codes = {
-        "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
-        "OPEX-SHOPPING", "OPEX-ENTERTAINMENT", "OPEX-HEALTH", "CAPEX-EDUCATION",
-        "OPEX-GOV", "OPEX-MISC"
-    }
-    if category_code not in standard_codes:
-        tx_check = (
-            client.table("transactions")
-            .select("id")
-            .eq("category_code", category_code)
-            .limit(1)
-            .execute()
-        )
-        if not (tx_check.data or []):
-            try:
-                client.table("cost_control_sub_categories").delete().eq("parent_code", category_code).execute()
-                client.table("budgets").delete().eq("category_code", category_code).execute()
-                client.table("cost_control_codes").delete().eq("code", category_code).execute()
-            except Exception as e:
-                logger.warning(f"Could not purge custom category {category_code}: {e}")
+    # 2. Persist inactive status in household_category_settings.
+    # Categories are NEVER deleted (even custom categories with zero transactions);
+    # they are only deactivated so they remain available in the Category Library for reactivation.
+    toggle_category_status(household_id, category_code, is_active=False)
 
     return {
         "status": "success",
-        "message": f"Category {category_code} archived successfully.",
+        "message": f"Category {category_code} deactivated successfully.",
         "category_code": category_code,
     }
 
@@ -938,13 +920,17 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
         if c.get("household_id") is None or c.get("household_id") == household_id
     ]
 
-    settings_resp = (
-        client.table("household_category_settings")
-        .select("*")
-        .eq("household_id", household_id)
-        .execute()
-    )
-    settings_map = {s["category_code"]: s["is_active"] for s in (settings_resp.data or [])}
+    try:
+        settings_resp = (
+            client.table("household_category_settings")
+            .select("*")
+            .eq("household_id", household_id)
+            .execute()
+        )
+        settings_map = {s["category_code"]: s["is_active"] for s in (settings_resp.data or [])}
+    except Exception as exc:
+        logger.warning("Could not query household_category_settings: %s", exc)
+        settings_map = {}
 
     initial_core = {
         "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
@@ -978,12 +964,15 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
     client = get_client()
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    client.table("household_category_settings").upsert({
-        "household_id": household_id,
-        "category_code": category_code,
-        "is_active": is_active,
-        "updated_at": now_iso,
-    }, on_conflict="household_id,category_code").execute()
+    try:
+        client.table("household_category_settings").upsert({
+            "household_id": household_id,
+            "category_code": category_code,
+            "is_active": is_active,
+            "updated_at": now_iso,
+        }, on_conflict="household_id,category_code").execute()
+    except Exception as exc:
+        logger.warning("Could not persist household_category_settings: %s", exc)
 
     if not is_active:
         client.table("budgets").update({
