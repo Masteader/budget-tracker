@@ -418,7 +418,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     _scrollToBottom();
   }
 
-  Future<void> _confirmPendingExpense(ChatMessage originalMsg, String merchant, String spentBy) async {
+  Future<void> _confirmPendingExpense(
+    ChatMessage originalMsg,
+    String merchant,
+    String categoryCode,
+    String? subCategory,
+    String paidBy,
+    String beneficiary,
+  ) async {
     final pending = originalMsg.pendingData;
     if (pending == null || _householdId == null) return;
 
@@ -435,7 +442,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       allowDuplicate: true,
       previewOnly: false,
       merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
-      spentBy: spentBy,
+      spentBy: beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both'),
+      categoryCode: categoryCode,
+      subCategory: subCategory,
+      paidBy: paidBy,
+      beneficiary: beneficiary,
     );
 
     setState(() {
@@ -456,8 +467,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             'amount': (res['amount'] as num?)?.toDouble() ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
             'category_code': res['category_code'] ?? pending['category_code'],
             'items': parsedItems.isNotEmpty ? parsedItems : (pending['items'] as List? ?? []),
-            'is_reallocated': res['is_reallocated'] ?? false,
-            'spent_by': res['spent_by'] ?? spentBy,
+            'spent_by': res['spent_by'] ?? (beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both')),
+            'paid_by': res['paid_by'] ?? paidBy,
+            'beneficiary': res['beneficiary'] ?? beneficiary,
+            'sub_category': res['sub_category'] ?? subCategory,
             'source': 'chat',
           },
         );
@@ -586,8 +599,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
-                    onConfirmPending: (store, spentBy) {
-                      _confirmPendingExpense(msg, store, spentBy);
+                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary) {
+                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary);
                     },
                     onCancelPending: () {
                       setState(() {

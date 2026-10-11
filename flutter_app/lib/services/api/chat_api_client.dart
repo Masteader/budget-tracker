@@ -15,6 +15,10 @@ class ChatApiClient {
     bool previewOnly = true,
     String? merchant,
     String? spentBy,
+    String? categoryCode,
+    String? subCategory,
+    String? paidBy,
+    String? beneficiary,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
@@ -25,6 +29,10 @@ class ChatApiClient {
       if (enrichTxId != null) 'enrich_tx_id': enrichTxId,
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
       if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
+      if (categoryCode != null && categoryCode.trim().isNotEmpty) 'category_code': categoryCode.trim(),
+      if (subCategory != null && subCategory.trim().isNotEmpty) 'sub_category': subCategory.trim(),
+      if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
+      if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
     };
 
     final res = await baseClient.post('/agent/chat-transaction', payload, shouldSign: true);

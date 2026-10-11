@@ -31,7 +31,13 @@ class ChatMessage {
 /// Renders either a user speech bubble or an assistant card with interactive modules.
 class ChatMessageBubble extends StatelessWidget {
   final ChatMessage message;
-  final void Function(String confirmedMerchant, String confirmedSpentBy)? onConfirmPending;
+  final void Function(
+    String confirmedMerchant,
+    String confirmedCategoryCode,
+    String? confirmedSubCategory,
+    String confirmedPaidBy,
+    String confirmedBeneficiary,
+  )? onConfirmPending;
   final VoidCallback? onCancelPending;
   final ValueChanged<String>? onEnrichCandidate;
   final ValueChanged<String>? onLogAsNewCandidate;

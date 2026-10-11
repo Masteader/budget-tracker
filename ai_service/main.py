@@ -292,6 +292,10 @@ async def chat_transaction(request: Request):
             preview_only=bool(body.get("preview_only", False)),
             override_merchant=body.get("merchant"),
             override_spent_by=body.get("spent_by"),
+            override_category_code=body.get("category_code"),
+            override_sub_category=body.get("sub_category"),
+            override_paid_by=body.get("paid_by"),
+            override_beneficiary=body.get("beneficiary"),
         )
         return result
     except Exception as exc:

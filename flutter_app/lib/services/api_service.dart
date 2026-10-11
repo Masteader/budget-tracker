@@ -39,6 +39,10 @@ class ApiService {
     bool previewOnly = true,
     String? merchant,
     String? spentBy,
+    String? categoryCode,
+    String? subCategory,
+    String? paidBy,
+    String? beneficiary,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -49,6 +53,10 @@ class ApiService {
         previewOnly: previewOnly,
         merchant: merchant,
         spentBy: spentBy,
+        categoryCode: categoryCode,
+        subCategory: subCategory,
+        paidBy: paidBy,
+        beneficiary: beneficiary,
       );
 
   Future<Map<String, dynamic>> simulatePurchase({
