@@ -32,6 +32,7 @@ class ChatLineItem(BaseModel):
     name: str = Field(..., description="Name of the item purchased")
     quantity: float = Field(1.0, description="Quantity of item")
     price: float = Field(..., description="Total price for this item line in SAR")
+    sub_category: Optional[str] = Field(None, description="Sub-category code for this specific item")
 
 class ParsedChatExpense(BaseModel):
     is_transaction: bool = Field(True, description="Whether the text represents a financial expense to record")
@@ -42,9 +43,10 @@ class ParsedChatExpense(BaseModel):
     total_amount: float = Field(0.0, description="Total amount in SAR")
     currency: str = "SAR"
     category_code: str = Field("OPEX-MISC", description="Category code like OPEX-DINING, OPEX-GROCERY, OPEX-SHOPPING, etc.")
+    sub_category: Optional[str] = Field(None, description="Sub-category code like restaurants_dinners, coffee_bakeries, etc.")
     spent_by: str = Field("both", description="Who spent this: 'me', 'partner', or 'both'")
     paid_by: str = Field("me", description="Who paid: 'me' or 'partner'")
-    beneficiary: str = Field("both", description="For whom: 'me', 'partner', or 'both'")
+    beneficiary: str = Field("both", description="For whom: 'me', 'partner', 'both', or dependent/child name")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
 
@@ -57,49 +59,35 @@ def normalize_arabic_numbers(text: str) -> str:
 SYSTEM_PROMPT = """You are an intelligent financial assistant for a Saudi budget tracker.
 Parse natural language expense logs into structured financial transactions with line-item breakdowns, OR detect pre-purchase affordability simulation questions.
 
-Categories available:
-- OPEX-GROCERY: Supermarkets, groceries, food stores (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim, بنده, العثيم, التميمي, مقاضي)
-- OPEX-DINING: Restaurants, cafes, fast food, coffee shops, bakeries, delivery (Dunkin, Starbucks, Albaik, McDonald's, Jahez, Hungerstation, Mrsool, البيك, جاهز, هنقرستيشن)
-- OPEX-FUEL: Fuel stations, gas, transport, taxi, Uber, Careem, trains (Aramco, Sahel, SASCO, Aldrees, ساسكو, الدريس, بنزين 91, بنزين 95)
-- OPEX-UTILITIES: Electricity, water, internet, mobile bills (STC, Mobily, Zain, SEC, الكهرباء, المياه)
-- OPEX-SHOPPING: Retail, clothing, electronics, books, iPad, gadgets (Jarir, Extra, Noon, Amazon, Apple, جرير, اكسترا)
-- OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming, concerts (Muvi, Vox, Netflix, PlayStation, Shahid)
-- OPEX-HEALTH: Pharmacies, clinics, doctors, hospitals, medicine (Nahdi, Al Dawaa, Habib, النهدي, الدواء, صيدلية)
-- OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance, home services).
+Categories and Sub-categories available:
+- OPEX-GROCERY: meat, vegetables_fruit, dairy_eggs, snacks_chips, beverages, pantry_staples, cleaning_household (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim, بنده, العثيم, التميمي, مقاضي)
+- OPEX-DINING: restaurants_dinners, coffee_bakeries, delivery_apps (Albaik, McDonald's, Beit Al Shawarma, Dunkin, Starbucks, Jahez, Hungerstation, Mrsool, البيك, بيت الشاورما, شاورما, بروستد, جاهز, هنقرستيشن)
+- OPEX-FUEL: gas_fuel, car_maintenance, ride_hailing (Aramco, Sahel, SASCO, Aldrees, Uber, Careem, ساسكو, الدريس, بنزين 91, بنزين 95, اوبر)
+- OPEX-UTILITIES: electricity_sec, fiber_internet, mobile_sims, water_municipal, housing_rent (STC, Mobily, Zain, SEC, الكهرباء, المياه, ايجار)
+- OPEX-SHOPPING: clothing_fashion, electronics_gadgets, home_furniture (Jarir, Extra, Noon, Amazon, Apple, Ikea, جرير, اكسترا, ايكيا)
+- OPEX-HEALTH: prescriptions_meds, clinics_dental (Nahdi, Al Dawaa, Habib, النهدي, الدواء, صيدلية, عيادة)
+- OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming (Muvi, Vox, Netflix, PlayStation, Shahid)
+- OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance).
 
-SAUDI COLLOQUIAL ARABIC & VOICE ENTRY SUPPORT:
-Users frequently log transactions in Saudi dialect (اللهجة السعودية الدارجة). Interpret colloquial Saudi verbs and expressions accurately:
-- Verbs: "عبيت" (filled/fueled), "تقضيت" (bought groceries), "حاسبت" (paid), "دفعت" (paid), "سددت" (settled bill), "شريت" (bought), "جبت" (got), "طلبت" (ordered delivery).
-- Slang items: "بنزين 91 / 95" -> OPEX-FUEL, "مقاضي البيت" -> OPEX-GROCERY, "عشاء / غداء / قهوة / شاهي / حلا" -> OPEX-DINING, "بندول" -> OPEX-HEALTH, "فاتورة الكهرب / النت" -> OPEX-UTILITIES.
-- Attribution ("spent_by"):
-  - "دفعتها أنا / دافعه أنا / ع حسابي / لي لحالي" -> "me"
+SAUDI COLLOQUIAL ARABIC & 2D ATTRIBUTION SUPPORT:
+- "paid_by" (who actually paid):
+  - "دفعتها أنا / دافعه أنا / ع حسابي / حاسبت" -> "me"
   - "دفعتها زوجتي / حاسبها زوجي / جابته المدام" -> "partner"
-  - "مقاضي البيت / لنا اثنيننا / مشترك / للبيت" -> "both" (default for grocery/house bills)
-- Local Saudi Merchants:
-  - Groceries: بنده (Panda), العثيم (Othaim), التميمي (Tamimi), الدانوب (Danube), لولو (Lulu), كارفور (Carrefour)
-  - Dining & Delivery: البيك (Albaik), ماك (McDonald's), جاهز (Jahez), هنقرستيشن (HungerStation), مرسول (Mrsool), بارنز (Barn's), دانكن (Dunkin')
-  - Fuel: ساسكو (SASCO), الدريس (Aldrees), نفط (Naft), أرامكو (Aramco), سهل (Sahel)
-  - Health: النهدي (Nahdi), الدواء (Al Dawaa), الحبيب (Al Habib)
-  - Shopping: جرير (Jarir), اكسترا (Extra), نون (Noon)
-  - Utilities: الكهرباء (SEC / Electricity), اس تي سي (STC), موبايلي (Mobily), زين (Zain)
-- Numerical support: Handles both Western digits (123) and Eastern Arabic numerals (١٢٣).
-
-PRE-PURCHASE AFFORDABILITY SIMULATION:
-If the user asks whether they can afford or buy an item, or asking if their budget permits a potential purchase:
-Examples:
-- "Can I buy a 1200 SAR iPad?" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
-- "أقدر اشتري ايباد بـ 1200 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 1200.0, simulated_item: "iPad", total_amount: 1200.0, category_code: "OPEX-SHOPPING"
-- "يمديني اطلب عشا بـ 80 ريال؟" -> is_transaction: false, is_simulation: true, simulated_amount: 80.0, simulated_item: "عشا", total_amount: 80.0, category_code: "OPEX-DINING"
+- "beneficiary" (for whom was this expense):
+  - "لي / لي لحالي / ع حسابي الشخصي" -> "me"
+  - "لزوجتي / للشريك" -> "partner"
+  - "مقاضي البيت / لنا اثنيننا / مشترك / للبيت" -> "both"
+  - Mention of a child / dependent (e.g. "لسارة", "لفهد", "للأولاد", "حليب سارة", "بامبرز") -> child's name (e.g. "Sarah", "Fahad") or "children".
 
 Expense Input examples:
 "عبيت بنزين 91 بـ 60 ريال من ساسكو"
--> merchant: "SASCO", total_amount: 60.0, category_code: "OPEX-FUEL", spent_by: "me", items: [{"name": "بنزين 91", "quantity": 1, "price": 60.0}]
+-> merchant: "SASCO", total_amount: 60.0, category_code: "OPEX-FUEL", sub_category: "gas_fuel", paid_by: "me", beneficiary: "both", items: [{"name": "بنزين 91", "quantity": 1, "price": 60.0, "sub_category": "gas_fuel"}]
 
-"تقضينا من بنده مقاضي البيت بـ 85 ريال حليب 15 وجبن 25 ودجاج 45"
--> merchant: "Panda", total_amount: 85.0, category_code: "OPEX-GROCERY", spent_by: "both", items: [{"name": "حليب", "quantity": 1, "price": 15.0}, {"name": "جبن", "quantity": 1, "price": 25.0}, {"name": "دجاج", "quantity": 1, "price": 45.0}]
+"طلبنا من بيت الشاورما بـ 25 ريال ساندويش شاورما وعصير"
+-> merchant: "Beit Al Shawarma", total_amount: 25.0, category_code: "OPEX-DINING", sub_category: "restaurants_dinners", paid_by: "me", beneficiary: "me", items: [{"name": "ساندويش شاورما", "quantity": 1, "price": 15.0, "sub_category": "restaurants_dinners"}, {"name": "عصير", "quantity": 1, "price": 10.0, "sub_category": "restaurants_dinners"}]
 
-"طلبنا من البيك بـ 54 ريال مسحب وبيبس دفعتها أنا"
--> merchant: "Albaik", total_amount: 54.0, category_code: "OPEX-DINING", spent_by: "me", items: [{"name": "مسحب وبيبس", "quantity": 1, "price": 54.0}]
+"شريت حفاضات لسارة بـ 85 ريال من النهدي"
+-> merchant: "Nahdi", total_amount: 85.0, category_code: "OPEX-HEALTH", sub_category: "prescriptions_meds", paid_by: "me", beneficiary: "Sarah", items: [{"name": "حفاضات", "quantity": 1, "price": 85.0, "sub_category": "prescriptions_meds"}]
 
 Return STRICTLY valid JSON conforming to:
 {
@@ -111,8 +99,11 @@ Return STRICTLY valid JSON conforming to:
   "total_amount": 0.0,
   "currency": "SAR",
   "category_code": "...",
+  "sub_category": "...",
   "spent_by": "me" | "partner" | "both",
-  "items": [{"name": "...", "quantity": 1, "price": 0.0}],
+  "paid_by": "me" | "partner",
+  "beneficiary": "me" | "partner" | "both" | "<child_name>",
+  "items": [{"name": "...", "quantity": 1, "price": 0.0, "sub_category": "..."}],
   "notes": "..."
 }
 """
@@ -322,12 +313,68 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         else:
             cat_code = "OPEX-MISC"
 
+    # Derive sub-category
+    sub_cat = None
+    if cat_code == "OPEX-DINING":
+        if any(w in lower for w in ("كافيه", "قهوة", "شاي", "كوفي", "ايس لاتيه", "حلا", "كيك", "دونات", "كرواسون", "مخبز", "coffee", "cafe", "starbucks", "dunkin")):
+            sub_cat = "coffee_bakeries"
+        elif any(w in lower for w in ("جاهز", "هنقرستيشن", "مرسول", "تويو", "jahez", "hungerstation", "mrsool", "toyou")):
+            sub_cat = "delivery_apps"
+        else:
+            sub_cat = "restaurants_dinners"
+    elif cat_code == "OPEX-GROCERY":
+        if any(w in lower for w in ("لحم", "دجاج", "سمك", "meat", "chicken", "beef")):
+            sub_cat = "meat"
+        elif any(w in lower for w in ("خضار", "فواكه", "produce", "fruit", "vegetable")):
+            sub_cat = "vegetables_fruit"
+        elif any(w in lower for w in ("حليب", "جبن", "بيض", "لبن", "زبادي", "milk", "cheese", "egg", "dairy")):
+            sub_cat = "dairy_eggs"
+        elif any(w in lower for w in ("شيبس", "بسكويت", "شوكولاته", "سناك", "chips", "snack", "chocolate")):
+            sub_cat = "snacks_chips"
+        elif any(w in lower for w in ("ماء", "موية", "عصير", "ببسي", "مشروب", "water", "juice", "beverage")):
+            sub_cat = "beverages"
+        elif any(w in lower for w in ("صابون", "تايد", "شامبو", "كلوركس", "مناديل", "cleaning", "detergent")):
+            sub_cat = "cleaning_household"
+        else:
+            sub_cat = "pantry_staples"
+    elif cat_code == "OPEX-FUEL":
+        if any(w in lower for w in ("اوبر", "كريم", "بوليت", "تاكسي", "مشوار", "uber", "careem", "bolt", "ride")):
+            sub_cat = "ride_hailing"
+        elif any(w in lower for w in ("زيت", "كفرات", "صيانة", "ورشة", "mechanic", "maintenance")):
+            sub_cat = "car_maintenance"
+        else:
+            sub_cat = "gas_fuel"
+    elif cat_code == "OPEX-HEALTH":
+        if any(w in lower for w in ("عيادة", "اسنان", "طبيب", "دكتور", "clinic", "dental", "doctor")):
+            sub_cat = "clinics_dental"
+        else:
+            sub_cat = "prescriptions_meds"
+    elif cat_code == "OPEX-SHOPPING":
+        if any(w in lower for w in ("ملابس", "ثوب", "فستان", "حذاء", "شوز", "clothes", "fashion", "zara")):
+            sub_cat = "clothing_fashion"
+        elif any(w in lower for w in ("جوال", "لابتوب", "ايباد", "سماعة", "شاحن", "كمبيوتر", "electronics", "gadget")):
+            sub_cat = "electronics_gadgets"
+        else:
+            sub_cat = "home_furniture"
+
+    for it in items:
+        if not getattr(it, "sub_category", None):
+            it.sub_category = sub_cat
+
+    # Detect child / dependent name in beneficiary
+    child_match = re.search(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw)
+    if child_match:
+        cand = child_match.group(1).strip()
+        if cand not in ("ي", "حالي", "البيت", "لنا", "الزوجة", "المدام", "الزوج"):
+            beneficiary = cand
+
     return ParsedChatExpense(
         is_transaction=True,
         merchant=merchant,
         total_amount=total_amount,
         currency="SAR",
         category_code=cat_code,
+        sub_category=sub_cat,
         spent_by=spent_by,
         paid_by=paid_by,
         beneficiary=beneficiary,
@@ -377,6 +424,10 @@ def process_chat_transaction(
     preview_only: bool = False,
     override_merchant: Optional[str] = None,
     override_spent_by: Optional[str] = None,
+    override_category_code: Optional[str] = None,
+    override_sub_category: Optional[str] = None,
+    override_paid_by: Optional[str] = None,
+    override_beneficiary: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -441,7 +492,26 @@ def process_chat_transaction(
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
-    category_code = matched.code if matched else parsed.category_code
+    category_code = override_category_code or (matched.code if matched else parsed.category_code)
+
+    sub_category = override_sub_category or getattr(parsed, "sub_category", None)
+    if not sub_category and category_code:
+        try:
+            from salary_cycle import match_sub_category
+            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts)
+        except Exception:
+            pass
+
+    paid_by = (override_paid_by or getattr(parsed, "paid_by", "me")).lower()
+    if paid_by not in ("me", "partner"):
+        paid_by = "me"
+
+    beneficiary = override_beneficiary or getattr(parsed, "beneficiary", "both")
+
+    # Ensure items have sub_category
+    for it in items_dicts:
+        if not it.get("sub_category"):
+            it["sub_category"] = sub_category
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -454,17 +524,36 @@ def process_chat_transaction(
 
     # If preview only, return structured data asking user for confirmation
     if preview_only:
+        dependents = []
+        try:
+            from dependents_service import get_household_dependents
+            dependents = get_household_dependents(household_id)
+        except Exception as exc:
+            logger.debug("Could not fetch dependents: %s", exc)
+
+        available_subs = []
+        try:
+            from salary_cycle import get_sub_categories_for_parent
+            available_subs = get_sub_categories_for_parent(category_code)
+        except Exception as exc:
+            logger.debug("Could not fetch sub categories: %s", exc)
+
         return {
             "status": "pending_confirmation",
             "merchant": merchant,
             "amount": parsed.total_amount,
             "category_code": category_code,
+            "sub_category": sub_category,
+            "available_sub_categories": available_subs,
             "is_category_inactive": is_inactive,
             "suggested_alternative": "OPEX-MISC" if is_inactive else None,
             "spent_by": spent_by,
+            "paid_by": paid_by,
+            "beneficiary": beneficiary,
+            "dependents": [d.get("name") for d in dependents if d.get("name")],
             "items": items_dicts,
             "original_message": message,
-            "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm store name and who spent it:",
+            "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",
         }
 
     # Duplicate check
@@ -524,6 +613,7 @@ def process_chat_transaction(
         currency="SAR",
         merchant=merchant,
         category_code=category_code,
+        sub_category=sub_category,
         timestamp=now_iso,
         raw_sms=audit_text,
         is_reallocated=is_reallocated,
@@ -545,8 +635,11 @@ def process_chat_transaction(
         "merchant": merchant,
         "amount": parsed.total_amount,
         "category_code": category_code,
+        "sub_category": sub_category,
         "spent_by": spent_by,
-        "items": items_dicts,
+        "paid_by": paid_by,
+        "beneficiary": beneficiary,
         "is_reallocated": is_reallocated,
-        "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by.capitalize()}).",
+        "items": items_dicts,
+        "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by}).",
     }
