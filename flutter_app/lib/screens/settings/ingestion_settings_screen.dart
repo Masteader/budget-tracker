@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../main.dart';
+import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
@@ -46,6 +47,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   String? _inviteCode;
   String _userRole = 'member';
   List<Map<String, dynamic>> _members = [];
+  List<HouseholdDependent> _dependents = [];
   int _paydayDay = 27;
   double _monthlyIncome = 0.0;
 
@@ -170,6 +172,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (mounted) {
         setState(() => _monthlyIncome = income);
       }
+
+      // Load household dependents
+      try {
+        final deps = await ApiService.instance.getDependents(hid);
+        if (mounted) {
+          setState(() => _dependents = deps);
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -544,6 +554,168 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     );
   }
 
+  Future<void> _showAddDependentDialog() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF30363D)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
+            const SizedBox(width: 8),
+            Text(
+              'Add Child / Dependent',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Add a child or family dependent to attribute individual expenses in chat and transactions.',
+              style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: "Dependent's Name (e.g. Sarah)",
+                hintStyle: const TextStyle(color: Color(0xFF6E7681)),
+                filled: true,
+                fillColor: const Color(0xFF0D1117),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF30363D)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) Navigator.pop(ctx, text);
+            },
+            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty && _householdId != null) {
+      try {
+        final res = await ApiService.instance.createDependent(_householdId!, name);
+        if (res != null) {
+          final updated = await ApiService.instance.getDependents(_householdId!);
+          if (mounted) {
+            setState(() => _dependents = updated);
+            AppSnackBar.showSuccess(
+              context,
+              'Added dependent "$name" successfully.',
+              title: 'Dependent Added',
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          AppSnackBar.showError(
+            context,
+            'Failed to add dependent: $e',
+            title: 'Error',
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _removeDependent(HouseholdDependent dependent) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF30363D)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_outline_rounded, color: Color(0xFFF85149)),
+            const SizedBox(width: 8),
+            Text(
+              'Remove Dependent',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove "${dependent.name}" from your household dependents?',
+          style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF85149),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _householdId != null) {
+      try {
+        final ok = await ApiService.instance.deleteDependent(_householdId!, dependent.id);
+        if (ok) {
+          final updated = await ApiService.instance.getDependents(_householdId!);
+          if (mounted) {
+            setState(() => _dependents = updated);
+            AppSnackBar.showSuccess(
+              context,
+              'Removed dependent "${dependent.name}".',
+              title: 'Dependent Removed',
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          AppSnackBar.showError(
+            context,
+            'Failed to remove dependent: $e',
+            title: 'Error',
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -584,10 +756,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               inviteCode: _inviteCode ?? '--------',
               userRole: _userRole,
               members: _members,
+              dependents: _dependents,
               onCopyInviteCode: _copyInviteCode,
               onLeaveHousehold: _confirmLeaveHousehold,
               onSwitchHousehold: _showJoinHouseholdDialog,
               onCreateHousehold: _showCreateHouseholdDialog,
+              onAddDependent: _showAddDependentDialog,
+              onRemoveDependent: _removeDependent,
             ),
             const SizedBox(height: 16),
             PaydaySettingsCard(

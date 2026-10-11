@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../models/models.dart';
 
-/// Card for managing household membership, invite code, and household switching.
+/// Card for managing household membership, invite code, household switching, and dependents.
 class HouseholdManagementCard extends StatelessWidget {
   final String householdName;
   final String inviteCode;
   final String userRole;
   final List<Map<String, dynamic>> members;
+  final List<HouseholdDependent> dependents;
   final VoidCallback onCopyInviteCode;
   final VoidCallback onLeaveHousehold;
   final VoidCallback onSwitchHousehold;
   final VoidCallback onCreateHousehold;
+  final VoidCallback? onAddDependent;
+  final ValueChanged<HouseholdDependent>? onRemoveDependent;
 
   const HouseholdManagementCard({
     super.key,
@@ -19,10 +23,13 @@ class HouseholdManagementCard extends StatelessWidget {
     required this.inviteCode,
     required this.userRole,
     required this.members,
+    this.dependents = const [],
     required this.onCopyInviteCode,
     required this.onLeaveHousehold,
     required this.onSwitchHousehold,
     required this.onCreateHousehold,
+    this.onAddDependent,
+    this.onRemoveDependent,
   });
 
   @override
@@ -180,6 +187,83 @@ class HouseholdManagementCard extends StatelessWidget {
               ),
             );
           }),
+
+          const SizedBox(height: 16),
+          const Divider(color: Color(0xFF21262D), height: 1),
+          const SizedBox(height: 14),
+
+          // Family Dependents & Children Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.child_care_rounded, size: 16, color: Color(0xFF58A6FF)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Family Dependents & Children',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF8B949E),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              if (onAddDependent != null)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF00C896),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 14),
+                  label: const Text(
+                    '+ Add Child / Dependent',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: onAddDependent,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (dependents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'No dependents registered yet. Add children to assign individual expenses.',
+                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF6E7681)),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: dependents.map((d) {
+                return Chip(
+                  backgroundColor: const Color(0xFF0D1117),
+                  side: const BorderSide(color: Color(0xFF30363D)),
+                  avatar: const CircleAvatar(
+                    backgroundColor: Color(0xFF21262D),
+                    child: Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
+                  ),
+                  label: Text(
+                    d.name,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                  deleteIcon: onRemoveDependent != null
+                      ? const Icon(Icons.close_rounded, size: 14, color: Color(0xFF8B949E))
+                      : null,
+                  onDeleted: onRemoveDependent != null ? () => onRemoveDependent!(d) : null,
+                );
+              }).toList(),
+            ),
 
           const SizedBox(height: 18),
           const Divider(color: Color(0xFF21262D), height: 1),
