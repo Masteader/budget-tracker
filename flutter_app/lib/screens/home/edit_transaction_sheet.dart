@@ -10,13 +10,19 @@ import '../../widgets/app_snackbar.dart';
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
+  final List<String> householdDependents;
 
   const EditTransactionSheet({
     super.key,
     required this.transaction,
+    this.householdDependents = const [],
   });
 
-  static Future<String?> show(BuildContext context, Transaction transaction) {
+  static Future<String?> show(
+    BuildContext context,
+    Transaction transaction, {
+    List<String> householdDependents = const [],
+  }) {
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -27,7 +33,10 @@ class EditTransactionSheet extends StatefulWidget {
       builder: (_) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: EditTransactionSheet(transaction: transaction),
+        child: EditTransactionSheet(
+          transaction: transaction,
+          householdDependents: householdDependents,
+        ),
       ),
     );
   }
@@ -40,19 +49,27 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late TextEditingController _merchantCtrl;
   late TextEditingController _amountCtrl;
   late String _selectedCategory;
+  late String? _selectedSubCategory;
   late String _selectedPaidBy;
   late String _selectedBeneficiary;
   late List<Map<String, dynamic>> _items;
+  List<Map<String, dynamic>> _subCategories = [];
+  List<String> _dependents = [];
   bool _isSaving = false;
+  bool _loadingSubs = false;
 
   final List<Map<String, String>> _categories = const [
+    {'code': 'OPEX-GROCERIES', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-DINING', 'name': 'Dining & Cafes'},
     {'code': 'OPEX-FUEL', 'name': 'Fuel & Transport'},
+    {'code': 'OPEX-TRANSPORT', 'name': 'Transport & Transit'},
     {'code': 'OPEX-UTILITIES', 'name': 'Utilities & Bills'},
     {'code': 'OPEX-SHOPPING', 'name': 'Shopping & Retail'},
     {'code': 'OPEX-ENTERTAINMENT', 'name': 'Entertainment'},
     {'code': 'OPEX-HEALTH', 'name': 'Health & Pharmacy'},
+    {'code': 'OPEX-EDUCATION', 'name': 'Education'},
+    {'code': 'OPEX-HOUSING', 'name': 'Housing'},
     {'code': 'OPEX-MISC', 'name': 'Miscellaneous'},
   ];
 
@@ -62,6 +79,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
     _selectedCategory = widget.transaction.categoryCode ?? 'OPEX-MISC';
+    _selectedSubCategory = widget.transaction.subCategory;
     _selectedPaidBy = widget.transaction.paidBy.isNotEmpty ? widget.transaction.paidBy : 'me';
     _selectedBeneficiary = widget.transaction.beneficiary.isNotEmpty ? widget.transaction.beneficiary : 'both';
     if (widget.transaction.paidBy.isEmpty && widget.transaction.spentBy.isNotEmpty) {
@@ -79,6 +97,37 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     _items = widget.transaction.items
         .map((it) => Map<String, dynamic>.from(it))
         .toList();
+    _dependents = List<String>.from(widget.householdDependents);
+    _loadSubCategories(_selectedCategory);
+    if (_dependents.isEmpty && widget.transaction.householdId.isNotEmpty) {
+      _loadDependents();
+    }
+  }
+
+  Future<void> _loadSubCategories(String catCode) async {
+    setState(() => _loadingSubs = true);
+    try {
+      final subs = await ApiService.instance.getSubCategories(catCode);
+      if (mounted) {
+        setState(() {
+          _subCategories = subs;
+          _loadingSubs = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingSubs = false);
+    }
+  }
+
+  Future<void> _loadDependents() async {
+    try {
+      final deps = await ApiService.instance.getDependents(widget.transaction.householdId);
+      if (mounted) {
+        setState(() {
+          _dependents = deps.map((d) => d.name).toList();
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -124,6 +173,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       'merchant': _merchantCtrl.text.trim(),
       'amount': amount,
       'category_code': _selectedCategory,
+      'sub_category': _selectedSubCategory,
       'items': _items,
     };
 
@@ -141,9 +191,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         final cleanRaw = raw
             .replaceAll(RegExp(r'\|\s*SpentBy:\s*(me|partner|both)', caseSensitive: false), '')
             .replaceAll(RegExp(r'\|\s*PaidBy:\s*(me|partner)', caseSensitive: false), '')
-            .replaceAll(RegExp(r'\|\s*Beneficiary:\s*(me|partner|both)', caseSensitive: false), '')
+            .replaceAll(RegExp(r'\|\s*Beneficiary:\s*([^\s\|]+)', caseSensitive: false), '')
+            .replaceAll(RegExp(r'\|\s*SubCategory:\s*([^\s\|]+)', caseSensitive: false), '')
             .trim();
-        final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SpentBy: $derivedSpentBy';
+        final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SubCategory: ${_selectedSubCategory ?? ""} | SpentBy: $derivedSpentBy';
         await supabase.from('transactions').update({
           ...basePayload,
           'raw_sms': newRaw,
@@ -681,7 +732,47 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 );
               }).toList(),
               onChanged: (val) {
-                if (val != null) setState(() => _selectedCategory = val);
+                if (val != null) {
+                  setState(() {
+                    _selectedCategory = val;
+                    _selectedSubCategory = null;
+                  });
+                  _loadSubCategories(val);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Sub-Category Dropdown
+            DropdownButtonFormField<String?>(
+              value: _subCategories.any((s) => s['sub_code'] == _selectedSubCategory)
+                  ? _selectedSubCategory
+                  : null,
+              dropdownColor: const Color(0xFF161B22),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Sub-Category',
+                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                filled: true,
+                fillColor: const Color(0xFF0D1117),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('General / Unassigned', style: TextStyle(color: Color(0xFF8B949E))),
+                ),
+                ..._subCategories.map((s) {
+                  final code = s['sub_code'] as String? ?? '';
+                  final name = s['name_en'] as String? ?? code;
+                  return DropdownMenuItem<String?>(
+                    value: code,
+                    child: Text(name),
+                  );
+                }),
+              ],
+              onChanged: (val) {
+                setState(() => _selectedSubCategory = val);
               },
             ),
             const SizedBox(height: 16),
@@ -771,6 +862,47 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
               ],
             ),
+            if (_dependents.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'CHILDREN & DEPENDENTS',
+                style: GoogleFonts.outfit(
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF8B949E),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _dependents.map((depName) {
+                  final isSelected = _selectedBeneficiary.toLowerCase() == depName.toLowerCase();
+                  return ChoiceChip(
+                    label: Text(depName),
+                    avatar: const Icon(Icons.child_care_rounded, size: 14, color: Color(0xFF58A6FF)),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF58A6FF).withValues(alpha: 0.2),
+                    backgroundColor: const Color(0xFF0D1117),
+                    labelStyle: TextStyle(
+                      color: isSelected ? const Color(0xFF58A6FF) : const Color(0xFFC9D1D9),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                    side: BorderSide(
+                      color: isSelected ? const Color(0xFF58A6FF) : const Color(0xFF30363D),
+                    ),
+                    onSelected: (selected) {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedBeneficiary = selected ? depName : 'both';
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
             const SizedBox(height: 10),
 
             // Live Settlement Preview
