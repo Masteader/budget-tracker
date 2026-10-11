@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:budget_tracker/providers/theme_provider.dart';
+import 'package:budget_tracker/providers/locale_provider.dart';
 import 'package:budget_tracker/screens/settings/ingestion_settings_screen.dart';
 
 void main() {
@@ -8,8 +11,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: IngestionSettingsScreen(),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => LocaleProvider()),
+        ],
+        child: const MaterialApp(
+          home: IngestionSettingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
