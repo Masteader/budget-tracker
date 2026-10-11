@@ -1,26 +1,17 @@
 """
 Landing page and auth confirmation HTML generator for Budget Tracker (budget.fmsco.com.sa).
-Features:
-- World-class obsidian fintech craft design inspired by Nate Herik UI aesthetics.
-- Flexible salary cycle budgeting for any day of the month (no fixed 27th payday constraint).
-- Comprehensive showcase of all app capabilities:
-  * Flexible Payday Engine & Weekend Auto-Shift
-  * Conversational Saudi AI Assistant
-  * Two-Tier Taxonomy with Hybrid LLM Subcategories
-  * ZATCA Phase 2 E-Invoice QR & Camera Scanner
-  * Household & Partner Sharing with 2D Fair-Share Split
-  * Family Dependents & Children Expense Attribution
-  * BNPL & Installment Tracker (Tabby, Tamara, 0% Cards)
-  * Recurring Bills & Auto-Cadence Detection
-  * Smart Grocery Price Comparison & Basket Optimizer
-  * "Can I Afford This?" Instant Purchase Simulator
-  * Offline-First SQLite Engine with Idempotent Sync
-  * Smart Savings Reserve & Monthly Tax-Ready PDF Reports
-- Live Interactive App Stage with 4 interactive simulators.
-- 12-pillar Bento Grid with micro-interactions.
-- Full bilingual Arabic (RTL default) and English (LTR) instant toggle.
-- Sleek store badges: Google Play, Apple App Store, Huawei AppGallery ("Coming Soon").
-- Interactive FAQ accordion, Privacy Policy, Terms of Service, and Developer Contact (abedmowafaq@gmail.com).
+Architected with modern-landing-designer specifications:
+- Deep obsidian palette (#08080A / #111116) with subtle 1px frosted micro-borders.
+- Directional light simulation with inset top borders and ambient radial mesh glows.
+- Floating frosted sticky navbar with live pulse indicator.
+- Hero with tight-tracking typography, primary bloom action, and store badges.
+- Live Interactive Product Stage (Payday Simulator, AI Assistant, ZATCA Scanner, 2D Split).
+- Metric counters bar (Offline-First, Zero SMS Snooping, ZATCA TLV speed, Any Payday).
+- 12-pillar asymmetric Bento Grid with varied spans and rich inner previews.
+- Bank-grade security and isolation comparison matrix.
+- FAQ accordion with smooth state transitions.
+- Instant bilingual Arabic (RTL default) and English (LTR) client-side localization engine.
+- Developer contact (abedmowafaq@gmail.com) and coming soon store badges.
 """
 
 def get_landing_page_html() -> str:
@@ -30,41 +21,41 @@ def get_landing_page_html() -> str:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Budget Tracker • ميزانية الأسرة الذكية | الابتكار المالي للأسر في السعودية</title>
-  <meta name="description" content="تطبيق إدارة الميزانية ومصاريف الأسرة الذكي في السعودية. دورة راتب مرنة لأي يوم في الشهر، مسح فواتير ZATCA بالذكاء الاصطناعي، تقسيم المصاريف بين الشركاء وتتبع نفقات الأبناء.">
+  <meta name="description" content="تطبيق إدارة ميزانية الأسرة ومصاريفها في السعودية. دورة راتب مرنة لأي يوم في الشهر، مسح فواتير ZATCA بالذكاء الاصطناعي، تقسيم المصاريف بين الشركاء وتتبع نفقات الأبناء.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #06080D;
-      --bg-card: rgba(15, 20, 28, 0.72);
-      --bg-card-hover: rgba(22, 29, 41, 0.88);
-      --bg-surface: #0E131C;
-      --bg-pill: rgba(255, 255, 255, 0.05);
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(0, 229, 153, 0.35);
-      --border-specular: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-      --primary: #00E599;
-      --primary-dim: rgba(0, 229, 153, 0.14);
-      --primary-glow: rgba(0, 229, 153, 0.35);
-      --cyan: #38BDF8;
-      --cyan-dim: rgba(56, 189, 248, 0.14);
-      --amber: #F59E0B;
-      --amber-dim: rgba(245, 158, 11, 0.14);
-      --purple: #A855F7;
-      --purple-dim: rgba(168, 85, 247, 0.14);
-      --rose: #F43F5E;
+      /* Modern Landing Designer Obsidian Tokens */
+      --canvas-base: #08080A;
+      --card-surface: #111116;
+      --card-elevated: #16161D;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(255, 255, 255, 0.18);
+      --specular-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      
+      /* Accent Glows & Radiance */
+      --glow-emerald: rgba(52, 211, 153, 0.9);
+      --glow-emerald-dim: rgba(52, 211, 153, 0.12);
+      --glow-indigo: rgba(99, 102, 241, 0.15);
+      --glow-cyan: rgba(56, 189, 248, 0.12);
+      --glow-purple: rgba(168, 85, 247, 0.12);
+      --glow-amber: rgba(245, 158, 11, 0.12);
+      
+      /* Typography */
       --text-pure: #FFFFFF;
-      --text-main: #F1F5F9;
+      --text-primary: #F1F5F9;
       --text-muted: #94A3B8;
       --text-dim: #64748B;
       --font-ar: 'Cairo', -apple-system, sans-serif;
-      --font-en: 'Outfit', 'Plus Jakarta Sans', -apple-system, sans-serif;
-      --radius-sm: 12px;
-      --radius-md: 18px;
-      --radius-lg: 26px;
-      --radius-xl: 34px;
-      --container-max: 1240px;
+      --font-en: 'Plus Jakarta Sans', 'Outfit', -apple-system, sans-serif;
+      
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+      --max-w: 1240px;
     }
 
     * {
@@ -80,8 +71,8 @@ def get_landing_page_html() -> str:
     }
 
     body {
-      background-color: var(--bg-base);
-      color: var(--text-main);
+      background-color: var(--canvas-base);
+      color: var(--text-primary);
       font-family: var(--font-ar);
       min-height: 100vh;
       overflow-x: hidden;
@@ -94,75 +85,73 @@ def get_landing_page_html() -> str:
       direction: ltr;
     }
 
-    /* Ambient Matrix & Spotlights */
-    .bg-matrix {
+    /* Ambient Mesh Gradients & Dot Texture */
+    .ambient-mesh {
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+      background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
       background-size: 28px 28px;
-      opacity: 0.55;
+      opacity: 0.6;
       pointer-events: none;
       z-index: 0;
-      mask-image: radial-gradient(circle at 50% 30%, black 40%, transparent 85%);
-      -webkit-mask-image: radial-gradient(circle at 50% 30%, black 40%, transparent 85%);
+      mask-image: radial-gradient(circle at 50% 25%, black 45%, transparent 85%);
+      -webkit-mask-image: radial-gradient(circle at 50% 25%, black 45%, transparent 85%);
     }
 
-    .spotlight-1 {
+    .ambient-glow-top {
       position: fixed;
-      top: -150px;
-      right: 10%;
-      width: 650px;
-      height: 650px;
-      background: radial-gradient(circle, rgba(0, 229, 153, 0.12) 0%, rgba(0, 229, 153, 0.02) 50%, transparent 70%);
-      border-radius: 50%;
+      top: -180px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 850px;
+      height: 520px;
+      background: radial-gradient(circle, rgba(52, 211, 153, 0.16) 0%, rgba(99, 102, 241, 0.10) 45%, transparent 70%);
       pointer-events: none;
       z-index: 0;
-      filter: blur(50px);
+      filter: blur(80px);
     }
 
-    .spotlight-2 {
+    .ambient-glow-side {
       position: fixed;
-      top: 40vh;
-      left: -150px;
-      width: 700px;
-      height: 700px;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.10) 0%, rgba(56, 189, 248, 0.01) 50%, transparent 70%);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 0;
-      filter: blur(60px);
-    }
-
-    .spotlight-3 {
-      position: fixed;
-      bottom: -100px;
-      right: -100px;
+      top: 45vh;
+      left: -120px;
       width: 600px;
       height: 600px;
-      background: radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 70%);
-      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, transparent 65%);
       pointer-events: none;
       z-index: 0;
-      filter: blur(50px);
+      filter: blur(90px);
+    }
+
+    .ambient-glow-bottom {
+      position: fixed;
+      bottom: -150px;
+      right: -100px;
+      width: 650px;
+      height: 650px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
     }
 
     .container {
-      max-width: var(--container-max);
+      max-width: var(--max-w);
       margin: 0 auto;
       padding: 0 28px;
       position: relative;
       z-index: 1;
     }
 
-    /* Navbar */
+    /* Floating Frosted Navbar */
     header {
       position: sticky;
       top: 0;
       z-index: 100;
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      background: rgba(6, 8, 13, 0.78);
-      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(8, 8, 10, 0.82);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid var(--card-border);
       transition: all 0.3s ease;
     }
 
@@ -173,7 +162,7 @@ def get_landing_page_html() -> str:
       height: 80px;
     }
 
-    .brand {
+    .brand-link {
       display: flex;
       align-items: center;
       gap: 14px;
@@ -181,76 +170,65 @@ def get_landing_page_html() -> str:
       color: inherit;
     }
 
-    .brand-mark {
+    .brand-icon-box {
       width: 44px;
       height: 44px;
       border-radius: 14px;
-      background: linear-gradient(135deg, #00E599 0%, #0284C7 100%);
+      background: linear-gradient(135deg, #10B981 0%, #0284C7 100%);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 22px;
-      box-shadow: 0 0 24px rgba(0, 229, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-      position: relative;
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.4), var(--specular-highlight);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
-    .brand-mark::after {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      border-radius: 16px;
-      background: linear-gradient(135deg, rgba(0, 229, 153, 0.6), transparent);
-      z-index: -1;
-      opacity: 0.5;
-    }
-
-    .brand-text h1 {
-      font-size: 21px;
+    .brand-text-wrap h1 {
+      font-size: 20px;
       font-weight: 800;
       letter-spacing: -0.02em;
       color: var(--text-pure);
       line-height: 1.2;
     }
 
-    .brand-text span {
+    .brand-text-wrap span {
       font-size: 11px;
       font-weight: 700;
-      color: var(--primary);
+      color: #34D399;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       display: block;
     }
 
-    .nav-links {
+    .nav-items {
       display: flex;
       align-items: center;
       gap: 28px;
       list-style: none;
     }
 
-    .nav-link {
+    .nav-item-link {
       color: var(--text-muted);
       text-decoration: none;
       font-size: 14px;
       font-weight: 600;
-      transition: all 0.2s ease;
-      position: relative;
+      transition: color 0.2s ease;
     }
 
-    .nav-link:hover {
+    .nav-item-link:hover {
       color: var(--text-pure);
     }
 
-    .nav-actions {
+    .nav-cta-actions {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
     }
 
-    .lang-btn {
+    .lang-switcher-btn {
       background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      color: var(--text-primary);
       padding: 9px 18px;
       border-radius: 999px;
       font-size: 13px;
@@ -260,64 +238,65 @@ def get_landing_page_html() -> str:
       align-items: center;
       gap: 8px;
       transition: all 0.25s ease;
-      box-shadow: var(--border-specular);
+      box-shadow: var(--specular-highlight);
     }
 
-    .lang-btn:hover {
-      background: rgba(0, 229, 153, 0.1);
-      border-color: var(--primary);
-      color: var(--primary);
+    .lang-switcher-btn:hover {
+      background: rgba(52, 211, 153, 0.1);
+      border-color: #34D399;
+      color: #34D399;
       transform: translateY(-1px);
     }
 
     /* Hero Section */
-    .hero {
+    .hero-section {
       padding: 90px 0 60px;
       text-align: center;
       position: relative;
     }
 
-    .hero-badge-pill {
+    .shimmer-status-pill {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 7px 18px;
-      background: rgba(0, 229, 153, 0.08);
-      border: 1px solid rgba(0, 229, 153, 0.25);
+      padding: 7px 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
       border-radius: 999px;
-      color: var(--primary);
+      color: #E2E8F0;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
       margin-bottom: 28px;
-      box-shadow: 0 0 25px rgba(0, 229, 153, 0.15), var(--border-specular);
-      backdrop-filter: blur(10px);
+      box-shadow: var(--specular-highlight), 0 0 20px rgba(52, 211, 153, 0.12);
+      backdrop-filter: blur(14px);
     }
 
-    .ping-dot {
+    .live-status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--primary);
+      background: #34D399;
+      box-shadow: 0 0 10px #34D399;
       position: relative;
     }
 
-    .ping-dot::after {
+    .live-status-dot::after {
       content: '';
       position: absolute;
       inset: -4px;
       border-radius: 50%;
-      background: var(--primary);
+      background: #34D399;
       opacity: 0.6;
-      animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+      animation: pulsePing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
     }
 
-    @keyframes ping {
+    @keyframes pulsePing {
       0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(2.6); opacity: 0; }
+      100% { transform: scale(2.8); opacity: 0; }
     }
 
-    .hero-heading {
-      font-size: clamp(34px, 5.5vw, 68px);
+    .hero-h1 {
+      font-size: clamp(34px, 5.4vw, 68px);
       font-weight: 900;
       line-height: 1.15;
       letter-spacing: -0.03em;
@@ -326,14 +305,14 @@ def get_landing_page_html() -> str:
       margin: 0 auto 24px;
     }
 
-    .hero-heading .gradient-text {
-      background: linear-gradient(135deg, #00E599 0%, #38BDF8 60%, #A855F7 100%);
+    .hero-h1 .gradient-clip {
+      background: linear-gradient(135deg, #FFFFFF 0%, #34D399 45%, #38BDF8 85%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       display: inline-block;
     }
 
-    .hero-desc {
+    .hero-subtitle {
       font-size: clamp(16px, 2.1vw, 20px);
       color: var(--text-muted);
       max-width: 820px;
@@ -342,8 +321,8 @@ def get_landing_page_html() -> str:
       font-weight: 400;
     }
 
-    /* Store Badges */
-    .store-cta-group {
+    /* Dual Action CTA & Store Badges */
+    .hero-action-row {
       display: flex;
       justify-content: center;
       align-items: center;
@@ -352,16 +331,37 @@ def get_landing_page_html() -> str:
       margin-bottom: 60px;
     }
 
-    .store-badge-card {
+    .primary-bloom-btn {
+      background: #FFFFFF;
+      color: #08080A;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 13px 28px;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.25s ease;
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.35);
+    }
+
+    .primary-bloom-btn:hover {
+      background: #E2E8F0;
+      transform: translateY(-2px);
+      box-shadow: 0 0 35px rgba(255, 255, 255, 0.5);
+    }
+
+    .store-badge-pill {
       display: flex;
       align-items: center;
       gap: 14px;
-      background: rgba(18, 24, 35, 0.7);
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--border-specular), 0 12px 28px rgba(0, 0, 0, 0.4);
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--specular-highlight), 0 12px 28px rgba(0, 0, 0, 0.4);
       padding: 12px 22px;
       border-radius: var(--radius-md);
-      min-width: 215px;
+      min-width: 210px;
       text-decoration: none;
       color: inherit;
       position: relative;
@@ -370,39 +370,29 @@ def get_landing_page_html() -> str:
       backdrop-filter: blur(14px);
     }
 
-    .store-badge-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    }
-
-    .store-badge-card:hover {
+    .store-badge-pill:hover {
       transform: translateY(-3px);
-      border-color: rgba(255, 255, 255, 0.22);
-      box-shadow: var(--border-specular), 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 229, 153, 0.15);
+      border-color: var(--card-border-hover);
+      box-shadow: var(--specular-highlight), 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(52, 211, 153, 0.15);
     }
 
-    .store-icon {
-      font-size: 28px;
+    .store-icon-cell {
+      font-size: 26px;
       width: 40px;
       height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.04);
       border-radius: 12px;
       flex-shrink: 0;
     }
 
-    .store-texts {
+    .store-labels-wrap {
       text-align: start;
     }
 
-    .store-sub {
+    .store-sub-lbl {
       font-size: 11px;
       color: var(--text-dim);
       font-weight: 600;
@@ -410,7 +400,7 @@ def get_landing_page_html() -> str:
       letter-spacing: 0.04em;
     }
 
-    .store-main {
+    .store-main-lbl {
       font-size: 15px;
       font-weight: 800;
       color: var(--text-pure);
@@ -419,62 +409,61 @@ def get_landing_page_html() -> str:
       gap: 6px;
     }
 
-    .badge-chip {
-      background: rgba(245, 158, 11, 0.15);
+    .coming-tag-chip {
+      background: rgba(245, 158, 11, 0.14);
       border: 1px solid rgba(245, 158, 11, 0.35);
-      color: var(--amber);
+      color: #F59E0B;
       font-size: 10px;
       font-weight: 800;
       padding: 2px 7px;
       border-radius: 6px;
     }
 
-    /* Live Interactive App Stage */
-    .interactive-stage {
-      max-width: 960px;
-      margin: 0 auto 100px;
-      background: linear-gradient(180deg, rgba(20, 27, 40, 0.75) 0%, rgba(10, 14, 22, 0.95) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    /* Live Interactive Product Stage */
+    .interactive-stage-card {
+      max-width: 980px;
+      margin: 0 auto 90px;
+      background: linear-gradient(180deg, rgba(22, 22, 29, 0.85) 0%, rgba(14, 14, 18, 0.98) 100%);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-xl);
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 50px rgba(0, 229, 153, 0.12), var(--border-specular);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.75), 0 0 50px rgba(52, 211, 153, 0.12), var(--specular-highlight);
       overflow: hidden;
       position: relative;
     }
 
-    .stage-glass-bar {
+    .stage-top-window-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 18px 28px;
-      background: rgba(12, 17, 26, 0.85);
-      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(17, 17, 22, 0.9);
+      border-bottom: 1px solid var(--card-border);
     }
 
-    .stage-window-controls {
+    .window-traffic-lights {
       display: flex;
       gap: 8px;
     }
 
-    .stage-dot {
+    .light-dot {
       width: 11px;
       height: 11px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.12);
     }
-    .stage-dot.close { background: #FF5F56; }
-    .stage-dot.min { background: #FFBD2E; }
-    .stage-dot.max { background: #27C93F; }
+    .light-dot.red { background: #FF5F56; }
+    .light-dot.yellow { background: #FFBD2E; }
+    .light-dot.green { background: #27C93F; }
 
-    .stage-tabs {
+    .stage-tab-controls {
       display: flex;
       gap: 8px;
       background: rgba(255, 255, 255, 0.04);
       padding: 4px;
       border-radius: 12px;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--card-border);
     }
 
-    .stage-tab-btn {
+    .stage-tab-trigger {
       background: transparent;
       border: none;
       color: var(--text-muted);
@@ -490,44 +479,44 @@ def get_landing_page_html() -> str:
       gap: 6px;
     }
 
-    .stage-tab-btn.active {
-      background: rgba(0, 229, 153, 0.16);
-      color: var(--primary);
-      box-shadow: 0 2px 10px rgba(0, 229, 153, 0.15);
+    .stage-tab-trigger.active {
+      background: rgba(52, 211, 153, 0.16);
+      color: #34D399;
+      box-shadow: 0 2px 10px rgba(52, 211, 153, 0.15);
     }
 
-    .stage-tab-btn:hover:not(.active) {
+    .stage-tab-trigger:hover:not(.active) {
       color: var(--text-pure);
       background: rgba(255, 255, 255, 0.05);
     }
 
-    .stage-viewport {
+    .stage-viewport-area {
       padding: 34px 30px;
     }
 
-    /* Tab Content 1: Payday Engine Simulator */
-    .tab-panel {
+    .tab-view-pane {
       display: none;
     }
-    .tab-panel.active {
+    .tab-view-pane.active {
       display: block;
-      animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: fadeInSmooth 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
+    @keyframes fadeInSmooth {
+      from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .simulator-box {
-      background: rgba(14, 19, 28, 0.8);
-      border: 1px solid var(--border-subtle);
+    /* Tab 1: Payday Simulator */
+    .sim-panel-box {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-lg);
       padding: 26px;
-      margin-bottom: 24px;
+      box-shadow: var(--specular-highlight);
     }
 
-    .sim-header {
+    .sim-meta-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -536,7 +525,7 @@ def get_landing_page_html() -> str:
       gap: 12px;
     }
 
-    .sim-title {
+    .sim-heading-title {
       font-size: 16px;
       font-weight: 800;
       color: var(--text-pure);
@@ -545,11 +534,11 @@ def get_landing_page_html() -> str:
       gap: 8px;
     }
 
-    .sim-slider-wrap {
+    .slider-track-wrap {
       margin-bottom: 24px;
     }
 
-    .slider-labels {
+    .slider-extremes {
       display: flex;
       justify-content: space-between;
       font-size: 13px;
@@ -557,12 +546,12 @@ def get_landing_page_html() -> str:
       margin-bottom: 10px;
     }
 
-    .slider-labels strong {
-      color: var(--primary);
+    .slider-extremes strong {
+      color: #34D399;
       font-size: 15px;
     }
 
-    .custom-range {
+    .custom-range-slider {
       width: 100%;
       height: 8px;
       border-radius: 999px;
@@ -572,40 +561,40 @@ def get_landing_page_html() -> str:
       cursor: pointer;
     }
 
-    .custom-range::-webkit-slider-thumb {
+    .custom-range-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: var(--primary);
-      box-shadow: 0 0 16px var(--primary);
+      background: #34D399;
+      box-shadow: 0 0 16px #34D399;
       cursor: grab;
       border: 2px solid #FFFFFF;
       transition: transform 0.1s ease;
     }
 
-    .custom-range::-webkit-slider-thumb:hover {
+    .custom-range-slider::-webkit-slider-thumb:hover {
       transform: scale(1.15);
     }
 
-    .sim-stat-grid {
+    .sim-metrics-trio {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 16px;
     }
 
-    .stat-pill-card {
-      background: rgba(8, 12, 19, 0.9);
-      border: 1px solid var(--border-subtle);
+    .metric-slab {
+      background: var(--card-elevated);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-md);
       padding: 18px;
       position: relative;
       overflow: hidden;
-      box-shadow: var(--border-specular);
+      box-shadow: var(--specular-highlight);
     }
 
-    .stat-pill-card::before {
+    .metric-slab::before {
       content: '';
       position: absolute;
       top: 0;
@@ -613,42 +602,42 @@ def get_landing_page_html() -> str:
       width: 4px;
       height: 100%;
     }
-    .stat-pill-card.teal::before { background: var(--primary); }
-    .stat-pill-card.blue::before { background: var(--cyan); }
-    .stat-pill-card.gold::before { background: var(--amber); }
+    .metric-slab.emerald::before { background: #34D399; }
+    .metric-slab.cyan::before { background: #38BDF8; }
+    .metric-slab.amber::before { background: #F59E0B; }
 
-    .stat-lbl {
+    .metric-lbl {
       font-size: 12px;
       color: var(--text-muted);
       margin-bottom: 6px;
       font-weight: 600;
     }
 
-    .stat-val {
+    .metric-val {
       font-size: 23px;
       font-weight: 800;
       color: var(--text-pure);
       line-height: 1.2;
     }
 
-    .stat-sub {
+    .metric-sub {
       font-size: 11px;
       color: var(--text-dim);
       margin-top: 6px;
     }
 
-    /* Tab Content 2: AI Chat Simulator */
-    .ai-chat-preview {
+    /* Tab 2: AI Assistant Simulator */
+    .ai-chat-preview-box {
       display: flex;
       flex-direction: column;
       gap: 14px;
-      background: rgba(14, 19, 28, 0.8);
-      border: 1px solid var(--border-subtle);
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-lg);
       padding: 24px;
     }
 
-    .chat-bubble-user {
+    .chat-bubble-sender {
       align-self: flex-start;
       background: rgba(56, 189, 248, 0.12);
       border: 1px solid rgba(56, 189, 248, 0.3);
@@ -659,33 +648,33 @@ def get_landing_page_html() -> str:
       max-width: 80%;
     }
 
-    body.lang-en .chat-bubble-user {
+    body.lang-en .chat-bubble-sender {
       border-radius: 18px 18px 18px 4px;
     }
 
-    .chat-bubble-ai {
+    .chat-bubble-response {
       align-self: flex-end;
-      background: rgba(0, 229, 153, 0.08);
-      border: 1px solid rgba(0, 229, 153, 0.3);
+      background: rgba(52, 211, 153, 0.08);
+      border: 1px solid rgba(52, 211, 153, 0.3);
       border-radius: 18px 18px 18px 4px;
       padding: 18px;
       width: 90%;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
 
-    body.lang-en .chat-bubble-ai {
+    body.lang-en .chat-bubble-response {
       border-radius: 18px 18px 4px 18px;
     }
 
-    .ai-card-parsed {
-      background: rgba(8, 12, 19, 0.95);
+    .ai-parsed-card {
+      background: #0E0E12;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 14px;
       padding: 16px;
       margin-top: 10px;
     }
 
-    .ai-card-title {
+    .ai-card-title-row {
       font-size: 15px;
       font-weight: 800;
       color: var(--text-pure);
@@ -694,7 +683,7 @@ def get_landing_page_html() -> str:
       margin-bottom: 12px;
     }
 
-    .badge-tag {
+    .tag-badge {
       font-size: 11px;
       font-weight: 700;
       padding: 3px 8px;
@@ -704,22 +693,22 @@ def get_landing_page_html() -> str:
       gap: 4px;
     }
 
-    .badge-tag.cat { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
-    .badge-tag.sub { background: rgba(56, 189, 248, 0.15); color: #7DD3FC; border: 1px solid rgba(56, 189, 248, 0.3); }
-    .badge-tag.paid { background: rgba(0, 229, 153, 0.15); color: #34D399; border: 1px solid rgba(0, 229, 153, 0.3); }
-    .badge-tag.for { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tag-badge.cat { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .tag-badge.sub { background: rgba(56, 189, 248, 0.15); color: #7DD3FC; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .tag-badge.paid { background: rgba(52, 211, 153, 0.15); color: #34D399; border: 1px solid rgba(52, 211, 153, 0.3); }
+    .tag-badge.for { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
 
-    .ai-chips-row {
+    .tag-cluster {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       margin-top: 8px;
     }
 
-    /* Tab Content 3: ZATCA Scanner Viewfinder */
-    .zatca-viewfinder {
-      background: radial-gradient(circle at center, rgba(14, 25, 38, 0.8) 0%, rgba(8, 12, 18, 0.95) 100%);
-      border: 1px solid var(--border-subtle);
+    /* Tab 3: ZATCA Scanner */
+    .zatca-viewfinder-pane {
+      background: radial-gradient(circle at center, rgba(17, 24, 39, 0.8) 0%, #0A0A0E 100%);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-lg);
       padding: 30px;
       display: flex;
@@ -729,38 +718,38 @@ def get_landing_page_html() -> str:
       overflow: hidden;
     }
 
-    .scan-laser-beam {
+    .laser-beam-line {
       position: absolute;
       top: 0;
       left: 10%;
       right: 10%;
       height: 2px;
-      background: linear-gradient(90deg, transparent, #00E599, #38BDF8, transparent);
-      box-shadow: 0 0 16px #00E599, 0 0 30px #38BDF8;
-      animation: scanLaser 3s ease-in-out infinite alternate;
+      background: linear-gradient(90deg, transparent, #34D399, #38BDF8, transparent);
+      box-shadow: 0 0 16px #34D399, 0 0 30px #38BDF8;
+      animation: laserSweep 3s ease-in-out infinite alternate;
     }
 
-    @keyframes scanLaser {
+    @keyframes laserSweep {
       0% { top: 15%; opacity: 0.3; }
       50% { opacity: 1; }
       100% { top: 85%; opacity: 0.3; }
     }
 
-    .zatca-preview-grid {
+    .zatca-preview-layout {
       display: grid;
       grid-template-columns: 140px 1fr;
       gap: 24px;
       align-items: center;
       width: 100%;
       max-width: 620px;
-      background: rgba(10, 14, 22, 0.85);
-      border: 1px solid rgba(0, 229, 153, 0.3);
+      background: var(--card-elevated);
+      border: 1px solid rgba(52, 211, 153, 0.3);
       border-radius: 18px;
       padding: 22px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
 
-    .qr-mock {
+    .qr-canvas-box {
       width: 130px;
       height: 130px;
       background: #FFFFFF;
@@ -770,22 +759,21 @@ def get_landing_page_html() -> str:
       align-items: center;
       justify-content: center;
       padding: 8px;
-      position: relative;
     }
 
-    .qr-svg {
+    .qr-canvas-box svg {
       width: 100%;
       height: 100%;
     }
 
-    .zatca-details h5 {
+    .zatca-parsed-rows h5 {
       font-size: 16px;
       font-weight: 800;
       color: #FFFFFF;
       margin-bottom: 6px;
     }
 
-    .zatca-row {
+    .zatca-data-line {
       display: flex;
       justify-content: space-between;
       font-size: 13px;
@@ -794,19 +782,19 @@ def get_landing_page_html() -> str:
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .zatca-row strong {
+    .zatca-data-line strong {
       color: var(--text-pure);
     }
 
-    /* Tab Content 4: Partner & Dependents Settlement */
-    .partner-sim-box {
-      background: rgba(14, 19, 28, 0.8);
-      border: 1px solid var(--border-subtle);
+    /* Tab 4: 2D Partner Split */
+    .partner-split-pane {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-lg);
       padding: 26px;
     }
 
-    .split-ratio-bar {
+    .split-meter-bar {
       height: 14px;
       background: rgba(255, 255, 255, 0.08);
       border-radius: 999px;
@@ -815,24 +803,24 @@ def get_landing_page_html() -> str:
       margin: 16px 0 24px;
     }
 
-    .split-bar-you {
-      background: linear-gradient(90deg, #00E599, #059669);
+    .split-share-you {
+      background: linear-gradient(90deg, #34D399, #059669);
       transition: width 0.3s ease;
     }
 
-    .split-bar-partner {
+    .split-share-partner {
       background: linear-gradient(90deg, #38BDF8, #0284C7);
       transition: width 0.3s ease;
     }
 
-    .children-chips-bar {
+    .dependents-pill-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 16px;
     }
 
-    .child-chip {
+    .child-dep-chip {
       background: rgba(168, 85, 247, 0.12);
       border: 1px solid rgba(168, 85, 247, 0.3);
       padding: 6px 14px;
@@ -844,23 +832,75 @@ def get_landing_page_html() -> str:
       gap: 6px;
     }
 
-    /* Bento Grid Features Section */
-    .section-headline {
-      text-align: center;
-      margin-bottom: 60px;
+    /* Metric Counters Bar */
+    .metric-counter-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 100px;
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--specular-highlight);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px;
     }
 
-    .section-eyebrow {
+    .counter-cell {
+      text-align: center;
+      position: relative;
+    }
+
+    .counter-cell:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 15%;
+      bottom: 15%;
+      right: 0;
+      width: 1px;
+      background: var(--card-border);
+    }
+
+    body.lang-en .counter-cell:not(:last-child)::after {
+      right: auto;
+      left: 100%;
+    }
+
+    .counter-number {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: var(--text-pure);
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+
+    .counter-number .accent {
+      color: #34D399;
+    }
+
+    .counter-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* 12-Pillar Bento Grid */
+    .section-header-block {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .section-eyebrow-text {
       font-size: 12px;
       font-weight: 800;
-      color: var(--primary);
+      color: #34D399;
       text-transform: uppercase;
       letter-spacing: 0.12em;
       margin-bottom: 12px;
       display: block;
     }
 
-    .section-h2 {
+    .section-main-heading {
       font-size: clamp(28px, 4vw, 44px);
       font-weight: 900;
       color: var(--text-pure);
@@ -869,24 +909,24 @@ def get_landing_page_html() -> str:
       margin-bottom: 16px;
     }
 
-    .section-sub {
+    .section-lead-copy {
       font-size: 17px;
       color: var(--text-muted);
       max-width: 680px;
       margin: 0 auto;
     }
 
-    .bento-grid {
+    .asymmetric-bento-grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
       gap: 24px;
       margin-bottom: 120px;
     }
 
-    .bento-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--border-specular), 0 20px 40px rgba(0, 0, 0, 0.35);
+    .bento-surface-card {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--specular-highlight), 0 20px 40px rgba(0, 0, 0, 0.35);
       border-radius: var(--radius-lg);
       padding: 34px 28px;
       position: relative;
@@ -898,27 +938,19 @@ def get_landing_page_html() -> str:
       justify-content: space-between;
     }
 
-    .bento-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 60%);
-      pointer-events: none;
-    }
-
-    .bento-card:hover {
-      background: var(--bg-card-hover);
+    .bento-surface-card:hover {
+      background: var(--card-elevated);
       transform: translateY(-5px);
-      border-color: rgba(255, 255, 255, 0.18);
-      box-shadow: var(--border-specular), 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 229, 153, 0.1);
+      border-color: var(--card-border-hover);
+      box-shadow: var(--specular-highlight), 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(52, 211, 153, 0.12);
     }
 
-    .bento-span-8 { grid-column: span 8; }
-    .bento-span-4 { grid-column: span 4; }
-    .bento-span-6 { grid-column: span 6; }
-    .bento-span-12 { grid-column: span 12; }
+    .span-col-8 { grid-column: span 8; }
+    .span-col-4 { grid-column: span 4; }
+    .span-col-6 { grid-column: span 6; }
+    .span-col-12 { grid-column: span 12; }
 
-    .bento-icon {
+    .bento-icon-cell {
       width: 52px;
       height: 52px;
       border-radius: 16px;
@@ -927,16 +959,15 @@ def get_landing_page_html() -> str:
       justify-content: center;
       font-size: 26px;
       margin-bottom: 22px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--card-border);
     }
 
-    .bento-icon.teal { background: var(--primary-dim); border-color: rgba(0, 229, 153, 0.3); color: var(--primary); }
-    .bento-icon.blue { background: var(--cyan-dim); border-color: rgba(56, 189, 248, 0.3); color: var(--cyan); }
-    .bento-icon.amber { background: var(--amber-dim); border-color: rgba(245, 158, 11, 0.3); color: var(--amber); }
-    .bento-icon.purple { background: var(--purple-dim); border-color: rgba(168, 85, 247, 0.3); color: var(--purple); }
+    .bento-icon-cell.emerald { background: var(--glow-emerald-dim); border-color: rgba(52, 211, 153, 0.3); color: #34D399; }
+    .bento-icon-cell.cyan { background: var(--glow-cyan); border-color: rgba(56, 189, 248, 0.3); color: #38BDF8; }
+    .bento-icon-cell.amber { background: var(--glow-amber); border-color: rgba(245, 158, 11, 0.3); color: #F59E0B; }
+    .bento-icon-cell.purple { background: var(--glow-purple); border-color: rgba(168, 85, 247, 0.3); color: #A855F7; }
 
-    .bento-title {
+    .bento-card-title {
       font-size: 20px;
       font-weight: 800;
       color: var(--text-pure);
@@ -944,59 +975,59 @@ def get_landing_page_html() -> str:
       line-height: 1.3;
     }
 
-    .bento-desc {
+    .bento-card-desc {
       font-size: 15px;
       color: var(--text-muted);
       line-height: 1.75;
       margin-bottom: 20px;
     }
 
-    .bento-tag-row {
+    .bento-tag-pills {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
 
-    .pill-micro {
+    .subtle-badge-chip {
       font-size: 11px;
       font-weight: 700;
       padding: 4px 10px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--card-border);
       color: var(--text-muted);
     }
 
-    /* Comparison / Highlights Table */
-    .matrix-section {
-      background: linear-gradient(180deg, rgba(16, 22, 33, 0.6) 0%, rgba(9, 12, 18, 0.9) 100%);
-      border: 1px solid var(--border-subtle);
+    /* Security & Comparison Section */
+    .security-matrix-card {
+      background: linear-gradient(180deg, rgba(17, 17, 22, 0.7) 0%, rgba(10, 10, 14, 0.95) 100%);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-xl);
       padding: 48px 40px;
       margin-bottom: 120px;
-      box-shadow: var(--border-specular);
+      box-shadow: var(--specular-highlight);
     }
 
-    .matrix-grid {
+    .matrix-item-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 30px;
       margin-top: 36px;
     }
 
-    .matrix-item {
+    .matrix-cell-wrap {
       display: flex;
       gap: 16px;
       align-items: flex-start;
     }
 
-    .matrix-check {
+    .verified-check-mark {
       width: 28px;
       height: 28px;
       border-radius: 8px;
-      background: rgba(0, 229, 153, 0.15);
-      border: 1px solid var(--primary);
-      color: var(--primary);
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid #34D399;
+      color: #34D399;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1006,41 +1037,41 @@ def get_landing_page_html() -> str:
       margin-top: 2px;
     }
 
-    .matrix-text h4 {
+    .matrix-cell-text h4 {
       font-size: 16px;
       font-weight: 800;
       color: var(--text-pure);
       margin-bottom: 4px;
     }
 
-    .matrix-text p {
+    .matrix-cell-text p {
       font-size: 14px;
       color: var(--text-muted);
       line-height: 1.6;
     }
 
     /* FAQ Accordion */
-    .faq-section {
+    .faq-wrapper-block {
       max-width: 860px;
       margin: 0 auto 120px;
     }
 
-    .faq-item {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
+    .faq-accordion-item {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-md);
       margin-bottom: 14px;
-      box-shadow: var(--border-specular);
+      box-shadow: var(--specular-highlight);
       overflow: hidden;
       transition: all 0.25s ease;
     }
 
-    .faq-item.active {
-      border-color: rgba(0, 229, 153, 0.3);
-      background: rgba(18, 25, 36, 0.85);
+    .faq-accordion-item.active {
+      border-color: rgba(52, 211, 153, 0.35);
+      background: var(--card-elevated);
     }
 
-    .faq-btn {
+    .faq-header-trigger {
       width: 100%;
       text-align: start;
       background: none;
@@ -1056,17 +1087,17 @@ def get_landing_page_html() -> str:
       cursor: pointer;
     }
 
-    .faq-toggle-icon {
+    .faq-plus-icon {
       font-size: 18px;
-      color: var(--primary);
+      color: #34D399;
       transition: transform 0.25s ease;
     }
 
-    .faq-item.active .faq-toggle-icon {
+    .faq-accordion-item.active .faq-plus-icon {
       transform: rotate(45deg);
     }
 
-    .faq-answer {
+    .faq-body-collapse {
       display: none;
       padding: 0 26px 22px;
       color: var(--text-muted);
@@ -1076,29 +1107,29 @@ def get_landing_page_html() -> str:
       padding-top: 16px;
     }
 
-    .faq-item.active .faq-answer {
+    .faq-accordion-item.active .faq-body-collapse {
       display: block;
     }
 
     /* Legal Section */
-    .legal-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
+    .legal-modal-strip {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
       border-radius: var(--radius-lg);
       padding: 40px 36px;
       margin-bottom: 100px;
-      box-shadow: var(--border-specular);
+      box-shadow: var(--specular-highlight);
     }
 
-    .legal-tabs-row {
+    .legal-selector-tabs {
       display: flex;
       gap: 12px;
-      border-bottom: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--card-border);
       padding-bottom: 16px;
       margin-bottom: 24px;
     }
 
-    .legal-nav-btn {
+    .legal-tab-action {
       background: none;
       border: none;
       color: var(--text-muted);
@@ -1111,12 +1142,12 @@ def get_landing_page_html() -> str:
       transition: all 0.2s ease;
     }
 
-    .legal-nav-btn.active {
-      color: var(--primary);
-      background: rgba(0, 229, 153, 0.1);
+    .legal-tab-action.active {
+      color: #34D399;
+      background: rgba(52, 211, 153, 0.1);
     }
 
-    .legal-pane {
+    .legal-scroll-pane {
       max-height: 280px;
       overflow-y: auto;
       padding-right: 14px;
@@ -1125,17 +1156,17 @@ def get_landing_page_html() -> str:
       line-height: 1.8;
     }
 
-    .legal-pane h4 {
+    .legal-scroll-pane h4 {
       color: var(--text-pure);
       margin: 16px 0 8px;
       font-size: 15px;
     }
 
     /* Contact Banner */
-    .contact-card {
-      background: radial-gradient(circle at top right, rgba(0, 229, 153, 0.16) 0%, rgba(56, 189, 248, 0.05) 50%, transparent 80%), #0E1420;
-      border: 1px solid rgba(0, 229, 153, 0.35);
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 50px rgba(0, 229, 153, 0.15), var(--border-specular);
+    .contact-cta-hero {
+      background: radial-gradient(circle at top right, rgba(52, 211, 153, 0.16) 0%, rgba(99, 102, 241, 0.08) 50%, transparent 80%), var(--card-surface);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 50px rgba(52, 211, 153, 0.15), var(--specular-highlight);
       border-radius: var(--radius-xl);
       padding: 56px 36px;
       text-align: center;
@@ -1144,14 +1175,14 @@ def get_landing_page_html() -> str:
       overflow: hidden;
     }
 
-    .contact-title {
+    .contact-heading-text {
       font-size: clamp(24px, 3.5vw, 36px);
       font-weight: 900;
       color: var(--text-pure);
       margin-bottom: 14px;
     }
 
-    .contact-desc {
+    .contact-copy-text {
       color: var(--text-muted);
       font-size: 16px;
       max-width: 640px;
@@ -1159,11 +1190,11 @@ def get_landing_page_html() -> str:
       line-height: 1.7;
     }
 
-    .email-capsule {
+    .contact-email-capsule {
       display: inline-flex;
       align-items: center;
       gap: 12px;
-      background: rgba(6, 9, 14, 0.95);
+      background: #08080A;
       border: 1px solid rgba(255, 255, 255, 0.15);
       padding: 14px 30px;
       border-radius: 999px;
@@ -1175,24 +1206,24 @@ def get_landing_page_html() -> str:
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     }
 
-    .email-capsule:hover {
-      border-color: var(--primary);
-      background: rgba(0, 229, 153, 0.1);
-      color: var(--primary);
+    .contact-email-capsule:hover {
+      border-color: #34D399;
+      background: rgba(52, 211, 153, 0.1);
+      color: #34D399;
       transform: translateY(-2px);
-      box-shadow: 0 15px 35px rgba(0, 229, 153, 0.25);
+      box-shadow: 0 15px 35px rgba(52, 211, 153, 0.25);
     }
 
-    /* Footer */
+    /* Minimalist Footer */
     footer {
-      border-top: 1px solid var(--border-subtle);
+      border-top: 1px solid var(--card-border);
       padding: 48px 0 60px;
       text-align: center;
       color: var(--text-dim);
       font-size: 14px;
     }
 
-    .footer-links-row {
+    .footer-link-group {
       display: flex;
       justify-content: center;
       gap: 28px;
@@ -1200,62 +1231,65 @@ def get_landing_page_html() -> str:
       flex-wrap: wrap;
     }
 
-    .footer-links-row a {
+    .footer-link-group a {
       color: var(--text-muted);
       text-decoration: none;
       font-weight: 600;
       transition: color 0.2s ease;
     }
 
-    .footer-links-row a:hover {
-      color: var(--primary);
+    .footer-link-group a:hover {
+      color: #34D399;
     }
 
     /* Responsive */
     @media (max-width: 992px) {
-      .bento-span-8, .bento-span-4, .bento-span-6 { grid-column: span 12; }
-      .zatca-preview-grid { grid-template-columns: 1fr; justify-items: center; text-align: center; }
-      .nav-links { display: none; }
+      .span-col-8, .span-col-4, .span-col-6 { grid-column: span 12; }
+      .zatca-preview-layout { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+      .nav-items { display: none; }
+      .counter-cell:not(:last-child)::after { display: none; }
     }
 
     @media (max-width: 768px) {
-      .hero { padding: 50px 0 30px; }
-      .stage-glass-bar { flex-direction: column; gap: 14px; }
-      .stage-tabs { width: 100%; overflow-x: auto; justify-content: flex-start; }
-      .store-badge-card { width: 100%; justify-content: center; }
-      .matrix-section { padding: 32px 20px; }
-      .contact-card { padding: 36px 20px; }
+      .hero-section { padding: 50px 0 30px; }
+      .stage-top-window-bar { flex-direction: column; gap: 14px; }
+      .stage-tab-controls { width: 100%; overflow-x: auto; justify-content: flex-start; }
+      .store-badge-pill { width: 100%; justify-content: center; }
+      .security-matrix-card { padding: 32px 20px; }
+      .contact-cta-hero { padding: 36px 20px; }
+      .metric-counter-strip { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
 <body id="page-body">
 
-  <div class="bg-matrix"></div>
-  <div class="spotlight-1"></div>
-  <div class="spotlight-2"></div>
-  <div class="spotlight-3"></div>
+  <div class="ambient-mesh"></div>
+  <div class="ambient-glow-top"></div>
+  <div class="ambient-glow-side"></div>
+  <div class="ambient-glow-bottom"></div>
 
   <!-- Header -->
   <header>
     <div class="container nav-inner">
-      <a href="/" class="brand">
-        <div class="brand-mark">💎</div>
-        <div class="brand-text">
+      <a href="/" class="brand-link">
+        <div class="brand-icon-box">💎</div>
+        <div class="brand-text-wrap">
           <h1>Budget Tracker</h1>
           <span id="nav-brand-sub">ميزانية الأسرة الذكية</span>
         </div>
       </a>
 
-      <ul class="nav-links">
-        <li><a href="#simulator" class="nav-link" id="nav-sim">المحاكي التفاعلي</a></li>
-        <li><a href="#features" class="nav-link" id="nav-feat">المميزات</a></li>
-        <li><a href="#comparison" class="nav-link" id="nav-comp">المقارنة</a></li>
-        <li><a href="#faq" class="nav-link" id="nav-faq">الأسئلة الشائعة</a></li>
-        <li><a href="#contact" class="nav-link" id="nav-contact">الدعم الفني</a></li>
+      <ul class="nav-items">
+        <li><a href="#stage" class="nav-item-link" id="nav-sim">المحاكي التفاعلي</a></li>
+        <li><a href="#metrics" class="nav-item-link" id="nav-metrics">المؤشرات</a></li>
+        <li><a href="#features" class="nav-item-link" id="nav-feat">المميزات</a></li>
+        <li><a href="#security" class="nav-item-link" id="nav-sec">الأمان المصرفي</a></li>
+        <li><a href="#faq" class="nav-item-link" id="nav-faq">الأسئلة الشائعة</a></li>
+        <li><a href="#contact" class="nav-item-link" id="nav-contact">الدعم الفني</a></li>
       </ul>
 
-      <div class="nav-actions">
-        <button id="lang-btn" class="lang-btn" onclick="toggleLanguage()">
+      <div class="nav-cta-actions">
+        <button id="lang-btn" class="lang-switcher-btn" onclick="toggleLanguage()">
           🌐 <span>English</span>
         </button>
       </div>
@@ -1264,147 +1298,147 @@ def get_landing_page_html() -> str:
 
   <!-- Hero Section -->
   <main class="container">
-    <section class="hero">
-      <div class="hero-badge-pill" id="hero-badge">
-        <span class="ping-dot"></span>
+    <section class="hero-section">
+      <div class="shimmer-status-pill" id="hero-badge">
+        <span class="live-status-dot"></span>
         <span id="hero-badge-text">الابتكار المالي للأسر • متوافق مع أي دورة راتب شهرية</span>
       </div>
 
-      <h2 class="hero-heading">
-        <span id="hero-h1">تحكّم مطلق في ميزانية أسرتك</span><br>
-        <span class="gradient-text" id="hero-h2">مع أي يوم راتب تختاره وبدقة الذكاء الاصطناعي</span>
+      <h2 class="hero-h1">
+        <span id="hero-h1-prefix">تحكّم مطلق في ميزانية أسرتك</span><br>
+        <span class="gradient-clip" id="hero-h1-gradient">مع أي يوم راتب تختاره وبدقة الذكاء الاصطناعي</span>
       </h2>
 
-      <p class="hero-desc" id="hero-desc">
+      <p class="hero-subtitle" id="hero-desc">
         صُمم خصيصاً ليواكب واقع الأسر في السعودية. حدد يوم نزول راتبك بكل حرية (اليوم 1، 15، 25، 27 أو أي تاريخ يناسبك)، مع حساب قواعد الصرف المصرفية للعطلات تلقائياً، ومسح فواتير ZATCA، وتوزيع المصاريف بعدالة بين الشركاء والأبناء دون أي عناء.
       </p>
 
-      <!-- Store Badges Coming Soon -->
-      <div class="store-cta-group">
+      <!-- Store Badges & Actions -->
+      <div class="hero-action-row">
         <!-- Google Play -->
-        <div class="store-badge-card">
-          <div class="store-icon">🤖</div>
-          <div class="store-texts">
-            <div class="store-sub" id="st-google-sub">متوفر قريباً على</div>
-            <div class="store-main">
-              Google Play <span class="badge-chip" id="chip-1">قريباً</span>
+        <div class="store-badge-pill">
+          <div class="store-icon-cell">🤖</div>
+          <div class="store-labels-wrap">
+            <div class="store-sub-lbl" id="st-google-sub">متوفر قريباً على</div>
+            <div class="store-main-lbl">
+              Google Play <span class="coming-tag-chip" id="chip-1">قريباً</span>
             </div>
           </div>
         </div>
 
         <!-- Apple App Store -->
-        <div class="store-badge-card">
-          <div class="store-icon">🍎</div>
-          <div class="store-texts">
-            <div class="store-sub" id="st-apple-sub">متوفر قريباً على</div>
-            <div class="store-main">
-              App Store <span class="badge-chip" id="chip-2">قريباً</span>
+        <div class="store-badge-pill">
+          <div class="store-icon-cell">🍎</div>
+          <div class="store-labels-wrap">
+            <div class="store-sub-lbl" id="st-apple-sub">متوفر قريباً على</div>
+            <div class="store-main-lbl">
+              App Store <span class="coming-tag-chip" id="chip-2">قريباً</span>
             </div>
           </div>
         </div>
 
         <!-- Huawei AppGallery -->
-        <div class="store-badge-card">
-          <div class="store-icon">🛍️</div>
-          <div class="store-texts">
-            <div class="store-sub" id="st-huawei-sub">متوفر قريباً على</div>
-            <div class="store-main">
-              AppGallery <span class="badge-chip" id="chip-3">قريباً</span>
+        <div class="store-badge-pill">
+          <div class="store-icon-cell">🛍️</div>
+          <div class="store-labels-wrap">
+            <div class="store-sub-lbl" id="st-huawei-sub">متوفر قريباً على</div>
+            <div class="store-main-lbl">
+              AppGallery <span class="coming-tag-chip" id="chip-3">قريباً</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Live Interactive App Stage -->
-      <div class="interactive-stage" id="simulator">
-        <div class="stage-glass-bar">
-          <div class="stage-window-controls">
-            <div class="stage-dot close"></div>
-            <div class="stage-dot min"></div>
-            <div class="stage-dot max"></div>
+      <!-- Live Interactive Product Stage -->
+      <div class="interactive-stage-card" id="stage">
+        <div class="stage-top-window-bar">
+          <div class="window-traffic-lights">
+            <div class="light-dot red"></div>
+            <div class="light-dot yellow"></div>
+            <div class="light-dot green"></div>
           </div>
 
-          <div class="stage-tabs">
-            <button class="stage-tab-btn active" id="tab-sim-btn-1" onclick="switchSimTab('payday')">
+          <div class="stage-tab-controls">
+            <button class="stage-tab-trigger active" id="tab-sim-btn-1" onclick="switchSimTab('payday')">
               📅 <span id="tab-t1">محاكي دورة الراتب</span>
             </button>
-            <button class="stage-tab-btn" id="tab-sim-btn-2" onclick="switchSimTab('ai')">
+            <button class="stage-tab-trigger" id="tab-sim-btn-2" onclick="switchSimTab('ai')">
               ✨ <span id="tab-t2">مساعد الشات الذكي</span>
             </button>
-            <button class="stage-tab-btn" id="tab-sim-btn-3" onclick="switchSimTab('zatca')">
+            <button class="stage-tab-trigger" id="tab-sim-btn-3" onclick="switchSimTab('zatca')">
               🧾 <span id="tab-t3">ماسح فواتير ZATCA</span>
             </button>
-            <button class="stage-tab-btn" id="tab-sim-btn-4" onclick="switchSimTab('partner')">
+            <button class="stage-tab-trigger" id="tab-sim-btn-4" onclick="switchSimTab('partner')">
               👥 <span id="tab-t4">تقسيم الشركاء والأبناء</span>
             </button>
           </div>
         </div>
 
-        <div class="stage-viewport">
+        <div class="stage-viewport-area">
           <!-- Tab 1: Payday Engine Simulator -->
-          <div id="sim-panel-payday" class="tab-panel active">
-            <div class="simulator-box">
-              <div class="sim-header">
-                <div class="sim-title">
+          <div id="sim-panel-payday" class="tab-view-pane active">
+            <div class="sim-panel-box">
+              <div class="sim-meta-header">
+                <div class="sim-heading-title">
                   <span>⚙️</span>
                   <span id="sim-title-txt">اختر يوم نزول راتبك الشهري (مرن 100% لأي قطاع)</span>
                 </div>
-                <div id="sim-shift-badge" class="badge-chip" style="font-size: 12px; padding: 4px 10px;">
+                <div id="sim-shift-badge" class="coming-tag-chip" style="font-size: 12px; padding: 4px 10px; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.35); color: #34D399;">
                   ✓ نظام الصرف التلقائي للعطلات نشط
                 </div>
               </div>
 
-              <div class="sim-slider-wrap">
-                <div class="slider-labels">
+              <div class="slider-track-wrap">
+                <div class="slider-extremes">
                   <span id="slider-min-lbl">اليوم 1 في الشهر</span>
                   <span><span id="slider-curr-lbl">يوم الراتب المحدد:</span> <strong id="slider-curr-val">27</strong></span>
                   <span id="slider-max-lbl">اليوم 31 في الشهر</span>
                 </div>
-                <input type="range" min="1" max="31" value="27" class="custom-range" id="payday-range" oninput="updatePaydaySim(this.value)">
+                <input type="range" min="1" max="31" value="27" class="custom-range-slider" id="payday-range" oninput="updatePaydaySim(this.value)">
               </div>
 
-              <div class="sim-stat-grid">
-                <div class="stat-pill-card teal">
-                  <div class="stat-lbl" id="sim-lbl-days">الأيام المتبقية في الدورة</div>
-                  <div class="stat-val" id="sim-val-days">16 <small style="font-size: 13px;">يوم</small></div>
-                  <div class="stat-sub" id="sim-sub-days">دورة نشطة متوازنة</div>
+              <div class="sim-metrics-trio">
+                <div class="metric-slab emerald">
+                  <div class="metric-lbl" id="sim-lbl-days">الأيام المتبقية في الدورة</div>
+                  <div class="metric-val" id="sim-val-days">16 <small style="font-size: 13px;">يوم</small></div>
+                  <div class="metric-sub" id="sim-sub-days">دورة نشطة متوازنة</div>
                 </div>
 
-                <div class="stat-pill-card blue">
-                  <div class="stat-lbl" id="sim-lbl-safe">معدل الصرف اليومي الآمن</div>
-                  <div class="stat-val" id="sim-val-safe">345 <small style="font-size: 13px;">ر.س / يوم</small></div>
-                  <div class="stat-sub" id="sim-sub-safe">يحميك من نفاد الميزانية قبل الراتب</div>
+                <div class="metric-slab cyan">
+                  <div class="metric-lbl" id="sim-lbl-safe">معدل الصرف اليومي الآمن</div>
+                  <div class="metric-val" id="sim-val-safe">345 <small style="font-size: 13px;">ر.س / يوم</small></div>
+                  <div class="metric-sub" id="sim-sub-safe">يحميك من نفاد الميزانية قبل الراتب</div>
                 </div>
 
-                <div class="stat-pill-card gold">
-                  <div class="stat-lbl" id="sim-lbl-reserve">احتياطي الادخار التلقائي</div>
-                  <div class="stat-val" id="sim-val-reserve">4,500 <small style="font-size: 13px;">ر.س</small></div>
-                  <div class="stat-sub" id="sim-sub-reserve">فائض غير مخصص يُحفظ للطوارئ</div>
+                <div class="metric-slab amber">
+                  <div class="metric-lbl" id="sim-lbl-reserve">احتياطي الادخار التلقائي</div>
+                  <div class="metric-val" id="sim-val-reserve">4,500 <small style="font-size: 13px;">ر.س</small></div>
+                  <div class="metric-sub" id="sim-sub-reserve">فائض غير مخصص يُحفظ للطوارئ</div>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Tab 2: AI Chat Simulator -->
-          <div id="sim-panel-ai" class="tab-panel">
-            <div class="ai-chat-preview">
-              <div class="chat-bubble-user" id="chat-u-msg">
+          <div id="sim-panel-ai" class="tab-view-pane">
+            <div class="ai-chat-preview-box">
+              <div class="chat-bubble-sender" id="chat-u-msg">
                 "عشاء عائلي في البيك بـ 68 ريال، دفعتها أنا للأسرة"
               </div>
-              <div class="chat-bubble-ai">
-                <div style="font-size: 12px; color: var(--primary); font-weight: 700; margin-bottom: 6px;">
+              <div class="chat-bubble-response">
+                <div style="font-size: 12px; color: #34D399; font-weight: 700; margin-bottom: 6px;">
                   🤖 <span id="chat-ai-header">تم استخراج المصروف بالذكاء الاصطناعي بدقة</span>
                 </div>
-                <div class="ai-card-parsed">
-                  <div class="ai-card-title">
+                <div class="ai-parsed-card">
+                  <div class="ai-card-title-row">
                     <span>مطعم البيك (وجبة عائلية)</span>
-                    <span style="color: var(--primary);">68.00 ر.س</span>
+                    <span style="color: #34D399;">68.00 ر.س</span>
                   </div>
-                  <div class="ai-chips-row">
-                    <span class="badge-tag cat">🍔 المطاعم والتغذية</span>
-                    <span class="badge-tag sub">🍟 وجبات سريعة</span>
-                    <span class="badge-tag paid">👤 المدفوع بواسطة: أنا</span>
-                    <span class="badge-tag for">👨‍👩‍👧 المستفيد: الأسرة</span>
+                  <div class="tag-cluster">
+                    <span class="tag-badge cat">🍔 المطاعم والتغذية</span>
+                    <span class="tag-badge sub">🍟 وجبات سريعة</span>
+                    <span class="tag-badge paid">👤 المدفوع بواسطة: أنا</span>
+                    <span class="tag-badge for">👨‍👩‍👧 المستفيد: الأسرة</span>
                   </div>
                 </div>
               </div>
@@ -1412,12 +1446,12 @@ def get_landing_page_html() -> str:
           </div>
 
           <!-- Tab 3: ZATCA Scanner Viewfinder -->
-          <div id="sim-panel-zatca" class="tab-panel">
-            <div class="zatca-viewfinder">
-              <div class="scan-laser-beam"></div>
-              <div class="zatca-preview-grid">
-                <div class="qr-mock">
-                  <svg class="qr-svg" viewBox="0 0 100 100">
+          <div id="sim-panel-zatca" class="tab-view-pane">
+            <div class="zatca-viewfinder-pane">
+              <div class="laser-beam-line"></div>
+              <div class="zatca-preview-layout">
+                <div class="qr-canvas-box">
+                  <svg viewBox="0 0 100 100">
                     <rect width="100" height="100" fill="#fff"/>
                     <rect x="10" y="10" width="24" height="24" fill="#000"/>
                     <rect x="14" y="14" width="16" height="16" fill="#fff"/>
@@ -1434,24 +1468,24 @@ def get_landing_page_html() -> str:
                     <rect x="78" y="42" width="8" height="8" fill="#000"/>
                   </svg>
                 </div>
-                <div class="zatca-details" style="text-align: start; width: 100%;">
+                <div class="zatca-parsed-rows" style="text-align: start; width: 100%;">
                   <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span class="badge-chip" style="background: rgba(0, 229, 153, 0.15); border-color: var(--primary); color: var(--primary);">
+                    <span class="coming-tag-chip" style="background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.35); color: #34D399;">
                       ✓ متوافق مع هيئة الزكاة والضريبة والجمارك (المرحلة 2)
                     </span>
                   </div>
                   <h5>شركة أسواق بندة للتجزئة</h5>
-                  <div class="zatca-row">
+                  <div class="zatca-data-line">
                     <span id="z-lbl-tax">الرقم الضريبي:</span>
                     <strong>300055489200003</strong>
                   </div>
-                  <div class="zatca-row">
+                  <div class="zatca-data-line">
                     <span id="z-lbl-vat">ضريبة القيمة المضافة (15%):</span>
-                    <strong style="color: var(--amber);">32.40 ر.س</strong>
+                    <strong style="color: #F59E0B;">32.40 ر.س</strong>
                   </div>
-                  <div class="zatca-row">
+                  <div class="zatca-data-line">
                     <span id="z-lbl-tot">الإجمالي شامل الضريبة:</span>
-                    <strong style="color: var(--primary);">248.40 ر.س</strong>
+                    <strong style="color: #34D399;">248.40 ر.س</strong>
                   </div>
                 </div>
               </div>
@@ -1459,268 +1493,288 @@ def get_landing_page_html() -> str:
           </div>
 
           <!-- Tab 4: Partner & Dependents Settlement -->
-          <div id="sim-panel-partner" class="tab-panel">
-            <div class="partner-sim-box">
-              <div class="sim-header">
-                <div class="sim-title">
+          <div id="sim-panel-partner" class="tab-view-pane">
+            <div class="partner-split-pane">
+              <div class="sim-meta-header">
+                <div class="sim-heading-title">
                   <span>⚖️</span>
                   <span id="part-title-txt">حاسبة التسوية ثنائية الأبعاد وتتبع مصاريف الأبناء</span>
                 </div>
-                <div class="badge-chip" id="part-badge">نسبة عادلة 50% / 50%</div>
+                <div class="coming-tag-chip" id="part-badge">نسبة عادلة 50% / 50%</div>
               </div>
 
-              <div class="split-ratio-bar">
-                <div class="split-bar-you" id="ratio-bar-you" style="width: 50%;"></div>
-                <div class="split-bar-partner" id="ratio-bar-partner" style="width: 50%;"></div>
+              <div class="split-meter-bar">
+                <div class="split-share-you" id="ratio-bar-you" style="width: 50%;"></div>
+                <div class="split-share-partner" id="ratio-bar-partner" style="width: 50%;"></div>
               </div>
 
-              <div class="sim-stat-grid">
-                <div class="stat-pill-card teal">
-                  <div class="stat-lbl" id="part-lbl-net">صافي التسوية بين الشركاء</div>
-                  <div class="stat-val" style="color: var(--primary);">+380 <small style="font-size: 13px;">ر.س مستحق لك</small></div>
-                  <div class="stat-sub" id="part-sub-net">تمت الحسبة التلقائية لجميع فواتير الشهر</div>
+              <div class="sim-metrics-trio">
+                <div class="metric-slab emerald">
+                  <div class="metric-lbl" id="part-lbl-net">صافي التسوية بين الشركاء</div>
+                  <div class="metric-val" style="color: #34D399;">+380 <small style="font-size: 13px;">ر.س مستحق لك</small></div>
+                  <div class="metric-sub" id="part-sub-net">تمت الحسبة التلقائية لجميع فواتير الشهر</div>
                 </div>
 
-                <div class="stat-pill-card blue">
-                  <div class="stat-lbl" id="part-lbl-kids">مجموع نفقات الأبناء هذا الشهر</div>
-                  <div class="stat-val">1,240 <small style="font-size: 13px;">ر.س</small></div>
-                  <div class="stat-sub" id="part-sub-kids">مدارس، أنشطة، ورعاية صحية</div>
+                <div class="metric-slab cyan">
+                  <div class="metric-lbl" id="part-lbl-kids">مجموع نفقات الأبناء هذا الشهر</div>
+                  <div class="metric-val">1,240 <small style="font-size: 13px;">ر.س</small></div>
+                  <div class="metric-sub" id="part-sub-kids">مدارس، أنشطة، ورعاية صحية</div>
                 </div>
               </div>
 
-              <div class="children-chips-bar">
+              <div class="dependents-pill-row">
                 <span style="font-size: 13px; color: var(--text-muted); align-self: center;" id="part-lbl-tag">المستفيدون المخصصون:</span>
-                <span class="child-chip">👧 سارة (مستلزمات مدرسية: 520 ر.س)</span>
-                <span class="child-chip">👦 عمر (أنشطة رياضية: 430 ر.س)</span>
-                <span class="child-chip">👶 فهد (تطعيمات وتموين: 290 ر.س)</span>
+                <span class="child-dep-chip">👧 سارة (مستلزمات مدرسية: 520 ر.س)</span>
+                <span class="child-dep-chip">👦 عمر (أنشطة رياضية: 430 ر.س)</span>
+                <span class="child-dep-chip">👶 فهد (تطعيمات وتموين: 290 ر.س)</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Metric Counters Bar -->
+      <div class="metric-counter-strip" id="metrics">
+        <div class="counter-cell">
+          <div class="counter-number"><span class="accent">100</span>%</div>
+          <div class="counter-label" id="cnt-lbl-1">يعمل بدون اتصال (Offline-First)</div>
+        </div>
+        <div class="counter-cell">
+          <div class="counter-number"><span class="accent">0</span>%</div>
+          <div class="counter-label" id="cnt-lbl-2">صفر تجسس على رسائل SMS البنكية</div>
+        </div>
+        <div class="counter-cell">
+          <div class="counter-number">&lt;<span class="accent">0.8</span>s</div>
+          <div class="counter-label" id="cnt-lbl-3">سرعة فك تشفير فواتير ZATCA TLV</div>
+        </div>
+        <div class="counter-cell">
+          <div class="counter-number"><span class="accent">31</span>/31</div>
+          <div class="counter-label" id="cnt-lbl-4">مرونة تامة لأي يوم راتب تختاره</div>
+        </div>
+      </div>
     </section>
 
-    <!-- Bento Grid Features Section -->
+    <!-- 12-Pillar Bento Grid Section -->
     <section id="features">
-      <div class="section-headline">
-        <span class="section-eyebrow" id="feat-eyebrow">منظومة مالية شاملة</span>
-        <h3 class="section-h2" id="feat-h2">كل ما تحتاجه الأسرة السعودية في تطبيق واحد</h3>
-        <p class="section-sub" id="feat-sub">
+      <div class="section-header-block">
+        <span class="section-eyebrow-text" id="feat-eyebrow">منظومة مالية شاملة</span>
+        <h3 class="section-main-heading" id="feat-h2">كل ما تحتاجه الأسرة السعودية في تطبيق واحد</h3>
+        <p class="section-lead-copy" id="feat-sub">
           تم بناء كل ميزة لحل تحديات مالية حقيقية يواجهها الأفراد والأسر في المملكة مع تجربة مستخدم تتسم بالسهولة والجمال.
         </p>
       </div>
 
-      <div class="bento-grid">
+      <div class="asymmetric-bento-grid">
         <!-- 1. Flexible Salary Engine -->
-        <div class="bento-card bento-span-8">
+        <div class="bento-surface-card span-col-8">
           <div>
-            <div class="bento-icon teal">📅</div>
-            <h4 class="bento-title" id="f1-t">دورة راتب مرنة وقواعد الصرف التلقائية</h4>
-            <p class="bento-desc" id="f1-d">
+            <div class="bento-icon-cell emerald">📅</div>
+            <h4 class="bento-card-title" id="f1-t">دورة راتب مرنة وقواعد الصرف التلقائية</h4>
+            <p class="bento-card-desc" id="f1-d">
               سواء كنت موظفاً حكومياً، أو في القطاع الخاص، أو تمارس عملاً حراً؛ حدد يوم راتبك الشهري بكل حرية. يطبق التطبيق القواعد المصرفية السعودية التلقائية (الصرف يوم الخميس إذا صادف الجمعة، ويوم الأحد إذا صادف السبت) مع احتساب معدل الصرف اليومي الآمن لتفادي نفاد الراتب مبكراً.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تعديل أي يوم في الشهر</span>
-            <span class="pill-micro">موازنة العطلات البنكية</span>
-            <span class="pill-micro">معدل الصرف اليومي الآمن</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تعديل أي يوم في الشهر</span>
+            <span class="subtle-badge-chip">موازنة العطلات البنكية</span>
+            <span class="subtle-badge-chip">معدل الصرف اليومي الآمن</span>
           </div>
         </div>
 
         <!-- 2. Conversational Saudi AI -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon blue">✨</div>
-            <h4 class="bento-title" id="f2-t">مساعد ذكي يفهم اللهجة السعودية</h4>
-            <p class="bento-desc" id="f2-d">
+            <div class="bento-icon-cell cyan">✨</div>
+            <h4 class="bento-card-title" id="f2-t">مساعد ذكي يفهم اللهجة السعودية</h4>
+            <p class="bento-card-desc" id="f2-d">
               سجّل مشترياتك صوتياً أو كتابياً باللهجة المحلية أو الفصحى أو الإنجليزية. يفهم السياق فورياً ("عبيت بنزين 91 بـ 85 ريال") ويصنّفها بدقة متناهية.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">شات فوري</span>
-            <span class="pill-micro">تعرّف باللهجة</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">شات فوري</span>
+            <span class="subtle-badge-chip">تعرّف باللهجة</span>
           </div>
         </div>
 
         <!-- 3. Two-Tier Taxonomy & Hybrid LLM Subcategories -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon purple">📂</div>
-            <h4 class="bento-title" id="f3-t">تصنيف هجين ثنائي المستويات</h4>
-            <p class="bento-desc" id="f3-d">
+            <div class="bento-icon-cell purple">📂</div>
+            <h4 class="bento-card-title" id="f3-t">تصنيف هجين ثنائي المستويات</h4>
+            <p class="bento-card-desc" id="f3-d">
               تصنيفات رئيسية وفرعية دقيقة (مثل: المطاعم > وجبات سريعة أو كافيهات). يختار الذكاء الاصطناعي التصنيف الفرعي الأنسب مع بطاقة تأكيد تفاعلية تتيح لك التعديل بمرونة.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تصنيف فرعي ذكي</span>
-            <span class="pill-micro">بطاقة تأكيد قبل الحفظ</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تصنيف فرعي ذكي</span>
+            <span class="subtle-badge-chip">بطاقة تأكيد قبل الحفظ</span>
           </div>
         </div>
 
         <!-- 4. ZATCA Phase 2 QR Scanner -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon teal">🧾</div>
-            <h4 class="bento-title" id="f4-t">ماسح فواتير ZATCA المرحلة الثانية</h4>
-            <p class="bento-desc" id="f4-d">
+            <div class="bento-icon-cell emerald">🧾</div>
+            <h4 class="bento-card-title" id="f4-t">ماسح فواتير ZATCA المرحلة الثانية</h4>
+            <p class="bento-card-desc" id="f4-d">
               وجّه الكاميرا إلى أي فاتورة إلكترونية لفك شفرة رمز الاستجابة السريعة (Base64 TLV) بدقة 100% واستخراج اسم التاجر، الرقم الضريبي، وضريبة القيمة المضافة فورياً.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تشفير TLV</span>
-            <span class="pill-micro">احتساب الضريبة 15%</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تشفير TLV</span>
+            <span class="subtle-badge-chip">احتساب الضريبة 15%</span>
           </div>
         </div>
 
         <!-- 5. 2D Partner Fair-Share Split -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon amber">👥</div>
-            <h4 class="bento-title" id="f5-t">تقسيم عادل بين الشركاء</h4>
-            <p class="bento-desc" id="f5-d">
+            <div class="bento-icon-cell amber">👥</div>
+            <h4 class="bento-card-title" id="f5-t">تقسيم عادل بين الشركاء</h4>
+            <p class="bento-card-desc" id="f5-d">
               نظام توثيق ثنائي الأبعاد يرصد "من دفع" و"من استفاد" مع نسبة مخصصة للتقاسم لحساب التسويات الصافية والديون المتبادلة دون أي إحراج مالي.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">رمز دعوة عائلي</span>
-            <span class="pill-micro">تسوية ديون فورية</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">رمز دعوة عائلي</span>
+            <span class="subtle-badge-chip">تسوية ديون فورية</span>
           </div>
         </div>
 
         <!-- 6. Children & Dependents Tracking -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon blue">👶</div>
-            <h4 class="bento-title" id="f6-t">تتبع نفقات الأبناء والتابعين</h4>
-            <p class="bento-desc" id="f6-d">
+            <div class="bento-icon-cell cyan">👶</div>
+            <h4 class="bento-card-title" id="f6-t">تتبع نفقات الأبناء والتابعين</h4>
+            <p class="bento-card-desc" id="f6-d">
               أضف أسماء الأبناء في إعدادات الأسرة وخصّص الفواتير لكل ابن (مصاريف المدارس، الأنشطة، المستلزمات الطبية) لمعرفة التكلفة الفعلية لكل فرد بدقة.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تخصيص لكل طفل</span>
-            <span class="pill-micro">تقارير نفقات التابعين</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تخصيص لكل طفل</span>
+            <span class="subtle-badge-chip">تقارير نفقات التابعين</span>
           </div>
         </div>
 
         <!-- 7. BNPL & Installments Tracker -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon purple">💳</div>
-            <h4 class="bento-title" id="f7-t">متابعة أقساط تابي وتمارا والبطاقات</h4>
-            <p class="bento-desc" id="f7-d">
+            <div class="bento-icon-cell purple">💳</div>
+            <h4 class="bento-card-title" id="f7-t">متابعة أقساط تابي وتمارا والبطاقات</h4>
+            <p class="bento-card-desc" id="f7-d">
               تتبّع خطط التقسيط عبر تابي، تمارا، أو البطاقات الائتمانية مع حلقات تقدم دائرية توضح المتبقي والتنبيه التلقائي قبل مواعيد السداد لتفادي الرسوم.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تابي & تمارا</span>
-            <span class="pill-micro">تنبيه مواعيد الأقساط</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تابي & تمارا</span>
+            <span class="subtle-badge-chip">تنبيه مواعيد الأقساط</span>
           </div>
         </div>
 
         <!-- 8. Recurring Bills & Cadence Engine -->
-        <div class="bento-card bento-span-4">
+        <div class="bento-surface-card span-col-4">
           <div>
-            <div class="bento-icon amber">⚡</div>
-            <h4 class="bento-title" id="f8-t">جدولة الفواتير والاشتراكات الدورية</h4>
-            <p class="bento-desc" id="f8-d">
+            <div class="bento-icon-cell amber">⚡</div>
+            <h4 class="bento-card-title" id="f8-t">جدولة الفواتير والاشتراكات الدورية</h4>
+            <p class="bento-card-desc" id="f8-d">
               كشف وجدولة فواتير الكهرباء (SEC)، والمياه (NWC)، والاتصالات (STC/Mobily)، ورسوم الإقامة والتأمين لتجنب الانقطاعات والمفاجآت.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">الكهرباء والمياه</span>
-            <span class="pill-micro">تجديدات الاشتراكات</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">الكهرباء والمياه</span>
+            <span class="subtle-badge-chip">تجديدات الاشتراكات</span>
           </div>
         </div>
 
         <!-- 9. Smart Grocery Comparison -->
-        <div class="bento-card bento-span-6">
+        <div class="bento-surface-card span-col-6">
           <div>
-            <div class="bento-icon teal">🛒</div>
-            <h4 class="bento-title" id="f9-t">مقارنة أسعار المقاضي وسلة التوفير</h4>
-            <p class="bento-desc" id="f9-d">
+            <div class="bento-icon-cell emerald">🛒</div>
+            <h4 class="bento-card-title" id="f9-t">مقارنة أسعار المقاضي وسلة التوفير</h4>
+            <p class="bento-card-desc" id="f9-d">
               سجّل مشتريات السوبرماركت وقارن أسعار السلع الأساسية بين سلاسل المتاجر الكبرى في المملكة (بندة، كارفور، لولو، التميمي، الدانوب) لتوفير ما يصل إلى 20% شهرياً.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">تتبع تاريخ الأسعار</span>
-            <span class="pill-micro">سلة المقاضي المثالية</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">تتبع تاريخ الأسعار</span>
+            <span class="subtle-badge-chip">سلة المقاضي المثالية</span>
           </div>
         </div>
 
         <!-- 10. Purchase Affordability Simulator -->
-        <div class="bento-card bento-span-6">
+        <div class="bento-surface-card span-col-6">
           <div>
-            <div class="bento-icon blue">🧭</div>
-            <h4 class="bento-title" id="f10-t">حاسبة "هل أستطيع تحمل هذه التكلفة؟"</h4>
-            <p class="bento-desc" id="f10-d">
+            <div class="bento-icon-cell cyan">🧭</div>
+            <h4 class="bento-card-title" id="f10-t">حاسبة "هل أستطيع تحمل هذه التكلفة؟"</h4>
+            <p class="bento-card-desc" id="f10-d">
               اختبر أي قرار شراء غير مخطط له قبل اتخاذه؛ يحسب التطبيق فورياً أثر الشراء على وتيرة صرف الأيام المتبقية في دورة الراتب وعلى احتياطي الادخار دون إرباك الميزانية.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">محاكاة فورية للقرارات</span>
-            <span class="pill-micro">حماية خطة الشهر</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">محاكاة فورية للقرارات</span>
+            <span class="subtle-badge-chip">حماية خطة الشهر</span>
           </div>
         </div>
 
         <!-- 11. Offline-First SQLite Engine -->
-        <div class="bento-card bento-span-6">
+        <div class="bento-surface-card span-col-6">
           <div>
-            <div class="bento-icon purple">⚡</div>
-            <h4 class="bento-title" id="f11-t">يعمل بالكامل دون اتصال بالإنترنت</h4>
-            <p class="bento-desc" id="f11-d">
+            <div class="bento-icon-cell purple">⚡</div>
+            <h4 class="bento-card-title" id="f11-t">يعمل بالكامل دون اتصال بالإنترنت</h4>
+            <p class="bento-card-desc" id="f11-d">
               قاعدة بيانات SQLite محلية مدمجة تتيح لك تسجيل المصاريف ومسح الفواتير في أي وقت حتى بدون شبكة، مع مزامنة سحابية تلقائية وخوارزمية تشفير تمنع تكرار العمليات.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">مزامنة تلقائية</span>
-            <span class="pill-micro">تشفير SHA-256</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">مزامنة تلقائية</span>
+            <span class="subtle-badge-chip">تشفير SHA-256</span>
           </div>
         </div>
 
         <!-- 12. Smart Savings Reserve & PDF Statements -->
-        <div class="bento-card bento-span-6">
+        <div class="bento-surface-card span-col-6">
           <div>
-            <div class="bento-icon amber">📊</div>
-            <h4 class="bento-title" id="f12-t">احتياطي الادخار وتقارير PDF الشهرية</h4>
-            <p class="bento-desc" id="f12-d">
+            <div class="bento-icon-cell amber">📊</div>
+            <h4 class="bento-card-title" id="f12-t">احتياطي الادخار وتقارير PDF الشهرية</h4>
+            <p class="bento-card-desc" id="f12-d">
               يتحول الفائض غير المخصص تلقائياً إلى صندوق احتياطي الادخار الأسري، مع إمكانية تصدير كشوف حساب شهرية رسمية بصيغة PDF باللغتين العربية والإنجليزية.
             </p>
           </div>
-          <div class="bento-tag-row">
-            <span class="pill-micro">صندوق طوارئ مالي</span>
-            <span class="pill-micro">تقارير ضريبية ومالية</span>
+          <div class="bento-tag-pills">
+            <span class="subtle-badge-chip">صندوق طوارئ مالي</span>
+            <span class="subtle-badge-chip">تقارير ضريبية ومالية</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Comparison Section -->
-    <section class="matrix-section" id="comparison">
-      <div class="section-headline" style="margin-bottom: 30px;">
-        <span class="section-eyebrow" id="comp-eyebrow">لماذا نحن الخيار الأفضل؟</span>
-        <h3 class="section-h2" id="comp-h2">أمان بنكي وخصوصية تامة بدون تجسس</h3>
+    <!-- Bank-Grade Security & Comparison Section -->
+    <section class="security-matrix-card" id="security">
+      <div class="section-header-block" style="margin-bottom: 30px;">
+        <span class="section-eyebrow-text" id="comp-eyebrow">معايير أمان بنكية</span>
+        <h3 class="section-main-heading" id="comp-h2">أمان بنكي وخصوصية تامة بدون تجسس</h3>
       </div>
 
-      <div class="matrix-grid">
-        <div class="matrix-item">
-          <div class="matrix-check">✓</div>
-          <div class="matrix-text">
+      <div class="matrix-item-grid">
+        <div class="matrix-cell-wrap">
+          <div class="verified-check-mark">✓</div>
+          <div class="matrix-cell-text">
             <h4 id="cp-1-t">صفر تجسس على الرسائل النصية (SMS)</h4>
             <p id="cp-1-d">لا نطلب أي صلاحية مشبوهة لاعتراض الرسائل البنكية أو قراءة رسائل SMS في الخلفية كما تفعل التطبيقات القديمة.</p>
           </div>
         </div>
 
-        <div class="matrix-item">
-          <div class="matrix-check">✓</div>
-          <div class="matrix-text">
+        <div class="matrix-cell-wrap">
+          <div class="verified-check-mark">✓</div>
+          <div class="matrix-cell-text">
             <h4 id="cp-2-t">عزل تام لبيانات الأسرة (Row-Level Security)</h4>
             <p id="cp-2-d">بيانات كل أسرة معزولة مشفرة سحابياً ولا يمكن لأي مستخدم آخر الاطلاع على فلس واحد من مصروفاتكم.</p>
           </div>
         </div>
 
-        <div class="matrix-item">
-          <div class="matrix-check">✓</div>
-          <div class="matrix-text">
+        <div class="matrix-cell-wrap">
+          <div class="verified-check-mark">✓</div>
+          <div class="matrix-cell-text">
             <h4 id="cp-3-t">حفظ السجلات بنسبة 100% وعدم الحذف النهائي</h4>
             <p id="cp-3-d">التصنيفات غير المستخدمة تتحول إلى حالة "غير نشطة" مع حفظ كامل تاريخ المصروفات والرسوم البيانية السابقة.</p>
           </div>
@@ -1729,61 +1783,61 @@ def get_landing_page_html() -> str:
     </section>
 
     <!-- FAQ Accordion -->
-    <section class="faq-section" id="faq">
-      <div class="section-headline">
-        <span class="section-eyebrow" id="faq-eyebrow">إجابات واضحة</span>
-        <h3 class="section-h2" id="faq-h2">الأسئلة الشائعة</h3>
+    <section class="faq-wrapper-block" id="faq">
+      <div class="section-header-block">
+        <span class="section-eyebrow-text" id="faq-eyebrow">إجابات واضحة</span>
+        <h3 class="section-main-heading" id="faq-h2">الأسئلة الشائعة</h3>
       </div>
 
-      <div class="faq-item active">
-        <button class="faq-btn" onclick="toggleFaq(this)">
+      <div class="faq-accordion-item active">
+        <button class="faq-header-trigger" onclick="toggleFaq(this)">
           <span id="faq-q1">هل التطبيق محصور بيوم راتب معين (مثل يوم 27)؟</span>
-          <span class="faq-toggle-icon">+</span>
+          <span class="faq-plus-icon">+</span>
         </button>
-        <div class="faq-answer" id="faq-a1">
+        <div class="faq-body-collapse" id="faq-a1">
           إطلاقاً! يمكنك ضبط يوم نزول الراتب على أي تاريخ في الشهر (1، 15، 25، 27 أو أي تاريخ يحدده جهة عملك). يتولى المحرك إعادة حساب الأيام المتبقية ومعدل الصرف اليومي الآمن بدقة وفق التاريخ الذي تختاره.
         </div>
       </div>
 
-      <div class="faq-item">
-        <button class="faq-btn" onclick="toggleFaq(this)">
+      <div class="faq-accordion-item">
+        <button class="faq-header-trigger" onclick="toggleFaq(this)">
           <span id="faq-q2">كيف يتعامل التطبيق مع عطلات نهاية الأسبوع ومواعيد صرف الراتب في البنوك السعودية؟</span>
-          <span class="faq-toggle-icon">+</span>
+          <span class="faq-plus-icon">+</span>
         </button>
-        <div class="faq-answer" id="faq-a2">
+        <div class="faq-body-collapse" id="faq-a2">
           يطبق التطبيق القواعد المصرفية المعتمدة في المملكة تلقائياً: إذا صادف يوم راتبك يوم الجمعة، يتم تقديم دورة الصرف إلى يوم الخميس. وإذا صادف يوم السبت، يتم ترحيلها إلى يوم الأحد لضمان دقة وتيرة الصرف اليومية.
         </div>
       </div>
 
-      <div class="faq-item">
-        <button class="faq-btn" onclick="toggleFaq(this)">
+      <div class="faq-accordion-item">
+        <button class="faq-header-trigger" onclick="toggleFaq(this)">
           <span id="faq-q3">هل يمكنني تقسيم المصاريف وتحديد تكلفة كل ابن من أفراد الأسرة؟</span>
-          <span class="faq-toggle-icon">+</span>
+          <span class="faq-plus-icon">+</span>
         </button>
-        <div class="faq-answer" id="faq-a3">
+        <div class="faq-body-collapse" id="faq-a3">
           نعم، يدعم التطبيق إدارة أفراد الأسرة وإضافة الأبناء؛ عند تسجيل أي فاتورة يمكنك تحديد من دفع المصروف (أنا أو الشريك) ولمن تم الصرف (أنا، الشريك، أو أحد الأبناء)، ويقوم التطبيق بحساب التسويات الصافية العادلة بدقة.
         </div>
       </div>
 
-      <div class="faq-item">
-        <button class="faq-btn" onclick="toggleFaq(this)">
+      <div class="faq-accordion-item">
+        <button class="faq-header-trigger" onclick="toggleFaq(this)">
           <span id="faq-q4">هل يمكنني مسح الفواتير الإلكترونية ZATCA دون اتصال بالإنترنت؟</span>
-          <span class="faq-toggle-icon">+</span>
+          <span class="faq-plus-icon">+</span>
         </button>
-        <div class="faq-answer" id="faq-a4">
+        <div class="faq-body-collapse" id="faq-a4">
           نعم، فك شفرة Base64 TLV الخاصة بفواتير ZATCA يتم محلياً وبشكل فوري على جهازك وبسرعة فائقة حتى بدون أي اتصال بالإنترنت، ويتم حفظ الفاتورة في قاعدة بيانات SQLite المحلية لحين توفر الشبكة.
         </div>
       </div>
     </section>
 
     <!-- Legal Section -->
-    <section class="legal-container" id="legal">
-      <div class="legal-tabs-row">
-        <button class="legal-nav-btn active" id="tab-privacy-btn" onclick="switchLegalTab('privacy')">سياسة الخصوصية</button>
-        <button class="legal-nav-btn" id="tab-terms-btn" onclick="switchLegalTab('terms')">شروط الاستخدام</button>
+    <section class="legal-modal-strip" id="legal">
+      <div class="legal-selector-tabs">
+        <button class="legal-tab-action active" id="tab-privacy-btn" onclick="switchLegalTab('privacy')">سياسة الخصوصية</button>
+        <button class="legal-tab-action" id="tab-terms-btn" onclick="switchLegalTab('terms')">شروط الاستخدام</button>
       </div>
 
-      <div id="privacy-pane" class="legal-pane">
+      <div id="privacy-pane" class="legal-scroll-pane">
         <h4 id="lp-1">1. الالتزام الصارم بالخصوصية</h4>
         <p id="lp-1-txt">نحن في Budget Tracker نضع حماية بياناتك المالية فوق كل اعتبار. لا نطلب أي صلاحيات لاعتراض أو قراءة الرسائل النصية، ويتم عزل وتشفير بيانات كل أسرة سحابياً بأحدث معايير الأمان.</p>
         
@@ -1794,7 +1848,7 @@ def get_landing_page_html() -> str:
         <p id="lp-3-txt">يحق للمستخدم طلب الحذف النهائي والشامل لحسابه وكافة سجلاته المالية في أي وقت عبر مراسلة الدعم الفني مباشرة على: abedmowafaq@gmail.com.</p>
       </div>
 
-      <div id="terms-pane" class="legal-pane" style="display: none;">
+      <div id="terms-pane" class="legal-scroll-pane" style="display: none;">
         <h4 id="lt-1">1. الموافقة والامتثال</h4>
         <p id="lt-1-txt">باستخدامك لتطبيق وموقع Budget Tracker فإنك توافق على الالتزام بكافة الشروط والأحكام الموضحة هنا.</p>
         
@@ -1807,12 +1861,12 @@ def get_landing_page_html() -> str:
     </section>
 
     <!-- Contact Banner -->
-    <section class="contact-card" id="contact">
-      <h3 class="contact-title" id="contact-h">هل ترغب بالانضمام للنسخة التجريبية أو تقديم اقتراح؟</h3>
-      <p class="contact-desc" id="contact-p">
+    <section class="contact-cta-hero" id="contact">
+      <h3 class="contact-heading-text" id="contact-h">هل ترغب بالانضمام للنسخة التجريبية أو تقديم اقتراح؟</h3>
+      <p class="contact-copy-text" id="contact-p">
         يسعدنا دائماً الاستماع لآرائكم وملاحظاتكم لبناء أفضل تجربة مالية رقمية للأسر في المملكة العربية السعودية.
       </p>
-      <a href="mailto:abedmowafaq@gmail.com" class="email-capsule">
+      <a href="mailto:abedmowafaq@gmail.com" class="contact-email-capsule">
         <span>✉️</span>
         <span>abedmowafaq@gmail.com</span>
       </a>
@@ -1822,10 +1876,11 @@ def get_landing_page_html() -> str:
   <!-- Footer -->
   <footer>
     <div class="container">
-      <div class="footer-links-row">
-        <a href="#simulator" id="ft-sim">المحاكي</a>
+      <div class="footer-link-group">
+        <a href="#stage" id="ft-sim">المحاكي</a>
+        <a href="#metrics" id="ft-met">المؤشرات</a>
         <a href="#features" id="ft-feat">المميزات</a>
-        <a href="#comparison" id="ft-comp">الأمان</a>
+        <a href="#security" id="ft-comp">الأمان</a>
         <a href="#faq" id="ft-faq">الأسئلة الشائعة</a>
         <a href="#legal" onclick="switchLegalTab('privacy')" id="ft-priv">الخصوصية</a>
         <a href="#legal" onclick="switchLegalTab('terms')" id="ft-term">الشروط</a>
@@ -1844,14 +1899,15 @@ def get_landing_page_html() -> str:
         bodyClass: 'lang-en',
         langBtnText: '🇸🇦 <span>العربية</span>',
         navBrandSub: 'Smart Family Budgeting',
-        navSim: 'Interactive Simulator',
+        navSim: 'Interactive Stage',
+        navMetrics: 'Metrics',
         navFeat: 'Features',
-        navComp: 'Comparison',
+        navSec: 'Bank Security',
         navFaq: 'FAQ',
-        navContact: 'Contact',
+        navContact: 'Support',
         heroBadgeText: 'Fintech Innovation • Works with Any Monthly Salary Cycle',
-        heroH1: 'Absolute Mastery of Your Family Budget',
-        heroH2: 'With Any Salary Date You Choose & AI Precision',
+        heroH1Prefix: 'Absolute Mastery of Your Family Budget',
+        heroH1Gradient: 'With Any Salary Date You Choose & AI Precision',
         heroDesc: 'Engineered specifically for households in Saudi Arabia. Freely choose your monthly payday (1st, 15th, 25th, 27th, or custom), with automated banking weekend adjustments, instant ZATCA e-invoice scanning, and fair expense allocation between partners and children.',
         stGoogleSub: 'Coming Soon On',
         stAppleSub: 'Coming Soon On',
@@ -1886,6 +1942,10 @@ def get_landing_page_html() -> str:
         partLblKids: 'Total Children Expenses This Month',
         partSubKids: 'Schools, extracurriculars, & healthcare',
         partLblTag: 'Designated Beneficiaries:',
+        cntLbl1: '100% Offline-First Architecture',
+        cntLbl2: 'Zero SMS Interception or Snooping',
+        cntLbl3: 'Sub-Second ZATCA TLV Verification',
+        cntLbl4: 'Full Flexibility for Any Salary Day',
         featEyebrow: 'Comprehensive Financial Platform',
         featH2: 'Everything Your Family Needs in One App',
         featSub: 'Every single feature is built to solve real everyday financial challenges faced by households across Saudi Arabia.',
@@ -1948,6 +2008,7 @@ def get_landing_page_html() -> str:
         contactH: 'Interested in joining our Beta or sharing feedback?',
         contactP: 'We are always eager to hear your suggestions to build the finest digital finance experience for families in Saudi Arabia.',
         ftSim: 'Simulator',
+        ftMet: 'Metrics',
         ftFeat: 'Features',
         ftComp: 'Security',
         ftFaq: 'FAQ',
@@ -1962,13 +2023,14 @@ def get_landing_page_html() -> str:
         langBtnText: '🌐 <span>English</span>',
         navBrandSub: 'ميزانية الأسرة الذكية',
         navSim: 'المحاكي التفاعلي',
+        navMetrics: 'المؤشرات',
         navFeat: 'المميزات',
-        navComp: 'المقارنة',
+        navSec: 'الأمان المصرفي',
         navFaq: 'الأسئلة الشائعة',
         navContact: 'الدعم الفني',
         heroBadgeText: 'الابتكار المالي للأسر • متوافق مع أي دورة راتب شهرية',
-        heroH1: 'تحكّم مطلق في ميزانية أسرتك',
-        heroH2: 'مع أي يوم راتب تختاره وبدقة الذكاء الاصطناعي',
+        heroH1Prefix: 'تحكّم مطلق في ميزانية أسرتك',
+        heroH1Gradient: 'مع أي يوم راتب تختاره وبدقة الذكاء الاصطناعي',
         heroDesc: 'صُمم خصيصاً ليواكب واقع الأسر في السعودية. حدد يوم نزول راتبك بكل حرية (اليوم 1، 15، 25، 27 أو أي تاريخ يناسبك)، مع حساب قواعد الصرف المصرفية للعطلات تلقائياً، ومسح فواتير ZATCA، وتوزيع المصاريف بعدالة بين الشركاء والأبناء دون أي عناء.',
         stGoogleSub: 'متوفر قريباً على',
         stAppleSub: 'متوفر قريباً على',
@@ -2003,6 +2065,10 @@ def get_landing_page_html() -> str:
         partLblKids: 'مجموع نفقات الأبناء هذا الشهر',
         partSubKids: 'مدارس، أنشطة، ورعاية صحية',
         partLblTag: 'المستفيدون المخصصون:',
+        cntLbl1: 'يعمل بدون اتصال (Offline-First)',
+        cntLbl2: 'صفر تجسس على رسائل SMS البنكية',
+        cntLbl3: 'سرعة فك تشفير فواتير ZATCA TLV',
+        cntLbl4: 'مرونة تامة لأي يوم راتب تختاره',
         featEyebrow: 'منظومة مالية شاملة',
         featH2: 'كل ما تحتاجه الأسرة السعودية في تطبيق واحد',
         featSub: 'تم بناء كل ميزة لحل تحديات مالية حقيقية يواجهها الأفراد والأسر في المملكة مع تجربة مستخدم تتسم بالسهولة والجمال.',
@@ -2065,6 +2131,7 @@ def get_landing_page_html() -> str:
         contactH: 'هل ترغب بالانضمام للنسخة التجريبية أو تقديم اقتراح؟',
         contactP: 'يسعدنا دائماً الاستماع لآرائكم وملاحظاتكم لبناء أفضل تجربة مالية رقمية للأسر في المملكة العربية السعودية.',
         ftSim: 'المحاكي',
+        ftMet: 'المؤشرات',
         ftFeat: 'المميزات',
         ftComp: 'الأمان',
         ftFaq: 'الأسئلة الشائعة',
@@ -2097,7 +2164,6 @@ def get_landing_page_html() -> str:
           }
         }
       }
-      // Re-trigger simulator numbers in case language switched
       const paydayVal = document.getElementById('payday-range').value;
       updatePaydaySim(paydayVal);
     }
@@ -2176,7 +2242,7 @@ def get_auth_confirmed_html() -> str:
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Cairo', -apple-system, sans-serif;
-      background: #06080D;
+      background: #08080A;
       color: #C9D1D9;
       min-height: 100vh;
       display: flex;
@@ -2186,14 +2252,14 @@ def get_auth_confirmed_html() -> str:
       position: relative;
     }
     .card {
-      background: #0E131C;
-      border: 1px solid rgba(0, 229, 153, 0.3);
+      background: #111116;
+      border: 1px solid rgba(52, 211, 153, 0.3);
       border-radius: 24px;
       padding: 48px 36px;
       max-width: 480px;
       width: 100%;
       text-align: center;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 229, 153, 0.15);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(52, 211, 153, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
       position: relative;
       z-index: 1;
     }
@@ -2201,15 +2267,15 @@ def get_auth_confirmed_html() -> str:
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      background: rgba(0, 229, 153, 0.15);
-      border: 2px solid #00E599;
-      color: #00E599;
+      background: rgba(52, 211, 153, 0.15);
+      border: 2px solid #34D399;
+      color: #34D399;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-size: 40px;
       margin-bottom: 24px;
-      box-shadow: 0 0 25px rgba(0, 229, 153, 0.3);
+      box-shadow: 0 0 25px rgba(52, 211, 153, 0.3);
     }
     h1 {
       color: #FFFFFF;
@@ -2218,7 +2284,7 @@ def get_auth_confirmed_html() -> str:
       margin-bottom: 8px;
     }
     .subtitle-en {
-      color: #00E599;
+      color: #34D399;
       font-size: 16px;
       font-weight: 700;
       margin-bottom: 16px;
@@ -2245,7 +2311,7 @@ def get_auth_confirmed_html() -> str:
     .action-btn {
       display: inline-block;
       width: 100%;
-      background: linear-gradient(135deg, #00E599, #0284c7);
+      background: linear-gradient(135deg, #10B981, #0284C7);
       color: #FFFFFF;
       font-size: 16px;
       font-weight: 800;
@@ -2253,11 +2319,11 @@ def get_auth_confirmed_html() -> str:
       border-radius: 14px;
       text-decoration: none;
       transition: all 0.25s ease;
-      box-shadow: 0 8px 24px rgba(0, 229, 153, 0.3);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
     }
     .action-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(0, 229, 153, 0.45);
+      box-shadow: 0 12px 30px rgba(16, 185, 129, 0.5);
     }
     .contact-hint {
       margin-top: 24px;
@@ -2269,7 +2335,7 @@ def get_auth_confirmed_html() -> str:
       text-decoration: none;
     }
     .contact-hint a:hover {
-      color: #00E599;
+      color: #34D399;
     }
   </style>
 </head>
