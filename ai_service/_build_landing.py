@@ -45,11 +45,11 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Tracker • ميزانية الأسرة الذكية | FMSCO Enterprise</title>
-  <meta name="description" content="منصة FMSCO لإدارة ميزانية الأسرة والحوكمة المالية في السعودية. دورة راتب مرنة، مسح فواتير ZATCA بالذكاء الاصطناعي، تقسيم المصاريف بين الشركاء والأبناء.">
+  <title>Budget Tracker • ميزانية الأسرة الذكية</title>
+  <meta name="description" content="منصة Budget لإدارة ميزانية الأسرة والحوكمة المالية في السعودية. دورة راتب مرنة، مسح فواتير ZATCA بالذكاء الاصطناعي، تقسيم المصاريف بين الشركاء والأبناء.">
 
-  <!-- Favicon: stylized FMSCO brandmark in obsidian with glowing terracotta accent -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23C2783C'/%3E%3Cstop offset='100%25' stop-color='%23F5C06E'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23080709' stroke='%23C2783C' stroke-width='2' stroke-opacity='0.4'/%3E%3Ctext x='48%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-style='italic' font-weight='bold' font-size='38' fill='url(%23g)'%3EF%3C/text%3E%3Ccircle cx='48' cy='46' r='4' fill='%23F0A05A'/%3E%3C/svg%3E">
+  <!-- Favicon: stylized Budget brandmark in obsidian with glowing terracotta accent -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23C2783C'/%3E%3Cstop offset='100%25' stop-color='%23F5C06E'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23080709' stroke='%23C2783C' stroke-width='2' stroke-opacity='0.4'/%3E%3Ctext x='48%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-style='italic' font-weight='bold' font-size='38' fill='url(%23g)'%3EB%3C/text%3E%3Ccircle cx='48' cy='46' r='4' fill='%23F0A05A'/%3E%3C/svg%3E">
 
   <!-- Typography: Cairo, Plus Jakarta Sans, Playfair Display, Space Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -152,14 +152,31 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
     .ctap { background: #FFFFFF; color: #080709; font-size: 12.5px; font-weight: 700; padding: 9px 22px; border-radius: 999px; text-decoration: none; letter-spacing: .03em; transition: all .25s; box-shadow: 0 0 20px rgba(255,255,255,.2); }
     .ctap:hover { background: #F0EDE8; box-shadow: 0 0 28px rgba(255,255,255,.4); transform: translateY(-1px); }
 
-    /* Full 100vh Hero with Editorial Typography */
+    /* Full 100vh Hero with Floating Cinematic Background */
     .hero { position: relative; min-height: 100vh; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 84px; overflow: hidden; }
     .hero-bg {
       position: absolute; inset: 0;
-      background:
-        linear-gradient(180deg, rgba(8,7,9,.05) 0%, transparent 35%, rgba(8,7,9,.85) 75%, var(--canvas) 100%),
-        linear-gradient(135deg, #1C1712 0%, #0E0C09 30%, #17130E 60%, #0B0A09 100%);
+      background-color: #080709;
+      background-image:
+        linear-gradient(180deg, rgba(8,7,9,0.30) 0%, rgba(8,7,9,0.10) 25%, rgba(8,7,9,0.75) 65%, var(--canvas) 100%),
+        linear-gradient(90deg, rgba(8,7,9,0.92) 0%, rgba(8,7,9,0.60) 45%, rgba(8,7,9,0.20) 100%),
+        url('/hero-bg.webp'), url('/hero-bg.jpg');
+      background-size: cover;
+      background-position: center 30%;
+      background-repeat: no-repeat;
       z-index: 0;
+      transform: scale(1.02);
+      animation: heroFloat 28s ease-in-out infinite alternate;
+    }
+    body.en .hero-bg {
+      background-image:
+        linear-gradient(180deg, rgba(8,7,9,0.30) 0%, rgba(8,7,9,0.10) 25%, rgba(8,7,9,0.75) 65%, var(--canvas) 100%),
+        linear-gradient(270deg, rgba(8,7,9,0.92) 0%, rgba(8,7,9,0.60) 45%, rgba(8,7,9,0.20) 100%),
+        url('/hero-bg.webp'), url('/hero-bg.jpg');
+    }
+    @keyframes heroFloat {
+      0% { transform: scale(1.02) translateY(0); }
+      100% { transform: scale(1.07) translateY(-10px); }
     }
     .hero-light {
       position: absolute; top: 0; right: 0; width: 50%; height: 75%;
@@ -363,8 +380,8 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
 <header id="hdr">
   <div class="wrap nav">
     <a href="/" class="brand">
-      <span class="bwm">FMSCO<span class="bdot"></span></span>
-      <span class="bsub" data-i18n="brandSub">Budget Tracker • ميزانية الأسرة</span>
+      <span class="bwm">BUDGET<span class="bdot"></span></span>
+      <span class="bsub" data-i18n="brandSub">Tracker • ميزانية الأسرة</span>
     </a>
     <ul class="navlinks">
       <li><a href="#stage"    data-i18n="n1">المحاكي</a></li>
@@ -394,7 +411,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <span data-i18n="h1a">تحكّم مطلق في</span>
       <span class="h1i" data-i18n="h1b">ميزانية الأسرة.</span>
     </h1>
-    <p class="hsub" data-i18n="hs">منصة FMSCO لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.</p>
+    <p class="hsub" data-i18n="hs">منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.</p>
     <div class="hact">
       <a href="#stage"    class="bp" data-i18n="c1">⚡ ابدأ التجربة الحية</a>
       <a href="#features" class="bg" data-i18n="c2">← استكشف المميزات الـ 12</a>
@@ -775,7 +792,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <a href="#faq"      data-i18n="fl3">الأسئلة</a>
       <a href="mailto:abedmowafaq@gmail.com">abedmowafaq@gmail.com</a>
     </div>
-    <p>© 2026 FMSCO Enterprise • Budget Tracker • <span data-i18n="fm">صُنع بـ ❤️ للأسر السعودية</span></p>
+    <p>© 2026 Budget Tracker • <span data-i18n="fm">صُنع بـ ❤️ للأسر السعودية</span></p>
   </div>
 </footer>
 
@@ -783,12 +800,12 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
 <script>
 const T = {
   ar: {
-    brandSub: "Budget Tracker • ميزانية الأسرة",
+    brandSub: "Tracker • ميزانية الأسرة",
     n1: "المحاكي", n2: "المؤشرات", n3: "المميزات", n4: "الخصوصية", n5: "الأسئلة", n6: "التواصل", nc: "جرّب المحاكي",
     ey: "نظام حوكمة الميزانية العائلية • المملكة العربية السعودية",
     h1a: "تحكّم مطلق في",
     h1b: "ميزانية الأسرة.",
-    hs: "منصة FMSCO لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.",
+    hs: "منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.",
     c1: "⚡ ابدأ التجربة الحية",
     c2: "← استكشف المميزات الـ 12",
     si: "مرر للأسفل لاكتشاف المنصة",
@@ -878,20 +895,20 @@ const T = {
     lp3h: "حذف الحساب والبيانات", lp3p: "يحق للمستخدم طلب الحذف الكامل لحسابه وسجلاته في أي وقت عبر إعدادات التطبيق أو عبر مراسلة الدعم الفني.",
     lt1h: "نطاق الاستخدام", lt1p: "المنصة مخصصة لإدارة وحوكمة ميزانيات الأسر والأفراد في المملكة العربية السعودية للاستخدام الشخصي غير التجاري.",
     lt2h: "المسؤولية المالية", lt2p: "التطبيق يقدم أدوات تنظيمية واقتراحات استرشادية مبنية على الذكاء الاصطناعي ولا يُعد بديلاً عن المشورة المالية الرسمية.",
-    lt3h: "التحديثات والتطوير", lt3p: "تحتفظ إدارة منصة FMSCO بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.",
+    lt3h: "التحديثات والتطوير", lt3p: "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.",
     cth: "هل لديك استفسار أو ترغب بنسخة تجريبية مبكرة؟",
-    ctp: "فريق FMSCO الهندسي مرحّب بملاحظاتك واستفساراتك للمساهمة في تقديم أفضل تجربة مالية للأسرة.",
+    ctp: "فريق التطوير الهندسي مرحّب بملاحظاتك واستفساراتك للمساهمة في تقديم أفضل تجربة مالية للأسرة.",
     fs: "جميع الأنظمة تعمل بكفاءة",
     fl1: "المميزات", fl2: "الخصوصية", fl3: "الأسئلة",
     fm: "صُنع بـ ❤️ للأسر السعودية"
   },
   en: {
-    brandSub: "Budget Tracker • Family Finance",
+    brandSub: "Tracker • Family Finance",
     n1: "Simulator", n2: "Metrics", n3: "Features", n4: "Privacy", n5: "FAQ", n6: "Contact", nc: "Try Demo",
     ey: "ENTERPRISE HOUSEHOLD GOVERNANCE • SAUDI ARABIA",
     h1a: "Capital in the",
     h1b: "Algorithm.",
-    hs: "FMSCO's premier household financial governance platform for Saudi families — flexible payday cycles, conversational AI ledger, ZATCA e-invoice scanning, and equitable partner-children allocation.",
+    hs: "An advanced household financial governance platform for Saudi families — flexible payday cycles, conversational AI ledger, ZATCA e-invoice scanning, and equitable partner-children allocation.",
     c1: "⚡ Launch Interactive Demo",
     c2: "→ Explore All 12 Capabilities",
     si: "Scroll down to explore",
@@ -982,9 +999,9 @@ const T = {
     lp3h: "Account & Data Erasure", lp3p: "Users may request instantaneous permanent deletion of their account and all associated ledgers directly from settings.",
     lt1h: "Permitted Use", lt1p: "Budget Tracker is licensed for personal and family budget governance within the Kingdom of Saudi Arabia.",
     lt2h: "Financial Disclaimer", lt2p: "The platform delivers operational budgeting telemetry and AI suggestions; it does not offer statutory financial advisory services.",
-    lt3h: "Platform Modifications", lt3p: "FMSCO reserves the right to enhance system capabilities and policies periodically with prior notice to users.",
+    lt3h: "Platform Modifications", lt3p: "The platform reserves the right to enhance system capabilities and policies periodically with prior notice to users.",
     cth: "Inquiries or Early Beta Access?",
-    ctp: "The FMSCO engineering team welcomes your inquiries, institutional feedback, and feature requests.",
+    ctp: "The engineering team welcomes your inquiries, institutional feedback, and feature requests.",
     fs: "All Systems Operational",
     fl1: "Capabilities", fl2: "Privacy", fl3: "FAQ",
     fm: "Crafted with care for Saudi Families"

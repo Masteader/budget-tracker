@@ -21,7 +21,7 @@ from typing import Optional
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -88,7 +88,7 @@ elif not APP_AUTH_TOKEN:
 async def firewall_token_middleware(request: Request, call_next):
     # Allow local inspection, health check and docs
     path = request.url.path
-    if path in ["/", "/auth/confirm", "/auth/callback", "/health", "/docs", "/openapi.json", "/redoc"] or path.startswith("/auth/") or request.method == "OPTIONS":
+    if path in ["/", "/auth/confirm", "/auth/callback", "/health", "/docs", "/openapi.json", "/redoc", "/hero-bg.webp", "/hero-bg.jpg"] or path.startswith("/auth/") or path.startswith("/static/") or request.method == "OPTIONS":
         return await call_next(request)
 
     # Check if request arrived via reverse proxy or public tunnel
@@ -162,6 +162,29 @@ async def root_landing_page():
 async def auth_confirm_landing():
     """Welcome and email confirmation landing page."""
     return HTMLResponse(content=get_auth_confirmed_html())
+
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+
+@app.get("/hero-bg.webp", tags=["ops"])
+async def hero_background_webp():
+    """Serve WebP cinematic background image for the landing page."""
+    webp_path = os.path.join(STATIC_DIR, "hero_bg.webp")
+    if os.path.exists(webp_path):
+        return FileResponse(webp_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
+    raise HTTPException(status_code=404, detail="Background image not found")
+
+
+@app.get("/hero-bg.jpg", tags=["ops"])
+async def hero_background_jpg():
+    """Serve JPEG fallback cinematic background image for the landing page."""
+    jpg_path = os.path.join(STATIC_DIR, "hero_bg.jpg")
+    if os.path.exists(jpg_path):
+        return FileResponse(jpg_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
+    raise HTTPException(status_code=404, detail="Background image not found")
+
+
 
 
 @app.get("/health", tags=["ops"])

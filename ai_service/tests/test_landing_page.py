@@ -44,3 +44,15 @@ async def test_auth_callback_landing():
         res = await ac.get("/auth/callback")
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
+
+@pytest.mark.asyncio
+async def test_hero_background_images():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res_webp = await ac.get("/hero-bg.webp")
+        res_jpg = await ac.get("/hero-bg.jpg")
+    assert res_webp.status_code == 200
+    assert "image/webp" in res_webp.headers["content-type"]
+    assert res_jpg.status_code == 200
+    assert "image/jpeg" in res_jpg.headers["content-type"]
+
