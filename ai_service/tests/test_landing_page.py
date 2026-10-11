@@ -21,7 +21,7 @@ async def test_root_landing_page():
     # Verify developer email
     assert "abedmowafaq@gmail.com" in html
     # Verify feature descriptions
-    assert "27" in html  # Payday cycle
+    assert "دورة الراتب" in html  # Flexible salary cycle
     assert "الذكاء الاصطناعي" in html  # AI
     assert "الادخار" in html  # Savings reserve
 
