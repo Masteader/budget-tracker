@@ -147,97 +147,20 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
 # ROUTES
 # =============================================================================
 
+from landing_page import get_landing_page_html, get_auth_confirmed_html
+
+
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
+async def root_landing_page():
+    """Main public product showcase, feature explanations, and coming soon badges."""
+    return HTMLResponse(content=get_landing_page_html())
+
+
 @app.get("/auth/confirm", response_class=HTMLResponse, tags=["ops"])
 @app.get("/auth/callback", response_class=HTMLResponse, tags=["ops"])
 async def auth_confirm_landing():
     """Welcome and email confirmation landing page."""
-    html_content = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Tracker - Email Confirmed</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0D1117;
-      color: #C9D1D9;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .card {
-      background: #161B22;
-      border: 1px solid #30363D;
-      border-radius: 20px;
-      padding: 44px 32px;
-      max-width: 440px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-    }
-    .icon-circle {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: rgba(0, 200, 150, 0.15);
-      border: 2px solid #00C896;
-      color: #00C896;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 36px;
-      margin-bottom: 24px;
-    }
-    h1 {
-      color: #FFFFFF;
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .subtitle-ar {
-      color: #00C896;
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      direction: rtl;
-    }
-    p {
-      color: #8B949E;
-      font-size: 15px;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    .badge {
-      display: inline-block;
-      background: rgba(88, 166, 255, 0.12);
-      border: 1px solid rgba(88, 166, 255, 0.3);
-      color: #58A6FF;
-      font-size: 13px;
-      padding: 6px 14px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon-circle">✓</div>
-    <h1>Account Verified</h1>
-    <div class="subtitle-ar">تم تأكيد البريد الإلكتروني بنجاح</div>
-    <div class="badge">Budget Tracker</div>
-    <p>Your email has been confirmed. You can now return to the Budget Tracker app on your mobile device to sign in.</p>
-  </div>
-</body>
-</html>"""
-    return HTMLResponse(content=html_content)
+    return HTMLResponse(content=get_auth_confirmed_html())
 
 
 @app.get("/health", tags=["ops"])

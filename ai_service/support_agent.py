@@ -6,7 +6,7 @@ import litellm
 
 logger = logging.getLogger(__name__)
 
-SUPPORT_EMAIL = "fmscoinfo@fmsco.com.sa"
+SUPPORT_EMAIL = "abedmowafaq@gmail.com"
 
 SUPPORT_SYSTEM_PROMPTS = {
     "ar": """You are the AI Support Assistant for the Budget Tracker mobile application for Saudi households.

@@ -229,7 +229,7 @@ class SupportChatResponse(BaseModel):
     reply: str
     escalate_to_developer: bool = False
     summary: Optional[str] = None
-    support_email: str = "fmscoinfo@fmsco.com.sa"
+    support_email: str = "abedmowafaq@gmail.com"
 
 
 class HouseholdIncomeRequest(BaseModel):
