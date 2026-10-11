@@ -45,6 +45,7 @@ from models import (
     HouseholdIncomeResponse,
     CategoryToggleRequest,
     CustomCategoryCreateRequest,
+    DependentCreateRequest,
 )
 from support_agent import handle_support_query, SUPPORT_EMAIL
 
@@ -726,6 +727,41 @@ async def delete_budget_category(category_code: str, household_id: str):
     except Exception as exc:
         logger.error("Failed to delete category: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Household Dependents ─────────────────────────────────────────────────────
+
+@app.get(
+    "/households/{household_id}/dependents",
+    tags=["dependents"],
+    summary="Get all children and dependents for a household.",
+)
+async def list_household_dependents(household_id: str):
+    from dependents_service import get_household_dependents
+    deps = await asyncio.to_thread(get_household_dependents, household_id)
+    return {"status": "success", "dependents": deps}
+
+
+@app.post(
+    "/households/{household_id}/dependents",
+    tags=["dependents"],
+    summary="Add a new child or dependent to a household.",
+)
+async def add_household_dependent(household_id: str, req: DependentCreateRequest):
+    from dependents_service import create_household_dependent
+    dep = await asyncio.to_thread(create_household_dependent, household_id, req.name, req.avatar_icon)
+    return {"status": "success", "dependent": dep}
+
+
+@app.delete(
+    "/households/{household_id}/dependents/{dependent_id}",
+    tags=["dependents"],
+    summary="Remove a child or dependent from a household.",
+)
+async def remove_household_dependent(household_id: str, dependent_id: str):
+    from dependents_service import delete_household_dependent
+    await asyncio.to_thread(delete_household_dependent, household_id, dependent_id)
+    return {"status": "success", "message": "Dependent removed successfully."}
 
 
 

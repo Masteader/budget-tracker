@@ -255,4 +255,9 @@ class CustomCategoryCreateRequest(BaseModel):
     allocated_amount: float = 0.0
 
 
+class DependentCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, description="Child or dependent name")
+    avatar_icon: Optional[str] = Field("child", description="Icon representation")
+
+
 

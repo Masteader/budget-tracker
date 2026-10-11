@@ -109,25 +109,25 @@ def calculate_partner_settlement(
                 # I paid 100% for partner -> partner owes me 100%
                 i_paid_for_partner_100 += amt
                 shared_txs.append(tx)
-            elif beneficiary == "both":
-                # I paid shared expense -> partner owes me (1 - split_ratio)
-                shared_paid_by_me += amt
-                shared_txs.append(tx)
-            else:  # beneficiary == "me"
+            elif beneficiary == "me":
                 # Personal solo
                 me_personal_total += amt
+            else:
+                # Shared / Family / Child dependent expense -> partner owes (1 - split_ratio)
+                shared_paid_by_me += amt
+                shared_txs.append(tx)
         elif paid_by == "partner":
             if beneficiary == "me":
                 # Partner paid 100% for me -> I owe partner 100%
                 partner_paid_for_me_100 += amt
                 shared_txs.append(tx)
-            elif beneficiary == "both":
-                # Partner paid shared expense -> I owe partner split_ratio
-                shared_paid_by_partner += amt
-                shared_txs.append(tx)
-            else:  # beneficiary == "partner"
+            elif beneficiary == "partner":
                 # Partner personal solo
                 partner_personal_total += amt
+            else:
+                # Shared / Family / Child dependent expense -> I owe split_ratio
+                shared_paid_by_partner += amt
+                shared_txs.append(tx)
         else:
             # Default to shared paid by me
             shared_paid_by_me += amt
