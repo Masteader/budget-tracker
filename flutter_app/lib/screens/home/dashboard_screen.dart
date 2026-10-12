@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -240,6 +241,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           );
         }
         final hid = snap.data!;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            try {
+              context.read<InstallmentProvider>().init(hid);
+            } catch (_) {}
+          }
+        });
         return Scaffold(
           body: SafeArea(
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -249,8 +257,22 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   .eq('household_id', hid)
                   .order('category_code'),
               builder: (ctx, budgetSnap) {
-                return CustomScrollView(
-                  slivers: [
+                return RefreshIndicator(
+                  color: const Color(0xFF00C896),
+                  backgroundColor: const Color(0xFF161B22),
+                  onRefresh: () async {
+                    try {
+                      await Future.wait([
+                        context.read<InstallmentProvider>().fetchPlans(),
+                        context.read<TransactionProvider>().fetchTransactions(),
+                        context.read<BudgetProvider>().refresh(),
+                        context.read<RecurringBillsProvider>().fetchBills(),
+                      ]);
+                    } catch (_) {}
+                  },
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
                     _buildAppBar(hid),
                     if (!budgetSnap.hasData)
                       SliverPadding(
@@ -461,8 +483,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                       ),
                     ],
                   ],
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         );

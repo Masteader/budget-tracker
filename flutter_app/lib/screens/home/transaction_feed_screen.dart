@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import 'package:flutter/services.dart';
@@ -567,6 +568,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     budgetProvider.refresh();
     if (context.mounted) {
       context.read<RecurringBillsProvider>().fetchBills();
+      try {
+        context.read<InstallmentProvider>().fetchPlans(silent: true);
+      } catch (_) {}
     }
 
     if (context.mounted) {
@@ -1013,12 +1017,18 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                 context.read<TransactionProvider>().deleteTransaction(tx.id);
                                                 context.read<BudgetProvider>().refresh();
                                                 context.read<RecurringBillsProvider>().fetchBills();
+                                                try {
+                                                  context.read<InstallmentProvider>().fetchPlans(silent: true);
+                                                } catch (_) {}
                                               }
                                             } else if (res == 'updated') {
                                               if (context.mounted) {
                                                 context.read<TransactionProvider>().fetchTransactions();
                                                 context.read<BudgetProvider>().refresh();
                                                 context.read<RecurringBillsProvider>().fetchBills();
+                                                try {
+                                                  context.read<InstallmentProvider>().fetchPlans(silent: true);
+                                                } catch (_) {}
                                               }
                                             }
                                           },

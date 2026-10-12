@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/installment_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
+import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
@@ -582,6 +587,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
                         if (sheetCtx.mounted) Navigator.pop(sheetCtx);
                         if (mounted) {
+                          try {
+                            context.read<InstallmentProvider>().fetchPlans(silent: true);
+                            context.read<TransactionProvider>().fetchTransactions();
+                            context.read<BudgetProvider>().refresh();
+                            context.read<RecurringBillsProvider>().fetchBills(silent: true);
+                          } catch (_) {}
                           Navigator.pop(context, 'updated');
                           AppSnackBar.showSuccess(
                             context,

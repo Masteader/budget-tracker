@@ -525,5 +525,39 @@
     "original_transaction_id": null,
     "notes": null,
     "created_at": "2026-10-12T16:19:53.683001"
+  },
+  {
+    "id": "c173a28b-e141-445c-a3b6-1774386db37e",
+    "household_id": "hh_test_123",
+    "merchant": "United Electronics Co. eXtra",
+    "provider": "Tamara",
+    "total_amount": 7408.0,
+    "installment_count": 4,
+    "monthly_amount": 1852.0,
+    "paid_installments": 2,
+    "day_of_month": 27,
+    "start_date": "2026-10-12",
+    "status": "ACTIVE",
+    "category_code": "OPEX-SHOPPING",
+    "original_transaction_id": null,
+    "notes": null,
+    "created_at": "2026-10-12T20:37:08.044794"
+  },
+  {
+    "id": "d8175ee6-6ec3-4fbc-9657-ee2b78fa2697",
+    "household_id": "hh_test_123",
+    "merchant": "United Electronics Co. eXtra",
+    "provider": "Tamara",
+    "total_amount": 7408.0,
+    "installment_count": 4,
+    "monthly_amount": 1852.0,
+    "paid_installments": 2,
+    "day_of_month": 27,
+    "start_date": "2026-10-12",
+    "status": "ACTIVE",
+    "category_code": "OPEX-SHOPPING",
+    "original_transaction_id": null,
+    "notes": null,
+    "created_at": "2026-10-12T21:26:25.174156"
   }
 ]

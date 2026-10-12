@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/installment_plan.dart';
+import '../../providers/installment_provider.dart';
+import '../../providers/transaction_provider.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -28,11 +33,47 @@ class InstallmentPlansCard extends StatefulWidget {
 class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   late Future<List<InstallmentPlan>> _futurePlans;
   bool _isExpanded = true;
+  TransactionProvider? _txProvider;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.householdId != null && widget.householdId!.isNotEmpty) {
+        try {
+          context.read<InstallmentProvider>().init(widget.householdId!);
+        } catch (_) {}
+      }
+    });
     _loadPlans();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      final newTx = Provider.of<TransactionProvider>(context, listen: false);
+      if (_txProvider != newTx) {
+        _txProvider?.removeListener(_onDependencyChanged);
+        _txProvider = newTx;
+        _txProvider?.addListener(_onDependencyChanged);
+      }
+    } catch (_) {}
+  }
+
+  void _onDependencyChanged() {
+    if (!mounted) return;
+    try {
+      context.read<InstallmentProvider>().fetchPlans(silent: true);
+    } catch (_) {
+      setState(() => _loadPlans());
+    }
+  }
+
+  @override
+  void dispose() {
+    _txProvider?.removeListener(_onDependencyChanged);
+    super.dispose();
   }
 
   void _loadPlans() {
@@ -106,6 +147,11 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   void didUpdateWidget(InstallmentPlansCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.plans != widget.plans || oldWidget.householdId != widget.householdId) {
+      if (widget.householdId != null && widget.householdId!.isNotEmpty) {
+        try {
+          context.read<InstallmentProvider>().init(widget.householdId!);
+        } catch (_) {}
+      }
       _loadPlans();
     }
   }
@@ -256,7 +302,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       }
                       setDialogState(() => isSubmitting = true);
                       try {
-                        await ApiService.instance.createInstallmentPlan({
+                        final planData = {
                           'household_id': widget.householdId ?? '',
                           'merchant': merchant,
                           'provider': selectedProvider,
@@ -266,10 +312,20 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           'category_code': 'OPEX-SHOPPING',
                           'adjust_original_transaction': false,
                           'notes': 'Manually registered BNPL plan',
-                        });
+                        };
+                        try {
+                          await context.read<InstallmentProvider>().createPlan(planData);
+                        } catch (_) {
+                          await ApiService.instance.createInstallmentPlan(planData);
+                        }
                         if (dCtx.mounted) Navigator.pop(dCtx);
                         setState(() => _loadPlans());
                         if (context.mounted) {
+                          try {
+                            context.read<TransactionProvider>().fetchTransactions();
+                            context.read<BudgetProvider>().refresh();
+                            context.read<RecurringBillsProvider>().fetchBills(silent: true);
+                          } catch (_) {}
                           AppSnackBar.showSuccess(
                             context,
                             'Created $selectedProvider installment plan for $merchant',
@@ -296,17 +352,40 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
+    InstallmentProvider? installmentProv;
+    try {
+      installmentProv = Provider.of<InstallmentProvider>(context);
+    } catch (_) {}
+
+    if (widget.plans != null) {
+      return _buildCardContent(context, widget.plans!, fmt);
+    }
+
+    if (installmentProv != null) {
+      return _buildCardContent(context, installmentProv.plans, fmt);
+    }
+
     return FutureBuilder<List<InstallmentPlan>>(
       future: _futurePlans,
       builder: (context, snapshot) {
-        final plans = snapshot.data ?? widget.plans ?? [];
-        final activePlans = plans.where((p) => !p.isCompleted).toList();
-        final totalMonthlyCommitment = activePlans.fold<double>(
-          0.0,
-          (sum, p) => sum + p.monthlyAmount,
-        );
+        final plans = snapshot.data ?? [];
+        return _buildCardContent(context, plans, fmt);
+      },
+    );
+  }
 
-        return Container(
+  Widget _buildCardContent(
+    BuildContext context,
+    List<InstallmentPlan> plans,
+    NumberFormat fmt,
+  ) {
+    final activePlans = plans.where((p) => !p.isCompleted).toList();
+    final totalMonthlyCommitment = activePlans.fold<double>(
+      0.0,
+      (sum, p) => sum + p.monthlyAmount,
+    );
+
+    return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: context.cardBg,
@@ -539,13 +618,23 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       ),
                                       icon: const Icon(Icons.check_circle_outline, size: 14),
                                       label: const Text('Record Payment', style: TextStyle(fontSize: 11)),
-                                      onPressed: () {
+                                      onPressed: () async {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
                                         } else {
-                                          ApiService.instance.payInstallment(plan.id).then((_) {
-                                            setState(() => _loadPlans());
-                                          });
+                                          try {
+                                            await context.read<InstallmentProvider>().recordPayment(plan.id);
+                                          } catch (_) {
+                                            await ApiService.instance.payInstallment(plan.id);
+                                          }
+                                          setState(() => _loadPlans());
+                                          if (context.mounted) {
+                                            try {
+                                              context.read<TransactionProvider>().fetchTransactions();
+                                              context.read<BudgetProvider>().refresh();
+                                              context.read<RecurringBillsProvider>().fetchBills(silent: true);
+                                            } catch (_) {}
+                                          }
                                         }
                                       },
                                     ),
@@ -575,7 +664,5 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ],
           ),
         );
-      },
-    );
   }
 }
