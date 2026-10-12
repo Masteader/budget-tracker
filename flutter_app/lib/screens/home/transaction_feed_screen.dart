@@ -17,6 +17,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
 
@@ -524,7 +525,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         context: context,
         builder: (dCtx) => AlertDialog(
           backgroundColor: context.cardBg,
-          title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
+          title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
             'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
             style: const TextStyle(color: Color(0xFF8B949E)),
@@ -532,7 +533,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx, false),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+              child: Text(context.tr('cancel'), style: const TextStyle(color: Color(0xFF8B949E))),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -540,7 +541,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.pop(dCtx, true),
-              child: const Text('Delete'),
+              child: Text(context.tr('delete')),
             ),
           ],
         ),
@@ -601,7 +602,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        title: Text('Transactions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
+        title: Text(context.tr('nav_transactions'), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
         backgroundColor: context.scaffoldBg,
         elevation: 0,
         actions: [
@@ -610,7 +611,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
             children: [
               IconButton(
                 icon: Icon(Icons.tune_rounded, color: context.textPrimary),
-                tooltip: 'Filter & Sort',
+                tooltip: context.tr('filter_and_sort'),
                 onPressed: _showSortFilterModal,
               ),
               if (_activeFilterCount > 0)

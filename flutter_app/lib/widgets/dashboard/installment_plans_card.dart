@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 
 /// Card displayed on the dashboard for tracking BNPL installment plans (Tamara, Tabby, etc.).
@@ -307,9 +309,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
+            color: context.cardBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF30363D)),
+            border: Border.all(color: context.borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,11 +342,11 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Installments & BNPL',
+                              context.tr('installments_bnpl'),
                               style: GoogleFonts.outfit(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: context.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 2),

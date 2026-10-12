@@ -8,6 +8,8 @@ import '../../models/recurring_bill.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 
 /// Interactive dashboard card displaying recurring monthly bills, payment status
@@ -47,9 +49,9 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           return Container(
             height: 110,
             decoration: BoxDecoration(
-              color: const Color(0xFF161B22),
+              color: context.cardBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF30363D)),
+              border: Border.all(color: context.borderColor),
             ),
             child: const Center(
               child: SizedBox(
@@ -81,12 +83,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
 
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
+            color: context.cardBg,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: summary.reservedAmount > 0
                   ? const Color(0xFFF0883E).withValues(alpha: 0.3)
-                  : const Color(0xFF30363D),
+                  : context.borderColor,
             ),
           ),
           child: Column(
@@ -122,11 +124,11 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Recurring Bills & Reserves',
+                              context.tr('recurring_bills'),
                               style: GoogleFonts.outfit(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -275,9 +277,9 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [
@@ -295,8 +297,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Recurring Bills & Reserves',
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                  context.tr('recurring_bills'),
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
                 ),
                 const SizedBox(height: 2),
                 const Text(

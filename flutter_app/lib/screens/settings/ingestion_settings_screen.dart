@@ -21,6 +21,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 import 'help_support_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
@@ -729,7 +730,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        title: Text('Settings & Permissions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
+        title: Text(context.tr('settings_and_permissions'), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
         backgroundColor: context.scaffoldBg,
         elevation: 0,
         actions: [
@@ -1258,7 +1259,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Theme Mode', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                    Text(context.tr('appearance'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                     Text('System default, light mode, or dark mode', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
@@ -1278,7 +1279,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             child: Row(
               children: [
                 _buildThemeOption(
-                  label: 'System',
+                  label: context.tr('theme_system'),
                   icon: Icons.brightness_auto_rounded,
                   isSelected: themeProvider.themeMode == ThemeMode.system,
                   onTap: () => themeProvider.setThemeMode(ThemeMode.system),
@@ -1286,7 +1287,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   textColor: textColor,
                 ),
                 _buildThemeOption(
-                  label: 'Light',
+                  label: context.tr('theme_light'),
                   icon: Icons.light_mode_rounded,
                   isSelected: themeProvider.themeMode == ThemeMode.light,
                   onTap: () => themeProvider.setThemeMode(ThemeMode.light),
@@ -1294,7 +1295,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   textColor: textColor,
                 ),
                 _buildThemeOption(
-                  label: 'Dark',
+                  label: context.tr('theme_dark'),
                   icon: Icons.dark_mode_rounded,
                   isSelected: themeProvider.themeMode == ThemeMode.dark,
                   onTap: () => themeProvider.setThemeMode(ThemeMode.dark),
@@ -1324,7 +1325,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('App Language', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                    Text(context.tr('language'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                     Text('General application language (EN, AR, UR)', style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),

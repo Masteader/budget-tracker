@@ -1003,7 +1003,7 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
             if not existing_check.data or len(existing_check.data) == 0:
                 today = datetime.now(timezone.utc).date()
                 month_str = today.replace(day=1).isoformat()
-                cycle_key = f"{today.year}-{today.month:02d}-27"
+                cycle_key = f"{today.year:04d}-{today.month:02d}"
                 client.table("budgets").insert({
                     "household_id": household_id,
                     "category_code": category_code,

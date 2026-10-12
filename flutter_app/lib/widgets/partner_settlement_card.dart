@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../services/api_service.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 import 'app_snackbar.dart';
 
 class PartnerSettlementCard extends StatefulWidget {
@@ -51,9 +52,9 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
       return Container(
         height: 100,
         decoration: BoxDecoration(
-          color: const Color(0xFF161B22),
+          color: context.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF30363D)),
+          border: Border.all(color: context.borderColor),
         ),
         child: const Center(
           child: SizedBox(
@@ -118,7 +119,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'Partner Settlement',
+                        context.tr('partner_settlement'),
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
                           color: context.textPrimary,

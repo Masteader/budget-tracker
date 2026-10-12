@@ -12,6 +12,7 @@ import '../../widgets/sub_budget_breakdown_sheet.dart';
 import '../../widgets/categories/category_library_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
@@ -68,6 +69,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           .select('code, category')
           .order('code');
 
+      final activeBudgets = await supabase
+          .from('budgets')
+          .select('category_code')
+          .eq('household_id', hid)
+          .eq('is_active', true);
+      final activeBudgetCodes = (activeBudgets as List)
+          .map((r) => r['category_code'] as String)
+          .toSet();
+
       final inactiveBudgets = await supabase
           .from('budgets')
           .select('category_code')
@@ -76,6 +86,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       final inactiveCodes = (inactiveBudgets as List)
           .map((r) => r['category_code'] as String)
           .toSet();
+      inactiveCodes.removeAll(activeBudgetCodes);
 
       for (final r in (codesRaw as List)) {
         final code = r['code'] as String;
@@ -594,7 +605,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 'spent_amount': 0.0,
                 'is_active': true,
                 'month': _currentMonthStr,
-                'cycle_key': _currentCycleKey,
+                'cycle_key': _currentCycleKey.length > 7 ? _currentCycleKey.substring(0, 7) : _currentCycleKey,
               });
             } else {
               await supabase
@@ -653,11 +664,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Budget Allocations'),
+            title: Text(context.tr('budget_allocations')),
             actions: [
               IconButton(
                 icon: const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
-                tooltip: 'Category Library',
+                tooltip: context.tr('category_library'),
                 onPressed: () => _openCategoryLibrary(staticData),
               ),
               if (staticData.isAdmin)
@@ -709,7 +720,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
               ? FloatingActionButton.extended(
                   onPressed: () => _showAddCategoryDialog(staticData),
                   icon: const Icon(Icons.add_rounded, color: Colors.black),
-                  label: const Text('Add Category', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  label: Text(context.tr('add_category'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                   backgroundColor: const Color(0xFF00C896),
                 )
               : null,
@@ -774,7 +785,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   icon: _isCopying
                                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                                       : const Icon(Icons.copy_rounded, size: 16),
-                                  label: Text(_isCopying ? 'Copying...' : 'Copy Previous Cycle Allocations'),
+                                  label: Text(_isCopying ? 'Copying...' : context.tr('copy_previous')),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF00C896),
                                     foregroundColor: Colors.black,
@@ -814,7 +825,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Total Allocated ($headerTitle)',
+                                    '${context.tr('total_allocated')} ($headerTitle)',
                                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                                   ),
                                   const SizedBox(height: 4),
@@ -832,7 +843,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 builder: (context) {
                                   final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
                                   return Text(
-                                    '${setCodes.length}/${staticData.allCodes.length} Set',
+                                    '${setCodes.length}/${staticData.allCodes.length} ${context.tr('set')}',
                                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                                   );
                                 },
@@ -936,7 +947,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   Text(
                                     existing != null
                                         ? 'SAR ${fmt.format(existing.allocatedAmount)}'
-                                        : 'Not set',
+                                        : context.tr('not_set'),
                                     style: TextStyle(
                                       color: existing != null
                                           ? const Color(0xFF00C896)

@@ -30,6 +30,7 @@ import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../settings/ingestion_settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
@@ -103,26 +104,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard, color: Color(0xFF00C896)),
-            label: 'Dashboard',
+            icon: const Icon(Icons.dashboard_outlined),
+            selectedIcon: const Icon(Icons.dashboard, color: Color(0xFF00C896)),
+            label: context.tr('nav_dashboard'),
           ),
           NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long, color: Color(0xFF00C896)),
-            label: 'Transactions',
+            icon: const Icon(Icons.receipt_long_outlined),
+            selectedIcon: const Icon(Icons.receipt_long, color: Color(0xFF00C896)),
+            label: context.tr('nav_transactions'),
           ),
           NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune, color: Color(0xFF00C896)),
-            label: 'Budgets',
+            icon: const Icon(Icons.tune_outlined),
+            selectedIcon: const Icon(Icons.tune, color: Color(0xFF00C896)),
+            label: context.tr('nav_budgets'),
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings, color: Color(0xFF00C896)),
-            label: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings, color: Color(0xFF00C896)),
+            label: context.tr('nav_settings'),
           ),
         ],
       ),
@@ -296,7 +297,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            '$pending transaction(s) queued offline',
+                                            '$pending ${context.tr('queued_offline')}',
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 12,
@@ -306,9 +307,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         ),
                                         TextButton(
                                           onPressed: () => OfflineSyncService.instance.flushQueue(),
-                                          child: const Text(
-                                            'Sync Now',
-                                            style: TextStyle(
+                                          child: Text(
+                                            context.tr('sync_now'),
+                                            style: const TextStyle(
                                               color: Color(0xFF00C896),
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
@@ -360,7 +361,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
-                                                'Price Tracker',
+                                                context.tr('price_tracker'),
                                                 style: GoogleFonts.outfit(
                                                   color: context.textPrimary,
                                                   fontWeight: FontWeight.bold,
@@ -396,7 +397,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
-                                                'Multi-Shot Scan',
+                                                context.tr('multi_shot_scan'),
                                                 style: GoogleFonts.outfit(
                                                   color: context.textPrimary,
                                                   fontWeight: FontWeight.bold,
@@ -473,7 +474,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       backgroundColor: context.scaffoldBg,
       elevation: 0,
       title: Text(
-        'Budget Tracker',
+        context.tr('app_title'),
         style: GoogleFonts.outfit(
           fontSize: 20,
           fontWeight: FontWeight.w700,
