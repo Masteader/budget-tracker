@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
@@ -57,6 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted && count > 0) {
         context.read<TransactionProvider>().fetchTransactions();
         context.read<BudgetProvider>().refresh();
+        context.read<RecurringBillsProvider>().fetchBills();
         AppSnackBar.showSuccess(
           context,
           'Synced $count queued offline transaction(s) with cloud.',

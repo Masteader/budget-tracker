@@ -6,6 +6,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../main.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
@@ -261,6 +262,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     try {
       context.read<TransactionProvider>().refresh();
       context.read<BudgetProvider>().refresh();
+      context.read<RecurringBillsProvider>().fetchBills();
     } catch (_) {}
   }
 

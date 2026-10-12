@@ -597,8 +597,6 @@ def process_chat_transaction(
             reallocated_from_id = flexible[0].id
 
     # Format raw text for audit trail
-    paid_by = getattr(parsed, "paid_by", "me")
-    beneficiary = getattr(parsed, "beneficiary", "both")
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
     audit_text = (
         f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by} | Items: [{items_summary}]"

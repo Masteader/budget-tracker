@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/recurring_bill.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
@@ -24,28 +25,65 @@ class RecurringBillsCard extends StatefulWidget {
 }
 
 class _RecurringBillsCardState extends State<RecurringBillsCard> {
-  late Future<RecurringBillsSummary> _futureBills;
   bool _isExpanded = true;
   int _selectedFilter = 0; // 0: All, 1: Pending, 2: Paid
+  TransactionProvider? _txProvider;
+  BudgetProvider? _budgetProvider;
 
   @override
   void initState() {
     super.initState();
-    _loadBills();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<RecurringBillsProvider>().init(widget.householdId);
+      }
+    });
   }
 
-  void _loadBills() {
-    _futureBills = ApiService.instance.getRecurringBills(widget.householdId);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newTx = Provider.of<TransactionProvider>(context, listen: false);
+    if (_txProvider != newTx) {
+      _txProvider?.removeListener(_onDependencyChanged);
+      _txProvider = newTx;
+      _txProvider?.addListener(_onDependencyChanged);
+    }
+    final newBudget = Provider.of<BudgetProvider>(context, listen: false);
+    if (_budgetProvider != newBudget) {
+      _budgetProvider?.removeListener(_onDependencyChanged);
+      _budgetProvider = newBudget;
+      _budgetProvider?.addListener(_onDependencyChanged);
+    }
+  }
+
+  void _onDependencyChanged() {
+    if (!mounted) return;
+    context.read<RecurringBillsProvider>().fetchBills(silent: true);
+  }
+
+  @override
+  void didUpdateWidget(RecurringBillsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.householdId != widget.householdId) {
+      context.read<RecurringBillsProvider>().init(widget.householdId);
+    }
+  }
+
+  @override
+  void dispose() {
+    _txProvider?.removeListener(_onDependencyChanged);
+    _budgetProvider?.removeListener(_onDependencyChanged);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
 
-    return FutureBuilder<RecurringBillsSummary>(
-      future: _futureBills,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return Consumer<RecurringBillsProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.summary == null) {
           return Container(
             height: 110,
             decoration: BoxDecoration(
@@ -63,11 +101,10 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           );
         }
 
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.bills.isEmpty) {
+        final summary = provider.summary;
+        if (summary == null || summary.bills.isEmpty) {
           return _buildEmptyOrActionCard();
         }
-
-        final summary = snapshot.data!;
         final upcomingCount = summary.bills.where((b) => b.isUpcoming || b.isOverdue).length;
         final paidCount = summary.bills.where((b) => b.isPaid).length;
 
@@ -378,24 +415,18 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     if (confirmed != true) return;
 
     try {
-      await supabase.from('transactions').insert({
-        'household_id': widget.householdId,
-        'merchant': bill.merchant,
-        'amount': bill.averageAmount,
-        'category_code': bill.categoryCode,
-        'sub_category': bill.subCode,
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-      });
-
-      if (mounted) {
-        context.read<TransactionProvider>().init(widget.householdId);
-        context.read<BudgetProvider>().init(widget.householdId);
-        setState(() => _loadBills());
+      final success = await context.read<RecurringBillsProvider>().recordBillPayment(bill);
+      if (!mounted) return;
+      if (success) {
+        context.read<TransactionProvider>().refresh();
+        context.read<BudgetProvider>().refresh();
         AppSnackBar.showSuccess(
           context,
           'Recorded payment for ${bill.merchant}!',
           title: 'Bill Paid',
         );
+      } else {
+        AppSnackBar.showError(context, 'Failed to record payment', title: 'Payment Error');
       }
     } catch (e) {
       if (mounted) {
@@ -414,7 +445,10 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
       ),
       builder: (ctx) => _ManageRecurringBillsSheet(
         householdId: widget.householdId,
-        onUpdated: () => setState(() => _loadBills()),
+        onUpdated: () {
+          context.read<RecurringBillsProvider>().fetchBills();
+          context.read<BudgetProvider>().refresh();
+        },
       ),
     );
   }

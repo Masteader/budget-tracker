@@ -429,6 +429,27 @@ def match_sub_category(category_code: str, text: str, items: Optional[list] = No
         for kw in keywords:
             if kw.lower() in search_corpus:
                 return sub["sub_code"]
+
+    # Static fallback for essential keywords if DB keywords are incomplete
+    static_fallbacks = {
+        "OPEX-DINING": [
+            ("coffee_bakeries", ["coffee", "cafe", "starbucks", "dunkin", "barn", "قهوة", "كافيه", "حلا", "مخبز", "كيك", "دونات"]),
+            ("delivery_apps", ["jahez", "hungerstation", "mrsool", "toyou", "جاهز", "هنقرستيشن", "مرسول"]),
+            ("restaurants_dinners", ["restaurant", "dinner", "lunch", "burger", "sandwich", "sandwiches", "meal", "meals", "food", "albaik", "baik", "shawarma", "shawerma", "broast", "chicken", "مطعم", "عشاء", "غداء", "سندويش", "ساندوتش", "وجبة", "بيك", "شاورما"]),
+        ],
+        "OPEX-UTILITIES": [
+            ("housing_rent", ["rent", "housing", "apartment", "lease", "ايجار", "إيجار", "سكن"]),
+            ("electricity_sec", ["electricity", "sec", "power", "كهرباء"]),
+            ("fiber_internet", ["internet", "fiber", "ألياف", "نت", "انترنت"]),
+            ("mobile_sims", ["sim", "mobile", "stc", "mobily", "zain", "جوال", "باقة", "شحن"]),
+            ("water_municipal", ["water", "nwc", "مياه"]),
+        ],
+    }
+    for sub_code, kws in static_fallbacks.get(category_code, []):
+        for kw in kws:
+            if kw.lower() in search_corpus:
+                return sub_code
+
     return None
 
 

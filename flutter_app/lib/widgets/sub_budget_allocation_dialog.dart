@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../main.dart';
 import '../models/models.dart';
+import '../providers/budget_provider.dart';
+import '../providers/recurring_bills_provider.dart';
 import '../services/api_service.dart';
 import 'app_snackbar.dart';
 
@@ -634,6 +637,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       }
 
       if (mounted) {
+        try {
+          context.read<BudgetProvider>().refresh();
+          context.read<RecurringBillsProvider>().fetchBills();
+        } catch (_) {}
         widget.onSaved?.call();
         Navigator.pop(context, true);
         AppSnackBar.showSuccess(

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
@@ -564,6 +565,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
     // Instantly refresh budget calculations across the app
     budgetProvider.refresh();
+    if (context.mounted) {
+      context.read<RecurringBillsProvider>().fetchBills();
+    }
 
     if (context.mounted) {
       AppSnackBar.showDelete(
@@ -585,6 +589,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           });
           await txProvider.fetchTransactions();
           budgetProvider.refresh();
+          if (context.mounted) {
+            context.read<RecurringBillsProvider>().fetchBills();
+          }
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
@@ -928,6 +935,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),
                                       context.read<BudgetProvider>().refresh(),
+                                      context.read<RecurringBillsProvider>().fetchBills(),
                                     ]);
                                   },
                                   child: ListView.separated(
@@ -1004,11 +1012,13 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               if (context.mounted) {
                                                 context.read<TransactionProvider>().deleteTransaction(tx.id);
                                                 context.read<BudgetProvider>().refresh();
+                                                context.read<RecurringBillsProvider>().fetchBills();
                                               }
                                             } else if (res == 'updated') {
                                               if (context.mounted) {
                                                 context.read<TransactionProvider>().fetchTransactions();
                                                 context.read<BudgetProvider>().refresh();
+                                                context.read<RecurringBillsProvider>().fetchBills();
                                               }
                                             }
                                           },

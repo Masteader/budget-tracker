@@ -12,6 +12,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/budget_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/recurring_bills_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -52,6 +53,7 @@ class BudgetTrackerApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => BudgetProvider()),
+        ChangeNotifierProvider(create: (_) => RecurringBillsProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
       ],

@@ -73,3 +73,51 @@ def test_child_attribution_in_chat_expense(monkeypatch):
     assert res["paid_by"] == "me"
     assert res["beneficiary"] == "Sarah"
     assert "Sarah" in res["dependents"]
+
+
+def test_confirm_chat_transaction_preserves_category_sub_category_and_attribution(monkeypatch):
+    """Verify confirming pending expense persists category_code and sub_category rather than falling back to OPEX-MISC."""
+    mock_insert = MagicMock(return_value="tx-uuid-1234")
+    monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
+    monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items: True)
+    monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)
+    monkeypatch.setattr("chat_parser.find_duplicate_candidate", lambda *args, **kwargs: None)
+
+    mock_parsed = ParsedChatExpense(
+        merchant="Albaik",
+        total_amount=25.0,
+        currency="SAR",
+        category_code="OPEX-DINING",
+        sub_category="restaurants_dinners",
+        paid_by="me",
+        beneficiary="me",
+        items=[{"name": "big baik sandwich", "price": 25.0, "quantity": 1}],
+        notes="Dinner"
+    )
+    monkeypatch.setattr("chat_parser.parse_chat_expense", lambda msg, household_id=None: mock_parsed)
+
+    res = process_chat_transaction(
+        household_id="test-household-001",
+        message="big baik sandwich 25 sar",
+        preview_only=False,
+        allow_duplicate=True,
+        override_merchant="Albaik",
+        override_category_code="OPEX-DINING",
+        override_sub_category="restaurants_dinners",
+        override_paid_by="partner",
+        override_beneficiary="both",
+    )
+
+    assert res["status"] == "success"
+    assert res["category_code"] == "OPEX-DINING"
+    assert res["sub_category"] == "restaurants_dinners"
+    assert res["paid_by"] == "partner"
+    assert res["beneficiary"] == "both"
+
+    mock_insert.assert_called_once()
+    kwargs = mock_insert.call_args.kwargs
+    assert kwargs["category_code"] == "OPEX-DINING"
+    assert kwargs["sub_category"] == "restaurants_dinners"
+    assert kwargs["paid_by"] == "partner"
+    assert kwargs["beneficiary"] == "both"
+

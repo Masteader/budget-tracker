@@ -37,17 +37,16 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   late List<Map<String, dynamic>> _availableSubCategories;
   bool _loadingSubs = false;
 
-  static const List<String> _defaultCategories = [
-    'OPEX-DINING',
-    'OPEX-GROCERIES',
-    'OPEX-HOUSING',
-    'OPEX-UTILITIES',
-    'OPEX-TRANSPORT',
-    'OPEX-HEALTHCARE',
-    'OPEX-EDUCATION',
-    'OPEX-SHOPPING',
-    'OPEX-ENTERTAINMENT',
-    'OPEX-MISC',
+  static const List<Map<String, String>> _defaultCategories = [
+    {'code': 'OPEX-DINING', 'label': 'Dining'},
+    {'code': 'OPEX-GROCERY', 'label': 'Grocery'},
+    {'code': 'OPEX-UTILITIES', 'label': 'Utilities & Rent'},
+    {'code': 'OPEX-FUEL', 'label': 'Fuel & Transport'},
+    {'code': 'OPEX-HEALTH', 'label': 'Healthcare'},
+    {'code': 'OPEX-SHOPPING', 'label': 'Shopping'},
+    {'code': 'OPEX-EDUCATION', 'label': 'Education'},
+    {'code': 'OPEX-ENTERTAINMENT', 'label': 'Entertainment'},
+    {'code': 'OPEX-MISC', 'label': 'General / Misc'},
   ];
 
   @override
@@ -56,7 +55,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     final defaultMerchant = widget.pendingData['merchant'] as String? ?? 'Store Name';
     _merchantController = TextEditingController(text: defaultMerchant);
 
-    _selectedCategoryCode = (widget.pendingData['category_code'] as String? ?? 'OPEX-MISC').toUpperCase();
+    var rawCat = (widget.pendingData['category_code'] as String? ?? 'OPEX-MISC').toUpperCase();
+    if (rawCat == 'OPEX-GROCERIES') rawCat = 'OPEX-GROCERY';
+    if (rawCat == 'OPEX-TRANSPORT') rawCat = 'OPEX-FUEL';
+    if (rawCat == 'OPEX-HEALTHCARE') rawCat = 'OPEX-HEALTH';
+    _selectedCategoryCode = rawCat;
+
     _selectedSubCategory = widget.pendingData['sub_category'] as String?;
 
     // Attribution: Who Paid (me | partner)
@@ -72,6 +76,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     final rawSubs = widget.pendingData['available_sub_categories'] as List?;
     if (rawSubs != null && rawSubs.isNotEmpty) {
       _availableSubCategories = rawSubs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (_selectedSubCategory == null && _availableSubCategories.isNotEmpty) {
+        _selectedSubCategory = _availableSubCategories.first['sub_code'] as String?;
+      }
     } else {
       _availableSubCategories = [];
       _loadSubCategoriesForCategory(_selectedCategoryCode);
@@ -85,7 +92,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       if (mounted) {
         setState(() {
           _availableSubCategories = subs;
-          if (_selectedSubCategory != null &&
+          if (_selectedSubCategory == null ||
               !_availableSubCategories.any((s) => s['sub_code'] == _selectedSubCategory)) {
             _selectedSubCategory = _availableSubCategories.isNotEmpty
                 ? _availableSubCategories.first['sub_code'] as String?
@@ -208,15 +215,17 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _defaultCategories.contains(_selectedCategoryCode)
+                      value: _defaultCategories.any((c) => c['code'] == _selectedCategoryCode)
                           ? _selectedCategoryCode
-                          : _defaultCategories.first,
+                          : _defaultCategories.first['code'],
                       isExpanded: true,
                       dropdownColor: const Color(0xFF161B22),
                       style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
                       items: _defaultCategories.map((c) {
-                        final label = c.replaceFirst('OPEX-', '');
-                        return DropdownMenuItem(value: c, child: Text(label));
+                        return DropdownMenuItem(
+                          value: c['code'],
+                          child: Text(c['label'] ?? c['code']!),
+                        );
                       }).toList(),
                       onChanged: (val) {
                         if (val != null) {
@@ -441,10 +450,14 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   ),
                   onPressed: () {
                     final store = _merchantController.text.trim();
+                    final resolvedSub = _selectedSubCategory ??
+                        (_availableSubCategories.isNotEmpty
+                            ? _availableSubCategories.first['sub_code'] as String?
+                            : null);
                     widget.onConfirm(
                       store.isNotEmpty ? store : 'Store Name',
                       _selectedCategoryCode,
-                      _selectedSubCategory,
+                      resolvedSub,
                       _selectedPaidBy,
                       _selectedBeneficiary,
                     );
