@@ -127,3 +127,42 @@ def test_detect_recurring_bills_with_budgets_and_iqama():
     assert res["paid_this_cycle"] == 3000.0
     assert res["reserved_amount"] == 1000.0
 
+
+def test_two_phase_matching_prevents_sim_hijacking_zain_internet_bill():
+    budgets = [
+        {
+            "category_code": "OPEX-UTILITIES",
+            "cycle_key": "2026-10",
+            "is_active": True,
+            "sub_allocations": {
+                "mobile_sims": 75.0,
+                "housing_rent": 3000.0,
+                "sub-zain-internet-sim": 287.0,
+            },
+        },
+    ]
+
+    # Transaction tagged explicitly with sub-zain-internet-sim
+    txs = [
+        {
+            "id": "tx-zain-287",
+            "merchant": "Zain",
+            "amount": 287.0,
+            "category_code": "OPEX-UTILITIES",
+            "sub_category": "sub-zain-internet-sim",
+            "timestamp": "2026-10-12T10:00:00Z",
+        }
+    ]
+
+    res = detect_recurring_bills(txs, as_of_date=date(2026, 10, 12), budgets=budgets)
+    bills = res["bills"]
+
+    zain_bill = next(b for b in bills if b["sub_code"] == "sub-zain-internet-sim")
+    assert zain_bill["status"] == "PAID_THIS_CYCLE"
+    assert zain_bill["paid_amount"] == 287.0
+
+    sim_bill = next(b for b in bills if b["sub_code"] == "mobile_sims")
+    assert sim_bill["status"] in ("OVERDUE", "UPCOMING")
+    assert sim_bill["paid_amount"] is None
+
+

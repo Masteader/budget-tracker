@@ -508,9 +508,9 @@ def process_chat_transaction(
 
     beneficiary = override_beneficiary or getattr(parsed, "beneficiary", "both")
 
-    # Ensure items have sub_category
+    # Ensure items have sub_category (respect explicit user override)
     for it in items_dicts:
-        if not it.get("sub_category"):
+        if override_sub_category or not it.get("sub_category"):
             it["sub_category"] = sub_category
 
     # Check if category is inactive for this household

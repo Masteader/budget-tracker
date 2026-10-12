@@ -120,4 +120,46 @@ def test_confirm_chat_transaction_preserves_category_sub_category_and_attributio
     assert kwargs["sub_category"] == "restaurants_dinners"
     assert kwargs["paid_by"] == "partner"
     assert kwargs["beneficiary"] == "both"
+    assert kwargs["items"][0]["sub_category"] == "restaurants_dinners"
+
+
+def test_chat_confirmation_overrides_items_stale_sub_category(monkeypatch):
+    """Verify that user override_sub_category replaces initial parsed sub_category on line items."""
+    mock_insert = MagicMock(return_value="tx-zain-001")
+    monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
+    monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)
+
+    mock_parsed = ParsedChatExpense(
+        merchant="Zain",
+        total_amount=287.0,
+        currency="SAR",
+        category_code="OPEX-UTILITIES",
+        sub_category="fiber_internet",
+        paid_by="me",
+        beneficiary="both",
+        items=[{"name": "فاتورة انترنت", "price": 287.0, "quantity": 1, "sub_category": "fiber_internet"}],
+        notes="Internet"
+    )
+    monkeypatch.setattr("chat_parser.parse_chat_expense", lambda msg, household_id=None: mock_parsed)
+
+    res = process_chat_transaction(
+        household_id="test-household-001",
+        message="zain internet & sim 287 sar",
+        preview_only=False,
+        allow_duplicate=True,
+        override_merchant="Zain",
+        override_category_code="OPEX-UTILITIES",
+        override_sub_category="sub-zain-internet-sim",
+        override_paid_by="me",
+        override_beneficiary="both",
+    )
+
+    assert res["status"] == "success"
+    assert res["sub_category"] == "sub-zain-internet-sim"
+    assert res["items"][0]["sub_category"] == "sub-zain-internet-sim"
+
+    kwargs = mock_insert.call_args.kwargs
+    assert kwargs["sub_category"] == "sub-zain-internet-sim"
+    assert kwargs["items"][0]["sub_category"] == "sub-zain-internet-sim"
+
 

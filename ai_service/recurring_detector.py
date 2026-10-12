@@ -176,6 +176,7 @@ def detect_recurring_bills(
             )
         ]
 
+        budgeted_candidates = []
         for b in active_budgets:
             cat_code = b.get("category_code") or ""
             sub_allocs = b.get("sub_allocations") or {}
@@ -219,69 +220,114 @@ def detect_recurring_bills(
                 # Expected due day
                 expected_day = cfg.get("due_day") or DEFAULT_DUE_DAYS.get(sub_code) or 28
                 icon_key = DEFAULT_ICONS.get(sub_code, "receipt_long")
-
-                # Reconcile against payments in the current active salary cycle
-                matching_tx = None
                 clean_sub = sub_code.replace("sub-", "").replace("_", " ").lower()
 
-                for tx in cycle_txs:
-                    if tx["id"] and tx["id"] in matched_tx_ids:
-                        continue
+                budgeted_candidates.append({
+                    "sub_code": sub_code,
+                    "cat_code": cat_code,
+                    "amount": amount,
+                    "name_en": name_en,
+                    "name_ar": name_ar,
+                    "keywords": keywords,
+                    "expected_day": expected_day,
+                    "icon_key": icon_key,
+                    "clean_sub": clean_sub,
+                })
 
-                    # Exact sub-category match
-                    if tx.get("sub_category") and tx["sub_category"] == sub_code:
+        # Reconcile budgeted bills against cycle payments using two phases:
+        # PASS 1: Exact sub-category matches (Highest priority)
+        # Prevents generic keyword collisions from stealing explicitly categorized expenses
+        candidate_matches: Dict[str, Dict[str, Any]] = {}
+        for cand in budgeted_candidates:
+            sub_code = cand["sub_code"]
+            for tx in cycle_txs:
+                if tx["id"] and tx["id"] in matched_tx_ids:
+                    continue
+                tx_sub = tx.get("sub_category")
+                if tx_sub and (
+                    tx_sub == sub_code or
+                    tx_sub == cand["clean_sub"] or
+                    tx_sub.replace("sub-", "").replace("_", " ").lower() == cand["clean_sub"]
+                ):
+                    candidate_matches[sub_code] = tx
+                    if tx["id"]:
+                        matched_tx_ids.add(tx["id"])
+                    break
+
+        # PASS 2: Heuristic keyword / provider matching for remaining unmatched bills
+        # CRITICAL SAFETY: Never allow a transaction with an explicit sub_category
+        # for a different sub-code to be claimed by heuristic/keyword matching!
+        for cand in budgeted_candidates:
+            sub_code = cand["sub_code"]
+            if sub_code in candidate_matches:
+                continue
+
+            for tx in cycle_txs:
+                if tx["id"] and tx["id"] in matched_tx_ids:
+                    continue
+
+                tx_sub = tx.get("sub_category")
+                # If transaction is explicitly tagged with another sub-category, do not hijack it
+                if tx_sub and tx_sub != sub_code and tx_sub != cand["clean_sub"]:
+                    continue
+
+                matching_tx = None
+                # Match by category + keywords / provider normalization
+                if tx["category_code"] == cand["cat_code"]:
+                    t_m_lower = tx["merchant"].lower()
+                    if cand["clean_sub"] in t_m_lower or any(kw in t_m_lower for kw in cand["keywords"] if len(kw) >= 3):
                         matching_tx = tx
-                        break
-
-                    # Match by category + keywords / provider normalization
-                    if tx["category_code"] == cat_code:
-                        t_m_lower = tx["merchant"].lower()
-                        if clean_sub in t_m_lower or any(kw in t_m_lower for kw in keywords if len(kw) >= 3):
-                            matching_tx = tx
-                            break
-                        if tx["norm_m"].lower() in clean_sub or tx["norm_m"].lower() in name_en.lower():
-                            matching_tx = tx
-                            break
-
-                    # Cross-category match for specific recognized items (e.g. Iqama)
-                    if "iqama" in sub_code.lower() and ("iqama" in tx["merchant"].lower() or "إقامة" in tx["merchant"].lower()):
+                    elif tx["norm_m"].lower() in cand["clean_sub"] or tx["norm_m"].lower() in cand["name_en"].lower():
                         matching_tx = tx
-                        break
+
+                # Cross-category match for specific recognized items (e.g. Iqama)
+                if not matching_tx and "iqama" in sub_code.lower() and ("iqama" in tx["merchant"].lower() or "إقامة" in tx["merchant"].lower()):
+                    matching_tx = tx
 
                 if matching_tx:
+                    candidate_matches[sub_code] = matching_tx
                     if matching_tx["id"]:
                         matched_tx_ids.add(matching_tx["id"])
-                    status = "PAID_THIS_CYCLE"
-                    last_paid = matching_tx["date"].isoformat()
-                    paid_amount = matching_tx["amount"]
+                    break
+
+        # Construct RecurringBill models for each candidate
+        for cand in budgeted_candidates:
+            sub_code = cand["sub_code"]
+            expected_day = cand["expected_day"]
+            matching_tx = candidate_matches.get(sub_code)
+
+            if matching_tx:
+                status = "PAID_THIS_CYCLE"
+                last_paid = matching_tx["date"].isoformat()
+                paid_amount = matching_tx["amount"]
+            else:
+                # Determine due vs overdue based on cycle boundaries
+                if expected_day >= 27:
+                    due_date = date(cycle_start.year, cycle_start.month, min(expected_day, 28))
                 else:
-                    # Determine due vs overdue based on cycle boundaries
-                    if expected_day >= 27:
-                        due_date = date(cycle_start.year, cycle_start.month, min(expected_day, 28))
-                    else:
-                        due_date = date(cycle_end.year, cycle_end.month, min(expected_day, 28))
+                    due_date = date(cycle_end.year, cycle_end.month, min(expected_day, 28))
 
-                    status = "OVERDUE" if now_date > due_date else "UPCOMING"
-                    last_paid = None
-                    paid_amount = None
+                status = "OVERDUE" if now_date > due_date else "UPCOMING"
+                last_paid = None
+                paid_amount = None
 
-                detected_bills.append(
-                    RecurringBill(
-                        merchant=name_en,
-                        normalized_merchant=name_en,
-                        category_code=cat_code,
-                        average_amount=amount,
-                        expected_day_of_month=expected_day,
-                        status=status,
-                        last_paid_date=last_paid,
-                        paid_amount=paid_amount,
-                        cadence="monthly",
-                        sub_code=sub_code,
-                        name_ar=name_ar,
-                        icon_key=icon_key,
-                        is_budgeted=True,
-                    )
+            detected_bills.append(
+                RecurringBill(
+                    merchant=cand["name_en"],
+                    normalized_merchant=cand["name_en"],
+                    category_code=cand["cat_code"],
+                    average_amount=cand["amount"],
+                    expected_day_of_month=expected_day,
+                    status=status,
+                    last_paid_date=last_paid,
+                    paid_amount=paid_amount,
+                    cadence="monthly",
+                    sub_code=sub_code,
+                    name_ar=cand["name_ar"],
+                    icon_key=cand["icon_key"],
+                    is_budgeted=True,
                 )
+            )
 
     # 2. PROCESS TRANSACTION-BASED RECURRING PREDICTIONS (CADENCE & KNOWN BILL PROVIDERS)
     # Group remaining transactions not claimed by a budgeted bill
