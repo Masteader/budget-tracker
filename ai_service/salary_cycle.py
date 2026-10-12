@@ -914,10 +914,12 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
     all_codes_resp = client.table("cost_control_codes").select("*").execute()
     all_codes = all_codes_resp.data or []
 
-    # Filter for global OR this household
+    # Filter for global OR this household, and purge test categories completely
     hh_codes = [
         c for c in all_codes
-        if c.get("household_id") is None or c.get("household_id") == household_id
+        if (c.get("household_id") is None or c.get("household_id") == household_id)
+        and "test" not in (c.get("code") or "").lower()
+        and "test" not in (c.get("category") or "").lower()
     ]
 
     try:
@@ -934,7 +936,8 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
 
     initial_core = {
         "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
-        "OPEX-SHOPPING", "OPEX-HEALTH", "CAPEX-EDUCATION", "OPEX-MISC"
+        "OPEX-SHOPPING", "OPEX-HEALTH", "CAPEX-EDUCATION", "OPEX-MISC",
+        "OPEX-ENTERTAINMENT", "OPEX-GOV"
     }
 
     active = []
@@ -959,7 +962,7 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
 def toggle_category_status(household_id: str, category_code: str, is_active: bool) -> Dict[str, Any]:
     """
     Toggles active/inactive status for a household category.
-    If set to inactive, also updates the corresponding budget is_active to false.
+    Updates household_category_settings AND synchronizes budgets table is_active.
     """
     client = get_client()
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -974,10 +977,12 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
     except Exception as exc:
         logger.warning("Could not persist household_category_settings: %s", exc)
 
-    if not is_active:
+    try:
         client.table("budgets").update({
-            "is_active": False,
+            "is_active": is_active,
         }).eq("household_id", household_id).eq("category_code", category_code).execute()
+    except Exception as exc:
+        logger.warning("Could not sync budgets is_active for %s: %s", category_code, exc)
 
     return {
         "status": "success",

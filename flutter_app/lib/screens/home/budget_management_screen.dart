@@ -48,27 +48,47 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     _fetchCycles(hid);
 
-    final codesRaw = await supabase
-        .from('cost_control_codes')
-        .select('code, category')
-        .order('code');
+    final catData = await ApiService.instance.fetchHouseholdCategories(hid);
+    final activeFromApi = catData['active'] ?? [];
+    final activeCodes = <Map<String, String>>[];
 
-    final inactiveBudgets = await supabase
-        .from('budgets')
-        .select('category_code')
-        .eq('household_id', hid)
-        .eq('is_active', false);
-    final inactiveCodes = (inactiveBudgets as List)
-        .map((r) => r['category_code'] as String)
-        .toSet();
+    if (activeFromApi.isNotEmpty) {
+      for (final cat in activeFromApi) {
+        if (!cat.name.toLowerCase().contains('test') && !cat.code.toLowerCase().contains('test')) {
+          activeCodes.add({
+            'code': cat.code,
+            'category': cat.name,
+          });
+        }
+      }
+    } else {
+      final codesRaw = await supabase
+          .from('cost_control_codes')
+          .select('code, category')
+          .order('code');
 
-    final activeCodes = (codesRaw as List)
-        .where((r) => !inactiveCodes.contains(r['code']))
-        .map<Map<String, String>>((r) => {
-              'code': r['code'] as String,
-              'category': r['category'] as String,
-            })
-        .toList();
+      final inactiveBudgets = await supabase
+          .from('budgets')
+          .select('category_code')
+          .eq('household_id', hid)
+          .eq('is_active', false);
+      final inactiveCodes = (inactiveBudgets as List)
+          .map((r) => r['category_code'] as String)
+          .toSet();
+
+      for (final r in (codesRaw as List)) {
+        final code = r['code'] as String;
+        final name = r['category'] as String;
+        if (!inactiveCodes.contains(code) &&
+            !code.toLowerCase().contains('test') &&
+            !name.toLowerCase().contains('test')) {
+          activeCodes.add({
+            'code': code,
+            'category': name,
+          });
+        }
+      }
+    }
 
     double income = 0.0;
     try {
@@ -559,6 +579,13 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             categoryCode: cat.code,
             isActive: isActive,
           );
+          try {
+            await supabase
+                .from('budgets')
+                .update({'is_active': isActive})
+                .eq('household_id', data.householdId)
+                .eq('category_code', cat.code);
+          } catch (_) {}
           if (mounted) {
             setState(() {
               _staticFuture = _loadStaticData();

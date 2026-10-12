@@ -23,6 +23,19 @@ class CategoryLibrarySheet extends StatefulWidget {
 }
 
 class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
+  late List<CategoryItem> _activeCategories;
+  late List<CategoryItem> _inactiveCategories;
+  final Set<String> _processingCodes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _activeCategories = List<CategoryItem>.from(widget.activeCategories)
+      ..removeWhere((c) => c.name.toLowerCase().contains('test') || c.code.toLowerCase().contains('test'));
+    _inactiveCategories = List<CategoryItem>.from(widget.inactiveCategories)
+      ..removeWhere((c) => c.name.toLowerCase().contains('test') || c.code.toLowerCase().contains('test'));
+  }
+
   void _confirmDeactivate(CategoryItem item) {
     showDialog(
       context: context,
@@ -42,7 +55,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              widget.onToggle(item, false);
+              _handleDeactivate(item);
             },
             child: const Text('Deactivate'),
           ),
@@ -51,8 +64,48 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     );
   }
 
-  void _confirmActivate(CategoryItem item) {
-    widget.onToggle(item, true);
+  Future<void> _handleDeactivate(CategoryItem item) async {
+    setState(() {
+      _processingCodes.add(item.code);
+      _activeCategories.removeWhere((c) => c.code == item.code);
+      _inactiveCategories.add(item);
+    });
+    try {
+      widget.onToggle(item, false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _inactiveCategories.removeWhere((c) => c.code == item.code);
+          _activeCategories.add(item);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _processingCodes.remove(item.code));
+      }
+    }
+  }
+
+  Future<void> _confirmActivate(CategoryItem item) async {
+    setState(() {
+      _processingCodes.add(item.code);
+      _inactiveCategories.removeWhere((c) => c.code == item.code);
+      _activeCategories.add(item);
+    });
+    try {
+      widget.onToggle(item, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _activeCategories.removeWhere((c) => c.code == item.code);
+          _inactiveCategories.add(item);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _processingCodes.remove(item.code));
+      }
+    }
   }
 
   @override
@@ -107,8 +160,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               labelColor: const Color(0xFF00C896),
               unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               tabs: [
-                Tab(text: 'Active (${widget.activeCategories.length})'),
-                Tab(text: 'Library / Inactive (${widget.inactiveCategories.length})'),
+                Tab(text: 'Active (${_activeCategories.length})'),
+                Tab(text: 'Library / Inactive (${_inactiveCategories.length})'),
               ],
             ),
             // TabBarView
@@ -116,14 +169,15 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               child: TabBarView(
                 children: [
                   // Active Categories List
-                  widget.activeCategories.isEmpty
+                  _activeCategories.isEmpty
                       ? const Center(child: Text('No active categories'))
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
-                          itemCount: widget.activeCategories.length,
+                          itemCount: _activeCategories.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (ctx, index) {
-                            final item = widget.activeCategories[index];
+                            final item = _activeCategories[index];
+                            final isBusy = _processingCodes.contains(item.code);
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: const Color(0xFF00C896).withValues(alpha: 0.15),
@@ -140,26 +194,33 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                                 ),
                               ),
-                              trailing: OutlinedButton(
-                                onPressed: () => _confirmDeactivate(item),
-                                style: OutlinedButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  foregroundColor: theme.colorScheme.error,
-                                ),
-                                child: const Text('Deactivate'),
-                              ),
+                              trailing: isBusy
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : OutlinedButton(
+                                      onPressed: () => _confirmDeactivate(item),
+                                      style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        foregroundColor: theme.colorScheme.error,
+                                      ),
+                                      child: const Text('Deactivate'),
+                                    ),
                             );
                           },
                         ),
                   // Inactive / Library Categories List
-                  widget.inactiveCategories.isEmpty
+                  _inactiveCategories.isEmpty
                       ? const Center(child: Text('All categories are currently active'))
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
-                          itemCount: widget.inactiveCategories.length,
+                          itemCount: _inactiveCategories.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (ctx, index) {
-                            final item = widget.inactiveCategories[index];
+                            final item = _inactiveCategories[index];
+                            final isBusy = _processingCodes.contains(item.code);
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
@@ -202,14 +263,20 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                                 ),
                               ),
-                              trailing: FilledButton(
-                                onPressed: () => _confirmActivate(item),
-                                style: FilledButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  backgroundColor: const Color(0xFF00C896),
-                                ),
-                                child: const Text('Activate'),
-                              ),
+                              trailing: isBusy
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : FilledButton(
+                                      onPressed: () => _confirmActivate(item),
+                                      style: FilledButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        backgroundColor: const Color(0xFF00C896),
+                                      ),
+                                      child: const Text('Activate'),
+                                    ),
                             );
                           },
                         ),
