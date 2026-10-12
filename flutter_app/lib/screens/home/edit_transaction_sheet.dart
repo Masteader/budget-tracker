@@ -557,6 +557,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     onPressed: isProcessing ? null : () async {
                       setModalState(() => isProcessing = true);
                       try {
+                        final noteSuffix = ' [Financed via $selectedProvider: Installment 1 of $selectedCount. Full price: SAR ${amount.toStringAsFixed(2)}]';
+                        final updatedNotes = '${widget.transaction.rawSms ?? ''}$noteSuffix';
+
                         await ApiService.instance.createInstallmentPlan({
                           'household_id': widget.transaction.householdId,
                           'merchant': _merchantCtrl.text.trim(),
@@ -569,6 +572,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           'adjust_original_transaction': true,
                           'notes': 'Converted from transaction via mobile app',
                         });
+
+                        try {
+                          await supabase.from('transactions').update({
+                            'amount': monthly,
+                            'raw_sms': updatedNotes,
+                          }).eq('id', widget.transaction.id);
+                        } catch (_) {}
+
                         if (sheetCtx.mounted) Navigator.pop(sheetCtx);
                         if (mounted) {
                           Navigator.pop(context, 'updated');

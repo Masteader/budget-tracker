@@ -17,6 +17,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final bool initiallyExpanded;
   final String? receiptUrl;
   final String? qrCodeRaw;
+  final bool isInstallment;
+  final String? installmentBadgeText;
+  final String? installmentProvider;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -33,6 +36,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.initiallyExpanded = false,
     this.receiptUrl,
     this.qrCodeRaw,
+    this.isInstallment = false,
+    this.installmentBadgeText,
+    this.installmentProvider,
     this.onEdit,
     this.onDelete,
   });
@@ -118,6 +124,38 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     );
   }
 
+  Widget _buildInstallmentBadge(String label, String provider) {
+    final isTamara = provider.toLowerCase().contains('tamara');
+    final isTabby = provider.toLowerCase().contains('tabby');
+    final color = isTamara
+        ? const Color(0xFFFF6B6B)
+        : (isTabby ? const Color(0xFF00E676) : const Color(0xFF58A6FF));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.credit_score_rounded, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -177,6 +215,11 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (isInstallment)
+                  _buildInstallmentBadge(
+                    installmentBadgeText ?? 'Installment',
+                    installmentProvider ?? 'Tamara',
+                  ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(

@@ -222,20 +222,82 @@ class InstallmentService:
 
     @classmethod
     def list_plans(cls, household_id: str) -> List[InstallmentPlan]:
+        found_plans: List[InstallmentPlan] = []
+        seen_tx_ids = set()
+
         try:
             sb = supabase_client.get_client()
             res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
-            if res.data is not None:
-                return [InstallmentPlan(**row) for row in res.data]
+            if res.data:
+                for row in res.data:
+                    plan = InstallmentPlan(**row)
+                    found_plans.append(plan)
+                    if plan.original_transaction_id:
+                        seen_tx_ids.add(plan.original_transaction_id)
         except Exception as e:
             logger.debug("Supabase installment_plans query failed (%s), using local fallback", e)
 
         # Fallback to local
         plans = cls._read_fallback_plans()
-        return [
-            InstallmentPlan(**p) for p in plans
-            if p.get("household_id") == household_id
-        ]
+        for p in plans:
+            if p.get("household_id") == household_id:
+                if not any(fp.id == p.get("id") for fp in found_plans):
+                    plan = InstallmentPlan(**p)
+                    found_plans.append(plan)
+                    if plan.original_transaction_id:
+                        seen_tx_ids.add(plan.original_transaction_id)
+
+        # Also reconcile directly from transactions table in Supabase
+        try:
+            sb = supabase_client.get_client()
+            tx_res = sb.table("transactions").select("*").eq("household_id", household_id).execute()
+            import re
+            for tx in (tx_res.data or []):
+                raw = tx.get("raw_sms") or ""
+                tx_id = tx.get("id")
+                if not tx_id or tx_id in seen_tx_ids:
+                    continue
+
+                if "Financed via" in raw or "Tamara" in raw or "Tabby" in raw:
+                    match = re.search(r"Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,.]+))?", raw, re.IGNORECASE)
+                    provider = "Tamara" if "tamara" in raw.lower() else ("Tabby" if "tabby" in raw.lower() else "Bank")
+                    count = 4
+                    paid = 1
+                    monthly = float(tx.get("amount") or 0.0)
+                    total = monthly * count
+
+                    if match:
+                        provider = match.group(1).strip()
+                        paid = int(match.group(2))
+                        count = int(match.group(3))
+                        if match.group(4):
+                            try:
+                                total = float(match.group(4).replace(",", ""))
+                            except Exception:
+                                total = monthly * count
+
+                    plan_obj = InstallmentPlan(
+                        id=f"plan-{tx_id[:8]}",
+                        household_id=household_id,
+                        merchant=tx.get("merchant") or "Installment Purchase",
+                        provider=provider,
+                        total_amount=round(total, 2),
+                        installment_count=count,
+                        monthly_amount=round(monthly, 2) if monthly > 0 else round(total / count, 2),
+                        paid_installments=paid,
+                        day_of_month=27,
+                        start_date=(tx.get("timestamp") or date.today().isoformat())[:10],
+                        status="COMPLETED" if paid >= count else "ACTIVE",
+                        category_code=tx.get("category_code") or "OPEX-SHOPPING",
+                        original_transaction_id=tx_id,
+                        notes=raw,
+                    )
+                    found_plans.append(plan_obj)
+                    seen_tx_ids.add(tx_id)
+        except Exception as e:
+            logger.debug("Could not reconcile installment plans from transactions: %s", e)
+
+        return found_plans
 
     @classmethod
     def pay_installment(cls, plan_id: str) -> Optional[InstallmentPlan]:

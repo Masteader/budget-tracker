@@ -165,6 +165,42 @@ class Transaction {
     );
   }
 
+  bool get isInstallment {
+    final raw = rawSms ?? '';
+    final m = (merchant ?? '').toLowerCase();
+    return raw.contains('Financed via') ||
+        raw.toLowerCase().contains('tamara') ||
+        raw.toLowerCase().contains('tabby') ||
+        m.contains('tamara') ||
+        m.contains('tabby');
+  }
+
+  String? get installmentBadgeText {
+    final raw = rawSms ?? '';
+    final regex = RegExp(r'Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)', caseSensitive: false);
+    final match = regex.firstMatch(raw);
+    if (match != null) {
+      final p = match.group(1)?.trim() ?? 'BNPL';
+      final cur = match.group(2) ?? '1';
+      final tot = match.group(3) ?? '4';
+      return '$p ($cur/$tot)';
+    }
+    if (raw.toLowerCase().contains('tamara') || (merchant ?? '').toLowerCase().contains('tamara')) {
+      return 'Tamara (1/4)';
+    }
+    if (raw.toLowerCase().contains('tabby') || (merchant ?? '').toLowerCase().contains('tabby')) {
+      return 'Tabby (1/4)';
+    }
+    return null;
+  }
+
+  String get installmentProvider {
+    final raw = (rawSms ?? '').toLowerCase();
+    final m = (merchant ?? '').toLowerCase();
+    if (raw.contains('tabby') || m.contains('tabby')) return 'Tabby';
+    return 'Tamara';
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

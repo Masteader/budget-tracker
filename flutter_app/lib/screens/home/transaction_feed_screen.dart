@@ -993,6 +993,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           isReallocated: tx.isReallocated,
                                           receiptUrl: tx.receiptUrl,
                                           qrCodeRaw: tx.qrCodeRaw,
+                                          isInstallment: tx.isInstallment,
+                                          installmentBadgeText: tx.installmentBadgeText,
+                                          installmentProvider: tx.installmentProvider,
                                           onEdit: () async {
                                             final res = await EditTransactionSheet.show(context, tx);
                                             if (res == 'deleted') {

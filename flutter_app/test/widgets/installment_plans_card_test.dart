@@ -53,5 +53,23 @@ void main() {
       await tester.pump();
       expect(payTapped, isTrue);
     });
+
+    testWidgets('Renders actionable empty state when no plans exist', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: InstallmentPlansCard(
+                plans: [],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Installments & BNPL'), findsOneWidget);
+      expect(find.text('No Active BNPL Installments'), findsOneWidget);
+      expect(find.text('+ Add Installment Plan'), findsOneWidget);
+    });
   });
 }
