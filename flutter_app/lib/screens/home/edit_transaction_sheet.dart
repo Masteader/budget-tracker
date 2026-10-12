@@ -609,6 +609,72 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     );
   }
 
+  Future<void> _quickAddChild() async {
+    final nameCtrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
+            const SizedBox(width: 8),
+            Text(
+              'Add Child / Dependent',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+            ),
+          ],
+        ),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: "Child's Name",
+            labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+            hintText: 'e.g. Sarah, Omar',
+            hintStyle: const TextStyle(color: Color(0xFF484F58)),
+            filled: true,
+            fillColor: const Color(0xFF0D1117),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+            onPressed: () {
+              final n = nameCtrl.text.trim();
+              if (n.isNotEmpty) Navigator.pop(dCtx, n);
+            },
+            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty) {
+      try {
+        await ApiService.instance.createDependent(
+          householdId: widget.transaction.householdId,
+          name: name,
+        );
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          if (!_dependents.contains(name)) {
+            _dependents.add(name);
+          }
+          _selectedBeneficiary = name;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -873,18 +939,66 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
               ],
             ),
-            if (_dependents.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                'CHILDREN & DEPENDENTS',
-                style: GoogleFonts.outfit(
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF8B949E),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PAID FOR WHOM (CHILDREN & DEPENDENTS)',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF8B949E),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
+                InkWell(
+                  onTap: _quickAddChild,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.add_rounded, size: 14, color: Color(0xFF00C896)),
+                        const SizedBox(width: 2),
+                        Text(
+                          'Add Child',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF00C896),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_dependents.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B22),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF30363D)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 14, color: Color(0xFF8B949E)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No children added yet. Tap "+ Add Child" to assign expenses to a child.',
+                        style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E)),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -913,7 +1027,6 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   );
                 }).toList(),
               ),
-            ],
             const SizedBox(height: 10),
 
             // Live Settlement Preview

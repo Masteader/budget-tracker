@@ -196,20 +196,25 @@ class HouseholdManagementCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.child_care_rounded, size: 16, color: Color(0xFF58A6FF)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Family Dependents & Children',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF8B949E),
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.child_care_rounded, size: 16, color: Color(0xFF58A6FF)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Paid for Whom (Children & Dependents)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF8B949E),
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               if (onAddDependent != null)
                 TextButton.icon(

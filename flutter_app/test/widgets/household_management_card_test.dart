@@ -30,7 +30,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Family Dependents & Children'), findsOneWidget);
+      expect(find.text('Paid for Whom (Children & Dependents)'), findsOneWidget);
       expect(find.text('Sarah'), findsOneWidget);
       expect(find.text('+ Add Child / Dependent'), findsOneWidget);
     });
