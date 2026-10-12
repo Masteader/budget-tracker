@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_snackbar.dart';
+import '../../theme/app_themes.dart';
 
 /// Card for customizing the household/user monthly payday (1-31).
 class PaydaySettingsCard extends StatefulWidget {
@@ -71,9 +72,9 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,7 +104,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -148,7 +149,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             ),
           ),
           const SizedBox(height: 16),
-          const Divider(color: Color(0xFF21262D), height: 1),
+          Divider(color: context.borderColor, height: 1),
           const SizedBox(height: 14),
 
           // Presets Label
@@ -199,15 +200,15 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0D1117),
+              color: context.scaffoldBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF30363D)),
+              border: Border.all(color: context.borderColor),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 value: _selectedDay,
                 isExpanded: true,
-                dropdownColor: const Color(0xFF161B22),
+                dropdownColor: context.cardBg,
                 icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF00C896)),
                 items: List.generate(31, (index) {
                   final day = index + 1;
@@ -282,14 +283,14 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
       label: Text(label),
       selected: isSelected,
       selectedColor: const Color(0xFF00C896).withValues(alpha: 0.25),
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       labelStyle: TextStyle(
-        color: isSelected ? const Color(0xFF00C896) : const Color(0xFFC9D1D9),
+        color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+        color: isSelected ? const Color(0xFF00C896) : context.borderColor,
       ),
       onSelected: (_) {
         setState(() => _selectedDay = day);

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../services/api_service.dart';
+import '../theme/app_themes.dart';
 
 class SalaryCycleWidget extends StatefulWidget {
   final String householdId;
@@ -102,14 +103,14 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF161B22),
+            context.cardBg,
             paceColor.withValues(alpha: 0.06),
           ],
         ),
@@ -137,7 +138,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                         'Salary Cycle (27th)',
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          color: Colors.white,
+                          color: context.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -178,7 +179,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     child: CircularProgressIndicator(
                       value: progress,
                       strokeWidth: 6,
-                      backgroundColor: const Color(0xFF30363D),
+                      backgroundColor: context.borderColor,
                       valueColor: AlwaysStoppedAnimation(paceColor),
                     ),
                   ),
@@ -188,7 +189,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                       Text(
                         '$daysRemaining',
                         style: GoogleFonts.outfit(
-                          color: Colors.white,
+                          color: context.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
@@ -209,7 +210,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     Text(
                       '$daysRemaining Days to Payday (${_ordinal(paydayDay)})',
                       style: GoogleFonts.outfit(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),

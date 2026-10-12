@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/api_service.dart';
+import '../theme/app_themes.dart';
 import 'app_snackbar.dart';
 
 class PartnerSettlementCard extends StatefulWidget {
@@ -93,9 +94,9 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +121,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                         'Partner Settlement',
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          color: Colors.white,
+                          color: context.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -167,7 +168,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                 style: GoogleFonts.outfit(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: settleAmt > 0 ? badgeColor : Colors.white,
+                  color: settleAmt > 0 ? badgeColor : context.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -194,9 +195,9 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1117),
+                  color: context.scaffoldBg,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF30363D)),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Text(
                   'Shared 50/50: SAR ${totalShared.toStringAsFixed(2)}',

@@ -12,6 +12,7 @@ import '../../widgets/sub_budget_breakdown_sheet.dart';
 import '../../widgets/categories/category_library_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
+import '../../theme/app_themes.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -670,12 +671,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
               preferredSize: const Size.fromHeight(56),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: const Color(0xFF0D1117),
+                color: context.scaffoldBg,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70),
+                      icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                           ? () => setState(() => _currentCycleIndex++)
                           : null,
@@ -685,7 +686,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       children: [
                         Text(
                           headerTitle,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary),
                         ),
                         Text(
                           headerSub,
@@ -742,7 +743,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF161B22),
+                          color: context.cardBg,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
                         ),
@@ -795,12 +796,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF161B22),
+                        color: context.cardBg,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isOverAllocated
                               ? Colors.redAccent.withValues(alpha: 0.6)
-                              : const Color(0xFF30363D),
+                              : context.borderColor,
                         ),
                       ),
                       child: Column(
@@ -915,9 +916,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF161B22),
+                      color: context.cardBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF30363D)),
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -929,8 +930,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(category,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600, fontSize: 14)),
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
                                   const SizedBox(height: 3),
                                   Text(
                                     existing != null

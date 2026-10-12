@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/zatca_decoder.dart';
+import '../theme/app_themes.dart';
 import 'app_snackbar.dart';
 import 'receipt_photo_viewer_dialog.dart';
 
@@ -161,10 +162,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isReallocated ? Colors.orange.withValues(alpha: 0.5) : const Color(0xFF30363D),
+          color: isReallocated ? Colors.orange.withValues(alpha: 0.5) : context.borderColor,
         ),
       ),
       child: Material(
@@ -194,7 +195,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
-                    color: Colors.white,
+                    color: context.textPrimary,
                   ),
                 ),
               ),
@@ -223,7 +224,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF21262D),
+                    color: context.scaffoldBg,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -329,7 +330,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             ),
           ),
           children: [
-            const Divider(color: Color(0xFF21262D), height: 1),
+            Divider(color: context.borderColor, height: 1),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
@@ -340,9 +341,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0D1117),
+                      color: context.scaffoldBg,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF30363D), width: 0.8),
+                      border: Border.all(color: context.borderColor, width: 0.8),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

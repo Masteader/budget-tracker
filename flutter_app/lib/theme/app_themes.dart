@@ -67,6 +67,21 @@ class AppThemes {
           side: const BorderSide(color: brandDarkBorder),
         ),
       ),
+      cardColor: brandDarkCard,
+      canvasColor: brandDarkBg,
+      dialogBackgroundColor: brandDarkCard,
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: brandDarkCard,
+        indicatorColor: brandEmerald.withValues(alpha: 0.2),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
+          color: states.contains(WidgetState.selected) ? brandEmerald : const Color(0xFF8B949E),
+        )),
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          color: states.contains(WidgetState.selected) ? brandEmerald : const Color(0xFF8B949E),
+        )),
+      ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: brandDarkCard,
         modalBackgroundColor: brandDarkCard,
@@ -86,19 +101,35 @@ class AppThemes {
       colorScheme: colorScheme,
       brightness: Brightness.light,
       scaffoldBackgroundColor: brandLightBg,
+      cardColor: brandLightCard,
+      canvasColor: brandLightBg,
+      dialogBackgroundColor: brandLightCard,
       textTheme: GoogleFonts.outfitTextTheme().apply(
         bodyColor: brandLightText,
         displayColor: brandLightText,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: brandLightBg,
+        backgroundColor: brandLightCard,
         foregroundColor: brandLightText,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         titleTextStyle: GoogleFonts.outfit(
           color: brandLightText,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: brandLightCard,
+        indicatorColor: brandEmerald.withValues(alpha: 0.15),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
+          color: states.contains(WidgetState.selected) ? brandEmerald : brandLightSubtext,
+        )),
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          color: states.contains(WidgetState.selected) ? brandEmerald : brandLightSubtext,
+        )),
       ),
       cardTheme: CardThemeData(
         color: brandLightCard,
@@ -138,4 +169,16 @@ class AppThemes {
       ),
     );
   }
+}
+
+extension ThemeContextExtension on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+  Color get scaffoldBg => Theme.of(this).scaffoldBackgroundColor;
+  Color get cardBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
+  Color get cardSurfaceBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
+  Color get inputBg => isDarkMode ? AppThemes.brandDarkInput : AppThemes.brandLightInput;
+  Color get borderColor => isDarkMode ? AppThemes.brandDarkBorder : AppThemes.brandLightBorder;
+  Color get textPrimary => isDarkMode ? Colors.white : AppThemes.brandLightText;
+  Color get textSecondary => isDarkMode ? const Color(0xFF8B949E) : AppThemes.brandLightSubtext;
+  Color get chipBg => isDarkMode ? AppThemes.brandDarkInput : const Color(0xFFE2E8F0);
 }

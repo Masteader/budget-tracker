@@ -17,6 +17,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
+import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
@@ -139,7 +140,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -501,14 +502,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          color: selected ? Colors.black : const Color(0xFFC9D1D9),
+          color: selected ? Colors.black : context.textPrimary,
         ),
       ),
       selected: selected,
       selectedColor: const Color(0xFF00C896),
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.cardBg,
       side: BorderSide(
-        color: selected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+        color: selected ? const Color(0xFF00C896) : context.borderColor,
       ),
       onSelected: onSelected,
     );
@@ -522,8 +523,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (dCtx) => AlertDialog(
-          backgroundColor: const Color(0xFF161B22),
-          title: const Text('Delete Transaction', style: TextStyle(color: Colors.white)),
+          backgroundColor: context.cardBg,
+          title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
           content: Text(
             'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
             style: const TextStyle(color: Color(0xFF8B949E)),
@@ -598,17 +599,17 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        title: Text('Transactions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-        backgroundColor: const Color(0xFF161B22),
+        title: Text('Transactions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
+        backgroundColor: context.scaffoldBg,
         elevation: 0,
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                icon: Icon(Icons.tune_rounded, color: context.textPrimary),
                 tooltip: 'Filter & Sort',
                 onPressed: _showSortFilterModal,
               ),
@@ -652,14 +653,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? Colors.black : const Color(0xFFC9D1D9),
+                          color: isSelected ? Colors.black : context.textPrimary,
                         ),
                       ),
                       selected: isSelected,
                       selectedColor: const Color(0xFF00C896),
-                      backgroundColor: const Color(0xFF161B22),
+                      backgroundColor: context.cardBg,
                       side: BorderSide(
-                        color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+                        color: isSelected ? const Color(0xFF00C896) : context.borderColor,
                       ),
                       onSelected: (val) {
                         HapticFeedback.selectionClick();

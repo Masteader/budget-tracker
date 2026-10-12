@@ -20,6 +20,7 @@ import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
+import '../../theme/app_themes.dart';
 import 'help_support_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
@@ -719,17 +720,17 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0D1117),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF00C896))),
+      return Scaffold(
+        backgroundColor: context.scaffoldBg,
+        body: const Center(child: CircularProgressIndicator(color: Color(0xFF00C896))),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        title: Text('Settings & Permissions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-        backgroundColor: const Color(0xFF161B22),
+        title: Text('Settings & Permissions', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
+        backgroundColor: context.scaffoldBg,
         elevation: 0,
         actions: [
           IconButton(

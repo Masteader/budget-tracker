@@ -30,6 +30,7 @@ import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../settings/ingestion_settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../theme/app_themes.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
 
@@ -102,8 +103,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        backgroundColor: const Color(0xFF161B22),
-        indicatorColor: const Color(0xFF00C896).withValues(alpha: 0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -222,7 +221,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       builder: (context, snap) {
         if (!snap.hasData) {
           return Scaffold(
-            backgroundColor: const Color(0xFF0D1117),
+            backgroundColor: context.scaffoldBg,
             body: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -351,9 +350,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF161B22),
+                                          color: context.cardBg,
                                           borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: const Color(0xFF30363D)),
+                                          border: Border.all(color: context.borderColor),
                                         ),
                                         child: Row(
                                           children: [
@@ -363,7 +362,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                               child: Text(
                                                 'Price Tracker',
                                                 style: GoogleFonts.outfit(
-                                                  color: Colors.white,
+                                                  color: context.textPrimary,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12,
                                                 ),
@@ -387,9 +386,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF161B22),
+                                          color: context.cardBg,
                                           borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: const Color(0xFF30363D)),
+                                          border: Border.all(color: context.borderColor),
                                         ),
                                         child: Row(
                                           children: [
@@ -399,7 +398,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                               child: Text(
                                                 'Multi-Shot Scan',
                                                 style: GoogleFonts.outfit(
-                                                  color: Colors.white,
+                                                  color: context.textPrimary,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12,
                                                 ),
@@ -471,14 +470,14 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   Widget _buildAppBar(String hid) {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       elevation: 0,
       title: Text(
         'Budget Tracker',
         style: GoogleFonts.outfit(
           fontSize: 20,
           fontWeight: FontWeight.w700,
-          color: Colors.white,
+          color: context.textPrimary,
         ),
       ),
       actions: [

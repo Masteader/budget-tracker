@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
+import '../../theme/app_themes.dart';
 
 /// Card for managing household membership, invite code, household switching, and dependents.
 class HouseholdManagementCard extends StatelessWidget {
@@ -39,9 +40,9 @@ class HouseholdManagementCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +68,7 @@ class HouseholdManagementCard extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -103,7 +104,7 @@ class HouseholdManagementCard extends StatelessWidget {
           ),
 
           const SizedBox(height: 16),
-          const Divider(color: Color(0xFF21262D), height: 1),
+          Divider(color: context.borderColor, height: 1),
           const SizedBox(height: 14),
 
           // Invite Code Section
@@ -120,9 +121,9 @@ class HouseholdManagementCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF0D1117),
+              color: context.scaffoldBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF30363D)),
+              border: Border.all(color: context.borderColor),
             ),
             child: Row(
               children: [
@@ -248,8 +249,8 @@ class HouseholdManagementCard extends StatelessWidget {
               runSpacing: 8,
               children: dependents.map((d) {
                 return Chip(
-                  backgroundColor: const Color(0xFF0D1117),
-                  side: const BorderSide(color: Color(0xFF30363D)),
+                  backgroundColor: context.scaffoldBg,
+                  side: BorderSide(color: context.borderColor),
                   avatar: const CircleAvatar(
                     backgroundColor: Color(0xFF21262D),
                     child: Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
@@ -259,7 +260,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     style: GoogleFonts.outfit(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: context.textPrimary,
                     ),
                   ),
                   deleteIcon: onRemoveDependent != null
@@ -271,7 +272,7 @@ class HouseholdManagementCard extends StatelessWidget {
             ),
 
           const SizedBox(height: 18),
-          const Divider(color: Color(0xFF21262D), height: 1),
+          Divider(color: context.borderColor, height: 1),
           const SizedBox(height: 14),
 
           // Action Buttons: Join Another, Create New, Leave

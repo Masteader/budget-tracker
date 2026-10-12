@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../theme/app_themes.dart';
 import '../sub_budget_breakdown_sheet.dart';
 
 /// Interactive budget card per category displaying spent vs allocated,
@@ -46,9 +47,9 @@ class CategoryBudgetCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
+            color: context.cardBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF30363D)),
+            border: Border.all(color: context.borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,9 +140,9 @@ class CategoryBudgetCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1117),
+                    color: context.scaffoldBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF21262D)),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

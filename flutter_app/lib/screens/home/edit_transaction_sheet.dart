@@ -660,8 +660,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     if (name != null && name.isNotEmpty) {
       try {
         await ApiService.instance.createDependent(
-          householdId: widget.transaction.householdId,
-          name: name,
+          widget.transaction.householdId,
+          name,
         );
       } catch (_) {}
       if (mounted) {
