@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../services/api_service.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 
 class SalaryCycleWidget extends StatefulWidget {
   final String householdId;
@@ -96,7 +97,11 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
     final actualBurn = (_data!['actual_burn_rate'] as num?)?.toDouble() ?? 0.0;
     final dailyAllowance = (_data!['daily_remaining_allowance'] as num?)?.toDouble() ?? 0.0;
     final paceStatus = _data!['pace_status'] as String? ?? 'on_track';
-    final paceLabel = _data!['pace_label_en'] as String? ?? 'On Track';
+    final paceLabel = paceStatus == 'on_track'
+        ? context.tr('on_track')
+        : (paceStatus == 'exhausted' || paceStatus == 'critical'
+            ? context.tr('over_budget')
+            : (_data!['pace_label_en'] as String? ?? 'On Track'));
     final paceColor = _getPaceColor(paceStatus);
     final fmt = NumberFormat('#,##0.0', 'en_US');
 
@@ -135,7 +140,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'Salary Cycle (27th)',
+                        '${context.tr('salary_cycle')} (${_ordinal(paydayDay)})',
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
                           color: context.textPrimary,
@@ -195,7 +200,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                         ),
                       ),
                       Text(
-                        'days',
+                        context.tr('days'),
                         style: TextStyle(color: context.textSecondary, fontSize: 9),
                       ),
                     ],
@@ -208,7 +213,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$daysRemaining Days to Payday (${_ordinal(paydayDay)})',
+                      '$daysRemaining ${context.tr('days_to_payday')} (${_ordinal(paydayDay)})',
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontSize: 14,
@@ -217,7 +222,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Burn Rate: SAR ${fmt.format(actualBurn)}/day',
+                      '${context.tr('burn_rate')}: SAR ${fmt.format(actualBurn)}',
                       style: TextStyle(
                         color: context.textPrimary,
                         fontSize: 12,
@@ -226,7 +231,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Allowable Daily: SAR ${fmt.format(dailyAllowance)}/day remaining',
+                      '${context.tr('allowable_daily')}: SAR ${fmt.format(dailyAllowance)}',
                       style: TextStyle(color: context.textSecondary, fontSize: 11),
                     ),
                   ],

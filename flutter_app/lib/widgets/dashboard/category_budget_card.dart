@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
@@ -63,7 +64,7 @@ class CategoryBudgetCard extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            budget.categoryCode.replaceFirst(RegExp(r'^[A-Z]+-'), ''),
+                            context.trCat(budget.categoryCode),
                             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -127,11 +128,15 @@ class CategoryBudgetCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'SAR ${fmt.format(budget.spentAmount)} spent',
+                    context.isRtl
+                        ? '${fmt.format(budget.spentAmount)} ر.س ${context.tr('spent')}'
+                        : 'SAR ${fmt.format(budget.spentAmount)} ${context.tr('spent')}',
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                   Text(
-                    'of SAR ${fmt.format(budget.allocatedAmount)}',
+                    context.isRtl
+                        ? 'من ${fmt.format(budget.allocatedAmount)} ر.س'
+                        : 'of SAR ${fmt.format(budget.allocatedAmount)}',
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -153,8 +158,8 @@ class CategoryBudgetCard extends StatelessWidget {
                           const Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
                           SizedBox(width: 6),
                           Text(
-                            'Sub-Categories',
-                            style: TextStyle(
+                            context.tr('itemized_sub_budgets'),
+                            style: const TextStyle(
                               color: Color(0xFF00C896),
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -180,7 +185,7 @@ class CategoryBudgetCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
-                            s,
+                            context.trSub(s, nameEn: s),
                             style: TextStyle(color: context.textSecondary, fontSize: 10),
                           ),
                         )).toList(),

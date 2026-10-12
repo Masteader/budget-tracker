@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card for setting and updating household monthly salary/income (SAR).
 class IncomeSettingsCard extends StatefulWidget {
@@ -227,7 +228,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               children: [
                 TextButton(
                   onPressed: () => setState(() => _isEditing = false),
-                  child: Text('Cancel', style: TextStyle(color: subtextColor)),
+                  child: Text(context.tr('cancel'), style: TextStyle(color: subtextColor)),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
@@ -243,7 +244,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                         )
-                      : const Text('Save Income', style: TextStyle(fontWeight: FontWeight.bold)),
+                      : Text(context.tr('save_income'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

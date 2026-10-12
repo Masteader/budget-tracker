@@ -9,6 +9,7 @@ import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 
 class MultiPageReceiptScannerScreen extends StatefulWidget {
   final String householdId;
@@ -262,14 +263,14 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Capture Continuous Long Receipts',
+                            context.tr('capture_continuous_receipts'),
                             style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 6),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 36),
                             child: Text(
-                              'Take sequential overlapping photos of long grocery receipts (60+ items). Our AI stitches them and eliminates duplicate items automatically.',
+                              context.tr('multi_page_guide_desc'),
                               textAlign: TextAlign.center,
                               style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
                             ),
@@ -383,7 +384,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ),
                             icon: const Icon(Icons.add_a_photo_outlined, size: 20),
                             label: Text(
-                              _capturedShots.isEmpty ? 'Take Shot 1' : 'Take Shot #${_capturedShots.length + 1}',
+                              _capturedShots.isEmpty ? context.tr('take_shot_1') : '${context.tr('take_shot_n')}${_capturedShots.length + 1}',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             onPressed: _isProcessing ? null : _captureShot,
@@ -396,7 +397,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             padding: const EdgeInsets.all(14),
                           ),
                           icon: Icon(Icons.photo_library_outlined, color: context.textPrimary),
-                          tooltip: 'Pick from Gallery',
+                          tooltip: context.tr('pick_from_gallery'),
                           onPressed: _isProcessing ? null : _pickFromGallery,
                         ),
                         if (_capturedShots.isNotEmpty) ...[
@@ -417,7 +418,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                     )
                                   : const Icon(Icons.check_circle_outline, size: 20),
                               label: Text(
-                                _isProcessing ? 'Stitching...' : 'Process (${_capturedShots.length})',
+                                _isProcessing ? context.tr('stitching') : '${context.tr('process')} (${_capturedShots.length})',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               onPressed: _isProcessing ? null : _processAllShots,

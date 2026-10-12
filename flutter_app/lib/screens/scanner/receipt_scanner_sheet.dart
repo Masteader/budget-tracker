@@ -20,6 +20,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
 class ReceiptScannerSheet extends StatefulWidget {
@@ -143,7 +144,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           children: [
             const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896)),
             const SizedBox(width: 8),
-            Text('Saudi ZATCA VAT QR', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
+            Text(context.tr('saudi_zatca_vat_qr'), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
           ],
         ),
         content: Column(
@@ -223,7 +224,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               });
               _analyzeReceipt();
             },
-            child: const Text('Apply QR Code', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('apply_qr_code'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -244,7 +245,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 children: [
                   const Icon(Icons.no_photography_rounded, color: Colors.orange),
                   const SizedBox(width: 8),
-                  Text('Camera Access Needed', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary)),
+                  Text(context.tr('camera_access_needed'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary)),
                 ],
               ),
               content: Text(
@@ -675,7 +676,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                       ),
                       icon: const Icon(Icons.camera_alt_outlined),
                       label: Text(
-                        _imageFiles.isEmpty ? 'Snap Photo' : 'Snap Next Page',
+                        _imageFiles.isEmpty ? context.tr('snap_photo') : context.tr('snap_next_page'),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       onPressed: () => _addPhoto(ImageSource.camera),
@@ -691,7 +692,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Gallery'),
+                      label: Text(context.tr('gallery')),
                       onPressed: () => _addPhoto(ImageSource.gallery),
                     ),
                   ),
@@ -710,7 +711,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.qr_code_scanner, size: 20),
-                      label: const Text('Scan QR Camera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      label: Text(context.tr('scan_qr_camera'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       onPressed: _isAnalyzing ? null : _scanZatcaQrWithCamera,
                     ),
                   ),
@@ -724,7 +725,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.paste_rounded, size: 18),
-                      label: const Text('Paste Text', style: TextStyle(fontSize: 13)),
+                      label: Text(context.tr('paste_text'), style: const TextStyle(fontSize: 13)),
                       onPressed: _isAnalyzing ? null : _showZatcaQrDialog,
                     ),
                   ),
@@ -898,7 +899,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                           _errorMessage = null;
                           _isAnalyzing = false;
                         }),
-                        child: const Text('Dismiss'),
+                        child: Text(context.tr('dismiss')),
                       ),
                     ],
                   ],

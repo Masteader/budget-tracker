@@ -454,8 +454,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
-                                    title: 'No allocations for $_currentCycleKey',
-                                    message: 'Budgets auto-rollover on monthly payday. You can also add categories from the Budgets tab.',
+                                    title: '${context.tr('no_allocations_for_cycle')} $_currentCycleKey',
+                                    message: context.tr('budgets_auto_rollover_desc'),
                                   ),
                                 ),
                               );
@@ -509,7 +509,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       actions: [
         IconButton(
           icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00C896)),
-          tooltip: 'Help & Support',
+          tooltip: context.tr('help_support'),
           onPressed: () {
             Navigator.push(
               context,
@@ -521,7 +521,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         ),
         IconButton(
           icon: Icon(Icons.logout_rounded, color: context.textSecondary),
-          tooltip: 'Sign Out',
+          tooltip: context.tr('sign_out'),
           onPressed: () => supabase.auth.signOut(),
         ),
       ],

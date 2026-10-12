@@ -38,31 +38,42 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
 
-  final List<Map<String, String>> _categoryOptions = const [
-    {'code': 'ALL', 'label': 'All'},
-    {'code': 'OPEX-GROCERY', 'label': '🛒 Groceries & Supermarkets'},
-    {'code': 'OPEX-DINING', 'label': '☕ Dining & Cafes'},
-    {'code': 'OPEX-SHOPPING', 'label': '🛍️ Shopping & Retail'},
-    {'code': 'OPEX-UTILITIES', 'label': '⚡ Utilities & Bills'},
-    {'code': 'OPEX-FUEL', 'label': '⛽ Fuel & Transport'},
-    {'code': 'OPEX-ENTERTAINMENT', 'label': '🎮 Entertainment'},
-    {'code': 'OPEX-HEALTH', 'label': '💊 Health & Pharmacy'},
-    {'code': 'CAPEX-EDUCATION', 'label': '🎓 Education'},
-    {'code': 'OPEX-GOV', 'label': '🏛️ Government & Fees'},
-    {'code': 'OPEX-MISC', 'label': '📦 Miscellaneous'},
+  static const List<Map<String, String>> _categoryRawOptions = [
+    {'code': 'ALL', 'emoji': ''},
+    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
+    {'code': 'OPEX-DINING', 'emoji': '☕ '},
+    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
+    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
+    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
+    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
+    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
+    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
+    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
+    {'code': 'OPEX-MISC', 'emoji': '📦 '},
   ];
 
-  String get _sortLabel {
+  List<Map<String, String>> _getCategoryOptions(BuildContext context) {
+    return _categoryRawOptions.map((opt) {
+      final code = opt['code']!;
+      final emoji = opt['emoji']!;
+      if (code == 'ALL') {
+        return {'code': code, 'label': context.tr('all')};
+      }
+      return {'code': code, 'label': '$emoji${context.trCat(code)}'};
+    }).toList();
+  }
+
+  String _getSortLabel(BuildContext context) {
     switch (_selectedSort) {
       case 'oldest':
-        return 'Oldest First';
+        return context.tr('sort_oldest');
       case 'highest':
-        return 'Highest (SAR)';
+        return context.tr('sort_highest');
       case 'lowest':
-        return 'Lowest (SAR)';
+        return context.tr('sort_lowest');
       case 'newest':
       default:
-        return 'Newest First';
+        return context.tr('sort_newest');
     }
   }
 
@@ -181,7 +192,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Sort & Filter',
+                          context.tr('filter_and_sort'),
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -194,7 +205,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             setModalState(() {});
                             Navigator.pop(ctx);
                           },
-                          child: const Text('Reset All', style: TextStyle(color: Color(0xFF00C896), fontSize: 13)),
+                          child: Text(context.tr('reset_all'), style: TextStyle(color: Color(0xFF00C896), fontSize: 13)),
                         ),
                       ],
                     ),
@@ -202,7 +213,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
                     // ── SORT ORDER ──
                     Text(
-                      'SORT BY',
+                      context.tr('sort_by'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         letterSpacing: 1,
@@ -218,8 +229,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       children: [
                         _buildSortOption(
                           key: 'newest',
-                          title: 'Newest First',
-                          subtitle: 'Date descending',
+                          title: context.tr('sort_newest'),
+                          subtitle: context.tr('date_descending'),
                           icon: Icons.schedule,
                           current: _selectedSort,
                           onSelect: (val) {
@@ -229,8 +240,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildSortOption(
                           key: 'oldest',
-                          title: 'Oldest First',
-                          subtitle: 'Date ascending',
+                          title: context.tr('sort_oldest'),
+                          subtitle: context.tr('date_ascending'),
                           icon: Icons.history,
                           current: _selectedSort,
                           onSelect: (val) {
@@ -240,8 +251,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildSortOption(
                           key: 'highest',
-                          title: 'Highest Amount',
-                          subtitle: 'High to Low (SAR)',
+                          title: context.tr('sort_highest'),
+                          subtitle: context.tr('high_to_low'),
                           icon: Icons.trending_up,
                           current: _selectedSort,
                           onSelect: (val) {
@@ -251,8 +262,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildSortOption(
                           key: 'lowest',
-                          title: 'Lowest Amount',
-                          subtitle: 'Low to High (SAR)',
+                          title: context.tr('sort_lowest'),
+                          subtitle: context.tr('low_to_high'),
                           icon: Icons.trending_down,
                           current: _selectedSort,
                           onSelect: (val) {
@@ -266,7 +277,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
                     // ── DATE PERIOD ──
                     Text(
-                      'DATE PERIOD',
+                      context.tr('date_period'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         letterSpacing: 1,
@@ -281,7 +292,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       runSpacing: 8,
                       children: [
                         _buildFilterChip(
-                          label: 'All Time',
+                          label: context.tr('all_time'),
                           selected: _selectedDatePeriod == 'ALL',
                           onSelected: (_) {
                             setModalState(() => _selectedDatePeriod = 'ALL');
@@ -289,7 +300,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: 'Today',
+                          label: context.tr('today'),
                           selected: _selectedDatePeriod == 'TODAY',
                           onSelected: (_) {
                             setModalState(() => _selectedDatePeriod = 'TODAY');
@@ -297,7 +308,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: 'This Week',
+                          label: context.tr('this_week'),
                           selected: _selectedDatePeriod == 'THIS_WEEK',
                           onSelected: (_) {
                             setModalState(() => _selectedDatePeriod = 'THIS_WEEK');
@@ -305,7 +316,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: 'This Month',
+                          label: context.tr('this_month'),
                           selected: _selectedDatePeriod == 'THIS_MONTH',
                           onSelected: (_) {
                             setModalState(() => _selectedDatePeriod = 'THIS_MONTH');
@@ -315,7 +326,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         _buildFilterChip(
                           label: _customDateRange != null
                               ? '${DateFormat('d MMM').format(_customDateRange!.start)} - ${DateFormat('d MMM').format(_customDateRange!.end)}'
-                              : 'Custom Range...',
+                              : context.tr('custom_range'),
                           selected: _selectedDatePeriod == 'CUSTOM',
                           icon: Icons.calendar_today,
                           onSelected: (_) async {
@@ -362,7 +373,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
                     // ── WHO SPENT THIS ──
                     Text(
-                      'WHO SPENT THIS',
+                      context.tr('who_spent_this'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         letterSpacing: 1,
@@ -377,7 +388,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       runSpacing: 8,
                       children: [
                         _buildFilterChip(
-                          label: 'All',
+                          label: context.tr('all'),
                           selected: _selectedSpentByFilter == 'ALL',
                           onSelected: (_) {
                             setModalState(() => _selectedSpentByFilter = 'ALL');
@@ -385,7 +396,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: '👤 Me',
+                          label: '👤 ${context.tr("me")}',
                           selected: _selectedSpentByFilter == 'me',
                           onSelected: (_) {
                             setModalState(() => _selectedSpentByFilter = 'me');
@@ -393,7 +404,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: '💜 Partner',
+                          label: '💜 ${context.tr("partner")}',
                           selected: _selectedSpentByFilter == 'partner',
                           onSelected: (_) {
                             setModalState(() => _selectedSpentByFilter = 'partner');
@@ -401,7 +412,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           },
                         ),
                         _buildFilterChip(
-                          label: '👥 Both (Shared)',
+                          label: '👥 ${context.tr("both_shared")}',
                           selected: _selectedSpentByFilter == 'both',
                           onSelected: (_) {
                             setModalState(() => _selectedSpentByFilter = 'both');
@@ -424,7 +435,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         onPressed: () => Navigator.pop(ctx),
                         child: Text(
-                          'Apply Filters',
+                          context.tr('apply_filters'),
                           style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -659,10 +670,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _categoryOptions.length,
+                  itemCount: _getCategoryOptions(context).length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (ctx, i) {
-                    final opt = _categoryOptions[i];
+                    final opt = _getCategoryOptions(context)[i];
                     final isSelected = _selectedCategoryFilter == opt['code'];
                     return ChoiceChip(
                       label: Text(
@@ -711,7 +722,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${transactions.length} ${transactions.length == 1 ? "expense" : "expenses"} • SAR ${visibleTotal.toStringAsFixed(2)}',
+                                  '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.tr("sar")} ${visibleTotal.toStringAsFixed(2)}',
                                   style: GoogleFonts.outfit(
                                     color: context.textSecondary,
                                     fontSize: 12,
@@ -747,7 +758,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        _sortLabel,
+                                        _getSortLabel(context),
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
@@ -792,7 +803,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                       Icon(Icons.file_download_outlined, size: 14, color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7)),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Export CSV',
+                                        context.tr('export_csv'),
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
@@ -822,7 +833,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
                                             const SizedBox(width: 10),
                                             Text(
-                                              'Monthly Statement (PDF)',
+                                              context.tr('monthly_statement_pdf'),
                                               style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                                             ),
                                           ],
@@ -871,7 +882,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               foregroundColor: Colors.black,
                                             ),
                                             icon: const Icon(Icons.copy_rounded, size: 16),
-                                            label: const Text('Copy PDF Link', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            label: Text(context.tr('copy_pdf_link'), style: TextStyle(fontWeight: FontWeight.bold)),
                                             onPressed: () async {
                                               await Clipboard.setData(ClipboardData(text: pdfUrl));
                                               if (ctx.mounted) {
@@ -904,7 +915,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                       Icon(Icons.picture_as_pdf_outlined, size: 14, color: context.dangerColor),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Export PDF',
+                                        context.tr('export_pdf'),
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
@@ -928,9 +939,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     padding: const EdgeInsets.all(24.0),
                                     child: AppEmptyState(
                                       icon: Icons.search_off_rounded,
-                                      title: 'No Matching Transactions',
+                                      title: context.tr('no_matching_transactions'),
                                       message: 'Try adjusting your filters, date range, or category selection to find what you need.',
-                                      actionLabel: 'Reset Filters',
+                                      actionLabel: context.tr('reset_filters'),
                                       onAction: () {
                                         HapticFeedback.lightImpact();
                                         _resetFilters();
@@ -964,12 +975,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             color: Colors.redAccent.withValues(alpha: 0.8),
                                             borderRadius: BorderRadius.circular(16),
                                           ),
-                                          child: const Row(
+                                          child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(Icons.delete_outline, color: Colors.white, size: 24),
-                                              SizedBox(width: 8),
-                                              Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                              const Icon(Icons.delete_outline, color: Colors.white, size: 24),
+                                              const SizedBox(width: 8),
+                                              Text(context.tr('delete'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
                                         ),
@@ -994,7 +1005,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                     foregroundColor: Colors.white,
                                                   ),
                                                   onPressed: () => Navigator.pop(dCtx, true),
-                                                  child: const Text('Delete'),
+                                                  child: Text(context.tr('delete')),
                                                 ),
                                               ],
                                             ),

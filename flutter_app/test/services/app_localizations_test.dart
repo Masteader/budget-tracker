@@ -17,8 +17,8 @@ void main() {
     test('Arabic translations return correct Arabic text and RTL readiness', () {
       final loc = AppLocalizations(const Locale('ar'));
       expect(loc.get('app_title'), 'ميزانية الأسرة');
-      expect(loc.get('nav_dashboard'), 'لوحة التحكم');
-      expect(loc.get('recurring_bills'), 'الفواتير الدورية والاحتياطيات');
+      expect(loc.get('nav_dashboard'), 'الرئيسية');
+      expect(loc.get('recurring_bills'), 'الفواتير والاحتياطيات');
       expect(loc.get('installments_bnpl'), 'الأقساط والشراء الآجل');
       expect(loc.get('settings_and_permissions'), 'الإعدادات والصلاحيات');
       expect(loc.get('paid_for_whom'), 'الدفع لمن (الأبناء والمعالين)');

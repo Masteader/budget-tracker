@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 class SmartShoppingBasketSheet extends StatefulWidget {
   final String householdId;
@@ -170,7 +171,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Smart Basket Optimizer',
+                        context.tr('smart_basket_optimizer'),
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

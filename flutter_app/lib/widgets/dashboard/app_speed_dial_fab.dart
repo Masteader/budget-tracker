@@ -5,6 +5,7 @@ import '../../theme/app_themes.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
 import 'dashboard_action_sheet.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Animated multi-action Speed Dial FAB for quick transaction input.
 /// Provides direct 1-tap shortcuts to:
@@ -180,21 +181,21 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
           ),
         _buildOption(
           icon: Icons.camera_alt_rounded,
-          label: 'Scan Receipt',
+          label: context.tr('scan_receipt'),
           color: const Color(0xFF00C896),
           onTap: _onScanReceipt,
           offset: 160,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
-          label: 'Voice / Chat',
+          label: context.tr('voice_chat'),
           color: const Color(0xFF79C0FF),
           onTap: _onVoiceEntry,
           offset: 110,
         ),
         _buildOption(
           icon: Icons.edit_note_rounded,
-          label: 'Manual Log',
+          label: context.tr('manual_log'),
           color: const Color(0xFFFFA657),
           onTap: _onManualEntry,
           offset: 60,
@@ -211,7 +212,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
             child: Icon(_isOpen ? Icons.close_rounded : Icons.add_rounded, size: 24),
           ),
           label: Text(
-            _isOpen ? 'Close' : 'Add Expense',
+            _isOpen ? context.tr('close') : context.tr('add_expense'),
             style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13.5),
           ),
         ),

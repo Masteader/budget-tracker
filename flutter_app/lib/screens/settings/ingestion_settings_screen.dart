@@ -352,11 +352,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           children: [
             const Icon(Icons.warning_amber_rounded, color: Color(0xFFF85149)),
             const SizedBox(width: 8),
-            Text('Leave Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+            Text(context.tr('leave_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
         ),
         content: Text(
-          'Are you sure you want to leave this household? You will no longer have access to its shared budgets and transactions until you are re-invited.',
+          context.tr('leave_household_confirm'),
           style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -370,7 +370,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Leave', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('leave'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -410,12 +410,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
-        title: Text('Join Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+        title: Text(context.tr('join_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Enter the 8-character invite code:', style: TextStyle(color: context.textSecondary, fontSize: 13)),
+            Text(context.tr('join_household_desc'), style: TextStyle(color: context.textSecondary, fontSize: 13)),
             const SizedBox(height: 12),
             TextField(
               controller: codeCtrl,
@@ -439,7 +439,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               backgroundColor: const Color(0xFF00C896),
               foregroundColor: Colors.black,
             ),
-            child: const Text('Join', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final code = codeCtrl.text.trim().toUpperCase();
               if (code.length != 8) return;
@@ -571,7 +571,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
             const SizedBox(width: 8),
             Text(
-              'Add Child / Dependent',
+              context.tr('add_child_dependent'),
               style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary),
             ),
           ],
@@ -581,7 +581,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Add a child or family dependent to attribute individual expenses in chat and transactions.',
+              context.tr('child_dependent_desc'),
               style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 14),
@@ -590,7 +590,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               autofocus: true,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                hintText: "Dependent's Name (e.g. Sarah)",
+                hintText: context.tr('dependent_name_hint'),
                 hintStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -811,7 +811,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── APPEARANCE & LANGUAGE ──
-          _buildSectionHeader('APPEARANCE & LANGUAGE'),
+          _buildSectionHeader(context.tr('appearance_language')),
           const SizedBox(height: 6),
           Text(
             'Customize your app theme and system language.',
@@ -822,7 +822,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── 1. HARDWARE & APP PERMISSIONS ──
-          _buildSectionHeader('HARDWARE & APP PERMISSIONS'),
+          _buildSectionHeader(context.tr('hardware_permissions')),
           const SizedBox(height: 6),
           Text(
             'Check and manage camera and microphone access for expense scanning and AI voice input.',
@@ -833,8 +833,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           // Camera Permission Card
           _buildPermissionCard(
             icon: Icons.camera_alt_outlined,
-            title: 'Camera Access',
-            subtitle: 'Required to scan physical receipts & Saudi ZATCA QR codes.',
+            title: context.tr('camera_access'),
+            subtitle: context.tr('camera_access_desc'),
             status: _cameraStatus,
             onRequest: _requestCameraPermission,
             onOpenSettings: openAppSettings,
@@ -844,15 +844,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
                     )
                 : null,
-            testLabel: 'Test Camera',
+            testLabel: context.tr('test_camera'),
           ),
           const SizedBox(height: 10),
 
           // Microphone Permission Card
           _buildPermissionCard(
             icon: Icons.mic_none_outlined,
-            title: 'Microphone Access',
-            subtitle: 'Enables voice dictation for speaking items & expenses into AI chat.',
+            title: context.tr('microphone_access'),
+            subtitle: context.tr('microphone_access_desc'),
             status: _microphoneStatus,
             onRequest: _requestMicrophonePermission,
             onOpenSettings: openAppSettings,
@@ -862,8 +862,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           // Notification Permission Card
           _buildPermissionCard(
             icon: Icons.notifications_active_outlined,
-            title: 'Notifications',
-            subtitle: 'Receive budget threshold alerts and offline sync status.',
+            title: context.tr('notifications'),
+            subtitle: context.tr('notifications_desc'),
             status: _notificationStatus,
             onRequest: () async {
               final status = await Permission.notification.request();
@@ -874,12 +874,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── 2. ACTIVE INPUT CHANNELS ──
-          _buildSectionHeader('EXPENSE INGESTION CHANNELS'),
+          _buildSectionHeader(context.tr('expense_ingestion_channels')),
           const SizedBox(height: 10),
           _buildChannelTile(
             icon: Icons.chat_bubble_outline,
-            title: 'AI Conversational Chat',
-            subtitle: 'Log purchases via chat ("Dunkin 19 SAR: 16 latte 3 donut").',
+            title: context.tr('ai_conversational_chat'),
+            subtitle: context.tr('ai_chat_desc'),
             value: _chatEnabled,
             onChanged: (val) {
               setState(() => _chatEnabled = val);
@@ -889,8 +889,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 10),
           _buildChannelTile(
             icon: Icons.document_scanner_outlined,
-            title: 'Camera Receipt Scanner',
-            subtitle: 'OCR scan thermal receipts and ZATCA tax invoices.',
+            title: context.tr('camera_receipt_scanner'),
+            subtitle: context.tr('camera_scanner_desc'),
             value: _scannerEnabled,
             onChanged: (val) {
               setState(() => _scannerEnabled = val);
@@ -900,7 +900,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── 3. DUPLICATE RESOLUTION POLICY ──
-          _buildSectionHeader('CROSS-CHANNEL DUPLICATE RESOLUTION'),
+          _buildSectionHeader(context.tr('duplicate_resolution')),
           const SizedBox(height: 6),
           Text(
             'Choose how the system handles transactions when multiple methods are used.',
@@ -909,34 +909,31 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 12),
           _buildPolicyTile(
             policy: 'auto_enrich',
-            title: 'Smart Auto-Enrichment (Recommended)',
-            description:
-                'If a matching recent transaction exists, scanning a receipt or chatting line items will attach the details without creating a double charge.',
+            title: context.tr('auto_enrich'),
+            description: context.tr('auto_enrich_desc'),
           ),
           const SizedBox(height: 8),
           _buildPolicyTile(
             policy: 'prompt',
-            title: 'Prompt on Conflict',
-            description:
-                'Always prompt you whether to enrich the recent transaction or record it as a separate expense.',
+            title: context.tr('prompt_on_conflict'),
+            description: context.tr('prompt_desc'),
           ),
           const SizedBox(height: 8),
           _buildPolicyTile(
             policy: 'strict',
-            title: 'Strict Channel Isolation',
-            description:
-                'Flag any duplicate merchant and amount entries between receipt scanning and AI chat.',
+            title: context.tr('strict_isolation'),
+            description: context.tr('strict_desc'),
           ),
           // ── PARTNER FAIR-SHARE SETTLEMENT ──
           if (_householdId != null) ...[
-            _buildSectionHeader('PARTNER FAIR-SHARE SETTLEMENT'),
+            _buildSectionHeader(context.tr('partner_settlement')),
             const SizedBox(height: 10),
             PartnerSettlementCard(householdId: _householdId!),
             const SizedBox(height: 28),
           ],
 
           // ── DATA EXPORT & OFFLINE QUEUE ──
-          _buildSectionHeader('REPORTS & OFFLINE QUEUE'),
+          _buildSectionHeader(context.tr('reports_offline_queue')),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),

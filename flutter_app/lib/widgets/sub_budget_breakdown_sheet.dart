@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -152,8 +153,6 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
-    final catName = _categoryData?.categoryName ??
-        widget.categoryCode.replaceFirst(RegExp(r'^[A-Z]+-'), '');
     final spent = _categoryData != null ? _categoryData!.spentAmount : widget.spentAmount;
     final allocated = widget.allocatedAmount > 0 ? widget.allocatedAmount : (_categoryData?.allocatedAmount ?? 0.0);
     final prevDelta = widget.previousCycleDelta != 0.0
@@ -200,7 +199,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        catName,
+                        context.trCat(widget.categoryCode),
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -220,7 +219,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, color: Color(0xFF00C896), size: 20),
-                  tooltip: 'Edit Sub-Allocations',
+                  tooltip: context.tr('edit_allocations'),
                   onPressed: () async {
                     Budget? existing;
                     if (_categoryData != null) {
@@ -283,13 +282,13 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Total Spent',
+                          Text(context.tr('spent'),
                               style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
-                            'SAR ${fmt.format(spent)}',
+                            context.isRtl ? '${fmt.format(spent)} ر.س' : 'SAR ${fmt.format(spent)}',
                             style: GoogleFonts.outfit(
-                              color: Colors.white,
+                              color: context.textPrimary,
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
                             ),
@@ -299,11 +298,11 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('Base Allocation',
+                          Text(context.tr('base_allocation'),
                               style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
-                            'SAR ${fmt.format(allocated)}',
+                            context.isRtl ? '${fmt.format(allocated)} ر.س' : 'SAR ${fmt.format(allocated)}',
                             style: GoogleFonts.outfit(
                               color: const Color(0xFF00C896),
                               fontSize: 16,
@@ -339,8 +338,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           const SizedBox(width: 4),
                           Text(
                             prevDelta > 0
-                                ? '+SAR ${fmt.format(prevDelta)} unspent surplus rolled over'
-                                : '-SAR ${fmt.format(prevDelta.abs())} overspend carried over',
+                                ? '+SAR ${fmt.format(prevDelta)} ${context.tr('rolled_over_surplus')}'
+                                : '-SAR ${fmt.format(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
                                   ? const Color(0xFF00C896)
@@ -362,15 +361,15 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Sub-Category Budgets',
+                  context.tr('itemized_sub_budgets'),
                   style: GoogleFonts.outfit(
-                    color: Colors.white,
+                    color: context.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
-                  'Allocated & Spent',
+                  '${context.tr('allocated')} & ${context.tr('spent')}',
                   style: GoogleFonts.inter(
                     color: const Color(0xFF00C896),
                     fontSize: 11,
@@ -471,7 +470,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item.name,
+                          context.trSub(item.subCode ?? item.name, nameEn: item.name),
                           style: TextStyle(
                             color: context.textPrimary,
                             fontSize: 13,
@@ -480,7 +479,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                         ),
                         if (item.transactionCount > 0)
                           Text(
-                            '${item.transactionCount} transaction${item.transactionCount > 1 ? 's' : ''}',
+                            '${item.transactionCount} ${item.transactionCount == 1 ? context.tr('transaction_singular') : context.tr('transactions_count')}',
                             style: TextStyle(
                               color: context.textSecondary,
                               fontSize: 11,
@@ -488,7 +487,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           )
                         else if (hasAllocation)
                           Text(
-                            'No expenses yet',
+                            context.tr('no_expenses_yet'),
                             style: TextStyle(
                               color: context.textSecondary,
                               fontSize: 11,

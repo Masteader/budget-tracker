@@ -170,8 +170,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             const SizedBox(height: 3),
                             Text(
                               summary.reservedAmount > 0
-                                  ? 'SAR ${fmt.format(summary.reservedAmount)} reserved • $upcomingCount unpaid bill(s)'
-                                  : 'All monthly bills cleared for this cycle ✓',
+                                  ? 'SAR ${fmt.format(summary.reservedAmount)} ${context.tr('reserved')} • $upcomingCount ${context.tr('pending')}'
+                                  : '${context.tr('all_cleared')} ✓',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: summary.reservedAmount > 0
@@ -185,7 +185,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       ),
                       // Manage Config Button
                       IconButton(
-                        tooltip: 'Configure Bills',
+                        tooltip: context.tr('configure_bills'),
                         visualDensity: VisualDensity.compact,
                         icon: const Icon(Icons.tune_rounded, color: Color(0xFF58A6FF), size: 20),
                         onPressed: () => _showManageRecurringBillsSheet(context),
@@ -229,7 +229,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Total: SAR ${fmt.format(summary.totalRecurringMonthly)}',
+                          '${context.tr('total')}: SAR ${fmt.format(summary.totalRecurringMonthly)}',
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                         Row(
@@ -237,14 +237,14 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00C896), shape: BoxShape.circle)),
                             const SizedBox(width: 4),
                             Text(
-                              'Paid SAR ${fmt.format(summary.paidThisCycle)}',
+                              '${context.tr('paid')} SAR ${fmt.format(summary.paidThisCycle)}',
                               style: const TextStyle(color: Color(0xFF00C896), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 12),
                             Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
                             const SizedBox(width: 4),
                             Text(
-                              'Reserved SAR ${fmt.format(summary.reservedAmount)}',
+                              '${context.tr('reserved')} SAR ${fmt.format(summary.reservedAmount)}',
                               style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -265,11 +265,11 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                   child: Row(
                     children: [
-                      _buildFilterChip(0, 'All (${summary.bills.length})'),
+                      _buildFilterChip(0, '${context.tr('all')} (${summary.bills.length})'),
                       const SizedBox(width: 8),
-                      _buildFilterChip(1, 'Pending ($upcomingCount)'),
+                      _buildFilterChip(1, '${context.tr('pending')} ($upcomingCount)'),
                       const SizedBox(width: 8),
-                      _buildFilterChip(2, 'Paid ($paidCount)'),
+                      _buildFilterChip(2, '${context.tr('paid')} ($paidCount)'),
                     ],
                   ),
                 ),
@@ -469,15 +469,15 @@ class _BillRowItem extends StatelessWidget {
 
     if (bill.isPaid) {
       badgeColor = const Color(0xFF00C896);
-      badgeText = 'Paid';
+      badgeText = context.tr('paid');
       badgeIcon = Icons.check_circle_rounded;
     } else if (bill.isOverdue) {
       badgeColor = const Color(0xFFFF7B72);
-      badgeText = 'Overdue';
+      badgeText = context.tr('overdue');
       badgeIcon = Icons.error_outline_rounded;
     } else {
       badgeColor = const Color(0xFF58A6FF);
-      badgeText = 'Due ~Day ${bill.expectedDayOfMonth}';
+      badgeText = '${context.tr('due_day')} ~${bill.expectedDayOfMonth}';
       badgeIcon = Icons.schedule_rounded;
     }
 
@@ -513,7 +513,11 @@ class _BillRowItem extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        bill.merchant,
+                        (bill.subCode != null && bill.subCode!.isNotEmpty)
+                            ? context.trSub(bill.subCode!, nameAr: bill.nameAr, nameEn: bill.merchant)
+                            : (context.isArabic && bill.nameAr != null && bill.nameAr!.isNotEmpty
+                                ? bill.nameAr!
+                                : bill.merchant),
                         style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -526,14 +530,14 @@ class _BillRowItem extends StatelessWidget {
                           color: const Color(0xFF58A6FF).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('Budgeted', style: TextStyle(color: Color(0xFF58A6FF), fontSize: 9)),
+                        child: Text(context.tr('budgeted'), style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 9)),
                       ),
                     ],
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _formatCategory(bill.categoryCode),
+                  context.trCat(bill.categoryCode),
                   style: TextStyle(color: context.textSecondary, fontSize: 10),
                 ),
               ],
@@ -715,7 +719,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     ),
                                   ),
                                   Text(
-                                    '${_formatCategory(c.categoryCode)} • SAR ${fmt.format(c.allocatedAmount)}',
+                                    '${context.trCat(c.categoryCode)} • SAR ${fmt.format(c.allocatedAmount)}',
                                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                                   ),
                                 ],
@@ -789,24 +793,4 @@ IconData _getBillIcon(String? iconKey, String merchant, String catCode) {
     return Icons.school_rounded;
   }
   return Icons.receipt_long_rounded;
-}
-
-String _formatCategory(String code) {
-  final clean = code.replaceFirst(RegExp(r'^[A-Z]+-'), '');
-  switch (clean) {
-    case 'UTILITIES':
-      return 'Utilities & Bills';
-    case 'GOV':
-      return 'Government & Fees';
-    case 'ENTERTAINMENT':
-      return 'Entertainment';
-    case 'EDUCATION':
-      return 'Education';
-    case 'HEALTH':
-      return 'Health';
-    case 'FUEL':
-      return 'Fuel & Transport';
-    default:
-      return clean;
-  }
 }

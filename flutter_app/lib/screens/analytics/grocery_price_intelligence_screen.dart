@@ -7,6 +7,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/analytics/smart_shopping_basket_sheet.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 class GroceryPriceIntelligenceScreen extends StatefulWidget {
   final String householdId;
@@ -63,14 +64,14 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             const Icon(Icons.analytics_outlined, color: Color(0xFF00C896), size: 22),
             const SizedBox(width: 8),
             Text(
-              'Grocery Price Intelligence',
+              context.tr('grocery_price_intelligence'),
               style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 17),
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Smart Basket Optimizer',
+            tooltip: context.tr('smart_basket_optimizer'),
             icon: const Icon(Icons.shopping_basket_outlined, color: Color(0xFF00C896)),
             onPressed: () {
               HapticFeedback.mediumImpact();

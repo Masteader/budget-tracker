@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -700,7 +701,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.categoryName,
+                          context.trCat(widget.categoryCode),
                           style: GoogleFonts.inter(
                             color: context.textPrimary,
                             fontSize: 18,
@@ -709,7 +710,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${widget.categoryCode} • Cycle ${widget.cycleKey ?? "Current"}',
+                          '${widget.categoryCode} • ${context.tr('cycle')} ${widget.cycleKey ?? "Current"}',
                           style: GoogleFonts.inter(
                             color: context.textSecondary,
                             fontSize: 12,
@@ -751,7 +752,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'TOTAL MAIN CATEGORY BUDGET',
+                            context.tr('total_main_category_budget'),
                             style: GoogleFonts.inter(
                               color: const Color(0xFF00C896),
                               fontSize: 11,
@@ -761,7 +762,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Auto-sums all sub-categories',
+                            context.tr('auto_sums_sub_categories'),
                             style: GoogleFonts.inter(
                               color: context.textSecondary,
                               fontSize: 11,
@@ -776,7 +777,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'SAR ${_currencyFmt.format(_totalSum)}',
+                          context.isRtl
+                              ? '${_currencyFmt.format(_totalSum)} ر.س'
+                              : 'SAR ${_currencyFmt.format(_totalSum)}',
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 20,
@@ -869,7 +872,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                               return OutlinedButton.icon(
                                 onPressed: _promptAddSubCategory,
                                 icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF00C896)),
-                                label: const Text('Add Custom Sub-Category', style: TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold)),
+                                label: Text(
+                                  context.tr('add_custom_sub_category'),
+                                  style: const TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                   side: BorderSide(color: context.borderColor),
@@ -888,60 +894,45 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                    child: Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                item.nameEn,
-                                                style: GoogleFonts.inter(
-                                                  color: context.textPrimary,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 13,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onTap: () => _promptRenameSubCategory(item),
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                                child: Icon(
-                                                  Icons.edit_outlined,
-                                                  size: 15,
-                                                  color: context.textSecondary,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 2),
-                                            GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onTap: () => _promptRemoveSubCategory(item),
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                                child: Icon(
-                                                  Icons.delete_outline_rounded,
-                                                  size: 16,
-                                                  color: Color(0xFFF85149),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (item.nameAr.isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            item.nameAr,
+                                        Flexible(
+                                          child: Text(
+                                            context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn),
                                             style: GoogleFonts.inter(
+                                              color: context.textPrimary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _promptRenameSubCategory(item),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                            child: Icon(
+                                              Icons.edit_outlined,
+                                              size: 15,
                                               color: context.textSecondary,
-                                              fontSize: 11,
                                             ),
                                           ),
-                                        ],
+                                        ),
+                                        const SizedBox(width: 2),
+                                        GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _promptRemoveSubCategory(item),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                            child: const Icon(
+                                              Icons.delete_outline_rounded,
+                                              size: 16,
+                                              color: Color(0xFFF85149),
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1010,7 +1001,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
-                        'Cancel',
+                        context.tr('cancel'),
                         style: GoogleFonts.inter(color: context.textSecondary, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -1036,7 +1027,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           : FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                'Save SAR ${_currencyFmt.format(_totalSum)}',
+                                context.isRtl
+                                    ? '${context.tr('save')} ${_currencyFmt.format(_totalSum)} ر.س'
+                                    : '${context.tr('save')} SAR ${_currencyFmt.format(_totalSum)}',
                                 style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                             ),

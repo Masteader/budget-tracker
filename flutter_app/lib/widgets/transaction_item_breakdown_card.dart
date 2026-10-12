@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/zatca_decoder.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 import 'app_snackbar.dart';
 import 'receipt_photo_viewer_dialog.dart';
 
@@ -58,21 +59,21 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     }
   }
 
-  String get _sourceLabel {
+  String _getSourceLabel(BuildContext context) {
     switch (source) {
       case 'chat':
-        return 'AI Chat Entry';
+        return context.tr('ai_chat_entry');
       case 'receipt_scan':
-        return 'Invoice Scan';
+        return context.tr('invoice_scan');
       case 'manual':
-        return 'Manual Log';
+        return context.tr('manual_log');
       case 'direct':
       default:
-        return 'Direct Entry';
+        return context.tr('direct_entry');
     }
   }
 
-  Widget _buildSpentByBadge(String who, {bool detailed = false}) {
+  Widget _buildSpentByBadge(BuildContext context, String who, {bool detailed = false}) {
     Color bg;
     Color fg;
     IconData icon;
@@ -83,20 +84,20 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         bg = const Color(0xFFA371F7).withValues(alpha: 0.16);
         fg = const Color(0xFFBC8CFF);
         icon = Icons.favorite_outline;
-        label = detailed ? 'Paid by Partner' : 'Partner';
+        label = detailed ? context.tr('paid_by_partner') : context.tr('partner');
         break;
       case 'me':
         bg = const Color(0xFF1F6FEB).withValues(alpha: 0.16);
         fg = const Color(0xFF58A6FF);
         icon = Icons.person_outline;
-        label = detailed ? 'Paid by Me (Personal)' : 'Me';
+        label = detailed ? context.tr('paid_by_me') : context.tr('me');
         break;
       case 'both':
       default:
         bg = const Color(0xFF00C896).withValues(alpha: 0.16);
         fg = const Color(0xFF00C896);
         icon = Icons.people_alt_outlined;
-        label = detailed ? 'Household (Both)' : 'Both';
+        label = detailed ? context.tr('both_shared') : context.tr('both');
         break;
     }
 
@@ -228,11 +229,11 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    _sourceLabel,
+                    _getSourceLabel(context),
                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
                 ),
-                _buildSpentByBadge(spentBy),
+                _buildSpentByBadge(context, spentBy),
                 if (categoryCode != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -241,7 +242,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      categoryCode!.replaceFirst(RegExp(r'^[A-Z]+-'), ''),
+                      context.trCat(categoryCode!),
                       style: const TextStyle(
                         color: Color(0xFF00C896),
                         fontSize: 11,
@@ -256,8 +257,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       color: Colors.orange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text(
-                      'Reallocated',
+                    child: Text(
+                      context.tr('reallocated'),
                       style: TextStyle(
                         color: Colors.orange,
                         fontSize: 10,
@@ -281,13 +282,13 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.4), width: 0.8),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
-                          SizedBox(width: 4),
+                          const Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
+                          const SizedBox(width: 4),
                           Text(
-                            'View Receipt',
+                            context.tr('view_receipt'),
                             style: TextStyle(
                               color: Color(0xFF58A6FF),
                               fontSize: 10,
@@ -349,14 +350,14 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Attributed To:',
+                          context.tr('attributed_to'),
                           style: GoogleFonts.outfit(
                             color: context.textSecondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        _buildSpentByBadge(spentBy, detailed: true),
+                        _buildSpentByBadge(context, spentBy, detailed: true),
                       ],
                     ),
                   ),
@@ -367,7 +368,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'EXACT LINE ITEMS',
+                        context.tr('exact_line_items'),
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           letterSpacing: 1,
@@ -377,8 +378,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       ),
                       Text(
                         items.isNotEmpty
-                            ? '${items.length} ${items.length == 1 ? "item" : "items"}'
-                            : 'Single expense',
+                            ? '${items.length} ${context.tr('items')}'
+                            : context.tr('single_expense'),
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           color: context.textSecondary,
@@ -450,7 +451,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Total Breakdown',
+                                context.tr('total_breakdown'),
                                 style: GoogleFonts.outfit(
                                   color: context.textSecondary,
                                   fontSize: 12,
@@ -485,7 +486,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '1x $merchant ($currency ${amount.toStringAsFixed(2)})\nNo line items attached. Tap Edit to add items.',
+                              '1x $merchant ($currency ${amount.toStringAsFixed(2)})\n${context.tr('no_line_items_desc')}',
                               style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),
@@ -499,7 +500,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'RECEIPT PHOTO',
+                          context.tr('receipt_photo'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             letterSpacing: 1,
@@ -508,7 +509,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Tap to zoom',
+                          context.tr('tap_to_zoom'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             color: const Color(0xFF58A6FF),
@@ -564,7 +565,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                       const Icon(Icons.zoom_in, color: Color(0xFF58A6FF), size: 14),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'View Full',
+                                        context.tr('view_full'),
                                         style: TextStyle(color: context.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
                                       ),
                                     ],
@@ -583,7 +584,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'ZATCA QR CODE DATA',
+                          context.tr('zatca_qr_code_data'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             letterSpacing: 1,
@@ -606,7 +607,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF00C896)),
                               const SizedBox(width: 4),
                               Text(
-                                'Copy Base64',
+                                context.tr('copy_base64'),
                                 style: GoogleFonts.outfit(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
@@ -641,17 +642,17 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                   children: [
                                     if (decoded['seller'] != null)
                                       Text(
-                                        'Seller: ${decoded['seller']}',
+                                        '${context.tr('seller_merchant')} ${decoded['seller']}',
                                         style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                                       ),
                                     if (decoded['vat_number'] != null)
                                       Text(
-                                        'VAT No: ${decoded['vat_number']}',
+                                        '${context.tr('vat_registration')} ${decoded['vat_number']}',
                                         style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11),
                                       ),
                                     if (decoded['timestamp'] != null)
                                       Text(
-                                        'Time: ${decoded['timestamp']}',
+                                        '${context.tr('invoice_date')} ${decoded['timestamp']}',
                                         style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11),
                                       ),
                                     Padding(
@@ -698,14 +699,14 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     if (onEdit != null)
                       TextButton.icon(
                         icon: Icon(Icons.edit_outlined, size: 16, color: context.textSecondary),
-                        label: Text('Edit', style: TextStyle(color: context.textPrimary, fontSize: 12)),
+                        label: Text(context.tr('edit'), style: TextStyle(color: context.textPrimary, fontSize: 12)),
                         onPressed: onEdit,
                       ),
                     if (onDelete != null) ...[
                       const SizedBox(width: 8),
                       TextButton.icon(
                         icon: Icon(Icons.delete_outline, size: 16, color: context.dangerColor),
-                        label: Text('Delete', style: TextStyle(color: context.dangerColor, fontSize: 12)),
+                        label: Text(context.tr('delete'), style: TextStyle(color: context.dangerColor, fontSize: 12)),
                         onPressed: onDelete,
                       ),
                     ],
@@ -751,22 +752,22 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             children: [
               if (decoded != null) ...[
                 if (decoded['seller'] != null) ...[
-                  Text('Seller / Merchant:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(context.tr('seller_merchant'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(decoded['seller']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['vat_number'] != null) ...[
-                  Text('VAT Registration:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(context.tr('vat_registration'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(decoded['vat_number']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['timestamp'] != null) ...[
-                  Text('Invoice Date:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(context.tr('invoice_date'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(decoded['timestamp']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['total'] != null) ...[
-                  Text('Verified Total (incl. VAT):', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(context.tr('verified_total_vat'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(
                     'SAR ${decoded['total']} (VAT: SAR ${decoded['vat'] ?? '0.00'})',
                     style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
@@ -800,7 +801,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF00C896)),
-            label: const Text('Copy Base64', style: TextStyle(color: Color(0xFF00C896))),
+            label: Text(context.tr('copy_base64'), style: const TextStyle(color: Color(0xFF00C896))),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: rawQr));
               Navigator.pop(ctx);
@@ -813,7 +814,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             },
           ),
           TextButton(
-            child: Text('Close', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
             onPressed: () => Navigator.pop(ctx),
           ),
         ],

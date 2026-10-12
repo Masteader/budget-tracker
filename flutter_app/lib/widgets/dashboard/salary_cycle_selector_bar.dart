@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Reusable selector bar for switching between salary cycles (payday 27th - 26th).
 class SalaryCycleSelectorBar extends StatelessWidget {
@@ -26,7 +27,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
     final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
     final subText = currentCycle != null
         ? '${currentCycle!.cycleStart.substring(5)} - ${currentCycle!.cycleEnd.substring(5)}'
-        : 'Active Salary Cycle';
+        : context.tr('active_salary_cycle');
     final isCurrent = currentCycle?.isCurrent ?? true;
 
     return Container(
@@ -71,9 +72,9 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                             color: const Color(0xFF00C896).withValues(alpha: 0.6),
                           ),
                         ),
-                        child: const Text(
-                          'ACTIVE',
-                          style: TextStyle(
+                        child: Text(
+                          context.tr('active_badge'),
+                          style: const TextStyle(
                             color: Color(0xFF00C896),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,

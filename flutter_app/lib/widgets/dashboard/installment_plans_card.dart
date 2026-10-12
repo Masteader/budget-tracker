@@ -180,7 +180,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: context.cardBg,
           title: Text(
-            'New Installment Plan',
+            context.tr('new_installment_plan'),
             style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold),
           ),
           content: SingleChildScrollView(
@@ -192,9 +192,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   controller: merchantCtrl,
                   style: TextStyle(color: context.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Merchant / Item',
+                    labelText: context.tr('merchant_item'),
                     labelStyle: TextStyle(color: context.textSecondary),
-                    hintText: 'e.g. eXtra Electronics, Jarir',
+                    hintText: context.tr('merchant_placeholder'),
                     hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
@@ -204,14 +204,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: TextStyle(color: context.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Total Price (SAR)',
+                    labelText: context.tr('total_price'),
                     labelStyle: TextStyle(color: context.textSecondary),
                     hintText: 'e.g. 4000',
                     hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('PROVIDER', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                Text(context.tr('provider'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: ['Tamara', 'Tabby', 'Bank'].map((p) {
@@ -245,7 +245,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                Text('DURATION', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                Text(context.tr('duration'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [3, 4, 6].map((cnt) {
@@ -264,7 +264,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '$cnt mo',
+                              '$cnt ${context.tr('months_short')}',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: isSel ? const Color(0xFF00C896) : context.textPrimary,
@@ -284,7 +284,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx),
-              child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+              child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -329,7 +329,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           AppSnackBar.showSuccess(
                             context,
                             'Created $selectedProvider installment plan for $merchant',
-                            title: 'Plan Active',
+                            title: context.tr('plan_active'),
                           );
                         }
                       } catch (e) {
@@ -341,7 +341,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                     },
               child: isSubmitting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text('Confirm Plan', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(context.tr('confirm_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -431,8 +431,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             const SizedBox(height: 2),
                             Text(
                               activePlans.isEmpty
-                                  ? 'All installments cleared'
-                                  : 'SAR ${fmt.format(totalMonthlyCommitment)} / mo scheduled',
+                                  ? context.tr('all_installments_cleared')
+                                  : '${context.tr('sar')} ${fmt.format(totalMonthlyCommitment)} / ${context.tr('month')} ${context.tr('scheduled_monthly')}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty
@@ -475,7 +475,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'No Active BNPL Installments',
+                          context.tr('no_active_installments'),
                           style: GoogleFonts.outfit(
                             color: context.textPrimary,
                             fontWeight: FontWeight.bold,
@@ -484,7 +484,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Convert large purchases into 3 or 4 monthly payments (Tamara / Tabby) in the transaction edit sheet, or log a commitment directly.',
+                          context.tr('bnpl_empty_desc'),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
@@ -497,9 +497,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text(
-                            '+ Add Installment Plan',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          label: Text(
+                            '+ ${context.tr('add_installment_plan')}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           onPressed: () => _showAddPlanDialog(context),
                         ),
@@ -560,7 +560,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       ),
                                     ),
                                     Text(
-                                      'SAR ${fmt.format(plan.monthlyAmount)} / mo',
+                                      '${context.tr('sar')} ${fmt.format(plan.monthlyAmount)} / ${context.tr('month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
                                         color: const Color(0xFF00C896),
@@ -588,14 +588,18 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Installment ${plan.paidInstallments} of ${plan.installmentCount} paid',
+                                      context.isArabic
+                                          ? 'تم سداد ${plan.paidInstallments} من ${plan.installmentCount}'
+                                          : context.isUrdu
+                                              ? '${plan.installmentCount} میں سے ${plan.paidInstallments} قسط ادا ہو چکی'
+                                              : 'Installment ${plan.paidInstallments} of ${plan.installmentCount} paid',
                                       style: TextStyle(
                                         color: context.textSecondary,
                                         fontSize: 11,
                                       ),
                                     ),
                                     Text(
-                                      'Remaining: SAR ${fmt.format(plan.remainingAmount)}',
+                                      '${context.tr('remaining')}: ${context.tr('sar')} ${fmt.format(plan.remainingAmount)}',
                                       style: TextStyle(
                                         color: context.textPrimary,
                                         fontSize: 11,
@@ -617,7 +621,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         visualDensity: VisualDensity.compact,
                                       ),
                                       icon: const Icon(Icons.check_circle_outline, size: 14),
-                                      label: const Text('Record Payment', style: TextStyle(fontSize: 11)),
+                                      label: Text(context.tr('record_payment'), style: const TextStyle(fontSize: 11)),
                                       onPressed: () async {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
@@ -653,7 +657,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
                           icon: const Icon(Icons.add, size: 14),
-                          label: const Text('+ Add Installment Plan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: Text('+ ${context.tr('add_installment_plan')}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           onPressed: () => _showAddPlanDialog(context),
                         ),
                       ],

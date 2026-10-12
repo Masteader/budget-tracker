@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -723,7 +724,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Edit Transaction',
+                  context.tr('edit_transaction'),
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary),
                 ),
                 IconButton(
@@ -740,7 +741,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               controller: _merchantCtrl,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Merchant Name',
+                labelText: context.tr('merchant_name'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -755,7 +756,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
-                labelText: 'Amount (SAR)',
+                labelText: context.tr('amount_sar'),
                 prefixText: 'SAR ',
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
@@ -782,7 +783,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'BNPL Installment Plan',
+                          context.tr('installment_plans_title'),
                           style: GoogleFonts.outfit(
                             color: context.textPrimary,
                             fontSize: 13,
@@ -790,7 +791,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           ),
                         ),
                         Text(
-                          'Split into 3 or 4 monthly payments (Tamara / Tabby)',
+                          context.tr('bnpl_empty_desc'),
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],
@@ -798,7 +799,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   ),
                   TextButton(
                     onPressed: _convertToInstallmentPlan,
-                    child: const Text('Convert', style: TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold)),
+                    child: Text(context.tr('convert'), style: TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -811,7 +812,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Category',
+                labelText: context.tr('category'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -820,7 +821,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               items: _categories.map((c) {
                 return DropdownMenuItem(
                   value: c['code'],
-                  child: Text(c['name']!),
+                  child: Text(context.trCat(c['code']!)),
                 );
               }).toList(),
               onChanged: (val) {
@@ -843,7 +844,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Sub-Category',
+                labelText: context.tr('sub_category'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -852,14 +853,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               items: [
                 DropdownMenuItem<String?>(
                   value: null,
-                  child: Text('General / Unassigned', style: TextStyle(color: context.textSecondary)),
+                  child: Text(context.tr('select_sub_category'), style: TextStyle(color: context.textSecondary)),
                 ),
                 ..._subCategories.map((s) {
                   final code = s['sub_code'] as String? ?? '';
-                  final name = s['name_en'] as String? ?? code;
+                  final nameEn = s['name_en'] as String? ?? code;
+                  final nameAr = s['name_ar'] as String? ?? '';
                   return DropdownMenuItem<String?>(
                     value: code,
-                    child: Text(name),
+                    child: Text(context.trSub(code, nameAr: nameAr, nameEn: nameEn)),
                   );
                 }),
               ],
@@ -871,7 +873,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             // ── WHO PAID? ────────────────────────────────────────────────
             Text(
-              'WHO PAID?',
+              context.tr('who_paid'),
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 letterSpacing: 1,
@@ -884,7 +886,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               children: [
                 _buildSegmentOption(
                   isSelected: _selectedPaidBy == 'me',
-                  title: 'I Paid',
+                  title: context.tr('i_paid'),
                   icon: Icons.credit_card_rounded,
                   activeColor: const Color(0xFF58A6FF),
                   onTap: () {
@@ -895,7 +897,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 const SizedBox(width: 8),
                 _buildSegmentOption(
                   isSelected: _selectedPaidBy == 'partner',
-                  title: 'Partner Paid',
+                  title: context.tr('partner_paid'),
                   icon: Icons.favorite_outline,
                   activeColor: const Color(0xFFBC8CFF),
                   onTap: () {
@@ -909,7 +911,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             // ── FOR WHOM? ────────────────────────────────────────────────
             Text(
-              'FOR WHOM?',
+              context.tr('for_whom_title'),
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 letterSpacing: 1,
@@ -922,7 +924,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               children: [
                 _buildSegmentOption(
                   isSelected: _selectedBeneficiary == 'me',
-                  title: 'Me (Solo)',
+                  title: context.tr('me_solo'),
                   icon: Icons.person_outline,
                   activeColor: const Color(0xFF58A6FF),
                   onTap: () {
@@ -933,7 +935,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 const SizedBox(width: 8),
                 _buildSegmentOption(
                   isSelected: _selectedBeneficiary == 'partner',
-                  title: 'Partner',
+                  title: context.tr('partner'),
                   icon: Icons.favorite_outline,
                   activeColor: const Color(0xFFBC8CFF),
                   onTap: () {
@@ -944,7 +946,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 const SizedBox(width: 8),
                 _buildSegmentOption(
                   isSelected: _selectedBeneficiary == 'both',
-                  title: 'Both (Shared)',
+                  title: context.tr('both_shared'),
                   icon: Icons.people_alt_outlined,
                   activeColor: const Color(0xFF00C896),
                   onTap: () {
@@ -959,7 +961,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'PAID FOR WHOM (CHILDREN & DEPENDENTS)',
+                  context.tr('paid_for_whom_title'),
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     letterSpacing: 0.8,
@@ -977,7 +979,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         const Icon(Icons.add_rounded, size: 14, color: Color(0xFF00C896)),
                         const SizedBox(width: 2),
                         Text(
-                          'Add Child',
+                          context.tr('add_child'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -1006,7 +1008,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'No children added yet. Tap "+ Add Child" to assign expenses to a child.',
+                        context.tr('no_children_hint'),
                         style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary),
                       ),
                     ),
@@ -1053,7 +1055,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'LINE ITEMS',
+                  context.tr('exact_line_items'),
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     letterSpacing: 1,
@@ -1063,7 +1065,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.add, size: 16, color: Color(0xFF00C896)),
-                  label: const Text('Add Item', style: TextStyle(color: Color(0xFF00C896), fontSize: 12)),
+                  label: Text(context.tr('add_item'), style: TextStyle(color: Color(0xFF00C896), fontSize: 12)),
                   onPressed: _addItem,
                 ),
               ],
@@ -1074,7 +1076,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'No itemized breakdown attached.',
+                  context.tr('no_itemized_breakdown'),
                   style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                 ),
               ),
@@ -1098,7 +1100,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         initialValue: it['name'] ?? '',
                         style: TextStyle(color: context.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Item name',
+                          hintText: context.tr('item_name'),
                           hintStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                           border: InputBorder.none,
                           isDense: true,
@@ -1148,7 +1150,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                     )
-                  : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(context.tr('save_changes'), style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 20),
           ],

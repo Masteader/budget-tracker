@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 
@@ -338,7 +339,7 @@ User: ${widget.userEmail ?? "N/A"}
         backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(
-          'Help & Support',
+          context.tr('help_support'),
           style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary),
         ),
         actions: [

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card for managing household membership, invite code, household switching, and dependents.
 class HouseholdManagementCard extends StatelessWidget {
@@ -145,7 +146,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   ),
                   icon: const Icon(Icons.copy_rounded, size: 14),
-                  label: const Text('Copy Code', style: TextStyle(fontSize: 11)),
+                  label: Text(context.tr('copy_code'), style: const TextStyle(fontSize: 11)),
                   onPressed: onCopyInviteCode,
                 ),
               ],
@@ -286,7 +287,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.group_add_outlined, size: 16),
-                  label: const Text('Join with Code', style: TextStyle(fontSize: 12)),
+                  label: Text(context.tr('join_with_code'), style: const TextStyle(fontSize: 12)),
                   onPressed: onSwitchHousehold,
                 ),
               ),
@@ -299,7 +300,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('New Household', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: Text(context.tr('new_household'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: onCreateHousehold,
                 ),
               ),
@@ -313,7 +314,7 @@ class HouseholdManagementCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               ),
               icon: const Icon(Icons.logout_rounded, size: 15),
-              label: const Text('Leave Household', style: TextStyle(fontSize: 12)),
+              label: Text(context.tr('leave_household'), style: const TextStyle(fontSize: 12)),
               onPressed: onLeaveHousehold,
             ),
           ),
