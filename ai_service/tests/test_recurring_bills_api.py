@@ -54,3 +54,37 @@ def test_recurring_bills_endpoint_success(mock_fetch):
     assert data["reserved_amount"] == 100.0
     assert len(data["bills"]) == 2
     assert data["bills"][0]["merchant"] == "STC"
+
+
+def test_toggle_household_recurring_bill_selects_cycle_columns(monkeypatch):
+    import recurring_detector
+    from unittest.mock import MagicMock
+
+    mock_sb = MagicMock()
+    mock_select = mock_sb.table("budgets").select.return_value.eq.return_value.eq.return_value.execute
+    mock_select.return_value.data = [
+        {
+            "id": "b-123",
+            "category_code": "OPEX-UTILITIES",
+            "cycle_key": "2026-10",
+            "month": "2026-10-01",
+            "sub_allocations": {},
+        }
+    ]
+    mock_sb.table("budgets").update.return_value.eq.return_value.execute.return_value.data = [{"status": "ok"}]
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_sb)
+
+    # When cycle_info returns 2026-10
+    monkeypatch.setattr("recurring_detector.get_cycle_for_date", lambda: {"cycle_key": "2026-10"})
+
+    res = recurring_detector.toggle_household_recurring_bill(
+        household_id="hh-test",
+        category_code="OPEX-UTILITIES",
+        sub_code="ELECTRICITY",
+        is_recurring=True,
+    )
+
+    # Verify that select was called with cycle_key and month
+    mock_sb.table("budgets").select.assert_called_with("id, sub_allocations, cycle_key, month")
+    assert res["status"] == "success"
+    assert res["is_recurring"] is True

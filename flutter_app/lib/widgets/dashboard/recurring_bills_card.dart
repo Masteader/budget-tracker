@@ -690,14 +690,22 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                               value: c.isRecurring,
                               activeColor: const Color(0xFF00C896),
                               onChanged: (val) async {
-                                await ApiService.instance.toggleRecurringBill(
-                                  householdId: widget.householdId,
-                                  categoryCode: c.categoryCode,
-                                  subCode: c.subCode,
-                                  isRecurring: val,
-                                );
-                                widget.onUpdated();
-                                setState(() => _loadCandidates());
+                                setState(() {
+                                  c.isRecurring = val;
+                                });
+                                try {
+                                  await ApiService.instance.toggleRecurringBill(
+                                    householdId: widget.householdId,
+                                    categoryCode: c.categoryCode,
+                                    subCode: c.subCode,
+                                    isRecurring: val,
+                                  );
+                                  widget.onUpdated();
+                                } catch (_) {
+                                  if (mounted) {
+                                    setState(() => c.isRecurring = !val);
+                                  }
+                                }
                               },
                             ),
                           ],

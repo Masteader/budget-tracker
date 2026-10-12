@@ -580,11 +580,28 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             isActive: isActive,
           );
           try {
-            await supabase
+            final existing = await supabase
                 .from('budgets')
-                .update({'is_active': isActive})
+                .select('id')
                 .eq('household_id', data.householdId)
                 .eq('category_code', cat.code);
+            if (existing.isEmpty && isActive) {
+              await supabase.from('budgets').insert({
+                'household_id': data.householdId,
+                'category_code': cat.code,
+                'allocated_amount': 0.0,
+                'spent_amount': 0.0,
+                'is_active': true,
+                'month': _currentMonthStr,
+                'cycle_key': _currentCycleKey,
+              });
+            } else {
+              await supabase
+                  .from('budgets')
+                  .update({'is_active': isActive})
+                  .eq('household_id', data.householdId)
+                  .eq('category_code', cat.code);
+            }
           } catch (_) {}
           if (mounted) {
             setState(() {

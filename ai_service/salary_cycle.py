@@ -934,6 +934,19 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
         logger.warning("Could not query household_category_settings: %s", exc)
         settings_map = {}
 
+    # Query budgets table directly since it exists in Supabase and maintains is_active per category
+    budget_status_map = {}
+    try:
+        b_resp = client.table("budgets").select("category_code, is_active").eq("household_id", household_id).execute()
+        for b in (b_resp.data or []):
+            code_val = b.get("category_code")
+            if code_val:
+                # If any budget row for this category is explicitly active, record True; if all False, False
+                if code_val not in budget_status_map or b.get("is_active") is True:
+                    budget_status_map[code_val] = bool(b.get("is_active"))
+    except Exception as exc:
+        logger.warning("Could not query budgets for category status: %s", exc)
+
     initial_core = {
         "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
         "OPEX-SHOPPING", "OPEX-HEALTH", "CAPEX-EDUCATION", "OPEX-MISC",
@@ -947,6 +960,8 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
         code = cat["code"]
         if code in settings_map:
             is_active = bool(settings_map[code])
+        elif code in budget_status_map:
+            is_active = bool(budget_status_map[code])
         else:
             is_active = code in initial_core
 
@@ -978,9 +993,26 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
         logger.warning("Could not persist household_category_settings: %s", exc)
 
     try:
-        client.table("budgets").update({
+        update_res = client.table("budgets").update({
             "is_active": is_active,
         }).eq("household_id", household_id).eq("category_code", category_code).execute()
+
+        # If activating and no budget row existed for this category yet, create an initial budget row
+        if is_active and (not update_res.data or len(update_res.data) == 0):
+            existing_check = client.table("budgets").select("id").eq("household_id", household_id).eq("category_code", category_code).execute()
+            if not existing_check.data or len(existing_check.data) == 0:
+                today = datetime.now(timezone.utc).date()
+                month_str = today.replace(day=1).isoformat()
+                cycle_key = f"{today.year}-{today.month:02d}-27"
+                client.table("budgets").insert({
+                    "household_id": household_id,
+                    "category_code": category_code,
+                    "allocated_amount": 0.0,
+                    "spent_amount": 0.0,
+                    "is_active": True,
+                    "month": month_str,
+                    "cycle_key": cycle_key,
+                }).execute()
     except Exception as exc:
         logger.warning("Could not sync budgets is_active for %s: %s", category_code, exc)
 

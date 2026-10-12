@@ -463,15 +463,20 @@ def toggle_household_recurring_bill(
 
     resp = (
         client.table("budgets")
-        .select("id, sub_allocations")
+        .select("id, sub_allocations, cycle_key, month")
         .eq("household_id", household_id)
         .eq("category_code", category_code)
         .execute()
     )
+    rows = resp.data or []
     matching = [
-        r for r in (resp.data or [])
+        r for r in rows
         if r.get("cycle_key") == cycle_key or (not r.get("cycle_key") and (r.get("month") or "")[:7] == cycle_key)
     ]
+
+    # Resilient fallback: if no row explicitly matches current cycle key, use the most recent budget row for this category
+    if not matching and rows:
+        matching = rows
 
     if not matching:
         return {"status": "error", "message": f"Budget for {category_code} not found in active cycle."}

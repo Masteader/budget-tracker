@@ -118,11 +118,11 @@ class RecurringBillCandidate {
   final String nameEn;
   final String nameAr;
   final double allocatedAmount;
-  final bool isRecurring;
+  bool isRecurring;
   final int dueDay;
   final String iconKey;
 
-  const RecurringBillCandidate({
+  RecurringBillCandidate({
     required this.categoryCode,
     required this.subCode,
     required this.nameEn,
@@ -132,6 +132,28 @@ class RecurringBillCandidate {
     required this.dueDay,
     required this.iconKey,
   });
+
+  RecurringBillCandidate copyWith({
+    String? categoryCode,
+    String? subCode,
+    String? nameEn,
+    String? nameAr,
+    double? allocatedAmount,
+    bool? isRecurring,
+    int? dueDay,
+    String? iconKey,
+  }) {
+    return RecurringBillCandidate(
+      categoryCode: categoryCode ?? this.categoryCode,
+      subCode: subCode ?? this.subCode,
+      nameEn: nameEn ?? this.nameEn,
+      nameAr: nameAr ?? this.nameAr,
+      allocatedAmount: allocatedAmount ?? this.allocatedAmount,
+      isRecurring: isRecurring ?? this.isRecurring,
+      dueDay: dueDay ?? this.dueDay,
+      iconKey: iconKey ?? this.iconKey,
+    );
+  }
 
   factory RecurringBillCandidate.fromMap(Map<String, dynamic> map) {
     return RecurringBillCandidate(

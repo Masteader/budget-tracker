@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 
@@ -7,7 +8,7 @@ import '../../models/models.dart';
 class CategoryLibrarySheet extends StatefulWidget {
   final List<CategoryItem> activeCategories;
   final List<CategoryItem> inactiveCategories;
-  final void Function(CategoryItem category, bool isActive) onToggle;
+  final FutureOr<void> Function(CategoryItem category, bool isActive) onToggle;
   final VoidCallback onAddCustom;
 
   const CategoryLibrarySheet({
@@ -68,15 +69,19 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     setState(() {
       _processingCodes.add(item.code);
       _activeCategories.removeWhere((c) => c.code == item.code);
-      _inactiveCategories.add(item);
+      if (!_inactiveCategories.any((c) => c.code == item.code)) {
+        _inactiveCategories.add(item);
+      }
     });
     try {
-      widget.onToggle(item, false);
+      await widget.onToggle(item, false);
     } catch (_) {
       if (mounted) {
         setState(() {
           _inactiveCategories.removeWhere((c) => c.code == item.code);
-          _activeCategories.add(item);
+          if (!_activeCategories.any((c) => c.code == item.code)) {
+            _activeCategories.add(item);
+          }
         });
       }
     } finally {
@@ -90,15 +95,19 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     setState(() {
       _processingCodes.add(item.code);
       _inactiveCategories.removeWhere((c) => c.code == item.code);
-      _activeCategories.add(item);
+      if (!_activeCategories.any((c) => c.code == item.code)) {
+        _activeCategories.add(item);
+      }
     });
     try {
-      widget.onToggle(item, true);
+      await widget.onToggle(item, true);
     } catch (_) {
       if (mounted) {
         setState(() {
           _activeCategories.removeWhere((c) => c.code == item.code);
-          _inactiveCategories.add(item);
+          if (!_inactiveCategories.any((c) => c.code == item.code)) {
+            _inactiveCategories.add(item);
+          }
         });
       }
     } finally {
