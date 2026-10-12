@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -311,18 +312,18 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     final res = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Add Sub-Category for ${widget.categoryName}',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: context.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Sub-Category Name',
                 hintText: 'e.g. Fiber Internet, Specialty Coffee',
@@ -332,7 +333,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             TextField(
               controller: amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: context.textPrimary),
               decoration: const InputDecoration(
                 labelText: 'Initial Allocation',
                 prefixText: 'SAR ',
@@ -343,7 +344,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -395,11 +396,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       context: context,
       useRootNavigator: true,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Rename Sub-Category',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: GoogleFonts.inter(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -407,22 +408,22 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           children: [
             Text(
               'Code: ${item.subCode}',
-              style: GoogleFonts.inter(color: const Color(0xFF8B949E), fontSize: 12),
+              style: GoogleFonts.inter(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: nameCtrl,
               autofocus: true,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Sub-Category Name',
                 hintText: 'Enter new name',
-                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF30363D)),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -435,7 +436,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -498,11 +499,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       context: context,
       useRootNavigator: true,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Remove Sub-Category?',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: GoogleFonts.inter(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Text(
           'Are you sure you want to remove "${item.nameEn}"?\n\nThis will remove its allocation from the ${widget.categoryName} budget.',
@@ -511,7 +512,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -668,9 +669,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         maxHeight: MediaQuery.of(context).size.height * 0.88,
       ),
       margin: EdgeInsets.only(bottom: bottomInset),
-      decoration: const BoxDecoration(
-        color: Color(0xFF161B22),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         top: false,
@@ -683,7 +684,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFF30363D),
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -701,7 +702,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         Text(
                           widget.categoryName,
                           style: GoogleFonts.inter(
-                            color: Colors.white,
+                            color: context.textPrimary,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -710,7 +711,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         Text(
                           '${widget.categoryCode} • Cycle ${widget.cycleKey ?? "Current"}',
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF8B949E),
+                            color: context.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -719,7 +720,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF8B949E)),
+                    icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   ),
                 ],
               ),
@@ -733,8 +734,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0F2D24), Color(0xFF161B22)],
+                  gradient: LinearGradient(
+                    colors: context.isDark ? const [Color(0xFF0F2D24), Color(0xFF161B22)] : const [Color(0xFFE6F9F2), Color(0xFFF1F5F9)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -762,7 +763,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           Text(
                             'Auto-sums all sub-categories',
                             style: GoogleFonts.inter(
-                              color: const Color(0xFF8B949E),
+                              color: context.textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -845,10 +846,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                   filled: true,
-                                  fillColor: const Color(0xFF0D1117),
+                                  fillColor: context.inputBg,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: Color(0xFF30363D)),
+                                    borderSide: BorderSide(color: context.borderColor),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -871,7 +872,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                 label: const Text('Add Custom Sub-Category', style: TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold)),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 12),
-                                  side: const BorderSide(color: Color(0xFF30363D)),
+                                  side: BorderSide(color: context.borderColor),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                               );
@@ -880,9 +881,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0D1117),
+                                color: context.subtleCardBg,
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFF30363D)),
+                                border: Border.all(color: context.borderColor),
                               ),
                               child: Row(
                                 children: [
@@ -896,7 +897,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                               child: Text(
                                                 item.nameEn,
                                                 style: GoogleFonts.inter(
-                                                  color: Colors.white,
+                                                  color: context.textPrimary,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 13,
                                                 ),
@@ -907,12 +908,12 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                             GestureDetector(
                                               behavior: HitTestBehavior.opaque,
                                               onTap: () => _promptRenameSubCategory(item),
-                                              child: const Padding(
-                                                padding: EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
                                                 child: Icon(
                                                   Icons.edit_outlined,
                                                   size: 15,
-                                                  color: Color(0xFF8B949E),
+                                                  color: context.textSecondary,
                                                 ),
                                               ),
                                             ),
@@ -920,8 +921,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                             GestureDetector(
                                               behavior: HitTestBehavior.opaque,
                                               onTap: () => _promptRemoveSubCategory(item),
-                                              child: const Padding(
-                                                padding: EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
                                                 child: Icon(
                                                   Icons.delete_outline_rounded,
                                                   size: 16,
@@ -936,7 +937,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                           Text(
                                             item.nameAr,
                                             style: GoogleFonts.inter(
-                                              color: const Color(0xFF8B949E),
+                                              color: context.textSecondary,
                                               fontSize: 11,
                                             ),
                                           ),
@@ -952,7 +953,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                       controller: item.controller,
                                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                       style: GoogleFonts.inter(
-                                        color: Colors.white,
+                                        color: context.textPrimary,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -967,15 +968,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                         filled: true,
-                                        fillColor: const Color(0xFF161B22),
+                                        fillColor: context.inputBg,
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
-                                          borderSide: const BorderSide(color: Color(0xFF30363D)),
+                                          borderSide: BorderSide(color: context.borderColor),
                                         ),
                                         enabledBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
-                                          borderSide: const BorderSide(color: Color(0xFF30363D)),
+                                          borderSide: BorderSide(color: context.borderColor),
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
@@ -994,9 +995,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             // Action Buttons
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              decoration: const BoxDecoration(
-                color: Color(0xFF161B22),
-                border: Border(top: BorderSide(color: Color(0xFF30363D))),
+              decoration: BoxDecoration(
+                color: context.cardBg,
+                border: Border(top: BorderSide(color: context.borderColor)),
               ),
               child: Row(
                 children: [
@@ -1005,12 +1006,12 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                       onPressed: _isSaving ? null : () => Navigator.pop(context, false),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Color(0xFF30363D)),
+                        side: BorderSide(color: context.borderColor),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         'Cancel',
-                        style: GoogleFonts.inter(color: Colors.white70, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.inter(color: context.textSecondary, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),

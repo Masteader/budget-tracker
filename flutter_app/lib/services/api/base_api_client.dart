@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import '../../main.dart';
 import '../../supabase_config.dart';
 
 class BaseApiClient {

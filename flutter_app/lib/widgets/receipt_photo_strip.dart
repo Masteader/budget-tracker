@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
 
 /// Horizontal photo thumbnail strip for multi-page receipts with page numbers and delete actions.
 class ReceiptPhotoStrip extends StatelessWidget {
@@ -35,16 +36,16 @@ class ReceiptPhotoStrip extends StatelessWidget {
                   child: Container(
                     width: 85,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0D1117),
+                      color: context.subtleCardBg,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF30363D)),
+                      border: Border.all(color: context.borderColor),
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add_a_photo_outlined, color: Color(0xFF00C896), size: 26),
-                        SizedBox(height: 4),
-                        Text('Add Page', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                        const Icon(Icons.add_a_photo_outlined, color: Color(0xFF00C896), size: 26),
+                        const SizedBox(height: 4),
+                        Text('Add Page', style: TextStyle(color: context.textSecondary, fontSize: 11)),
                       ],
                     ),
                   ),

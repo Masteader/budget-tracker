@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_service.dart';
@@ -129,7 +130,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
       ),
@@ -147,7 +148,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   Text(
                     'Confirm Expense Details',
                     style: GoogleFonts.outfit(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -176,22 +177,22 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           // Merchant name input
           TextField(
             controller: _merchantController,
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13),
             decoration: InputDecoration(
               labelText: 'Merchant / Store',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
               isDense: true,
               filled: true,
-              fillColor: const Color(0xFF0D1117),
+              fillColor: context.inputBg,
               prefixIcon: const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF00C896)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -210,9 +211,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1117),
+                    color: context.inputBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF30363D)),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
@@ -220,8 +221,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                           ? _selectedCategoryCode
                           : _defaultCategories.first['code'],
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF161B22),
-                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
+                      dropdownColor: context.cardBg,
+                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12),
                       items: _defaultCategories.map((c) {
                         return DropdownMenuItem(
                           value: c['code'],
@@ -249,9 +250,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1117),
+                    color: context.inputBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF30363D)),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: _loadingSubs
@@ -276,8 +277,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                               _availableSubCategories.isEmpty ? 'General' : 'Sub-Category',
                               style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
                             ),
-                            dropdownColor: const Color(0xFF161B22),
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
+                            dropdownColor: context.cardBg,
+                            style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12),
                             items: _availableSubCategories.map((s) {
                               final subCode = s['sub_code'] as String? ?? '';
                               final nameEn = s['name_en'] as String? ?? subCode;
@@ -307,7 +308,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             style: GoogleFonts.outfit(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -335,7 +336,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             style: GoogleFonts.outfit(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -377,16 +378,16 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF21262D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '${items.length} item(s) found:',
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   ...items.map((it) {
@@ -401,7 +402,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                               children: [
                                 Text(
                                   '${it['quantity']}x ${it['name']}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  style: TextStyle(color: context.textPrimary, fontSize: 12),
                                 ),
                                 if (itemSub != null && itemSub.isNotEmpty) ...[
                                   const SizedBox(width: 6),
@@ -469,7 +470,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               TextButton(
                 onPressed: widget.onCancel,
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF8B949E),
+                  foregroundColor: context.textSecondary,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
                 child: const Text('Cancel', style: TextStyle(fontSize: 12)),
@@ -493,10 +494,10 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.15) : const Color(0xFF0D1117),
+          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.15) : context.chipBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
             width: isSelected ? 1.2 : 0.8,
           ),
         ),
@@ -504,7 +505,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00C896) : const Color(0xFF8B949E)),
+              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00C896) : context.textSecondary),
               const SizedBox(width: 4),
             ],
             Text(
@@ -512,7 +513,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? const Color(0xFF00C896) : const Color(0xFFC9D1D9),
+                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
               ),
             ),
           ],

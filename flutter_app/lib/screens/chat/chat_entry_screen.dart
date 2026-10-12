@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -190,10 +191,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF30363D)),
+          side: BorderSide(color: context.borderColor),
         ),
         title: Row(
           children: [
@@ -205,14 +206,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             ),
           ],
         ),
-        content: const Text(
+        content: Text(
           'Microphone access is required to speak your invoice items into the chat. Please tap "Open Settings" to enable Microphone access.',
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 14),
+          style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -498,7 +499,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
         titleSpacing: 0,
         title: Row(
@@ -521,9 +522,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: const Color(0xFF21262D),
+              color: context.chipBg,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF30363D)),
+              border: Border.all(color: context.borderColor),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -539,7 +540,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: Text(
                       '🇸🇦 ع',
                       style: TextStyle(
-                        color: _selectedLocale == 'ar_SA' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLocale == 'ar_SA' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -557,7 +558,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: Text(
                       '🇺🇸 EN',
                       style: TextStyle(
-                        color: _selectedLocale == 'en_US' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLocale == 'en_US' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -575,7 +576,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: Text(
                       '🇵🇰 اردو',
                       style: TextStyle(
-                        color: _selectedLocale == 'ur_PK' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLocale == 'ur_PK' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -586,7 +587,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             ),
           ),
         ],
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         elevation: 0,
       ),
       body: SafeArea(
@@ -644,7 +645,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     const SizedBox(width: 10),
                     Text(
                       "Magic is happening...",
-                      style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 13),
+                      style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                     ),
                   ],
                 ),
@@ -659,9 +660,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (ctx, i) {
                   return ActionChip(
-                    backgroundColor: const Color(0xFF161B22),
-                    side: const BorderSide(color: Color(0xFF30363D)),
-                    label: Text(_quickChips[i], style: const TextStyle(fontSize: 12, color: Color(0xFFC9D1D9))),
+                    backgroundColor: context.cardBg,
+                    side: BorderSide(color: context.borderColor),
+                    label: Text(_quickChips[i], style: TextStyle(fontSize: 12, color: context.textPrimary)),
                     onPressed: () => _sendMessage(_quickChips[i]),
                   );
                 },
@@ -678,9 +679,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             // Input bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFF161B22),
-                border: Border(top: BorderSide(color: Color(0xFF30363D))),
+              decoration: BoxDecoration(
+                color: context.cardBg,
+                border: Border(top: BorderSide(color: context.borderColor)),
               ),
               child: Row(
                 children: [
@@ -694,17 +695,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         hintText: _selectedLocale == 'ar_SA'
                             ? "تحدث أو اكتب: بنده 85 ريال حليب 15..."
                             : "Speak or type: Dunkin 19 SAR...",
-                        hintStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                        hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                         filled: true,
-                        fillColor: const Color(0xFF0D1117),
+                        fillColor: context.inputBg,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF30363D)),
+                          borderSide: BorderSide(color: context.borderColor),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF30363D)),
+                          borderSide: BorderSide(color: context.borderColor),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -718,10 +719,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      color: _isListening ? Colors.redAccent : const Color(0xFF21262D),
+                      color: _isListening ? Colors.redAccent : context.chipBg,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: _isListening ? Colors.red : const Color(0xFF30363D),
+                        color: _isListening ? Colors.red : context.borderColor,
                         width: 1.5,
                       ),
                       boxShadow: _isListening

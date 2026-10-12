@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../theme/app_themes.dart';
 
 /// Card displayed when an invoice matches a recent transaction amount.
 class DuplicateCandidateCard extends StatelessWidget {
@@ -44,7 +45,7 @@ class DuplicateCandidateCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             message,
-            style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
+            style: TextStyle(color: context.textPrimary, fontSize: 13),
           ),
           const SizedBox(height: 12),
           Row(
@@ -65,7 +66,7 @@ class DuplicateCandidateCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                  style: OutlinedButton.styleFrom(foregroundColor: context.textPrimary, side: BorderSide(color: context.borderColor)),
                   onPressed: onLogSeparate,
                   child: const Text('Log as Separate', style: TextStyle(fontSize: 11)),
                 ),

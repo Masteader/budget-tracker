@@ -6,6 +6,7 @@ import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/analytics/smart_shopping_basket_sheet.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_themes.dart';
 
 class GroceryPriceIntelligenceScreen extends StatefulWidget {
   final String householdId;
@@ -53,9 +54,9 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         elevation: 0,
         title: Row(
           children: [
@@ -99,14 +100,14 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             child: TextField(
               controller: _searchCtrl,
               onSubmitted: (v) => _loadPrices(query: v),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: TextStyle(color: context.textPrimary, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Search items (e.g. Milk, Chicken, Bread, Danube)...',
-                hintStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF8B949E), size: 20),
+                hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: context.textSecondary, size: 20),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: Color(0xFF8B949E), size: 18),
+                        icon: Icon(Icons.clear, color: context.textSecondary, size: 18),
                         onPressed: () {
                           _searchCtrl.clear();
                           _loadPrices();
@@ -114,15 +115,15 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFF161B22),
+                fillColor: context.inputBg,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF30363D)),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF30363D)),
+                  borderSide: BorderSide(color: context.borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -144,11 +145,11 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 final f = _quickFilters[i];
                 final isSelected = _selectedChip == f;
                 return ChoiceChip(
-                  label: Text(f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : const Color(0xFFC9D1D9))),
+                  label: Text(f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : context.textPrimary)),
                   selected: isSelected,
                   selectedColor: const Color(0xFF00C896),
-                  backgroundColor: const Color(0xFF161B22),
-                  side: BorderSide(color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D)),
+                  backgroundColor: context.cardBg,
+                  side: BorderSide(color: isSelected ? const Color(0xFF00C896) : context.borderColor),
                   onSelected: (val) {
                     HapticFeedback.selectionClick();
                     setState(() => _selectedChip = f);
@@ -205,9 +206,9 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,14 +250,14 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(color: Color(0xFF30363D), height: 1),
+          Divider(color: context.borderColor, height: 1),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Price Trend Curve',
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
               ),
               Text(
                 'Touch for details',
@@ -268,11 +269,11 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
           _buildPriceTrendChart(item['history'] as List? ?? [], minPrice, latestPrice),
           if (storeComparison.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Divider(color: Color(0xFF30363D), height: 1),
+            Divider(color: context.borderColor, height: 1),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Store Price Comparison',
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -284,10 +285,10 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.1) : const Color(0xFF21262D),
+                    color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.1) : context.subtleCardBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.4) : const Color(0xFF30363D),
+                      color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.4) : context.borderColor,
                     ),
                   ),
                   child: Row(
@@ -300,7 +301,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                       Text(
                         '${entry.key}: SAR ${price.toStringAsFixed(2)}',
                         style: TextStyle(
-                          color: isCheapest ? const Color(0xFF00C896) : const Color(0xFFC9D1D9),
+                          color: isCheapest ? const Color(0xFF00C896) : context.textPrimary,
                           fontSize: 11,
                           fontWeight: isCheapest ? FontWeight.bold : FontWeight.normal,
                         ),
@@ -358,8 +359,8 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
           maxY: maxY > minY ? maxY : (minY + 10),
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => const Color(0xFF161B22),
-              tooltipBorder: const BorderSide(color: Color(0xFF30363D)),
+              getTooltipColor: (_) => context.cardBg,
+              tooltipBorder: BorderSide(color: context.borderColor),
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
                   final idx = spot.x.toInt();
@@ -393,7 +394,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                     radius: 3.5,
                     color: const Color(0xFF00C896),
                     strokeWidth: 1.5,
-                    strokeColor: const Color(0xFF0D1117),
+                    strokeColor: context.cardBg,
                   );
                 },
               ),
@@ -419,7 +420,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+        Text(label, style: TextStyle(color: context.textSecondary, fontSize: 11)),
         const SizedBox(height: 2),
         Text(
           value,

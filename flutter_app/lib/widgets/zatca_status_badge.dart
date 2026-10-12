@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
 
 /// Displays a verified green status banner for Saudi ZATCA e-invoices with seller, total, and 15% VAT.
 class ZatcaStatusBadge extends StatelessWidget {
@@ -37,7 +38,7 @@ class ZatcaStatusBadge extends StatelessWidget {
               children: [
                 Text(
                   'ZATCA Verified: $seller',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: context.textPrimary, fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
@@ -50,7 +51,7 @@ class ZatcaStatusBadge extends StatelessWidget {
           ),
           if (onDismiss != null)
             IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Color(0xFF8B949E)),
+              icon: Icon(Icons.close, size: 18, color: context.textSecondary),
               onPressed: onDismiss,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),

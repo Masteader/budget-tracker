@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../theme/app_themes.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 
 class HelpSupportScreen extends StatefulWidget {
@@ -254,10 +255,10 @@ User: ${widget.userEmail ?? "N/A"}
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF30363D)),
+          side: BorderSide(color: context.borderColor),
         ),
         title: Row(
           children: [
@@ -265,7 +266,7 @@ User: ${widget.userEmail ?? "N/A"}
             const SizedBox(width: 10),
             Text('Contact Developer',
                 style: GoogleFonts.outfit(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+                    color: context.textPrimary, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -275,15 +276,15 @@ User: ${widget.userEmail ?? "N/A"}
             Text(
               'Developer email address copied to clipboard:',
               style: GoogleFonts.outfit(
-                  color: const Color(0xFF8B949E), fontSize: 13),
+                  color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF30363D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: SelectableText(
                 developerEmail,
@@ -296,7 +297,7 @@ User: ${widget.userEmail ?? "N/A"}
             Text(
               'Please send an email from your preferred mail client. Your diagnostics information has been prepared.',
               style: GoogleFonts.outfit(
-                  color: const Color(0xFF8B949E), fontSize: 12),
+                  color: context.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -332,13 +333,13 @@ User: ${widget.userEmail ?? "N/A"}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(
           'Help & Support',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary),
         ),
         actions: [
           // Independent language selector toggle pill
@@ -346,9 +347,9 @@ User: ${widget.userEmail ?? "N/A"}
             margin: const EdgeInsets.symmetric(vertical: 8),
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: const Color(0xFF21262D),
+              color: context.chipBg,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF30363D)),
+              border: Border.all(color: context.borderColor),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -364,7 +365,7 @@ User: ${widget.userEmail ?? "N/A"}
                     child: Text(
                       '🇸🇦 ع',
                       style: TextStyle(
-                        color: _selectedLanguage == 'ar' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLanguage == 'ar' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                       ),
@@ -382,7 +383,7 @@ User: ${widget.userEmail ?? "N/A"}
                     child: Text(
                       '🇺🇸 EN',
                       style: TextStyle(
-                        color: _selectedLanguage == 'en' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLanguage == 'en' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                       ),
@@ -400,7 +401,7 @@ User: ${widget.userEmail ?? "N/A"}
                     child: Text(
                       '🇵🇰 اردو',
                       style: TextStyle(
-                        color: _selectedLanguage == 'ur' ? Colors.black : const Color(0xFF8B949E),
+                        color: _selectedLanguage == 'ur' ? Colors.black : context.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                       ),
@@ -422,7 +423,7 @@ User: ${widget.userEmail ?? "N/A"}
           indicatorColor: const Color(0xFF00C896),
           indicatorWeight: 3,
           labelColor: const Color(0xFF00C896),
-          unselectedLabelColor: const Color(0xFF8B949E),
+          unselectedLabelColor: context.textSecondary,
           labelStyle:
               GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
@@ -464,13 +465,13 @@ User: ${widget.userEmail ?? "N/A"}
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF161B22), Color(0xFF1F242C)],
+            gradient: LinearGradient(
+              colors: context.isDark ? const [Color(0xFF161B22), Color(0xFF1F242C)] : const [Color(0xFFF1F5F9), Color(0xFFE2E8F0)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF30363D)),
+            border: Border.all(color: context.borderColor),
           ),
           child: Row(
             children: [
@@ -492,7 +493,7 @@ User: ${widget.userEmail ?? "N/A"}
                     Text(
                       'Interactive Feature Walkthrough',
                       style: GoogleFonts.outfit(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -501,7 +502,7 @@ User: ${widget.userEmail ?? "N/A"}
                     Text(
                       'Replay the 5-step visual guide to learn about scanners, bills, and salary cycles.',
                       style: GoogleFonts.outfit(
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -532,17 +533,17 @@ User: ${widget.userEmail ?? "N/A"}
         TextField(
           controller: _faqSearchController,
           onChanged: (v) => setState(() => _faqQuery = v),
-          style: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
+          style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Search help topics and guides...',
             hintStyle:
-                GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 13),
+                GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
             prefixIcon:
-                const Icon(Icons.search_rounded, color: Color(0xFF8B949E)),
+                Icon(Icons.search_rounded, color: context.textSecondary),
             suffixIcon: _faqQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear_rounded,
-                        color: Color(0xFF8B949E)),
+                    icon: Icon(Icons.clear_rounded,
+                        color: context.textSecondary),
                     onPressed: () {
                       _faqSearchController.clear();
                       setState(() => _faqQuery = '');
@@ -550,11 +551,11 @@ User: ${widget.userEmail ?? "N/A"}
                   )
                 : null,
             filled: true,
-            fillColor: const Color(0xFF161B22),
+            fillColor: context.inputBg,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF30363D)),
+              borderSide: BorderSide(color: context.borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -567,12 +568,12 @@ User: ${widget.userEmail ?? "N/A"}
         // Categories List
         ...filteredCategories.map((cat) {
           return Card(
-            color: const Color(0xFF161B22),
+            color: context.cardBg,
             elevation: 0,
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFF30363D)),
+              side: BorderSide(color: context.borderColor),
             ),
             child: Theme(
               data:
@@ -582,7 +583,7 @@ User: ${widget.userEmail ?? "N/A"}
                 title: Text(
                   cat.title,
                   style: GoogleFonts.outfit(
-                    color: Colors.white,
+                    color: context.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -591,9 +592,9 @@ User: ${widget.userEmail ?? "N/A"}
                   return Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(
-                        top: BorderSide(color: Color(0xFF21262D)),
+                        top: BorderSide(color: context.borderColor),
                       ),
                     ),
                     child: Column(
@@ -611,7 +612,7 @@ User: ${widget.userEmail ?? "N/A"}
                         Text(
                           faq.answer,
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF8B949E),
+                            color: context.textSecondary,
                             fontSize: 12.5,
                             height: 1.45,
                           ),
@@ -631,9 +632,9 @@ User: ${widget.userEmail ?? "N/A"}
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
+            color: context.cardBg,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF30363D)),
+            border: Border.all(color: context.borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,7 +647,7 @@ User: ${widget.userEmail ?? "N/A"}
                   Text(
                     'Direct Developer Support',
                     style: GoogleFonts.outfit(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 13.5,
                     ),
@@ -657,7 +658,7 @@ User: ${widget.userEmail ?? "N/A"}
               Text(
                 'Have a custom question, feature request, or encountered a defect? Reach out to the developer directly.',
                 style: GoogleFonts.outfit(
-                  color: const Color(0xFF8B949E),
+                  color: context.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -706,8 +707,8 @@ User: ${widget.userEmail ?? "N/A"}
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (ctx, idx) {
               return ActionChip(
-                backgroundColor: const Color(0xFF161B22),
-                side: const BorderSide(color: Color(0xFF30363D)),
+                backgroundColor: context.cardBg,
+                side: BorderSide(color: context.borderColor),
                 label: Text(
                   quickChips[idx],
                   style: GoogleFonts.outfit(
@@ -742,16 +743,16 @@ User: ${widget.userEmail ?? "N/A"}
                     decoration: BoxDecoration(
                       color: msg.isUser
                           ? const Color(0xFF00C896)
-                          : const Color(0xFF161B22),
+                          : context.cardBg,
                       borderRadius: BorderRadius.circular(14),
                       border: msg.isUser
                           ? null
-                          : Border.all(color: const Color(0xFF30363D)),
+                          : Border.all(color: context.borderColor),
                     ),
                     child: Text(
                       msg.text,
                       style: GoogleFonts.outfit(
-                        color: msg.isUser ? Colors.black : Colors.white,
+                        color: msg.isUser ? Colors.black : context.textPrimary,
                         fontSize: 13.5,
                         height: 1.4,
                         fontWeight:
@@ -767,7 +768,7 @@ User: ${widget.userEmail ?? "N/A"}
                       padding: const EdgeInsets.all(12),
                       constraints: const BoxConstraints(maxWidth: 320),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1F242C),
+                        color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFF00C896)),
                       ),
@@ -782,7 +783,7 @@ User: ${widget.userEmail ?? "N/A"}
                               Text(
                                 'Escalate to Developer',
                                 style: GoogleFonts.outfit(
-                                  color: Colors.white,
+                                  color: context.textPrimary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
                                 ),
@@ -793,7 +794,7 @@ User: ${widget.userEmail ?? "N/A"}
                           Text(
                             'Detected technical query or bug. Tap below to send this directly to the developer email.',
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF8B949E),
+                              color: context.textSecondary,
                               fontSize: 11.5,
                             ),
                           ),
@@ -851,7 +852,7 @@ User: ${widget.userEmail ?? "N/A"}
                 Text(
                   'Thinking...',
                   style: GoogleFonts.outfit(
-                      color: const Color(0xFF8B949E), fontSize: 12),
+                      color: context.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -860,31 +861,31 @@ User: ${widget.userEmail ?? "N/A"}
         // Chat Input Bar
         Container(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            border: Border(top: BorderSide(color: Color(0xFF30363D))),
+          decoration: BoxDecoration(
+            color: context.cardBg,
+            border: Border(top: BorderSide(color: context.borderColor)),
           ),
           child: Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _chatController,
-                  style: GoogleFonts.outfit(color: Colors.white, fontSize: 13.5),
+                  style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13.5),
                   decoration: InputDecoration(
                     hintText: 'Ask anything about Budget Tracker...',
                     hintStyle: GoogleFonts.outfit(
-                        color: const Color(0xFF8B949E), fontSize: 12.5),
+                        color: context.textSecondary, fontSize: 12.5),
                     filled: true,
-                    fillColor: const Color(0xFF0D1117),
+                    fillColor: context.inputBg,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF30363D)),
+                      borderSide: BorderSide(color: context.borderColor),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF30363D)),
+                      borderSide: BorderSide(color: context.borderColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),

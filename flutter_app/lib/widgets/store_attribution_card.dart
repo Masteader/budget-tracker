@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Reusable store name input & 'Spent by who?' selector card.
@@ -21,7 +22,8 @@ class StoreAttributionCard extends StatelessWidget {
     this.compact = false,
   });
 
-  Widget _buildSpentByOption({
+  Widget _buildSpentByOption(
+    BuildContext context, {
     required String key,
     required String label,
     required IconData icon,
@@ -34,17 +36,17 @@ class StoreAttributionCard extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
           decoration: BoxDecoration(
-            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
+            color: isSelected ? activeColor.withValues(alpha: 0.18) : context.subtleCardBg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? activeColor : const Color(0xFF30363D),
+              color: isSelected ? activeColor : context.borderColor,
               width: isSelected ? 1.5 : 1.0,
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: compact ? 16 : 18, color: isSelected ? activeColor : const Color(0xFF8B949E)),
+              Icon(icon, size: compact ? 16 : 18, color: isSelected ? activeColor : context.textSecondary),
               const SizedBox(height: 3),
               Text(
                 label,
@@ -52,7 +54,7 @@ class StoreAttributionCard extends StatelessWidget {
                 style: GoogleFonts.outfit(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                  color: isSelected ? (context.isDark ? Colors.white : const Color(0xFF0F172A)) : context.textSecondary,
                 ),
               ),
             ],
@@ -68,9 +70,9 @@ class StoreAttributionCard extends StatelessWidget {
       margin: EdgeInsets.only(bottom: compact ? 8 : 14),
       padding: EdgeInsets.all(compact ? 12 : 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,7 +86,7 @@ class StoreAttributionCard extends StatelessWidget {
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: compact ? 12 : 13,
-                  color: Colors.white,
+                  color: context.textPrimary,
                 ),
               ),
             ],
@@ -92,25 +94,25 @@ class StoreAttributionCard extends StatelessWidget {
           SizedBox(height: compact ? 8 : 12),
           TextField(
             controller: merchantController,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: TextStyle(color: context.textPrimary, fontSize: 13),
             onChanged: onMerchantChanged,
             decoration: InputDecoration(
               labelText: 'Store Name / Merchant',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+              labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
               prefixIcon: const Icon(Icons.store_outlined, color: Color(0xFF00C896), size: 18),
               filled: true,
-              fillColor: const Color(0xFF0D1117),
+              fillColor: context.inputBg,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: compact ? 10 : 12,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -125,27 +127,27 @@ class StoreAttributionCard extends StatelessWidget {
               fontSize: 10,
               letterSpacing: 0.8,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
             ),
           ),
           const SizedBox(height: 6),
           Row(
             children: [
-              _buildSpentByOption(
+              _buildSpentByOption(context,
                 key: 'me',
                 label: 'Me',
                 icon: Icons.person_outline,
                 activeColor: const Color(0xFF58A6FF),
               ),
               const SizedBox(width: 6),
-              _buildSpentByOption(
+              _buildSpentByOption(context,
                 key: 'partner',
                 label: 'Partner',
                 icon: Icons.favorite_outline,
                 activeColor: const Color(0xFFBC8CFF),
               ),
               const SizedBox(width: 6),
-              _buildSpentByOption(
+              _buildSpentByOption(context,
                 key: 'both',
                 label: 'Both (Shared)',
                 icon: Icons.group_outlined,

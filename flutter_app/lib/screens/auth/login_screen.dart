@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
 import '../../supabase_config.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../theme/app_themes.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -90,11 +91,11 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D1117), Color(0xFF0A1628)],
+            colors: context.isDark ? const [Color(0xFF0D1117), Color(0xFF0A1628)] : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
           ),
         ),
         child: SafeArea(
@@ -122,13 +123,13 @@ class _LoginScreenState extends State<LoginScreen>
                     Text(
                       'Budget Tracker',
                       style: GoogleFonts.outfit(
-                        fontSize: 30, fontWeight: FontWeight.w700, color: Colors.white,
+                        fontSize: 30, fontWeight: FontWeight.w700, color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       _isLogin ? 'Welcome back' : 'Create your account',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 15),
+                      style: TextStyle(color: context.textSecondary, fontSize: 15),
                     ),
                     const SizedBox(height: 40),
 

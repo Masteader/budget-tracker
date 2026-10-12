@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../theme/app_themes.dart';
 
 typedef SendResetCodeFn = Future<void> Function(String email);
 typedef VerifyAndResetPasswordFn = Future<void> Function(String email, String token, String newPassword);
@@ -175,12 +176,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 20),
           onPressed: () {
             if (_currentStep == 2) {
               setState(() => _currentStep = 1);
@@ -191,11 +192,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D1117), Color(0xFF0A1628)],
+            colors: context.isDark ? const [Color(0xFF0D1117), Color(0xFF0A1628)] : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
           ),
         ),
         child: SafeArea(
@@ -236,33 +237,33 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             style: GoogleFonts.outfit(
               fontSize: 28,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: context.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Enter your account email address and we will send you a verification code.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF8B949E), fontSize: 14, height: 1.4),
+            style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 32),
           TextFormField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
               hintText: 'Email address',
-              hintStyle: const TextStyle(color: Color(0xFF8B949E)),
-              prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF8B949E)),
+              hintStyle: TextStyle(color: context.textSecondary),
+              prefixIcon: Icon(Icons.email_outlined, color: context.textSecondary),
               filled: true,
-              fillColor: const Color(0xFF161B22),
+              fillColor: context.inputBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -329,7 +330,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Text(
             'We sent a verification code to ${_emailCtrl.text.trim()}. Check your inbox or spam folder.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 14, height: 1.4),
+            style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 28),
           TextFormField(
@@ -347,19 +348,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               counterText: '',
               hintText: 'Code',
               hintStyle: TextStyle(
-                color: const Color(0xFF8B949E).withValues(alpha: 0.5),
+                color: context.textSecondary.withValues(alpha: 0.5),
                 letterSpacing: 4,
               ),
-              prefixIcon: const Icon(Icons.pin_outlined, color: Color(0xFF8B949E)),
+              prefixIcon: Icon(Icons.pin_outlined, color: context.textSecondary),
               filled: true,
-              fillColor: const Color(0xFF161B22),
+              fillColor: context.inputBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -377,27 +378,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TextFormField(
             controller: _passwordCtrl,
             obscureText: _obscurePass,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
               hintText: 'New password',
-              hintStyle: const TextStyle(color: Color(0xFF8B949E)),
-              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF8B949E)),
+              hintStyle: TextStyle(color: context.textSecondary),
+              prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: const Color(0xFF8B949E),
+                  color: context.textSecondary,
                 ),
                 onPressed: () => setState(() => _obscurePass = !_obscurePass),
               ),
               filled: true,
-              fillColor: const Color(0xFF161B22),
+              fillColor: context.inputBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -410,27 +411,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TextFormField(
             controller: _confirmPasswordCtrl,
             obscureText: _obscureConfirm,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
               hintText: 'Confirm new password',
-              hintStyle: const TextStyle(color: Color(0xFF8B949E)),
-              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF8B949E)),
+              hintStyle: TextStyle(color: context.textSecondary),
+              prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: const Color(0xFF8B949E),
+                  color: context.textSecondary,
                 ),
                 onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
               ),
               filled: true,
-              fillColor: const Color(0xFF161B22),
+              fillColor: context.inputBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF30363D)),
+                borderSide: BorderSide(color: context.borderColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -475,7 +476,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? 'Resend code in ${_resendCooldown}s'
                   : 'Didn\'t receive code? Resend',
               style: TextStyle(
-                color: _resendCooldown > 0 ? const Color(0xFF8B949E) : const Color(0xFF00C896),
+                color: _resendCooldown > 0 ? context.textSecondary : const Color(0xFF00C896),
                 fontWeight: FontWeight.w500,
               ),
             ),

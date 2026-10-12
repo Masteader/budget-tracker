@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_themes.dart';
 import '../widgets/app_snackbar.dart';
 
 class CsvExportService {
@@ -81,7 +82,7 @@ class CsvExportService {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -89,7 +90,7 @@ class CsvExportService {
             const SizedBox(width: 10),
             Text(
               'Export Report (${monthLabel ?? 'Current'})',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -99,21 +100,21 @@ class CsvExportService {
           children: [
             Text(
               '$count transactions • Total SAR ${totalSum.toStringAsFixed(2)}',
-              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
             Container(
               height: 160,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF30363D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: SingleChildScrollView(
                 child: Text(
                   csvContent,
-                  style: const TextStyle(color: Color(0xFFC9D1D9), fontFamily: 'monospace', fontSize: 11),
+                  style: TextStyle(color: context.textPrimary, fontFamily: 'monospace', fontSize: 11),
                 ),
               ),
             ),
@@ -122,7 +123,7 @@ class CsvExportService {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Close', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(

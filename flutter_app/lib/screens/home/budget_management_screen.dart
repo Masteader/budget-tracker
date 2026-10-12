@@ -233,7 +233,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF161B22),
+          backgroundColor: context.cardBg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
@@ -242,15 +242,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             children: [
               Text(
                 activeTab == 0 ? 'Add Budget Category' : 'Add Sub-Category',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 12),
               // Clean Segmented toggle
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1117),
+                  color: context.inputBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF30363D)),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Row(
                   children: [
@@ -267,7 +267,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             child: Text(
                               'Main Category',
                               style: TextStyle(
-                                color: activeTab == 0 ? Colors.black : Colors.white70,
+                                color: activeTab == 0 ? Colors.black : context.textSecondary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -289,7 +289,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             child: Text(
                               'Sub-Category',
                               style: TextStyle(
-                                color: activeTab == 1 ? Colors.black : Colors.white70,
+                                color: activeTab == 1 ? Colors.black : context.textSecondary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -311,7 +311,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     children: [
                       TextField(
                         controller: catNameCtrl,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.textPrimary),
                         decoration: const InputDecoration(
                           labelText: 'Category Name',
                           hintText: 'e.g. Pet Care, Fitness & Gym',
@@ -321,7 +321,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       TextField(
                         controller: catAmountCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.textPrimary),
                         decoration: const InputDecoration(
                           labelText: 'Monthly Allocation',
                           prefixText: 'SAR ',
@@ -331,8 +331,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       const SizedBox(height: 12),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Flexible Pool', style: TextStyle(color: Colors.white, fontSize: 13)),
-                        subtitle: const Text('Allow automatic reallocations if another category exceeds budget', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                        title: Text('Flexible Pool', style: TextStyle(color: context.textPrimary, fontSize: 13)),
+                        subtitle: Text('Allow automatic reallocations if another category exceeds budget', style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         value: isFlexible,
                         activeThumbColor: const Color(0xFF00C896),
                         onChanged: (v) => setDialogState(() => isFlexible = v),
@@ -344,16 +344,16 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       DropdownButtonFormField<String>(
-                        dropdownColor: const Color(0xFF161B22),
+                        dropdownColor: context.cardBg,
                         initialValue: selectedParentCode.isNotEmpty ? selectedParentCode : null,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.textPrimary),
                         decoration: const InputDecoration(
                           labelText: 'Parent Category',
                         ),
                         items: staticData.allCodes.map((c) {
                           return DropdownMenuItem<String>(
                             value: c['code'],
-                            child: Text(c['category'] ?? c['code']!, style: const TextStyle(color: Colors.white)),
+                            child: Text(c['category'] ?? c['code']!, style: TextStyle(color: context.textPrimary)),
                           );
                         }).toList(),
                         onChanged: (val) {
@@ -365,7 +365,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: subNameCtrl,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.textPrimary),
                         decoration: const InputDecoration(
                           labelText: 'Sub-Category Name',
                           hintText: 'e.g. Specialty Coffee, Dog Food',
@@ -375,7 +375,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       TextField(
                         controller: subAmountCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: context.textPrimary),
                         decoration: const InputDecoration(
                           labelText: 'Allocated Amount',
                           prefixText: 'SAR ',
@@ -388,7 +388,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+              child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
             ),
             ElevatedButton(
               onPressed: isSubmitting
@@ -497,17 +497,17 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Deactivate $categoryName?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('Deactivate $categoryName?', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
           'This will deactivate $categoryName and move it to your Category Library. Categories are never deleted, so your financial history remains safe and you can reactivate it at any time.',
-          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -649,10 +649,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       builder: (ctx, staticSnap) {
         if (!staticSnap.hasData) {
           return Scaffold(
-            backgroundColor: const Color(0xFF0D1117),
+            backgroundColor: context.scaffoldBg,
             appBar: AppBar(
               title: const Text('Budget Allocations'),
-              backgroundColor: const Color(0xFF161B22),
             ),
             body: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -701,12 +700,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         ),
                         Text(
                           headerSub,
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+                      icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                           ? () => setState(() => _currentCycleIndex--)
                           : null,
@@ -772,9 +771,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            const Text(
+                            Text(
                               'Budgets automatically roll over on monthly payday. You can copy previous month allocations or add custom categories below.',
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                              style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                             const SizedBox(height: 12),
                             if (staticData.isAdmin)
@@ -826,7 +825,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 children: [
                                   Text(
                                     '${context.tr('total_allocated')} ($headerTitle)',
-                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                                    style: TextStyle(color: context.textSecondary, fontSize: 12),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -844,7 +843,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
                                   return Text(
                                     '${setCodes.length}/${staticData.allCodes.length} ${context.tr('set')}',
-                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                                    style: TextStyle(color: context.textSecondary, fontSize: 13),
                                   );
                                 },
                               ),
@@ -852,7 +851,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           ),
                           if (hasIncome) ...[
                             const SizedBox(height: 12),
-                            const Divider(color: Color(0xFF30363D), height: 1),
+                            Divider(color: context.borderColor, height: 1),
                             const SizedBox(height: 10),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -869,7 +868,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       isOverAllocated ? 'Over-allocated by:' : 'Savings Reserve (Surplus):',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: isOverAllocated ? Colors.redAccent : const Color(0xFF8B949E),
+                                        color: isOverAllocated ? Colors.redAccent : context.textSecondary,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -896,7 +895,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 fontSize: 11,
                                 color: isOverAllocated
                                     ? Colors.redAccent.withValues(alpha: 0.8)
-                                    : const Color(0xFF8B949E),
+                                    : context.textSecondary,
                               ),
                             ),
                           ],
@@ -954,7 +953,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                         style: TextStyle(
                                           color: existing != null
                                               ? const Color(0xFF00C896)
-                                              : const Color(0xFF8B949E),
+                                              : context.textSecondary,
                                           fontSize: 13,
                                           fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
                                         ),
@@ -966,7 +965,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                           style: TextStyle(
                                             color: existing.spentAmount > existing.allocatedAmount && existing.allocatedAmount > 0
                                                 ? Colors.redAccent
-                                                : const Color(0xFF8B949E),
+                                                : context.textSecondary,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
                                           ),
@@ -979,8 +978,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             ),
                             if (staticData.isAdmin) ...[
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: Color(0xFF8B949E)),
+                                icon: const Icon(Icons.edit_outlined),
+                                color: context.textSecondary,
                                 tooltip: 'Edit Allocation',
                                 onPressed: () => _editBudget(staticData, existing, code),
                               ),
@@ -991,7 +990,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 onPressed: () => _archiveCategory(staticData, code, category),
                               ),
                             ],
-                            const Icon(Icons.chevron_right, size: 18, color: Color(0xFF8B949E)),
+                            Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                           ],
                         ),
                         if (subCategories.isNotEmpty) ...[
@@ -1002,15 +1001,16 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             children: subCategories.map((sub) => Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF21262D),
+                                color: context.chipBg,
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFF30363D)),
+                                border: Border.all(color: context.borderColor),
                               ),
                               child: Text(
                                 sub,
-                                style: const TextStyle(
-                                  color: Color(0xFF8B949E),
+                                style: TextStyle(
+                                  color: context.textSecondary,
                                   fontSize: 11,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             )).toList(),

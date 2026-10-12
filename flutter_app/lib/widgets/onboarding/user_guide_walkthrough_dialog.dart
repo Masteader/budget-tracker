@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -114,9 +115,9 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
     return Container(
       constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF30363D), width: 1.5),
+        border: Border.all(color: context.borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.6),
@@ -139,22 +140,22 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF21262D),
+                      color: context.chipBg,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF30363D)),
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: Text(
                       'Feature ${_currentPage + 1} of ${_steps.length}',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: Color(0xFF8B949E), size: 20),
+                    icon: Icon(Icons.close_rounded,
+                        color: context.textSecondary, size: 20),
                     onPressed: _finish,
                   ),
                 ],
@@ -222,7 +223,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 height: 1.4,
-                                color: const Color(0xFF8B949E),
+                                color: context.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -237,17 +238,17 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D1117),
+                                    color: context.subtleCardBg,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                        color: const Color(0xFF30363D)),
+                                        color: context.borderColor),
                                   ),
                                   child: Text(
                                     tag,
                                     style: GoogleFonts.outfit(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w500,
-                                      color: const Color(0xFFC9D1D9),
+                                      color: context.textPrimary,
                                     ),
                                   ),
                                 );
@@ -280,7 +281,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                         decoration: BoxDecoration(
                           color: _currentPage == idx
                               ? const Color(0xFF00C896)
-                              : const Color(0xFF30363D),
+                              : context.borderColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -296,7 +297,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                         child: Text(
                           'Skip',
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF8B949E),
+                            color: context.textSecondary,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),

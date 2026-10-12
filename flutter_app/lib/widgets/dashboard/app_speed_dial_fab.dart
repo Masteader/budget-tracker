@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../theme/app_themes.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
 import 'dashboard_action_sheet.dart';
@@ -123,7 +124,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF161B22),
+                        color: context.cardBg,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: color.withValues(alpha: 0.5)),
                         boxShadow: [

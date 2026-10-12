@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 
 import '../transaction_item_breakdown_card.dart';
 import 'duplicate_resolution_card.dart';
@@ -83,13 +84,13 @@ class ChatMessageBubble extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B22),
+                color: context.cardBg,
                 borderRadius: BorderRadius.circular(16).copyWith(bottomLeft: Radius.zero),
-                border: Border.all(color: const Color(0xFF30363D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: Text(
                 message.text,
-                style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 14, height: 1.4),
+                style: TextStyle(color: context.textPrimary, fontSize: 14, height: 1.4),
               ),
             ),
             if (message.simulationData != null) ...[

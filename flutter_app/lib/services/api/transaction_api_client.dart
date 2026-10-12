@@ -1,4 +1,3 @@
-import '../../supabase_config.dart';
 import 'base_api_client.dart';
 
 class TransactionApiClient {

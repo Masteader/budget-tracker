@@ -68,9 +68,9 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
       return Container(
         height: 120,
         decoration: BoxDecoration(
-          color: const Color(0xFF161B22),
+          color: context.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF30363D)),
+          border: Border.all(color: context.borderColor),
         ),
         child: const Center(
           child: SizedBox(
@@ -194,9 +194,9 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const Text(
+                      Text(
                         'days',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 9),
+                        style: TextStyle(color: context.textSecondary, fontSize: 9),
                       ),
                     ],
                   ),
@@ -218,8 +218,8 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     const SizedBox(height: 4),
                     Text(
                       'Burn Rate: SAR ${fmt.format(actualBurn)}/day',
-                      style: const TextStyle(
-                        color: Color(0xFFC9D1D9),
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -227,7 +227,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     const SizedBox(height: 2),
                     Text(
                       'Allowable Daily: SAR ${fmt.format(dailyAllowance)}/day remaining',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                      style: TextStyle(color: context.textSecondary, fontSize: 11),
                     ),
                   ],
                 ),

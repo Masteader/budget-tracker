@@ -20,6 +20,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../theme/app_themes.dart';
 
 class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
@@ -33,7 +34,7 @@ class ReceiptScannerSheet extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -137,33 +138,34 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         title: Row(
           children: [
             const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896)),
             const SizedBox(width: 8),
-            Text('Saudi ZATCA VAT QR', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Saudi ZATCA VAT QR', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Paste or scan the Base64 QR code from your tax invoice. It automatically verifies merchant, total, and 15% VAT.',
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
               maxLines: 3,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: context.textPrimary),
               decoration: InputDecoration(
                 hintText: 'e.g. AQ5UYW1pbWkgTWFya2V0cwIPMzAwMDAwMDAwMDAwMDAz...',
-                hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 11),
+                hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6), fontSize: 11),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                fillColor: context.inputBg,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.borderColor)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.borderColor)),
               ),
             ),
             const SizedBox(height: 8),
@@ -202,7 +204,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
@@ -237,22 +239,22 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: const Color(0xFF161B22),
+              backgroundColor: context.cardBg,
               title: Row(
                 children: [
                   const Icon(Icons.no_photography_rounded, color: Colors.orange),
                   const SizedBox(width: 8),
-                  Text('Camera Access Needed', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Camera Access Needed', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary)),
                 ],
               ),
-              content: const Text(
+              content: Text(
                 'Camera permission is required to scan invoice QR codes.\n\nPlease tap "Open Settings" to enable Camera for Budget Tracker.',
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -611,7 +613,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF30363D),
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -627,7 +629,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: context.textPrimary,
                     ),
                   ),
                 ),
@@ -636,7 +638,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             const SizedBox(height: 6),
             Text(
               'For long 60+ item receipts, snap multiple photos (top, middle, bottom). You can also scan the ZATCA VAT QR code.',
-              style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF8B949E)),
+              style: GoogleFonts.outfit(fontSize: 13, color: context.textSecondary),
             ),
             const SizedBox(height: 16),
 
@@ -683,8 +685,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFF30363D)),
+                        foregroundColor: context.textPrimary,
+                        side: BorderSide(color: context.borderColor),
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -760,7 +762,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   const SizedBox(height: 8),
                   TextButton.icon(
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF8B949E),
+                      foregroundColor: context.textSecondary,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
@@ -817,13 +819,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     const SizedBox(height: 16),
                     Text(
                       'AI Scanning Long Receipt...',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 16),
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: context.textPrimary, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Reading all line items item-by-item across ${_imageFiles.length} photo(s)',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF8B949E)),
+                      style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
                   ],
                 ),
@@ -878,7 +880,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
-                                side: const BorderSide(color: Color(0xFF30363D)),
+                                side: BorderSide(color: context.borderColor),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
@@ -962,7 +964,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     children: [
                       Text(
                         'Invoice Saved Successfully!',
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1094,7 +1096,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _zatcaDecoded = null;
             _scanResult = null;
           }),
-          label: const Text('Scan Another Receipt', style: TextStyle(color: Color(0xFF8B949E))),
+          label: Text('Scan Another Receipt', style: TextStyle(color: context.textSecondary)),
         ),
         const SizedBox(height: 16),
       ],

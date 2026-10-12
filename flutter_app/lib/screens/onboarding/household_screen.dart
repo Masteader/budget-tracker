@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -159,10 +160,10 @@ class _HouseholdScreenState extends State<HouseholdScreen>
               const SizedBox(height: 32),
               Text('Your Household',
                   style: GoogleFonts.outfit(
-                      fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white)),
+                      fontSize: 28, fontWeight: FontWeight.w700, color: context.textPrimary)),
               const SizedBox(height: 8),
-              const Text('Create a new household or join one.',
-                  style: TextStyle(color: Color(0xFF8B949E))),
+              Text('Create a new household or join one.',
+                  style: TextStyle(color: context.textSecondary)),
               const SizedBox(height: 32),
 
               // Tab bar
@@ -170,7 +171,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                 controller: _tab,
                 indicatorColor: const Color(0xFF00C896),
                 labelColor: const Color(0xFF00C896),
-                unselectedLabelColor: const Color(0xFF8B949E),
+                unselectedLabelColor: context.textSecondary,
                 tabs: const [Tab(text: 'Create'), Tab(text: 'Join')],
               ),
               const SizedBox(height: 28),

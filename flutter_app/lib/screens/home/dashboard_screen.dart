@@ -259,7 +259,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
                   color: const Color(0xFF00C896),
-                  backgroundColor: const Color(0xFF161B22),
+                  backgroundColor: context.cardBg,
                   onRefresh: () async {
                     try {
                       await Future.wait([
@@ -520,7 +520,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           },
         ),
         IconButton(
-          icon: const Icon(Icons.logout_rounded, color: Color(0xFF8B949E)),
+          icon: Icon(Icons.logout_rounded, color: context.textSecondary),
           tooltip: 'Sign Out',
           onPressed: () => supabase.auth.signOut(),
         ),

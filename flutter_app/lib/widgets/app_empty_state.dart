@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_themes.dart';
 
 /// Modern dark-theme empty state widget with icon badge, title, subtitle, and action button.
 class AppEmptyState extends StatelessWidget {
@@ -27,9 +28,9 @@ class AppEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
       margin: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -48,7 +49,7 @@ class AppEmptyState extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              color: Colors.white,
+              color: context.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -58,7 +59,7 @@ class AppEmptyState extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               fontSize: 13,
               height: 1.4,
             ),

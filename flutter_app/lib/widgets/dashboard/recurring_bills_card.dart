@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../main.dart';
 import '../../models/recurring_bill.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -193,7 +192,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       ),
                       Icon(
                         _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ],
                   ),
@@ -231,7 +230,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       children: [
                         Text(
                           'Total: SAR ${fmt.format(summary.totalRecurringMonthly)}',
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                         Row(
                           children: [
@@ -259,7 +258,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
               // Expanded Bill List
               if (_isExpanded) ...[
                 const SizedBox(height: 12),
-                const Divider(height: 1, color: Color(0xFF21262D)),
+                Divider(height: 1, color: context.borderColor),
 
                 // Filter Chips
                 Padding(
@@ -283,7 +282,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                         _selectedFilter == 1
                             ? 'All recurring bills are paid for this cycle!'
                             : 'No bills found in this filter.',
-                        style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        style: TextStyle(color: context.textSecondary, fontSize: 12),
                       ),
                     ),
                   )
@@ -338,16 +337,16 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                   style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Set up monthly bills (utilities, iqama fees, rent) to reserve funds.',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF8B949E)),
+                  style: TextStyle(fontSize: 11, color: context.textSecondary),
                 ),
               ],
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF21262D),
+              backgroundColor: context.chipBg,
               foregroundColor: const Color(0xFF58A6FF),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -368,7 +367,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF00C896).withValues(alpha: 0.2) : const Color(0xFF21262D),
+          color: selected ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.chipBg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected ? const Color(0xFF00C896) : Colors.transparent,
@@ -377,7 +376,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? const Color(0xFF00C896) : const Color(0xFF8B949E),
+            color: selected ? const Color(0xFF00C896) : context.textSecondary,
             fontSize: 11,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -391,17 +390,17 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Record Bill Payment', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('Record Bill Payment', style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
           'Confirm payment of SAR ${fmt.format(bill.averageAmount)} for "${bill.merchant}" in this cycle?',
-          style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 14),
+          style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00C896)),
@@ -439,7 +438,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -487,12 +486,12 @@ class _BillRowItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1117),
+        color: context.subtleCardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: bill.isOverdue
               ? const Color(0xFFFF7B72).withValues(alpha: 0.3)
-              : const Color(0xFF21262D),
+              : context.borderColor,
         ),
       ),
       child: Row(
@@ -515,7 +514,7 @@ class _BillRowItem extends StatelessWidget {
                     Flexible(
                       child: Text(
                         bill.merchant,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -535,7 +534,7 @@ class _BillRowItem extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   _formatCategory(bill.categoryCode),
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                  style: TextStyle(color: context.textSecondary, fontSize: 10),
                 ),
               ],
             ),
@@ -545,7 +544,7 @@ class _BillRowItem extends StatelessWidget {
             children: [
               Text(
                 'SAR ${fmt.format(bill.averageAmount)}',
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 3),
               Row(
@@ -639,7 +638,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: const Color(0xFF30363D), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: context.borderColor, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -648,17 +647,17 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
               children: [
                 Text(
                   'Manage Recurring Bills',
-                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Color(0xFF8B949E)),
+                  icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-            const Text(
+            Text(
               'Toggle which budgeted sub-items (utilities, iqama fees, rent, subscriptions) should be tracked as monthly recurring obligations and reserved from salary.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8B949E), height: 1.4),
+              style: TextStyle(fontSize: 12, color: context.textSecondary, height: 1.4),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -669,10 +668,10 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                     return const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)));
                   }
                   if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
                         'No budgeted sub-categories found. Allocate amounts in Budget Management first.',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                        style: TextStyle(color: context.textSecondary, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
                     );
@@ -691,17 +690,17 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0D1117),
+                          color: context.subtleCardBg,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: c.isRecurring
                                 ? const Color(0xFF00C896).withValues(alpha: 0.3)
-                                : const Color(0xFF21262D),
+                                : context.borderColor,
                           ),
                         ),
                         child: Row(
                           children: [
-                            Icon(icon, color: c.isRecurring ? const Color(0xFF00C896) : const Color(0xFF8B949E), size: 20),
+                            Icon(icon, color: c.isRecurring ? const Color(0xFF00C896) : context.textSecondary, size: 20),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -710,14 +709,14 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                   Text(
                                     c.nameEn,
                                     style: TextStyle(
-                                      color: c.isRecurring ? Colors.white : const Color(0xFF8B949E),
+                                      color: c.isRecurring ? context.textPrimary : context.textSecondary,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   Text(
                                     '${_formatCategory(c.categoryCode)} • SAR ${fmt.format(c.allocatedAmount)}',
-                                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                                    style: TextStyle(color: context.textSecondary, fontSize: 11),
                                   ),
                                 ],
                               ),

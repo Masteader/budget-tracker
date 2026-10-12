@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
+import '../../theme/app_themes.dart';
 
 /// Bottom action sheet modal providing shortcuts for adding transactions via
 /// AI Conversational Chat / Simulator or ZATCA / Multi-Page Receipt Scanner.
@@ -14,7 +15,7 @@ class DashboardActionSheet extends StatelessWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -34,7 +35,7 @@ class DashboardActionSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFF30363D),
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -44,7 +45,7 @@ class DashboardActionSheet extends StatelessWidget {
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: context.textPrimary,
               ),
             ),
             const SizedBox(height: 16),
@@ -61,15 +62,15 @@ class DashboardActionSheet extends StatelessWidget {
                   ),
                   child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
                 ),
-                title: const Text(
+                title: Text(
                   'AI Conversational Chat & Simulator',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
-                subtitle: const Text(
+                subtitle: Text(
                   'Say what you spent or ask "Can I afford this?"',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                trailing: Icon(Icons.chevron_right, color: context.textSecondary),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -97,15 +98,15 @@ class DashboardActionSheet extends StatelessWidget {
                     size: 22,
                   ),
                 ),
-                title: const Text(
+                title: Text(
                   'Scan VAT Invoice / Receipt (ZATCA & Multi-Page)',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
-                subtitle: const Text(
+                subtitle: Text(
                   'ZATCA QR camera, manual code input, or multi-page photos',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFF8B949E)),
+                trailing: Icon(Icons.chevron_right, color: context.textSecondary),
                 onTap: () {
                   Navigator.pop(context);
                   if (householdId != null && householdId!.isNotEmpty) {

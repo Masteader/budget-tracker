@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -31,7 +32,7 @@ class EditTransactionSheet extends StatefulWidget {
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -230,16 +231,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         title: const Text('Delete Transaction', style: TextStyle(color: Colors.white)),
         content: Text(
           'Are you sure you want to delete this SAR ${widget.transaction.amount.toStringAsFixed(2)} transaction at ${widget.transaction.merchant ?? "Unknown"}?\nThis will adjust your budget spent amount automatically.',
-          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
@@ -288,17 +289,17 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? activeColor.withValues(alpha: 0.18) : const Color(0xFF0D1117),
+            color: isSelected ? activeColor.withValues(alpha: 0.18) : context.subtleCardBg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? activeColor : const Color(0xFF30363D),
+              color: isSelected ? activeColor : context.borderColor,
               width: isSelected ? 1.5 : 1.0,
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: isSelected ? activeColor : const Color(0xFF8B949E)),
+              Icon(icon, size: 18, color: isSelected ? activeColor : context.textSecondary),
               const SizedBox(height: 4),
               Text(
                 title,
@@ -306,7 +307,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 style: GoogleFonts.outfit(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                  color: isSelected ? (context.isDark ? Colors.white : const Color(0xFF0F172A)) : context.textSecondary,
                 ),
               ),
             ],
@@ -380,15 +381,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? color.withValues(alpha: 0.15) : const Color(0xFF0D1117),
-            border: Border.all(color: isSelected ? color : const Color(0xFF30363D)),
+            color: isSelected ? color.withValues(alpha: 0.15) : context.subtleCardBg,
+            border: Border.all(color: isSelected ? color : context.borderColor),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             provider,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: isSelected ? color : Colors.white,
+              color: isSelected ? color : context.textPrimary,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 12,
             ),
@@ -412,7 +413,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -438,7 +439,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF30363D),
+                        color: context.borderColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -449,18 +450,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: context.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Amortize this purchase across monthly installments to prevent budget blowouts.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+                    style: TextStyle(fontSize: 12, color: context.textSecondary),
                   ),
                   const SizedBox(height: 16),
 
                   // Provider Selector
-                  Text('PROVIDER', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E), letterSpacing: 1)),
+                  Text('PROVIDER', style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -480,7 +481,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   const SizedBox(height: 16),
 
                   // Duration selector
-                  Text('INSTALLMENT DURATION', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E), letterSpacing: 1)),
+                  Text('INSTALLMENT DURATION', style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Row(
                     children: [3, 4, 6].map((count) {
@@ -494,9 +495,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.2) : const Color(0xFF0D1117),
+                                color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.subtleCardBg,
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+                                  color: isSelected ? const Color(0xFF00C896) : context.borderColor,
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -504,7 +505,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                                 '$count Months',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: isSelected ? const Color(0xFF00C896) : Colors.white,
+                                  color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   fontSize: 12,
                                 ),
@@ -521,16 +522,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0D1117),
+                      color: context.subtleCardBg,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF30363D)),
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: Column(
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('First Month (This Cycle):', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            Text('First Month (This Cycle):', style: TextStyle(color: context.textSecondary, fontSize: 12)),
                             Text('SAR ${monthly.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
@@ -538,15 +539,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Deferred to Next Cycles (${selectedCount - 1} mo):', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
-                            Text('SAR ${remainingBalance.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            Text('Deferred to Next Cycles (${selectedCount - 1} mo):', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                            Text('SAR ${remainingBalance.toStringAsFixed(2)}', style: TextStyle(color: context.textPrimary, fontSize: 13)),
                           ],
                         ),
-                        const Divider(color: Color(0xFF21262D), height: 16),
+                        Divider(color: context.borderColor, height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Immediate Budget Headroom:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                            Text('Immediate Budget Headroom:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
                             Text('+SAR ${remainingBalance.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
@@ -628,7 +629,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final name = await showDialog<String>(
       context: context,
       builder: (dCtx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -636,28 +637,28 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             const SizedBox(width: 8),
             Text(
               'Add Child / Dependent',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary),
             ),
           ],
         ),
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: context.textPrimary),
           decoration: InputDecoration(
             labelText: "Child's Name",
-            labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+            labelStyle: TextStyle(color: context.textSecondary),
             hintText: 'e.g. Sarah, Omar',
             hintStyle: const TextStyle(color: Color(0xFF484F58)),
             filled: true,
-            fillColor: const Color(0xFF0D1117),
+            fillColor: context.inputBg,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
@@ -712,7 +713,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF30363D),
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -723,7 +724,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               children: [
                 Text(
                   'Edit Transaction',
-                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -737,12 +738,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             // Merchant
             TextField(
               controller: _merchantCtrl,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Merchant Name',
-                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -752,13 +753,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 labelText: 'Amount (SAR)',
                 prefixText: 'SAR ',
-                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -768,9 +769,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF30363D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: Row(
                 children: [
@@ -783,14 +784,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         Text(
                           'BNPL Installment Plan',
                           style: GoogleFonts.outfit(
-                            color: Colors.white,
+                            color: context.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const Text(
+                        Text(
                           'Split into 3 or 4 monthly payments (Tamara / Tabby)',
-                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
@@ -807,13 +808,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             // Category Dropdown
             DropdownButtonFormField<String>(
               initialValue: _categories.any((c) => c['code'] == _selectedCategory) ? _selectedCategory : 'OPEX-MISC',
-              dropdownColor: const Color(0xFF161B22),
-              style: const TextStyle(color: Colors.white),
+              dropdownColor: context.cardBg,
+              style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Category',
-                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: _categories.map((c) {
@@ -839,19 +840,19 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               value: _subCategories.any((s) => s['sub_code'] == _selectedSubCategory)
                   ? _selectedSubCategory
                   : null,
-              dropdownColor: const Color(0xFF161B22),
-              style: const TextStyle(color: Colors.white),
+              dropdownColor: context.cardBg,
+              style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 labelText: 'Sub-Category',
-                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
-                fillColor: const Color(0xFF0D1117),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: [
-                const DropdownMenuItem<String?>(
+                DropdownMenuItem<String?>(
                   value: null,
-                  child: Text('General / Unassigned', style: TextStyle(color: Color(0xFF8B949E))),
+                  child: Text('General / Unassigned', style: TextStyle(color: context.textSecondary)),
                 ),
                 ..._subCategories.map((s) {
                   final code = s['sub_code'] as String? ?? '';
@@ -875,7 +876,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 fontSize: 12,
                 letterSpacing: 1,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF8B949E),
+                color: context.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -913,7 +914,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 fontSize: 12,
                 letterSpacing: 1,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF8B949E),
+                color: context.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -963,7 +964,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     fontSize: 11,
                     letterSpacing: 0.8,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF8B949E),
+                    color: context.textSecondary,
                   ),
                 ),
                 InkWell(
@@ -995,18 +996,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161B22),
+                  color: context.subtleCardBg,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF30363D)),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 14, color: Color(0xFF8B949E)),
+                    Icon(Icons.info_outline, size: 14, color: context.textSecondary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'No children added yet. Tap "+ Add Child" to assign expenses to a child.',
-                        style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF8B949E)),
+                        style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary),
                       ),
                     ),
                   ],
@@ -1023,14 +1024,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     avatar: const Icon(Icons.child_care_rounded, size: 14, color: Color(0xFF58A6FF)),
                     selected: isSelected,
                     selectedColor: const Color(0xFF58A6FF).withValues(alpha: 0.2),
-                    backgroundColor: const Color(0xFF0D1117),
+                    backgroundColor: context.chipBg,
                     labelStyle: TextStyle(
-                      color: isSelected ? const Color(0xFF58A6FF) : const Color(0xFFC9D1D9),
+                      color: isSelected ? const Color(0xFF58A6FF) : context.textPrimary,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 12,
                     ),
                     side: BorderSide(
-                      color: isSelected ? const Color(0xFF58A6FF) : const Color(0xFF30363D),
+                      color: isSelected ? const Color(0xFF58A6FF) : context.borderColor,
                     ),
                     onSelected: (selected) {
                       HapticFeedback.selectionClick();
@@ -1057,7 +1058,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     fontSize: 12,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF8B949E),
+                    color: context.textSecondary,
                   ),
                 ),
                 TextButton.icon(
@@ -1074,7 +1075,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'No itemized breakdown attached.',
-                  style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 12),
+                  style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                 ),
               ),
 
@@ -1085,9 +1086,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1117),
+                  color: context.subtleCardBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF30363D)),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: Row(
                   children: [
@@ -1095,10 +1096,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       flex: 3,
                       child: TextFormField(
                         initialValue: it['name'] ?? '',
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: context.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
                           hintText: 'Item name',
-                          hintStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          hintStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                           border: InputBorder.none,
                           isDense: true,
                         ),
@@ -1123,7 +1124,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 18, color: Color(0xFF8B949E)),
+                      icon: Icon(Icons.close, size: 18, color: context.textSecondary),
                       onPressed: () => _removeItem(idx),
                     ),
                   ],

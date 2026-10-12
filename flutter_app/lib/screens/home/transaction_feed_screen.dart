@@ -170,7 +170,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF30363D),
+                          color: context.borderColor,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -207,7 +207,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         fontSize: 11,
                         letterSpacing: 1,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -271,7 +271,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         fontSize: 11,
                         letterSpacing: 1,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -330,12 +330,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                               builder: (pickerCtx, child) {
                                 return Theme(
-                                  data: ThemeData.dark().copyWith(
-                                    colorScheme: const ColorScheme.dark(
-                                      primary: Color(0xFF00C896),
+                                  data: (context.isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+                                    colorScheme: ColorScheme.fromSeed(
+                                      seedColor: const Color(0xFF00C896),
+                                      brightness: context.isDark ? Brightness.dark : Brightness.light,
+                                      primary: const Color(0xFF00C896),
                                       onPrimary: Colors.black,
-                                      surface: Color(0xFF161B22),
-                                      onSurface: Colors.white,
+                                      surface: context.cardBg,
+                                      onSurface: context.textPrimary,
                                     ),
                                   ),
                                   child: child!,
@@ -365,7 +367,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         fontSize: 11,
                         letterSpacing: 1,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -452,10 +454,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         width: (MediaQuery.of(context).size.width - 48) / 2,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.12) : const Color(0xFF0D1117),
+          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.inputBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : const Color(0xFF30363D),
+            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -467,7 +469,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected ? const Color(0xFF00C896) : const Color(0xFF8B949E),
+                  color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
                 ),
                 const Spacer(),
                 if (isSelected)
@@ -480,12 +482,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFFC9D1D9),
+                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
               ),
             ),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E)),
+              style: TextStyle(fontSize: 11, color: context.textSecondary),
             ),
           ],
         ),
@@ -501,7 +503,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }) {
     return ChoiceChip(
       avatar: icon != null
-          ? Icon(icon, size: 14, color: selected ? Colors.black : const Color(0xFF8B949E))
+          ? Icon(icon, size: 14, color: selected ? Colors.black : context.textSecondary)
           : null,
       label: Text(
         label,
@@ -533,12 +535,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
             'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
-            style: const TextStyle(color: Color(0xFF8B949E)),
+            style: TextStyle(color: context.textSecondary),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx, false),
-              child: Text(context.tr('cancel'), style: const TextStyle(color: Color(0xFF8B949E))),
+              child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -711,7 +713,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 child: Text(
                                   '${transactions.length} ${transactions.length == 1 ? "expense" : "expenses"} • SAR ${visibleTotal.toStringAsFixed(2)}',
                                   style: GoogleFonts.outfit(
-                                    color: const Color(0xFF8B949E),
+                                    color: context.textSecondary,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -725,12 +727,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF161B22),
+                                    color: context.chipBg,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
                                       color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
                                           ? const Color(0xFF00C896)
-                                          : const Color(0xFF30363D),
+                                          : context.borderColor,
                                     ),
                                   ),
                                   child: Row(
@@ -741,7 +743,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         size: 14,
                                         color: _selectedSort != 'newest'
                                             ? const Color(0xFF00C896)
-                                            : const Color(0xFF8B949E),
+                                            : context.textSecondary,
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
@@ -751,7 +753,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           fontWeight: FontWeight.w600,
                                           color: _selectedSort != 'newest'
                                               ? const Color(0xFF00C896)
-                                              : const Color(0xFFC9D1D9),
+                                              : context.textPrimary,
                                         ),
                                       ),
                                     ],
@@ -780,21 +782,21 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF161B22),
+                                    color: context.chipBg,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF30363D)),
+                                    border: Border.all(color: context.borderColor),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.file_download_outlined, size: 14, color: Color(0xFF58A6FF)),
+                                      Icon(Icons.file_download_outlined, size: 14, color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7)),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Export CSV',
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF58A6FF),
+                                          color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7),
                                         ),
                                       ),
                                     ],
@@ -813,7 +815,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     showDialog(
                                       context: context,
                                       builder: (ctx) => AlertDialog(
-                                        backgroundColor: const Color(0xFF161B22),
+                                        backgroundColor: context.cardBg,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                         title: Row(
                                           children: [
@@ -821,7 +823,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             const SizedBox(width: 10),
                                             Text(
                                               'Monthly Statement (PDF)',
-                                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                                             ),
                                           ],
                                         ),
@@ -829,17 +831,17 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           mainAxisSize: MainAxisSize.min,
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text(
+                                            Text(
                                               'Executive monthly statement with partner attribution split, 15% VAT, and category budgets.',
-                                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                                              style: TextStyle(color: context.textSecondary, fontSize: 13),
                                             ),
                                             const SizedBox(height: 14),
                                             Container(
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFF0D1117),
+                                                color: context.subtleCardBg,
                                                 borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: const Color(0xFF30363D)),
+                                                border: Border.all(color: context.borderColor),
                                               ),
                                               child: Row(
                                                 children: [
@@ -850,7 +852,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                       pdfUrl,
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
-                                                      style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 11, fontFamily: 'monospace'),
+                                                      style: TextStyle(color: context.textPrimary, fontSize: 11, fontFamily: 'monospace'),
                                                     ),
                                                   ),
                                                 ],
@@ -861,7 +863,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
-                                            child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+                                            child: Text('Close', style: TextStyle(color: context.textSecondary)),
                                           ),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
@@ -892,21 +894,21 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF161B22),
+                                    color: context.chipBg,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF30363D)),
+                                    border: Border.all(color: context.borderColor),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.picture_as_pdf_outlined, size: 14, color: Color(0xFFE24A4A)),
+                                      Icon(Icons.picture_as_pdf_outlined, size: 14, color: context.dangerColor),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Export PDF',
                                         style: GoogleFonts.outfit(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
-                                          color: const Color(0xFFE24A4A),
+                                          color: context.dangerColor,
                                         ),
                                       ),
                                     ],
@@ -975,16 +977,16 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           return await showDialog<bool>(
                                             context: context,
                                             builder: (dCtx) => AlertDialog(
-                                              backgroundColor: const Color(0xFF161B22),
-                                              title: const Text('Delete Transaction', style: TextStyle(color: Colors.white)),
+                                              backgroundColor: context.cardBg,
+                                              title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
                                               content: Text(
                                                 'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated.',
-                                                style: const TextStyle(color: Color(0xFF8B949E)),
+                                                style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [
                                                 TextButton(
                                                   onPressed: () => Navigator.pop(dCtx, false),
-                                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+                                                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
                                                 ),
                                                 ElevatedButton(
                                                   style: ElevatedButton.styleFrom(

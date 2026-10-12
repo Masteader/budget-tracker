@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/api_service.dart';
+import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
@@ -161,13 +162,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         : 'Ready to stitch and process all shots!';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: context.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(
           'Continuous Long Receipt Stitcher',
-          style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: context.textPrimary),
         ),
         actions: [
           IconButton(
@@ -188,7 +189,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B22),
+                color: context.cardBg,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
               ),
@@ -209,12 +210,12 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                       children: [
                         Text(
                           'Overlap Shots by ~2-3 Items',
-                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           currentGuide,
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -253,24 +254,24 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                           Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF161B22),
+                              color: context.cardBg,
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF30363D)),
+                              border: Border.all(color: context.borderColor),
                             ),
                             child: const Icon(Icons.receipt_long_rounded, size: 54, color: Color(0xFF00C896)),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Capture Continuous Long Receipts',
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 6),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 36),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 36),
                             child: Text(
                               'Take sequential overlapping photos of long grocery receipts (60+ items). Our AI stitches them and eliminates duplicate items automatically.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13, height: 1.4),
+                              style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
                             ),
                           ),
                         ],
@@ -309,7 +310,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
             // Bottom Filmstrip
             Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              color: const Color(0xFF161B22),
+              color: context.cardBg,
               child: Column(
                 children: [
                   if (_capturedShots.isNotEmpty)
@@ -375,8 +376,8 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF21262D),
-                              foregroundColor: Colors.white,
+                              backgroundColor: context.chipBg,
+                              foregroundColor: context.textPrimary,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
@@ -391,10 +392,10 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                         const SizedBox(width: 8),
                         IconButton(
                           style: IconButton.styleFrom(
-                            backgroundColor: const Color(0xFF21262D),
+                            backgroundColor: context.chipBg,
                             padding: const EdgeInsets.all(14),
                           ),
-                          icon: const Icon(Icons.photo_library_outlined, color: Colors.white),
+                          icon: Icon(Icons.photo_library_outlined, color: context.textPrimary),
                           tooltip: 'Pick from Gallery',
                           onPressed: _isProcessing ? null : _pickFromGallery,
                         ),

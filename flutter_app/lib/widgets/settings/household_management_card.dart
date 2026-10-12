@@ -74,7 +74,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '${members.length} Active Member${members.length == 1 ? '' : 's'}',
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                      style: TextStyle(color: context.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -113,7 +113,7 @@ class HouseholdManagementCard extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -140,8 +140,8 @@ class HouseholdManagementCard extends StatelessWidget {
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF30363D)),
+                    foregroundColor: context.textPrimary,
+                    side: BorderSide(color: context.borderColor),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   ),
                   icon: const Icon(Icons.copy_rounded, size: 14),
@@ -160,7 +160,7 @@ class HouseholdManagementCard extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -172,17 +172,17 @@ class HouseholdManagementCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.person_outline_rounded, size: 16, color: Color(0xFF8B949E)),
+                  Icon(Icons.person_outline_rounded, size: 16, color: context.textSecondary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       email,
-                      style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13),
+                      style: TextStyle(color: context.textPrimary, fontSize: 13),
                     ),
                   ),
                   Text(
                     role.toUpperCase(),
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: context.textSecondary, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -190,7 +190,7 @@ class HouseholdManagementCard extends StatelessWidget {
           }),
 
           const SizedBox(height: 16),
-          const Divider(color: Color(0xFF21262D), height: 1),
+          Divider(color: context.borderColor, height: 1),
           const SizedBox(height: 14),
 
           // Family Dependents & Children Section
@@ -208,7 +208,7 @@ class HouseholdManagementCard extends StatelessWidget {
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF8B949E),
+                          color: context.textSecondary,
                           letterSpacing: 0.5,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -251,8 +251,8 @@ class HouseholdManagementCard extends StatelessWidget {
                 return Chip(
                   backgroundColor: context.scaffoldBg,
                   side: BorderSide(color: context.borderColor),
-                  avatar: const CircleAvatar(
-                    backgroundColor: Color(0xFF21262D),
+                  avatar: CircleAvatar(
+                    backgroundColor: context.chipBg,
                     child: Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
                   ),
                   label: Text(
@@ -264,7 +264,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     ),
                   ),
                   deleteIcon: onRemoveDependent != null
-                      ? const Icon(Icons.close_rounded, size: 14, color: Color(0xFF8B949E))
+                      ? Icon(Icons.close_rounded, size: 14, color: context.textSecondary)
                       : null,
                   onDeleted: onRemoveDependent != null ? () => onRemoveDependent!(d) : null,
                 );
@@ -281,8 +281,8 @@ class HouseholdManagementCard extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF30363D)),
+                    foregroundColor: context.textPrimary,
+                    side: BorderSide(color: context.borderColor),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.group_add_outlined, size: 16),

@@ -177,14 +177,14 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                 whoOwes == 'settled'
                     ? 'All square'
                     : (whoOwes == 'partner_owes_me' ? 'incoming balance' : 'outgoing balance'),
-                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             recText,
-            style: const TextStyle(color: Color(0xFFC9D1D9), fontSize: 13, height: 1.3),
+            style: TextStyle(color: context.textPrimary, fontSize: 13, height: 1.3),
           ),
           const SizedBox(height: 12),
 
@@ -196,39 +196,51 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: context.scaffoldBg,
+                  color: context.chipBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: context.borderColor),
                 ),
                 child: Text(
                   'Shared 50/50: SAR ${totalShared.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                  style: TextStyle(color: context.textSecondary, fontSize: 11),
                 ),
               ),
               if (iPaidForPartner > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBC8CFF).withValues(alpha: 0.1),
+                    color: const Color(0xFF8B5CF6).withValues(alpha: context.isDarkMode ? 0.1 : 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFBC8CFF).withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: context.isDarkMode ? 0.3 : 0.4),
+                    ),
                   ),
                   child: Text(
                     'Paid for partner: SAR ${iPaidForPartner.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Color(0xFFBC8CFF), fontSize: 11),
+                    style: TextStyle(
+                      color: context.isDarkMode ? const Color(0xFFBC8CFF) : const Color(0xFF6D28D9),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               if (partnerPaidForMe > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF9E79).withValues(alpha: 0.1),
+                    color: const Color(0xFFF97316).withValues(alpha: context.isDarkMode ? 0.1 : 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFF9E79).withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: const Color(0xFFF97316).withValues(alpha: context.isDarkMode ? 0.3 : 0.4),
+                    ),
                   ),
                   child: Text(
                     'Partner paid for me: SAR ${partnerPaidForMe.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Color(0xFFFF9E79), fontSize: 11),
+                    style: TextStyle(
+                      color: context.isDarkMode ? const Color(0xFFFF9E79) : const Color(0xFFC2410C),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
             ],
@@ -240,7 +252,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF21262D),
+                  backgroundColor: context.chipBg,
                   foregroundColor: const Color(0xFF00C896),
                   side: const BorderSide(color: Color(0xFF00C896)),
                   padding: const EdgeInsets.symmetric(vertical: 10),

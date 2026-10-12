@@ -175,7 +175,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
           child: ExpansionTile(
             initiallyExpanded: initiallyExpanded,
             iconColor: const Color(0xFF00C896),
-            collapsedIconColor: const Color(0xFF8B949E),
+            collapsedIconColor: context.textSecondary,
             shape: const Border(),
             collapsedShape: const Border(),
             leading: Container(
@@ -204,7 +204,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
-                  color: const Color(0xFFFF5252),
+                  color: context.dangerColor,
                 ),
               ),
             ],
@@ -229,7 +229,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   ),
                   child: Text(
                     _sourceLabel,
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
                 ),
                 _buildSpentByBadge(spentBy),
@@ -351,7 +351,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         Text(
                           'Attributed To:',
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF8B949E),
+                            color: context.textSecondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -372,7 +372,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           fontSize: 11,
                           letterSpacing: 1,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF8B949E),
+                          color: context.textSecondary,
                         ),
                       ),
                       Text(
@@ -381,7 +381,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             : 'Single expense',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
-                          color: const Color(0xFF8B949E),
+                          color: context.textSecondary,
                         ),
                       ),
                     ],
@@ -392,9 +392,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D1117),
+                        color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF21262D)),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Column(
                         children: [
@@ -424,7 +424,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                     child: Text(
                                       '${qty > 1 ? '${qty.toStringAsFixed(0)}x ' : ''}$name',
                                       style: GoogleFonts.outfit(
-                                        color: const Color(0xFFF0F6FC),
+                                        color: context.textPrimary,
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -433,7 +433,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                   Text(
                                     '$currency ${price.toStringAsFixed(2)}',
                                     style: GoogleFonts.outfit(
-                                      color: Colors.white,
+                                      color: context.textPrimary,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -442,9 +442,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               ),
                             );
                           }),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Divider(color: Color(0xFF21262D), height: 1),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Divider(color: context.borderColor, height: 1),
                           ),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -452,7 +452,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Text(
                                 'Total Breakdown',
                                 style: GoogleFonts.outfit(
-                                  color: const Color(0xFF8B949E),
+                                  color: context.textSecondary,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -475,18 +475,18 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D1117),
+                        color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF21262D)),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.receipt_outlined, size: 18, color: Color(0xFF8B949E)),
+                          Icon(Icons.receipt_outlined, size: 18, color: context.textSecondary),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               '1x $merchant ($currency ${amount.toStringAsFixed(2)})\nNo line items attached. Tap Edit to add items.',
-                              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                              style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),
                         ],
@@ -504,7 +504,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             fontSize: 11,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF8B949E),
+                            color: context.textSecondary,
                           ),
                         ),
                         Text(
@@ -529,9 +529,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         height: 120,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0D1117),
+                          color: context.subtleCardBg,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF21262D)),
+                          border: Border.all(color: context.borderColor),
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
@@ -541,8 +541,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Image.network(
                                 receiptUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (ctx, _, __) => const Center(
-                                  child: Icon(Icons.broken_image_outlined, color: Color(0xFF8B949E), size: 32),
+                                errorBuilder: (ctx, _, __) => Center(
+                                  child: Icon(Icons.broken_image_outlined, color: context.textSecondary, size: 32),
                                 ),
                               ),
                               Container(
@@ -554,18 +554,18 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF161B22).withValues(alpha: 0.85),
+                                    color: context.cardBg.withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF30363D)),
+                                    border: Border.all(color: context.borderColor),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.zoom_in, color: Color(0xFF58A6FF), size: 14),
-                                      SizedBox(width: 4),
+                                      const Icon(Icons.zoom_in, color: Color(0xFF58A6FF), size: 14),
+                                      const SizedBox(width: 4),
                                       Text(
                                         'View Full',
-                                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        style: TextStyle(color: context.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
@@ -623,9 +623,9 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D1117),
+                        color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF21262D)),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,21 +642,21 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                     if (decoded['seller'] != null)
                                       Text(
                                         'Seller: ${decoded['seller']}',
-                                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                        style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                                       ),
                                     if (decoded['vat_number'] != null)
                                       Text(
                                         'VAT No: ${decoded['vat_number']}',
-                                        style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11),
+                                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11),
                                       ),
                                     if (decoded['timestamp'] != null)
                                       Text(
                                         'Time: ${decoded['timestamp']}',
-                                        style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11),
+                                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11),
                                       ),
-                                    const Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 6),
-                                      child: Divider(color: Color(0xFF21262D), height: 1),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6),
+                                      child: Divider(color: context.borderColor, height: 1),
                                     ),
                                   ],
                                 ),
@@ -668,16 +668,16 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             style: GoogleFonts.outfit(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: const Color(0xFF8B949E),
+                              color: context.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 4),
                           SelectableText(
                             qrCodeRaw!,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 10,
-                              color: Color(0xFF79C0FF),
+                              color: context.isDark ? const Color(0xFF79C0FF) : const Color(0xFF0284C7),
                             ),
                             maxLines: 4,
                           ),
@@ -689,7 +689,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               ),
             ),
             if (onEdit != null || onDelete != null) ...[
-              const Divider(color: Color(0xFF21262D), height: 1),
+              Divider(color: context.borderColor, height: 1),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Row(
@@ -697,15 +697,15 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   children: [
                     if (onEdit != null)
                       TextButton.icon(
-                        icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B949E)),
-                        label: const Text('Edit', style: TextStyle(color: Color(0xFFC9D1D9), fontSize: 12)),
+                        icon: Icon(Icons.edit_outlined, size: 16, color: context.textSecondary),
+                        label: Text('Edit', style: TextStyle(color: context.textPrimary, fontSize: 12)),
                         onPressed: onEdit,
                       ),
                     if (onDelete != null) ...[
                       const SizedBox(width: 8),
                       TextButton.icon(
-                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                        label: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                        icon: Icon(Icons.delete_outline, size: 16, color: context.dangerColor),
+                        label: Text('Delete', style: TextStyle(color: context.dangerColor, fontSize: 12)),
                         onPressed: onDelete,
                       ),
                     ],
@@ -725,10 +725,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF30363D)),
+          side: BorderSide(color: context.borderColor),
         ),
         title: Row(
           children: [
@@ -737,7 +737,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             Text(
               'Saudi ZATCA QR',
               style: GoogleFonts.outfit(
-                color: Colors.white,
+                color: context.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -751,39 +751,39 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             children: [
               if (decoded != null) ...[
                 if (decoded['seller'] != null) ...[
-                  Text('Seller / Merchant:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
-                  Text(decoded['seller']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('Seller / Merchant:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(decoded['seller']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['vat_number'] != null) ...[
-                  Text('VAT Registration:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
-                  Text(decoded['vat_number']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('VAT Registration:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(decoded['vat_number']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['timestamp'] != null) ...[
-                  Text('Invoice Date:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
-                  Text(decoded['timestamp']!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13)),
+                  Text('Invoice Date:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+                  Text(decoded['timestamp']!, style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13)),
                   const SizedBox(height: 8),
                 ],
                 if (decoded['total'] != null) ...[
-                  Text('Verified Total (incl. VAT):', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+                  Text('Verified Total (incl. VAT):', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(
                     'SAR ${decoded['total']} (VAT: SAR ${decoded['vat'] ?? '0.00'})',
                     style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                 ],
-                const Divider(color: Color(0xFF21262D)),
+                Divider(color: context.borderColor),
               ],
-              Text('Raw Base64 TLV String:', style: GoogleFonts.outfit(color: const Color(0xFF8B949E), fontSize: 11)),
+              Text('Raw Base64 TLV String:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
               const SizedBox(height: 4),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1117),
+                  color: context.subtleCardBg,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF21262D)),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: SelectableText(
                   rawQr,
@@ -813,7 +813,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             },
           ),
           TextButton(
-            child: const Text('Close', style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('Close', style: TextStyle(color: context.textSecondary)),
             onPressed: () => Navigator.pop(ctx),
           ),
         ],

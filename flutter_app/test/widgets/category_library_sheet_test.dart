@@ -12,16 +12,12 @@ void main() {
       CategoryItem(code: 'OPEX-PETS', name: 'Pets', isActive: false, isSystem: true),
     ];
 
-    bool toggled = false;
-
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: CategoryLibrarySheet(
           activeCategories: active,
           inactiveCategories: inactive,
-          onToggle: (cat, active) {
-            toggled = true;
-          },
+          onToggle: (cat, active) {},
           onAddCustom: () {},
         ),
       ),

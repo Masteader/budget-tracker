@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../theme/app_themes.dart';
 
 /// Reusable selector bar for switching between salary cycles (payday 27th - 26th).
 class SalaryCycleSelectorBar extends StatelessWidget {
@@ -32,16 +33,16 @@ class SalaryCycleSelectorBar extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(color: context.borderColor),
       ),
       child: Row(
         children: [
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 24),
+            icon: Icon(Icons.chevron_left_rounded, color: hasPrevious ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),
             onPressed: hasPrevious ? onPrevious : null,
           ),
           Expanded(
@@ -56,7 +57,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     ),
                     if (isCurrent) ...[
@@ -85,8 +86,8 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subText,
-                  style: const TextStyle(
-                    color: Color(0xFF8B949E),
+                  style: TextStyle(
+                    color: context.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -96,7 +97,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
+            icon: Icon(Icons.chevron_right_rounded, color: hasNext ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),
             onPressed: hasNext ? onNext : null,
           ),
         ],

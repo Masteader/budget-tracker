@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../app_snackbar.dart';
+import '../../theme/app_themes.dart';
 
 /// Card for setting and updating household monthly salary/income (SAR).
 class IncomeSettingsCard extends StatefulWidget {
@@ -73,12 +74,10 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF30363D) : const Color(0xFFE2E8F0);
-    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subtextColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+    final cardColor = context.cardBg;
+    final borderColor = context.borderColor;
+    final textColor = context.textPrimary;
+    final subtextColor = context.textSecondary;
 
     final currentIncome = double.tryParse(_incomeCtrl.text) ?? widget.initialIncome;
     final formattedIncome = NumberFormat('#,##0.00').format(currentIncome);
@@ -147,7 +146,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0D1117) : const Color(0xFFF8FAFC),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: borderColor),
               ),
@@ -182,7 +181,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 suffixText: 'SAR',
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF0D1117) : const Color(0xFFF1F5F9),
+                fillColor: context.inputBg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: borderColor),
@@ -204,7 +203,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF21262D) : const Color(0xFFF1F5F9),
+                      color: context.chipBg,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: borderColor),
                     ),

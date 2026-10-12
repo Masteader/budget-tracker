@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
@@ -36,7 +37,7 @@ class SubBudgetBreakdownSheet extends StatefulWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: context.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -174,7 +175,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF30363D),
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -203,14 +204,14 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: context.textPrimary,
                         ),
                       ),
                       if (_cycleInfo != null)
                         Text(
                           _cycleInfo!.label,
-                          style: const TextStyle(
-                            color: Color(0xFF8B949E),
+                          style: TextStyle(
+                            color: context.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -257,7 +258,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
 
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF8B949E)),
+                  icon: Icon(Icons.close, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -269,9 +270,9 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF30363D)),
+                border: Border.all(color: context.borderColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -282,8 +283,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Total Spent',
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                          Text('Total Spent',
+                              style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
                             'SAR ${fmt.format(spent)}',
@@ -298,8 +299,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Base Allocation',
-                              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                          Text('Base Allocation',
+                              style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
                             'SAR ${fmt.format(allocated)}',
@@ -409,9 +410,9 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
             Icon(Icons.receipt_long_outlined,
                 color: Colors.grey.withValues(alpha: 0.4), size: 40),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'No itemized sub-budget records yet',
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -443,9 +444,9 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF0D1117),
+            color: context.subtleCardBg,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF21262D)),
+            border: Border.all(color: context.borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -455,7 +456,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF21262D),
+                      color: context.chipBg,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -471,8 +472,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       children: [
                         Text(
                           item.name,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -480,16 +481,16 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                         if (item.transactionCount > 0)
                           Text(
                             '${item.transactionCount} transaction${item.transactionCount > 1 ? 's' : ''}',
-                            style: const TextStyle(
-                              color: Color(0xFF8B949E),
+                            style: TextStyle(
+                              color: context.textSecondary,
                               fontSize: 11,
                             ),
                           )
                         else if (hasAllocation)
-                          const Text(
+                          Text(
                             'No expenses yet',
                             style: TextStyle(
-                              color: Color(0xFF8B949E),
+                              color: context.textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -502,7 +503,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       Text(
                         'SAR ${fmt.format(item.spentAmount)}',
                         style: GoogleFonts.outfit(
-                          color: item.spentAmount > 0 ? Colors.white : const Color(0xFF8B949E),
+                          color: item.spentAmount > 0 ? context.textPrimary : context.textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -513,7 +514,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           style: TextStyle(
                             color: item.spentAmount > item.allocatedAmount
                                 ? Colors.redAccent
-                                : const Color(0xFF8B949E),
+                                : context.textSecondary,
                             fontSize: 11,
                             fontWeight: item.spentAmount > item.allocatedAmount
                                 ? FontWeight.bold
@@ -523,8 +524,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       else if (totalCatSpent > 0 && item.spentAmount > 0)
                         Text(
                           '${((item.spentAmount / totalCatSpent) * 100).toStringAsFixed(0)}% of cat',
-                          style: const TextStyle(
-                            color: Color(0xFF8B949E),
+                          style: TextStyle(
+                            color: context.textSecondary,
                             fontSize: 11,
                           ),
                         ),
@@ -538,7 +539,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: clampedProgress,
-                    backgroundColor: const Color(0xFF21262D),
+                    backgroundColor: context.chipBg,
                     valueColor: AlwaysStoppedAnimation(progressColor),
                     minHeight: 4,
                   ),

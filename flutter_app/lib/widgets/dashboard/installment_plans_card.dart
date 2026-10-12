@@ -178,10 +178,10 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
       context: context,
       builder: (dCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF161B22),
+          backgroundColor: context.cardBg,
           title: Text(
             'New Installment Plan',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+            style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -190,28 +190,28 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
               children: [
                 TextField(
                   controller: merchantCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: context.textPrimary),
+                  decoration: InputDecoration(
                     labelText: 'Merchant / Item',
-                    labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                    labelStyle: TextStyle(color: context.textSecondary),
                     hintText: 'e.g. eXtra Electronics, Jarir',
-                    hintStyle: TextStyle(color: Color(0xFF484F58)),
+                    hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: context.textPrimary),
+                  decoration: InputDecoration(
                     labelText: 'Total Price (SAR)',
-                    labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                    labelStyle: TextStyle(color: context.textSecondary),
                     hintText: 'e.g. 4000',
-                    hintStyle: TextStyle(color: Color(0xFF484F58)),
+                    hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('PROVIDER', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                Text('PROVIDER', style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: ['Tamara', 'Tabby', 'Bank'].map((p) {
@@ -225,15 +225,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : const Color(0xFF0D1117),
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : const Color(0xFF30363D)),
+                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               p,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : Colors.white,
+                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -245,7 +245,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                const Text('DURATION', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                Text('DURATION', style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [3, 4, 6].map((cnt) {
@@ -259,15 +259,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : const Color(0xFF0D1117),
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : const Color(0xFF30363D)),
+                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               '$cnt mo',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : Colors.white,
+                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -284,7 +284,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+              child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -437,7 +437,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                 fontSize: 12,
                                 color: activePlans.isEmpty
                                     ? const Color(0xFF00C896)
-                                    : const Color(0xFF8B949E),
+                                    : context.textSecondary,
                               ),
                             ),
                           ],
@@ -447,7 +447,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         _isExpanded
                             ? Icons.keyboard_arrow_up_rounded
                             : Icons.keyboard_arrow_down_rounded,
-                        color: const Color(0xFF8B949E),
+                        color: context.textSecondary,
                       ),
                     ],
                   ),
@@ -455,7 +455,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
               ),
 
               if (_isExpanded) ...[
-                const Divider(color: Color(0xFF21262D), height: 1),
+                Divider(color: context.borderColor, height: 1),
                 if (plans.isEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.all(20),
@@ -463,13 +463,13 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF0D1117),
+                          decoration: BoxDecoration(
+                            color: context.subtleCardBg,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.credit_score_outlined,
-                            color: Color(0xFF8B949E),
+                            color: context.textSecondary,
                             size: 28,
                           ),
                         ),
@@ -477,16 +477,16 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         Text(
                           'No Active BNPL Installments',
                           style: GoogleFonts.outfit(
-                            color: Colors.white,
+                            color: context.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           'Convert large purchases into 3 or 4 monthly payments (Tamara / Tabby) in the transaction edit sheet, or log a commitment directly.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                         const SizedBox(height: 14),
                         ElevatedButton.icon(
@@ -518,9 +518,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0D1117),
+                              color: context.subtleCardBg,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF21262D)),
+                              border: Border.all(color: context.borderColor),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,7 +553,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         plan.merchant,
                                         style: GoogleFonts.outfit(
                                           fontWeight: FontWeight.w600,
-                                          color: Colors.white,
+                                          color: context.textPrimary,
                                           fontSize: 14,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -574,7 +574,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   borderRadius: BorderRadius.circular(4),
                                   child: LinearProgressIndicator(
                                     value: plan.progressPercentage,
-                                    backgroundColor: const Color(0xFF21262D),
+                                    backgroundColor: context.chipBg,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       plan.isCompleted
                                           ? const Color(0xFF00C896)
@@ -589,15 +589,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   children: [
                                     Text(
                                       'Installment ${plan.paidInstallments} of ${plan.installmentCount} paid',
-                                      style: const TextStyle(
-                                        color: Color(0xFF8B949E),
+                                      style: TextStyle(
+                                        color: context.textSecondary,
                                         fontSize: 11,
                                       ),
                                     ),
                                     Text(
                                       'Remaining: SAR ${fmt.format(plan.remainingAmount)}',
-                                      style: const TextStyle(
-                                        color: Color(0xFFC9D1D9),
+                                      style: TextStyle(
+                                        color: context.textPrimary,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -610,8 +610,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                     alignment: Alignment.centerRight,
                                     child: OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.white,
-                                        side: const BorderSide(color: Color(0xFF30363D)),
+                                        foregroundColor: context.textPrimary,
+                                        side: BorderSide(color: context.borderColor),
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 12, vertical: 4),
                                         visualDensity: VisualDensity.compact,
@@ -648,7 +648,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF00C896),
-                            side: const BorderSide(color: Color(0xFF30363D)),
+                            side: BorderSide(color: context.borderColor),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),

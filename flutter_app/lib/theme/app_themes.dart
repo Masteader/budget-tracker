@@ -68,8 +68,17 @@ class AppThemes {
         ),
       ),
       cardColor: brandDarkCard,
-      canvasColor: brandDarkBg,
+      canvasColor: brandDarkCard,
       dialogBackgroundColor: brandDarkCard,
+      popupMenuTheme: const PopupMenuThemeData(
+        color: brandDarkCard,
+        textStyle: TextStyle(color: Colors.white),
+      ),
+      dropdownMenuTheme: const DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(brandDarkCard),
+        ),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: brandDarkCard,
         indicatorColor: brandEmerald.withValues(alpha: 0.2),
@@ -102,8 +111,17 @@ class AppThemes {
       brightness: Brightness.light,
       scaffoldBackgroundColor: brandLightBg,
       cardColor: brandLightCard,
-      canvasColor: brandLightBg,
+      canvasColor: brandLightCard,
       dialogBackgroundColor: brandLightCard,
+      popupMenuTheme: const PopupMenuThemeData(
+        color: brandLightCard,
+        textStyle: TextStyle(color: brandLightText),
+      ),
+      dropdownMenuTheme: const DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(brandLightCard),
+        ),
+      ),
       textTheme: GoogleFonts.outfitTextTheme().apply(
         bodyColor: brandLightText,
         displayColor: brandLightText,
@@ -173,12 +191,18 @@ class AppThemes {
 
 extension ThemeContextExtension on BuildContext {
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+  bool get isDark => isDarkMode;
   Color get scaffoldBg => Theme.of(this).scaffoldBackgroundColor;
   Color get cardBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
   Color get cardSurfaceBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
+  Color get subtleCardBg => isDarkMode ? const Color(0xFF0D1117) : const Color(0xFFF8FAFC);
   Color get inputBg => isDarkMode ? AppThemes.brandDarkInput : AppThemes.brandLightInput;
   Color get borderColor => isDarkMode ? AppThemes.brandDarkBorder : AppThemes.brandLightBorder;
   Color get textPrimary => isDarkMode ? Colors.white : AppThemes.brandLightText;
   Color get textSecondary => isDarkMode ? const Color(0xFF8B949E) : AppThemes.brandLightSubtext;
-  Color get chipBg => isDarkMode ? AppThemes.brandDarkInput : const Color(0xFFE2E8F0);
+  Color get textMuted => isDarkMode ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+  Color get chipBg => isDarkMode ? AppThemes.brandDarkInput : const Color(0xFFF1F5F9);
+  Color get chipBorder => isDarkMode ? AppThemes.brandDarkBorder : const Color(0xFFCBD5E1);
+  Color get dangerColor => isDarkMode ? const Color(0xFFFF5252) : const Color(0xFFDC2626);
+  Color get primaryAccent => AppThemes.brandEmerald;
 }

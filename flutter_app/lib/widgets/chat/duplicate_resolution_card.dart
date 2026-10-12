@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../theme/app_themes.dart';
 
 /// Card for resolving potential duplicate transactions detected by the AI.
 class DuplicateResolutionCard extends StatelessWidget {
@@ -24,7 +25,7 @@ class DuplicateResolutionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF21262D),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
       ),
@@ -64,8 +65,8 @@ class DuplicateResolutionCard extends StatelessWidget {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF8B949E)),
+                    foregroundColor: context.textPrimary,
+                    side: BorderSide(color: context.borderColor),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   child: const Text('Log as New', style: TextStyle(fontSize: 12)),

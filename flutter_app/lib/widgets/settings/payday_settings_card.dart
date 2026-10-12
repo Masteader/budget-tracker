@@ -110,8 +110,8 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                     const SizedBox(height: 2),
                     Text(
                       'Custom monthly salary arrival date',
-                      style: const TextStyle(
-                        color: Color(0xFF8B949E),
+                      style: TextStyle(
+                        color: context.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -145,7 +145,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             'Budget cycles, remaining days counter, daily burn rate allowances, and automatic budget rollover will dynamically sync to this date.',
             style: GoogleFonts.outfit(
               fontSize: 12,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
             ),
           ),
           const SizedBox(height: 16),
@@ -158,7 +158,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -191,7 +191,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF8B949E),
+              color: context.textSecondary,
               letterSpacing: 0.8,
             ),
           ),
@@ -200,7 +200,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             decoration: BoxDecoration(
-              color: context.scaffoldBg,
+              color: context.inputBg,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: context.borderColor),
             ),
@@ -217,7 +217,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                     child: Text(
                       'Day $day (${getOrdinal(day)} of every month)',
                       style: GoogleFonts.outfit(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontSize: 14,
                         fontWeight: day == _selectedDay
                             ? FontWeight.bold

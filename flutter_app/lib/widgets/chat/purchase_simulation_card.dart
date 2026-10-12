@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Card showing real-time affordability analysis before purchasing an item.
@@ -36,7 +37,7 @@ class PurchaseSimulationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
       ),
@@ -51,7 +52,7 @@ class PurchaseSimulationCard extends StatelessWidget {
                 child: Text(
                   'Purchase Simulator',
                   style: GoogleFonts.outfit(
-                    color: Colors.white,
+                    color: context.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -79,49 +80,50 @@ class PurchaseSimulationCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             '$item • SAR ${targetAmt.toStringAsFixed(2)}',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+            style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             'Days to Payday: $daysToPayday days away',
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+            style: TextStyle(color: context.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF0D1117),
+              color: context.subtleCardBg,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.borderColor),
             ),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     children: [
-                      const Text(
+                      Text(
                         'Daily Allowance Now',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                        style: TextStyle(color: context.textSecondary, fontSize: 10),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(Icons.arrow_forward_rounded, color: Color(0xFF8B949E), size: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.arrow_forward_rounded, color: context.textSecondary, size: 14),
                 ),
                 Expanded(
                   child: Column(
                     children: [
-                      const Text(
+                      Text(
                         'After Purchase',
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                        style: TextStyle(color: context.textSecondary, fontSize: 10),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 2),

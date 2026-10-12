@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_themes.dart';
 
 class ReceiptPhotoViewerDialog extends StatelessWidget {
   final String receiptUrl;
@@ -78,7 +79,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                color: const Color(0xFF161B22),
+                color: context.cardBg,
                 child: InteractiveViewer(
                   panEnabled: true,
                   minScale: 0.8,
@@ -97,11 +98,11 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.broken_image_outlined, size: 48, color: Color(0xFF8B949E)),
+                            Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
                             const SizedBox(height: 8),
                             Text(
                               'Unable to load receipt image',
-                              style: GoogleFonts.outfit(color: const Color(0xFF8B949E)),
+                              style: GoogleFonts.outfit(color: context.textSecondary),
                             ),
                           ],
                         ),

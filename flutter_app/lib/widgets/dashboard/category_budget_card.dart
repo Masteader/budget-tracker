@@ -107,7 +107,7 @@ class CategoryBudgetCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, size: 16, color: Color(0xFF8B949E)),
+                      Icon(Icons.chevron_right, size: 16, color: context.textSecondary),
                     ],
                   ),
                 ],
@@ -117,7 +117,7 @@ class CategoryBudgetCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: budget.usagePercent,
-                  backgroundColor: const Color(0xFF30363D),
+                  backgroundColor: context.chipBg,
                   valueColor: AlwaysStoppedAnimation(_barColor),
                   minHeight: 8,
                 ),
@@ -128,11 +128,11 @@ class CategoryBudgetCard extends StatelessWidget {
                 children: [
                   Text(
                     'SAR ${fmt.format(budget.spentAmount)} spent',
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                   Text(
                     'of SAR ${fmt.format(budget.allocatedAmount)}',
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                    style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -148,9 +148,9 @@ class CategoryBudgetCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
+                          const Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
                           SizedBox(width: 6),
                           Text(
                             'Sub-Categories',
@@ -163,10 +163,10 @@ class CategoryBudgetCard extends StatelessWidget {
                           Spacer(),
                           Text(
                             'Breakdown',
-                            style: TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                            style: TextStyle(color: context.textSecondary, fontSize: 10),
                           ),
-                          SizedBox(width: 2),
-                          Icon(Icons.chevron_right, size: 14, color: Color(0xFF8B949E)),
+                          const SizedBox(width: 2),
+                          Icon(Icons.chevron_right, size: 14, color: context.textSecondary),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -176,12 +176,12 @@ class CategoryBudgetCard extends StatelessWidget {
                         children: subCategories.map((s) => Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF161B22),
+                            color: context.chipBg,
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             s,
-                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10),
+                            style: TextStyle(color: context.textSecondary, fontSize: 10),
                           ),
                         )).toList(),
                       ),
