@@ -36,4 +36,36 @@ void main() {
     expect(find.text('Sub-Category'), findsOneWidget);
     expect(find.text('Sarah'), findsOneWidget);
   });
+
+  testWidgets('EditTransactionSheet selects Shopping & Retail for OPEX-SHOPPING transaction', (tester) async {
+    final tx = Transaction(
+      id: 'tx-noon-shoes',
+      householdId: 'h1',
+      amount: 100.0,
+      currency: 'SAR',
+      merchant: 'Noon',
+      categoryCode: 'OPEX-SHOPPING',
+      subCategory: 'clothing_fashion',
+      timestamp: DateTime.now(),
+      isReallocated: false,
+      createdAt: DateTime.now(),
+      paidBy: 'me',
+      beneficiary: 'me',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: EditTransactionSheet(
+              transaction: tx,
+              householdDependents: const [],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Shopping & Retail'), findsOneWidget);
+  });
 }

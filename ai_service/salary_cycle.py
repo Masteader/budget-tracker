@@ -520,19 +520,44 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
 
     # 5. Build category breakdown items
     categories = []
+    budget_by_code = {b["category_code"]: b for b in cycle_budgets}
+
+    # Collect all categories:
+    # First, those with active cycle budgets
+    seen_codes = set()
+    ordered_codes = []
     for b in cycle_budgets:
-        c_code = b["category_code"]
+        c = b["category_code"]
+        if c not in seen_codes:
+            seen_codes.add(c)
+            ordered_codes.append(c)
+
+    # Next, all categories from cost_control_codes (so every category sheet can open cleanly)
+    for c in cat_names.keys():
+        if c not in seen_codes:
+            seen_codes.add(c)
+            ordered_codes.append(c)
+
+    # Finally, any other category with spending in this cycle
+    for (c, _) in cat_sub_spending.keys():
+        if c not in seen_codes:
+            seen_codes.add(c)
+            ordered_codes.append(c)
+
+    month_str = f"{target_key}-01"
+    for c_code in ordered_codes:
+        b = budget_by_code.get(c_code)
         c_name = cat_names.get(c_code, c_code)
-        allocated = float(b.get("allocated_amount") or 0.0)
-        prev_delta = float(b.get("previous_cycle_delta") or 0.0)
-        
+        allocated = float(b.get("allocated_amount") or 0.0) if b else 0.0
+        prev_delta = float(b.get("previous_cycle_delta") or 0.0) if b else 0.0
+
         sub_items = []
         predefined = sub_defs_by_parent.get(c_code, [])
         used_sub_codes = set()
-        sub_allocs = b.get("sub_allocations") or {}
+        sub_allocs = b.get("sub_allocations") or {} if b else {}
         if not isinstance(sub_allocs, dict):
             sub_allocs = {}
-        
+
         for pre in predefined:
             sc_code = pre["sub_code"]
             used_sub_codes.add(sc_code)
@@ -544,7 +569,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
                 "spent_amount": round(sp_data["spent"], 2),
                 "transaction_count": sp_data["count"],
             })
-            
+
         other_sp = cat_sub_spending.get((c_code, "other"), {"spent": 0.0, "count": 0})
         for (c, sc), data in cat_sub_spending.items():
             if c == c_code and sc != "other" and sc not in used_sub_codes:
@@ -555,7 +580,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
                     "spent_amount": round(data["spent"], 2),
                     "transaction_count": data["count"],
                 })
-                
+
         if other_sp["spent"] > 0 or other_sp["count"] > 0 or not sub_items:
             sub_items.append({
                 "sub_code": "other",
@@ -564,11 +589,29 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
                 "spent_amount": round(other_sp["spent"], 2),
                 "transaction_count": other_sp["count"],
             })
-            
+
         total_sub_spent = sum(item["spent_amount"] for item in sub_items)
-        actual_spent = max(total_sub_spent, float(b.get("spent_amount") or 0.0))
+        db_spent = float(b.get("spent_amount") or 0.0) if b else 0.0
+        actual_spent = max(total_sub_spent, db_spent)
         remaining = allocated - actual_spent
-        
+
+        # If this category has spending but no budget row in DB, auto-create one
+        if b is None and actual_spent > 0:
+            try:
+                new_row = {
+                    "household_id": household_id,
+                    "category_code": c_code,
+                    "cycle_key": target_key,
+                    "month": month_str,
+                    "allocated_amount": 0.0,
+                    "spent_amount": round(actual_spent, 2),
+                    "is_active": True,
+                    "previous_cycle_delta": 0.0,
+                }
+                client.table("budgets").insert(new_row).execute()
+            except Exception:
+                pass
+
         categories.append({
             "category_code": c_code,
             "category_name": c_name,

@@ -592,11 +592,11 @@ async def pay_installment_endpoint(plan_id: str):
     tags=["budgets"],
     summary="Recalculate spent_amount for all categories in a household from transactions.",
 )
-async def recalculate_budgets_endpoint(household_id: str):
+async def recalculate_budgets_endpoint(household_id: str, cycle_key: Optional[str] = None):
     from installment_service import InstallmentService
     try:
-        await asyncio.to_thread(InstallmentService.recalculate_budgets, household_id)
-        return {"status": "ok", "household_id": household_id}
+        await asyncio.to_thread(InstallmentService.recalculate_budgets, household_id, cycle_key)
+        return {"status": "ok", "household_id": household_id, "cycle_key": cycle_key}
     except Exception as exc:
         logger.error("Failed to recalculate budgets: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

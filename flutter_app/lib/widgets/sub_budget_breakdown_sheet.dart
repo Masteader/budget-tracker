@@ -11,6 +11,7 @@ class SubBudgetBreakdownSheet extends StatefulWidget {
   final String categoryCode;
   final String? cycleKey;
   final double allocatedAmount;
+  final double spentAmount;
   final double previousCycleDelta;
 
   const SubBudgetBreakdownSheet({
@@ -19,6 +20,7 @@ class SubBudgetBreakdownSheet extends StatefulWidget {
     required this.categoryCode,
     this.cycleKey,
     required this.allocatedAmount,
+    this.spentAmount = 0.0,
     this.previousCycleDelta = 0.0,
   });
 
@@ -28,6 +30,7 @@ class SubBudgetBreakdownSheet extends StatefulWidget {
     required String categoryCode,
     String? cycleKey,
     required double allocatedAmount,
+    double spentAmount = 0.0,
     double previousCycleDelta = 0.0,
   }) {
     showModalBottomSheet(
@@ -42,6 +45,7 @@ class SubBudgetBreakdownSheet extends StatefulWidget {
         categoryCode: categoryCode,
         cycleKey: cycleKey,
         allocatedAmount: allocatedAmount,
+        spentAmount: spentAmount,
         previousCycleDelta: previousCycleDelta,
       ),
     );
@@ -135,6 +139,12 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
     if (code.contains('dine') || code.contains('burger')) return Icons.lunch_dining_outlined;
     if (code.contains('coffee') || code.contains('cafe')) return Icons.coffee_outlined;
     if (code.contains('pharmacy') || code.contains('med')) return Icons.medication_outlined;
+    if (code.contains('cloth') || code.contains('fashion') || code.contains('shoe')) return Icons.checkroom_outlined;
+    if (code.contains('electronic') || code.contains('gadget')) return Icons.devices_outlined;
+    if (code.contains('furnitur') || code.contains('home')) return Icons.chair_outlined;
+    if (code.contains('cinema') || code.contains('game') || code.contains('entertain')) return Icons.sports_esports_outlined;
+    if (code.contains('tuition') || code.contains('book') || code.contains('school') || code.contains('educat')) return Icons.school_outlined;
+    if (code.contains('gov') || code.contains('visa') || code.contains('iqama')) return Icons.account_balance_outlined;
     return Icons.category_outlined;
   }
 
@@ -143,7 +153,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final catName = _categoryData?.categoryName ??
         widget.categoryCode.replaceFirst(RegExp(r'^[A-Z]+-'), '');
-    final spent = _categoryData?.spentAmount ?? 0.0;
+    final spent = _categoryData != null ? _categoryData!.spentAmount : widget.spentAmount;
     final allocated = widget.allocatedAmount > 0 ? widget.allocatedAmount : (_categoryData?.allocatedAmount ?? 0.0);
     final prevDelta = widget.previousCycleDelta != 0.0
         ? widget.previousCycleDelta

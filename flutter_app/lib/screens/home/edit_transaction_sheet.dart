@@ -64,17 +64,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   bool _loadingSubs = false;
 
   final List<Map<String, String>> _categories = const [
-    {'code': 'OPEX-GROCERIES', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-DINING', 'name': 'Dining & Cafes'},
-    {'code': 'OPEX-FUEL', 'name': 'Fuel & Transport'},
-    {'code': 'OPEX-TRANSPORT', 'name': 'Transport & Transit'},
-    {'code': 'OPEX-UTILITIES', 'name': 'Utilities & Bills'},
     {'code': 'OPEX-SHOPPING', 'name': 'Shopping & Retail'},
+    {'code': 'OPEX-UTILITIES', 'name': 'Utilities & Bills'},
+    {'code': 'OPEX-FUEL', 'name': 'Fuel & Transport'},
     {'code': 'OPEX-ENTERTAINMENT', 'name': 'Entertainment'},
     {'code': 'OPEX-HEALTH', 'name': 'Health & Pharmacy'},
-    {'code': 'OPEX-EDUCATION', 'name': 'Education'},
-    {'code': 'OPEX-HOUSING', 'name': 'Housing'},
+    {'code': 'CAPEX-EDUCATION', 'name': 'Education'},
+    {'code': 'OPEX-GOV', 'name': 'Government & Fees'},
     {'code': 'OPEX-MISC', 'name': 'Miscellaneous'},
   ];
 
@@ -83,7 +81,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     super.initState();
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
-    _selectedCategory = widget.transaction.categoryCode ?? 'OPEX-MISC';
+    var initialCat = widget.transaction.categoryCode ?? 'OPEX-MISC';
+    if (initialCat == 'OPEX-GROCERIES') initialCat = 'OPEX-GROCERY';
+    if (initialCat == 'OPEX-TRANSPORT') initialCat = 'OPEX-FUEL';
+    if (initialCat == 'OPEX-EDUCATION') initialCat = 'CAPEX-EDUCATION';
+    if (initialCat == 'OPEX-HOUSING') initialCat = 'OPEX-UTILITIES';
+    _selectedCategory = initialCat;
     _selectedSubCategory = widget.transaction.subCategory;
     _selectedPaidBy = widget.transaction.paidBy.isNotEmpty ? widget.transaction.paidBy : 'me';
     _selectedBeneficiary = widget.transaction.beneficiary.isNotEmpty ? widget.transaction.beneficiary : 'both';

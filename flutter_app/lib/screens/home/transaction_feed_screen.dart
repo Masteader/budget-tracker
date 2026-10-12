@@ -40,13 +40,16 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
   final List<Map<String, String>> _categoryOptions = const [
     {'code': 'ALL', 'label': 'All'},
-    {'code': 'OPEX-DINING', 'label': '☕ Dining'},
-    {'code': 'OPEX-GROCERY', 'label': '🛒 Groceries'},
-    {'code': 'OPEX-FUEL', 'label': '⛽ Fuel'},
-    {'code': 'OPEX-SHOPPING', 'label': '🛍️ Shopping'},
-    {'code': 'OPEX-UTILITIES', 'label': '⚡ Bills'},
-    {'code': 'OPEX-HEALTH', 'label': '💊 Health'},
-    {'code': 'OPEX-MISC', 'label': '📦 Other'},
+    {'code': 'OPEX-GROCERY', 'label': '🛒 Groceries & Supermarkets'},
+    {'code': 'OPEX-DINING', 'label': '☕ Dining & Cafes'},
+    {'code': 'OPEX-SHOPPING', 'label': '🛍️ Shopping & Retail'},
+    {'code': 'OPEX-UTILITIES', 'label': '⚡ Utilities & Bills'},
+    {'code': 'OPEX-FUEL', 'label': '⛽ Fuel & Transport'},
+    {'code': 'OPEX-ENTERTAINMENT', 'label': '🎮 Entertainment'},
+    {'code': 'OPEX-HEALTH', 'label': '💊 Health & Pharmacy'},
+    {'code': 'CAPEX-EDUCATION', 'label': '🎓 Education'},
+    {'code': 'OPEX-GOV', 'label': '🏛️ Government & Fees'},
+    {'code': 'OPEX-MISC', 'label': '📦 Miscellaneous'},
   ];
 
   String get _sortLabel {

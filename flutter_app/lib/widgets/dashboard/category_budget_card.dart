@@ -41,6 +41,7 @@ class CategoryBudgetCard extends StatelessWidget {
             categoryCode: budget.categoryCode,
             cycleKey: cycleKey,
             allocatedAmount: budget.allocatedAmount,
+            spentAmount: budget.spentAmount,
             previousCycleDelta: budget.previousCycleDelta,
           );
         },

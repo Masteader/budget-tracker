@@ -920,6 +920,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       categoryCode: code,
                       cycleKey: _currentCycleKey,
                       allocatedAmount: existing?.allocatedAmount ?? 0.0,
+                      spentAmount: existing?.spentAmount ?? 0.0,
                       previousCycleDelta: existing?.previousCycleDelta ?? 0.0,
                     );
                   },
@@ -944,17 +945,34 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       style: TextStyle(
                                           fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
                                   const SizedBox(height: 3),
-                                  Text(
-                                    existing != null
-                                        ? 'SAR ${fmt.format(existing.allocatedAmount)}'
-                                        : context.tr('not_set'),
-                                    style: TextStyle(
-                                      color: existing != null
-                                          ? const Color(0xFF00C896)
-                                          : const Color(0xFF8B949E),
-                                      fontSize: 13,
-                                      fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        existing != null
+                                            ? 'SAR ${fmt.format(existing.allocatedAmount)}'
+                                            : context.tr('not_set'),
+                                        style: TextStyle(
+                                          color: existing != null
+                                              ? const Color(0xFF00C896)
+                                              : const Color(0xFF8B949E),
+                                          fontSize: 13,
+                                          fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
+                                        ),
+                                      ),
+                                      if (existing != null && existing.spentAmount > 0) ...[
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '• Spent: SAR ${fmt.format(existing.spentAmount)}',
+                                          style: TextStyle(
+                                            color: existing.spentAmount > existing.allocatedAmount && existing.allocatedAmount > 0
+                                                ? Colors.redAccent
+                                                : const Color(0xFF8B949E),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),

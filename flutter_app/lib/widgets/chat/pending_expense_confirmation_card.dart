@@ -38,15 +38,16 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   bool _loadingSubs = false;
 
   static const List<Map<String, String>> _defaultCategories = [
-    {'code': 'OPEX-DINING', 'label': 'Dining'},
-    {'code': 'OPEX-GROCERY', 'label': 'Grocery'},
-    {'code': 'OPEX-UTILITIES', 'label': 'Utilities & Rent'},
+    {'code': 'OPEX-GROCERY', 'label': 'Groceries & Supermarkets'},
+    {'code': 'OPEX-DINING', 'label': 'Dining & Cafes'},
+    {'code': 'OPEX-SHOPPING', 'label': 'Shopping & Retail'},
+    {'code': 'OPEX-UTILITIES', 'label': 'Utilities & Bills'},
     {'code': 'OPEX-FUEL', 'label': 'Fuel & Transport'},
-    {'code': 'OPEX-HEALTH', 'label': 'Healthcare'},
-    {'code': 'OPEX-SHOPPING', 'label': 'Shopping'},
-    {'code': 'OPEX-EDUCATION', 'label': 'Education'},
     {'code': 'OPEX-ENTERTAINMENT', 'label': 'Entertainment'},
-    {'code': 'OPEX-MISC', 'label': 'General / Misc'},
+    {'code': 'OPEX-HEALTH', 'label': 'Health & Pharmacy'},
+    {'code': 'CAPEX-EDUCATION', 'label': 'Education'},
+    {'code': 'OPEX-GOV', 'label': 'Government & Fees'},
+    {'code': 'OPEX-MISC', 'label': 'Miscellaneous'},
   ];
 
   @override

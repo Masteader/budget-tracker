@@ -336,6 +336,12 @@ def insert_transaction(
         "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s sub_category=%s cycle=%s reallocated=%s source=%s",
         transaction_id, amount, currency, merchant, category_code, sub_category, cycle_key, is_reallocated, source,
     )
+    try:
+        from installment_service import InstallmentService
+        InstallmentService.recalculate_budgets(household_id, cycle_key)
+    except Exception as recalc_err:
+        logger.debug("Background recalculate_budgets on insert failed: %s", recalc_err)
+
     return transaction_id
 
 
