@@ -17,6 +17,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/payday_settings_card.dart';
+import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
@@ -52,6 +53,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   List<HouseholdDependent> _dependents = [];
   int _paydayDay = 27;
   double _monthlyIncome = 0.0;
+  String _rolloverRule = 'send_to_savings';
+  double _accumulatedSavings = 0.0;
 
   @override
   void initState() {
@@ -175,6 +178,27 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         setState(() => _monthlyIncome = income);
       }
 
+      // Load configured budget rollover rule & savings surplus
+      String rollover = 'send_to_savings';
+      double savingsSurplus = 0.0;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        rollover = prefs.getString('household_rollover_rule') ?? 'send_to_savings';
+        final serverRule = await ApiService.instance.getHouseholdRolloverRule(hid);
+        if (serverRule.isNotEmpty) {
+          rollover = serverRule;
+          await prefs.setString('household_rollover_rule', rollover);
+        }
+        final summary = await ApiService.instance.getHouseholdSavingsSummary(hid);
+        savingsSurplus = (summary['accumulated_savings'] as num?)?.toDouble() ?? 0.0;
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _rolloverRule = rollover;
+          _accumulatedSavings = savingsSurplus;
+        });
+      }
+
       // Load household dependents
       try {
         final deps = await ApiService.instance.getDependents(hid);
@@ -229,6 +253,31 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           context,
           'Failed to save income: $e',
           title: 'Income Error',
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _saveRolloverRule(String newRule) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('household_rollover_rule', newRule);
+      if (mounted) setState(() => _rolloverRule = newRule);
+
+      if (_householdId != null) {
+        await ApiService.instance.setHouseholdRolloverRule(_householdId!, newRule);
+        try {
+          await supabase.from('households').update({'rollover_rule': newRule}).eq('id', _householdId!);
+        } catch (_) {}
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Failed to save rollover policy: $e',
+          title: 'Rollover Error',
         );
       }
       return false;
@@ -755,6 +804,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           if (_householdId != null) ...[
             HouseholdManagementCard(
               householdName: _householdName ?? 'Household',
+              householdId: _householdId,
               inviteCode: _inviteCode ?? '--------',
               userRole: _userRole,
               members: _members,
@@ -775,6 +825,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             IncomeSettingsCard(
               initialIncome: _monthlyIncome,
               onSaveIncome: _saveIncome,
+            ),
+            const SizedBox(height: 16),
+            RolloverSettingsCard(
+              initialRule: _rolloverRule,
+              accumulatedSavings: _accumulatedSavings,
+              onSaveRule: _saveRolloverRule,
             ),
           ] else ...[
             Container(
@@ -1045,7 +1101,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withOpacity(0.15),
+                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.menu_book_rounded, color: Color(0xFF00C896), size: 20),
@@ -1066,7 +1122,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.15),
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.support_agent_rounded, color: Color(0xFF3B82F6), size: 20),
@@ -1097,7 +1153,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.mail_outline_rounded, color: Color(0xFFF59E0B), size: 20),
@@ -1227,7 +1283,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
-    final activeBg = const Color(0xFF00C896);
+    const activeBg = Color(0xFF00C896);
 
     return Container(
       padding: const EdgeInsets.all(16),

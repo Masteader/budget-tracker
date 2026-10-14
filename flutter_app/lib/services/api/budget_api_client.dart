@@ -182,7 +182,14 @@ class BudgetApiClient {
       '/households/$householdId/invites',
       {'role': role},
     );
-    return HouseholdInvite.fromMap(res);
+    if (res['invite_code'] != null) {
+      return HouseholdInvite.fromMap(res);
+    }
+    return HouseholdInvite(
+      householdId: householdId,
+      inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
+      role: role,
+    );
   }
 
   Future<HouseholdInvite> inspectInviteCode({

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../home/dashboard_screen.dart';
 
@@ -97,6 +98,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     }
     setState(() => _loading = true);
     try {
+      final invite = await ApiService.instance.inspectInviteCode(code);
+      final confirmedRole = invite.role;
+
       Map<String, dynamic> hh;
       try {
         final res = await supabase.rpc(
@@ -114,16 +118,23 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         hh = res;
         await supabase
             .from('users')
-            .update({'household_id': hh['id'], 'role': 'member'})
+            .update({
+              'household_id': hh['id'],
+              'role': 'member',
+              'financial_role': confirmedRole,
+            })
             .eq('id', uid);
       }
       final householdId = hh['id'] as String;
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
         context.read<BudgetProvider>().init(householdId);
+        final roleLabel = confirmedRole == 'spouse'
+            ? 'Wife / Spouse'
+            : (confirmedRole == 'peer' ? 'Roommate' : 'Family Member');
         AppSnackBar.showSuccess(
           context,
-          'Joined household "${hh['name'] ?? code}" successfully!',
+          'Joined household "${hh['name'] ?? code}" as $roleLabel!',
           title: 'Welcome to Household',
         );
         Navigator.of(context).pushAndRemoveUntil(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import 'role_invite_dialog.dart';
 
 /// Card for managing household membership, invite code, household switching, and dependents.
 class HouseholdManagementCard extends StatelessWidget {
@@ -12,6 +12,7 @@ class HouseholdManagementCard extends StatelessWidget {
   final String userRole;
   final List<Map<String, dynamic>> members;
   final List<HouseholdDependent> dependents;
+  final String? householdId;
   final VoidCallback onCopyInviteCode;
   final VoidCallback onLeaveHousehold;
   final VoidCallback onSwitchHousehold;
@@ -26,6 +27,7 @@ class HouseholdManagementCard extends StatelessWidget {
     required this.userRole,
     required this.members,
     this.dependents = const [],
+    this.householdId,
     required this.onCopyInviteCode,
     required this.onLeaveHousehold,
     required this.onSwitchHousehold,
@@ -149,6 +151,26 @@ class HouseholdManagementCard extends StatelessWidget {
                   label: Text(context.tr('copy_code'), style: const TextStyle(fontSize: 11)),
                   onPressed: onCopyInviteCode,
                 ),
+                if (householdId != null && householdId!.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C896),
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
+                    label: const Text('Invite with Role', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => RoleInviteDialog(householdId: householdId!),
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -254,7 +276,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   side: BorderSide(color: context.borderColor),
                   avatar: CircleAvatar(
                     backgroundColor: context.chipBg,
-                    child: Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
+                    child: const Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
                   ),
                   label: Text(
                     d.name,
