@@ -17,14 +17,14 @@ import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
-import '../../widgets/dashboard/dashboard_action_sheet.dart';
 import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
-import '../../widgets/partner_settlement_card.dart';
+import '../../widgets/dashboard/family_reimbursement_card.dart';
+import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
 import '../../widgets/salary_cycle_widget.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
-import '../scanner/multi_page_receipt_scanner_screen.dart';
+import '../../widgets/simulator/affordability_simulator_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
@@ -355,7 +355,21 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               const SizedBox(height: 12),
                               SalaryCycleWidget(householdId: hid),
                               const SizedBox(height: 12),
-                              PartnerSettlementCard(householdId: hid),
+                              FutureBuilder<SettlementV2Summary>(
+                                future: ApiService.instance.getSettlementV2(hid),
+                                builder: (context, snap) {
+                                  if (snap.hasData && snap.data!.isRoommateMode) {
+                                    return MultiRoommateSettlementCard(
+                                      householdId: hid,
+                                      summary: snap.data,
+                                    );
+                                  }
+                                  return FamilyReimbursementCard(
+                                    householdId: hid,
+                                    summary: snap.data?.familySummary,
+                                  );
+                                },
+                              ),
                               const SizedBox(height: 12),
                               RecurringBillsCard(householdId: hid),
                               const SizedBox(height: 12),
@@ -401,12 +415,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: InkWell(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MultiPageReceiptScannerScreen(householdId: hid),
-                                        ),
-                                      ),
+                                      onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
                                       borderRadius: BorderRadius.circular(14),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -417,11 +426,11 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         ),
                                         child: Row(
                                           children: [
-                                            const Icon(Icons.document_scanner_outlined, color: Color(0xFF58A6FF), size: 18),
+                                            const Icon(Icons.calculate_outlined, color: Color(0xFFA371F7), size: 18),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
-                                                context.tr('multi_shot_scan'),
+                                                context.tr('affordability_simulator'),
                                                 style: GoogleFonts.outfit(
                                                   color: context.textPrimary,
                                                   fontWeight: FontWeight.bold,
