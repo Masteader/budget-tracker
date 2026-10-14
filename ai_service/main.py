@@ -39,6 +39,7 @@ from models import (
     PaydayUpdateRequest,
     RolloverRuleUpdateRequest,
     HouseholdInviteCreateRequest,
+    HouseholdProfileClaimRequest,
     HouseholdReimbursementRequest,
     ShoppingBasketOptimizeRequest,
     RecurringBillToggleRequest,
@@ -593,7 +594,12 @@ async def create_household_role_invite_endpoint(household_id: str, payload: Hous
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     from supabase_client import create_household_role_invite
-    invite = await asyncio.to_thread(create_household_role_invite, household_id, payload.role)
+    invite = await asyncio.to_thread(
+        create_household_role_invite,
+        household_id,
+        payload.role,
+        payload.target_member_id,
+    )
     return invite
 
 
@@ -608,6 +614,19 @@ async def inspect_household_role_invite_endpoint(invite_code: str):
     from supabase_client import inspect_household_role_invite
     info = await asyncio.to_thread(inspect_household_role_invite, invite_code)
     return info
+
+
+@app.post(
+    "/households/invites/{invite_code}/claim",
+    tags=["households"],
+    summary="Claim a household invite code and link user account to member profile.",
+)
+async def claim_household_role_invite_endpoint(invite_code: str, payload: HouseholdProfileClaimRequest):
+    if not invite_code:
+        raise HTTPException(status_code=400, detail="invite_code is required.")
+    from supabase_client import claim_household_role_invite
+    res = await asyncio.to_thread(claim_household_role_invite, invite_code, payload.user_id)
+    return res
 
 
 @app.post(
@@ -946,7 +965,14 @@ async def list_household_dependents(household_id: str):
 )
 async def add_household_dependent(household_id: str, req: DependentCreateRequest):
     from dependents_service import create_household_dependent
-    dep = await asyncio.to_thread(create_household_dependent, household_id, req.name, req.avatar_icon)
+    dep = await asyncio.to_thread(
+        create_household_dependent,
+        household_id,
+        req.name,
+        req.avatar_icon,
+        req.relationship,
+        req.monthly_allowance,
+    )
     return {"status": "success", "dependent": dep}
 
 

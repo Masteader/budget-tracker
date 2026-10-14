@@ -713,9 +713,14 @@ def get_household_savings_summary(household_id: str) -> dict:
 HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "household_invites.json")
 
 
-def create_household_role_invite(household_id: str, role: str) -> dict:
+def create_household_role_invite(
+    household_id: str,
+    role: str,
+    target_member_id: Optional[str] = None,
+) -> dict:
     """
     Creates an 8-character invite code for a specific role ('spouse', 'peer', 'family_member').
+    Optionally binds the invite code to a pre-created manual member (target_member_id).
     Persists to Supabase household_invites table and caches in household_invites.json.
     """
     import secrets
@@ -729,6 +734,7 @@ def create_household_role_invite(household_id: str, role: str) -> dict:
         "household_id": household_id,
         "invite_code": code,
         "role": norm_role,
+        "target_member_id": target_member_id,
         "expires_at": expires_at,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -758,7 +764,7 @@ def create_household_role_invite(household_id: str, role: str) -> dict:
 
 def inspect_household_role_invite(invite_code: str) -> dict:
     """
-    Retrieves metadata for an invite code: household_id and assigned role.
+    Retrieves metadata for an invite code: household_id, assigned role, and target_member_id.
     """
     code = invite_code.strip().upper()
     try:
@@ -782,7 +788,44 @@ def inspect_household_role_invite(invite_code: str) -> dict:
         "invite_code": code,
         "household_id": None,
         "role": "peer",
+        "target_member_id": None,
         "is_valid": False,
+    }
+
+
+def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
+    """
+    Claims a household invite for a user: links the pre-created member profile (if target_member_id is set)
+    and updates the user's household_id and financial_role.
+    """
+    from dependents_service import link_dependent_user
+    inv = inspect_household_role_invite(invite_code)
+    hid = inv.get("household_id")
+    target_mid = inv.get("target_member_id")
+    role = inv.get("role", "peer")
+
+    if target_mid and hid:
+        link_dependent_user(hid, target_mid, user_id)
+
+    # Attempt Supabase updates
+    try:
+        client = get_client()
+        if hid:
+            client.table("users").update({
+                "household_id": hid,
+                "role": "member",
+                "financial_role": role,
+            }).eq("id", user_id).execute()
+        client.table("household_invites").update({"used_by": user_id}).eq("invite_code", invite_code.strip().upper()).execute()
+    except Exception as e:
+        logger.info(f"Supabase claim invite fallback: {e}")
+
+    return {
+        "status": "success",
+        "household_id": hid,
+        "user_id": user_id,
+        "linked_member_id": target_mid,
+        "financial_role": role,
     }
 
 

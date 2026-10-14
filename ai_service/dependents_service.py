@@ -33,9 +33,11 @@ def get_household_dependents(household_id: str) -> List[Dict[str, Any]]:
 def create_household_dependent(
     household_id: str,
     name: str,
-    avatar_icon: Optional[str] = "child"
+    avatar_icon: Optional[str] = "child",
+    relationship: Optional[str] = "child",
+    monthly_allowance: Optional[float] = 0.0,
 ) -> Dict[str, Any]:
-    """Creates a new dependent for a household."""
+    """Creates a new member/dependent for a household."""
     from supabase_client import get_client
     now_iso = datetime.now(timezone.utc).isoformat()
     record = {
@@ -43,6 +45,9 @@ def create_household_dependent(
         "household_id": household_id,
         "name": name.strip(),
         "avatar_icon": avatar_icon or "child",
+        "relationship": relationship or "child",
+        "monthly_allowance": round(float(monthly_allowance or 0.0), 2),
+        "linked_user_id": None,
         "created_at": now_iso,
     }
 
@@ -53,6 +58,8 @@ def create_household_dependent(
             "household_id": record["household_id"],
             "name": record["name"],
             "avatar_icon": record["avatar_icon"],
+            "relationship": record["relationship"],
+            "monthly_allowance": record["monthly_allowance"],
         }).execute()
         if res.data and len(res.data) > 0:
             record = res.data[0]
@@ -79,3 +86,32 @@ def delete_household_dependent(household_id: str, dependent_id: str) -> bool:
             d for d in _memory_dependents[household_id] if d.get("id") != dependent_id
         ]
     return True
+
+
+def link_dependent_user(household_id: str, dependent_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Links a pre-created member/dependent record to a live user account."""
+    from supabase_client import get_client
+    updated = None
+
+    try:
+        client = get_client()
+        res = (
+            client.table("household_dependents")
+            .update({"linked_user_id": user_id})
+            .eq("id", dependent_id)
+            .execute()
+        )
+        if res.data and len(res.data) > 0:
+            updated = res.data[0]
+    except Exception as exc:
+        logger.debug("Linking dependent user in local cache (%s)", exc)
+
+    if household_id in _memory_dependents:
+        for dep in _memory_dependents[household_id]:
+            if dep.get("id") == dependent_id:
+                dep["linked_user_id"] = user_id
+                if not updated:
+                    updated = dep
+                break
+
+    return updated

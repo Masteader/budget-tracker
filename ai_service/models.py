@@ -217,6 +217,14 @@ class HouseholdInviteCreateRequest(BaseModel):
         pattern="^(spouse|peer|family_member|dependent)$",
         description="Assigned role for invited member: 'spouse', 'peer', or 'family_member'",
     )
+    target_member_id: Optional[str] = Field(
+        default=None,
+        description="Optional pre-created manual member ID to bind this invite to",
+    )
+
+
+class HouseholdProfileClaimRequest(BaseModel):
+    user_id: str = Field(..., description="ID of the live user claiming the pre-created profile")
 
 
 class HouseholdReimbursementRequest(BaseModel):
@@ -281,8 +289,10 @@ class CustomCategoryCreateRequest(BaseModel):
 
 
 class DependentCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, description="Child or dependent name")
+    name: str = Field(..., min_length=1, description="Member or dependent name")
     avatar_icon: Optional[str] = Field("child", description="Icon representation")
+    relationship: Optional[str] = Field("child", description="Role: 'spouse', 'peer', 'child', 'dependent'")
+    monthly_allowance: Optional[float] = Field(0.0, ge=0.0, description="Monthly allocated allowance in SAR")
 
 
 
