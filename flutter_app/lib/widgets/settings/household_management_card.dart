@@ -177,62 +177,23 @@ class HouseholdManagementCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Members Section
-          Text(
-            'MEMBERS',
-            style: GoogleFonts.outfit(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: context.textSecondary,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 6),
-          ...members.map((m) {
-            final email = m['email'] as String? ?? 'User';
-            final role = m['role'] as String? ?? 'member';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(Icons.person_outline_rounded, size: 16, color: context.textSecondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      email,
-                      style: TextStyle(color: context.textPrimary, fontSize: 13),
-                    ),
-                  ),
-                  Text(
-                    role.toUpperCase(),
-                    style: TextStyle(color: context.textSecondary, fontSize: 10, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            );
-          }),
-
-          const SizedBox(height: 16),
-          Divider(color: context.borderColor, height: 1),
-          const SizedBox(height: 14),
-
-          // Family Dependents & Children Section
+          // Members & Living Group Hub
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.child_care_rounded, size: 16, color: Color(0xFF58A6FF)),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.group_rounded, size: 16, color: Color(0xFF00C896)),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Paid for Whom (Children & Dependents)',
+                        'HOUSEHOLD & LIVING GROUP MEMBERS',
                         style: GoogleFonts.outfit(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: context.textSecondary,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.8,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -248,50 +209,244 @@ class HouseholdManagementCard extends StatelessWidget {
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  icon: const Icon(Icons.add_rounded, size: 14),
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
                   label: const Text(
-                    '+ Add Child / Dependent',
+                    '+ Add Member / Dependent',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                   onPressed: onAddDependent,
                 ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (dependents.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                'No dependents registered yet. Add children to assign individual expenses.',
-                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF6E7681)),
+          const SizedBox(height: 10),
+
+          // Active App Accounts
+          ...members.map((m) {
+            final email = m['email'] as String? ?? 'User';
+            final role = m['role'] as String? ?? 'member';
+            final isAdminMember = role.toLowerCase() == 'admin';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: context.scaffoldBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor),
               ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: dependents.map((d) {
-                return Chip(
-                  backgroundColor: context.scaffoldBg,
-                  side: BorderSide(color: context.borderColor),
-                  avatar: CircleAvatar(
-                    backgroundColor: context.chipBg,
-                    child: const Icon(Icons.face_rounded, size: 14, color: Color(0xFF58A6FF)),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person_outline_rounded, color: Color(0xFF00C896), size: 16),
                   ),
-                  label: Text(
-                    d.name,
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: context.textPrimary,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          email,
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF00C896),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            const Text(
+                              'Active Account',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF00C896),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  deleteIcon: onRemoveDependent != null
-                      ? Icon(Icons.close_rounded, size: 14, color: context.textSecondary)
-                      : null,
-                  onDeleted: onRemoveDependent != null ? () => onRemoveDependent!(d) : null,
-                );
-              }).toList(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isAdminMember
+                          ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                          : context.chipBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      role.toUpperCase(),
+                      style: TextStyle(
+                        color: isAdminMember ? const Color(0xFF00C896) : context.textSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+
+          // Pre-created and Dependent Members
+          ...dependents.map((d) {
+            Color roleColor = const Color(0xFF34D399);
+            IconData roleIcon = Icons.child_care_rounded;
+            String roleName = 'Child';
+
+            if (d.isSpouse) {
+              roleColor = const Color(0xFFE5A93C);
+              roleIcon = Icons.favorite_rounded;
+              roleName = 'Wife / Spouse';
+            } else if (d.isPeer) {
+              roleColor = const Color(0xFF38BDF8);
+              roleIcon = Icons.group_outlined;
+              roleName = 'Roommate';
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: context.scaffoldBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: roleColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(roleIcon, color: roleColor, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                d.name,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: context.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: roleColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                roleName,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: roleColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: d.isClaimed ? const Color(0xFF00C896) : const Color(0xFFE5A93C),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              d.isClaimed ? 'Active Account' : 'Pre-Account Profile',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: d.isClaimed ? const Color(0xFF00C896) : const Color(0xFFE5A93C),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (d.monthlyAllowance > 0) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '•  ${d.monthlyAllowance.toStringAsFixed(0)} SAR/mo',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!d.isClaimed && householdId != null && householdId!.isNotEmpty) ...[
+                    IconButton(
+                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                      tooltip: 'Invite with linked profile',
+                      color: const Color(0xFF00C896),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => RoleInviteDialog(
+                            householdId: householdId!,
+                            initialRole: d.relationship,
+                            targetMemberId: d.id,
+                            targetMemberName: d.name,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                  if (onRemoveDependent != null) ...[
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, size: 16, color: context.textSecondary),
+                      tooltip: 'Remove',
+                      onPressed: () => onRemoveDependent!(d),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+
+          if (members.isEmpty && dependents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No members or profiles added yet. Tap "+ Add Member / Dependent" to get started.',
+                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF6E7681)),
+              ),
             ),
 
           const SizedBox(height: 18),

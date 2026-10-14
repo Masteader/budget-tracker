@@ -9,11 +9,17 @@ import '../app_snackbar.dart';
 
 class RoleInviteDialog extends StatefulWidget {
   final String householdId;
+  final String? initialRole;
+  final String? targetMemberId;
+  final String? targetMemberName;
   final ValueChanged<HouseholdInvite>? onInviteGenerated;
 
   const RoleInviteDialog({
     super.key,
     required this.householdId,
+    this.initialRole,
+    this.targetMemberId,
+    this.targetMemberName,
     this.onInviteGenerated,
   });
 
@@ -25,6 +31,21 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
   String _selectedRole = 'spouse';
   bool _isGenerating = false;
   HouseholdInvite? _generatedInvite;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialRole != null) {
+      final norm = widget.initialRole!.toLowerCase();
+      if (norm == 'wife' || norm == 'spouse') {
+        _selectedRole = 'spouse';
+      } else if (norm == 'roommate' || norm == 'peer') {
+        _selectedRole = 'peer';
+      } else {
+        _selectedRole = 'family_member';
+      }
+    }
+  }
 
   final List<Map<String, dynamic>> _roles = const [
     {
@@ -58,6 +79,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
       invite = await ApiService.instance.createRoleInvite(
         widget.householdId,
         _selectedRole,
+        targetMemberId: widget.targetMemberId,
       );
     } catch (_) {
       // Offline fallback
@@ -65,6 +87,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
         householdId: widget.householdId,
         inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
         role: _selectedRole,
+        targetMemberId: widget.targetMemberId,
+        targetMemberName: widget.targetMemberName,
       );
     }
 
@@ -107,7 +131,9 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Generate Role Invite',
+                      widget.targetMemberName != null
+                          ? 'Invite ${widget.targetMemberName}'
+                          : 'Generate Role Invite',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -119,7 +145,9 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Select the member’s role to configure the correct settlement model automatically.',
+                widget.targetMemberName != null
+                    ? 'This invite code is linked to ${widget.targetMemberName}\'s profile. When they join, their account is automatically claimed and merged.'
+                    : 'Select the member’s role to configure the correct settlement model automatically.',
                 style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 16),

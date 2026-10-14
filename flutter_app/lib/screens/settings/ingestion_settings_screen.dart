@@ -16,6 +16,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
+import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
@@ -606,86 +607,25 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   }
 
   Future<void> _showAddDependentDialog() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: context.borderColor),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
-            const SizedBox(width: 8),
-            Text(
-              context.tr('add_child_dependent'),
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr('child_dependent_desc'),
-              style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              style: TextStyle(color: context.textPrimary),
-              decoration: InputDecoration(
-                hintText: context.tr('dependent_name_hint'),
-                hintStyle: TextStyle(color: context.textSecondary),
-                filled: true,
-                fillColor: context.inputBg,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: context.borderColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
-              foregroundColor: Colors.black,
-            ),
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) Navigator.pop(ctx, text);
-            },
-            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    final result = await AddHouseholdMemberSheet.show(context);
 
-    if (name != null && name.isNotEmpty && _householdId != null) {
+    if (result != null && result.name.isNotEmpty && _householdId != null) {
       try {
-        final res = await ApiService.instance.createDependent(_householdId!, name);
+        final res = await ApiService.instance.createDependent(
+          _householdId!,
+          result.name,
+          relationship: result.relationship,
+          monthlyAllowance: result.monthlyAllowance,
+          avatarIcon: result.avatarIcon,
+        );
         if (res != null) {
           final updated = await ApiService.instance.getDependents(_householdId!);
           if (mounted) {
             setState(() => _dependents = updated);
             AppSnackBar.showSuccess(
               context,
-              'Added dependent "$name" successfully.',
-              title: 'Dependent Added',
+              'Added member "${result.name}" successfully.',
+              title: 'Member Added',
             );
           }
         }
@@ -693,7 +633,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to add dependent: $e',
+            'Failed to add member: $e',
             title: 'Error',
           );
         }

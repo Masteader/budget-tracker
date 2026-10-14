@@ -5,7 +5,7 @@ import 'package:budget_tracker/widgets/settings/household_management_card.dart';
 
 void main() {
   group('HouseholdManagementCard Widget Tests', () {
-    testWidgets('renders Family Dependents & Children section and displays child chip', (tester) async {
+    testWidgets('renders Household & Living Group section with roles and pre-account status', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -14,9 +14,20 @@ void main() {
                 householdName: 'My Household',
                 inviteCode: 'ABC12345',
                 userRole: 'admin',
-                members: const [],
+                householdId: 'h1',
+                members: const [
+                  {'email': 'owner@family.com', 'role': 'admin'},
+                ],
                 dependents: const [
-                  HouseholdDependent(id: '1', householdId: 'h1', name: 'Sarah', avatarIcon: 'child', createdAt: null),
+                  HouseholdDependent(
+                    id: '1',
+                    householdId: 'h1',
+                    name: 'Sarah',
+                    relationship: 'spouse',
+                    monthlyAllowance: 1500.0,
+                    avatarIcon: 'wife',
+                    createdAt: null,
+                  ),
                 ],
                 onCopyInviteCode: () {},
                 onLeaveHousehold: () {},
@@ -29,9 +40,13 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Paid for Whom (Children & Dependents)'), findsOneWidget);
+      expect(find.text('HOUSEHOLD & LIVING GROUP MEMBERS'), findsOneWidget);
       expect(find.text('Sarah'), findsOneWidget);
-      expect(find.text('+ Add Child / Dependent'), findsOneWidget);
+      expect(find.text('Wife / Spouse'), findsOneWidget);
+      expect(find.text('Pre-Account Profile'), findsOneWidget);
+      expect(find.text('•  1500 SAR/mo'), findsOneWidget);
+      expect(find.text('+ Add Member / Dependent'), findsOneWidget);
+      expect(find.byIcon(Icons.person_add_alt_1_rounded), findsWidgets);
     });
 
     testWidgets('Renders household details, invite code, and actions', (tester) async {
