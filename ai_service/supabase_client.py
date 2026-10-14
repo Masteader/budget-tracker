@@ -406,12 +406,28 @@ def ensure_household_cycle_budgets(
     latest_month = all_prev[0]["month"]
     latest_rows = [b for b in all_prev if b["month"] == latest_month and b.get("is_active", True)]
 
-    # 3. Create new cycle rows with rollover
+    # 3. Create new cycle rows with rollover rule
+    rollover_rule = get_household_rollover_rule(household_id)
+    if rollover_rule == "send_to_savings":
+        surplus = round(
+            sum(
+                max(0.0, float(prev.get("allocated_amount") or 0.0) - float(prev.get("spent_amount") or 0.0))
+                for prev in latest_rows
+            ),
+            2,
+        )
+        if surplus > 0:
+            add_household_savings_surplus(household_id, surplus, cycle_key)
+            logger.info("Auto-swept cycle surplus of SAR %.2f to savings for household=%s cycle=%s", surplus, household_id, cycle_key)
+
     new_rows = []
     for prev in latest_rows:
         prev_allocated = float(prev.get("allocated_amount") or 0.0)
         prev_spent = float(prev.get("spent_amount") or 0.0)
-        delta = round(prev_allocated - prev_spent, 2)
+        if rollover_rule == "rollover_to_categories":
+            delta = round(prev_allocated - prev_spent, 2)
+        else:
+            delta = 0.0
 
         new_rows.append({
             "household_id": household_id,
@@ -426,7 +442,7 @@ def ensure_household_cycle_budgets(
 
     if new_rows:
         inserted = client.table("budgets").insert(new_rows).execute().data
-        logger.info("Auto-rolled over %d budgets for household=%s cycle=%s", len(new_rows), household_id, cycle_key)
+        logger.info("Auto-rolled over %d budgets for household=%s cycle=%s (rule=%s)", len(new_rows), household_id, cycle_key, rollover_rule)
         return inserted
 
     return []
@@ -559,5 +575,267 @@ def set_household_income(household_id: str, monthly_income: float) -> float:
         logger.info(f"Supabase households.monthly_income column update skipped: {e}")
 
     return monthly_income
+
+
+# =============================================================================
+# HOUSEHOLD ROLLOVER RULES & SAVINGS RESERVE
+# =============================================================================
+
+VALID_ROLLOVER_RULES = {"send_to_savings", "rollover_to_categories", "fresh_start"}
+DEFAULT_ROLLOVER_RULE = "send_to_savings"
+
+
+def get_household_rollover_rule(household_id: str) -> str:
+    """
+    Retrieves the rollover rule for a household.
+    Options: 'send_to_savings' (default), 'rollover_to_categories', 'fresh_start'.
+    """
+    if not household_id:
+        return DEFAULT_ROLLOVER_RULE
+    try:
+        client = get_client()
+        res = client.table("households").select("rollover_rule").eq("id", household_id).maybe_single().execute()
+        if res.data and res.data.get("rollover_rule") in VALID_ROLLOVER_RULES:
+            return str(res.data["rollover_rule"])
+    except Exception:
+        pass
+
+    try:
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                if household_id in settings and settings[household_id].get("rollover_rule") in VALID_ROLLOVER_RULES:
+                    return str(settings[household_id]["rollover_rule"])
+    except Exception:
+        pass
+
+    return DEFAULT_ROLLOVER_RULE
+
+
+def set_household_rollover_rule(household_id: str, rollover_rule: str) -> str:
+    """
+    Sets the rollover rule for a household.
+    Options: 'send_to_savings', 'rollover_to_categories', 'fresh_start'.
+    """
+    if not household_id:
+        return DEFAULT_ROLLOVER_RULE
+
+    rule = rollover_rule if rollover_rule in VALID_ROLLOVER_RULES else DEFAULT_ROLLOVER_RULE
+
+    # 1. Update local storage
+    try:
+        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
+        settings = {}
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        if household_id not in settings:
+            settings[household_id] = {}
+        settings[household_id]["rollover_rule"] = rule
+        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist household_settings.json for rollover_rule: {e}")
+
+    # 2. Update Supabase
+    try:
+        client = get_client()
+        client.table("households").update({"rollover_rule": rule}).eq("id", household_id).execute()
+    except Exception as e:
+        logger.info(f"Supabase households.rollover_rule column update skipped (pending migration): {e}")
+
+    return rule
+
+
+def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: str) -> float:
+    """
+    Sweeps unspent positive cycle surplus into the household's accumulated savings pool.
+    """
+    if not household_id or surplus <= 0:
+        return 0.0
+
+    accumulated = 0.0
+    try:
+        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
+        settings = {}
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        if household_id not in settings:
+            settings[household_id] = {}
+
+        accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
+        settings[household_id]["accumulated_savings"] = round(accumulated, 2)
+        settings[household_id]["last_rollover_surplus"] = round(surplus, 2)
+        settings[household_id]["last_rollover_cycle"] = cycle_key
+
+        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to record savings surplus in household_settings.json: {e}")
+
+    return accumulated
+
+
+def get_household_savings_summary(household_id: str) -> dict:
+    """
+    Returns accumulated savings surplus and configured rollover rule.
+    """
+    rule = get_household_rollover_rule(household_id)
+    accumulated = 0.0
+    last_surplus = 0.0
+    last_cycle = None
+
+    try:
+        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
+            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                if household_id in settings:
+                    accumulated = float(settings[household_id].get("accumulated_savings") or 0.0)
+                    last_surplus = float(settings[household_id].get("last_rollover_surplus") or 0.0)
+                    last_cycle = settings[household_id].get("last_rollover_cycle")
+    except Exception:
+        pass
+
+    return {
+        "household_id": household_id,
+        "rollover_rule": rule,
+        "accumulated_savings": round(accumulated, 2),
+        "last_rollover_surplus": round(last_surplus, 2),
+        "last_rollover_cycle": last_cycle,
+    }
+
+
+# =============================================================================
+# ROLE-BASED HOUSEHOLD INVITES & REIMBURSEMENT TRANSACTIONS
+# =============================================================================
+
+HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "household_invites.json")
+
+
+def create_household_role_invite(household_id: str, role: str) -> dict:
+    """
+    Creates an 8-character invite code for a specific role ('spouse', 'peer', 'family_member').
+    Persists to Supabase household_invites table and caches in household_invites.json.
+    """
+    import secrets
+    from datetime import datetime, timezone, timedelta
+
+    code = secrets.token_hex(4).upper()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    norm_role = role if role in ("spouse", "peer", "family_member", "dependent") else "peer"
+
+    invite_data = {
+        "household_id": household_id,
+        "invite_code": code,
+        "role": norm_role,
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # 1. Update local cache
+    try:
+        os.makedirs(os.path.dirname(HOUSEHOLD_INVITES_FILE), exist_ok=True)
+        invites = {}
+        if os.path.exists(HOUSEHOLD_INVITES_FILE):
+            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
+                invites = json.load(f)
+        invites[code] = invite_data
+        with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
+            json.dump(invites, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist household_invites.json: {e}")
+
+    # 2. Update Supabase
+    try:
+        client = get_client()
+        client.table("household_invites").insert(invite_data).execute()
+    except Exception as e:
+        logger.info(f"Supabase household_invites insert skipped: {e}")
+
+    return invite_data
+
+
+def inspect_household_role_invite(invite_code: str) -> dict:
+    """
+    Retrieves metadata for an invite code: household_id and assigned role.
+    """
+    code = invite_code.strip().upper()
+    try:
+        client = get_client()
+        res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
+        if res.data:
+            return res.data
+    except Exception:
+        pass
+
+    try:
+        if os.path.exists(HOUSEHOLD_INVITES_FILE):
+            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
+                invites = json.load(f)
+                if code in invites:
+                    return invites[code]
+    except Exception:
+        pass
+
+    return {
+        "invite_code": code,
+        "household_id": None,
+        "role": "peer",
+        "is_valid": False,
+    }
+
+
+def record_household_reimbursement(
+    household_id: str,
+    payer_id: str,
+    recipient_id: str,
+    amount: float,
+    payment_method: str = "stc_pay",
+    notes: Optional[str] = None,
+) -> dict:
+    """
+    Records a settlement reimbursement transaction between household members.
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    tx_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    note_text = notes or f"Reimbursement via {payment_method.upper()}"
+
+    tx_data = {
+        "id": tx_id,
+        "household_id": household_id,
+        "amount": round(float(amount), 2),
+        "merchant": f"Settlement Reimbursement ({payment_method.upper()})",
+        "category_code": "OPEX-SETTLEMENT",
+        "paid_by": payer_id,
+        "beneficiary_type": "individual",
+        "beneficiary_id": recipient_id,
+        "settlement_target_id": recipient_id,
+        "is_settlement": True,
+        "notes": note_text,
+        "timestamp": now_iso,
+    }
+
+    # Attempt Supabase insert
+    try:
+        client = get_client()
+        client.table("transactions").insert(tx_data).execute()
+    except Exception as e:
+        logger.info(f"Supabase reimbursement transaction insert fallback: {e}")
+
+    return {
+        "status": "success",
+        "transaction_id": tx_id,
+        "household_id": household_id,
+        "amount": round(float(amount), 2),
+        "payer_id": payer_id,
+        "recipient_id": recipient_id,
+        "is_settlement": True,
+        "timestamp": now_iso,
+    }
+
 
 

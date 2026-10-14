@@ -203,6 +203,31 @@ class PaydayUpdateRequest(BaseModel):
     payday_day: int = Field(..., ge=1, le=31, description="Configured monthly payday day (1-31)")
 
 
+class RolloverRuleUpdateRequest(BaseModel):
+    rollover_rule: str = Field(
+        ...,
+        pattern="^(send_to_savings|rollover_to_categories|fresh_start)$",
+        description="Budget rollover rule for end of salary cycle: 'send_to_savings', 'rollover_to_categories', or 'fresh_start'",
+    )
+
+
+class HouseholdInviteCreateRequest(BaseModel):
+    role: str = Field(
+        default="peer",
+        pattern="^(spouse|peer|family_member|dependent)$",
+        description="Assigned role for invited member: 'spouse', 'peer', or 'family_member'",
+    )
+
+
+class HouseholdReimbursementRequest(BaseModel):
+    household_id: str
+    payer_id: str
+    recipient_id: str
+    amount: float = Field(..., gt=0, description="Settlement reimbursement amount in SAR")
+    payment_method: str = Field(default="stc_pay", description="Payment method: 'stc_pay', 'urpay', 'iban', 'cash'")
+    notes: Optional[str] = None
+
+
 class ShoppingBasketOptimizeRequest(BaseModel):
     household_id: str
     items: List[str] = Field(default_factory=list, description="List of grocery item names to price and optimize")

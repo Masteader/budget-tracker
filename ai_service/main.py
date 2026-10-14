@@ -37,6 +37,9 @@ from models import (
     SubCategoryCreateRequest,
     SubCategoryRenameRequest,
     PaydayUpdateRequest,
+    RolloverRuleUpdateRequest,
+    HouseholdInviteCreateRequest,
+    HouseholdReimbursementRequest,
     ShoppingBasketOptimizeRequest,
     RecurringBillToggleRequest,
     SupportChatRequest,
@@ -67,8 +70,23 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
-allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] or ["*"]
+# ─── CORS Security Configuration (OWASP A05) ──────────────────────────────────
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://budget.fmsco.com.sa",
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://localhost:5000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5000",
+]
+cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+if cors_origins_env and cors_origins_env != "*":
+    allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+elif cors_origins_env == "*":
+    allow_origins = ["*"]
+else:
+    allow_origins = DEFAULT_ALLOWED_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,11 +95,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Auth Token & Firewall (OWASP A01 / A02) ───────────────────────────────────
 APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
-if not APP_AUTH_TOKEN and os.environ.get("ENV", "development").lower() != "production":
-    APP_AUTH_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"  # Local/testing fallback only
-elif not APP_AUTH_TOKEN:
-    logger.warning("APP_AUTH_TOKEN is not configured; unauthenticated proxied requests will be rejected.")
+IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
+
+if not APP_AUTH_TOKEN:
+    if IS_PRODUCTION:
+        logger.error("SECURITY ALERT: APP_AUTH_TOKEN is not configured in production! All proxied requests will be rejected.")
+    else:
+        APP_AUTH_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"  # Local/testing fallback only
+        logger.warning("Using development fallback APP_AUTH_TOKEN. Configure APP_AUTH_TOKEN in production.")
 
 
 @app.middleware("http")
@@ -117,15 +140,18 @@ async def firewall_token_middleware(request: Request, call_next):
 # =============================================================================
 
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
-if not WEBHOOK_SECRET and os.environ.get("ENV", "development").lower() != "production":
-    WEBHOOK_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"  # Dev fallback only
+if not WEBHOOK_SECRET:
+    if IS_PRODUCTION:
+        logger.error("SECURITY ALERT: WEBHOOK_SECRET is not set in production — webhook requests will be rejected.")
+    else:
+        WEBHOOK_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"  # Dev fallback only
+        logger.warning("Using development fallback WEBHOOK_SECRET. Configure WEBHOOK_SECRET in production.")
 
 
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:
     """Return True if the HMAC-SHA256 signature matches, or if no secret is configured in dev."""
-    env = os.environ.get("ENV", "development").lower()
     if not WEBHOOK_SECRET:
-        if env == "production":
+        if IS_PRODUCTION:
             logger.error("WEBHOOK_SECRET is not set in production — rejecting request.")
             return False
         logger.warning("WEBHOOK_SECRET not set — skipping signature verification (dev mode).")
@@ -141,6 +167,59 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
 
     expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, provided_sig)
+
+
+# =============================================================================
+# RATE LIMITING (OWASP A04: Strict Invoice Scan Protection)
+# Strict limit: 10 invoices per 10 minutes (600 seconds) maximum per household.
+# =============================================================================
+RECEIPT_SCAN_MAX_REQUESTS = int(os.environ.get("RECEIPT_SCAN_MAX_REQUESTS", "10"))
+RECEIPT_SCAN_WINDOW_SECONDS = int(os.environ.get("RECEIPT_SCAN_WINDOW_SECONDS", "600"))  # 10 minutes
+
+_receipt_rate_limit_lock = asyncio.Lock()
+_receipt_scan_history: dict[str, list[float]] = {}
+
+
+def _reset_receipt_scan_rate_limits():
+    """Helper for test execution to reset scan rate limits."""
+    global _receipt_scan_history
+    _receipt_scan_history.clear()
+
+
+async def check_receipt_scan_rate_limit(key: str) -> None:
+    """
+    Enforces strict rate limit: maximum 10 invoices per 10 minutes per household.
+    Raises HTTPException(429) with Retry-After header if exceeded.
+    """
+    now = time.time()
+    cutoff = now - RECEIPT_SCAN_WINDOW_SECONDS
+
+    async with _receipt_rate_limit_lock:
+        timestamps = _receipt_scan_history.get(key, [])
+        # Keep only timestamps within the sliding window
+        valid_timestamps = [t for t in timestamps if t > cutoff]
+
+        if len(valid_timestamps) >= RECEIPT_SCAN_MAX_REQUESTS:
+            oldest = valid_timestamps[0]
+            retry_after = max(1, int(oldest + RECEIPT_SCAN_WINDOW_SECONDS - now))
+            logger.warning(
+                "Strict rate limit exceeded for %s: %d invoices scanned in last %d minutes (limit: %d). Retry-After: %ds",
+                key, len(valid_timestamps), RECEIPT_SCAN_WINDOW_SECONDS // 60, RECEIPT_SCAN_MAX_REQUESTS, retry_after
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded: Maximum {RECEIPT_SCAN_MAX_REQUESTS} invoices per {RECEIPT_SCAN_WINDOW_SECONDS // 60} minutes allowed. Please try again in {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        valid_timestamps.append(now)
+        _receipt_scan_history[key] = valid_timestamps
+
+        # Housekeeping: prune old entries if table grows
+        if len(_receipt_scan_history) > 500:
+            stale_keys = [k for k, ts in _receipt_scan_history.items() if not ts or ts[-1] <= cutoff]
+            for sk in stale_keys:
+                _receipt_scan_history.pop(sk, None)
 
 
 
@@ -361,6 +440,9 @@ async def scan_receipt(request: Request):
     if not images_base64 and not qr_code_raw:
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
+    # Strict rate limit: 10 invoices per 10 minutes maximum per household
+    await check_receipt_scan_rate_limit(f"hh:{household_id}")
+
     from receipt_scanner import process_receipt_scan
     result = await asyncio.to_thread(
         process_receipt_scan,
@@ -461,6 +543,94 @@ async def update_household_income_endpoint(household_id: str, payload: Household
     from supabase_client import set_household_income
     saved_income = await asyncio.to_thread(set_household_income, household_id, payload.monthly_income)
     return {"household_id": household_id, "monthly_income": saved_income, "status": "success"}
+
+
+@app.get(
+    "/households/{household_id}/rollover-rule",
+    tags=["households"],
+    summary="Get configured budget rollover rule for a household.",
+)
+async def get_household_rollover_rule_endpoint(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import get_household_rollover_rule
+    rule = await asyncio.to_thread(get_household_rollover_rule, household_id)
+    return {"household_id": household_id, "rollover_rule": rule}
+
+
+@app.put(
+    "/households/{household_id}/rollover-rule",
+    tags=["households"],
+    summary="Update configured budget rollover rule for a household.",
+)
+async def update_household_rollover_rule_endpoint(household_id: str, payload: RolloverRuleUpdateRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import set_household_rollover_rule
+    saved_rule = await asyncio.to_thread(set_household_rollover_rule, household_id, payload.rollover_rule)
+    return {"household_id": household_id, "rollover_rule": saved_rule, "status": "success"}
+
+
+@app.get(
+    "/households/{household_id}/savings-summary",
+    tags=["households"],
+    summary="Get accumulated savings summary and last surplus swept for a household.",
+)
+async def get_household_savings_summary_endpoint(household_id: str):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import get_household_savings_summary
+    summary = await asyncio.to_thread(get_household_savings_summary, household_id)
+    return summary
+
+
+@app.post(
+    "/households/{household_id}/invites",
+    tags=["households"],
+    summary="Create a role-tagged 8-character invite code for a household.",
+)
+async def create_household_role_invite_endpoint(household_id: str, payload: HouseholdInviteCreateRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import create_household_role_invite
+    invite = await asyncio.to_thread(create_household_role_invite, household_id, payload.role)
+    return invite
+
+
+@app.get(
+    "/households/invites/{invite_code}",
+    tags=["households"],
+    summary="Inspect invite code metadata and assigned role.",
+)
+async def inspect_household_role_invite_endpoint(invite_code: str):
+    if not invite_code:
+        raise HTTPException(status_code=400, detail="invite_code is required.")
+    from supabase_client import inspect_household_role_invite
+    info = await asyncio.to_thread(inspect_household_role_invite, invite_code)
+    return info
+
+
+@app.post(
+    "/households/{household_id}/reimbursements",
+    tags=["settlement"],
+    summary="Record a settlement reimbursement transaction between household members.",
+)
+async def record_household_reimbursement_endpoint(household_id: str, payload: HouseholdReimbursementRequest):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    from supabase_client import record_household_reimbursement
+    res = await asyncio.to_thread(
+        record_household_reimbursement,
+        household_id=household_id,
+        payer_id=payload.payer_id,
+        recipient_id=payload.recipient_id,
+        amount=payload.amount,
+        payment_method=payload.payment_method,
+        notes=payload.notes,
+    )
+    return res
+
+
 
 
 @app.get(
