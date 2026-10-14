@@ -5,6 +5,9 @@ import '../../supabase_config.dart';
 
 class BaseApiClient {
   static const String appAuthToken = 'bt_sec_99a81f3d4c72e01b88e2';
+  final http.Client _client;
+
+  BaseApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   String get baseUrl {
     if (fastapiBaseUrl.isNotEmpty) {
@@ -44,7 +47,7 @@ class BaseApiClient {
     final url = path.startsWith('http') ? Uri.parse(path) : Uri.parse('$baseUrl$path');
 
     try {
-      final response = await http
+      final response = await _client
           .post(url, headers: buildHeaders(signature: signature), body: payload)
           .timeout(timeout);
       if (response.statusCode >= 400) {
@@ -79,7 +82,7 @@ class BaseApiClient {
     }
 
     try {
-      final response = await http.get(uri, headers: buildHeaders()).timeout(timeout);
+      final response = await _client.get(uri, headers: buildHeaders()).timeout(timeout);
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);
@@ -110,7 +113,7 @@ class BaseApiClient {
     final encoded = jsonEncode(body ?? {});
     final signature = shouldSign ? sign(encoded) : null;
     try {
-      final response = await http
+      final response = await _client
           .put(
             Uri.parse(path.startsWith('http') ? path : '$baseUrl$path'),
             headers: buildHeaders(signature: signature),
@@ -147,7 +150,7 @@ class BaseApiClient {
     }
 
     try {
-      final response = await http.delete(uri, headers: buildHeaders()).timeout(timeout);
+      final response = await _client.delete(uri, headers: buildHeaders()).timeout(timeout);
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);

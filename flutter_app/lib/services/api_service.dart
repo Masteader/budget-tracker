@@ -160,11 +160,35 @@ class ApiService {
         monthlyIncome: monthlyIncome,
       );
 
+  Future<String> getHouseholdRolloverRule(String householdId) =>
+      budget.fetchHouseholdRolloverRule(householdId: householdId);
+
+  Future<bool> setHouseholdRolloverRule(String householdId, String rolloverRule) =>
+      budget.updateHouseholdRolloverRule(
+        householdId: householdId,
+        rolloverRule: rolloverRule,
+      );
+
+  Future<Map<String, dynamic>> getHouseholdSavingsSummary(String householdId) =>
+      budget.fetchHouseholdSavingsSummary(householdId: householdId);
+
   Future<Map<String, dynamic>> getPartnerSettlement(String householdId, {double splitRatio = 0.50}) =>
       budget.fetchPartnerSettlement(householdId: householdId, splitRatio: splitRatio);
 
   Future<Map<String, dynamic>> fetchPartnerSettlement({required String householdId, double splitRatio = 0.5}) =>
       budget.fetchPartnerSettlement(householdId: householdId, splitRatio: splitRatio);
+
+  Future<SettlementV2Summary> getSettlementV2(String householdId, {String? cycleStart}) =>
+      budget.fetchSettlementV2(householdId: householdId, cycleStart: cycleStart);
+
+  Future<HouseholdInvite> createRoleInvite(String householdId, String role) =>
+      budget.createRoleInvite(householdId: householdId, role: role);
+
+  Future<HouseholdInvite> inspectInviteCode(String code) =>
+      budget.inspectInviteCode(code: code);
+
+  Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
+      budget.recordReimbursementPayment(request: request);
 
   Future<List<HouseholdDependent>> getDependents(String householdId) =>
       budget.fetchHouseholdDependents(householdId: householdId);

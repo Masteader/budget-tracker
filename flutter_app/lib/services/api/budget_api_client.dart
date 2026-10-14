@@ -125,6 +125,30 @@ class BudgetApiClient {
     return res['status'] == 'success';
   }
 
+  Future<String> fetchHouseholdRolloverRule({
+    required String householdId,
+  }) async {
+    final res = await baseClient.get('/households/$householdId/rollover-rule');
+    return res['rollover_rule'] as String? ?? 'send_to_savings';
+  }
+
+  Future<bool> updateHouseholdRolloverRule({
+    required String householdId,
+    required String rolloverRule,
+  }) async {
+    final res = await baseClient.put(
+      '/households/$householdId/rollover-rule',
+      body: {'rollover_rule': rolloverRule},
+    );
+    return res['status'] == 'success';
+  }
+
+  Future<Map<String, dynamic>> fetchHouseholdSavingsSummary({
+    required String householdId,
+  }) async {
+    return baseClient.get('/households/$householdId/savings-summary');
+  }
+
   Future<Map<String, dynamic>> fetchPartnerSettlement({
     required String householdId,
     double splitRatio = 0.5,
@@ -132,6 +156,48 @@ class BudgetApiClient {
     return baseClient.get(
       '/households/$householdId/settlement',
       queryParams: {'split_ratio': splitRatio},
+    );
+  }
+
+  Future<SettlementV2Summary> fetchSettlementV2({
+    required String householdId,
+    String? cycleStart,
+  }) async {
+    final params = <String, dynamic>{};
+    if (cycleStart != null && cycleStart.isNotEmpty) {
+      params['cycle_start'] = cycleStart;
+    }
+    final res = await baseClient.get(
+      '/households/$householdId/settlement-v2',
+      queryParams: params,
+    );
+    return SettlementV2Summary.fromMap(res);
+  }
+
+  Future<HouseholdInvite> createRoleInvite({
+    required String householdId,
+    required String role,
+  }) async {
+    final res = await baseClient.post(
+      '/households/$householdId/invites',
+      {'role': role},
+    );
+    return HouseholdInvite.fromMap(res);
+  }
+
+  Future<HouseholdInvite> inspectInviteCode({
+    required String code,
+  }) async {
+    final res = await baseClient.get('/households/invites/$code');
+    return HouseholdInvite.fromMap(res);
+  }
+
+  Future<Map<String, dynamic>> recordReimbursementPayment({
+    required ReimbursementRecordRequest request,
+  }) async {
+    return baseClient.post(
+      '/households/${request.householdId}/reimbursements',
+      request.toMap(),
     );
   }
 

@@ -603,6 +603,8 @@ class HouseholdDependent {
   final String householdId;
   final String name;
   final String avatarIcon;
+  final String relationship;
+  final double monthlyAllowance;
   final DateTime? createdAt;
 
   const HouseholdDependent({
@@ -610,6 +612,8 @@ class HouseholdDependent {
     required this.householdId,
     required this.name,
     this.avatarIcon = 'child',
+    this.relationship = 'child',
+    this.monthlyAllowance = 0.0,
     this.createdAt,
   });
 
@@ -619,6 +623,8 @@ class HouseholdDependent {
       householdId: map['household_id'] as String? ?? '',
       name: map['name'] as String? ?? '',
       avatarIcon: map['avatar_icon'] as String? ?? 'child',
+      relationship: map['relationship'] as String? ?? 'child',
+      monthlyAllowance: (map['monthly_allowance'] as num?)?.toDouble() ?? 0.0,
       createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
     );
   }
@@ -629,9 +635,264 @@ class HouseholdDependent {
       'household_id': householdId,
       'name': name,
       'avatar_icon': avatarIcon,
+      'relationship': relationship,
+      'monthly_allowance': monthlyAllowance,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
 }
+
+// ── Household Role Invite ───────────────────────────────────────────────────
+
+class HouseholdInvite {
+  final String id;
+  final String householdId;
+  final String inviteCode;
+  final String role; // 'spouse' | 'peer' | 'family_member' | 'dependent'
+  final DateTime? expiresAt;
+  final DateTime? createdAt;
+  final bool isValid;
+
+  const HouseholdInvite({
+    this.id = '',
+    required this.householdId,
+    required this.inviteCode,
+    this.role = 'peer',
+    this.expiresAt,
+    this.createdAt,
+    this.isValid = true,
+  });
+
+  bool get isSpouse => role.toLowerCase() == 'spouse' || role.toLowerCase() == 'wife';
+  bool get isPeer => role.toLowerCase() == 'peer' || role.toLowerCase() == 'roommate';
+  bool get isFamilyMember => role.toLowerCase() == 'family_member' || role.toLowerCase() == 'dependent';
+
+  factory HouseholdInvite.fromMap(Map<String, dynamic> map) {
+    return HouseholdInvite(
+      id: map['id'] as String? ?? '',
+      householdId: map['household_id'] as String? ?? '',
+      inviteCode: map['invite_code'] as String? ?? '',
+      role: map['role'] as String? ?? 'peer',
+      expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'].toString()) : null,
+      createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
+      isValid: map['is_valid'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      'household_id': householdId,
+      'invite_code': inviteCode,
+      'role': role,
+      if (expiresAt != null) 'expires_at': expiresAt!.toIso8601String(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+      'is_valid': isValid,
+    };
+  }
+}
+
+// ── Reimbursement Record Request ─────────────────────────────────────────────
+
+class ReimbursementRecordRequest {
+  final String householdId;
+  final String payerId;
+  final String recipientId;
+  final double amount;
+  final String paymentMethod;
+  final String? notes;
+
+  const ReimbursementRecordRequest({
+    required this.householdId,
+    required this.payerId,
+    required this.recipientId,
+    required this.amount,
+    this.paymentMethod = 'stc_pay',
+    this.notes,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'household_id': householdId,
+      'payer_id': payerId,
+      'recipient_id': recipientId,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      if (notes != null) 'notes': notes,
+    };
+  }
+}
+
+// ── Multi-Party Pairwise & Simplified Debt Models ────────────────────────────
+
+class PairwiseDebt {
+  final String fromId;
+  final String toId;
+  final String fromName;
+  final String toName;
+  final double amount;
+
+  const PairwiseDebt({
+    required this.fromId,
+    required this.toId,
+    required this.fromName,
+    required this.toName,
+    required this.amount,
+  });
+
+  factory PairwiseDebt.fromMap(Map<String, dynamic> map) {
+    return PairwiseDebt(
+      fromId: map['from_id'] as String? ?? '',
+      toId: map['to_id'] as String? ?? '',
+      fromName: map['from_name'] as String? ?? map['from_id'] as String? ?? 'Member',
+      toName: map['to_name'] as String? ?? map['to_id'] as String? ?? 'Member',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'from_id': fromId,
+      'to_id': toId,
+      'from_name': fromName,
+      'to_name': toName,
+      'amount': amount,
+    };
+  }
+}
+
+class SimplifiedDebt {
+  final String fromId;
+  final String toId;
+  final String fromName;
+  final String toName;
+  final double amount;
+
+  const SimplifiedDebt({
+    required this.fromId,
+    required this.toId,
+    required this.fromName,
+    required this.toName,
+    required this.amount,
+  });
+
+  factory SimplifiedDebt.fromMap(Map<String, dynamic> map) {
+    return SimplifiedDebt(
+      fromId: map['from_id'] as String? ?? '',
+      toId: map['to_id'] as String? ?? '',
+      fromName: map['from_name'] as String? ?? map['from_id'] as String? ?? 'Member',
+      toName: map['to_name'] as String? ?? map['to_id'] as String? ?? 'Member',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'from_id': fromId,
+      'to_id': toId,
+      'from_name': fromName,
+      'to_name': toName,
+      'amount': amount,
+    };
+  }
+}
+
+class FamilyNafaqahSummary {
+  final double wifeReimbursementOwed;
+  final double spentOnWife;
+  final double spentOnChildren;
+  final double familyGeneralTotal;
+
+  const FamilyNafaqahSummary({
+    this.wifeReimbursementOwed = 0.0,
+    this.spentOnWife = 0.0,
+    this.spentOnChildren = 0.0,
+    this.familyGeneralTotal = 0.0,
+  });
+
+  factory FamilyNafaqahSummary.fromMap(Map<String, dynamic> map) {
+    return FamilyNafaqahSummary(
+      wifeReimbursementOwed: (map['wife_reimbursement_owed'] as num?)?.toDouble() ?? 0.0,
+      spentOnWife: (map['spent_on_wife'] as num?)?.toDouble() ?? 0.0,
+      spentOnChildren: (map['spent_on_children'] as num?)?.toDouble() ?? 0.0,
+      familyGeneralTotal: (map['family_general_total'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'wife_reimbursement_owed': wifeReimbursementOwed,
+      'spent_on_wife': spentOnWife,
+      'spent_on_children': spentOnChildren,
+      'family_general_total': familyGeneralTotal,
+    };
+  }
+}
+
+class SettlementV2Summary {
+  final String mode; // 'family_nafaqah' | 'multi_roommate' | 'standard'
+  final FamilyNafaqahSummary? familySummary;
+  final List<PairwiseDebt> pairwiseDebts;
+  final List<SimplifiedDebt> simplifiedDebts;
+  final Map<String, double> roommateBalances;
+
+  const SettlementV2Summary({
+    this.mode = 'standard',
+    this.familySummary,
+    this.pairwiseDebts = const [],
+    this.simplifiedDebts = const [],
+    this.roommateBalances = const {},
+  });
+
+  bool get isFamilyMode => mode == 'family_nafaqah';
+  bool get isRoommateMode => mode == 'multi_roommate';
+
+  factory SettlementV2Summary.fromMap(Map<String, dynamic> map) {
+    FamilyNafaqahSummary? fam;
+    if (map['family_summary'] != null && map['family_summary'] is Map) {
+      fam = FamilyNafaqahSummary.fromMap(Map<String, dynamic>.from(map['family_summary'] as Map));
+    }
+
+    List<PairwiseDebt> pairs = [];
+    if (map['pairwise_debts'] != null && map['pairwise_debts'] is List) {
+      pairs = (map['pairwise_debts'] as List)
+          .map((e) => PairwiseDebt.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+
+    List<SimplifiedDebt> simplified = [];
+    if (map['simplified_debts'] != null && map['simplified_debts'] is List) {
+      simplified = (map['simplified_debts'] as List)
+          .map((e) => SimplifiedDebt.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+
+    Map<String, double> balances = {};
+    if (map['roommate_balances'] != null && map['roommate_balances'] is Map) {
+      (map['roommate_balances'] as Map).forEach((k, v) {
+        balances[k.toString()] = (v as num).toDouble();
+      });
+    }
+
+    return SettlementV2Summary(
+      mode: map['mode'] as String? ?? 'standard',
+      familySummary: fam,
+      pairwiseDebts: pairs,
+      simplifiedDebts: simplified,
+      roommateBalances: balances,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'mode': mode,
+      if (familySummary != null) 'family_summary': familySummary!.toMap(),
+      'pairwise_debts': pairwiseDebts.map((e) => e.toMap()).toList(),
+      'simplified_debts': simplifiedDebts.map((e) => e.toMap()).toList(),
+      'roommate_balances': roommateBalances,
+    };
+  }
+}
+
 
 
