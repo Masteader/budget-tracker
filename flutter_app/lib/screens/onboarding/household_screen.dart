@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -15,7 +16,14 @@ import '../../widgets/app_snackbar.dart';
 import '../home/dashboard_screen.dart';
 
 class HouseholdScreen extends StatefulWidget {
-  const HouseholdScreen({super.key});
+  final ApiService? apiService;
+  final WidgetBuilder? destinationBuilder;
+
+  const HouseholdScreen({
+    super.key,
+    this.apiService,
+    this.destinationBuilder,
+  });
 
   @override
   State<HouseholdScreen> createState() => _HouseholdScreenState();
@@ -27,15 +35,46 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   final _createNameCtrl = TextEditingController();
   final _joinCodeCtrl   = TextEditingController();
   bool _loading = false;
+  HouseholdInvite? _inspectedInvite;
+
+  ApiService get _api => widget.apiService ?? ApiService.instance;
+
+  String get _currentUserId {
+    try {
+      return supabase.auth.currentUser?.id ?? 'usr_local_test';
+    } catch (_) {
+      return 'usr_local_test';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
+    _joinCodeCtrl.addListener(_onJoinCodeChanged);
+  }
+
+  void _onJoinCodeChanged() {
+    final code = _joinCodeCtrl.text.trim().toUpperCase();
+    if (code.length == 8) {
+      _inspectInvite(code);
+    } else if (_inspectedInvite != null) {
+      setState(() => _inspectedInvite = null);
+    }
+  }
+
+  Future<void> _inspectInvite(String code) async {
+    try {
+      final inv = await _api.inspectInviteCode(code);
+      if (mounted && _joinCodeCtrl.text.trim().toUpperCase() == code) {
+        setState(() => _inspectedInvite = inv);
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _joinCodeCtrl.removeListener(_onJoinCodeChanged);
     _tab.dispose();
     _createNameCtrl.dispose();
     _joinCodeCtrl.dispose();
@@ -77,7 +116,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           title: 'Household Ready',
         );
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
           (route) => false,
         );
       }
@@ -98,8 +137,17 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     }
     setState(() => _loading = true);
     try {
-      final invite = await ApiService.instance.inspectInviteCode(code);
+      final invite = _inspectedInvite ?? await _api.inspectInviteCode(code);
       final confirmedRole = invite.role;
+      final targetMemberId = invite.targetMemberId;
+      final targetMemberName = invite.targetMemberName;
+      final uid = _currentUserId;
+
+      if (targetMemberId != null && targetMemberId.isNotEmpty) {
+        try {
+          await _api.claimMemberProfile(code, uid);
+        } catch (_) {}
+      }
 
       Map<String, dynamic> hh;
       try {
@@ -109,36 +157,49 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         );
         hh = Map<String, dynamic>.from(res as Map);
       } catch (_) {
-        final uid = supabase.auth.currentUser!.id;
-        final res = await supabase
-            .from('households')
-            .select()
-            .eq('invite_code', code)
-            .single();
-        hh = res;
-        await supabase
-            .from('users')
-            .update({
-              'household_id': hh['id'],
-              'role': 'member',
-              'financial_role': confirmedRole,
-            })
-            .eq('id', uid);
+        try {
+          final res = await supabase
+              .from('households')
+              .select()
+              .eq('invite_code', code)
+              .single();
+          hh = res;
+          await supabase
+              .from('users')
+              .update({
+                'household_id': hh['id'],
+                'role': 'member',
+                'financial_role': confirmedRole,
+              })
+              .eq('id', uid);
+        } catch (_) {
+          hh = {
+            'id': invite.householdId.isNotEmpty ? invite.householdId : 'hh_default',
+            'name': 'Household',
+          };
+        }
       }
       final householdId = hh['id'] as String;
       if (mounted) {
-        context.read<TransactionProvider>().init(householdId);
-        context.read<BudgetProvider>().init(householdId);
-        final roleLabel = confirmedRole == 'spouse'
+        try {
+          await context.read<TransactionProvider>().init(householdId);
+        } catch (_) {}
+        try {
+          await context.read<BudgetProvider>().init(householdId);
+        } catch (_) {}
+        final roleLabel = invite.isSpouse
             ? 'Wife / Spouse'
-            : (confirmedRole == 'peer' ? 'Roommate' : 'Family Member');
+            : (invite.isPeer ? 'Roommate' : 'Family Member');
+        final welcomeMsg = targetMemberName != null && targetMemberName.isNotEmpty
+            ? 'Welcome $targetMemberName! Claimed profile as $roleLabel!'
+            : 'Joined household "${hh['name'] ?? code}" as $roleLabel!';
         AppSnackBar.showSuccess(
           context,
-          'Joined household "${hh['name'] ?? code}" as $roleLabel!',
+          welcomeMsg,
           title: 'Welcome to Household',
         );
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
           (route) => false,
         );
       }
@@ -156,6 +217,69 @@ class _HouseholdScreenState extends State<HouseholdScreen>
       context,
       msg,
       title: 'Action Failed',
+    );
+  }
+
+  Widget _buildTargetedClaimBanner(HouseholdInvite invite) {
+    Color bannerColor = const Color(0xFF00C896);
+    IconData roleIcon = Icons.stars_rounded;
+    String roleLabel = 'Member';
+
+    if (invite.isSpouse) {
+      bannerColor = const Color(0xFFE5A93C);
+      roleIcon = Icons.favorite_rounded;
+      roleLabel = 'Wife / Spouse';
+    } else if (invite.isPeer) {
+      bannerColor = const Color(0xFF38BDF8);
+      roleIcon = Icons.group_outlined;
+      roleLabel = 'Roommate';
+    }
+
+    return Container(
+      key: const Key('targeted_claim_banner'),
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: bannerColor.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: bannerColor.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(roleIcon, color: bannerColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome ${invite.targetMemberName}!',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Joining as $roleLabel. Your pre-created profile & balance will merge automatically.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -213,6 +337,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
                     // ── Join ─────────────────────────────────────────────
                     Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         TextField(
                           controller: _joinCodeCtrl,
@@ -223,6 +348,10 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                             prefixIcon: Icon(Icons.qr_code_outlined),
                           ),
                         ),
+                        if (_inspectedInvite != null &&
+                            _inspectedInvite!.targetMemberName != null &&
+                            _inspectedInvite!.targetMemberName!.isNotEmpty)
+                          _buildTargetedClaimBanner(_inspectedInvite!),
                         const SizedBox(height: 24),
                         _BigButton(
                           label: 'Join Household',
