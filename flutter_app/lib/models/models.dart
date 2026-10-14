@@ -605,6 +605,7 @@ class HouseholdDependent {
   final String avatarIcon;
   final String relationship;
   final double monthlyAllowance;
+  final String? linkedUserId;
   final DateTime? createdAt;
 
   const HouseholdDependent({
@@ -614,8 +615,14 @@ class HouseholdDependent {
     this.avatarIcon = 'child',
     this.relationship = 'child',
     this.monthlyAllowance = 0.0,
+    this.linkedUserId,
     this.createdAt,
   });
+
+  bool get isClaimed => linkedUserId != null && linkedUserId!.isNotEmpty;
+  bool get isSpouse => relationship.toLowerCase() == 'spouse' || relationship.toLowerCase() == 'wife';
+  bool get isPeer => relationship.toLowerCase() == 'peer' || relationship.toLowerCase() == 'roommate';
+  bool get isChild => !isSpouse && !isPeer;
 
   factory HouseholdDependent.fromMap(Map<String, dynamic> map) {
     return HouseholdDependent(
@@ -625,6 +632,7 @@ class HouseholdDependent {
       avatarIcon: map['avatar_icon'] as String? ?? 'child',
       relationship: map['relationship'] as String? ?? 'child',
       monthlyAllowance: (map['monthly_allowance'] as num?)?.toDouble() ?? 0.0,
+      linkedUserId: map['linked_user_id'] as String?,
       createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
     );
   }
@@ -637,6 +645,7 @@ class HouseholdDependent {
       'avatar_icon': avatarIcon,
       'relationship': relationship,
       'monthly_allowance': monthlyAllowance,
+      if (linkedUserId != null) 'linked_user_id': linkedUserId,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
@@ -649,6 +658,8 @@ class HouseholdInvite {
   final String householdId;
   final String inviteCode;
   final String role; // 'spouse' | 'peer' | 'family_member' | 'dependent'
+  final String? targetMemberId;
+  final String? targetMemberName;
   final DateTime? expiresAt;
   final DateTime? createdAt;
   final bool isValid;
@@ -658,6 +669,8 @@ class HouseholdInvite {
     required this.householdId,
     required this.inviteCode,
     this.role = 'peer',
+    this.targetMemberId,
+    this.targetMemberName,
     this.expiresAt,
     this.createdAt,
     this.isValid = true,
@@ -673,6 +686,8 @@ class HouseholdInvite {
       householdId: map['household_id'] as String? ?? '',
       inviteCode: map['invite_code'] as String? ?? '',
       role: map['role'] as String? ?? 'peer',
+      targetMemberId: map['target_member_id'] as String?,
+      targetMemberName: map['target_member_name'] as String?,
       expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'].toString()) : null,
       createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
       isValid: map['is_valid'] as bool? ?? true,
@@ -685,6 +700,8 @@ class HouseholdInvite {
       'household_id': householdId,
       'invite_code': inviteCode,
       'role': role,
+      if (targetMemberId != null) 'target_member_id': targetMemberId,
+      if (targetMemberName != null) 'target_member_name': targetMemberName,
       if (expiresAt != null) 'expires_at': expiresAt!.toIso8601String(),
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
       'is_valid': isValid,

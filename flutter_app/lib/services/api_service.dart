@@ -7,6 +7,7 @@
 /// - ChatApiClient (Conversational expense parser, purchase simulation)
 library;
 
+import 'package:flutter/foundation.dart';
 import 'api/base_api_client.dart';
 import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
@@ -18,15 +19,38 @@ import '../models/installment_plan.dart';
 import '../models/models.dart';
 
 class ApiService {
-  ApiService._();
+  ApiService._() : base = BaseApiClient() {
+    budget = BudgetApiClient(baseClient: base);
+    transaction = TransactionApiClient(baseClient: base);
+    receipt = ReceiptApiClient(baseClient: base);
+    chat = ChatApiClient(baseClient: base);
+    support = SupportApiClient(baseClient: base);
+  }
+
   static final ApiService instance = ApiService._();
 
-  final BaseApiClient base = BaseApiClient();
-  late final BudgetApiClient budget = BudgetApiClient(baseClient: base);
-  late final TransactionApiClient transaction = TransactionApiClient(baseClient: base);
-  late final ReceiptApiClient receipt = ReceiptApiClient(baseClient: base);
-  late final ChatApiClient chat = ChatApiClient(baseClient: base);
-  late final SupportApiClient support = SupportApiClient(baseClient: base);
+  @visibleForTesting
+  ApiService({
+    BaseApiClient? base,
+    BudgetApiClient? budget,
+    TransactionApiClient? transaction,
+    ReceiptApiClient? receipt,
+    ChatApiClient? chat,
+    SupportApiClient? support,
+  }) : base = base ?? BaseApiClient() {
+    this.budget = budget ?? BudgetApiClient(baseClient: this.base);
+    this.transaction = transaction ?? TransactionApiClient(baseClient: this.base);
+    this.receipt = receipt ?? ReceiptApiClient(baseClient: this.base);
+    this.chat = chat ?? ChatApiClient(baseClient: this.base);
+    this.support = support ?? SupportApiClient(baseClient: this.base);
+  }
+
+  final BaseApiClient base;
+  late final BudgetApiClient budget;
+  late final TransactionApiClient transaction;
+  late final ReceiptApiClient receipt;
+  late final ChatApiClient chat;
+  late final SupportApiClient support;
 
   // ── Chat & Simulations ───────────────────────────────────────────────────
 
@@ -181,11 +205,14 @@ class ApiService {
   Future<SettlementV2Summary> getSettlementV2(String householdId, {String? cycleStart}) =>
       budget.fetchSettlementV2(householdId: householdId, cycleStart: cycleStart);
 
-  Future<HouseholdInvite> createRoleInvite(String householdId, String role) =>
-      budget.createRoleInvite(householdId: householdId, role: role);
+  Future<HouseholdInvite> createRoleInvite(String householdId, String role, {String? targetMemberId}) =>
+      budget.createRoleInvite(householdId: householdId, role: role, targetMemberId: targetMemberId);
 
   Future<HouseholdInvite> inspectInviteCode(String code) =>
       budget.inspectInviteCode(code: code);
+
+  Future<Map<String, dynamic>> claimMemberProfile(String inviteCode, String userId) =>
+      budget.claimMemberProfile(inviteCode: inviteCode, userId: userId);
 
   Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
       budget.recordReimbursementPayment(request: request);
@@ -193,8 +220,20 @@ class ApiService {
   Future<List<HouseholdDependent>> getDependents(String householdId) =>
       budget.fetchHouseholdDependents(householdId: householdId);
 
-  Future<HouseholdDependent?> createDependent(String householdId, String name, {String? avatarIcon}) =>
-      budget.createHouseholdDependent(householdId: householdId, name: name, avatarIcon: avatarIcon);
+  Future<HouseholdDependent?> createDependent(
+    String householdId,
+    String name, {
+    String? avatarIcon,
+    String? relationship,
+    double? monthlyAllowance,
+  }) =>
+      budget.createHouseholdDependent(
+        householdId: householdId,
+        name: name,
+        avatarIcon: avatarIcon,
+        relationship: relationship,
+        monthlyAllowance: monthlyAllowance,
+      );
 
   Future<bool> deleteDependent(String householdId, String dependentId) =>
       budget.deleteHouseholdDependent(householdId: householdId, dependentId: dependentId);

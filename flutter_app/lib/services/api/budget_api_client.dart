@@ -177,10 +177,14 @@ class BudgetApiClient {
   Future<HouseholdInvite> createRoleInvite({
     required String householdId,
     required String role,
+    String? targetMemberId,
   }) async {
     final res = await baseClient.post(
       '/households/$householdId/invites',
-      {'role': role},
+      {
+        'role': role,
+        if (targetMemberId != null && targetMemberId.isNotEmpty) 'target_member_id': targetMemberId,
+      },
     );
     if (res['invite_code'] != null) {
       return HouseholdInvite.fromMap(res);
@@ -189,6 +193,7 @@ class BudgetApiClient {
       householdId: householdId,
       inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
       role: role,
+      targetMemberId: targetMemberId,
     );
   }
 
@@ -197,6 +202,16 @@ class BudgetApiClient {
   }) async {
     final res = await baseClient.get('/households/invites/$code');
     return HouseholdInvite.fromMap(res);
+  }
+
+  Future<Map<String, dynamic>> claimMemberProfile({
+    required String inviteCode,
+    required String userId,
+  }) async {
+    return baseClient.post(
+      '/households/invites/$inviteCode/claim',
+      {'user_id': userId},
+    );
   }
 
   Future<Map<String, dynamic>> recordReimbursementPayment({
@@ -222,12 +237,16 @@ class BudgetApiClient {
     required String householdId,
     required String name,
     String? avatarIcon,
+    String? relationship,
+    double? monthlyAllowance,
   }) async {
     final res = await baseClient.post(
       '/households/$householdId/dependents',
       {
         'name': name,
         if (avatarIcon != null) 'avatar_icon': avatarIcon,
+        if (relationship != null) 'relationship': relationship,
+        if (monthlyAllowance != null) 'monthly_allowance': monthlyAllowance,
       },
     );
     if (res['dependent'] != null) {
