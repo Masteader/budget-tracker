@@ -22,5 +22,6 @@ void main() {
     await client.post('/budgets/breakdown', {'household_id': '11111111-1111-1111-1111-111111111111'}, shouldSign: false);
 
     expect(capturedAuthHeader, equals('Bearer fake_supabase_jwt_token'));
+    expect(capturedAppToken, isNull);
   });
 }

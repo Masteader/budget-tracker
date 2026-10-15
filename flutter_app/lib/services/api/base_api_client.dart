@@ -19,7 +19,7 @@ class BaseApiClient {
 
   String? get _currentAccessToken {
     if (_authTokenProvider != null) {
-      return _authTokenProvider!();
+      return _authTokenProvider();
     }
     try {
       return Supabase.instance.client.auth.currentSession?.accessToken;
