@@ -1,58 +1,37 @@
 """
 FastAPI entry point for the Budget Tracker AI microservice.
 
-Endpoints:
-  POST /webhook/sms   — receive SMS from Flutter, run LangGraph agent
-  GET  /health        — liveness probe
+Architecture:
+- Modular routers under `routes/`
+- JWT & HMAC authentication middleware
+- Request body size limiter (DoS protection)
+- Constant-time firewall token middleware
 """
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import hmac
-import json
 import logging
 import os
-import re
 import time
-from typing import Optional
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, status, Response
-from fastapi.responses import HTMLResponse, FileResponse
-
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
-from graph import sms_graph
-from models import (
-    AgentState,
-    SMSWebhookRequest,
-    SMSWebhookResponse,
-    CategoryCreateRequest,
-    SubAllocationsRequest,
-    SubCategoryCreateRequest,
-    SubCategoryRenameRequest,
-    PaydayUpdateRequest,
-    RolloverRuleUpdateRequest,
-    HouseholdInviteCreateRequest,
-    HouseholdProfileClaimRequest,
-    HouseholdReimbursementRequest,
-    ShoppingBasketOptimizeRequest,
-    RecurringBillToggleRequest,
-    SupportChatRequest,
-    SupportChatResponse,
-    HouseholdIncomeRequest,
-    HouseholdIncomeResponse,
-    CategoryToggleRequest,
-    CustomCategoryCreateRequest,
-    DependentCreateRequest,
-)
-from support_agent import handle_support_query, SUPPORT_EMAIL
-
+from utils import verify_signature as _verify_signature
+from landing_page import get_landing_page_html, get_auth_confirmed_html
+from routes.budgets import router as budgets_router
+from routes.households import router as households_router
+from routes.analytics import router as analytics_router
+from routes.receipts import router as receipts_router
+from routes.chat import router as chat_router
+from routes.reports import router as reports_router
+from routes.support import router as support_router
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -65,27 +44,25 @@ logger = logging.getLogger(__name__)
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Budget Tracker AI Service",
-    description="LangGraph-powered SMS parser and budget manager for Saudi bank notifications.",
-    version="1.0.0",
+    description="Modular AI service and budget manager for Saudi personal finance.",
+    version="1.0.2",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ─── CORS Security Configuration (OWASP A05) ──────────────────────────────────
+# ─── CORS ─────────────────────────────────────────────────────────────────────
 DEFAULT_ALLOWED_ORIGINS = [
-    "https://budget.fmsco.com.sa",
     "http://localhost:3000",
     "http://localhost:8080",
-    "http://localhost:5000",
+    "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8080",
-    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5173",
+    "https://budget.fmsco.com.sa",
 ]
-cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
-if cors_origins_env and cors_origins_env != "*":
-    allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
-elif cors_origins_env == "*":
-    allow_origins = ["*"]
+env_origins = os.environ.get("ALLOWED_ORIGINS")
+if env_origins:
+    allow_origins = [o.strip() for o in env_origins.split(",") if o.strip()]
 else:
     allow_origins = DEFAULT_ALLOWED_ORIGINS
 
@@ -95,6 +72,23 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# ─── Request Body Size Limit (OWASP A04: DoS Protection) ──────────────────────
+MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))  # 10MB default
+
+
+@app.middleware("http")
+async def request_size_limit_middleware(request: Request, call_next):
+    """Reject request bodies exceeding MAX_REQUEST_BODY_BYTES to prevent DoS."""
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_REQUEST_BODY_BYTES:
+        from starlette.responses import JSONResponse
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"Request body too large. Maximum allowed: {MAX_REQUEST_BODY_BYTES // (1024 * 1024)}MB."},
+        )
+    return await call_next(request)
+
 
 # ─── Auth Token & Firewall (OWASP A01 / A02) ───────────────────────────────────
 APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
@@ -134,12 +128,7 @@ async def firewall_token_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-# =============================================================================
-# HMAC SIGNATURE VERIFICATION
-# Shared secret between Flutter and this service.
-# Flutter sends: X-Signature: sha256=<hmac_hex>
-# =============================================================================
-
+# ─── HMAC Signature Config ───────────────────────────────────────────────────
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
 if not WEBHOOK_SECRET:
     logger.warning(
@@ -149,88 +138,7 @@ if not WEBHOOK_SECRET:
     )
 
 
-def _verify_signature(body: bytes, signature_header: str | None) -> bool:
-    """Return True if the HMAC-SHA256 signature matches, or if no secret is configured in dev."""
-    if not WEBHOOK_SECRET:
-        if IS_PRODUCTION:
-            logger.error("WEBHOOK_SECRET is not set in production — rejecting request.")
-            return False
-        logger.warning("WEBHOOK_SECRET not set — skipping signature verification (dev mode).")
-        return True
-    if not signature_header:
-        return False
-    try:
-        scheme, provided_sig = signature_header.split("=", 1)
-        if scheme != "sha256":
-            return False
-    except (ValueError, AttributeError):
-        return False
-
-    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, provided_sig)
-
-
-# =============================================================================
-# RATE LIMITING (OWASP A04: Strict Invoice Scan Protection)
-# Strict limit: 10 invoices per 10 minutes (600 seconds) maximum per household.
-# =============================================================================
-RECEIPT_SCAN_MAX_REQUESTS = int(os.environ.get("RECEIPT_SCAN_MAX_REQUESTS", "10"))
-RECEIPT_SCAN_WINDOW_SECONDS = int(os.environ.get("RECEIPT_SCAN_WINDOW_SECONDS", "600"))  # 10 minutes
-
-_receipt_rate_limit_lock = asyncio.Lock()
-_receipt_scan_history: dict[str, list[float]] = {}
-
-
-def _reset_receipt_scan_rate_limits():
-    """Helper for test execution to reset scan rate limits."""
-    global _receipt_scan_history
-    _receipt_scan_history.clear()
-
-
-async def check_receipt_scan_rate_limit(key: str) -> None:
-    """
-    Enforces strict rate limit: maximum 10 invoices per 10 minutes per household.
-    Raises HTTPException(429) with Retry-After header if exceeded.
-    """
-    now = time.time()
-    cutoff = now - RECEIPT_SCAN_WINDOW_SECONDS
-
-    async with _receipt_rate_limit_lock:
-        timestamps = _receipt_scan_history.get(key, [])
-        # Keep only timestamps within the sliding window
-        valid_timestamps = [t for t in timestamps if t > cutoff]
-
-        if len(valid_timestamps) >= RECEIPT_SCAN_MAX_REQUESTS:
-            oldest = valid_timestamps[0]
-            retry_after = max(1, int(oldest + RECEIPT_SCAN_WINDOW_SECONDS - now))
-            logger.warning(
-                "Strict rate limit exceeded for %s: %d invoices scanned in last %d minutes (limit: %d). Retry-After: %ds",
-                key, len(valid_timestamps), RECEIPT_SCAN_WINDOW_SECONDS // 60, RECEIPT_SCAN_MAX_REQUESTS, retry_after
-            )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded: Maximum {RECEIPT_SCAN_MAX_REQUESTS} invoices per {RECEIPT_SCAN_WINDOW_SECONDS // 60} minutes allowed. Please try again in {retry_after} seconds.",
-                headers={"Retry-After": str(retry_after)},
-            )
-
-        valid_timestamps.append(now)
-        _receipt_scan_history[key] = valid_timestamps
-
-        # Housekeeping: prune old entries if table grows
-        if len(_receipt_scan_history) > 500:
-            stale_keys = [k for k, ts in _receipt_scan_history.items() if not ts or ts[-1] <= cutoff]
-            for sk in stale_keys:
-                _receipt_scan_history.pop(sk, None)
-
-
-
-# =============================================================================
-# ROUTES
-# =============================================================================
-
-from landing_page import get_landing_page_html, get_auth_confirmed_html
-
-
+# ─── Public Landing & Health Routes ──────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
 async def root_landing_page():
     """Main public product showcase, feature explanations, and coming soon badges."""
@@ -265,938 +173,23 @@ async def hero_background_jpg():
     raise HTTPException(status_code=404, detail="Background image not found")
 
 
-
-
 @app.get("/health", tags=["ops"])
 async def health_check():
     """Liveness probe — returns 200 OK with uptime."""
     return {"status": "ok", "version": "1.0.2", "timestamp": time.time()}
 
 
-
-@app.post(
-    "/webhook/sms",
-    response_model=SMSWebhookResponse,
-    status_code=status.HTTP_200_OK,
-    tags=["sms"],
-    summary="Receive a bank SMS from the Flutter Android app and process it.",
-)
-async def webhook_sms(request: Request) -> SMSWebhookResponse:
-    """
-    Main webhook endpoint.
-    1. Verifies HMAC signature.
-    2. Parses request body into SMSWebhookRequest.
-    3. Runs the LangGraph sms_graph.
-    4. Returns a structured SMSWebhookResponse.
-    """
-    # ── Signature verification ────────────────────────────────────────────
-    raw_body = await request.body()
-    sig_header = request.headers.get("X-Signature")
-    if not _verify_signature(raw_body, sig_header):
-        logger.warning("Webhook signature mismatch — request rejected.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing HMAC signature.",
-        )
-
-    # ── Parse body ────────────────────────────────────────────────────────
-    try:
-        payload = SMSWebhookRequest.model_validate_json(raw_body)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-
-    logger.info(
-        "Webhook received: sender=%s household=%s sms_len=%d",
-        payload.sender, payload.household_id, len(payload.raw_sms),
-    )
-
-    # ── Build initial LangGraph state ─────────────────────────────────────
-    initial_state = AgentState(
-        raw_sms=payload.raw_sms,
-        sender=payload.sender,
-        received_at=payload.received_at,
-        household_id=payload.household_id,
-        device_id=payload.device_id,
-    )
-
-    # ── Run graph ─────────────────────────────────────────────────────────
-    try:
-        raw_result = await sms_graph.ainvoke(initial_state)
-        final_state: AgentState = (
-            AgentState.model_validate(raw_result)
-            if isinstance(raw_result, dict)
-            else raw_result
-        )
-    except Exception as exc:
-        logger.exception("LangGraph execution failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent error: {exc}",
-        )
-
-    # ── Map state → response ──────────────────────────────────────────────
-    if final_state.rejection_reason:
-        return SMSWebhookResponse(
-            status="rejected",
-            message=final_state.rejection_reason,
-        )
-    if final_state.error:
-        return SMSWebhookResponse(
-            status="error",
-            message=final_state.error,
-        )
-
-    return SMSWebhookResponse(
-        status="success",
-        transaction_id=final_state.transaction_id,
-        category_code=final_state.category_code,
-        amount=final_state.amount,
-        merchant=final_state.merchant,
-        is_reallocated=final_state.is_reallocated,
-        reallocated_from_category=final_state.reallocated_from_category,
-        message="Transaction recorded successfully.",
-    )
-
-
-@app.post(
-    "/agent/chat-transaction",
-    tags=["chat"],
-    summary="Process natural language conversational expense message.",
-)
-async def chat_transaction(request: Request):
-    """
-    Parse a user chat message into an itemized transaction.
-    Extracts merchant, total, line items, and checks for duplicates.
-    """
-    raw_body = await request.body()
-    sig_header = request.headers.get("X-Signature")
-    if not _verify_signature(raw_body, sig_header):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid HMAC signature.")
-
-    try:
-        body = json.loads(raw_body.decode("utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-
-    message = body.get("message")
-    household_id = body.get("household_id")
-    if not message or not household_id:
-        raise HTTPException(status_code=400, detail="message and household_id are required.")
-
-    from chat_parser import process_chat_transaction
-    try:
-        result = await asyncio.to_thread(
-            process_chat_transaction,
-            household_id=household_id,
-            message=message,
-            user_id=body.get("user_id"),
-            allow_duplicate=bool(body.get("allow_duplicate", False)),
-            enrich_tx_id=body.get("enrich_tx_id"),
-            preview_only=bool(body.get("preview_only", False)),
-            override_merchant=body.get("merchant"),
-            override_spent_by=body.get("spent_by"),
-            override_category_code=body.get("category_code"),
-            override_sub_category=body.get("sub_category"),
-            override_paid_by=body.get("paid_by"),
-            override_beneficiary=body.get("beneficiary"),
-        )
-        return result
-    except Exception as exc:
-        logger.error("Failed to process chat transaction: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-
-@app.post(
-    "/agent/scan-receipt",
-    tags=["receipt"],
-    summary="Process camera or gallery receipt invoice image.",
-)
-async def scan_receipt(request: Request):
-    """
-    Analyze receipt image using multimodal Gemini vision.
-    Extracts line items, store name, totals, and prevents duplicate charges.
-    """
-    raw_body = await request.body()
-    sig_header = request.headers.get("X-Signature")
-    if not _verify_signature(raw_body, sig_header):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid HMAC signature.")
-
-    try:
-        body = json.loads(raw_body.decode("utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-
-    images_base64 = body.get("images_base64")
-    if not images_base64 and body.get("image_base64"):
-        images_base64 = [body.get("image_base64")]
-    if not images_base64:
-        images_base64 = []
-
-    qr_code_raw = body.get("qr_code_raw")
-    household_id = body.get("household_id")
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-
-    if not images_base64 and not qr_code_raw:
-        raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
-
-    # Strict rate limit: 10 invoices per 10 minutes maximum per household
-    await check_receipt_scan_rate_limit(f"hh:{household_id}")
-
-    from receipt_scanner import process_receipt_scan
-    result = await asyncio.to_thread(
-        process_receipt_scan,
-        household_id=household_id,
-        images_base64=images_base64,
-        qr_code_raw=qr_code_raw,
-        user_id=body.get("user_id"),
-        allow_duplicate=bool(body.get("allow_duplicate", False)),
-        enrich_tx_id=body.get("enrich_tx_id"),
-        preview_only=bool(body.get("preview_only", False)),
-        override_merchant=body.get("merchant"),
-        override_spent_by=body.get("spent_by"),
-        receipt_url=body.get("receipt_url"),
-    )
-    return result
-
-
-@app.get(
-    "/budgets/salary-cycle-forecast",
-    tags=["budgets"],
-    summary="Get active Saudi salary cycle stats, burn rate velocity, and projected run-out date.",
-)
-async def salary_cycle_forecast(household_id: str, payday_day: Optional[int] = None):
-    """Returns salary cycle progress, days to payday, burn rate, and pace indicator."""
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import get_salary_cycle_forecast
-    try:
-        return await asyncio.to_thread(get_salary_cycle_forecast, household_id, None, payday_day)
-    except Exception as exc:
-        logger.error("Failed to generate salary cycle forecast: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/budgets/cycles",
-    tags=["budgets"],
-    summary="List active and available salary cycles for a household.",
-)
-async def list_salary_cycles(household_id: str, payday_day: Optional[int] = None):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import get_available_cycles_for_household
-    try:
-        return await asyncio.to_thread(get_available_cycles_for_household, household_id, payday_day)
-    except Exception as exc:
-        logger.error("Failed to list cycles: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/households/{household_id}/payday",
-    tags=["households"],
-    summary="Get configured monthly payday day for a household.",
-)
-async def get_household_payday_endpoint(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import get_household_payday
-    day = await asyncio.to_thread(get_household_payday, household_id)
-    return {"household_id": household_id, "payday_day": day}
-
-
-@app.put(
-    "/households/{household_id}/payday",
-    tags=["households"],
-    summary="Update configured monthly payday day for a household.",
-)
-async def update_household_payday_endpoint(household_id: str, payload: PaydayUpdateRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import set_household_payday
-    saved_day = await asyncio.to_thread(set_household_payday, household_id, payload.payday_day)
-    return {"household_id": household_id, "payday_day": saved_day, "status": "success"}
-
-
-@app.get(
-    "/households/{household_id}/income",
-    tags=["households"],
-    summary="Get configured monthly income/salary for a household.",
-)
-async def get_household_income_endpoint(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import get_household_income
-    income = await asyncio.to_thread(get_household_income, household_id)
-    return {"household_id": household_id, "monthly_income": income}
-
-
-@app.put(
-    "/households/{household_id}/income",
-    tags=["households"],
-    summary="Update configured monthly income/salary for a household.",
-)
-async def update_household_income_endpoint(household_id: str, payload: HouseholdIncomeRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import set_household_income
-    saved_income = await asyncio.to_thread(set_household_income, household_id, payload.monthly_income)
-    return {"household_id": household_id, "monthly_income": saved_income, "status": "success"}
-
-
-@app.get(
-    "/households/{household_id}/rollover-rule",
-    tags=["households"],
-    summary="Get configured budget rollover rule for a household.",
-)
-async def get_household_rollover_rule_endpoint(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import get_household_rollover_rule
-    rule = await asyncio.to_thread(get_household_rollover_rule, household_id)
-    return {"household_id": household_id, "rollover_rule": rule}
-
-
-@app.put(
-    "/households/{household_id}/rollover-rule",
-    tags=["households"],
-    summary="Update configured budget rollover rule for a household.",
-)
-async def update_household_rollover_rule_endpoint(household_id: str, payload: RolloverRuleUpdateRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import set_household_rollover_rule
-    saved_rule = await asyncio.to_thread(set_household_rollover_rule, household_id, payload.rollover_rule)
-    return {"household_id": household_id, "rollover_rule": saved_rule, "status": "success"}
-
-
-@app.get(
-    "/households/{household_id}/savings-summary",
-    tags=["households"],
-    summary="Get accumulated savings summary and last surplus swept for a household.",
-)
-async def get_household_savings_summary_endpoint(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import get_household_savings_summary
-    summary = await asyncio.to_thread(get_household_savings_summary, household_id)
-    return summary
-
-
-@app.post(
-    "/households/{household_id}/invites",
-    tags=["households"],
-    summary="Create a role-tagged 8-character invite code for a household.",
-)
-async def create_household_role_invite_endpoint(household_id: str, payload: HouseholdInviteCreateRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import create_household_role_invite
-    invite = await asyncio.to_thread(
-        create_household_role_invite,
-        household_id,
-        payload.role,
-        payload.target_member_id,
-    )
-    return invite
-
-
-@app.get(
-    "/households/invites/{invite_code}",
-    tags=["households"],
-    summary="Inspect invite code metadata and assigned role.",
-)
-async def inspect_household_role_invite_endpoint(invite_code: str):
-    if not invite_code:
-        raise HTTPException(status_code=400, detail="invite_code is required.")
-    from supabase_client import inspect_household_role_invite
-    info = await asyncio.to_thread(inspect_household_role_invite, invite_code)
-    return info
-
-
-@app.post(
-    "/households/invites/{invite_code}/claim",
-    tags=["households"],
-    summary="Claim a household invite code and link user account to member profile.",
-)
-async def claim_household_role_invite_endpoint(invite_code: str, payload: HouseholdProfileClaimRequest):
-    if not invite_code:
-        raise HTTPException(status_code=400, detail="invite_code is required.")
-    from supabase_client import claim_household_role_invite
-    res = await asyncio.to_thread(claim_household_role_invite, invite_code, payload.user_id)
-    return res
-
-
-@app.post(
-    "/households/{household_id}/reimbursements",
-    tags=["settlement"],
-    summary="Record a settlement reimbursement transaction between household members.",
-)
-async def record_household_reimbursement_endpoint(household_id: str, payload: HouseholdReimbursementRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from supabase_client import record_household_reimbursement
-    res = await asyncio.to_thread(
-        record_household_reimbursement,
-        household_id=household_id,
-        payer_id=payload.payer_id,
-        recipient_id=payload.recipient_id,
-        amount=payload.amount,
-        payment_method=payload.payment_method,
-        notes=payload.notes,
-    )
-    return res
-
-
-
-
-@app.get(
-    "/budgets/recurring-bills",
-    tags=["budgets"],
-    summary="Get detected recurring household bills, cycle payment status, and reserved allowance.",
-)
-async def get_recurring_bills(household_id: str, as_of_date: Optional[str] = None):
-    """
-    Analyzes historical transactions for recurring cadence (telecom, utilities, subscriptions)
-    and reports upcoming vs paid bills for the active Saudi salary cycle.
-    """
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from recurring_detector import fetch_household_recurring_bills
-    from datetime import date
-
-    target_date = None
-    if as_of_date:
-        try:
-            target_date = date.fromisoformat(as_of_date)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="as_of_date must be in YYYY-MM-DD format.")
-
-    try:
-        return await asyncio.to_thread(fetch_household_recurring_bills, household_id, target_date)
-    except Exception as exc:
-        logger.error("Failed to fetch recurring bills: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/recurring-bills/toggle",
-    tags=["budgets"],
-    summary="Toggle or customize whether a sub-budget appears in recurring bills.",
-)
-async def toggle_recurring_bill(req: RecurringBillToggleRequest):
-    from recurring_detector import toggle_household_recurring_bill
-    try:
-        return await asyncio.to_thread(
-            toggle_household_recurring_bill,
-            household_id=req.household_id,
-            category_code=req.category_code,
-            sub_code=req.sub_code,
-            is_recurring=req.is_recurring,
-            due_day=req.due_day,
-            custom_name=req.custom_name,
-        )
-    except Exception as exc:
-        logger.error("Failed to toggle recurring bill: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/budgets/recurring-bills/candidates",
-    tags=["budgets"],
-    summary="List all sub-budget items eligible to be recurring bills.",
-)
-async def list_recurring_bill_candidates(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from recurring_detector import get_recurring_bill_candidates
-    try:
-        return await asyncio.to_thread(get_recurring_bill_candidates, household_id)
-    except Exception as exc:
-        logger.error("Failed to list recurring bill candidates: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/budgets/installments",
-    tags=["installments"],
-    summary="List active and completed BNPL installment plans for a household.",
-)
-async def list_installments(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from installment_service import InstallmentService
-    try:
-        plans = await asyncio.to_thread(InstallmentService.list_plans, household_id)
-        return {"plans": [p.model_dump() for p in plans], "count": len(plans)}
-    except Exception as exc:
-        logger.error("Failed to list installment plans: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/installments",
-    tags=["installments"],
-    summary="Create a new BNPL installment plan (e.g. Tamara/Tabby) and amortize purchase.",
-)
-async def create_installment_plan(request: Request):
-    try:
-        body = await request.json()
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-    from installment_service import InstallmentService, InstallmentPlanCreate
-    try:
-        req = InstallmentPlanCreate(**body)
-        plan = await asyncio.to_thread(InstallmentService.create_plan, req)
-        return plan.model_dump()
-    except Exception as exc:
-        logger.error("Failed to create installment plan: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@app.post(
-    "/budgets/installments/{plan_id}/pay",
-    tags=["installments"],
-    summary="Record an installment payment towards a plan.",
-)
-async def pay_installment_endpoint(plan_id: str):
-    from installment_service import InstallmentService
-    try:
-        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id)
-        if not plan:
-            raise HTTPException(status_code=404, detail="Installment plan not found.")
-        return plan.model_dump()
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Failed to pay installment: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/recalculate",
-    tags=["budgets"],
-    summary="Recalculate spent_amount for all categories in a household from transactions.",
-)
-async def recalculate_budgets_endpoint(household_id: str, cycle_key: Optional[str] = None):
-    from installment_service import InstallmentService
-    try:
-        await asyncio.to_thread(InstallmentService.recalculate_budgets, household_id, cycle_key)
-        return {"status": "ok", "household_id": household_id, "cycle_key": cycle_key}
-    except Exception as exc:
-        logger.error("Failed to recalculate budgets: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-
-@app.get(
-    "/budgets/breakdown",
-    tags=["budgets"],
-    summary="Get budget categories and sub-budget spending breakdown for a salary cycle.",
-)
-async def get_budget_breakdown(household_id: str, cycle_key: Optional[str] = None):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import get_cycle_breakdown
-    try:
-        return await asyncio.to_thread(get_cycle_breakdown, household_id, cycle_key)
-    except Exception as exc:
-        logger.error("Failed to get budget breakdown: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/categories",
-    tags=["budgets"],
-    summary="Add a new category and initial budget allocation.",
-)
-async def add_budget_category(req: CategoryCreateRequest):
-    from salary_cycle import add_category_and_budget
-    try:
-        return await asyncio.to_thread(add_category_and_budget, req)
-    except Exception as exc:
-        logger.error("Failed to add category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/sub-allocations",
-    tags=["budgets"],
-    summary="Set sub-category budget allocations and automatically recompute parent budget amount.",
-)
-async def set_sub_allocations(req: SubAllocationsRequest):
-    from salary_cycle import save_sub_allocations
-    try:
-        return await asyncio.to_thread(
-            save_sub_allocations,
-            household_id=req.household_id,
-            category_code=req.category_code,
-            sub_allocations=req.sub_allocations,
-            cycle_key=req.cycle_key,
-        )
-    except Exception as exc:
-        logger.error("Failed to save sub-allocations: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/budgets/sub-categories",
-    tags=["budgets"],
-    summary="Add a new sub-category to a parent budget category with an allocation.",
-)
-async def add_sub_category(req: SubCategoryCreateRequest):
-    from salary_cycle import add_sub_category_for_household
-    try:
-        return await asyncio.to_thread(
-            add_sub_category_for_household,
-            household_id=req.household_id,
-            parent_code=req.parent_code,
-            name_en=req.name_en,
-            allocated_amount=req.allocated_amount,
-            sub_code=req.sub_code,
-            cycle_key=req.cycle_key,
-        )
-    except Exception as exc:
-        logger.error("Failed to add sub-category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/budgets/sub-categories",
-    tags=["budgets"],
-    summary="Get all sub-categories for a parent category code.",
-)
-async def get_sub_categories_route(parent_code: str):
-    from salary_cycle import get_sub_categories_for_parent
-    try:
-        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code)
-        return {
-            "status": "success",
-            "sub_categories": sub_cats,
-        }
-    except Exception as exc:
-        logger.error("Failed to get sub-categories: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.patch(
-    "/budgets/sub-categories",
-    tags=["budgets"],
-    summary="Rename an existing sub-category.",
-)
-async def rename_sub_category_endpoint(req: SubCategoryRenameRequest):
-    from salary_cycle import rename_sub_category
-    try:
-        return await asyncio.to_thread(
-            rename_sub_category,
-            parent_code=req.parent_code,
-            sub_code=req.sub_code,
-            name_en=req.name_en,
-            name_ar=req.name_ar,
-        )
-    except Exception as exc:
-        logger.error("Failed to rename sub-category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.delete(
-    "/budgets/sub-categories",
-    tags=["budgets"],
-    summary="Remove a sub-category from budget and purge if unused.",
-)
-async def remove_sub_category_endpoint(
-    household_id: str,
-    parent_code: str,
-    sub_code: str,
-    cycle_key: Optional[str] = None,
-):
-    if not household_id or not parent_code or not sub_code:
-        raise HTTPException(status_code=400, detail="household_id, parent_code, and sub_code are required.")
-    from salary_cycle import remove_sub_category_for_household
-    try:
-        return await asyncio.to_thread(
-            remove_sub_category_for_household,
-            household_id=household_id,
-            parent_code=parent_code,
-            sub_code=sub_code,
-            cycle_key=cycle_key,
-        )
-    except Exception as exc:
-        logger.error("Failed to remove sub-category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.delete(
-    "/budgets/categories/{category_code}",
-    tags=["budgets"],
-    summary="Deactivate or remove a category allocation for a household.",
-)
-async def delete_budget_category(category_code: str, household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import archive_category_for_household
-    try:
-        return await asyncio.to_thread(archive_category_for_household, household_id, category_code)
-    except Exception as exc:
-        logger.error("Failed to delete category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-# ── Household Dependents ─────────────────────────────────────────────────────
-
-@app.get(
-    "/households/{household_id}/dependents",
-    tags=["dependents"],
-    summary="Get all children and dependents for a household.",
-)
-async def list_household_dependents(household_id: str):
-    from dependents_service import get_household_dependents
-    deps = await asyncio.to_thread(get_household_dependents, household_id)
-    return {"status": "success", "dependents": deps}
-
-
-@app.post(
-    "/households/{household_id}/dependents",
-    tags=["dependents"],
-    summary="Add a new child or dependent to a household.",
-)
-async def add_household_dependent(household_id: str, req: DependentCreateRequest):
-    from dependents_service import create_household_dependent
-    dep = await asyncio.to_thread(
-        create_household_dependent,
-        household_id,
-        req.name,
-        req.avatar_icon,
-        req.relationship,
-        req.monthly_allowance,
-    )
-    return {"status": "success", "dependent": dep}
-
-
-@app.delete(
-    "/households/{household_id}/dependents/{dependent_id}",
-    tags=["dependents"],
-    summary="Remove a child or dependent from a household.",
-)
-async def remove_household_dependent(household_id: str, dependent_id: str):
-    from dependents_service import delete_household_dependent
-    await asyncio.to_thread(delete_household_dependent, household_id, dependent_id)
-    return {"status": "success", "message": "Dependent removed successfully."}
-
-
-
-@app.post(
-    "/budgets/simulate-affordability",
-    tags=["budgets"],
-    summary="Pre-purchase affordability simulator ('Can I Afford This?').",
-)
-async def simulate_purchase_affordability(request: Request):
-    """
-    Evaluates purchase against active salary cycle cushion, flexible budget pools, and days to 27th.
-    """
-    try:
-        body = await request.json()
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-    household_id = body.get("household_id")
-    target_amount = float(body.get("target_amount") or 0.0)
-    item_name = body.get("item_name") or "Item"
-    category_code = body.get("category_code")
-
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-
-    from salary_cycle import simulate_affordability
-    return await asyncio.to_thread(
-        simulate_affordability,
-        household_id=household_id,
-        target_amount=target_amount,
-        item_name=item_name,
-        category_code=category_code,
-    )
-
-
-@app.get(
-    "/households/{household_id}/settlement",
-    tags=["settlement"],
-    summary="Calculate shared partner expense balance and settle-up payment note.",
-)
-async def household_settlement(household_id: str, split_ratio: float = 0.50):
-    """
-    Aggregates transactions in the active salary cycle by spent_by ('me', 'partner', 'both').
-    Returns net balance, who owes whom, and copyable STC Pay / Urpay / IBAN transfer note.
-    """
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from settlement_engine import calculate_partner_settlement
-    try:
-        return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
-    except Exception as exc:
-        logger.error("Failed to compute partner settlement: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/households/{household_id}/categories",
-    tags=["categories"],
-    summary="Get active and inactive categories for household.",
-)
-async def get_household_categories_endpoint(household_id: str):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import get_household_categories
-    try:
-        return await asyncio.to_thread(get_household_categories, household_id)
-    except Exception as exc:
-        logger.error("Failed to fetch household categories: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/households/{household_id}/categories/toggle",
-    tags=["categories"],
-    summary="Toggle category active/inactive status for a household.",
-)
-async def toggle_category_endpoint(household_id: str, req: CategoryToggleRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import toggle_category_status
-    try:
-        return await asyncio.to_thread(
-            toggle_category_status,
-            household_id=household_id,
-            category_code=req.category_code,
-            is_active=req.is_active,
-        )
-    except Exception as exc:
-        logger.error("Failed to toggle category status: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/households/{household_id}/categories/custom",
-    tags=["categories"],
-    summary="Create custom root category for a household.",
-)
-async def create_custom_category_endpoint(household_id: str, req: CustomCategoryCreateRequest):
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from salary_cycle import create_household_custom_category
-    try:
-        return await asyncio.to_thread(
-            create_household_custom_category,
-            household_id=household_id,
-            code=req.code,
-            category=req.category,
-            keywords=req.keywords,
-            is_flexible=req.is_flexible,
-            allocated_amount=req.allocated_amount,
-        )
-    except Exception as exc:
-        logger.error("Failed to create custom category: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get(
-    "/analytics/price-history",
-    tags=["analytics"],
-    summary="Query grocery price history, inflation percentage, and store comparisons.",
-)
-async def grocery_price_history(household_id: str, item_filter: str | None = None):
-    """
-    Groups line items across receipts, voice, and chat logs by normalized product name and store.
-    Computes price trends, cheapest store (Panda vs Danube vs Tamimi), and inflation rate.
-    """
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from price_tracker import get_grocery_price_history
-    try:
-        items = await asyncio.to_thread(get_grocery_price_history, household_id, item_filter=item_filter)
-        return {"items": items, "count": len(items)}
-    except Exception as exc:
-        logger.error("Failed to fetch grocery price history: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/analytics/shopping-basket-optimize",
-    tags=["analytics"],
-    summary="Optimize shopping list across major Saudi grocery retailers.",
-)
-async def shopping_basket_optimize(req: ShoppingBasketOptimizeRequest):
-    """
-    Computes total basket pricing at Panda, Danube, Tamimi, Othaim, and Lulu,
-    identifying the cheapest single store and optimal multi-store savings split.
-    """
-    if not req.household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from price_tracker import optimize_shopping_basket
-    try:
-        return await asyncio.to_thread(optimize_shopping_basket, req.household_id, req.items)
-    except Exception as exc:
-        logger.error("Failed to optimize shopping basket: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-
-@app.get(
-    "/reports/statement-pdf",
-    tags=["reports"],
-    summary="Download branded monthly financial statement PDF.",
-)
-async def export_statement_pdf(household_id: str, cycle_key: str | None = None):
-    """
-    Generates a branded monthly PDF statement covering salary cycle spending,
-    partner splits, category utilization, and 15% VAT breakdown.
-    """
-    if not household_id:
-        raise HTTPException(status_code=400, detail="household_id is required.")
-    from pdf_statement_generator import generate_monthly_pdf_statement
-    try:
-        pdf_bytes = await asyncio.to_thread(generate_monthly_pdf_statement, household_id, cycle_key=cycle_key)
-        safe_cycle = re.sub(r"[^a-zA-Z0-9_\-]", "", cycle_key or "current")
-        safe_hid = re.sub(r"[^a-zA-Z0-9_\-]", "", household_id)[:8] or "unknown"
-        filename = f"statement_{safe_cycle}_{safe_hid}.pdf"
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-    except Exception as exc:
-        logger.error("Failed to generate PDF statement: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post(
-    "/support/chat",
-    response_model=SupportChatResponse,
-    tags=["support"],
-    summary="AI Support Chatbot and Developer Escalation",
-)
-async def support_chat(payload: SupportChatRequest) -> SupportChatResponse:
-    reply, escalate, summary = await handle_support_query(
-        message=payload.message,
-        household_id=payload.household_id,
-        user_id=payload.user_id,
-        history=payload.history,
-        language=payload.language or "ar",
-    )
-    return SupportChatResponse(
-        reply=reply,
-        escalate_to_developer=escalate,
-        summary=summary,
-        support_email=SUPPORT_EMAIL,
-    )
-
-
-# =============================================================================
-# ENTRY POINT
-# =============================================================================
-
+# ─── Include Routers ─────────────────────────────────────────────────────────
+app.include_router(budgets_router)
+app.include_router(households_router)
+app.include_router(analytics_router)
+app.include_router(receipts_router)
+app.include_router(chat_router)
+app.include_router(reports_router)
+app.include_router(support_router)
+
+
+# ─── Entry Point ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

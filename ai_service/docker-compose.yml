@@ -18,7 +18,6 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       # ── Security ──────────────────────────────────────────────────────────
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
-      ALLOWED_SENDERS: ${ALLOWED_SENDERS:-SNB,ALRAJHI,9200}
       # ── Server ────────────────────────────────────────────────────────────
       PORT: 8000
       RELOAD: "false"

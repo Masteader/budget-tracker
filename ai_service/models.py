@@ -167,6 +167,17 @@ class BudgetBreakdownResponse(BaseModel):
     categories: list[CategoryBreakdownItem]
 
 
+def _uuid_validator(v: Optional[str]) -> Optional[str]:
+    """Validate household_id is a proper UUID string."""
+    if v is None:
+        return v
+    try:
+        UUID(str(v))
+    except (ValueError, AttributeError):
+        raise ValueError(f"Invalid UUID: {v}")
+    return str(v)
+
+
 class CategoryCreateRequest(BaseModel):
     household_id: str
     code: str
@@ -175,12 +186,22 @@ class CategoryCreateRequest(BaseModel):
     is_flexible: bool = True
     keywords: list[str] = Field(default_factory=list)
 
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
+
 
 class SubAllocationsRequest(BaseModel):
     household_id: str
     category_code: str
     cycle_key: Optional[str] = None
     sub_allocations: dict[str, float]
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
 
 
 class SubCategoryCreateRequest(BaseModel):
@@ -190,6 +211,11 @@ class SubCategoryCreateRequest(BaseModel):
     allocated_amount: float = 0.0
     sub_code: Optional[str] = None
     cycle_key: Optional[str] = None
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
 
 
 class SubCategoryRenameRequest(BaseModel):
@@ -235,10 +261,20 @@ class HouseholdReimbursementRequest(BaseModel):
     payment_method: str = Field(default="stc_pay", description="Payment method: 'stc_pay', 'urpay', 'iban', 'cash'")
     notes: Optional[str] = None
 
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
+
 
 class ShoppingBasketOptimizeRequest(BaseModel):
     household_id: str
     items: List[str] = Field(default_factory=list, description="List of grocery item names to price and optimize")
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
 
 
 class RecurringBillToggleRequest(BaseModel):
@@ -248,6 +284,11 @@ class RecurringBillToggleRequest(BaseModel):
     is_recurring: bool = True
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     custom_name: Optional[str] = None
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
 
 
 class SupportChatRequest(BaseModel):

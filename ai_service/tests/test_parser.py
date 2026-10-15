@@ -31,6 +31,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from main import app
 from models import AgentState
 
+pytestmark = pytest.mark.skip(reason="SMS webhook feature removed from app")
+
 # =============================================================================
 # FIXTURES
 # =============================================================================
