@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>BUDGET Tracker | ميزانية وأكثر - انسيابية وصفاء مالي</title>
+  
+  <!-- Typography: IBM Plex Sans Arabic & Tajawal -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  
+  <style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+        scroll-behavior: smooth;
+        font-family: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+    }
+    ::-webkit-scrollbar { display: none; }
+    
+    /* Energetic luminous flow line animation */
+    @keyframes flowGlow {
+      0% { stroke-dashoffset: 1200; opacity: 0.35; }
+      50% { opacity: 0.85; filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.9)); }
+      100% { stroke-dashoffset: 0; opacity: 0.35; }
+    }
+    .flow-wave-path {
+      stroke-dasharray: 600;
+      animation: flowGlow 12s linear infinite;
+    }
+    .flow-wave-path-delayed {
+      stroke-dasharray: 500;
+      animation: flowGlow 9s ease-in-out infinite reverse;
+    }
+    
+    /* Super-Powers HUD Glassmorphism */
+    .glass-card-hud {
+      background: rgba(255, 255, 255, 0.68);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.1), 0 0 25px 0 rgba(16, 185, 129, 0.08);
+    }
+    .glass-card-subtle {
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+    }
+    
+    /* Dynamic Exploding Orb Canvas */
+    #orbCanvas {
+      pointer-events: auto;
+      cursor: pointer;
+      border-radius: 2rem;
+    }
+    
+    .pulse-glow {
+      box-shadow: 0 0 35px rgba(0, 245, 160, 0.45);
+    }
+  </style>
+  
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#006c49",
+            "primary-container": "#10b981",
+            "secondary": "#006a61",
+            "secondary-container": "#86f2e4",
+            "tertiary": "#00687a",
+            "tertiary-container": "#00b2d0",
+            "ocean-teal": "#0d9488",
+            "coastal-navy": "#0f172a",
+            "on-surface": "#0f172a",
+            "on-surface-variant": "#334155",
+            "surface": "#f8fafc",
+            "surface-container": "#e2e8f0",
+            "surface-container-low": "#f1f5f9",
+            "surface-container-lowest": "#ffffff",
+            "mint-neon": "#00F5A0"
+          },
+          fontFamily: {
+            sans: ['"IBM Plex Sans Arabic"', '"Tajawal"', 'sans-serif'],
+            display: ['"Tajawal"', '"IBM Plex Sans Arabic"', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-[#f4f7f6] text-coastal-navy antialiased selection:bg-primary-container selection:text-white relative min-h-screen">
+
+  <!-- Fixed Vertical Progress Timeline (Desktop Floating HUD Tracker 01 -> 07) -->
+  <aside class="hidden 2xl:flex fixed left-7 top-1/2 -translate-y-1/2 z-50 flex-col gap-3.5 bg-white/70 backdrop-blur-2xl p-2.5 rounded-full border border-white/80 shadow-[0_12px_36px_rgba(15,23,42,0.1)]">
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#hero" title="البداية والواجهة">
+      <span class="w-3.5 h-3.5 rounded-full bg-primary-container ring-4 ring-primary-container/25 transition-transform group-hover:scale-125"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">01 البداية الساحلية</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#orb-stage" title="الانفجار البصري الفائق">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">02 الانفجار البصري</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#metrics" title="المؤشرات الحية">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">03 المؤشرات</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#simulator" title="المحاكي التفاعلي">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">04 محاكي الدورة</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#pillars" title="المميزات الـ 12">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">05 الركائز الـ 12</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#privacy" title="الخصوصية والأمان">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">06 الخصوصية السيادية</span>
+    </a>
+    <a class="group flex items-center gap-3 p-1 transition-all" href="#contact" title="التواصل والوصول المبكر">
+      <span class="w-3 h-3 rounded-full bg-slate-300 group-hover:bg-primary-container transition-all"></span>
+      <span class="hidden group-hover:inline-block font-medium text-xs bg-coastal-navy text-white px-2.5 py-1 rounded-full shadow-lg whitespace-nowrap">07 حجز VIP</span>
+    </a>
+  </aside>
+
+  <!-- Flying Cloud-Level Glass Navbar -->
+  <header class="fixed top-0 w-full z-40 transition-all duration-300 px-4 sm:px-8 pt-3">
+    <div class="max-w-7xl mx-auto h-16 sm:h-20 glass-card-hud rounded-2xl sm:rounded-full px-5 sm:px-8 flex items-center justify-between gap-4 border border-white/90 shadow-[0_8px_32px_rgba(15,23,42,0.06)]">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 sm:gap-4">
+        <a class="flex items-center gap-3 group" href="#hero">
+          <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-primary via-primary-container to-secondary-container flex items-center justify-center text-white shadow-[0_4px_16px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform">
+            <span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="font-display font-black text-lg sm:text-xl tracking-tight text-coastal-navy">BUDGET Tracker</span>
+            <span class="text-[11px] font-semibold text-ocean-teal -mt-1 flex items-center gap-1">
+              ميزانية وأكثر <span class="text-primary-container font-black">•</span> صفاء وانسيابية
+            </span>
+          </div>
+        </a>
+        <!-- Desktop Nav Links -->
+        <nav class="hidden lg:flex items-center gap-1 mr-6 bg-white/50 backdrop-blur-md p-1.5 rounded-full border border-white/60">
+          <a class="text-xs xl:text-sm font-semibold text-coastal-navy hover:text-primary px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#simulator">المحاكي</a>
+          <a class="text-xs xl:text-sm font-semibold text-slate-600 hover:text-coastal-navy px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#metrics">المؤشرات</a>
+          <a class="text-xs xl:text-sm font-semibold text-slate-600 hover:text-coastal-navy px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#pillars">المميزات الـ 12</a>
+          <a class="text-xs xl:text-sm font-semibold text-slate-600 hover:text-coastal-navy px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#privacy">الخصوصية</a>
+          <a class="text-xs xl:text-sm font-semibold text-slate-600 hover:text-coastal-navy px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#faq">الأسئلة</a>
+          <a class="text-xs xl:text-sm font-semibold text-slate-600 hover:text-coastal-navy px-3.5 py-1.5 rounded-full hover:bg-white/90 transition-all" href="#contact">تواصل</a>
+        </nav>
+      </div>
+
+      <!-- Right actions: Lang + CTA -->
+      <div class="flex items-center gap-3">
+        <button class="text-xs font-bold px-3 py-1.5 rounded-full bg-white/70 border border-slate-200 text-slate-700 hover:bg-white transition-all shadow-sm">
+          عربي <span class="text-slate-300">|</span> EN
+        </button>
+        <a class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold bg-gradient-to-r from-primary to-primary-container text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-[0_6px_20px_rgba(16,185,129,0.35)] hover:shadow-[0_8px_25px_rgba(16,185,129,0.5)] hover:-translate-y-0.5 transition-all" href="#simulator">
+          <span class="material-symbols-outlined text-[18px]">bolt</span>
+          <span>جرّب المحاكي</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WRAPPER -->
+  <main class="w-full relative">
+
+    <!-- HERO BACKDROP: Daylight Coastal Exploding Flow -->
+    <div class="relative w-full min-h-[960px] lg:min-h-[1050px] overflow-hidden pt-28 sm:pt-36 pb-20 flex items-center">
+      <!-- Full-bleed photorealistic cinematic coastal background -->
+      <div class="absolute inset-0 -z-30 w-full h-full">
+        <img alt="Daylight Coastal Majesty - sun-drenched green mountains and shimmering azure ocean" 
+             class="w-full h-full object-cover object-center scale-105 transform motion-safe:duration-1000" 
+             src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZS384EhETg2o49HVUzAea2EDLGe6OxgGX40krM2Z_d8849u9D35H75PDQtPZ_LokTuFwNLlgeAThagt7i70Hr8goAksEBiJaLyymRyNI1IZx2Q1JHOzK-xd81CvCABWrAjMvLSav8-ujMSRtPSnsXr9sEQbaFl23EJPBp1ewrzg54SdurzkCergCnmZMRT4mbvdMqZxbEW2hi7aD7tQHZja5gKFdyrRTkAx1SiKTJl7jeMQIigol8"/>
+        <!-- Atmospheric Sunlight and Sea-spray Glass Overlays -->
+        <div class="absolute inset-0 bg-gradient-to-b from-white/30 via-white/10 to-[#f4f7f6]"></div>
+        <div class="absolute inset-0 bg-gradient-to-l from-emerald-950/15 via-transparent to-transparent"></div>
+        <div class="absolute -top-32 right-1/4 w-[500px] h-[500px] bg-amber-100/35 rounded-full blur-3xl pointer-events-none"></div>
+      </div>
+
+      <!-- Flowing energy vector wave overlay mimicking cash-flow serenity along the shore -->
+      <div class="absolute inset-0 -z-20 pointer-events-none overflow-hidden opacity-80">
+        <svg class="w-full h-full min-w-[1200px]" fill="none" preserveaspectratio="none" viewbox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+          <path class="flow-wave-path" d="M -100,580 C 250,560 480,720 780,630 C 1080,540 1260,670 1600,600" stroke="url(#mintGrad1)" stroke-linecap="round" stroke-width="3"></path>
+          <path class="flow-wave-path-delayed" d="M -60,610 C 290,590 520,750 820,660 C 1120,570 1300,700 1640,630" stroke="url(#mintGrad2)" stroke-linecap="round" stroke-width="2"></path>
+          <defs>
+            <linearGradient id="mintGrad1" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.1"></stop>
+              <stop offset="50%" stop-color="#10b981" stop-opacity="0.95"></stop>
+              <stop offset="100%" stop-color="#6ee7b7" stop-opacity="0.3"></stop>
+            </linearGradient>
+            <linearGradient id="mintGrad2" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.1"></stop>
+              <stop offset="60%" stop-color="#34d399" stop-opacity="0.8"></stop>
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0.2"></stop>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <!-- Hero Content Container -->
+      <div class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="hero">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+          
+          <!-- Right Column (RTL Editorial & Value Prop) -->
+          <div class="lg:col-span-7 flex flex-col items-start text-right gap-5">
+            <!-- Live Tag Badge with Mint Glow -->
+            <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur-xl border border-white/90 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
+              <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container"></span>
+              </span>
+              <span class="text-xs sm:text-sm font-bold text-coastal-navy">
+                🌊 انسيابية مالية ذكية • للأفراد، الأسر، وشركاء السكن
+              </span>
+            </div>
+
+            <!-- Main Headline -->
+            <h1 class="font-display font-black text-3xl sm:text-5xl lg:text-6xl text-coastal-navy leading-[1.2] sm:leading-[1.18] tracking-tight">
+              صفاء مالي و<span class="text-transparent bg-clip-text bg-gradient-to-l from-emerald-600 via-primary-container to-teal-700 drop-shadow-sm font-black">انسيابية تامة..</span><br class="hidden sm:inline"/> لأسرتك أو شركاء سكنك.
+            </h1>
+
+            <!-- Subtitle -->
+            <p class="text-base sm:text-lg text-slate-700 max-w-2xl leading-relaxed font-normal bg-white/40 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none p-3 sm:p-0 rounded-2xl">
+              وداعاً لتوتر مصاريف منتصف الشهر وحسابات السكن المعقدة. نظام متكامل يتيح ضبط دورة الراتب الشخصية من اليوم 1 إلى 31، تدوين الفواتير صوتياً بالذكاء الاصطناعي، فك شفرات فواتير ZATCA الضريبية بلحظة، وتوزيع الالتزامات المشتركة بعدالة دون أي إحراج.
+            </p>
+
+            <!-- Dual Action CTAs -->
+            <div class="flex flex-wrap items-center gap-4 pt-2 w-full sm:w-auto">
+              <a class="inline-flex items-center justify-center gap-2.5 font-bold text-sm sm:text-base bg-gradient-to-r from-primary via-emerald-600 to-primary-container text-white rounded-full px-7 sm:px-9 py-3.5 shadow-[0_12px_28px_rgba(16,185,129,0.4)] hover:shadow-[0_16px_36px_rgba(16,185,129,0.55)] hover:-translate-y-1 transition-all" href="#simulator">
+                <span class="material-symbols-outlined text-[22px]">bolt</span>
+                <span>⚡ ابدأ التجربة الحية</span>
+              </a>
+              <a class="inline-flex items-center justify-center gap-2 font-bold text-sm sm:text-base bg-white/75 backdrop-blur-xl border border-white/90 text-coastal-navy rounded-full px-6 sm:px-7 py-3.5 shadow-[0_6px_20px_rgba(15,23,42,0.06)] hover:bg-white hover:text-primary transition-all" href="#pillars">
+                <span>استكشف المميزات الـ 12</span>
+                <span class="material-symbols-outlined text-[20px] rtl:rotate-180">arrow_forward</span>
+              </a>
+            </div>
+
+            <!-- App Store Availability strip -->
+            <div class="pt-4 flex flex-col gap-2.5 w-full">
+              <span class="text-xs font-semibold text-slate-600">متاح كتطبيق ويب فوري PWA وقريباً على المتاجر المعتمدة:</span>
+              <div class="flex flex-wrap items-center gap-2.5">
+                <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/70 backdrop-blur-md border border-white/80 shadow-sm text-xs font-bold text-coastal-navy">
+                  <span class="material-symbols-outlined text-emerald-600 text-[18px]">install_mobile</span>
+                  <span>Web PWA (جاهز للعمل)</span>
+                </div>
+                <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/50 backdrop-blur-sm border border-white/60 text-xs font-medium text-slate-600">
+                  <span class="material-symbols-outlined text-[17px]">shop</span>
+                  <span>Google Play (قريباً)</span>
+                </div>
+                <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/50 backdrop-blur-sm border border-white/60 text-xs font-medium text-slate-600">
+                  <span class="material-symbols-outlined text-[17px]">apple</span>
+                  <span>App Store (قريباً)</span>
+                </div>
+                <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/50 backdrop-blur-sm border border-white/60 text-xs font-medium text-slate-600">
+                  <span class="material-symbols-outlined text-[17px]">apps</span>
+                  <span>AppGallery</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Left Column: 3D Cascading Floating HUD Cards Collage Above the Ocean -->
+          <div class="lg:col-span-5 relative flex items-center justify-center">
+            <!-- Atmospheric glow behind cards -->
+            <div class="absolute -inset-4 bg-gradient-to-tr from-primary-container/20 via-teal-300/20 to-transparent rounded-3xl blur-2xl"></div>
+            <div class="relative w-full max-w-md flex flex-col gap-4 z-10">
+
+              <!-- Card 1: Daily Safe Spend Gauge -->
+              <div class="glass-card-hud rounded-3xl p-5 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
+                <div class="flex items-center justify-between pb-3 border-b border-white/50">
+                  <div class="flex items-center gap-3">
+                    <span class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-[20px]">speed</span>
+                    </span>
+                    <div>
+                      <h3 class="font-bold text-sm text-coastal-navy">معدل الصرف اليومي الآمن</h3>
+                      <p class="text-[11px] text-emerald-700 font-semibold">مضبوط ديناميكياً حتى نزول الراتب</p>
+                    </div>
+                  </div>
+                  <span class="text-xs font-bold bg-emerald-500/15 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                    أخضر • آمن
+                  </span>
+                </div>
+                <div class="flex items-center justify-between pt-4">
+                  <div>
+                    <span class="text-3xl sm:text-4xl font-black text-coastal-navy font-display">145.00</span>
+                    <span class="text-xs font-bold text-slate-600 mr-1.5">ر.س / يومياً</span>
+                  </div>
+                  <!-- Radial Progress Dial -->
+                  <div class="relative w-16 h-16 flex items-center justify-center">
+                    <svg class="w-16 h-16 -rotate-90" viewbox="0 0 36 36">
+                      <path class="text-slate-200/80" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3.5"></path>
+                      <path class="text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="72, 100" stroke-linecap="round" stroke-width="3.5"></path>
+                    </svg>
+                    <span class="absolute text-xs font-black text-emerald-700">72%</span>
+                  </div>
+                </div>
+                <div class="mt-3 pt-2 flex items-center justify-between text-xs text-slate-600 border-t border-white/40 font-medium">
+                  <span>المتبقي الحر: 3,480 ر.س</span>
+                  <span class="text-ocean-teal font-bold">12 يوماً متبقية</span>
+                </div>
+              </div>
+
+              <!-- Card 2: Shared Expense Split Ledger -->
+              <div class="glass-card-hud -mt-2 lg:mr-6 rounded-3xl p-5 hover:-translate-y-1 transition-all duration-300">
+                <div class="flex items-center justify-between pb-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-800 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-[18px]">group</span>
+                    </span>
+                    <h3 class="font-bold text-xs sm:text-sm text-coastal-navy">تسوية مصاريف سكن الأصدقاء</h3>
+                  </div>
+                  <span class="text-[11px] font-bold bg-teal-100 text-teal-800 px-2.5 py-0.5 rounded-full">توزيع عادل</span>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-white/80">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">س</div>
+                      <div>
+                        <p class="text-xs font-bold text-coastal-navy">إيجار الشقة الشهري</p>
+                        <span class="text-[10px] text-slate-500">دفع سالم • مناصفة 50%</span>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold text-coastal-navy">3,200.00 ر.س</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-white/80">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-7 h-7 rounded-full bg-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">ف</div>
+                      <div>
+                        <p class="text-xs font-bold text-coastal-navy">تموينات ومقاضي السكن</p>
+                        <span class="text-[10px] text-slate-500">دفع فهد • مقسمة بالتساوي</span>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold text-coastal-navy">1,150.00 ر.س</span>
+                  </div>
+                </div>
+                <div class="mt-3 p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200/60 flex items-center justify-between">
+                  <span class="text-[11px] font-medium text-emerald-900">صافي التسوية التلقائية:</span>
+                  <span class="text-xs font-bold text-emerald-700">سالم يستحق 1,025 ر.س من فهد</span>
+                </div>
+              </div>
+
+              <!-- Card 3: AI Parsed ZATCA Instant Receipt Card -->
+              <div class="glass-card-subtle -mt-2 w-11/12 mx-auto rounded-2xl p-3 shadow-lg flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                    <span class="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+                  </span>
+                  <div>
+                    <span class="text-xs font-bold text-coastal-navy block">فك شفرة ZATCA ضوئياً</span>
+                    <span class="text-[10px] text-slate-600">أسواق التميمي • 342.50 ر.س (VAT: 44.67)</span>
+                  </div>
+                </div>
+                <span class="text-[10px] font-bold bg-white text-emerald-700 px-2 py-1 rounded-md border border-emerald-200">
+                  مُصنف ذكياً
+                </span>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 💥 DYNAMIC BURST STAGE: 3D Geometric Financial Flow Orb & Particle Explosion (Optimind Inspired) -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-10 relative -mt-16 z-30" id="orb-stage">
+      <div class="max-w-5xl mx-auto rounded-3xl glass-card-hud p-6 sm:p-10 border border-white/95 shadow-2xl relative overflow-hidden text-center flex flex-col items-center gap-5">
+        
+        <div class="flex flex-col gap-1 items-center">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-800 font-bold text-xs border border-emerald-500/20">
+            <span class="material-symbols-outlined text-[16px] text-emerald-600">stream</span>
+            <span>التدفق المالي الفائق ثلاثي الأبعاد • 3D Financial Flow Orb</span>
+          </div>
+          <h2 class="font-display font-black text-xl sm:text-3xl text-coastal-navy">
+            انفجار الانسيابية المالية (The Super Power Dynamic Burst)
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-600 max-w-xl">
+            اضغط على الكرة الهندسية ثلاثية الأبعاد لتفجير طاقة التدفق المالي وانسياب الجزيئات الذكية عبر الواجهة
+          </p>
+        </div>
+
+        <!-- 3D Interactive Canvas Container -->
+        <div class="relative w-full max-w-2xl h-[340px] sm:h-[400px] flex items-center justify-center rounded-3xl bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-teal-950/90 shadow-2xl overflow-hidden border border-white/20">
+          <canvas id="orbCanvas" class="w-full h-full"></canvas>
+          
+          <!-- Central Interactive Trigger Overlay -->
+          <div id="orbPlayOverlay" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/20 backdrop-blur-[1px] transition-opacity duration-500">
+            <button onclick="triggerOrbExplosion()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-emerald-500 via-primary-container to-cyan-400 text-white flex items-center justify-center shadow-[0_0_35px_rgba(0,245,160,0.8)] hover:scale-110 active:scale-95 transition-all group">
+              <span class="material-symbols-outlined text-[34px] sm:text-[42px] translate-x-[-1px] group-hover:rotate-12 transition-transform">play_arrow</span>
+            </button>
+            <span class="text-xs sm:text-sm font-bold text-white drop-shadow bg-black/40 px-4 py-1.5 rounded-full border border-white/20">
+              اضغط لتفجير انسيابية السيولة 💥
+            </span>
+          </div>
+
+          <!-- Burst Stat HUD Overlay (Reveals on explosion) -->
+          <div id="burstHUD" class="absolute bottom-4 inset-x-4 flex items-center justify-between px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs opacity-0 transition-opacity duration-700 pointer-events-none">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+              <span class="font-bold">الانفجار المالي: مُفعل ونشط</span>
+            </div>
+            <button onclick="triggerOrbExplosion()" class="pointer-events-auto px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold transition-all flex items-center gap-1 text-[11px]">
+              <span class="material-symbols-outlined text-[14px]">replay</span>
+              <span>إعادة الانفجار</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2: 4 Animated Key Stat Metrics Floating Over Sea Gradient -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-12 relative z-20" id="metrics">
+      <div class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <!-- Metric 1 -->
+          <div class="glass-card-hud rounded-3xl p-6 flex flex-col gap-2 hover:-translate-y-1.5 transition-all">
+            <div class="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[24px]">view_quilt</span>
+            </div>
+            <span class="font-display text-4xl font-black text-coastal-navy mt-1">+12</span>
+            <h3 class="font-bold text-base text-coastal-navy">ركيزة حوكمة مالية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تغطي إدارة الدخل، الادخار، تقاسم المصاريف، وتتبع الدورة بدقة متناهية.</p>
+          </div>
+          <!-- Metric 2 -->
+          <div class="glass-card-hud rounded-3xl p-6 flex flex-col gap-2 hover:-translate-y-1.5 transition-all">
+            <div class="w-11 h-11 rounded-2xl bg-teal-500/15 text-teal-700 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[24px]">psychology</span>
+            </div>
+            <span class="font-display text-4xl font-black text-coastal-navy mt-1">99.4%</span>
+            <h3 class="font-bold text-base text-coastal-navy">دقة الاستخراج الذكي</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">للصوت والفواتير الضريبية وفهم اللهجات الدارجة وتقسيم البنود المتداخلة.</p>
+          </div>
+          <!-- Metric 3 -->
+          <div class="glass-card-hud rounded-3xl p-6 flex flex-col gap-2 hover:-translate-y-1.5 transition-all">
+            <div class="w-11 h-11 rounded-2xl bg-cyan-500/15 text-cyan-800 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[24px]">event_repeat</span>
+            </div>
+            <span class="font-display text-4xl font-black text-coastal-navy mt-1">1 - 31</span>
+            <h3 class="font-bold text-base text-coastal-navy">مرونة دورة الراتب</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">حرية تحديد يوم الاستحقاق شهرياً ليتوافق تماماً مع تدفقك النقدي الواقعي.</p>
+          </div>
+          <!-- Metric 4 -->
+          <div class="glass-card-hud rounded-3xl p-6 flex flex-col gap-2 hover:-translate-y-1.5 transition-all">
+            <div class="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[24px]">shield_lock</span>
+            </div>
+            <span class="font-display text-4xl font-black text-coastal-navy mt-1">100%</span>
+            <h3 class="font-bold text-base text-coastal-navy">خصوصية سيادية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">صفر قراءة لرسائل SMS وبدون ربط بنكي خارجي، بياناتك تحت إدارتك وحدك.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: Live Interactive Cockpit Simulator -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-16 relative" id="simulator">
+      <div class="max-w-6xl mx-auto flex flex-col gap-8">
+        <!-- Header -->
+        <div class="text-center max-w-2xl mx-auto flex flex-col gap-2">
+          <div class="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-100/80 px-3.5 py-1 rounded-full w-fit mx-auto border border-emerald-200">
+            <span class="material-symbols-outlined text-[16px]">tune</span>
+            <span>محرّك المحاكاة الحي</span>
+          </div>
+          <h2 class="font-display text-2xl sm:text-4xl font-extrabold text-coastal-navy">قمرة التحكم التفاعلية للميزانية</h2>
+          <p class="text-sm sm:text-base text-slate-600">اختبر بنفسك كيف تتكيف الدورة المالية، وتتحلل النصوص، وتُقسم المصاريف في ثوانٍ معدودة.</p>
+        </div>
+
+        <!-- Simulator Tabs Control -->
+        <div class="flex flex-wrap items-center justify-center gap-2 p-1.5 rounded-full bg-white/70 backdrop-blur-xl border border-white max-w-2xl mx-auto shadow-md">
+          <button class="sim-tab font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 bg-gradient-to-r from-primary to-primary-container text-white shadow-md" id="tab-btn-1" onclick="switchSimulatorTab(1)">
+            <span class="material-symbols-outlined text-[18px]">calendar_month</span>
+            <span>دورة الراتب المرنة</span>
+          </button>
+          <button class="sim-tab font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 text-slate-700 hover:text-coastal-navy hover:bg-white" id="tab-btn-2" onclick="switchSimulatorTab(2)">
+            <span class="material-symbols-outlined text-[18px]">mic</span>
+            <span>المساعد الذكي</span>
+          </button>
+          <button class="sim-tab font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 text-slate-700 hover:text-coastal-navy hover:bg-white" id="tab-btn-3" onclick="switchSimulatorTab(3)">
+            <span class="material-symbols-outlined text-[18px]">qr_code_2</span>
+            <span>قارئ ZATCA</span>
+          </button>
+          <button class="sim-tab font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 text-slate-700 hover:text-coastal-navy hover:bg-white" id="tab-btn-4" onclick="switchSimulatorTab(4)">
+            <span class="material-symbols-outlined text-[18px]">balance</span>
+            <span>التوزيع العادل</span>
+          </button>
+        </div>
+
+        <!-- Simulator Cockpit Stage -->
+        <div class="w-full glass-card-hud rounded-3xl p-6 sm:p-10 border border-white/90 shadow-2xl relative overflow-hidden">
+          
+          <!-- Tab 1: Flexible Salary Cycle -->
+          <div class="sim-panel flex flex-col gap-6" id="sim-panel-1">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div>
+                <h3 class="font-bold text-lg text-coastal-navy">حساب الأيام الآمنة لدورة الراتب</h3>
+                <p class="text-xs text-slate-600">حرّك المؤشر لاختيار يوم نزول الراتب وشاهد التكيف الفوري لمعدل الصرف اليومي والاحتياطي.</p>
+              </div>
+              <div class="flex items-center gap-3 bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-200 w-fit">
+                <span class="text-xs font-semibold text-emerald-900">اليوم المحدد:</span>
+                <span class="text-lg font-black text-emerald-700" id="salary-day-display">27 من كل شهر</span>
+              </div>
+            </div>
+
+            <!-- Slider Range Control -->
+            <div class="flex flex-col gap-2 pt-2">
+              <div class="flex justify-between text-xs font-bold text-slate-500">
+                <span>أول الشهر (1)</span>
+                <span>منتصف الشهر (15)</span>
+                <span>نهاية الشهر (31)</span>
+              </div>
+              <input class="w-full accent-primary h-3 bg-slate-200 rounded-lg cursor-pointer transition-all" id="salary-range" max="31" min="1" oninput="updateSalarySimulation(this.value)" type="range" value="27"/>
+            </div>
+
+            <!-- Live Dynamic Readouts -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div class="p-5 rounded-2xl bg-white/70 border border-white shadow-sm flex flex-col gap-1.5">
+                <span class="text-xs font-bold text-slate-500">الأيام المتبقية حتى الراتب</span>
+                <span class="text-2xl sm:text-3xl font-black text-ocean-teal font-display" id="days-left-val">12 يوماً</span>
+                <span class="text-[11px] text-emerald-700 font-semibold">تغطية ذكية حتى آخر يوم</span>
+              </div>
+              <div class="p-5 rounded-2xl bg-white/70 border border-white shadow-sm flex flex-col gap-1.5">
+                <span class="text-xs font-bold text-slate-500">معدل الصرف اليومي الآمن</span>
+                <span class="text-2xl sm:text-3xl font-black text-primary font-display" id="safe-spend-val">145.00 ر.س</span>
+                <span class="text-[11px] text-slate-600">مبني على الرصيد التشغيلي الحر</span>
+              </div>
+              <div class="p-5 rounded-2xl bg-white/70 border border-white shadow-sm flex flex-col gap-1.5">
+                <span class="text-xs font-bold text-slate-500">احتياطي الادخار والطوارئ</span>
+                <span class="text-2xl sm:text-3xl font-black text-teal-800 font-display" id="reserve-val">2,250.00 ر.س</span>
+                <span class="text-[11px] text-teal-700 font-semibold">محمي تلقائياً ومستبعد من الحسبة</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: AI Voice & Natural Language Parser -->
+          <div class="sim-panel hidden flex flex-col gap-6" id="sim-panel-2">
+            <div class="text-right">
+              <h3 class="font-bold text-lg text-coastal-navy">المحرك اللغوي الذكي (صوتي ونصي)</h3>
+              <p class="text-xs text-slate-600">اكتب أو انطق بالعامية؛ يفكك الذكاء الاصطناعي البنود والمبالغ والشركاء فورياً بدقة.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+              <div class="p-5 bg-white/70 rounded-2xl border border-white flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-600">جملة الإدخال الصوتي / النصي:</span>
+                  <span class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[16px]">mic</span>
+                  </span>
+                </div>
+                <p class="text-sm font-medium text-coastal-navy p-3.5 bg-slate-50/90 rounded-xl leading-relaxed border border-slate-200">
+                  "سددت فاتورة الكهرباء 430 ريال مع أحمد وسامي مناصفة، ودفعت أيضاً 120 بقالة البيت"
+                </p>
+                <div class="flex items-center gap-1.5 text-emerald-700 font-bold text-xs">
+                  <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+                  <span>تم التفكيك بنجاح إلى بندين ومشاركين 2</span>
+                </div>
+              </div>
+              <div class="flex flex-col gap-2.5 p-5 bg-white/70 rounded-2xl border border-white">
+                <span class="text-xs font-bold text-coastal-navy">البنود المستخرجة تلقائياً:</span>
+                <div class="p-3 bg-white rounded-xl flex items-center justify-between border border-slate-100 shadow-sm">
+                  <div>
+                    <span class="text-xs font-bold text-coastal-navy block">فاتورة كهرباء الشقة</span>
+                    <span class="text-[10px] text-slate-500">فواتير وخدمات • مقسم 3 أفراد</span>
+                  </div>
+                  <div class="text-left">
+                    <span class="text-xs font-bold text-coastal-navy block">430.00 ر.س</span>
+                    <span class="text-[10px] font-bold text-emerald-700">143.33 ر.س / فرد</span>
+                  </div>
+                </div>
+                <div class="p-3 bg-white rounded-xl flex items-center justify-between border border-slate-100 shadow-sm">
+                  <div>
+                    <span class="text-xs font-bold text-coastal-navy block">تموينات بقالة البيت</span>
+                    <span class="text-[10px] text-slate-500">مقاضي واستهلاك • مصروف عام</span>
+                  </div>
+                  <div class="text-left">
+                    <span class="text-xs font-bold text-coastal-navy block">120.00 ر.س</span>
+                    <span class="text-[10px] font-bold text-teal-700">حسابك الشخصي</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: ZATCA TLV Decoder -->
+          <div class="sim-panel hidden flex flex-col gap-6" id="sim-panel-3">
+            <div class="text-right">
+              <h3 class="font-bold text-lg text-coastal-navy">قارئ الفواتير الإلكترونية ZATCA (TLV QR)</h3>
+              <p class="text-xs text-slate-600">فك شفرات الباركود الضريبي السعودي المعتمد فورياً دون إدخال يدوي ممل.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="flex flex-col items-center justify-center p-8 bg-white/60 rounded-2xl border border-white gap-3 text-center">
+                <div class="w-32 h-32 rounded-2xl bg-white p-3 shadow-md flex items-center justify-center relative border border-slate-100">
+                  <span class="material-symbols-outlined text-[80px] text-slate-800">qr_code_2</span>
+                  <div class="absolute inset-x-3 top-3 h-1 bg-emerald-500 animate-pulse rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                </div>
+                <span class="text-xs font-bold text-emerald-700">تم مسح كود TLV الضريبي بنجاح</span>
+              </div>
+              <div class="space-y-2 text-xs font-medium">
+                <div class="flex justify-between p-2.5 rounded-xl bg-white/80 border border-white">
+                  <span class="text-slate-500">اسم المنشأة المعتمد:</span>
+                  <span class="font-bold text-coastal-navy">شركة بندة للتجزئة ش.م.م</span>
+                </div>
+                <div class="flex justify-between p-2.5 rounded-xl bg-white/80 border border-white">
+                  <span class="text-slate-500">الرقم الضريبي (VAT):</span>
+                  <span class="font-bold text-coastal-navy">30005432100003</span>
+                </div>
+                <div class="flex justify-between p-2.5 rounded-xl bg-white/80 border border-white">
+                  <span class="text-slate-500">إجمالي المبلغ الشامل:</span>
+                  <span class="font-bold text-emerald-700">850.00 ر.س</span>
+                </div>
+                <div class="flex justify-between p-2.5 rounded-xl bg-white/80 border border-white">
+                  <span class="text-slate-500">ضريبة القيمة المضافة (15%):</span>
+                  <span class="font-bold text-teal-800">110.87 ر.س</span>
+                </div>
+                <div class="flex justify-between p-2.5 rounded-xl bg-white/80 border border-white">
+                  <span class="text-slate-500">الطابع الزمني الفعلي:</span>
+                  <span class="text-slate-700">2025-05-14T19:42:10Z</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 4: Fair Ledger Splitter -->
+          <div class="sim-panel hidden flex flex-col gap-6" id="sim-panel-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="font-bold text-lg text-coastal-navy">التوزيع التكافلي العادل للمصاريف</h3>
+                <p class="text-xs text-slate-600">تقسيم شفاف يمنع النزاعات وتراكم الديون الودية بين الشركاء أو أفراد الأسرة.</p>
+              </div>
+              <div class="flex items-center gap-1 bg-slate-200/70 p-1 rounded-full border border-white">
+                <button class="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-coastal-navy shadow-sm" id="split-mode-roommates" onclick="switchSplitMode('roommates')">وضع سكن الأصدقاء</button>
+                <button class="text-xs font-semibold px-3 py-1.5 rounded-full text-slate-600" id="split-mode-family" onclick="switchSplitMode('family')">وضع الأسرة</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="split-cards-container">
+              <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">ع</span>
+                  <span class="text-xs font-bold text-coastal-navy">عبدالله (أنت)</span>
+                </div>
+                <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 2,400 ر.س</p>
+                <div class="mt-1 text-emerald-800 font-bold text-xs bg-emerald-100/80 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                  يستحق استرداد: 600 ر.س
+                </div>
+              </div>
+              <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-bold">م</span>
+                  <span class="text-xs font-bold text-coastal-navy">محمد (شريك 1)</span>
+                </div>
+                <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 600 ر.س</p>
+                <div class="mt-1 text-rose-800 font-bold text-xs bg-rose-100/80 px-2.5 py-1.5 rounded-lg border border-rose-200">
+                  عليه دفع: 300 ر.س
+                </div>
+              </div>
+              <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-cyan-700 text-white text-xs flex items-center justify-center font-bold">خ</span>
+                  <span class="text-xs font-bold text-coastal-navy">خالد (شريك 2)</span>
+                </div>
+                <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 600 ر.س</p>
+                <div class="mt-1 text-rose-800 font-bold text-xs bg-rose-100/80 px-2.5 py-1.5 rounded-lg border border-rose-200">
+                  عليه دفع: 300 ر.س
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: The 12 Pillars Bento Grid on Coastal Gradient -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-20 relative" id="pillars">
+      <div class="max-w-7xl mx-auto flex flex-col gap-10">
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div class="flex flex-col gap-2 max-w-2xl">
+            <div class="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-100 px-3.5 py-1 rounded-full w-fit">
+              <span class="material-symbols-outlined text-[16px]">verified</span>
+              <span>منظومة متكاملة لحوكمة الأموال</span>
+            </div>
+            <h2 class="font-display text-2xl sm:text-4xl font-black text-coastal-navy">الركائز الـ 12 لحوكمة مالية فائقة الدقة</h2>
+            <p class="text-sm sm:text-base text-slate-600">صُممت كل أداة لتمنحك الوضوح، الأمان، والتخلص النهائي من ضغوط الميزانية والالتزامات العائلية أو المشتركة.</p>
+          </div>
+          <div class="hidden md:flex items-center gap-2 px-4 py-2 rounded-full glass-card-hud text-xs font-bold text-emerald-800">
+            <span>12 أداة في نظام موحد</span>
+          </div>
+        </div>
+
+        <!-- 12-Card Translucent Bento Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <!-- Pillar 1 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">psychology</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">1. المساعد المالي بالذكاء الاصطناعي</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تحليل تلقائي للنصوص والرسائل العامية وفك التراكيب المالية المعقدة فورياً دون أي إدخال جداول.</p>
+          </div>
+          <!-- Pillar 2 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">date_range</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">2. دورة الراتب المرنة (1 - 31)</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تحرر من قيد التقويم الميلادي، اضبط دورتك على يوم 27، 1، أو أي تاريخ يناسب نزول دخلك الفعلي.</p>
+          </div>
+          <!-- Pillar 3 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">qr_code_scanner</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">3. قارئ فواتير ZATCA والضريبة</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">ماسح ضوئي لكود QR الضريبي يفك بيانات المورد، الضريبة 15%، والمبلغ الإجمالي في أجزاء من الثانية.</p>
+          </div>
+          <!-- Pillar 4 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">pie_chart</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">4. التوزيع التكافلي للأسرة والسكن</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">سجل تسوية ذكي يضمن توزيع المصاريف المشتركة، الإيجار، والمستلزمات بنسب مئوية عادلة دون نزاع.</p>
+          </div>
+          <!-- Pillar 5 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">monitoring</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">5. لوحة المؤشرات والتحليلات اللحظية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تتبع معدل الاستنزاف المالي اليومي والمدى الزمني المتبقي بمخططات بيانية كريستالية فائقة النقاء.</p>
+          </div>
+          <!-- Pillar 6 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">category</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">6. تبويب وتصنيف المصروفات المخصص</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">أقسام ديناميكية تتكيف مع أسلوب حياتك: احتياجات أساسية، رفاهية، سكن، تعليم، أو التزامات دورية.</p>
+          </div>
+          <!-- Pillar 7 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">savings</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">7. الاحتياطي التلقائي والادخار الذكي</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">حجز آمن لمبالغ الطوارئ والادخار قبل احتساب اليوميات، حتى لا تنفق ما خططت لحفظه للمستقبل.</p>
+          </div>
+          <!-- Pillar 8 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">lock</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">8. الخصوصية المشفرة عبر Supabase</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">حماية أمنية على مستوى السطر (RLS) تضمن عدم اطلاع أي طرف ثالث على تفاصيل تعاملاتك المادية.</p>
+          </div>
+          <!-- Pillar 9 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">receipt_long</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">9. سجل التدقيق والشفافية المالية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تتبع زمني لا يمكن التلاعب به، يوضح من أضاف كل مصروف، متى تم تعديله، وحالة الاعتماد الرسمية.</p>
+          </div>
+          <!-- Pillar 10 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">cottage</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">10. هيكلة المجموعات والمنازل</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">إنشاء فضاءات متعددة بسهولة: فضاء خاص لميزانيتك الذاتية، وآخر لمصروفات الأسرة أو سكن الاستراحة.</p>
+          </div>
+          <!-- Pillar 11 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">picture_as_pdf</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">11. التقارير الشهرية والختامية التلقائية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">تصدير ملخصات تنفيذية شاملة ومخططات واضحة بنهاية كل دورة راتب لتقييم صحتك المالية باستمرار.</p>
+          </div>
+          <!-- Pillar 12 -->
+          <div class="glass-card-hud rounded-2xl p-5 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-3 group">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span class="material-symbols-outlined text-[22px]">record_voice_over</span>
+            </div>
+            <h3 class="font-bold text-base text-coastal-navy">12. الإدخال الصوتي بالعامية والإنجليزية</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">سجّل أثناء قيادتك أو تسوقك عبر رسالة صوتية سريعة؛ يتعامل الذكاء الاصطناعي مع اللهجات بدقة فائقة.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: Absolute Privacy Section (High Trust Guarantee) -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-20 relative" id="privacy">
+      <div class="max-w-6xl mx-auto rounded-3xl bg-gradient-to-br from-coastal-navy via-[#0c2423] to-[#042f2e] text-white p-8 sm:p-14 relative overflow-hidden shadow-2xl">
+        <!-- Glowing wave overlay inside privacy card -->
+        <div class="absolute -right-20 -bottom-20 w-96 h-96 bg-primary-container/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative z-10 flex flex-col gap-8">
+          <div class="max-w-2xl text-right flex flex-col gap-2">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 w-fit border border-emerald-400/30">
+              <span class="material-symbols-outlined text-[18px] text-emerald-400">verified_user</span>
+              <span class="text-xs font-bold text-emerald-300">سيادة تامة وأمان غير مشروط</span>
+            </div>
+            <h2 class="font-display text-2xl sm:text-4xl font-black">بياناتك ملكك أنت وحدك.. خصوصية مصرفية مطلقة</h2>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              نحن نؤمن بأن حوكمة المال لا يجب أن تعني التنازل عن الخصوصية. لذلك قمنا بتصميم BUDGET Tracker على مبدأ الاستقلالية التامة دون الحاجة لكشف حساباتك البنكية.
+            </p>
+          </div>
+
+          <!-- 6 Privacy Guarantees Grid with Mint Badges -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">صفر ربط بنكي</h4>
+                <p class="text-xs text-slate-300 mt-1">لا نطلب بيانات دخولك، أرقام بطاقاتك، أو صلاحيات المصرف المفتوح مطلقاً.</p>
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">صفر قراءة لـ SMS و OTP</h4>
+                <p class="text-xs text-slate-300 mt-1">رسائلك النصية وأكواد التحقق البنكية تظل مشفرة في جهازك دون مساس إطلاقاً.</p>
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">تشفير AES-256 فائق</h4>
+                <p class="text-xs text-slate-300 mt-1">تشفير كامل لكافة المدخلات الحسابية محلياً وسحابياً عبر أرقى المعايير العالمية.</p>
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">حماية هويات العائلة والشركاء</h4>
+                <p class="text-xs text-slate-300 mt-1">تسميات مستعارة وتحكم دقيق في من يرى تفاصيل الفواتير المشتركة.</p>
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">حسابات محلية لدورة الراتب</h4>
+                <p class="text-xs text-slate-300 mt-1">معادلات الصرف الآمن والاحتياطي تتم في جهازك دون إرسال لهيئات تسويق خارجية.</p>
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md flex items-start gap-3">
+              <span class="material-symbols-outlined text-[24px] text-emerald-400 shrink-0">check_circle</span>
+              <div>
+                <h4 class="font-bold text-sm text-white">بطاقة مراجعة قبل الحفظ</h4>
+                <p class="text-xs text-slate-300 mt-1">لن يُعتمد أي استخراج صوتي أو ماسح ضوئي إلا بعد موافقتك الصريحة.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: Interactive FAQ Accordions -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-20 relative" id="faq">
+      <div class="max-w-4xl mx-auto flex flex-col gap-8">
+        <div class="text-center flex flex-col gap-2">
+          <div class="inline-flex items-center gap-1.5 text-xs font-bold text-ocean-teal bg-teal-100 px-3.5 py-1 rounded-full w-fit mx-auto">
+            <span>إجابات شفافة</span>
+          </div>
+          <h2 class="font-display text-2xl sm:text-4xl font-black text-coastal-navy">الأسئلة الشائعة حول المنصة والتقنية</h2>
+        </div>
+
+        <div class="flex flex-col gap-3" id="faq-accordion">
+          <!-- FAQ 1 -->
+          <div class="glass-card-hud rounded-2xl p-5 border border-white/90">
+            <button class="w-full flex items-center justify-between text-right gap-4 cursor-pointer" onclick="toggleFaq(1)">
+              <span class="font-bold text-sm sm:text-base text-coastal-navy">كيف تختلف منصة BUDGET Tracker عن التطبيقات المصرفية العادية؟</span>
+              <span class="material-symbols-outlined text-emerald-600 transition-transform duration-200" id="faq-icon-1">expand_more</span>
+            </button>
+            <div class="hidden mt-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 leading-relaxed" id="faq-content-1">
+              التطبيقات المصرفية تسجل ما حدث في الماضي فقط بعد خصمه. BUDGET Tracker يمنحك مؤشراً حياً واستباقياً لمعدل الصرف اليومي الآمن المتبقي حتى موعد راتبك التالي، بالإضافة لإدارة الفواتير المشتركة بين الشركاء أو أفراد الأسرة دون الحاجة لفتح حساب مشترك.
+            </div>
+          </div>
+          <!-- FAQ 2 -->
+          <div class="glass-card-hud rounded-2xl p-5 border border-white/90">
+            <button class="w-full flex items-center justify-between text-right gap-4 cursor-pointer" onclick="toggleFaq(2)">
+              <span class="font-bold text-sm sm:text-base text-coastal-navy">هل يدعم النظام دورة الرواتب في المملكة العربية السعودية (يوم 27)؟</span>
+              <span class="material-symbols-outlined text-emerald-600 transition-transform duration-200" id="faq-icon-2">expand_more</span>
+            </button>
+            <div class="hidden mt-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 leading-relaxed" id="faq-content-2">
+              نعم تماماً! يمكنك تحديد يوم بداية ونهاية الدورة المالية من اليوم 1 حتى 31 بحرية كاملة، وبالتالي ضبطها على يوم 27 المعتمد للقطاع الحكومي والخاص في السعودية بسهولة.
+            </div>
+          </div>
+          <!-- FAQ 3 -->
+          <div class="glass-card-hud rounded-2xl p-5 border border-white/90">
+            <button class="w-full flex items-center justify-between text-right gap-4 cursor-pointer" onclick="toggleFaq(3)">
+              <span class="font-bold text-sm sm:text-base text-coastal-navy">كيف يتعامل قارئ الفواتير ZATCA مع المشتريات اليومية؟</span>
+              <span class="material-symbols-outlined text-emerald-600 transition-transform duration-200" id="faq-icon-3">expand_more</span>
+            </button>
+            <div class="hidden mt-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 leading-relaxed" id="faq-content-3">
+              بمجرد توجيه كاميرا الهاتف نحو رمز الاستجابة السريع (QR) المشفر وفق بروتوكول هيئة الزكاة والضريبة والجمارك (TLV)، يقوم النظام بفك شفرة اسم المتجر، الرقم الضريبي، وضريبة الـ 15% وتصنيف الفاتورة تلقائياً.
+            </div>
+          </div>
+          <!-- FAQ 4 -->
+          <div class="glass-card-hud rounded-2xl p-5 border border-white/90">
+            <button class="w-full flex items-center justify-between text-right gap-4 cursor-pointer" onclick="toggleFaq(4)">
+              <span class="font-bold text-sm sm:text-base text-coastal-navy">هل يحتاج شركاء السكن أو أفراد الأسرة إلى إنشاء حسابات معقدة؟</span>
+              <span class="material-symbols-outlined text-emerald-600 transition-transform duration-200" id="faq-icon-4">expand_more</span>
+            </button>
+            <div class="hidden mt-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 leading-relaxed" id="faq-content-4">
+              لا، يمكن لمدير المجموعة إضافتهم بأسماء مستعارة وإرسال رابط تسوية فوري عبر واتساب، أو يمكنهم الانضمام بضغطة زر لمشاهدة دفتر المصاريف الشفاف وتأكيد التحويلات.
+            </div>
+          </div>
+          <!-- FAQ 5 -->
+          <div class="glass-card-hud rounded-2xl p-5 border border-white/90">
+            <button class="w-full flex items-center justify-between text-right gap-4 cursor-pointer" onclick="toggleFaq(5)">
+              <span class="font-bold text-sm sm:text-base text-coastal-navy">كيف تضمنون عدم تسريب أو بيع البيانات لأي جهة إعلانية؟</span>
+              <span class="material-symbols-outlined text-emerald-600 transition-transform duration-200" id="faq-icon-5">expand_more</span>
+            </button>
+            <div class="hidden mt-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 leading-relaxed" id="faq-content-5">
+              نموذج عملنا يعتمد على الاشتراكات والخدمات المتميزة فقط، ولا نشارك أي بيانات مجمعة أو فردية مع معلنين. بياناتك معزولة بتقنية Row-Level Security ولا يستطيع حتى مسؤولو النظام فك تشفير ميزانياتك الشخصية.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 7: VIP Early Access & Direct Contact Card -->
+    <section class="w-full px-4 sm:px-6 lg:px-8 py-16 pb-28 relative" id="contact">
+      <div class="max-w-4xl mx-auto rounded-3xl glass-card-hud border border-white/95 p-8 sm:p-14 relative overflow-hidden shadow-2xl">
+        <div class="flex flex-col items-center text-center gap-5 max-w-xl mx-auto">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary to-primary-container text-white flex items-center justify-center shadow-lg shadow-emerald-500/30">
+            <span class="material-symbols-outlined text-[32px]">stars</span>
+          </div>
+          <h2 class="font-display text-2xl sm:text-4xl font-black text-coastal-navy">احجز مقعدك في الوصول المبكر (VIP Early Access)</h2>
+          <p class="text-sm text-slate-600">انضم لأوائل مستخدمي BUDGET Tracker واحصل على وصول مجاني دائم للخصائص المتقدمة ودعم مباشر من فريق التطوير.</p>
+          
+          <!-- Newsletter / Early Access Form -->
+          <form class="w-full flex flex-col sm:flex-row gap-2.5 mt-2" onsubmit="handleEarlyAccess(event)">
+            <input class="flex-1 px-5 py-3.5 rounded-full bg-white/90 border border-slate-200 text-coastal-navy placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-primary shadow-inner" id="vip-email" placeholder="أدخل بريدك الإلكتروني هنا..." required="" type="email"/>
+            <button class="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all" type="submit">
+              <span>انضم الآن</span>
+              <span class="material-symbols-outlined text-[18px]">send</span>
+            </button>
+          </form>
+          <div class="hidden p-3 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-bold w-full border border-emerald-300" id="access-confirmation">
+            تم تسجيل بريدك بنجاح! سنرسل لك دعوة الوصول المبكر قريباً.
+          </div>
+
+          <!-- Direct Developer / Contact Strip -->
+          <div class="pt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500 border-t border-slate-200 w-full">
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-emerald-600">mail</span>
+              <span>للتواصل المباشر والاستفسارات المؤسسية:</span>
+              <a class="font-bold text-primary hover:underline" href="mailto:abedmowafaq@gmail.com">abedmowafaq@gmail.com</a>
+            </div>
+            <span class="hidden sm:inline">•</span>
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-ocean-teal">location_on</span>
+              <span>الرياض، المملكة العربية السعودية</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Live System Status Footer -->
+  <footer class="w-full bg-white/80 backdrop-blur-xl border-t border-slate-200 py-10 shadow-sm relative z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col gap-6">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+          <span class="text-xs font-semibold text-coastal-navy bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+            النظام يعمل بكفاءة 100% • مشفر محلياً
+          </span>
+        </div>
+        <nav class="flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-slate-600">
+          <a class="hover:text-primary transition-colors" href="#privacy">سياسة الخصوصية</a>
+          <a class="hover:text-primary transition-colors" href="#simulator">شروط الاستخدام</a>
+          <a class="hover:text-primary transition-colors" href="#privacy">بروتوكول التشفير الفائق</a>
+        </nav>
+      </div>
+      <div class="text-center border-t border-slate-100 pt-5">
+        <p class="text-xs text-slate-500 font-medium">© 2025 BUDGET Tracker | ميزانية وأكثر. جميع الحقوق محفوظة.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- 3D Particle Orb & Exploding Financial Flow Engine + Simulator Scripts -->
+  <script>
+    // =========================================================================
+    // 3D GEOMETRIC WIREFRAME ORB & PARTICLE BURST ENGINE (HTML5 Canvas)
+    // =========================================================================
+    const canvas = document.getElementById('orbCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('orbPlayOverlay');
+    const burstHUD = document.getElementById('burstHUD');
+
+    let width, height;
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      width = canvas.width = rect.width;
+      height = canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 3D Wireframe Node definition
+    let nodes = [];
+    const NODE_COUNT = 48;
+    const RADIUS = 90;
+
+    // Generate 3D spherical Fibonacci lattice
+    for (let i = 0; i < NODE_COUNT; i++) {
+      const phi = Math.acos(-1 + (2 * i) / NODE_COUNT);
+      const theta = Math.sqrt(NODE_COUNT * Math.PI) * phi;
+      nodes.push({
+        x: RADIUS * Math.cos(theta) * Math.sin(phi),
+        y: RADIUS * Math.sin(theta) * Math.sin(phi),
+        z: RADIUS * Math.cos(phi),
+        vx: 0, vy: 0, vz: 0,
+        origX: RADIUS * Math.cos(theta) * Math.sin(phi),
+        origY: RADIUS * Math.sin(theta) * Math.sin(phi),
+        origZ: RADIUS * Math.cos(phi),
+        color: i % 3 === 0 ? '#10b981' : (i % 3 === 1 ? '#06b6d4' : '#f59e0b')
+      });
+    }
+
+    let angleX = 0;
+    let angleY = 0;
+    let isExploded = false;
+    let explosionProgress = 0;
+    let particles = [];
+    let shockwaves = [];
+
+    function triggerOrbExplosion() {
+      isExploded = true;
+      explosionProgress = 1.0;
+      if (overlay) overlay.style.opacity = '0';
+      if (overlay) overlay.style.pointerEvents = 'none';
+      if (burstHUD) burstHUD.style.opacity = '1';
+
+      // Spawn 350 exploding spark particles
+      particles = [];
+      for (let i = 0; i < 350; i++) {
+        const speed = Math.random() * 8 + 3;
+        const angle = Math.random() * Math.PI * 2;
+        const elev = (Math.random() - 0.5) * Math.PI;
+        particles.push({
+          x: width / 2,
+          y: height / 2,
+          vx: Math.cos(angle) * Math.cos(elev) * speed,
+          vy: Math.sin(elev) * speed,
+          vz: Math.sin(angle) * Math.cos(elev) * speed,
+          size: Math.random() * 3 + 1.5,
+          alpha: 1,
+          decay: Math.random() * 0.015 + 0.008,
+          color: Math.random() > 0.4 ? '#00F5A0' : (Math.random() > 0.5 ? '#38bdf8' : '#fbbf24')
+        });
+      }
+
+      // Add 3 expanding shockwave rings
+      shockwaves = [
+        { r: 10, maxR: 260, alpha: 1, speed: 7, color: '#10b981' },
+        { r: 5, maxR: 220, alpha: 1, speed: 5.5, color: '#06b6d4' },
+        { r: 1, maxR: 180, alpha: 1, speed: 4, color: '#f59e0b' }
+      ];
+
+      // Headline shimmer glow
+      const headline = document.querySelector('h1 span');
+      if (headline) {
+        headline.classList.add('pulse-glow');
+        setTimeout(() => headline.classList.remove('pulse-glow'), 2000);
+      }
+    }
+
+    // Main 3D Render Loop
+    function render() {
+      ctx.clearRect(0, 0, width, height);
+
+      const cx = width / 2;
+      const cy = height / 2;
+
+      angleY += 0.012;
+      angleX += 0.006;
+
+      if (!isExploded) {
+        // Draw Pre-explosion rotating 3D wireframe orb
+        const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+        const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+
+        const projected = nodes.map(n => {
+          let x1 = n.x * cosY - n.z * sinY;
+          let z1 = n.z * cosY + n.x * sinY;
+          let y1 = n.y * cosX - z1 * sinX;
+          let z2 = z1 * cosX + n.y * sinX;
+
+          const fov = 350;
+          const scale = fov / (fov + z2);
+          return {
+            px: cx + x1 * scale,
+            py: cy + y1 * scale,
+            scale: scale,
+            color: n.color
+          };
+        });
+
+        // Draw connecting glowing wireframe vectors
+        ctx.lineWidth = 1;
+        for (let i = 0; i < projected.length; i++) {
+          for (let j = i + 1; j < projected.length; j++) {
+            const dx = projected[i].px - projected[j].px;
+            const dy = projected[i].py - projected[j].py;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 55) {
+              ctx.strokeStyle = `rgba(16, 185, 129, ${(1 - dist / 55) * 0.45})`;
+              ctx.beginPath();
+              ctx.moveTo(projected[i].px, projected[i].py);
+              ctx.lineTo(projected[j].px, projected[j].py);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Draw glowing nodes
+        projected.forEach(p => {
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, 2.5 * p.scale, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Core pulsating glow
+        const pulse = 15 + Math.sin(Date.now() * 0.004) * 5;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulse * 3);
+        grad.addColorStop(0, 'rgba(0, 245, 160, 0.55)');
+        grad.addColorStop(0.5, 'rgba(6, 182, 212, 0.25)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, pulse * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else {
+        // Draw Explosion shockwaves
+        shockwaves.forEach(sw => {
+          if (sw.alpha > 0.01) {
+            ctx.save();
+            ctx.strokeStyle = sw.color;
+            ctx.globalAlpha = sw.alpha;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, sw.r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            sw.r += sw.speed;
+            sw.alpha *= 0.95;
+          }
+        });
+
+        // Draw and update 3D particles & light streaks
+        particles.forEach(p => {
+          if (p.alpha > 0.01) {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.96;
+            p.vy *= 0.96;
+            p.alpha -= p.decay;
+          }
+        });
+
+        // Draw lingering ambient quantum field
+        const ambientCount = 35;
+        for (let i = 0; i < ambientCount; i++) {
+          const t = Date.now() * 0.001 + i;
+          const ax = cx + Math.sin(t * 0.7) * (140 + i * 2);
+          const ay = cy + Math.cos(t * 0.5) * (70 + (i % 5) * 15);
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(0, 245, 160, 0.45)' : 'rgba(56, 189, 248, 0.45)';
+          ctx.beginPath();
+          ctx.arc(ax, ay, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      requestAnimationFrame(render);
+    }
+    render();
+
+    // Click canvas to trigger explosion
+    canvas.addEventListener('click', triggerOrbExplosion);
+
+
+    // =========================================================================
+    // INTERACTIVE SIMULATOR COCKPIT LOGIC
+    // =========================================================================
+    
+    // Tab switcher
+    function switchSimulatorTab(tabNumber) {
+      for (let i = 1; i <= 4; i++) {
+        const panel = document.getElementById('sim-panel-' + i);
+        const btn = document.getElementById('tab-btn-' + i);
+        if (panel && btn) {
+          panel.classList.add('hidden');
+          btn.classList.remove('bg-gradient-to-r', 'from-primary', 'to-primary-container', 'text-white', 'shadow-md');
+          btn.classList.add('text-slate-700');
+        }
+      }
+      const activePanel = document.getElementById('sim-panel-' + tabNumber);
+      const activeBtn = document.getElementById('tab-btn-' + tabNumber);
+      if (activePanel && activeBtn) {
+        activePanel.classList.remove('hidden');
+        activeBtn.classList.remove('text-slate-700');
+        activeBtn.classList.add('bg-gradient-to-r', 'from-primary', 'to-primary-container', 'text-white', 'shadow-md');
+      }
+    }
+
+    // Dynamic slider logic for flexible salary cycle
+    function updateSalarySimulation(dayVal) {
+      const dayDisplay = document.getElementById('salary-day-display');
+      const daysLeftVal = document.getElementById('days-left-val');
+      const safeSpendVal = document.getElementById('safe-spend-val');
+      const reserveVal = document.getElementById('reserve-val');
+
+      if (dayDisplay) {
+        dayDisplay.textContent = dayVal + ' من كل شهر';
+      }
+
+      const num = parseInt(dayVal, 10);
+      const calculatedDaysLeft = ((num + 14) % 28) + 2;
+      const pool = 4500;
+      const reserve = Math.round(pool * 0.25);
+      const spendable = pool - reserve;
+      const dailySafe = (spendable / calculatedDaysLeft).toFixed(2);
+
+      if (daysLeftVal) daysLeftVal.textContent = calculatedDaysLeft + ' يوماً';
+      if (safeSpendVal) safeSpendVal.textContent = dailySafe + ' ر.س';
+      if (reserveVal) reserveVal.textContent = reserve.toLocaleString('ar-SA') + ' ر.س';
+    }
+
+    // Switch between Family and Roommates split mode
+    function switchSplitMode(mode) {
+      const roommatesBtn = document.getElementById('split-mode-roommates');
+      const familyBtn = document.getElementById('split-mode-family');
+      const container = document.getElementById('split-cards-container');
+
+      if (mode === 'family') {
+        if (familyBtn) {
+          familyBtn.classList.add('bg-white', 'text-coastal-navy', 'shadow-sm', 'font-bold');
+          familyBtn.classList.remove('text-slate-600', 'font-semibold');
+        }
+        if (roommatesBtn) {
+          roommatesBtn.classList.remove('bg-white', 'text-coastal-navy', 'shadow-sm', 'font-bold');
+          roommatesBtn.classList.add('text-slate-600', 'font-semibold');
+        }
+        if (container) {
+          container.innerHTML = `
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">أ</span>
+                <span class="text-xs font-bold text-coastal-navy">أبو فهد (المصروف العام)</span>
+              </div>
+              <p class="text-[11px] text-slate-500">إجمالي المدفوع: 4,800 ر.س</p>
+              <div class="mt-1 text-emerald-800 font-bold text-xs bg-emerald-100/80 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                مستقر • مغطى بالكامل
+              </div>
+            </div>
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-bold">أم</span>
+                <span class="text-xs font-bold text-coastal-navy">أم فهد (مستلزمات البيت)</span>
+              </div>
+              <p class="text-[11px] text-slate-500">إجمالي المدفوع: 1,600 ر.س</p>
+              <div class="mt-1 text-teal-800 font-bold text-xs bg-teal-100/80 px-2.5 py-1.5 rounded-lg border border-teal-200">
+                تكامل الميزانية: 100%
+              </div>
+            </div>
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-cyan-700 text-white text-xs flex items-center justify-center font-bold">ط</span>
+                <span class="text-xs font-bold text-coastal-navy">صندوق طوارئ الأسرة</span>
+              </div>
+              <p class="text-[11px] text-slate-500">الرصيد التراكمي: 8,500 ر.س</p>
+              <div class="mt-1 text-emerald-700 font-bold text-xs bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                متاح للطوارئ الطبية والمدرسية
+              </div>
+            </div>
+          `;
+        }
+      } else {
+        if (roommatesBtn) {
+          roommatesBtn.classList.add('bg-white', 'text-coastal-navy', 'shadow-sm', 'font-bold');
+          roommatesBtn.classList.remove('text-slate-600', 'font-semibold');
+        }
+        if (familyBtn) {
+          familyBtn.classList.remove('bg-white', 'text-coastal-navy', 'shadow-sm', 'font-bold');
+          familyBtn.classList.add('text-slate-600', 'font-semibold');
+        }
+        if (container) {
+          container.innerHTML = `
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">ع</span>
+                <span class="text-xs font-bold text-coastal-navy">عبدالله (أنت)</span>
+              </div>
+              <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 2,400 ر.س</p>
+              <div class="mt-1 text-emerald-800 font-bold text-xs bg-emerald-100/80 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                يستحق استرداد: 600 ر.س
+              </div>
+            </div>
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-bold">م</span>
+                <span class="text-xs font-bold text-coastal-navy">محمد (شريك 1)</span>
+              </div>
+              <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 600 ر.س</p>
+              <div class="mt-1 text-rose-800 font-bold text-xs bg-rose-100/80 px-2.5 py-1.5 rounded-lg border border-rose-200">
+                عليه دفع: 300 ر.س
+              </div>
+            </div>
+            <div class="p-4 rounded-2xl bg-white/80 border border-white flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-cyan-700 text-white text-xs flex items-center justify-center font-bold">خ</span>
+                <span class="text-xs font-bold text-coastal-navy">خالد (شريك 2)</span>
+              </div>
+              <p class="text-[11px] text-slate-500">إجمالي ما دفعه: 600 ر.س</p>
+              <div class="mt-1 text-rose-800 font-bold text-xs bg-rose-100/80 px-2.5 py-1.5 rounded-lg border border-rose-200">
+                عليه دفع: 300 ر.س
+              </div>
+            </div>
+          `;
+        }
+      }
+    }
+
+    // FAQ Accordion Toggle
+    function toggleFaq(id) {
+      const content = document.getElementById('faq-content-' + id);
+      const icon = document.getElementById('faq-icon-' + id);
+      if (!content) return;
+
+      if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        if (icon) icon.classList.add('rotate-180');
+      } else {
+        content.classList.add('hidden');
+        if (icon) icon.classList.remove('rotate-180');
+      }
+    }
+
+    // VIP Early Access confirmation handler
+    function handleEarlyAccess(e) {
+      e.preventDefault();
+      const conf = document.getElementById('access-confirmation');
+      const emailInput = document.getElementById('vip-email');
+      if (conf && emailInput) {
+        conf.classList.remove('hidden');
+        emailInput.value = '';
+      }
+    }
+  </script>
+</body>
+</html>
