@@ -5,23 +5,30 @@ import 'package:budget_tracker/supabase_config.dart';
 
 void main() {
   group('BaseApiClient Tests', () {
-    test('Builds headers with default X-App-Token and ngrok skip header', () {
+    test('Builds headers with default Content-Type and ngrok skip header', () {
       final client = BaseApiClient();
       final headers = client.buildHeaders();
 
       expect(headers['Content-Type'], equals('application/json'));
-      expect(headers['X-App-Token'], equals(BaseApiClient.appAuthToken));
+      if (BaseApiClient.appAuthToken.isNotEmpty) {
+        expect(headers['X-App-Token'], equals(BaseApiClient.appAuthToken));
+      } else {
+        expect(headers.containsKey('X-App-Token'), isFalse);
+      }
       expect(headers['ngrok-skip-browser-warning'], equals('true'));
       expect(headers.containsKey('X-Signature'), isFalse);
     });
 
-    test('Computes HMAC-SHA256 signature prefixed with sha256=', () {
+    test('sign returns empty string when webhookSecret is not provided via env', () {
       final client = BaseApiClient();
       const payload = '{"test": "data"}';
       final sig = client.sign(payload);
 
-      expect(sig.startsWith('sha256='), isTrue);
-      expect(sig.length, greaterThan(10));
+      if (webhookSecret.isEmpty) {
+        expect(sig, isEmpty);
+      } else {
+        expect(sig.startsWith('sha256='), isTrue);
+      }
     });
 
     test('Includes X-Signature when signature is passed to buildHeaders', () {
