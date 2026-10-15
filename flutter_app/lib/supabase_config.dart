@@ -5,9 +5,12 @@ library;
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 
-const supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+const supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+);
 
-/// Deprecated: use [supabasePublishableKey] instead.
+/// Deprecated: alias for [supabasePublishableKey].
 const supabaseAnonKey = supabasePublishableKey;
 
 const fastapiBaseUrl = String.fromEnvironment('FASTAPI_BASE_URL');
