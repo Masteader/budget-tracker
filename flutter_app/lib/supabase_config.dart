@@ -1,39 +1,19 @@
 /// Supabase + FastAPI configuration.
-/// Default values are configured for local development and direct running.
+/// All values MUST be provided via --dart-define at build time.
+/// Example: flutter build apk --dart-define=SUPABASE_URL=https://...
 library;
 
-const supabaseUrl = String.fromEnvironment(
-  'SUPABASE_URL',
-  defaultValue: 'https://qnhyiszgiymsypcwnntu.supabase.co',
-);
+const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 
-const supabasePublishableKey = String.fromEnvironment(
-  'SUPABASE_PUBLISHABLE_KEY',
-  defaultValue: 'sb_publishable_MKtHOBzNx__wuWOMTGo3eA_2T8KD0lY',
-);
+const supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
 
 /// Deprecated: use [supabasePublishableKey] instead.
 const supabaseAnonKey = supabasePublishableKey;
 
-const fastapiBaseUrl = String.fromEnvironment(
-  'FASTAPI_BASE_URL',
-  defaultValue: 'https://budget.fmsco.com.sa',
-);
+const fastapiBaseUrl = String.fromEnvironment('FASTAPI_BASE_URL');
 
-const fastapiWebhookUrl = String.fromEnvironment(
-  'FASTAPI_WEBHOOK_URL',
-  defaultValue: 'https://budget.fmsco.com.sa',
-);
+const fastapiWebhookUrl = String.fromEnvironment('FASTAPI_WEBHOOK_URL');
 
-const authRedirectUrl = String.fromEnvironment(
-  'AUTH_REDIRECT_URL',
-  defaultValue: 'https://budget.fmsco.com.sa',
-);
+const authRedirectUrl = String.fromEnvironment('AUTH_REDIRECT_URL');
 
-
-
-const webhookSecret = String.fromEnvironment(
-  'WEBHOOK_SECRET',
-  defaultValue:
-      'dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400',
-);
+const webhookSecret = String.fromEnvironment('WEBHOOK_SECRET');

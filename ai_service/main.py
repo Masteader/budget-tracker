@@ -101,11 +101,11 @@ APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
 IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
 
 if not APP_AUTH_TOKEN:
-    if IS_PRODUCTION:
-        logger.error("SECURITY ALERT: APP_AUTH_TOKEN is not configured in production! All proxied requests will be rejected.")
-    else:
-        APP_AUTH_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"  # Local/testing fallback only
-        logger.warning("Using development fallback APP_AUTH_TOKEN. Configure APP_AUTH_TOKEN in production.")
+    logger.warning(
+        "APP_AUTH_TOKEN is not configured. "
+        "Firewall middleware will reject all proxied/tunnel requests. "
+        "Set APP_AUTH_TOKEN in environment variables."
+    )
 
 
 @app.middleware("http")
@@ -142,11 +142,11 @@ async def firewall_token_middleware(request: Request, call_next):
 
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
 if not WEBHOOK_SECRET:
-    if IS_PRODUCTION:
-        logger.error("SECURITY ALERT: WEBHOOK_SECRET is not set in production — webhook requests will be rejected.")
-    else:
-        WEBHOOK_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"  # Dev fallback only
-        logger.warning("Using development fallback WEBHOOK_SECRET. Configure WEBHOOK_SECRET in production.")
+    logger.warning(
+        "WEBHOOK_SECRET is not configured. "
+        "HMAC signature verification will reject all signed requests. "
+        "Set WEBHOOK_SECRET in environment variables."
+    )
 
 
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:

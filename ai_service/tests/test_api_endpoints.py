@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from main import app, WEBHOOK_SECRET
 
 client = TestClient(app)
-SECRET = os.environ.get("WEBHOOK_SECRET", "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400")
+SECRET = os.environ.get("WEBHOOK_SECRET", "test_secret_for_ci_only_do_not_use_in_prod")
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 
 def _make_signed_headers(payload: dict) -> dict:

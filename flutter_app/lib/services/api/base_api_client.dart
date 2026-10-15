@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../../supabase_config.dart';
 
 class BaseApiClient {
-  static const String appAuthToken = 'bt_sec_99a81f3d4c72e01b88e2';
+  static const String appAuthToken = String.fromEnvironment('APP_AUTH_TOKEN');
   final http.Client _client;
 
   BaseApiClient({http.Client? client}) : _client = client ?? http.Client();
