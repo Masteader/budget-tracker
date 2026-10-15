@@ -129,7 +129,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: context.cardBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(
           top: BorderSide(color: context.borderColor),
           left: BorderSide(color: context.borderColor),

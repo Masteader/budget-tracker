@@ -6,10 +6,10 @@ import 'package:budget_tracker/widgets/categories/category_library_sheet.dart';
 void main() {
   testWidgets('CategoryLibrarySheet displays Active and Library tabs with categories', (tester) async {
     final active = [
-      CategoryItem(code: 'OPEX-DINING', name: 'Dining', isActive: true, isSystem: true),
+      const CategoryItem(code: 'OPEX-DINING', name: 'Dining', isActive: true, isSystem: true),
     ];
     final inactive = [
-      CategoryItem(code: 'OPEX-PETS', name: 'Pets', isActive: false, isSystem: true),
+      const CategoryItem(code: 'OPEX-PETS', name: 'Pets', isActive: false, isSystem: true),
     ];
 
     await tester.pumpWidget(MaterialApp(

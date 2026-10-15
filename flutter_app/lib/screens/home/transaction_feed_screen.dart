@@ -205,7 +205,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             setModalState(() {});
                             Navigator.pop(ctx);
                           },
-                          child: Text(context.tr('reset_all'), style: TextStyle(color: Color(0xFF00C896), fontSize: 13)),
+                          child: Text(context.tr('reset_all'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 13)),
                         ),
                       ],
                     ),
@@ -882,7 +882,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               foregroundColor: Colors.black,
                                             ),
                                             icon: const Icon(Icons.copy_rounded, size: 16),
-                                            label: Text(context.tr('copy_pdf_link'), style: TextStyle(fontWeight: FontWeight.bold)),
+                                            label: Text(context.tr('copy_pdf_link'), style: const TextStyle(fontWeight: FontWeight.bold)),
                                             onPressed: () async {
                                               await Clipboard.setData(ClipboardData(text: pdfUrl));
                                               if (ctx.mounted) {

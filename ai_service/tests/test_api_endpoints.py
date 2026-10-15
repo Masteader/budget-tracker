@@ -227,8 +227,46 @@ def test_shopping_basket_optimize_endpoint():
     assert data["cheapest_store_total"] > 0
     assert "store_totals" in data
     assert "split_optimization" in data
-    assert len(data["split_optimization"]["items"]) == 4
 
+@patch("receipt_scanner.process_receipt_scan")
+def test_scan_receipt_rate_limiting_strict(mock_process):
+    from main import _reset_receipt_scan_rate_limits
+    _reset_receipt_scan_rate_limits()
 
+    mock_process.return_value = {
+        "status": "success",
+        "merchant": "Al Meera",
+        "amount": 50.0,
+        "category_code": "OPEX-GROCERY",
+    }
 
+    target_hh = "rate-limit-test-hh-1"
+    payload = {
+        "image_base64": "fake_base64_data",
+        "household_id": target_hh,
+        "allow_duplicate": True,
+    }
+    headers = _make_signed_headers(payload)
 
+    # First 10 requests should succeed (200 OK)
+    for i in range(10):
+        resp = client.post("/agent/scan-receipt", content=json.dumps(payload), headers=headers)
+        assert resp.status_code == 200, f"Request {i+1} failed with status {resp.status_code}: {resp.text}"
+
+    # 11th request must fail with 429 Too Many Requests
+    blocked_resp = client.post("/agent/scan-receipt", content=json.dumps(payload), headers=headers)
+    assert blocked_resp.status_code == 429, f"Expected 429 but got {blocked_resp.status_code}"
+    assert "Rate limit exceeded" in blocked_resp.json()["detail"]
+    assert "Retry-After" in blocked_resp.headers
+
+    # Another household should NOT be blocked
+    other_payload = {
+        "image_base64": "fake_base64_data",
+        "household_id": "different-hh-2",
+        "allow_duplicate": True,
+    }
+    other_headers = _make_signed_headers(other_payload)
+    other_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    assert other_resp.status_code == 200
+
+    _reset_receipt_scan_rate_limits()

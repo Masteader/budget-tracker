@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
-import '../../l10n/app_localizations.dart';
 
 typedef AddMemberCallback = Future<void> Function({
   required String name,
@@ -317,13 +316,16 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                           ],
                         ),
                       ),
-                      Radio<String>(
-                        value: opt['id'] as String,
-                        groupValue: _selectedRole,
-                        activeColor: color,
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedRole = val);
-                        },
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected ? color : context.borderColor,
+                            width: isSelected ? 6 : 2,
+                          ),
+                        ),
                       ),
                     ],
                   ),

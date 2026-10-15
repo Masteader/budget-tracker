@@ -69,7 +69,6 @@ class AppThemes {
       ),
       cardColor: brandDarkCard,
       canvasColor: brandDarkCard,
-      dialogBackgroundColor: brandDarkCard,
       popupMenuTheme: const PopupMenuThemeData(
         color: brandDarkCard,
         textStyle: TextStyle(color: Colors.white),
@@ -112,7 +111,6 @@ class AppThemes {
       scaffoldBackgroundColor: brandLightBg,
       cardColor: brandLightCard,
       canvasColor: brandLightCard,
-      dialogBackgroundColor: brandLightCard,
       popupMenuTheme: const PopupMenuThemeData(
         color: brandLightCard,
         textStyle: TextStyle(color: brandLightText),

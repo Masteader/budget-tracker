@@ -4,14 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
-import 'dashboard_action_sheet.dart';
+import '../simulator/affordability_simulator_sheet.dart';
+import '../transactions/manual_expense_sheet.dart';
 import '../../l10n/app_localizations.dart';
 
-/// Animated multi-action Speed Dial FAB for quick transaction input.
+/// Animated multi-action Speed Dial FAB for quick transaction input and pre-purchase check.
 /// Provides direct 1-tap shortcuts to:
 /// 1. 📸 Scan Receipt / Invoice (Camera & Gallery)
-/// 2. 🎙️ Voice Entry (Conversational natural language)
-/// 3. ✏️ Manual Log (Form entry)
+/// 2. 🎙️ Voice & AI Chat (Conversational expense logging)
+/// 3. 💡 Can I Afford This? (Pre-Purchase Affordability Simulator)
+/// 4. ✏️ Manual Log (Direct expense logging)
 class AppSpeedDialFab extends StatefulWidget {
   final String? householdId;
 
@@ -92,10 +94,16 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
     );
   }
 
+  void _onAffordabilitySimulator() {
+    _close();
+    HapticFeedback.selectionClick();
+    AffordabilitySimulatorSheet.show(context, householdId: widget.householdId);
+  }
+
   void _onManualEntry() {
     _close();
     HapticFeedback.selectionClick();
-    DashboardActionSheet.show(context, householdId: widget.householdId);
+    ManualExpenseSheet.show(context, householdId: widget.householdId);
   }
 
   Widget _buildOption({
@@ -175,8 +183,8 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
             onTap: _close,
             behavior: HitTestBehavior.opaque,
             child: const SizedBox(
-              width: 250,
-              height: 250,
+              width: 280,
+              height: 320,
             ),
           ),
         _buildOption(
@@ -184,13 +192,20 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
           label: context.tr('scan_receipt'),
           color: const Color(0xFF00C896),
           onTap: _onScanReceipt,
-          offset: 160,
+          offset: 210,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
           color: const Color(0xFF79C0FF),
           onTap: _onVoiceEntry,
+          offset: 160,
+        ),
+        _buildOption(
+          icon: Icons.calculate_outlined,
+          label: context.tr('affordability_simulator'),
+          color: const Color(0xFFA371F7),
+          onTap: _onAffordabilitySimulator,
           offset: 110,
         ),
         _buildOption(

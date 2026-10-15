@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../l10n/app_localizations.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
 import '../../theme/app_themes.dart';
+import '../simulator/affordability_simulator_sheet.dart';
+import '../transactions/manual_expense_sheet.dart';
 
-/// Bottom action sheet modal providing shortcuts for adding transactions via
-/// AI Conversational Chat / Simulator or ZATCA / Multi-Page Receipt Scanner.
+/// Bottom action sheet modal providing non-duplicate shortcuts for:
+/// 1. Scan VAT Invoice / Receipt
+/// 2. AI Voice & Conversational Expense Assistant
+/// 3. Pre-Purchase Affordability Simulator ("Can I Afford This?")
+/// 4. Manual Expense Log
 class DashboardActionSheet extends StatelessWidget {
   final String? householdId;
 
@@ -41,7 +47,7 @@ class DashboardActionSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Add Transaction',
+              context.tr('fast_actions'),
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -49,6 +55,8 @@ class DashboardActionSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+
+            // 1. Scan Receipt
             Material(
               color: Colors.transparent,
               child: ListTile(
@@ -57,17 +65,50 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.12),
+                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 22),
+                  child: const Icon(Icons.document_scanner_outlined, color: Color(0xFF00C896), size: 22),
                 ),
                 title: Text(
-                  'AI Conversational Chat & Simulator',
+                  context.tr('scan_receipt'),
                   style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
                 subtitle: Text(
-                  'Say what you spent or ask "Can I afford this?"',
+                  'ZATCA QR camera, manual code input, or photos',
+                  style: TextStyle(color: context.textSecondary, fontSize: 12),
+                ),
+                trailing: Icon(Icons.chevron_right, color: context.textSecondary),
+                onTap: () {
+                  Navigator.pop(context);
+                  if (householdId != null && householdId!.isNotEmpty) {
+                    ReceiptScannerSheet.show(context, householdId!);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // 2. AI Assistant / Voice Chat
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF79C0FF).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.mic_rounded, color: Color(0xFF79C0FF), size: 22),
+                ),
+                title: Text(
+                  context.tr('voice_chat'),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
+                ),
+                subtitle: Text(
+                  'Speak or chat what you spent in plain language',
                   style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
                 trailing: Icon(Icons.chevron_right, color: context.textSecondary),
@@ -81,6 +122,8 @@ class DashboardActionSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
+
+            // 3. Pre-Purchase Simulator
             Material(
               color: Colors.transparent,
               child: ListTile(
@@ -89,29 +132,54 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F6FEB).withValues(alpha: 0.15),
+                    color: const Color(0xFFA371F7).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.document_scanner_outlined,
-                    color: Color(0xFF58A6FF),
-                    size: 22,
-                  ),
+                  child: const Icon(Icons.calculate_outlined, color: Color(0xFFA371F7), size: 22),
                 ),
                 title: Text(
-                  'Scan VAT Invoice / Receipt (ZATCA & Multi-Page)',
+                  context.tr('affordability_simulator'),
                   style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
                 subtitle: Text(
-                  'ZATCA QR camera, manual code input, or multi-page photos',
+                  context.tr('affordability_simulator_desc'),
                   style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
                 trailing: Icon(Icons.chevron_right, color: context.textSecondary),
                 onTap: () {
                   Navigator.pop(context);
-                  if (householdId != null && householdId!.isNotEmpty) {
-                    ReceiptScannerSheet.show(context, householdId!);
-                  }
+                  AffordabilitySimulatorSheet.show(context, householdId: householdId);
+                },
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // 4. Manual Log
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFA657).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.edit_note_rounded, color: Color(0xFFFFA657), size: 22),
+                ),
+                title: Text(
+                  context.tr('manual_log'),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
+                ),
+                subtitle: Text(
+                  context.tr('manual_log_desc'),
+                  style: TextStyle(color: context.textSecondary, fontSize: 12),
+                ),
+                trailing: Icon(Icons.chevron_right, color: context.textSecondary),
+                onTap: () {
+                  Navigator.pop(context);
+                  ManualExpenseSheet.show(context, householdId: householdId);
                 },
               ),
             ),

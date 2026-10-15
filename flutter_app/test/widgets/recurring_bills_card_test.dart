@@ -15,13 +15,13 @@ void main() {
       final txProvider = TransactionProvider();
       final budgetProvider = BudgetProvider();
 
-      final summary = RecurringBillsSummary(
+      const summary = RecurringBillsSummary(
         cycleKey: '2026-10',
         cycleLabel: 'October 2026',
         totalRecurringMonthly: 4350.0,
         paidThisCycle: 350.0,
         reservedAmount: 4000.0,
-        bills: const [
+        bills: [
           RecurringBillItem(
             merchant: 'Housing Rent',
             normalizedMerchant: 'housing rent',
@@ -92,7 +92,7 @@ void main() {
       final txProvider = TransactionProvider();
       final budgetProvider = BudgetProvider();
 
-      final summary = const RecurringBillsSummary(
+      const summary = RecurringBillsSummary(
         cycleKey: '2026-10',
         cycleLabel: 'October 2026',
         totalRecurringMonthly: 0.0,

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 import '../theme/app_themes.dart';
 import '../l10n/app_localizations.dart';
+import 'simulator/affordability_simulator_sheet.dart';
 
 class SalaryCycleWidget extends StatefulWidget {
   final String householdId;
@@ -264,6 +265,36 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () => AffordabilitySimulatorSheet.show(context, householdId: widget.householdId),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF58A6FF).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calculate_outlined, color: Color(0xFF58A6FF), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.tr('can_i_afford_this'),
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF58A6FF),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF58A6FF), size: 16),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

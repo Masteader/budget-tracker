@@ -14,7 +14,7 @@ class SupportApiClient {
     List<Map<String, String>>? history,
     String? language,
   }) async {
-    final url = '$fastapiBaseUrl/support/chat';
+    const url = '$fastapiBaseUrl/support/chat';
     return baseClient.post(
       url,
       {

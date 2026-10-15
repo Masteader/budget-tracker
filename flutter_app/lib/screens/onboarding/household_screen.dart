@@ -184,9 +184,11 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         try {
           await context.read<TransactionProvider>().init(householdId);
         } catch (_) {}
+        if (!mounted) return;
         try {
           await context.read<BudgetProvider>().init(householdId);
         } catch (_) {}
+        if (!mounted) return;
         final roleLabel = invite.isSpouse
             ? 'Wife / Spouse'
             : (invite.isPeer ? 'Roommate' : 'Family Member');

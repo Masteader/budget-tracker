@@ -924,9 +924,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                         GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: () => _promptRemoveSubCategory(item),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                            child: const Icon(
+                                          child: const Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                            child: Icon(
                                               Icons.delete_outline_rounded,
                                               size: 16,
                                               color: Color(0xFFF85149),

@@ -252,7 +252,7 @@ Household: ${widget.householdId ?? "N/A"}
 User: ${widget.userEmail ?? "N/A"}
 ''';
 
-    Clipboard.setData(ClipboardData(text: developerEmail));
+    Clipboard.setData(const ClipboardData(text: developerEmail));
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -480,7 +480,7 @@ User: ${widget.userEmail ?? "N/A"}
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withOpacity(0.15),
+                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.explore_rounded,

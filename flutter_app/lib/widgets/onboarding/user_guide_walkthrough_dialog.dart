@@ -120,7 +120,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
         border: Border.all(color: context.borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.6),
+            color: Colors.black.withValues(alpha: 0.6),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -193,7 +193,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                                 boxShadow: [
                                   BoxShadow(
                                     color: step.gradientColors.first
-                                        .withOpacity(0.35),
+                                        .withValues(alpha: 0.35),
                                     blurRadius: 20,
                                     offset: const Offset(0, 8),
                                   ),

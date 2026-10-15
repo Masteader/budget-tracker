@@ -156,7 +156,7 @@ class CategoryBudgetCard extends StatelessWidget {
                       Row(
                         children: [
                           const Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
-                          SizedBox(width: 6),
+                          const SizedBox(width: 6),
                           Text(
                             context.tr('itemized_sub_budgets'),
                             style: const TextStyle(
@@ -165,7 +165,7 @@ class CategoryBudgetCard extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Spacer(),
+                          const Spacer(),
                           Text(
                             'Breakdown',
                             style: TextStyle(color: context.textSecondary, fontSize: 10),

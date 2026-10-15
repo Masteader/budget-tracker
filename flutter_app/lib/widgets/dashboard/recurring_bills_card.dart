@@ -297,7 +297,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       final bill = filteredBills[index];
                       return _BillRowItem(
                         bill: bill,
-                        onMarkPaid: () => _recordBillPayment(context, bill),
+                        onMarkPaid: () => _recordBillPayment(bill),
                       );
                     },
                   ),
@@ -385,7 +385,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     );
   }
 
-  Future<void> _recordBillPayment(BuildContext context, RecurringBillItem bill) async {
+  Future<void> _recordBillPayment(RecurringBillItem bill) async {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final confirmed = await showDialog<bool>(
       context: context,
@@ -412,6 +412,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     try {
       final success = await context.read<RecurringBillsProvider>().recordBillPayment(bill);
@@ -727,7 +728,8 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                             ),
                             Switch(
                               value: c.isRecurring,
-                              activeColor: const Color(0xFF00C896),
+                              activeThumbColor: const Color(0xFF00C896),
+                              activeTrackColor: const Color(0xFF00C896).withValues(alpha: 0.4),
                               onChanged: (val) async {
                                 setState(() {
                                   c.isRecurring = val;

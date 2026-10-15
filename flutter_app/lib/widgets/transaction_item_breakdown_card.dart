@@ -259,7 +259,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     ),
                     child: Text(
                       context.tr('reallocated'),
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.orange,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
@@ -289,7 +289,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             context.tr('view_receipt'),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Color(0xFF58A6FF),
                               fontSize: 10,
                               fontWeight: FontWeight.w600,

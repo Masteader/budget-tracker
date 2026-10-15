@@ -17,7 +17,7 @@ void main() {
 
     test('Computes HMAC-SHA256 signature prefixed with sha256=', () {
       final client = BaseApiClient();
-      final payload = '{"test": "data"}';
+      const payload = '{"test": "data"}';
       final sig = client.sign(payload);
 
       expect(sig.startsWith('sha256='), isTrue);

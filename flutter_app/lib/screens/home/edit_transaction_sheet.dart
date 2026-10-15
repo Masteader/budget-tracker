@@ -63,7 +63,6 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   List<Map<String, dynamic>> _subCategories = [];
   List<String> _dependents = [];
   bool _isSaving = false;
-  bool _loadingSubs = false;
 
   final List<Map<String, String>> _categories = const [
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
@@ -115,18 +114,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   }
 
   Future<void> _loadSubCategories(String catCode) async {
-    setState(() => _loadingSubs = true);
     try {
       final subs = await ApiService.instance.getSubCategories(catCode);
       if (mounted) {
         setState(() {
           _subCategories = subs;
-          _loadingSubs = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingSubs = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadDependents() async {
@@ -799,7 +794,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   ),
                   TextButton(
                     onPressed: _convertToInstallmentPlan,
-                    child: Text(context.tr('convert'), style: TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold)),
+                    child: Text(context.tr('convert'), style: const TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -838,7 +833,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             // Sub-Category Dropdown
             DropdownButtonFormField<String?>(
-              value: _subCategories.any((s) => s['sub_code'] == _selectedSubCategory)
+              initialValue: _subCategories.any((s) => s['sub_code'] == _selectedSubCategory)
                   ? _selectedSubCategory
                   : null,
               dropdownColor: context.cardBg,
@@ -1065,7 +1060,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.add, size: 16, color: Color(0xFF00C896)),
-                  label: Text(context.tr('add_item'), style: TextStyle(color: Color(0xFF00C896), fontSize: 12)),
+                  label: Text(context.tr('add_item'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 12)),
                   onPressed: _addItem,
                 ),
               ],
@@ -1150,7 +1145,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                     )
-                  : Text(context.tr('save_changes'), style: TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(context.tr('save_changes'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 20),
           ],
