@@ -125,9 +125,18 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
         color: context.cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isAllSettled ? context.borderColor : const Color(0xFF38BDF8).withValues(alpha: 0.35),
+          color: isAllSettled
+              ? context.borderColor
+              : const Color(0xFF4DE6F7).withValues(alpha: 0.35),
           width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,12 +151,15 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                        color: const Color(0xFF4DE6F7).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF4DE6F7).withValues(alpha: 0.25),
+                        ),
                       ),
                       child: const Icon(
                         Icons.group_outlined,
-                        color: Color(0xFF38BDF8),
+                        color: Color(0xFF4DE6F7),
                         size: 20,
                       ),
                     ),
@@ -184,7 +196,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                   Text(
                     'Simplify Debts',
                     style: TextStyle(
-                      color: _simplifyDebts ? const Color(0xFF38BDF8) : context.textSecondary,
+                      color: _simplifyDebts ? const Color(0xFF4DE6F7) : context.textSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -193,7 +205,8 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                     scale: 0.75,
                     child: Switch(
                       value: _simplifyDebts,
-                      activeThumbColor: const Color(0xFF38BDF8),
+                      activeThumbColor: const Color(0xFF00E5BF),
+                      activeTrackColor: const Color(0xFF00E5BF).withValues(alpha: 0.3),
                       onChanged: (val) {
                         setState(() => _simplifyDebts = val);
                       },
@@ -224,17 +237,17 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 final isPositive = balance > 0.01;
                 final isNegative = balance < -0.01;
                 final color = isPositive
-                    ? const Color(0xFF00C896)
+                    ? const Color(0xFF00E5BF)
                     : (isNegative ? const Color(0xFFFF6B6B) : context.textSecondary);
 
                 final prefix = isPositive ? '+SAR ' : (isNegative ? '-SAR ' : 'SAR ');
                 final displayAmt = '$prefix${balance.abs().toStringAsFixed(2)}';
 
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: context.isDarkMode ? 0.12 : 0.08),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: color.withValues(alpha: 0.3)),
                   ),
                   child: Row(
@@ -269,13 +282,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF00C896).withValues(alpha: 0.08),
+                color: const Color(0xFF00E5BF).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.2)),
+                border: Border.all(color: const Color(0xFF00E5BF).withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00C896), size: 20),
+                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00E5BF), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -284,7 +297,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                         const Text(
                           'All Settled',
                           style: TextStyle(
-                            color: Color(0xFF00C896),
+                            color: Color(0xFF00E5BF),
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -311,8 +324,10 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: context.chipBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.borderColor),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF4DE6F7).withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -332,7 +347,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                             Text(
                               'SAR ${debt.amount.toStringAsFixed(2)}',
                               style: GoogleFonts.outfit(
-                                color: const Color(0xFF38BDF8),
+                                color: const Color(0xFF4DE6F7),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -340,10 +355,27 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                           ],
                         ),
                       ),
+                      // 1-Click WhatsApp Settle Share Action
+                      IconButton(
+                        tooltip: 'Share via WhatsApp',
+                        icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF00E5BF)),
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          final text = 'مرحباً ${debt.fromName}، لتسوية مصاريف السكن المشترك: المبلغ المستحق SAR ${debt.amount.toStringAsFixed(2)} لصالح ${debt.toName}.';
+                          Clipboard.setData(ClipboardData(text: text));
+                          AppSnackBar.showSuccess(
+                            context,
+                            'WhatsApp settlement text copied to clipboard!',
+                            title: '1-Click Settle',
+                            icon: Icons.check_circle_outline_rounded,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 4),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF38BDF8),
-                          foregroundColor: Colors.black,
+                          backgroundColor: const Color(0xFF00E5BF),
+                          foregroundColor: const Color(0xFF051424),
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -4,11 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 class AppThemes {
   AppThemes._();
 
-  static const Color brandEmerald = Color(0xFF00C896);
-  static const Color brandDarkBg = Color(0xFF0D1117);
-  static const Color brandDarkCard = Color(0xFF161B22);
-  static const Color brandDarkInput = Color(0xFF21262D);
-  static const Color brandDarkBorder = Color(0xFF30363D);
+  // ─── Iced Ocean Sovereign Palette Tokens ─────────────────────────────────────
+  static const Color brandEmerald = Color(0xFF00E5BF); // Electric Teal
+  static const Color brandDarkBg = Color(0xFF051424);  // Arctic Void Canvas
+  static const Color brandDarkCard = Color(0xFF0B192C);// Glacial Elevate Card
+  static const Color brandDarkInput = Color(0xFF0F223B);// Sub-surface Input / Field
+  static const Color brandDarkBorder = Color(0xFF1B3150);// Deep Glacial Rim Border
+
+  // ─── Sovereign Highlights ───────────────────────────────────────────────────
+  static const Color iceCyan = Color(0xFF4DE6F7);       // Ice Cyan Accent
+  static const Color electricTeal = Color(0xFF00E5BF);  // Sovereign Electric Teal
+  static const Color mintNeon = Color(0xFF73FBC4);      // Mint Neon Status
+  static const Color champagneGold = Color(0xFFD4AF37); // Sovereign Gold Accent
+  static const Color deepGlacial = Color(0xFF071C33);   // Nav & Elevated HUD
 
   static const Color brandLightBg = Color(0xFFF8FAFC);
   static const Color brandLightCard = Colors.white;
@@ -20,8 +28,14 @@ class AppThemes {
   // ─── Dark Theme ─────────────────────────────────────────────────────────────
   static ThemeData get darkTheme {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: brandEmerald,
+      seedColor: electricTeal,
       brightness: Brightness.dark,
+    ).copyWith(
+      primary: electricTeal,
+      secondary: iceCyan,
+      surface: brandDarkCard,
+      surfaceContainerHighest: brandDarkInput,
+      outline: brandDarkBorder,
     );
 
     return ThemeData(
@@ -79,15 +93,15 @@ class AppThemes {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: brandDarkCard,
-        indicatorColor: brandEmerald.withValues(alpha: 0.2),
+        backgroundColor: deepGlacial,
+        indicatorColor: iceCyan.withValues(alpha: 0.18),
         labelTextStyle: WidgetStateProperty.resolveWith((states) => GoogleFonts.outfit(
           fontSize: 12,
           fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
-          color: states.contains(WidgetState.selected) ? brandEmerald : const Color(0xFF8B949E),
+          color: states.contains(WidgetState.selected) ? iceCyan : const Color(0xFF8B949E),
         )),
         iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
-          color: states.contains(WidgetState.selected) ? brandEmerald : const Color(0xFF8B949E),
+          color: states.contains(WidgetState.selected) ? iceCyan : const Color(0xFF8B949E),
         )),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -193,7 +207,7 @@ extension ThemeContextExtension on BuildContext {
   Color get scaffoldBg => Theme.of(this).scaffoldBackgroundColor;
   Color get cardBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
   Color get cardSurfaceBg => isDarkMode ? AppThemes.brandDarkCard : AppThemes.brandLightCard;
-  Color get subtleCardBg => isDarkMode ? const Color(0xFF0D1117) : const Color(0xFFF8FAFC);
+  Color get subtleCardBg => isDarkMode ? AppThemes.deepGlacial : const Color(0xFFF8FAFC);
   Color get inputBg => isDarkMode ? AppThemes.brandDarkInput : AppThemes.brandLightInput;
   Color get borderColor => isDarkMode ? AppThemes.brandDarkBorder : AppThemes.brandLightBorder;
   Color get textPrimary => isDarkMode ? Colors.white : AppThemes.brandLightText;
@@ -202,5 +216,27 @@ extension ThemeContextExtension on BuildContext {
   Color get chipBg => isDarkMode ? AppThemes.brandDarkInput : const Color(0xFFF1F5F9);
   Color get chipBorder => isDarkMode ? AppThemes.brandDarkBorder : const Color(0xFFCBD5E1);
   Color get dangerColor => isDarkMode ? const Color(0xFFFF5252) : const Color(0xFFDC2626);
-  Color get primaryAccent => AppThemes.brandEmerald;
+  Color get primaryAccent => AppThemes.electricTeal;
+  Color get electricTeal => AppThemes.electricTeal;
+  Color get iceCyan => AppThemes.iceCyan;
+  Color get mintNeon => AppThemes.mintNeon;
+  Color get champagneGold => AppThemes.champagneGold;
+
+  LinearGradient get icedHeroGradient => isDarkMode
+      ? const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0E233D), Color(0xFF051424)],
+        )
+      : const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF00E5BF), Color(0xFF0284C7)],
+        );
+
+  LinearGradient get icedAccentGradient => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppThemes.electricTeal, AppThemes.iceCyan],
+      );
 }

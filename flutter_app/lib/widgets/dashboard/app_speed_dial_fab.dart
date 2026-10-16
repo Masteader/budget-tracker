@@ -190,21 +190,21 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         _buildOption(
           icon: Icons.camera_alt_rounded,
           label: context.tr('scan_receipt'),
-          color: const Color(0xFF00C896),
+          color: const Color(0xFF4DE6F7),
           onTap: _onScanReceipt,
           offset: 210,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
-          color: const Color(0xFF79C0FF),
+          color: const Color(0xFF00E5BF),
           onTap: _onVoiceEntry,
           offset: 160,
         ),
         _buildOption(
           icon: Icons.calculate_outlined,
           label: context.tr('affordability_simulator'),
-          color: const Color(0xFFA371F7),
+          color: const Color(0xFFD4AF37),
           onTap: _onAffordabilitySimulator,
           offset: 110,
         ),
@@ -217,8 +217,8 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         ),
         FloatingActionButton.extended(
           heroTag: 'main_speed_dial_fab',
-          backgroundColor: const Color(0xFF00C896),
-          foregroundColor: Colors.black,
+          backgroundColor: const Color(0xFF00E5BF),
+          foregroundColor: const Color(0xFF051424),
           elevation: 6,
           onPressed: _toggle,
           icon: AnimatedRotation(

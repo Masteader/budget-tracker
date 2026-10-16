@@ -24,13 +24,13 @@ class ZatcaStatusBadge extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF00C896).withValues(alpha: 0.12),
+        color: const Color(0xFF00E5BF).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.35)),
+        border: Border.all(color: const Color(0xFF00E5BF).withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
+          const Icon(Icons.verified_rounded, color: Color(0xFF00E5BF), size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -44,7 +44,7 @@ class ZatcaStatusBadge extends StatelessWidget {
                 Text(
                   customSubtitle ??
                       'Total: SAR ${total.toStringAsFixed(2)}  •  VAT: SAR ${vat.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
+                  style: const TextStyle(color: Color(0xFF00E5BF), fontSize: 11),
                 ),
               ],
             ),

@@ -15,19 +15,29 @@ class ZatcaQrCameraScanner extends StatefulWidget {
 }
 
 class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController();
+  late final AnimationController _laserController;
+  late final Animation<double> _laserAnimation;
   bool _isDetected = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _laserController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _laserAnimation = Tween<double>(begin: 0.08, end: 0.92).animate(
+      CurvedAnimation(parent: _laserController, curve: Curves.easeInOut),
+    );
     _checkPermissionAndRestart();
   }
 
   @override
   void dispose() {
+    _laserController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
@@ -91,7 +101,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00E5BF)),
             const SizedBox(width: 8),
             Text(
               'Enter Invoice QR Data',
@@ -130,8 +140,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
-              foregroundColor: Colors.black,
+              backgroundColor: const Color(0xFF00E5BF),
+              foregroundColor: const Color(0xFF051424),
             ),
             onPressed: () {
               final raw = textCtrl.text.trim();
@@ -206,8 +216,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
-                  foregroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF00E5BF),
+                  foregroundColor: const Color(0xFF051424),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -289,19 +299,87 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             onDetect: _onDetect,
             errorBuilder: (context, error) => _buildErrorView(error),
           ),
-          // Viewfinder square targeting the QR code
+          // Viewfinder square with Holographic Laser sweep
           Center(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF00C896), width: 3),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.2),
-                    blurRadius: 20,
-                    spreadRadius: 2,
+            child: SizedBox(
+              width: 270,
+              height: 270,
+              child: Stack(
+                children: [
+                  Container(
+                    width: 270,
+                    height: 270,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                        width: 2.5,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00E5BF).withValues(alpha: 0.25),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Top HUD Badge
+                  Positioned(
+                    top: 10,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF071C33).withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          'ZATCA PHASE 2 TARGET',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF4DE6F7),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Animated Holographic Laser Line
+                  AnimatedBuilder(
+                    animation: _laserAnimation,
+                    builder: (context, child) {
+                      return Positioned(
+                        top: 270 * _laserAnimation.value,
+                        left: 12,
+                        right: 12,
+                        child: Container(
+                          height: 2.5,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Color(0xFF00E5BF),
+                                Color(0xFF4DE6F7),
+                                Color(0xFF00E5BF),
+                                Colors.transparent,
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                                blurRadius: 10,
+                                spreadRadius: 1.5,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -314,18 +392,25 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: (context.isDark ? Colors.black : Colors.white).withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.borderColor),
+                color: const Color(0xFF071C33).withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_scanner, color: Color(0xFF00C896), size: 22),
+                  const Icon(Icons.qr_code_scanner, color: Color(0xFF00E5BF), size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Hold camera over the QR code on your printed receipt',
-                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13),
+                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],

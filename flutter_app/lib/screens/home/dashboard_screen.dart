@@ -34,6 +34,8 @@ import '../settings/help_support_screen.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
+import '../chat/chat_entry_screen.dart';
+import '../scanner/receipt_scanner_sheet.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
 
@@ -110,22 +112,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.dashboard_outlined),
-            selectedIcon: const Icon(Icons.dashboard, color: Color(0xFF00C896)),
+            selectedIcon: const Icon(Icons.dashboard, color: Color(0xFF00E5BF)),
             label: context.tr('nav_dashboard'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long, color: Color(0xFF00C896)),
+            selectedIcon: const Icon(Icons.receipt_long, color: Color(0xFF00E5BF)),
             label: context.tr('nav_transactions'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.tune_outlined),
-            selectedIcon: const Icon(Icons.tune, color: Color(0xFF00C896)),
+            selectedIcon: const Icon(Icons.tune, color: Color(0xFF00E5BF)),
             label: context.tr('nav_budgets'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings, color: Color(0xFF00C896)),
+            selectedIcon: const Icon(Icons.settings, color: Color(0xFF00E5BF)),
             label: context.tr('nav_settings'),
           ),
         ],
@@ -258,7 +260,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   .order('category_code'),
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
-                  color: const Color(0xFF00C896),
+                  color: const Color(0xFF00E5BF),
                   backgroundColor: context.cardBg,
                   onRefresh: () async {
                     try {
@@ -334,7 +336,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                           child: Text(
                                             context.tr('sync_now'),
                                             style: const TextStyle(
-                                              color: Color(0xFF00C896),
+                                              color: Color(0xFF00E5BF),
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
                                             ),
@@ -352,6 +354,77 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     .toList(),
                                 cycle: _selectedCycle,
                               ),
+                              const SizedBox(height: 12),
+
+                              // ─── Sovereign Quick Action Dock ────────────────
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: context.isDark ? const Color(0xFF071C33) : context.cardBg,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: context.isDark
+                                        ? const Color(0xFF4DE6F7).withValues(alpha: 0.2)
+                                        : context.borderColor,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.2),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _QuickActionButton(
+                                      icon: Icons.qr_code_scanner_rounded,
+                                      label: context.tr('scan_receipt'),
+                                      color: const Color(0xFF4DE6F7),
+                                      onTap: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (_) => ReceiptScannerSheet(householdId: hid),
+                                        );
+                                      },
+                                    ),
+                                    _QuickActionButton(
+                                      icon: Icons.mic_rounded,
+                                      label: context.tr('voice_chat'),
+                                      color: const Color(0xFF00E5BF),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
+                                        );
+                                      },
+                                    ),
+                                    _QuickActionButton(
+                                      icon: Icons.calculate_outlined,
+                                      label: 'Simulator',
+                                      color: const Color(0xFFD4AF37),
+                                      onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
+                                    ),
+                                    _QuickActionButton(
+                                      icon: Icons.trending_up_rounded,
+                                      label: 'Prices',
+                                      color: const Color(0xFF73FBC4),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => GroceryPriceIntelligenceScreen(householdId: hid),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+
                               const SizedBox(height: 12),
                               SalaryCycleWidget(householdId: hid),
                               const SizedBox(height: 12),
@@ -395,7 +468,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         ),
                                         child: Row(
                                           children: [
-                                            const Icon(Icons.trending_up_rounded, color: Color(0xFF00C896), size: 18),
+                                            const Icon(Icons.trending_up_rounded, color: Color(0xFF00E5BF), size: 18),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -507,17 +580,32 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       pinned: true,
       backgroundColor: context.scaffoldBg,
       elevation: 0,
-      title: Text(
-        context.tr('app_title'),
-        style: GoogleFonts.outfit(
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: context.textPrimary,
-        ),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+            ),
+            child: const Icon(Icons.waves_rounded, color: Color(0xFF00E5BF), size: 16),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            context.tr('app_title'),
+            style: GoogleFonts.outfit(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimary,
+            ),
+          ),
+        ],
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00C896)),
+          icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00E5BF)),
           tooltip: context.tr('help_support'),
           onPressed: () {
             Navigator.push(
@@ -534,6 +622,55 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           onPressed: () => supabase.auth.signOut(),
         ),
       ],
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.28)),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: context.textPrimary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
