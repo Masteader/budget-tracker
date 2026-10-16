@@ -287,6 +287,7 @@ class AppLocalizations {
       'app_title': 'Budget Tracker',
       'nav_dashboard': 'Dashboard',
       'nav_transactions': 'Transactions',
+      'nav_ai': 'AI Assistant',
       'nav_budgets': 'Budgets',
       'nav_settings': 'Settings',
 
@@ -670,6 +671,7 @@ class AppLocalizations {
       'app_title': 'ميزانية الأسرة',
       'nav_dashboard': 'الرئيسية',
       'nav_transactions': 'المعاملات',
+      'nav_ai': 'المساعد الذكي',
       'nav_budgets': 'الميزانيات',
       'nav_settings': 'الإعدادات',
 
@@ -1053,6 +1055,7 @@ class AppLocalizations {
       'app_title': 'بجٹ ٹریکر',
       'nav_dashboard': 'ڈیش بورڈ',
       'nav_transactions': 'لین دین',
+      'nav_ai': 'اے آئی اسسٹنٹ',
       'nav_budgets': 'بجٹ',
       'nav_settings': 'ترتیبات',
 

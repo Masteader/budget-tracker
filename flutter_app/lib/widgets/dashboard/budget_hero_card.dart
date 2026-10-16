@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../theme/app_themes.dart';
 
 class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;
@@ -15,11 +16,13 @@ class BudgetHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     final totalAllocated = budgets.fold(0.0, (s, b) => s + b.allocatedAmount);
     final totalSpent = budgets.fold(0.0, (s, b) => s + b.spentAmount);
     final remaining = (totalAllocated - totalSpent);
 
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     DateTime fallbackCycleStart;
     if (now.day >= 27) {
       fallbackCycleStart = DateTime(now.year, now.month, 27);
@@ -31,6 +34,24 @@ class BudgetHeroCard extends StatelessWidget {
     final daysTotal = cycle?.daysTotal ?? 30;
     final daysElapsed = (cycle?.daysElapsed ?? fallbackDaysElapsed).clamp(1, daysTotal);
     final daysRemaining = (daysTotal - daysElapsed).clamp(0, daysTotal);
+
+    // Compute dynamic days until payday accurately
+    int paydayDay = 27;
+    if (cycle != null && cycle!.cycleStart.isNotEmpty) {
+      try {
+        paydayDay = DateTime.parse(cycle!.cycleStart).day;
+      } catch (_) {}
+    }
+    DateTime nextPayday = DateTime(today.year, today.month, paydayDay);
+    int daysUntilPayday;
+    if (today.isAtSameMomentAs(nextPayday)) {
+      daysUntilPayday = 0;
+    } else {
+      if (today.isAfter(nextPayday)) {
+        nextPayday = DateTime(today.year, today.month + 1, paydayDay);
+      }
+      daysUntilPayday = nextPayday.difference(today).inDays;
+    }
 
     // Separate fixed lump-sum monthly commitments (rent, utilities) from variable daily expenses
     const fixedCodes = {'HOUSING-RENT', 'HOUSING', 'OPEX-UTILITIES', 'UTILITIES-BILLS'};
@@ -57,31 +78,40 @@ class BudgetHeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF071C33),
+        color: isDark ? const Color(0xFF071C33) : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFF4DE6F7).withValues(alpha: 0.28),
+          color: isDark
+              ? const Color(0xFF4DE6F7).withValues(alpha: 0.28)
+              : const Color(0xFF00E5BF).withValues(alpha: 0.35),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00E5BF).withValues(alpha: 0.08),
+            color: const Color(0xFF00E5BF).withValues(alpha: isDark ? 0.08 : 0.12),
             blurRadius: 28,
             offset: const Offset(0, 10),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.35)
+                : const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0D2542),
-            Color(0xFF051424),
-          ],
+          colors: isDark
+              ? const [
+                  Color(0xFF0D2542),
+                  Color(0xFF051424),
+                ]
+              : const [
+                  Colors.white,
+                  Color(0xFFF0FDF9),
+                ],
         ),
       ),
       child: Column(
@@ -112,7 +142,7 @@ class BudgetHeroCard extends StatelessWidget {
                   Text(
                     'SOVEREIGN HUD',
                     style: GoogleFonts.outfit(
-                      color: const Color(0xFF4DE6F7),
+                      color: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF008F7A),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.2,
@@ -123,18 +153,20 @@ class BudgetHeroCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F2642),
+                  color: isDark ? const Color(0xFF0F2642) : const Color(0xFFE6FAF6),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFF4DE6F7).withValues(alpha: 0.2),
+                    color: isDark
+                        ? const Color(0xFF4DE6F7).withValues(alpha: 0.2)
+                        : const Color(0xFF00E5BF).withValues(alpha: 0.4),
                   ),
                 ),
                 child: Text(
-                  '$daysRemaining DAYS TO PAYDAY',
+                  '$daysUntilPayday DAYS TO PAYDAY',
                   style: GoogleFonts.outfit(
-                    color: Colors.white70,
+                    color: isDark ? Colors.white70 : const Color(0xFF065F54),
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -146,9 +178,9 @@ class BudgetHeroCard extends StatelessWidget {
           Text(
             'CYCLE REMAINING BUDGET',
             style: GoogleFonts.outfit(
-              color: Colors.white.withValues(alpha: 0.65),
+              color: isDark ? Colors.white.withValues(alpha: 0.65) : const Color(0xFF64748B),
               fontSize: 11.5,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
             ),
           ),
@@ -160,7 +192,7 @@ class BudgetHeroCard extends StatelessWidget {
               Text(
                 'SAR ',
                 style: GoogleFonts.outfit(
-                  color: const Color(0xFF00E5BF),
+                  color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A887),
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                 ),
@@ -168,7 +200,7 @@ class BudgetHeroCard extends StatelessWidget {
               Text(
                 fmt.format(remaining),
                 style: GoogleFonts.outfit(
-                  color: Colors.white,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.5,
@@ -185,13 +217,13 @@ class BudgetHeroCard extends StatelessWidget {
               height: 6,
               child: LinearProgressIndicator(
                 value: spentRatio,
-                backgroundColor: const Color(0xFF0F2642),
+                backgroundColor: isDark ? const Color(0xFF0F2642) : const Color(0xFFE2E8F0),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   spentRatio > 0.9
                       ? const Color(0xFFFF5252)
                       : (spentRatio > 0.75
                           ? const Color(0xFFFFA657)
-                          : const Color(0xFF00E5BF)),
+                          : (isDark ? const Color(0xFF00E5BF) : const Color(0xFF00C896))),
                 ),
               ),
             ),
@@ -207,7 +239,9 @@ class BudgetHeroCard extends StatelessWidget {
                   Icon(
                     isBurnCaution ? Icons.trending_up_rounded : Icons.check_circle_outline_rounded,
                     size: 14,
-                    color: isBurnCaution ? const Color(0xFFFFA657) : const Color(0xFF73FBC4),
+                    color: isBurnCaution
+                        ? (isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706))
+                        : (isDark ? const Color(0xFF73FBC4) : const Color(0xFF059669)),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -215,7 +249,9 @@ class BudgetHeroCard extends StatelessWidget {
                         ? 'Burn SAR ${compactFmt.format(dailyBurn)}/d (Pacing High)'
                         : 'Burn SAR ${compactFmt.format(dailyBurn)}/d (On Track)',
                     style: GoogleFonts.outfit(
-                      color: isBurnCaution ? const Color(0xFFFFA657) : const Color(0xFF73FBC4),
+                      color: isBurnCaution
+                          ? (isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706))
+                          : (isDark ? const Color(0xFF73FBC4) : const Color(0xFF059669)),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -225,7 +261,7 @@ class BudgetHeroCard extends StatelessWidget {
               Text(
                 '${(spentRatio * 100).toInt()}% Spent',
                 style: GoogleFonts.outfit(
-                  color: Colors.white60,
+                  color: isDark ? Colors.white60 : const Color(0xFF64748B),
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
@@ -242,7 +278,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: 'Allocated',
                   value: 'SAR ${compactFmt.format(totalAllocated)}',
                   icon: Icons.account_balance_wallet_outlined,
-                  accentColor: const Color(0xFF4DE6F7),
+                  accentColor: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF0284C7),
                 ),
               ),
               const SizedBox(width: 8),
@@ -251,7 +287,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: 'Spent',
                   value: 'SAR ${compactFmt.format(totalSpent)}',
                   icon: Icons.payments_outlined,
-                  accentColor: const Color(0xFF00E5BF),
+                  accentColor: isDark ? const Color(0xFF00E5BF) : const Color(0xFF059669),
                 ),
               ),
               const SizedBox(width: 8),
@@ -260,7 +296,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: 'Allowance',
                   value: 'SAR ${compactFmt.format(dailyAllowance)}/d',
                   icon: Icons.speed_rounded,
-                  accentColor: const Color(0xFFD4AF37),
+                  accentColor: isDark ? const Color(0xFFD4AF37) : const Color(0xFFB45309),
                 ),
               ),
             ],
@@ -272,21 +308,29 @@ class BudgetHeroCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF5252).withValues(alpha: 0.14),
+                color: isDark
+                    ? const Color(0xFFFF5252).withValues(alpha: 0.14)
+                    : const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFFFF5252).withValues(alpha: 0.35),
+                  color: isDark
+                      ? const Color(0xFFFF5252).withValues(alpha: 0.35)
+                      : const Color(0xFFFCA5A5),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFA657), size: 16),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: isDark ? const Color(0xFFFFA657) : const Color(0xFFDC2626),
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Projected: SAR ${fmt.format(projectedSpend)} (Over budget)',
                       style: GoogleFonts.outfit(
-                        color: const Color(0xFFFFA657),
+                        color: isDark ? const Color(0xFFFFA657) : const Color(0xFFDC2626),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -317,15 +361,25 @@ class _StatCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1E34),
+        color: isDark ? const Color(0xFF0B1E34) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: accentColor.withValues(alpha: 0.22),
+          color: accentColor.withValues(alpha: isDark ? 0.22 : 0.35),
           width: 1,
         ),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,7 +393,7 @@ class _StatCapsule extends StatelessWidget {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    color: Colors.white60,
+                    color: isDark ? Colors.white60 : const Color(0xFF64748B),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w500,
                   ),
@@ -353,7 +407,7 @@ class _StatCapsule extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.outfit(
-              color: Colors.white,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
             ),

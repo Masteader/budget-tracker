@@ -94,41 +94,184 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final screens = [
       const _BudgetDashboard(),
       const TransactionFeedScreen(),
+      const ChatEntryScreen(),
       const BudgetManagementScreen(),
       const IngestionSettingsScreen(),
     ];
 
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(
         index: _selectedIndex,
         children: screens,
       ),
-      floatingActionButton: (_selectedIndex == 2 || _selectedIndex == 3)
-          ? null
-          : AppSpeedDialFab(householdId: _householdId),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.dashboard_outlined),
-            selectedIcon: const Icon(Icons.dashboard, color: Color(0xFF00E5BF)),
+      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
+          ? AppSpeedDialFab(householdId: _householdId)
+          : null,
+      bottomNavigationBar: _buildFloatingBottomNavBar(context),
+    );
+  }
+
+  Widget _buildFloatingBottomNavBar(BuildContext context) {
+    final isDark = context.isDark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      height: 68,
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF071C33).withValues(alpha: 0.94)
+            : Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF4DE6F7).withValues(alpha: 0.22)
+              : const Color(0xFF00E5BF).withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.45)
+                : const Color(0xFF00E5BF).withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          if (!isDark)
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildNavItem(
+            index: 0,
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home_rounded,
             label: context.tr('nav_dashboard'),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long, color: Color(0xFF00E5BF)),
+          _buildNavItem(
+            index: 1,
+            icon: Icons.receipt_long_outlined,
+            selectedIcon: Icons.receipt_long_rounded,
             label: context.tr('nav_transactions'),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.tune_outlined),
-            selectedIcon: const Icon(Icons.tune, color: Color(0xFF00E5BF)),
+          _buildCenterAiNavItem(),
+          _buildNavItem(
+            index: 3,
+            icon: Icons.pie_chart_outline_rounded,
+            selectedIcon: Icons.pie_chart_rounded,
             label: context.tr('nav_budgets'),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings, color: Color(0xFF00E5BF)),
+          _buildNavItem(
+            index: 4,
+            icon: Icons.person_outline_rounded,
+            selectedIcon: Icons.person_rounded,
             label: context.tr('nav_settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+  }) {
+    final isSelected = _selectedIndex == index;
+    final isDark = context.isDark;
+    final activeColor = isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A);
+    final inactiveColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+
+    return InkWell(
+      onTap: () => setState(() => _selectedIndex = index),
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSelected ? 12 : 6,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark
+                        ? const Color(0xFF00E5BF).withValues(alpha: 0.16)
+                        : const Color(0xFF00E5BF).withValues(alpha: 0.18))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                isSelected ? selectedIcon : icon,
+                color: isSelected ? activeColor : inactiveColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? activeColor : inactiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterAiNavItem() {
+    final isSelected = _selectedIndex == 2;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF00E5BF), Color(0xFF4DE6F7)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E5BF).withValues(alpha: isSelected ? 0.65 : 0.4),
+                  blurRadius: isSelected ? 16 : 10,
+                  spreadRadius: isSelected ? 2 : 0,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Color(0xFF051424),
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            context.tr('nav_ai'),
+            style: GoogleFonts.outfit(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              color: isSelected
+                  ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A))
+                  : (context.isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B)),
+            ),
           ),
         ],
       ),
@@ -358,21 +501,30 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
                               // ─── Sovereign Quick Action Dock ────────────────
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                 decoration: BoxDecoration(
-                                  color: context.isDark ? const Color(0xFF071C33) : context.cardBg,
-                                  borderRadius: BorderRadius.circular(18),
+                                  color: context.isDark ? const Color(0xFF071C33) : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: context.isDark
                                         ? const Color(0xFF4DE6F7).withValues(alpha: 0.2)
-                                        : context.borderColor,
+                                        : const Color(0xFF00E5BF).withValues(alpha: 0.35),
+                                    width: 1.2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.2),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 3),
+                                      color: context.isDark
+                                          ? Colors.black.withValues(alpha: 0.25)
+                                          : const Color(0xFF00E5BF).withValues(alpha: 0.08),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 4),
                                     ),
+                                    if (!context.isDark)
+                                      BoxShadow(
+                                        color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
                                   ],
                                 ),
                                 child: Row(
@@ -641,30 +793,49 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(26),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withValues(alpha: 0.28)),
+                shape: BoxShape.circle,
+                color: isDark ? color.withValues(alpha: 0.12) : Colors.white,
+                border: Border.all(
+                  color: isDark
+                      ? color.withValues(alpha: 0.5)
+                      : color.withValues(alpha: 0.45),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: isDark ? 0.25 : 0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: Icon(
+                icon,
+                color: isDark
+                    ? color
+                    : (color == const Color(0xFF00E5BF) ? const Color(0xFF008F7A) : color),
+                size: 23,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               label,
               style: GoogleFonts.outfit(
                 color: context.textPrimary,
-                fontSize: 10.5,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
             ),
