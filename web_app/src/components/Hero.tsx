@@ -76,26 +76,16 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="text-center text-3xl sm:text-5xl lg:text-[62px] lg:leading-[74px] font-bold tracking-tight text-white max-w-5xl mb-6 drop-shadow-lg"
+          className="text-center text-3xl sm:text-5xl lg:text-[62px] lg:leading-[74px] font-bold tracking-tight text-white max-w-5xl mb-8 drop-shadow-lg"
         >
           {dict.hero.title}
         </motion.h1>
-
-        {/* Editorial Subtitle with Pristine High Contrast */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="text-center text-base sm:text-lg text-white/95 max-w-3xl mb-10 leading-relaxed font-normal drop-shadow-md bg-deep-navy/30 backdrop-blur-sm sm:backdrop-blur-none p-3 sm:p-0 rounded-2xl"
-        >
-          {dict.hero.subtitle}
-        </motion.p>
 
         {/* Dual Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
+          transition={{ duration: 0.7, delay: 0.2 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full mb-12"
         >
           <a
