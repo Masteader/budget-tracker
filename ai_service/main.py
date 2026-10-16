@@ -105,9 +105,27 @@ if not APP_AUTH_TOKEN:
 
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
-    # Allow local inspection, health check and docs
     path = request.url.path
-    if path in ["/", "/auth/confirm", "/auth/callback", "/health", "/docs", "/openapi.json", "/redoc", "/hero-bg.webp", "/hero-bg.jpg"] or path.startswith("/auth/") or path.startswith("/static/") or request.method == "OPTIONS":
+    if (
+        path in [
+            "/",
+            "/auth/confirm",
+            "/auth/callback",
+            "/health",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+            "/hero-bg.webp",
+            "/hero-bg.jpg",
+            "/hero_glacier.png",
+            "/hero_glacier.jpg",
+            "/favicon.svg",
+        ]
+        or path.startswith("/assets/")
+        or path.startswith("/auth/")
+        or path.startswith("/static/")
+        or request.method == "OPTIONS"
+    ):
         return await call_next(request)
 
     # Check if request arrived via reverse proxy or public tunnel
