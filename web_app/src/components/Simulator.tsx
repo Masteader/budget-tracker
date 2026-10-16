@@ -1,19 +1,54 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import type { TranslationDictionary } from '../i18n/translations';
+import type { TranslationDictionary, Language } from '../i18n/translations';
 
 interface SimulatorProps {
   dict: TranslationDictionary;
+  lang?: Language;
 }
 
-export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
+export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
+  const isRTL = lang === 'ar';
   const [activeTab, setActiveTab] = useState<'salary' | 'ai' | 'zatca' | 'split'>('salary');
 
-  // Tab 1: Salary cycle state
-  const [payday, setPayday] = useState<number>(27);
-  const remainingDays = 31 - payday > 0 ? 31 - payday : 30;
-  const safeDaily = (4350 / (remainingDays || 1)).toFixed(2);
+  // Tab 1: Salary cycle state & custom income
+  const [payday, setPayday] = useState<number>(28);
+  const [income, setIncome] = useState<number>(15000);
+
+  // Dynamic date calculations based on today
+  const today = new Date();
+  const currentDay = today.getDate(); // e.g. 16 on Oct 16
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  // Accurate countdown to next payday
+  let remainingDays = 0;
+  if (payday > currentDay) {
+    remainingDays = payday - currentDay;
+  } else if (payday === currentDay) {
+    remainingDays = 0;
+  } else {
+    // Current month's payday has passed; next payday is in next month
+    remainingDays = (daysInCurrentMonth - currentDay) + payday;
+  }
+
+  // Financial allocations based on custom income (50% Fixed, 35% Discretionary, 15% Emergency Reserve)
+  const safeIncome = Math.max(0, income);
+  const reserveBuffer = safeIncome * 0.15;
+  const discretionaryPool = safeIncome * 0.35;
+  const dailyRate = discretionaryPool / 30;
+  const availableRemaining = remainingDays === 0 ? discretionaryPool : (remainingDays * dailyRate);
+  const safeDaily = (remainingDays === 0 ? dailyRate : (availableRemaining / remainingDays)).toFixed(2);
+
+  const formatCurrency = (val: number) => {
+    const formatted = val.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return isRTL ? `${formatted} ر.س` : `SAR ${formatted}`;
+  };
 
   // Tab 2: AI mock state
   const [aiInput, setAiInput] = useState(
@@ -217,10 +252,10 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                       className="w-full accent-[#00808c] cursor-pointer h-2 bg-slate-200 rounded-lg"
                     />
                     <div className="flex justify-between text-[10px] font-mono text-slate-500">
-                      <span>{dict.simulator.day1Label}</span>
-                      <span>{dict.simulator.day15Label}</span>
-                      <span className="text-[#00808c] font-bold">{dict.simulator.day27Label}</span>
-                      <span>{dict.simulator.day31Label}</span>
+                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(1)}>{dict.simulator.day1Label}</span>
+                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(15)}>{dict.simulator.day15Label}</span>
+                      <span className={`cursor-pointer transition-colors ${payday === 27 ? 'text-[#00808c] font-bold underline' : 'hover:text-[#00808c]'}`} onClick={() => setPayday(27)}>{dict.simulator.day27Label}</span>
+                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(31)}>{dict.simulator.day31Label}</span>
                     </div>
                   </div>
 
@@ -231,7 +266,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                         {dict.simulator.reserveTitle}
                       </div>
                       <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
-                        {dict.simulator.reserveVal}{' '}
+                        {formatCurrency(reserveBuffer)}{' '}
                         <span className="text-xs text-slate-400 font-normal">
                           {dict.simulator.reserveSub}
                         </span>
@@ -261,8 +296,10 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                       </span>
                     </div>
                     <div className="text-3xl font-bold font-mono text-[#00808c] mb-1">
-                      {safeDaily} ر.س{' '}
-                      <span className="text-xs font-normal text-slate-400">/ يومياً</span>
+                      {isRTL ? `${safeDaily} ر.س` : `SAR ${safeDaily}`}{' '}
+                      <span className="text-xs font-normal text-slate-400">
+                        {isRTL ? '/ يومياً' : '/ day'}
+                      </span>
                     </div>
                     <p className="text-xs text-emerald-700 flex items-center gap-1.5 mt-2">
                       <span className="material-symbols-outlined text-[14px]">check_circle</span>
@@ -271,7 +308,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                     <div className="w-full bg-slate-100 h-2 rounded-full mt-4 overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-[#00808c] to-emerald-500 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(100, Math.max(20, (145 / parseFloat(safeDaily)) * 50))}%` }}
+                        style={{ width: `${Math.min(100, Math.max(15, (parseFloat(safeDaily) / (dailyRate || 1)) * 100))}%` }}
                       />
                     </div>
                   </div>
@@ -292,21 +329,23 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                       </span>
                     </div>
                     <div className="text-3xl font-bold font-mono text-[#0c2530] mb-1">
-                      {remainingDays}{' '}
+                      {remainingDays === 0 ? (isRTL ? 'اليوم' : 'Today!') : remainingDays}{' '}
                       <span className="text-sm font-normal text-slate-400">
-                        {dict.simulator.countdownDays.replace('{val}', '')}
+                        {remainingDays === 0
+                          ? (isRTL ? '(يوم الراتب!)' : '(Payday!)')
+                          : dict.simulator.countdownDays.replace('{val}', '').trim()}
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 mt-2">
-                      المتبقي المتاح:{' '}
+                      {isRTL ? 'المتبقي المتاح: ' : 'Available Remaining: '}
                       <strong className="text-[#00808c] font-mono font-semibold">
-                        4,350.00 ر.س
+                        {formatCurrency(availableRemaining)}
                       </strong>
                     </p>
                     <div className="w-full bg-slate-100 h-2 rounded-full mt-4 overflow-hidden">
                       <div
                         className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${(remainingDays / 31) * 100}%` }}
+                        style={{ width: `${Math.min(100, Math.max(5, (remainingDays / 31) * 100))}%` }}
                       />
                     </div>
                   </div>
@@ -320,10 +359,34 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict }) => {
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-semibold text-[#0c2530]">
-                          {dict.simulator.poolLabel} {dict.simulator.poolVal}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-[#0c2530]">
+                            {dict.simulator.poolLabel}
+                          </span>
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#f0f9fa] border border-[#bce6ec] hover:border-[#00808c] focus-within:border-[#00808c] focus-within:ring-2 focus-within:ring-[#00808c]/20 transition-all shadow-inner">
+                            <span className="text-xs font-mono font-bold text-[#00808c]">
+                              {isRTL ? 'ر.س' : 'SAR'}
+                            </span>
+                            <input
+                              type="number"
+                              min="500"
+                              max="1000000"
+                              step="500"
+                              value={income || ''}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setIncome(isNaN(val) ? 0 : val);
+                              }}
+                              placeholder="15000"
+                              className="w-24 sm:w-28 text-sm font-mono font-bold text-[#00808c] bg-transparent outline-none border-none p-0 text-start"
+                              title={isRTL ? 'أدخل راتبك / دخلك الشهري المخصص' : 'Enter custom monthly income'}
+                            />
+                            <span className="material-symbols-outlined text-[15px] text-[#00808c]/60 cursor-pointer" title={isRTL ? 'تعديل الدخل' : 'Edit income'}>
+                              edit
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500">{dict.simulator.poolDesc}</div>
+                        <div className="text-xs text-slate-500 mt-1">{dict.simulator.poolDesc}</div>
                       </div>
                     </div>
                     <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">
