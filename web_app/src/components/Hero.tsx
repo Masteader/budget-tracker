@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import type { TranslationDictionary } from '../i18n/translations';
 import { GlacialParticlesCanvas } from './GlacialParticlesCanvas';
+import { AliveGlacialRiver } from './AliveGlacialRiver';
+import heroGlacierImg from '../assets/hero_glacier.png';
 
 interface HeroProps {
   dict: TranslationDictionary;
@@ -32,19 +34,25 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
       <div className="absolute inset-0 z-0 overflow-hidden">
         <img
           alt="Glacial Iceberg Landscape Backdrop"
-          className="w-full h-full object-cover object-center transform"
+          className="w-full h-full object-cover object-center transform scale-[1.01]"
           style={{
-            filter: 'contrast(1.08) saturate(1.12) brightness(1.02)',
+            filter: 'contrast(1.06) saturate(1.1) brightness(1.02)',
             imageRendering: '-webkit-optimize-contrast',
           }}
-          src="https://lh3.googleusercontent.com/aida/AEtjO1X9VWGnAgU7y9JPd238PHXrYUjeS1Fu7K7fxbXW6tN94Xec1Ukgx1-AT0htUJ6Bptcl_RfOgbXBQCJBoNt-NOwdA5tn_w51ajgHjAwZxI27gYyGiuhbmoIsCIus3em6h5CE9O5_6JuLbg9NKRuAzYPyh2MACStQ6LM5IiDtUjjF7JbKTY7lT5GW7XjH1LITuX5y1PHa1ajr5xKnY9tc1W4zWQKRd0a6RB5Ol_RA4tw6DgzOGrpZxfLC5Q"
+          src={heroGlacierImg}
+          loading="eager"
+          decoding="sync"
         />
-        {/* Ultra Subtle High-Contrast Tint to keep icebergs crisp while making typography pop */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1528]/85 via-[#0b1528]/25 to-[#0b1528]/50 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-l from-black/25 via-transparent to-black/20 pointer-events-none" />
+
+        {/* Dynamic Living Animated River Current in the Glacial Ocean Channel */}
+        <AliveGlacialRiver />
+
+        {/* Balanced Vignette: keeps the majestic icebergs and glowing river luminous while ensuring text contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0b1528] via-[#0b1528]/10 to-[#0b1528]/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/30 pointer-events-none" />
       </div>
 
-      {/* Interactive 3D Glacial Particle Field Overlay */}
+      {/* Floating 3D Glacial Particle Field Overlay (Preserved flying dots) */}
       <GlacialParticlesCanvas />
 
       {/* Hero Content Layer Directly over Glacial Mirror Sea */}
