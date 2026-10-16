@@ -39,7 +39,7 @@ from dependents_service import (
     create_household_dependent,
     delete_household_dependent,
 )
-from settlement_engine import calculate_partner_settlement
+from settlement_engine import calculate_partner_settlement, calculate_settlement_v2
 from salary_cycle import (
     get_household_categories,
     toggle_category_status,
@@ -349,6 +349,25 @@ async def household_settlement(
         return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to compute partner settlement.")
+
+
+@router.get(
+    "/households/{household_id}/settlement-v2",
+    tags=["settlement"],
+    summary="Role-aware multi-party and Islamic Family Nafaqah settlement summary.",
+)
+async def household_settlement_v2(
+    household_id: str,
+    cycle_start: Optional[str] = None,
+    _auth: str = Depends(verify_household_access),
+):
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    validate_uuid(household_id)
+    try:
+        return await asyncio.to_thread(calculate_settlement_v2, household_id, cycle_start=cycle_start)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to compute settlement v2.")
 
 
 @router.get(

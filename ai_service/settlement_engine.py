@@ -378,3 +378,76 @@ def simplify_debts(debts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     return simplified
 
+
+def calculate_settlement_v2(
+    household_id: str,
+    cycle_start: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Computes unified role-aware settlement:
+    - If household contains peer members (roommates) and no spouse: computes multi-party pairwise debts & simplification.
+    - Otherwise (default family household): computes Islamic Family Nafaqah (husband provides, wife owes 0).
+    """
+    client = get_client()
+    dates = get_salary_cycle_dates()
+    start_iso = cycle_start or dates["cycle_start"]
+
+    try:
+        users_resp = (
+            client.table("users")
+            .select("id, display_name, role, financial_role")
+            .eq("household_id", household_id)
+            .execute()
+        )
+        members = users_resp.data or []
+    except Exception as exc:
+        logger.warning("Failed to fetch household members for settlement v2: %s", exc)
+        members = []
+
+    has_peers = any((m.get("financial_role") or "").lower() == "peer" for m in members)
+    has_spouse = any((m.get("financial_role") or "").lower() == "spouse" for m in members)
+
+    try:
+        tx_resp = (
+            client.table("transactions")
+            .select("id, amount, paid_by, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, line_items, timestamp, category_code, spent_by")
+            .eq("household_id", household_id)
+            .gte("timestamp", start_iso)
+            .order("timestamp", desc=True)
+            .execute()
+        )
+        txs = tx_resp.data or []
+    except Exception as exc:
+        logger.warning("Failed to fetch transactions for settlement v2: %s", exc)
+        txs = []
+
+    if has_peers and not has_spouse:
+        peers = [m.get("id") or m.get("display_name") for m in members]
+        pairwise = calculate_roommate_pairwise_debts(txs, peers)
+        simplified = simplify_debts(pairwise)
+        return {
+            "mode": "multi_roommate",
+            "family_summary": None,
+            "pairwise_debts": pairwise,
+            "simplified_debts": simplified,
+            "roommate_balances": {},
+        }
+    else:
+        husband_id = "provider"
+        wife_id = "spouse"
+        for m in members:
+            f_role = (m.get("financial_role") or "").lower()
+            if f_role == "provider" or m.get("role") == "admin":
+                husband_id = m.get("id") or "provider"
+            elif f_role == "spouse":
+                wife_id = m.get("id") or "spouse"
+
+        family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
+        return {
+            "mode": "family_nafaqah",
+            "family_summary": family_summary,
+            "pairwise_debts": [],
+            "simplified_debts": [],
+            "roommate_balances": {},
+        }
+

@@ -9,7 +9,8 @@ import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
-import '../../widgets/partner_settlement_card.dart';
+import '../../widgets/dashboard/family_reimbursement_card.dart';
+import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../providers/locale_provider.dart';
@@ -920,11 +921,25 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             title: context.tr('strict_isolation'),
             description: context.tr('strict_desc'),
           ),
-          // ── PARTNER FAIR-SHARE SETTLEMENT ──
-          if (_householdId != null) ...[
+          // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
+          if (_householdId != null && _members.length > 1) ...[
             _buildSectionHeader(context.tr('partner_settlement')),
             const SizedBox(height: 10),
-            PartnerSettlementCard(householdId: _householdId!),
+            FutureBuilder<SettlementV2Summary>(
+              future: ApiService.instance.getSettlementV2(_householdId!),
+              builder: (context, snap) {
+                if (snap.hasData && snap.data!.isRoommateMode) {
+                  return MultiRoommateSettlementCard(
+                    householdId: _householdId!,
+                    summary: snap.data,
+                  );
+                }
+                return FamilyReimbursementCard(
+                  householdId: _householdId!,
+                  summary: snap.data?.familySummary,
+                );
+              },
+            ),
             const SizedBox(height: 28),
           ],
 
