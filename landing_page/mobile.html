@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+  <title>BUDGET Tracker | لوحة تحكم التطبيق المحمول (ميزانية وأكثر)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "tertiary-container": "#00b2d0",
+            "on-tertiary-container": "#003f4b",
+            "on-primary": "#ffffff",
+            "primary": "#006c49",
+            "inverse-primary": "#4edea3",
+            "primary-fixed-dim": "#4edea3",
+            "on-secondary": "#ffffff",
+            "on-primary-container": "#00422b",
+            "secondary-fixed-dim": "#6bd8cb",
+            "primary-fixed": "#6ffbbe",
+            "error": "#ba1a1a",
+            "surface-variant": "#dae2fd",
+            "outline": "#6c7a71",
+            "on-surface": "#131b2e",
+            "inverse-on-surface": "#eef0ff",
+            "tertiary-fixed": "#acedff",
+            "surface-bright": "#faf8ff",
+            "on-secondary-fixed-variant": "#005049",
+            "on-surface-variant": "#3c4a42",
+            "on-primary-fixed": "#002113",
+            "tertiary": "#00687a",
+            "surface-container-high": "#e2e7ff",
+            "on-tertiary": "#ffffff",
+            "surface-tint": "#006c49",
+            "primary-container": "#10b981",
+            "outline-variant": "#bbcabf",
+            "on-tertiary-fixed": "#001f26",
+            "inverse-surface": "#283044",
+            "surface": "#faf8ff",
+            "on-primary-fixed-variant": "#005236",
+            "surface-container-highest": "#dae2fd",
+            "secondary-fixed": "#89f5e7",
+            "surface-container-low": "#f2f3ff",
+            "on-error-container": "#93000a",
+            "on-tertiary-fixed-variant": "#004e5c",
+            "background": "#faf8ff",
+            "on-secondary-container": "#006f66",
+            "error-container": "#ffdad6",
+            "secondary-container": "#86f2e4",
+            "surface-container-lowest": "#ffffff",
+            "on-background": "#131b2e",
+            "surface-dim": "#d2d9f4",
+            "on-error": "#ffffff",
+            "secondary": "#006a61",
+            "on-secondary-fixed": "#00201d",
+            "tertiary-fixed-dim": "#4cd7f6",
+            "surface-container": "#eaedff"
+          },
+          fontFamily: {
+            sans: ['IBM Plex Sans Arabic', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'IBM Plex Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, #f0fdfa 0%, #faf8ff 50%, #e2e7ff 100%);
+      color: #131b2e;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(13, 148, 136, 0.15);
+      box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background pb-28">
+
+  <!-- Floating Mobile Mockup Header / Web Return Bar -->
+  <aside class="w-full bg-slate-900 text-white text-xs px-4 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="font-bold">تطبيق الجوال BUDGET Tracker (Stitch Engine)</span>
+    </div>
+    <a href="index.html" class="flex items-center gap-1 text-emerald-400 hover:text-white transition-colors">
+      <span>العودة للموقع الرئيسي</span>
+      <span class="material-symbols-outlined text-[14px] rtl:rotate-180">arrow_forward</span>
+    </a>
+  </aside>
+
+  <!-- TopAppBar -->
+  <header class="bg-surface/90 backdrop-blur-md sticky top-0 z-40 w-full px-4 py-3 flex justify-between items-center shadow-sm border-b border-slate-100">
+    <div class="flex items-center gap-3">
+      <div class="relative">
+        <img class="w-10 h-10 rounded-full object-cover border-2 border-primary-container" alt="صورة المستخدم" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNlSWOiOBLOpUCMU7GK4YluTlSzRKKvNOptzpSgtfBnqiCJP-fNQKsM5v7-cjAKzoMfPWZUdeXKlsAASBKu7LvfdufdZqO9_28sg9KylLlQSRkT3U48aZOlFgxhbk1U6ev6C5_e1avxhsIxN5_OKtbV06idTUsq4Nj7bLTvH9Ufu-nL4Y_seMvb9vOnj2OUcoeyE3M_ftx2-x-XnPAuGoeHXvwJkrEeJDDqdP4XtfL4M29d4YEmWRyzZY9utvPjprCkgCQUEdlBA"/>
+        <span class="absolute -bottom-1 -right-1 bg-primary text-white rounded-full p-0.5 text-[10px] material-symbols-outlined" style="font-size: 12px;">verified</span>
+      </div>
+      <div>
+        <button id="household-btn" onclick="toggleHouseholdSwitch()" class="flex items-center gap-1.5 text-base font-bold text-primary focus:outline-none hover:opacity-80 transition-opacity">
+          <span id="household-title">🏡 ميزانية الأسرة</span>
+          <span class="material-symbols-outlined text-sm">expand_more</span>
+        </button>
+        <p class="text-xs text-on-surface-variant font-medium">ميزانية وأكثر • نشط الآن</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="alert('لا توجد إشعارات جديدة حالياً.')" class="p-2 rounded-full hover:bg-surface-variant transition-all text-primary relative">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Mobile Container -->
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-4">
+
+    <!-- Hero Metric Card (Daily Safe Spend Gauge) -->
+    <section class="glass-card rounded-2xl p-5 relative overflow-hidden shadow-sm">
+      <div class="absolute -top-10 -left-10 w-32 h-32 bg-primary-container/10 rounded-full blur-xl pointer-events-none"></div>
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <span class="text-xs text-on-surface-variant font-medium">معدل الصرف اليومي الآمن</span>
+          <h2 class="text-3xl font-black text-primary mt-1 font-display">145.00 <span class="text-xs font-bold text-on-surface-variant">ر.س / يومياً</span></h2>
+        </div>
+        <span class="bg-emerald-500/10 text-primary border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          أخضر • آمن (72%)
+        </span>
+      </div>
+      <!-- Progress bar / Gauge simulator -->
+      <div class="w-full bg-slate-200/80 rounded-full h-2.5 mb-4 overflow-hidden">
+        <div class="bg-gradient-to-r from-emerald-400 to-primary h-2.5 rounded-full" style="width: 72%"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-200/60 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-lg">event_upcoming</span>
+          <div>
+            <p class="text-on-surface-variant text-[11px]">دورة الراتب</p>
+            <p class="font-bold text-on-surface">12 يوماً متبقية حتى يوم 27</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 border-r border-slate-200/60 pr-3">
+          <span class="material-symbols-outlined text-teal-600 text-lg">savings</span>
+          <div>
+            <p class="text-on-surface-variant text-[11px]">الاحتياطي الآلي</p>
+            <p class="font-bold text-on-surface">2,250 ر.س محمي</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick AI Action Ribbon -->
+    <section class="grid grid-cols-4 gap-2.5">
+      <button class="glass-card p-3 rounded-xl flex flex-col items-center text-center hover:bg-surface-variant/50 active:scale-95 transition-all group" onclick="alert('🎙️ جاري فتح المساعد الصوتي بالعامية السعودية...')">
+        <div class="w-11 h-11 rounded-full bg-primary-container/20 flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-on-primary transition-colors mb-1.5 shadow-sm">
+          <span class="material-symbols-outlined">mic</span>
+        </div>
+        <span class="text-[11px] font-bold text-on-surface">تسجيل صوتي</span>
+      </button>
+      <button class="glass-card p-3 rounded-xl flex flex-col items-center text-center hover:bg-surface-variant/50 active:scale-95 transition-all group" onclick="alert('📸 جاري تشغيل كاميرا مسح الفواتير ZATCA الضريبية...')">
+        <div class="w-11 h-11 rounded-full bg-teal-500/20 flex items-center justify-center text-teal-800 group-hover:bg-teal-500 group-hover:text-white transition-colors mb-1.5 shadow-sm">
+          <span class="material-symbols-outlined">qr_code_scanner</span>
+        </div>
+        <span class="text-[11px] font-bold text-on-surface">ماسح ZATCA</span>
+      </button>
+      <button class="glass-card p-3 rounded-xl flex flex-col items-center text-center hover:bg-surface-variant/50 active:scale-95 transition-all group" onclick="prompt('أدخل قيمة المصروف السريع (ر.س):')">
+        <div class="w-11 h-11 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-800 group-hover:bg-cyan-600 group-hover:text-white transition-colors mb-1.5 shadow-sm">
+          <span class="material-symbols-outlined">add_circle</span>
+        </div>
+        <span class="text-[11px] font-bold text-on-surface">إضافة فوري</span>
+      </button>
+      <button class="glass-card p-3 rounded-xl flex flex-col items-center text-center hover:bg-surface-variant/50 active:scale-95 transition-all group" onclick="alert('🤝 تسوية الشركاء: فهد مدين لك بـ 1,025 ر.س')">
+        <div class="w-11 h-11 rounded-full bg-slate-200/80 flex items-center justify-center text-slate-700 group-hover:bg-primary group-hover:text-white transition-colors mb-1.5 shadow-sm">
+          <span class="material-symbols-outlined">balance</span>
+        </div>
+        <span class="text-[11px] font-bold text-on-surface">تسوية الشركاء</span>
+      </button>
+    </section>
+
+    <!-- Shared Expense / Roommates Split Balance Card -->
+    <section class="glass-card rounded-2xl p-4 border-r-4 border-r-primary">
+      <div class="flex justify-between items-center mb-3">
+        <div class="flex items-center gap-2">
+          <span class="p-2 rounded-xl bg-primary/10 text-primary material-symbols-outlined">group</span>
+          <div>
+            <h3 class="text-xs font-bold text-on-surface">سكن الزملاء والأصدقاء</h3>
+            <p class="text-[11px] text-on-surface-variant">صافي التسوية: تستحق 1,025 ر.س من فهد</p>
+          </div>
+        </div>
+        <span class="text-[11px] font-bold bg-amber-500/10 text-amber-700 px-2 py-0.5 rounded">معلق</span>
+      </div>
+      <button class="w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95" onclick="window.open('https://wa.me/?text=مرحباً%20فهد،%20لديك%20مبلغ%20معلق%20بقيمة%201,025%20ر.س%20لتسوية%20مصاريف%20السكن%20المشتركة.', '_blank')">
+        <span class="material-symbols-outlined text-base">send</span>
+        <span>طلب تسوية فورية عبر واتساب</span>
+      </button>
+    </section>
+
+    <!-- Budget Envelopes Summary -->
+    <section class="glass-card rounded-2xl p-4 space-y-3.5">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-xs text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-primary text-base">folder_open</span>
+          <span>مظاريف الميزانية النشطة</span>
+        </h3>
+        <span class="text-[11px] text-primary font-bold cursor-pointer hover:underline">إدارة المظاريف</span>
+      </div>
+      <!-- Envelope 1 -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between text-xs">
+          <span class="font-semibold text-on-surface">تموينات ومقاضي البيت</span>
+          <span class="text-on-surface-variant font-bold">1,850 / 2,500 ر.س</span>
+        </div>
+        <div class="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+          <div class="bg-primary h-2 rounded-full" style="width: 74%"></div>
+        </div>
+      </div>
+      <!-- Envelope 2 -->
+      <div class="space-y-1.5">
+        <div class="flex justify-between text-xs">
+          <span class="font-semibold text-on-surface">فواتير وخدمات مشتركة</span>
+          <span class="text-on-surface-variant font-bold">920 / 1,200 ر.س</span>
+        </div>
+        <div class="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+          <div class="bg-teal-500 h-2 rounded-full" style="width: 76%"></div>
+        </div>
+      </div>
+      <!-- Envelope 3 -->
+      <div class="space-y-1.5 opacity-80">
+        <div class="flex justify-between text-xs">
+          <span class="font-semibold text-on-surface flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">lock</span>
+            <span>طوارئ واحتياطي</span>
+          </span>
+          <span class="text-on-surface-variant font-bold">3,000 ر.س (مغلق)</span>
+        </div>
+        <div class="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+          <div class="bg-slate-400 h-2 rounded-full w-full"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recent Transactions Feed -->
+    <section class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="flex justify-between items-center mb-1">
+        <h3 class="font-bold text-xs text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-primary text-base">receipt_long</span>
+          <span>آخر العمليات المصنفة ذكياً</span>
+        </h3>
+        <span class="text-[11px] text-primary font-bold cursor-pointer hover:underline">عرض الكل</span>
+      </div>
+      <div class="space-y-2.5">
+        <!-- Transaction Item 1 -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/70 hover:bg-white transition-all border border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center text-primary">
+              <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <h4 class="text-xs font-bold text-on-surface">أسواق بنده المركزية</h4>
+                <span class="bg-primary/10 text-primary text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                  <span class="material-symbols-outlined text-[10px]">verified</span> ZATCA 15%
+                </span>
+              </div>
+              <p class="text-[10px] text-on-surface-variant mt-0.5">تموينات ومقاضي البيت • تقسيم مع فهد</p>
+            </div>
+          </div>
+          <div class="text-left">
+            <span class="text-xs font-black text-rose-600">- 342.50 ر.س</span>
+            <p class="text-[9px] text-on-surface-variant">اليوم، 04:15 م</p>
+          </div>
+        </div>
+        <!-- Transaction Item 2 -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/70 hover:bg-white transition-all border border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-teal-500/15 flex items-center justify-center text-teal-700">
+              <span class="material-symbols-outlined text-[18px]">bolt</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <h4 class="text-xs font-bold text-on-surface">الشركة السعودية للكهرباء</h4>
+                <span class="bg-primary/10 text-primary text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                  <span class="material-symbols-outlined text-[10px]">verified</span> ZATCA
+                </span>
+              </div>
+              <p class="text-[10px] text-on-surface-variant mt-0.5">فواتير وخدمات مشتركة</p>
+            </div>
+          </div>
+          <div class="text-left">
+            <span class="text-xs font-black text-rose-600">- 280.00 ر.س</span>
+            <p class="text-[9px] text-on-surface-variant">أمس، 11:30 م</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BottomNavBar -->
+  <nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 shadow-xl bg-white/95 backdrop-blur-lg border-t border-slate-200/80">
+    <a class="flex flex-col items-center justify-center bg-primary-container/20 text-primary font-bold rounded-2xl px-3 py-1.5 transition-all" href="#">
+      <span class="material-symbols-outlined text-[20px]">dashboard</span>
+      <span class="text-[10px] mt-0.5">الرئيسية</span>
+    </a>
+    <a class="flex flex-col items-center justify-center text-slate-500 hover:text-primary px-3 py-1.5 rounded-2xl transition-all" href="#" onclick="alert('فتح المظاريف')">
+      <span class="material-symbols-outlined text-[20px]">folder_open</span>
+      <span class="text-[10px] mt-0.5">المظاريف</span>
+    </a>
+    <!-- Central Floating AI Trigger -->
+    <button class="flex flex-col items-center justify-center text-white bg-gradient-to-tr from-primary to-primary-container p-3 rounded-full shadow-[0_4px_16px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-transform -mt-5" onclick="alert('🤖 مرحباً! أنا مساعد BUDGET Tracker الذكي. كيف أساعدك اليوم؟')">
+      <span class="material-symbols-outlined text-2xl">auto_awesome</span>
+    </button>
+    <a class="flex flex-col items-center justify-center text-slate-500 hover:text-primary px-3 py-1.5 rounded-2xl transition-all" href="#" onclick="alert('فتح الشركاء')">
+      <span class="material-symbols-outlined text-[20px]">group</span>
+      <span class="text-[10px] mt-0.5">الشركاء</span>
+    </a>
+    <a class="flex flex-col items-center justify-center text-slate-500 hover:text-primary px-3 py-1.5 rounded-2xl transition-all" href="#" onclick="alert('فتح الإعدادات والحساب')">
+      <span class="material-symbols-outlined text-[20px]">settings</span>
+      <span class="text-[10px] mt-0.5">حسابي</span>
+    </a>
+  </nav>
+
+  <script>
+    let isFamily = true;
+    function toggleHouseholdSwitch() {
+      isFamily = !isFamily;
+      const title = document.getElementById('household-title');
+      if (title) {
+        title.textContent = isFamily ? '🏡 ميزانية الأسرة' : '🏢 سكن الزملاء والأصدقاء';
+      }
+    }
+  </script>
+</body>
+</html>
