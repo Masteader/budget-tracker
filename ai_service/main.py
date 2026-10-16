@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
@@ -153,11 +154,33 @@ async def auth_confirm_landing():
 
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+assets_dir = os.path.join(STATIC_DIR, "assets")
+if os.path.exists(assets_dir):
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
+@app.get("/hero_glacier.png", tags=["ops"])
+@app.get("/hero_glacier.jpg", tags=["ops"])
+async def hero_glacier_image():
+    """Serve sharp glacial iceberg background image."""
+    png_path = os.path.join(STATIC_DIR, "hero_glacier.png")
+    if os.path.exists(png_path):
+        return FileResponse(png_path, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
+    raise HTTPException(status_code=404, detail="Glacier image not found")
+
+
+@app.get("/favicon.svg", tags=["ops"])
+async def favicon_svg():
+    """Serve application SVG favicon."""
+    fav_path = os.path.join(STATIC_DIR, "favicon.svg")
+    if os.path.exists(fav_path):
+        return FileResponse(fav_path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=604800"})
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 
 @app.get("/hero-bg.webp", tags=["ops"])
 async def hero_background_webp():
-    """Serve WebP cinematic background image for the landing page."""
+    """Serve WebP cinematic background image for legacy landing page fallback."""
     webp_path = os.path.join(STATIC_DIR, "hero_bg.webp")
     if os.path.exists(webp_path):
         return FileResponse(webp_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
@@ -166,7 +189,7 @@ async def hero_background_webp():
 
 @app.get("/hero-bg.jpg", tags=["ops"])
 async def hero_background_jpg():
-    """Serve JPEG fallback cinematic background image for the landing page."""
+    """Serve JPEG fallback cinematic background image."""
     jpg_path = os.path.join(STATIC_DIR, "hero_bg.jpg")
     if os.path.exists(jpg_path):
         return FileResponse(jpg_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})

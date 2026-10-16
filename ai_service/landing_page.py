@@ -8,6 +8,8 @@ Features: Bilingual AR/EN, Live Interactive Product Stage, Asymmetric Bento Grid
           KPI Counters, FAQ, Legal, Developer Contact (abedmowafaq@gmail.com).
 """
 
+import os
+
 try:
     from ai_service._landing_impl import LANDING_HTML, AUTH_CONFIRM_HTML, AUTH_CALLBACK_HTML
 except ImportError:
@@ -15,6 +17,10 @@ except ImportError:
 
 
 def get_landing_page_html() -> str:
+    static_index = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(static_index):
+        with open(static_index, "r", encoding="utf-8") as f:
+            return f.read()
     return LANDING_HTML
 
 
