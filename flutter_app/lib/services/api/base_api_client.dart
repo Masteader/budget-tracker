@@ -7,7 +7,10 @@ import '../../supabase_config.dart';
 typedef AuthTokenProvider = String? Function();
 
 class BaseApiClient {
-  static const String appAuthToken = String.fromEnvironment('APP_AUTH_TOKEN');
+  static const String appAuthToken = String.fromEnvironment(
+    'APP_AUTH_TOKEN',
+    defaultValue: 'bt_sec_0781379b6c621e7c89dee8dd981067f0',
+  );
   final http.Client _client;
   final AuthTokenProvider? _authTokenProvider;
 

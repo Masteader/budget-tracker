@@ -82,6 +82,14 @@ class _LoginScreenState extends State<LoginScreen>
           title: 'Authentication Failed',
         );
       }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+          title: 'Authentication Error',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,7 +103,9 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: context.isDark ? const [Color(0xFF0D1117), Color(0xFF0A1628)] : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
+            colors: context.isDark
+                ? const [AppThemes.brandDarkBg, Color(0xFF091C31)]
+                : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
           ),
         ),
         child: SafeArea(
@@ -112,12 +122,19 @@ class _LoginScreenState extends State<LoginScreen>
                       width: 80, height: 80,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF00C896), Color(0xFF00A3FF)],
+                          colors: [AppThemes.electricTeal, AppThemes.iceCyan],
                         ),
                         borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppThemes.electricTeal.withValues(alpha: 0.25),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
                       child: const Icon(Icons.account_balance_wallet_rounded,
-                          color: Colors.white, size: 40),
+                          color: Color(0xFF051424), size: 40),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -201,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: const Text(
                                   'Forgot password?',
                                   style: TextStyle(
-                                    color: Color(0xFF00C896),
+                                    color: AppThemes.electricTeal,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -218,8 +235,9 @@ class _LoginScreenState extends State<LoginScreen>
                             child: ElevatedButton(
                               onPressed: _loading ? null : _submit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppThemes.electricTeal,
+                                foregroundColor: const Color(0xFF051424),
+                                elevation: 0,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14)),
                               ),
@@ -228,12 +246,12 @@ class _LoginScreenState extends State<LoginScreen>
                                       width: 22,
                                       height: 22,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white),
+                                          strokeWidth: 2, color: Color(0xFF051424)),
                                     )
                                   : Text(
                                       _isLogin ? 'Sign In' : 'Create Account',
                                       style: const TextStyle(
-                                          fontSize: 16, fontWeight: FontWeight.w600),
+                                          fontSize: 16, fontWeight: FontWeight.w700),
                                     ),
                             ),
                           ),
@@ -246,7 +264,10 @@ class _LoginScreenState extends State<LoginScreen>
                               _isLogin
                                   ? "Don't have an account? Sign up"
                                   : 'Already have an account? Sign in',
-                              style: const TextStyle(color: Color(0xFF00C896)),
+                              style: const TextStyle(
+                                color: AppThemes.electricTeal,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],

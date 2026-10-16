@@ -82,7 +82,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (widget.onSendResetCode != null) {
         await widget.onSendResetCode!(email);
       } else {
-        await supabase.auth.signInWithOtp(email: email);
+        try {
+          await supabase.auth.resetPasswordForEmail(email);
+        } catch (_) {
+          await supabase.auth.signInWithOtp(email: email);
+        }
       }
 
       if (!mounted) return;
@@ -132,13 +136,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           await supabase.auth.verifyOTP(
             email: email,
             token: otp,
-            type: OtpType.email,
+            type: OtpType.recovery,
           );
         } catch (_) {
           await supabase.auth.verifyOTP(
             email: email,
             token: otp,
-            type: OtpType.recovery,
+            type: OtpType.email,
           );
         }
         await supabase.auth.updateUser(
@@ -196,7 +200,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: context.isDark ? const [Color(0xFF0D1117), Color(0xFF0A1628)] : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
+            colors: context.isDark
+                ? const [AppThemes.brandDarkBg, Color(0xFF091C31)]
+                : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
           ),
         ),
         child: SafeArea(
@@ -225,11 +231,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             height: 72,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF00C896), Color(0xFF00A3FF)],
+                colors: [AppThemes.electricTeal, AppThemes.iceCyan],
               ),
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppThemes.electricTeal.withValues(alpha: 0.25),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: const Icon(Icons.lock_reset_rounded, color: Colors.white, size: 36),
+            child: const Icon(Icons.lock_reset_rounded, color: Color(0xFF051424), size: 36),
           ),
           const SizedBox(height: 24),
           Text(
@@ -267,7 +280,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
             validator: (v) => v != null && v.contains('@') ? null : 'Enter a valid email',
@@ -279,19 +292,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: ElevatedButton(
               onPressed: _loading ? null : _handleSendResetCode,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
-                foregroundColor: Colors.white,
+                backgroundColor: AppThemes.electricTeal,
+                foregroundColor: const Color(0xFF051424),
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               child: _loading
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
                     )
                   : const Text(
                       'Send Reset Code',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
             ),
           ),
@@ -311,11 +325,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             height: 72,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF00C896), Color(0xFF00A3FF)],
+                colors: [AppThemes.electricTeal, AppThemes.iceCyan],
               ),
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppThemes.electricTeal.withValues(alpha: 0.25),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: const Icon(Icons.mark_email_read_rounded, color: Colors.white, size: 36),
+            child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFF051424), size: 36),
           ),
           const SizedBox(height: 24),
           Text(
@@ -364,7 +385,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
             validator: (v) {
@@ -402,7 +423,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
             validator: (v) => v != null && v.length >= 6 ? null : 'Min 6 characters',
@@ -435,7 +456,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
             validator: (v) {
@@ -452,19 +473,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: ElevatedButton(
               onPressed: _loading ? null : _handleVerifyAndResetPassword,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
-                foregroundColor: Colors.white,
+                backgroundColor: AppThemes.electricTeal,
+                foregroundColor: const Color(0xFF051424),
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               child: _loading
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
                     )
                   : const Text(
                       'Set New Password',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
             ),
           ),
@@ -476,8 +498,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? 'Resend code in ${_resendCooldown}s'
                   : 'Didn\'t receive code? Resend',
               style: TextStyle(
-                color: _resendCooldown > 0 ? context.textSecondary : const Color(0xFF00C896),
-                fontWeight: FontWeight.w500,
+                color: _resendCooldown > 0 ? context.textSecondary : AppThemes.electricTeal,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
