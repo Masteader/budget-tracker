@@ -57,8 +57,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   late final TextEditingController _merchantCtrl;
   late final TextEditingController _amountCtrl;
   late String _selectedCategory;
-  String _selectedSpentBy = 'me';
   bool _isSaving = false;
+
+  // Role-Aware Attribution & Living Model State
+  bool _isRoommateMode = false;
+  String _familyPayer = 'me'; // 'me' (Husband/Provider), 'wife_reimbursable', 'wife_personal'
+  String? _selectedRoommateId;
+  String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
+  List<Map<String, dynamic>> _householdMembers = [];
 
   static const List<Map<String, String>> _categories = [
     {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
@@ -83,6 +89,35 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           : '',
     );
     _selectedCategory = widget.initialCategory ?? 'OPEX-GROCERY';
+    _loadHouseholdMembers();
+  }
+
+  Future<void> _loadHouseholdMembers() async {
+    final hid = widget.householdId;
+    if (hid == null || hid.isEmpty) return;
+    try {
+      final res = await supabase
+          .from('users')
+          .select('id, display_name, role, financial_role')
+          .eq('household_id', hid);
+      if (mounted) {
+        final list = List<Map<String, dynamic>>.from(res);
+        final hasPeers = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'peer');
+        final hasSpouse = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse');
+        setState(() {
+          _householdMembers = list;
+          _isRoommateMode = hasPeers && !hasSpouse;
+          if (_isRoommateMode && list.isNotEmpty) {
+            final uid = supabase.auth.currentUser?.id;
+            final myMember = list.firstWhere(
+              (m) => m['id'] == uid,
+              orElse: () => list.first,
+            );
+            _selectedRoommateId = myMember['id'] as String?;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -108,6 +143,36 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     setState(() => _isSaving = true);
     final hid = widget.householdId ?? '';
 
+    // Determine role-aware attribution fields
+    final String paidBy;
+    final String benType;
+    final String benId;
+    final String spentBy;
+
+    if (_isRoommateMode) {
+      paidBy = _selectedRoommateId ?? supabase.auth.currentUser?.id ?? 'me';
+      benType = _roommateSplit == 'all' ? 'all_peers' : 'individual';
+      benId = _roommateSplit == 'all' ? 'all_peers' : (_selectedRoommateId ?? 'me');
+      spentBy = _roommateSplit == 'all' ? 'both' : 'me';
+    } else {
+      if (_familyPayer == 'wife_reimbursable') {
+        paidBy = 'wife';
+        benType = 'household';
+        benId = 'household';
+        spentBy = 'partner';
+      } else if (_familyPayer == 'wife_personal') {
+        paidBy = 'wife';
+        benType = 'individual';
+        benId = 'wife';
+        spentBy = 'partner';
+      } else {
+        paidBy = 'me';
+        benType = 'household';
+        benId = 'household';
+        spentBy = 'me';
+      }
+    }
+
     try {
       // 1. Direct Supabase insert
       await supabase.from('transactions').insert({
@@ -116,7 +181,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         'currency': 'SAR',
         'merchant': merchant,
         'category_code': _selectedCategory,
-        'spent_by': _selectedSpentBy,
+        'spent_by': spentBy,
+        'paid_by': paidBy,
+        'beneficiary_type': benType,
+        'beneficiary_id': benId,
         'source': 'manual',
         'timestamp': DateTime.now().toIso8601String(),
         'items': [
@@ -142,6 +210,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           payload: {
             'message': '$merchant SAR ${amount.toStringAsFixed(2)} in $_selectedCategory',
             'user_id': supabase.auth.currentUser?.id,
+            'paid_by': paidBy,
+            'beneficiary_type': benType,
+            'beneficiary_id': benId,
+            'spent_by': spentBy,
           },
           householdId: hid,
         );
@@ -288,21 +360,238 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Paid By Segmented Options
-              Text(
-                'Paid by:',
-                style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
+              // Paid By & Responsibility Attribution
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildSegment('me', 'Me', Icons.person_rounded),
-                  const SizedBox(width: 8),
-                  _buildSegment('partner', 'Partner', Icons.people_alt_rounded),
-                  const SizedBox(width: 8),
-                  _buildSegment('both', 'Split (Both)', Icons.handshake_rounded),
+                  Text(
+                    context.tr('paid_by_label'),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.subtleCardBg,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildModeTogglePill(
+                          label: context.tr('household_model_family'),
+                          icon: Icons.family_restroom_rounded,
+                          isSelected: !_isRoommateMode,
+                          onTap: () => setState(() => _isRoommateMode = false),
+                        ),
+                        _buildModeTogglePill(
+                          label: context.tr('household_model_roommates'),
+                          icon: Icons.groups_rounded,
+                          isSelected: _isRoommateMode,
+                          onTap: () => setState(() => _isRoommateMode = true),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
+              const SizedBox(height: 10),
+
+              if (!_isRoommateMode) ...[
+                // Family Islamic Nafaqah options
+                Row(
+                  children: [
+                    _buildSegmentOption(
+                      isSelected: _familyPayer == 'me',
+                      label: context.tr('payer_nafaqah_me'),
+                      icon: Icons.shield_outlined,
+                      activeColor: const Color(0xFF00C896),
+                      onTap: () => setState(() => _familyPayer = 'me'),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSegmentOption(
+                      isSelected: _familyPayer == 'wife_reimbursable',
+                      label: context.tr('payer_nafaqah_wife_reimbursable'),
+                      icon: Icons.currency_exchange_rounded,
+                      activeColor: const Color(0xFFFFA657),
+                      onTap: () => setState(() => _familyPayer = 'wife_reimbursable'),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSegmentOption(
+                      isSelected: _familyPayer == 'wife_personal',
+                      label: context.tr('payer_nafaqah_wife_personal'),
+                      icon: Icons.shopping_bag_outlined,
+                      activeColor: const Color(0xFF4DE6F7),
+                      onTap: () => setState(() => _familyPayer = 'wife_personal'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (_familyPayer == 'wife_reimbursable'
+                            ? const Color(0xFFFFA657)
+                            : _familyPayer == 'wife_personal'
+                                ? const Color(0xFF4DE6F7)
+                                : const Color(0xFF00C896))
+                        .withValues(alpha: context.isDark ? 0.12 : 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: (_familyPayer == 'wife_reimbursable'
+                              ? const Color(0xFFFFA657)
+                              : _familyPayer == 'wife_personal'
+                                  ? const Color(0xFF4DE6F7)
+                                  : const Color(0xFF00C896))
+                          .withValues(alpha: context.isDark ? 0.35 : 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _familyPayer == 'wife_reimbursable'
+                            ? Icons.info_outline_rounded
+                            : _familyPayer == 'wife_personal'
+                                ? Icons.person_outline_rounded
+                                : Icons.check_circle_outline_rounded,
+                        size: 15,
+                        color: _familyPayer == 'wife_reimbursable'
+                            ? const Color(0xFFFFA657)
+                            : _familyPayer == 'wife_personal'
+                                ? const Color(0xFF4DE6F7)
+                                : const Color(0xFF00C896),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _familyPayer == 'wife_reimbursable'
+                              ? context.tr('nafaqah_wife_reimbursable_hint')
+                              : _familyPayer == 'wife_personal'
+                                  ? context.tr('nafaqah_wife_personal_hint')
+                                  : context.tr('nafaqah_me_hint'),
+                          style: GoogleFonts.outfit(
+                            color: context.textPrimary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                // Multi-Roommate Living Mode
+                if (_householdMembers.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Select Payer:',
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _householdMembers.map((m) {
+                        final mid = m['id'] as String? ?? '';
+                        final name = (m['display_name'] as String?)?.isNotEmpty == true
+                            ? m['display_name'] as String
+                            : 'Roommate';
+                        final isSelected = _selectedRoommateId == mid;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(name),
+                            selected: isSelected,
+                            onSelected: (sel) {
+                              if (sel) setState(() => _selectedRoommateId = mid);
+                            },
+                            selectedColor: const Color(0xFF00C896).withValues(alpha: 0.2),
+                            backgroundColor: context.subtleCardBg,
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A87A))
+                                  : context.textSecondary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 11.5,
+                            ),
+                            side: BorderSide(
+                              color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    _buildSegmentOption(
+                      isSelected: _roommateSplit == 'all',
+                      label: context.tr('roommate_split_all'),
+                      icon: Icons.groups_rounded,
+                      activeColor: const Color(0xFF00C896),
+                      onTap: () => setState(() => _roommateSplit = 'all'),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSegmentOption(
+                      isSelected: _roommateSplit == 'personal',
+                      label: context.tr('roommate_split_personal'),
+                      icon: Icons.lock_outline_rounded,
+                      activeColor: const Color(0xFF4DE6F7),
+                      onTap: () => setState(() => _roommateSplit = 'personal'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (_roommateSplit == 'all'
+                            ? const Color(0xFF00C896)
+                            : const Color(0xFF4DE6F7))
+                        .withValues(alpha: context.isDark ? 0.12 : 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: (_roommateSplit == 'all'
+                              ? const Color(0xFF00C896)
+                              : const Color(0xFF4DE6F7))
+                          .withValues(alpha: context.isDark ? 0.35 : 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _roommateSplit == 'all' ? Icons.pie_chart_outline_rounded : Icons.lock_outline_rounded,
+                        size: 15,
+                        color: _roommateSplit == 'all' ? const Color(0xFF00C896) : const Color(0xFF4DE6F7),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _roommateSplit == 'all'
+                              ? context.tr('roommate_split_all_hint')
+                              : context.tr('roommate_split_personal_hint'),
+                          style: GoogleFonts.outfit(
+                            color: context.textPrimary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Save Button
@@ -339,30 +628,80 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     );
   }
 
-  Widget _buildSegment(String key, String label, IconData icon) {
-    final isSelected = _selectedSpentBy == key;
+  Widget _buildModeTogglePill({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (context.isDark ? const Color(0xFF00C896) : const Color(0xFF00A87A))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: isSelected ? Colors.black : context.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.black : context.textSecondary,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSegmentOption({
+    required bool isSelected,
+    required String label,
+    required IconData icon,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedSpentBy = key),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.18) : context.subtleCardBg,
+            color: isSelected ? activeColor.withValues(alpha: context.isDark ? 0.18 : 0.12) : context.subtleCardBg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+              color: isSelected ? activeColor : context.borderColor,
+              width: isSelected ? 1.4 : 1.0,
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: isSelected ? const Color(0xFF00C896) : context.textSecondary),
-              const SizedBox(width: 4),
+              Icon(icon, size: 16, color: isSelected ? activeColor : context.textSecondary),
+              const SizedBox(height: 4),
               Text(
                 label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
-                  fontSize: 11.5,
+                  color: isSelected ? activeColor : context.textSecondary,
+                  fontSize: 11,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),

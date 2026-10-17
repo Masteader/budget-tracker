@@ -133,12 +133,19 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: context.cardBg,
+                        color: context.isDark ? const Color(0xFF071C33) : Colors.white,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: color.withValues(alpha: 0.5)),
+                        border: Border.all(
+                          color: context.isDark
+                              ? color.withValues(alpha: 0.5)
+                              : color.withValues(alpha: 0.7),
+                          width: context.isDark ? 1 : 1.2,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: context.isDark
+                                ? Colors.black.withValues(alpha: 0.4)
+                                : const Color(0xFF0F172A).withValues(alpha: 0.10),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -147,7 +154,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                       child: Text(
                         label,
                         style: GoogleFonts.outfit(
-                          color: Colors.white,
+                          color: context.isDark ? Colors.white : const Color(0xFF0F172A),
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
                         ),
