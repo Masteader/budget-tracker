@@ -25,6 +25,7 @@ import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../accounts/accounts_overview_screen.dart';
 import 'help_support_screen.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
@@ -772,6 +773,84 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               initialRule: _rolloverRule,
               accumulatedSavings: _accumulatedSavings,
               onSaveRule: _saveRolloverRule,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Color(0xFF00E5BF),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Accounts & Balances',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Manage bank accounts, e-wallets, crypto & cash balances',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AccountsOverviewScreen(
+                            householdId: _householdId!,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00E5BF),
+                      foregroundColor: const Color(0xFF051424),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Manage',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ] else ...[
             Container(

@@ -1,0 +1,497 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
+import '../../models/account.dart';
+import '../../services/account_service.dart';
+import '../../theme/app_themes.dart';
+import '../app_snackbar.dart';
+
+/// Assistant sheet to distribute newly received salary from bank into
+/// e-wallets, cash, or savings accounts in one seamless workflow.
+class SalaryDistributionAssistantSheet extends StatefulWidget {
+  final String householdId;
+  final Account sourceAccount;
+  final double netSalaryAmount;
+  final VoidCallback? onComplete;
+
+  const SalaryDistributionAssistantSheet({
+    super.key,
+    required this.householdId,
+    required this.sourceAccount,
+    required this.netSalaryAmount,
+    this.onComplete,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required String householdId,
+    required Account sourceAccount,
+    required double netSalaryAmount,
+    VoidCallback? onComplete,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SalaryDistributionAssistantSheet(
+        householdId: householdId,
+        sourceAccount: sourceAccount,
+        netSalaryAmount: netSalaryAmount,
+        onComplete: onComplete,
+      ),
+    );
+  }
+
+  @override
+  State<SalaryDistributionAssistantSheet> createState() =>
+      _SalaryDistributionAssistantSheetState();
+}
+
+class _SalaryDistributionAssistantSheetState
+    extends State<SalaryDistributionAssistantSheet> {
+  final _fmt = NumberFormat('#,##0.00', 'en_US');
+  List<Account> _targetAccounts = [];
+  bool _isLoading = true;
+  bool _isExecuting = false;
+
+  // Map of accountId -> TextEditingController
+  final Map<String, TextEditingController> _controllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccounts();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final all = await AccountService.instance.getAccounts(widget.householdId);
+      if (mounted) {
+        setState(() {
+          // Exclude source account
+          _targetAccounts =
+              all.where((a) => a.id != widget.sourceAccount.id && !a.isArchived).toList();
+          for (final a in _targetAccounts) {
+            _controllers[a.id] = TextEditingController(text: '');
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  double get _totalAllocated {
+    double sum = 0.0;
+    for (final c in _controllers.values) {
+      final v = double.tryParse(c.text.trim()) ?? 0.0;
+      sum += v;
+    }
+    return sum;
+  }
+
+  double get _remainingInBank => widget.netSalaryAmount - _totalAllocated;
+
+  Future<void> _executeDistribution() async {
+    final targets = <String, double>{};
+    for (final entry in _controllers.entries) {
+      final val = double.tryParse(entry.value.text.trim()) ?? 0.0;
+      if (val > 0) {
+        targets[entry.key] = val;
+      }
+    }
+
+    if (targets.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
+
+    if (_remainingInBank < -0.01) {
+      AppSnackBar.showError(
+        context,
+        'Allocated amount exceeds deposited salary by SAR ${_fmt.format(-_remainingInBank)}',
+        title: 'Overallocated',
+      );
+      return;
+    }
+
+    setState(() => _isExecuting = true);
+
+    try {
+      int successCount = 0;
+      for (final entry in targets.entries) {
+        final targetAcc = _targetAccounts.firstWhere((a) => a.id == entry.key);
+        await AccountService.instance.transferFunds(
+          householdId: widget.householdId,
+          fromAccountId: widget.sourceAccount.id,
+          toAccountId: entry.key,
+          amount: entry.value,
+          fee: 0.0,
+          notes: 'Payday auto-distribution to ${targetAcc.name}',
+        );
+        successCount++;
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onComplete?.call();
+        AppSnackBar.showSuccess(
+          context,
+          'Successfully distributed funds across $successCount account(s)!',
+          title: 'Distribution Complete',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isExecuting = false);
+        AppSnackBar.showError(
+          context,
+          'Failed to complete transfers: $e',
+          title: 'Transfer Error',
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDark;
+    final totalAllocated = _totalAllocated;
+    final remaining = _remainingInBank;
+    final isOverallocated = remaining < -0.01;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.scaffoldBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(color: context.borderColor),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Title & Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.alt_route_rounded,
+                  color: Color(0xFF00E5BF),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Distribute Salary',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Move funds to your wallets & savings',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: context.textSecondary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Live Allocation Tracker
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF09223D), const Color(0xFF0A1828)]
+                    : [const Color(0xFFE6FAF5), const Color(0xFFF0FDF8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isOverallocated
+                    ? Colors.redAccent.withValues(alpha: 0.5)
+                    : const Color(0xFF00E5BF).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'From ${widget.sourceAccount.name}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'SAR ${_fmt.format(widget.netSalaryAmount)}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  height: 36,
+                  width: 1,
+                  color: context.borderColor,
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Remaining in Bank',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isOverallocated ? Colors.redAccent : context.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'SAR ${_fmt.format(remaining)}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isOverallocated
+                            ? Colors.redAccent
+                            : const Color(0xFF00C896),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Accounts List
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF00E5BF)),
+              ),
+            )
+          else if (_targetAccounts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No secondary accounts found.\nCreate e-wallets or cash accounts to distribute.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.textSecondary, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _targetAccounts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (ctx, i) {
+                  final acc = _targetAccounts[i];
+                  final ctrl = _controllers[acc.id]!;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          acc.accountType.defaultIcon,
+                          size: 22,
+                          color: const Color(0xFF00E5BF),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                acc.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: context.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                '${acc.accountType.labelEn} • Current: SAR ${_fmt.format(acc.balance)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 110,
+                          child: TextField(
+                            controller: ctrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textAlign: TextAlign.end,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: context.textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '0.00',
+                              hintStyle: TextStyle(
+                                color: context.textSecondary.withValues(alpha: 0.5),
+                                fontSize: 13,
+                              ),
+                              prefixText: 'SAR ',
+                              prefixStyle: TextStyle(
+                                fontSize: 11,
+                                color: context.textSecondary,
+                              ),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              fillColor: context.scaffoldBg,
+                              filled: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: context.borderColor),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF00E5BF), width: 1.5),
+                              ),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 16),
+
+          // Actions
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isExecuting ? null : () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(color: context.borderColor),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'Keep All in Bank',
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: (_isExecuting || isOverallocated || totalAllocated <= 0)
+                      ? null
+                      : _executeDistribution,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5BF),
+                    foregroundColor: const Color(0xFF051424),
+                    disabledBackgroundColor: context.chipBg,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: _isExecuting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF051424),
+                          ),
+                        )
+                      : Text(
+                          'Execute (${_fmt.format(totalAllocated)})',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

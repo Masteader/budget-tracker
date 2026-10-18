@@ -22,6 +22,8 @@ import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
 import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
+import '../../widgets/dashboard/accounts_summary_card.dart';
+import '../../widgets/dashboard/payday_checkin_banner.dart';
 import '../../widgets/salary_cycle_widget.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
 import '../../widgets/simulator/affordability_simulator_sheet.dart';
@@ -490,6 +492,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   );
                                 },
                               ),
+                              PaydayCheckinBanner(householdId: hid),
                               BudgetHeroCard(
                                 budgets: budgetSnap.data!
                                     .map(Budget.fromMap)
@@ -577,6 +580,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 ),
                               ),
 
+                              const SizedBox(height: 12),
+                              AccountsSummaryCard(householdId: hid),
                               const SizedBox(height: 12),
                               SalaryCycleWidget(householdId: hid),
                               const SizedBox(height: 12),
