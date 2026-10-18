@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/recurring_bill.dart';
 import '../../models/installment_plan.dart';
 import '../../models/models.dart';
@@ -576,7 +577,8 @@ class BudgetApiClient {
 
   Future<List<HouseholdMembership>> getUserHouseholds() async {
     try {
-      final res = await baseClient.supabase.rpc('get_user_households');
+      final client = Supabase.instance.client;
+      final res = await client.rpc('get_user_households');
       if (res is List) {
         return res
             .map((e) => HouseholdMembership.fromMap(Map<String, dynamic>.from(e as Map)))
@@ -584,31 +586,30 @@ class BudgetApiClient {
       }
     } catch (_) {
       try {
-        final uid = baseClient.supabase.auth.currentUser?.id;
+        final client = Supabase.instance.client;
+        final uid = client.auth.currentUser?.id;
         if (uid != null) {
-          final res = await baseClient.supabase
+          final res = await client
               .from('household_memberships')
               .select('household_id, role, households(name, invite_code)')
               .eq('user_id', uid);
-          if (res is List) {
-            final activeHid = (await baseClient.supabase
-                .from('users')
-                .select('household_id')
-                .eq('id', uid)
-                .maybeSingle())?['household_id'];
-            return res.map((item) {
-              final m = Map<String, dynamic>.from(item as Map);
-              final hh = Map<String, dynamic>.from((m['households'] as Map?) ?? {});
-              final hid = m['household_id'] as String? ?? '';
-              return HouseholdMembership(
-                householdId: hid,
-                householdName: hh['name'] as String? ?? 'Household',
-                inviteCode: hh['invite_code'] as String? ?? '',
-                role: m['role'] as String? ?? 'member',
-                isActive: hid == activeHid,
-              );
-            }).toList();
-          }
+          final activeHid = (await client
+              .from('users')
+              .select('household_id')
+              .eq('id', uid)
+              .maybeSingle())?['household_id'];
+          return res.map((item) {
+            final m = Map<String, dynamic>.from(item);
+            final hh = Map<String, dynamic>.from((m['households'] as Map?) ?? {});
+            final hid = m['household_id'] as String? ?? '';
+            return HouseholdMembership(
+              householdId: hid,
+              householdName: hh['name'] as String? ?? 'Household',
+              inviteCode: hh['invite_code'] as String? ?? '',
+              role: m['role'] as String? ?? 'member',
+              isActive: hid == activeHid,
+            );
+          }).toList();
         }
       } catch (_) {}
     }
@@ -617,7 +618,8 @@ class BudgetApiClient {
 
   Future<bool> switchActiveHousehold(String householdId) async {
     try {
-      final res = await baseClient.supabase.rpc(
+      final client = Supabase.instance.client;
+      final res = await client.rpc(
         'switch_active_household',
         params: {'p_household_id': householdId},
       );
@@ -626,16 +628,17 @@ class BudgetApiClient {
       }
     } catch (_) {
       try {
-        final uid = baseClient.supabase.auth.currentUser?.id;
+        final client = Supabase.instance.client;
+        final uid = client.auth.currentUser?.id;
         if (uid != null) {
-          final membership = await baseClient.supabase
+          final membership = await client
               .from('household_memberships')
               .select('role')
               .eq('household_id', householdId)
               .eq('user_id', uid)
               .maybeSingle();
           if (membership != null) {
-            await baseClient.supabase.from('users').update({
+            await client.from('users').update({
               'household_id': householdId,
               'role': membership['role'] ?? 'member',
             }).eq('id', uid);

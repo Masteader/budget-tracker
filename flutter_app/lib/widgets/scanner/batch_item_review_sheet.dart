@@ -47,7 +47,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   late final TextEditingController _vatCtrl;
 
   String _selectedCategory = 'OPEX-GROCERY';
-  String _selectedSpentBy = 'both';
+  final String _selectedSpentBy = 'both';
   bool _isOfflineDraft = false;
 
   static const List<String> _categories = [
@@ -440,7 +440,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
             // Category Dropdown
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: InputDecoration(
                 labelText: 'Category',
                 labelStyle: TextStyle(color: context.textSecondary),

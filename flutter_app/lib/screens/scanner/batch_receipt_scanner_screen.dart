@@ -382,7 +382,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                             ),
                                           )
-                                        : Icon(Icons.camera_alt_rounded, color: const Color(0xFF051424), size: 26),
+                                        : const Icon(Icons.camera_alt_rounded, color: Color(0xFF051424), size: 26),
                                   ),
                                 ),
                               ),
