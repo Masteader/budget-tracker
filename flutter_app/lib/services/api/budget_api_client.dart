@@ -573,4 +573,77 @@ class BudgetApiClient {
       return false;
     }
   }
+
+  Future<List<HouseholdMembership>> getUserHouseholds() async {
+    try {
+      final res = await baseClient.supabase.rpc('get_user_households');
+      if (res is List) {
+        return res
+            .map((e) => HouseholdMembership.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+    } catch (_) {
+      try {
+        final uid = baseClient.supabase.auth.currentUser?.id;
+        if (uid != null) {
+          final res = await baseClient.supabase
+              .from('household_memberships')
+              .select('household_id, role, households(name, invite_code)')
+              .eq('user_id', uid);
+          if (res is List) {
+            final activeHid = (await baseClient.supabase
+                .from('users')
+                .select('household_id')
+                .eq('id', uid)
+                .maybeSingle())?['household_id'];
+            return res.map((item) {
+              final m = Map<String, dynamic>.from(item as Map);
+              final hh = Map<String, dynamic>.from((m['households'] as Map?) ?? {});
+              final hid = m['household_id'] as String? ?? '';
+              return HouseholdMembership(
+                householdId: hid,
+                householdName: hh['name'] as String? ?? 'Household',
+                inviteCode: hh['invite_code'] as String? ?? '',
+                role: m['role'] as String? ?? 'member',
+                isActive: hid == activeHid,
+              );
+            }).toList();
+          }
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  Future<bool> switchActiveHousehold(String householdId) async {
+    try {
+      final res = await baseClient.supabase.rpc(
+        'switch_active_household',
+        params: {'p_household_id': householdId},
+      );
+      if (res is Map && res['success'] == true) {
+        return true;
+      }
+    } catch (_) {
+      try {
+        final uid = baseClient.supabase.auth.currentUser?.id;
+        if (uid != null) {
+          final membership = await baseClient.supabase
+              .from('household_memberships')
+              .select('role')
+              .eq('household_id', householdId)
+              .eq('user_id', uid)
+              .maybeSingle();
+          if (membership != null) {
+            await baseClient.supabase.from('users').update({
+              'household_id': householdId,
+              'role': membership['role'] ?? 'member',
+            }).eq('id', uid);
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
 }

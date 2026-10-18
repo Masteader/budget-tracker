@@ -1,6 +1,8 @@
 /// Data models for the Budget Tracker app.
 library;
 
+export 'household_membership.dart';
+
 // ── Transaction ──────────────────────────────────────────────────────────────
 
 class Transaction {

@@ -214,6 +214,12 @@ class ApiService {
   Future<Map<String, dynamic>> claimMemberProfile(String inviteCode, String userId) =>
       budget.claimMemberProfile(inviteCode: inviteCode, userId: userId);
 
+  Future<List<HouseholdMembership>> getUserHouseholds() =>
+      budget.getUserHouseholds();
+
+  Future<bool> switchActiveHousehold(String householdId) =>
+      budget.switchActiveHousehold(householdId);
+
   Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
       budget.recordReimbursementPayment(request: request);
 
