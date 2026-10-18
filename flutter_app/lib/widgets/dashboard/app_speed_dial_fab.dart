@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
+import '../../screens/scanner/batch_receipt_scanner_screen.dart';
 import '../simulator/affordability_simulator_sheet.dart';
 import '../transactions/manual_expense_sheet.dart';
 import '../accounts/record_income_sheet.dart';
@@ -83,6 +84,20 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (_) => ReceiptScannerSheet(householdId: hid),
+      );
+    }
+  }
+
+  void _onBatchScanReceipts() {
+    _close();
+    HapticFeedback.selectionClick();
+    final hid = widget.householdId;
+    if (hid != null && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BatchReceiptScannerScreen(householdId: hid),
+        ),
       );
     }
   }
@@ -211,9 +226,16 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
             behavior: HitTestBehavior.opaque,
             child: const SizedBox(
               width: 300,
-              height: 420,
+              height: 480,
             ),
           ),
+        _buildOption(
+          icon: Icons.dynamic_feed_rounded,
+          label: context.tr('batch_scan_receipts'),
+          color: const Color(0xFF80E5FF),
+          onTap: _onBatchScanReceipts,
+          offset: 340,
+        ),
         _buildOption(
           icon: Icons.camera_alt_rounded,
           label: context.tr('scan_receipt'),
@@ -230,15 +252,15 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         ),
         _buildOption(
           icon: Icons.savings_rounded,
-          label: 'Record Income',
-          color: const Color(0xFF00C896),
+          label: context.tr('record_income'),
+          color: context.electricTeal,
           onTap: _onRecordIncome,
           offset: 190,
         ),
         _buildOption(
           icon: Icons.swap_horiz_rounded,
-          label: 'Transfer Funds',
-          color: const Color(0xFF38BDF8),
+          label: context.tr('transfer_funds'),
+          color: context.iceCyan,
           onTap: _onTransferFunds,
           offset: 140,
         ),

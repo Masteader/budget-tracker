@@ -804,6 +804,11 @@ class AppLocalizations {
       'offline_draft_notice': 'Captured offline. Total SAR and store extracted locally; line items will enrich when online.',
       'batch_complete_title': 'Batch Processing Complete',
       'batch_complete_desc': 'All receipts in the queue have been reviewed and saved.',
+      'save_and_finish': 'Save & Finish',
+      'done': 'Done',
+      'return_to_dashboard': 'Return to Dashboard',
+      'empty_queue_message': 'No receipts queued yet. Snap photos of your paper receipts to begin batch scanning.',
+      'clear_queue': 'Clear Queue',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -1326,6 +1331,11 @@ class AppLocalizations {
       'offline_draft_notice': 'تم التقاطها دون اتصال. تم استخراج الإجمالي والمتجر محلياً، وستكتمل البنود تلقائياً عند استعادة الاتصال.',
       'batch_complete_title': 'اكتملت معالجة المجموعة',
       'batch_complete_desc': 'تمت مراجعة وحفظ جميع فواتير المجموعة بنجاح.',
+      'save_and_finish': 'حفظ وإنهاء',
+      'done': 'تم',
+      'return_to_dashboard': 'العودة إلى الرئيسية',
+      'empty_queue_message': 'لا توجد فواتير في قائمة الانتظار بعد. التقط صوراً لفواتيرك الورقية لبدء المسح المتتالي.',
+      'clear_queue': 'مسح القائمة',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -1848,6 +1858,11 @@ class AppLocalizations {
       'offline_draft_notice': 'آف لائن ریکارڈ۔ رقم اور اسٹور مقامی طور پر حاصل؛ انٹرنیٹ پر مکمل تفصیلات آ جائیں گی۔',
       'batch_complete_title': 'بیچ پروسیسنگ مکمل',
       'batch_complete_desc': 'قطار کی تمام رسیدوں کا جائزہ لے کر محفوظ کر لیا گیا ہے۔',
+      'save_and_finish': 'محفوظ کریں اور ختم کریں',
+      'done': 'مکمل',
+      'return_to_dashboard': 'ڈیش بورڈ پر واپس جائیں',
+      'empty_queue_message': 'ابھی قطار میں کوئی رسید نہیں۔ بیچ اسکین شروع کرنے کے لیے رسیدوں کی تصاویر لیں۔',
+      'clear_queue': 'قطار صاف کریں',
     },
   };
 
