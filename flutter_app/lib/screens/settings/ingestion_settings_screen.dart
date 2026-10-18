@@ -21,6 +21,7 @@ import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../onboarding/household_screen.dart';
 import '../../theme/app_themes.dart';
@@ -456,6 +457,17 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     }
   }
 
+  void _showHouseholdSwitchSheet() {
+    if (_householdId == null) return;
+    HouseholdSwitchSheet.show(
+      context,
+      currentHouseholdId: _householdId!,
+      onSwitched: _loadUserInfo,
+      onJoinNew: _showJoinHouseholdDialog,
+      onCreateNew: _showCreateHouseholdDialog,
+    );
+  }
+
   Future<void> _showJoinHouseholdDialog() async {
     final codeCtrl = TextEditingController();
     await showDialog(
@@ -753,7 +765,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               dependents: _dependents,
               onCopyInviteCode: _copyInviteCode,
               onLeaveHousehold: _confirmLeaveHousehold,
-              onSwitchHousehold: _showJoinHouseholdDialog,
+              onSwitchHousehold: _showHouseholdSwitchSheet,
               onCreateHousehold: _showCreateHouseholdDialog,
               onAddDependent: _showAddDependentDialog,
               onRemoveDependent: _removeDependent,
@@ -787,12 +799,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                      color: context.electricTeal.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.account_balance_wallet_rounded,
-                      color: Color(0xFF00E5BF),
+                      color: context.electricTeal,
                       size: 24,
                     ),
                   ),
@@ -802,7 +814,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Accounts & Balances',
+                          context.tr('accounts_balances'),
                           style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -811,7 +823,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Manage bank accounts, e-wallets, crypto & cash balances',
+                          context.tr('accounts_balances_desc'),
                           style: TextStyle(
                             fontSize: 12,
                             color: context.textSecondary,
@@ -833,8 +845,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00E5BF),
-                      foregroundColor: const Color(0xFF051424),
+                      backgroundColor: context.electricTeal,
+                      foregroundColor: context.scaffoldBg,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -842,7 +854,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       elevation: 0,
                     ),
                     child: Text(
-                      'Manage',
+                      context.tr('manage'),
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,

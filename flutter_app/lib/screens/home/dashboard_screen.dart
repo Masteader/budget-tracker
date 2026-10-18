@@ -33,6 +33,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../settings/ingestion_settings_screen.dart';
 import '../settings/help_support_screen.dart';
+import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
@@ -761,6 +762,22 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         ],
       ),
       actions: [
+        IconButton(
+          key: const Key('switch_household_appbar_button'),
+          icon: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF00E5BF)),
+          tooltip: context.tr('switch_household'),
+          onPressed: () {
+            HouseholdSwitchSheet.show(
+              context,
+              currentHouseholdId: hid,
+              onSwitched: () {
+                setState(() {
+                  _householdId = _fetchHouseholdId();
+                });
+              },
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00E5BF)),
           tooltip: context.tr('help_support'),
