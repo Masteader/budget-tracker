@@ -3,7 +3,11 @@ import os
 import pytest
 from fastapi import Request
 
-# Set test secrets before any imports of main
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Set test secrets before any imports of main (fall back to mocks if not in .env)
 os.environ.setdefault("WEBHOOK_SECRET", "test_secret_for_ci_only_do_not_use_in_prod")
 os.environ.setdefault("APP_AUTH_TOKEN", "test_token_for_ci_only")
 os.environ.setdefault("ENV", "development")
