@@ -6,6 +6,8 @@ import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
 import '../simulator/affordability_simulator_sheet.dart';
 import '../transactions/manual_expense_sheet.dart';
+import '../accounts/record_income_sheet.dart';
+import '../accounts/account_transfer_sheet.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Animated multi-action Speed Dial FAB for quick transaction input and pre-purchase check.
@@ -106,6 +108,24 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
     ManualExpenseSheet.show(context, householdId: widget.householdId);
   }
 
+  void _onRecordIncome() {
+    _close();
+    HapticFeedback.selectionClick();
+    final hid = widget.householdId;
+    if (hid != null && mounted) {
+      RecordIncomeSheet.show(context, householdId: hid);
+    }
+  }
+
+  void _onTransferFunds() {
+    _close();
+    HapticFeedback.selectionClick();
+    final hid = widget.householdId;
+    if (hid != null && mounted) {
+      AccountTransferSheet.show(context, householdId: hid);
+    }
+  }
+
   Widget _buildOption({
     required IconData icon,
     required String label,
@@ -190,8 +210,8 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
             onTap: _close,
             behavior: HitTestBehavior.opaque,
             child: const SizedBox(
-              width: 280,
-              height: 320,
+              width: 300,
+              height: 420,
             ),
           ),
         _buildOption(
@@ -199,28 +219,42 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
           label: context.tr('scan_receipt'),
           color: const Color(0xFF4DE6F7),
           onTap: _onScanReceipt,
-          offset: 210,
+          offset: 290,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
           color: const Color(0xFF00E5BF),
           onTap: _onVoiceEntry,
-          offset: 160,
+          offset: 240,
+        ),
+        _buildOption(
+          icon: Icons.savings_rounded,
+          label: 'Record Income',
+          color: const Color(0xFF00C896),
+          onTap: _onRecordIncome,
+          offset: 190,
+        ),
+        _buildOption(
+          icon: Icons.swap_horiz_rounded,
+          label: 'Transfer Funds',
+          color: const Color(0xFF38BDF8),
+          onTap: _onTransferFunds,
+          offset: 140,
         ),
         _buildOption(
           icon: Icons.calculate_outlined,
           label: context.tr('affordability_simulator'),
           color: const Color(0xFFD4AF37),
           onTap: _onAffordabilitySimulator,
-          offset: 110,
+          offset: 95,
         ),
         _buildOption(
           icon: Icons.edit_note_rounded,
           label: context.tr('manual_log'),
           color: const Color(0xFFFFA657),
           onTap: _onManualEntry,
-          offset: 60,
+          offset: 50,
         ),
         FloatingActionButton.extended(
           heroTag: 'main_speed_dial_fab',

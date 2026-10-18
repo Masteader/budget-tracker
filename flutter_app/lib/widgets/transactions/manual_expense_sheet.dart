@@ -7,6 +7,8 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/offline_sync_service.dart';
+import '../../models/account.dart';
+import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 
@@ -65,6 +67,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   String? _selectedRoommateId;
   String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
   List<Map<String, dynamic>> _householdMembers = [];
+  List<Account> _accounts = [];
+  String? _selectedAccountId;
 
   static const List<Map<String, String>> _categories = [
     {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
@@ -90,6 +94,46 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     );
     _selectedCategory = widget.initialCategory ?? 'OPEX-GROCERY';
     _loadHouseholdMembers();
+    _loadAccounts();
+  }
+
+  Future<void> _loadAccounts() async {
+    final hid = widget.householdId;
+    if (hid == null || hid.isEmpty) return;
+    try {
+      final list = await AccountService.instance.getAccounts(hid);
+      if (mounted) {
+        setState(() {
+          _accounts = list;
+        });
+        await _updateDefaultAccountForCategory(_selectedCategory);
+        if (_selectedAccountId == null && list.isNotEmpty && mounted) {
+          setState(() {
+            _selectedAccountId = list.first.id;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _updateDefaultAccountForCategory(String categoryCode) async {
+    final hid = widget.householdId;
+    if (hid == null || hid.isEmpty) return;
+    try {
+      final bRes = await supabase
+          .from('budgets')
+          .select('account_id')
+          .eq('household_id', hid)
+          .eq('category_code', categoryCode)
+          .not('account_id', 'is', null)
+          .maybeSingle();
+      if (bRes != null && bRes['account_id'] != null && mounted) {
+        final accId = bRes['account_id'] as String;
+        if (_accounts.any((a) => a.id == accId)) {
+          setState(() => _selectedAccountId = accId);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadHouseholdMembers() async {
@@ -185,12 +229,26 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         'paid_by': paidBy,
         'beneficiary_type': benType,
         'beneficiary_id': benId,
+        'account_id': _selectedAccountId,
         'source': 'manual',
         'timestamp': DateTime.now().toIso8601String(),
         'items': [
           {'name': merchant, 'price': amount, 'quantity': 1}
         ],
       });
+
+      if (_selectedAccountId != null && _selectedAccountId!.isNotEmpty) {
+        try {
+          final accRes = await supabase.from('accounts').select('balance').eq('id', _selectedAccountId!).maybeSingle();
+          if (accRes != null && accRes['balance'] != null) {
+            final curBal = (accRes['balance'] as num).toDouble();
+            await supabase.from('accounts').update({
+              'balance': curBal - amount,
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('id', _selectedAccountId!);
+          }
+        } catch (_) {}
+      }
 
       if (mounted) {
         context.read<TransactionProvider>().fetchTransactions();
@@ -355,10 +413,48 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   );
                 }).toList(),
                 onChanged: (val) {
-                  if (val != null) setState(() => _selectedCategory = val);
+                  if (val != null) {
+                    setState(() => _selectedCategory = val);
+                    _updateDefaultAccountForCategory(val);
+                  }
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // Payment Account Dropdown
+              if (_accounts.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  value: _selectedAccountId,
+                  dropdownColor: context.cardBg,
+                  style: TextStyle(color: context.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Payment Account',
+                    labelStyle: TextStyle(color: context.textSecondary),
+                    prefixIcon: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF00E5BF), size: 20),
+                    filled: true,
+                    fillColor: context.inputBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: _accounts.map((acc) {
+                    return DropdownMenuItem<String>(
+                      value: acc.id,
+                      child: Row(
+                        children: [
+                          Icon(acc.accountType.defaultIcon, size: 16, color: const Color(0xFF00E5BF)),
+                          const SizedBox(width: 8),
+                          Text('${acc.name} (${acc.currency} ${acc.balance.toStringAsFixed(2)})'),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedAccountId = val);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                const SizedBox(height: 4),
+              ],
 
               // Paid By & Responsibility Attribution
               Row(
