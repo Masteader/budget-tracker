@@ -59,6 +59,21 @@ extension AccountTypeExtension on AccountType {
     }
   }
 
+  String get translationKey {
+    switch (this) {
+      case AccountType.bank:
+        return 'account_type_bank';
+      case AccountType.eWallet:
+        return 'account_type_wallet';
+      case AccountType.crypto:
+        return 'account_type_crypto';
+      case AccountType.cash:
+        return 'account_type_cash';
+      case AccountType.sharedPool:
+        return 'account_type_pool';
+    }
+  }
+
   IconData get defaultIcon {
     switch (this) {
       case AccountType.bank:
@@ -314,6 +329,23 @@ extension IncomeSourceTypeExtension on IncomeSourceType {
         return 'Roommate Share';
       case IncomeSourceType.other:
         return 'Other Income';
+    }
+  }
+
+  String get translationKey {
+    switch (this) {
+      case IncomeSourceType.salary:
+        return 'income_source_salary';
+      case IncomeSourceType.overtime:
+        return 'overtime';
+      case IncomeSourceType.bonus:
+        return 'income_source_bonus';
+      case IncomeSourceType.sideGig:
+        return 'income_source_freelance';
+      case IncomeSourceType.roommateShare:
+        return 'income_source_roommate';
+      case IncomeSourceType.other:
+        return 'income_source_other';
     }
   }
 }

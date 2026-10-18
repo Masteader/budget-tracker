@@ -29,7 +29,7 @@
 - Consumes: `public.households`, `public.users`, `public.budgets`, `public.transactions`
 - Produces: `public.accounts`, `public.account_transfers`, `public.income_records`, columns `budgets.account_id`, `transactions.account_id`
 
-- [ ] **Step 1: Write SQL migration file**
+- [x] **Step 1: Write SQL migration file**
 
 ```sql
 -- Migration: Multi-source income, accounts & balances, and linked budgets
@@ -123,7 +123,7 @@ CREATE POLICY "Household members view income" ON public.income_records
     USING (household_id IN (SELECT household_id FROM public.users WHERE id = auth.uid()));
 ```
 
-- [ ] **Step 2: Commit migration file**
+- [x] **Step 2: Commit migration file**
 
 ```bash
 git add supabase/migrations/20261018_multi_source_income_and_accounts.sql
@@ -144,7 +144,7 @@ git commit -m "feat(db): add accounts, transfers, and multi-source income tables
 - Consumes: Supabase database tables `accounts`, `account_transfers`, `income_records`
 - Produces: `Account`, `AccountType`, `AccountTransfer`, `IncomeRecord`, `AccountService` singleton
 
-- [ ] **Step 1: Write failing unit test for Account models and calculations**
+- [x] **Step 1: Write failing unit test for Account models and calculations**
 
 ```dart
 // flutter_app/test/account_models_test.dart
@@ -178,18 +178,18 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 cd flutter_app; flutter test test/account_models_test.dart
 ```
 
-- [ ] **Step 3: Implement `Account`, `AccountTransfer`, and `IncomeRecord` models**
+- [x] **Step 3: Implement `Account`, `AccountTransfer`, and `IncomeRecord` models**
 
 Create `flutter_app/lib/models/account.dart` with enum `AccountType`, model `Account`, `AccountTransfer`, `IncomeRecord`, and capacity status helpers.
 Update `flutter_app/lib/models/models.dart` to include `accountId` in `Budget` and `Transaction`.
 
-- [ ] **Step 4: Implement `AccountService`**
+- [x] **Step 4: Implement `AccountService`**
 
 Create `flutter_app/lib/services/account_service.dart`:
 - `Stream<List<Account>> streamAccounts(String householdId)`
@@ -198,13 +198,13 @@ Create `flutter_app/lib/services/account_service.dart`:
 - `Future<void> transferFunds({required String fromAccountId, required String toAccountId, required double amount, double fee = 0, String? notes})`
 - `Future<void> logIncome({required String accountId, required String cycleKey, required String sourceType, required String title, required double baseAmount, double overtime = 0, double bonus = 0, double deductions = 0, String? notes})`
 
-- [ ] **Step 5: Run tests and verify PASS**
+- [x] **Step 5: Run tests and verify PASS**
 
 ```bash
 cd flutter_app; flutter test test/account_models_test.dart
 ```
 
-- [ ] **Step 6: Commit models & service**
+- [x] **Step 6: Commit models & service**
 
 ```bash
 git add flutter_app/lib/models/ flutter_app/lib/services/account_service.dart flutter_app/test/account_models_test.dart
@@ -225,38 +225,38 @@ git commit -m "feat(models): add Account, Transfer, IncomeRecord models and Acco
 - Consumes: `AccountService`, `Account`
 - Produces: Interactive bottom sheets for logging income, transferring between accounts, and picking payment account in manual expense
 
-- [ ] **Step 1: Create `RecordIncomeSheet`**
+- [x] **Step 1: Create `RecordIncomeSheet`**
 Allows user to log received money:
 - Select destination account
 - Select source type (Salary, Overtime, Bonus, Side Gig, Roommate Share, Other)
 - Amount, date, notes
 - Saves to `income_records` and increments destination `account.balance`.
 
-- [ ] **Step 2: Create `AccountTransferSheet`**
+- [x] **Step 2: Create `AccountTransferSheet`**
 Allows transferring between accounts:
 - Source account dropdown (with current balance displayed)
 - Destination account dropdown
 - Amount & optional transfer/gas fee
 - Executes transfer atomically and refreshes both account balances.
 
-- [ ] **Step 3: Update `ManualExpenseSheet`**
+- [x] **Step 3: Update `ManualExpenseSheet`**
 Add "Payment Account" dropdown:
 - Pre-selects the category's mapped account.
 - Allows user to override if another account was used.
 - Decrements the chosen account balance when expense is saved.
 
-- [ ] **Step 4: Wire up `AppSpeedDialFab`**
+- [x] **Step 4: Wire up `AppSpeedDialFab`**
 Add 1-tap options:
 - 💰 Record Income -> opens `RecordIncomeSheet`
 - 🔄 Transfer Funds -> opens `AccountTransferSheet`
 
-- [ ] **Step 5: Verify via widget test or flutter analyze**
+- [x] **Step 5: Verify via widget test or flutter analyze**
 
 ```bash
 cd flutter_app; flutter analyze lib/widgets/dashboard/app_speed_dial_fab.dart lib/widgets/accounts/
 ```
 
-- [ ] **Step 6: Commit FAB & transaction sheets**
+- [x] **Step 6: Commit FAB & transaction sheets**
 
 ```bash
 git add flutter_app/lib/widgets/
@@ -277,7 +277,7 @@ git commit -m "feat(ui): add record income, account transfer sheets, and speed d
 - Consumes: `AccountService`, Supabase real-time `accounts` & `budgets`
 - Produces: Dedicated accounts management screen
 
-- [ ] **Step 1: Implement `AccountCard` widget**
+- [x] **Step 1: Implement `AccountCard` widget**
 Displays:
 - Account icon, name, currency badge
 - Balance (with eye privacy toggle)
@@ -286,22 +286,22 @@ Displays:
 - If in deficit: `[⚡ Quick Transfer]` button that opens `AccountTransferSheet` with pre-filled deficit amount!
 - Reconcile balance button.
 
-- [ ] **Step 2: Implement `ReconcileBalanceDialog`**
+- [x] **Step 2: Implement `ReconcileBalanceDialog`**
 Allows user to enter actual bank app balance, computes variance, and saves adjustment.
 
-- [ ] **Step 3: Implement `AccountsOverviewScreen`**
+- [x] **Step 3: Implement `AccountsOverviewScreen`**
 Displays:
 - Total Liquid Net Worth header card
 - Grouped accounts (Banks, E-wallets, Crypto, Cash, Shared Pool)
 - Add Account button
 
-- [ ] **Step 4: Test & Verify screen compilation**
+- [x] **Step 4: Test & Verify screen compilation**
 
 ```bash
 cd flutter_app; flutter analyze lib/screens/accounts/
 ```
 
-- [ ] **Step 5: Commit Accounts screen**
+- [x] **Step 5: Commit Accounts screen**
 
 ```bash
 git add flutter_app/lib/screens/accounts/ flutter_app/lib/widgets/accounts/
@@ -320,25 +320,25 @@ git commit -m "feat(screens): add AccountsOverviewScreen with capacity status an
 - Consumes: `budgets.account_id`, `accounts`
 - Produces: Category account badge, account re-linking sheet, deficit alert banner, Option A/C rollover prompt
 
-- [ ] **Step 1: Add Mapped Account Badge to Category Cards**
+- [x] **Step 1: Add Mapped Account Badge to Category Cards**
 In `budget_management_screen.dart`, render a chip on each category item: e.g. `[📱 STC Pay]`. Tapping opens `LinkAccountSheet` to switch account.
 
-- [ ] **Step 2: Add Top Account Deficit Banner**
+- [x] **Step 2: Add Top Account Deficit Banner**
 If any mapped account has $\text{balance} < \text{allocated}$, display red/amber banner:
 `⚠️ STC Pay is short by SAR 500.00 for active budgets. [⚡ Fix with Transfer]`.
 
-- [ ] **Step 3: Upgrade Cycle Rollover Prompt (`_copyFromPreviousMonth`)**
+- [x] **Step 3: Upgrade Cycle Rollover Prompt (`_copyFromPreviousMonth`)**
 When copying budgets to the new cycle, prompt user for leftover unspent category funds:
 - `[Option A]`: Roll over unspent funds into this cycle's category cushion (`previous_cycle_delta`).
 - `[Option C]`: Sweep unspent funds into an account Savings/Reserve buffer.
 
-- [ ] **Step 4: Test & Verify compilation**
+- [x] **Step 4: Test & Verify compilation**
 
 ```bash
 cd flutter_app; flutter analyze lib/screens/home/budget_management_screen.dart
 ```
 
-- [ ] **Step 5: Commit budget integration**
+- [x] **Step 5: Commit budget integration**
 
 ```bash
 git add flutter_app/lib/screens/home/budget_management_screen.dart flutter_app/lib/widgets/budgets/
@@ -358,27 +358,27 @@ git commit -m "feat(budgets): integrate account mapping, deficit alerts, and Opt
 - Consumes: `payday_day`, `cycle_key`, `income_records`, `accounts`, `budgets`
 - Produces: Automated payday prompt, itemized salary breakdown, 1-tap salary distribution
 
-- [ ] **Step 1: Implement `PaydayIncomeSheet`**
+- [x] **Step 1: Implement `PaydayIncomeSheet`**
 Form with:
 - Destination Account (defaults to primary bank)
 - Base Salary + Overtime + Bonus - Deductions
 - Net deposit amount
 - Submits to `income_records` and updates destination account balance.
 
-- [ ] **Step 2: Implement `SalaryDistributionAssistantSheet`**
+- [x] **Step 2: Implement `SalaryDistributionAssistantSheet`**
 Detects funding deficits across external accounts (e.g. STC Pay needs SAR 2,000 for groceries; Binance needs SAR 1,000).
 Provides 1-tap `[⚡ Execute Transfers]` button that generates the inter-account transfers from the primary salary bank.
 
-- [ ] **Step 3: Hook Payday Detection in `DashboardScreen`**
+- [x] **Step 3: Hook Payday Detection in `DashboardScreen`**
 If today is on or after the household's `payday_day` and no salary record exists for the current `cycle_key`, present `PaydayIncomeSheet`.
 
-- [ ] **Step 4: Test & Verify**
+- [x] **Step 4: Test & Verify**
 
 ```bash
 cd flutter_app; flutter analyze lib/widgets/salary/ lib/screens/home/dashboard_screen.dart
 ```
 
-- [ ] **Step 5: Commit payday automation**
+- [x] **Step 5: Commit payday automation**
 
 ```bash
 git add flutter_app/lib/widgets/salary/ flutter_app/lib/screens/home/dashboard_screen.dart
@@ -398,13 +398,13 @@ git commit -m "feat(payday): add payday check-in sheet and salary distribution a
 - Consumes: `AccountsOverviewScreen`
 - Produces: User access via Dashboard, Budgets header, Settings, and multilingual text
 
-- [ ] **Step 1: Add Accounts Summary Card on Dashboard**
+- [x] **Step 1: Add Accounts Summary Card on Dashboard**
 Renders net liquid assets, total accounts count, and deficit alert pill. Tapping navigates to `AccountsOverviewScreen`.
 
-- [ ] **Step 2: Add Accounts Tile in Settings**
+- [x] **Step 2: Add Accounts Tile in Settings**
 Add `Accounts & Balances` tile navigating to `AccountsOverviewScreen`.
 
-- [ ] **Step 3: Add Localization Strings in `app_localizations.dart`**
+- [x] **Step 3: Add Localization Strings in `app_localizations.dart`**
 Add translation keys for:
 - `accounts_and_balances`
 - `total_liquid_assets`
@@ -417,13 +417,13 @@ Add translation keys for:
 - `quick_transfer`
 (In English, Arabic, and Urdu).
 
-- [ ] **Step 4: Run full flutter analyze**
+- [x] **Step 4: Run full flutter analyze**
 
 ```bash
 cd flutter_app; flutter analyze
 ```
 
-- [ ] **Step 5: Commit navigation & localization**
+- [x] **Step 5: Commit navigation & localization**
 
 ```bash
 git add flutter_app/lib/screens/ flutter_app/lib/l10n/app_localizations.dart
@@ -438,15 +438,15 @@ git commit -m "feat(ui): add dashboard accounts card, settings tile, and full lo
 - Test: `flutter_app/test/account_models_test.dart`
 - Test: `flutter_app/test/accounts_overview_test.dart`
 
-- [ ] **Step 1: Write integration widget test for accounts and capacity alerts**
-- [ ] **Step 2: Run all Flutter tests**
+- [x] **Step 1: Write integration widget test for accounts and capacity alerts**
+- [x] **Step 2: Run all Flutter tests**
 
 ```bash
 cd flutter_app; flutter test
 ```
 Verify: All unit and widget tests PASS with zero errors.
 
-- [ ] **Step 3: Commit verified test suite**
+- [x] **Step 3: Commit verified test suite**
 
 ```bash
 git add flutter_app/test/

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../theme/app_themes.dart';
 import '../salary/payday_income_sheet.dart';
@@ -75,12 +76,12 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00E5BF).withValues(alpha: 0.4),
+          color: context.electricTeal.withValues(alpha: 0.4),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00E5BF).withValues(alpha: 0.1),
+            color: context.electricTeal.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -91,12 +92,12 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF00E5BF).withValues(alpha: 0.2),
+              color: context.electricTeal.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.celebration_rounded,
-              color: Color(0xFF00E5BF),
+              color: context.electricTeal,
               size: 20,
             ),
           ),
@@ -106,7 +107,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Payday Cycle Started! 🎉',
+                  context.tr('payday_banner_title'),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -115,7 +116,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Record salary & distribute to wallets',
+                  context.tr('payday_banner_desc'),
                   style: TextStyle(
                     fontSize: 11,
                     color: context.textSecondary,
@@ -133,8 +134,8 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5BF),
-              foregroundColor: const Color(0xFF051424),
+              backgroundColor: context.electricTeal,
+              foregroundColor: context.scaffoldBg,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -142,7 +143,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               elevation: 0,
             ),
             child: Text(
-              'Log Salary',
+              context.tr('log_salary'),
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,

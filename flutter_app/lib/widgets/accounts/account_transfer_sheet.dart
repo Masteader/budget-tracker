@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -213,15 +214,15 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                    color: context.electricTeal.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF00E5BF), size: 22),
+                  child: Icon(Icons.swap_horiz_rounded, color: context.electricTeal, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Transfer Funds',
+                    context.tr('transfer_funds'),
                     style: GoogleFonts.outfit(
                       color: context.textPrimary,
                       fontSize: 18,
@@ -244,13 +245,13 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                   border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Text(
-                  'You need at least 2 accounts to make a transfer. Please add another account first.',
+                  context.tr('need_two_accounts_transfer'),
                   style: TextStyle(color: Colors.orange.shade300, fontSize: 13),
                 ),
               )
             else ...[
               // Source Account (From)
-              Text('From Account (Source)', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(context.tr('from_source_account'), style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 initialValue: _fromAccountId,
@@ -268,7 +269,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                     value: acc.id,
                     child: Row(
                       children: [
-                        Icon(acc.accountType.defaultIcon, size: 18, color: const Color(0xFF00E5BF)),
+                        Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
                         Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
                       ],
@@ -288,13 +289,13 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                     shape: BoxShape.circle,
                     border: Border.all(color: context.borderColor),
                   ),
-                  child: const Icon(Icons.arrow_downward_rounded, size: 16, color: Color(0xFF00E5BF)),
+                  child: Icon(Icons.arrow_downward_rounded, size: 16, color: context.electricTeal),
                 ),
               ),
               const SizedBox(height: 12),
 
               // Destination Account (To)
-              Text('To Account (Destination)', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(context.tr('to_destination_account'), style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 initialValue: _toAccountId,
@@ -312,7 +313,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                     value: acc.id,
                     child: Row(
                       children: [
-                        Icon(acc.accountType.defaultIcon, size: 18, color: const Color(0xFF00E5BF)),
+                        Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
                         Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
                       ],
@@ -329,7 +330,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 decoration: InputDecoration(
-                  labelText: 'Transfer Amount',
+                  labelText: context.tr('transfer_amount'),
                   prefixText: 'SAR ',
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
@@ -350,7 +351,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        labelText: 'Transfer Fee (optional)',
+                        labelText: context.tr('transfer_fee'),
                         prefixText: 'SAR ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
@@ -369,8 +370,8 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 controller: _notesCtrl,
                 style: TextStyle(color: context.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: 'Notes (optional)',
-                  hintText: 'e.g. Weekly grocery top-up',
+                  labelText: context.tr('notes_optional'),
+                  hintText: context.tr('transfer_notes_hint'),
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
                   fillColor: context.inputBg,
@@ -391,7 +392,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total Deducted from Source:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                    Text(context.tr('total_deducted_source'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
                     Text('SAR ${fmt.format(_totalDeduction)}', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                   ],
                 ),
@@ -401,14 +402,14 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
               ElevatedButton(
                 onPressed: _isTransferring ? null : _executeTransfer,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5BF),
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.electricTeal,
+                  foregroundColor: context.scaffoldBg,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: _isTransferring
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Text('Confirm Transfer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.scaffoldBg))
+                    : Text(context.tr('confirm_transfer'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ],
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/widgets/accounts/reconcile_balance_dialog.dart';
+import 'package:budget_tracker/l10n/app_localizations.dart';
 
 void main() {
   group('ReconcileBalanceDialog Widget Tests', () {
@@ -17,6 +18,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: [AppLocalizationsDelegate()],
           home: Scaffold(
             body: ReconcileBalanceDialog(account: account),
           ),

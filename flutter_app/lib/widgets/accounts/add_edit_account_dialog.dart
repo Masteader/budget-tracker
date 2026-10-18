@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -74,7 +75,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
   Future<void> _submit() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      AppSnackBar.showError(context, 'Please enter an account name.');
+      AppSnackBar.showError(context, context.tr('enter_account_name'));
       return;
     }
 
@@ -146,7 +147,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
       backgroundColor: context.cardBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
-        _isEditing ? 'Edit Account' : 'Add New Account',
+        _isEditing ? context.tr('edit_account') : context.tr('new_account'),
         style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
@@ -159,8 +160,8 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
               controller: _nameCtrl,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Account Name',
-                hintText: 'e.g. Al Rajhi Main, STC Pay, Binance',
+                labelText: context.tr('account_name'),
+                hintText: context.tr('account_name_hint'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -175,7 +176,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Account Type',
+                labelText: context.tr('account_type'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -186,9 +187,9 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
                   value: t,
                   child: Row(
                     children: [
-                      Icon(t.defaultIcon, size: 18, color: const Color(0xFF00E5BF)),
+                      Icon(t.defaultIcon, size: 18, color: context.electricTeal),
                       const SizedBox(width: 8),
-                      Text(t.labelEn),
+                      Text(context.tr(t.translationKey)),
                     ],
                   ),
                 );
@@ -214,7 +215,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
                     dropdownColor: context.cardBg,
                     style: TextStyle(color: context.textPrimary),
                     decoration: InputDecoration(
-                      labelText: 'Currency',
+                      labelText: context.tr('currency'),
                       labelStyle: TextStyle(color: context.textSecondary),
                       filled: true,
                       fillColor: context.inputBg,
@@ -236,7 +237,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
-                      labelText: _isEditing ? 'Balance' : 'Initial Balance',
+                      labelText: _isEditing ? context.tr('current_balance') : context.tr('initial_balance'),
                       labelStyle: TextStyle(color: context.textSecondary),
                       filled: true,
                       fillColor: context.inputBg,
@@ -251,10 +252,10 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
             // Shared Pool Switch
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('Shared Household Pool', style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: Text('Visible to all household members for flat bills & pooling', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+              title: Text(context.tr('shared_household_pool'), style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: Text(context.tr('shared_pool_desc'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
               value: _isSharedPool,
-              activeThumbColor: const Color(0xFF00E5BF),
+              activeThumbColor: context.electricTeal,
               onChanged: (v) => setState(() => _isSharedPool = v),
             ),
 
@@ -263,7 +264,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
               TextButton.icon(
                 onPressed: _isSubmitting ? null : _archive,
                 icon: const Icon(Icons.archive_outlined, size: 16, color: Colors.redAccent),
-                label: const Text('Archive Account', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                label: Text(context.tr('archive_account'), style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
               ),
             ],
           ],
@@ -272,17 +273,17 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+          child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
         ),
         ElevatedButton(
           onPressed: _isSubmitting ? null : _submit,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF00E5BF),
-            foregroundColor: Colors.black,
+            backgroundColor: context.electricTeal,
+            foregroundColor: context.scaffoldBg,
           ),
           child: _isSubmitting
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-              : Text(_isEditing ? 'Save Changes' : 'Create Account', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.scaffoldBg))
+              : Text(_isEditing ? context.tr('save_changes') : context.tr('create_account'), style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

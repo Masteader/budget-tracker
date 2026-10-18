@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/widgets/accounts/account_card.dart';
+import 'package:budget_tracker/l10n/app_localizations.dart';
 
 void main() {
   group('AccountCard Widget Tests', () {
@@ -17,6 +18,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: [AppLocalizationsDelegate()],
           home: Scaffold(
             body: AccountCard(
               account: account,
@@ -47,6 +49,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: [AppLocalizationsDelegate()],
           home: Scaffold(
             body: AccountCard(
               account: account,

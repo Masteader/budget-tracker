@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../models/models.dart';
 import '../../services/account_service.dart';
@@ -132,10 +133,10 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                      color: context.electricTeal.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.link_rounded, color: Color(0xFF00E5BF), size: 22),
+                    child: Icon(Icons.link_rounded, color: context.electricTeal, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -143,7 +144,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Map Budget to Account',
+                          context.tr('link_payment_account'),
                           style: GoogleFonts.outfit(
                             color: context.textPrimary,
                             fontSize: 18,
@@ -151,7 +152,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                           ),
                         ),
                         Text(
-                          '${widget.categoryName} (Allocated: SAR ${fmt.format(widget.budget.allocatedAmount)})',
+                          '${widget.categoryName} (${context.tr('allocated')}: SAR ${fmt.format(widget.budget.allocatedAmount)})',
                           style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -162,7 +163,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
               const SizedBox(height: 16),
 
               Text(
-                'Select which bank account, e-wallet, or pool will fund this category. Transactions will consume from this balance by default.',
+                context.tr('map_budget_account_desc'),
                 style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -170,7 +171,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
               if (_isLoading)
                 const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
               else if (_accounts.isEmpty)
-                Text('No accounts found. Create an account in Accounts & Balances first.', style: TextStyle(color: Colors.orange.shade300, fontSize: 13))
+                Text(context.tr('no_accounts_configured'), style: TextStyle(color: Colors.orange.shade300, fontSize: 13))
               else
                 ..._accounts.map((acc) {
                   final isSelected = _selectedAccountId == acc.id;
@@ -180,12 +181,12 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFF00E5BF).withValues(alpha: 0.1)
+                          ? context.electricTeal.withValues(alpha: 0.1)
                           : context.inputBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected
-                            ? const Color(0xFF00E5BF)
+                            ? context.electricTeal
                             : context.borderColor,
                         width: isSelected ? 1.5 : 1.0,
                       ),
@@ -193,7 +194,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                     child: ListTile(
                       dense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      leading: Icon(acc.accountType.defaultIcon, color: isSelected ? const Color(0xFF00E5BF) : context.textSecondary),
+                      leading: Icon(acc.accountType.defaultIcon, color: isSelected ? context.electricTeal : context.textSecondary),
                       title: Text(
                         acc.name,
                         style: TextStyle(
@@ -202,14 +203,14 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                         ),
                       ),
                       subtitle: Text(
-                        'Balance: ${acc.currency} ${fmt.format(acc.balance)} ${!hasEnough ? "(Low balance)" : ""}',
+                        '${context.tr('current_balance')}: ${acc.currency} ${fmt.format(acc.balance)} ${!hasEnough ? "(${context.tr('low_balance')})" : ""}',
                         style: TextStyle(
                           color: !hasEnough ? Colors.orange : context.textSecondary,
                           fontSize: 11,
                         ),
                       ),
                       trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00E5BF), size: 20)
+                          ? Icon(Icons.check_circle_rounded, color: context.electricTeal, size: 20)
                           : null,
                       onTap: () => setState(() => _selectedAccountId = acc.id),
                     ),
@@ -226,7 +227,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                         setState(() => _selectedAccountId = null);
                         _saveLink();
                       },
-                      child: Text('Unlink Account', style: TextStyle(color: context.textSecondary)),
+                      child: Text(context.tr('unlink_account'), style: TextStyle(color: context.textSecondary)),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -235,14 +236,14 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _saveLink,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00E5BF),
-                        foregroundColor: Colors.black,
+                        backgroundColor: context.electricTeal,
+                        foregroundColor: context.scaffoldBg,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isSaving
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                          : const Text('Save Link', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.scaffoldBg))
+                          : Text(context.tr('save_link'), style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

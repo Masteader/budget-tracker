@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../theme/app_themes.dart';
 import 'account_transfer_sheet.dart';
@@ -40,17 +41,17 @@ class AccountCard extends StatelessWidget {
     switch (status) {
       case AccountCapacityStatus.zeroBased:
         statusColor = const Color(0xFF00E5BF);
-        statusLabel = 'Zero-Based (100% Allocated)';
+        statusLabel = context.tr('zero_based_label');
         statusIcon = Icons.check_circle_outline_rounded;
         break;
       case AccountCapacityStatus.surplus:
-        statusColor = const Color(0xFF38BDF8);
-        statusLabel = '+${account.currency} ${fmt.format(margin)} Surplus Buffer';
+        statusColor = const Color(0xFF4DE6F7);
+        statusLabel = '+${account.currency} ${fmt.format(margin)} ${context.tr("surplus_buffer_label")}';
         statusIcon = Icons.savings_outlined;
         break;
       case AccountCapacityStatus.deficit:
         statusColor = Colors.redAccent;
-        statusLabel = 'Deficit: -${account.currency} ${fmt.format(-margin)}';
+        statusLabel = '${context.tr("deficit_label")}: -${account.currency} ${fmt.format(-margin)}';
         statusIcon = Icons.warning_amber_rounded;
         break;
     }
@@ -129,7 +130,7 @@ class AccountCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        account.accountType.labelEn,
+                        context.tr(account.accountType.translationKey),
                         style: TextStyle(color: context.textSecondary, fontSize: 12),
                       ),
                     ],
@@ -159,7 +160,7 @@ class AccountCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Current Balance', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                        Text(context.tr('current_balance'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         const SizedBox(height: 2),
                         Text(
                           displayBalance,
@@ -174,7 +175,7 @@ class AccountCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('Committed to Budgets', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                        Text(context.tr('committed_budgets'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         const SizedBox(height: 2),
                         Text(
                           displayCommitted,
@@ -228,7 +229,7 @@ class AccountCard extends StatelessWidget {
                       },
                       icon: const Icon(Icons.bolt_rounded, size: 16),
                       label: Text(
-                        '⚡ Quick Transfer ${account.currency} ${fmt.format(-margin)}',
+                        '⚡ ${context.tr("quick_transfer")} ${account.currency} ${fmt.format(-margin)}',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -263,7 +264,7 @@ class AccountCard extends StatelessWidget {
                     );
                   },
                   icon: const Icon(Icons.tune_rounded, size: 15),
-                  label: const Text('Reconcile', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  label: Text(context.tr('reconcile'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
                     foregroundColor: context.textSecondary,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -279,7 +280,7 @@ class AccountCard extends StatelessWidget {
                     );
                   },
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
-                  label: const Text('Transfer Out', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  label: Text(context.tr('transfer_out'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF00E5BF),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

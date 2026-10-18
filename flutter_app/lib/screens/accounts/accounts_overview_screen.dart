@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -65,7 +66,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
         title: Text(
-          'Accounts & Balances',
+          context.tr('accounts_balances'),
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         backgroundColor: context.scaffoldBg,
@@ -73,12 +74,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         actions: [
           IconButton(
             icon: Icon(_hideBalances ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-            tooltip: _hideBalances ? 'Show Balances' : 'Hide Balances',
+            tooltip: _hideBalances ? 'Show' : 'Hide',
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
             icon: const Icon(Icons.add_rounded, color: Color(0xFF00E5BF)),
-            tooltip: 'Add Account',
+            tooltip: context.tr('add_account'),
             onPressed: () {
               AddEditAccountDialog.show(
                 context,
@@ -115,12 +116,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No Accounts Setup Yet',
+                      context.tr('no_accounts_configured'),
                       style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add your primary bank, e-wallets (STC Pay, Urpay), or crypto exchanges to track balances and map budgets.',
+                      context.tr('accounts_balances_desc'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: context.textSecondary, fontSize: 13),
                     ),
@@ -134,10 +135,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                         );
                       },
                       icon: const Icon(Icons.add_rounded),
-                      label: const Text('Add First Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00E5BF),
-                        foregroundColor: Colors.black,
+                        foregroundColor: const Color(0xFF051424),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -180,18 +181,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isDark
-                          ? [const Color(0xFF0A2647), const Color(0xFF071C33)]
-                          : [const Color(0xFF00E5BF).withValues(alpha: 0.15), Colors.white],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: context.icedHeroGradient,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF00E5BF).withValues(alpha: 0.3)
-                          : const Color(0xFF00E5BF).withValues(alpha: 0.5),
+                      color: const Color(0xFF00E5BF).withValues(alpha: isDark ? 0.3 : 0.5),
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -208,7 +201,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'TOTAL LIQUID NET ASSETS',
+                            context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
                               color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A),
                               fontSize: 12,
@@ -233,7 +226,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  deficitCount == 0 ? 'All Accounts Funded' : '$deficitCount Deficit Alert',
+                                  deficitCount == 0
+                                      ? 'Funded'
+                                      : '$deficitCount ${context.tr("deficit_label")}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -268,10 +263,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 );
                               },
                               icon: const Icon(Icons.savings_rounded, size: 16),
-                              label: const Text('Record Income', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF00C896),
-                                foregroundColor: Colors.black,
+                                foregroundColor: const Color(0xFF051424),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
@@ -288,10 +283,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 );
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-                              label: const Text('Transfer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF00E5BF),
-                                foregroundColor: Colors.black,
+                                foregroundColor: const Color(0xFF051424),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
@@ -306,35 +301,35 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
                 // 2. Banks Section
                 if (banks.isNotEmpty) ...[
-                  _buildSectionHeader('🏦 Bank Accounts', banks.length),
+                  _buildSectionHeader('🏦 ${context.tr("account_type_bank")}', banks.length),
                   ...banks.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
 
                 // 3. E-Wallets Section
                 if (eWallets.isNotEmpty) ...[
-                  _buildSectionHeader('📱 E-Wallets (STC Pay, Urpay)', eWallets.length),
+                  _buildSectionHeader('📱 ${context.tr("account_type_wallet")}', eWallets.length),
                   ...eWallets.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
 
                 // 4. Crypto Section
                 if (crypto.isNotEmpty) ...[
-                  _buildSectionHeader('🪙 Crypto & Exchanges', crypto.length),
+                  _buildSectionHeader('🪙 ${context.tr("account_type_crypto")}', crypto.length),
                   ...crypto.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
 
                 // 5. Shared Pools Section
                 if (sharedPools.isNotEmpty) ...[
-                  _buildSectionHeader('👥 Shared Household & Flat Pools', sharedPools.length),
+                  _buildSectionHeader('👥 ${context.tr("account_type_pool")}', sharedPools.length),
                   ...sharedPools.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
 
                 // 6. Cash Section
                 if (cash.isNotEmpty) ...[
-                  _buildSectionHeader('💵 Cash & Physical Wallets', cash.length),
+                  _buildSectionHeader('💵 ${context.tr("account_type_cash")}', cash.length),
                   ...cash.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -198,10 +199,10 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: context.electricTeal.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.savings_rounded, color: Color(0xFF00C896), size: 22),
+                  child: Icon(Icons.savings_rounded, color: context.electricTeal, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -209,15 +210,15 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Record Income',
+                        context.tr('record_income'),
                         style: GoogleFonts.outfit(
-                          color: context.textPrimary,
+                           color: context.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'Cycle $_currentCycleKey',
+                        '${context.tr('cycle')} $_currentCycleKey',
                         style: TextStyle(color: context.textSecondary, fontSize: 12),
                       ),
                     ],
@@ -228,7 +229,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
             const SizedBox(height: 16),
 
             // Source Type Selector
-            Text('Income Source', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(context.tr('income_source'), style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
@@ -236,12 +237,12 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
               children: IncomeSourceType.values.map((src) {
                 final isSelected = _selectedSource == src;
                 return ChoiceChip(
-                  label: Text(src.labelEn),
+                  label: Text(context.tr(src.translationKey)),
                   selected: isSelected,
-                  selectedColor: const Color(0xFF00C896),
+                  selectedColor: context.electricTeal,
                   backgroundColor: context.inputBg,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.black : context.textPrimary,
+                    color: isSelected ? context.scaffoldBg : context.textPrimary,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     fontSize: 12,
                   ),
@@ -250,7 +251,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       setState(() {
                         _selectedSource = src;
                         if (_titleCtrl.text.isEmpty || _titleCtrl.text == 'Monthly Salary' || _titleCtrl.text == 'Income') {
-                          _titleCtrl.text = src.labelEn;
+                          _titleCtrl.text = context.tr(src.translationKey);
                         }
                       });
                     }
@@ -261,12 +262,12 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
             const SizedBox(height: 16),
 
             // Destination Account
-            Text('Destination Account', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(context.tr('destination_account'), style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             if (_isLoadingAccounts)
               const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
             else if (_accounts.isEmpty)
-              Text('No accounts found. Please create an account first.', style: TextStyle(color: Colors.orange.shade300, fontSize: 13))
+              Text(context.tr('no_accounts_configured'), style: TextStyle(color: Colors.orange.shade300, fontSize: 13))
             else
               DropdownButtonFormField<String>(
                 initialValue: _selectedAccountId,
@@ -284,7 +285,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                     value: acc.id,
                     child: Row(
                       children: [
-                        Icon(acc.accountType.defaultIcon, size: 18, color: const Color(0xFF00C896)),
+                        Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
                         Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
                       ],
@@ -300,9 +301,9 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
               controller: _titleCtrl,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Title / Description',
+                labelText: context.tr('income_title'),
                 labelStyle: TextStyle(color: context.textSecondary),
-                hintText: 'e.g. October Salary, Q3 Bonus',
+                hintText: context.tr('income_title_hint'),
                 filled: true,
                 fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
@@ -317,7 +318,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
               decoration: InputDecoration(
-                labelText: 'Base Amount',
+                labelText: context.tr('base_amount'),
                 prefixText: 'SAR ',
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
@@ -339,7 +340,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        labelText: 'Overtime (+)',
+                        labelText: '${context.tr('overtime')} (+)',
                         prefixText: 'SAR ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
@@ -356,7 +357,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        labelText: 'Bonus (+)',
+                        labelText: '${context.tr('bonus')} (+)',
                         prefixText: 'SAR ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
@@ -374,7 +375,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: Colors.redAccent, fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: 'Deductions / GOSI (-)',
+                  labelText: '${context.tr('deductions_gosi')} (-)',
                   prefixText: 'SAR ',
                   labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                   filled: true,
@@ -390,17 +391,17 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF00C896).withValues(alpha: 0.1),
+                color: context.electricTeal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+                border: Border.all(color: context.electricTeal.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Net Deposit to Account:', style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(context.tr('net_deposit_summary'), style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
                   Text(
                     'SAR ${fmt.format(_netTotal)}',
-                    style: const TextStyle(color: Color(0xFF00C896), fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.electricTeal, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -411,14 +412,14 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
             ElevatedButton(
               onPressed: _isSaving ? null : _saveIncome,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
-                foregroundColor: Colors.black,
+                backgroundColor: context.electricTeal,
+                foregroundColor: context.scaffoldBg,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               child: _isSaving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text('Deposit Income', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.scaffoldBg))
+                  : Text(context.tr('deposit_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ],
         ),

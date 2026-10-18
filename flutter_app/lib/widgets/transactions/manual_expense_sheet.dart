@@ -428,9 +428,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   dropdownColor: context.cardBg,
                   style: TextStyle(color: context.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Payment Account',
+                    labelText: context.tr('payment_account'),
                     labelStyle: TextStyle(color: context.textSecondary),
-                    prefixIcon: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF00E5BF), size: 20),
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined, color: context.electricTeal, size: 20),
                     filled: true,
                     fillColor: context.inputBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -440,7 +440,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       value: acc.id,
                       child: Row(
                         children: [
-                          Icon(acc.accountType.defaultIcon, size: 16, color: const Color(0xFF00E5BF)),
+                          Icon(acc.accountType.defaultIcon, size: 16, color: context.electricTeal),
                           const SizedBox(width: 8),
                           Text('${acc.name} (${acc.currency} ${acc.balance.toStringAsFixed(2)})'),
                         ],

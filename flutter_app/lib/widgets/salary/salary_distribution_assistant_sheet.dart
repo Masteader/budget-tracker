@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -208,12 +209,12 @@ class _SalaryDistributionAssistantSheetState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                  color: context.electricTeal.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.alt_route_rounded,
-                  color: Color(0xFF00E5BF),
+                  color: context.electricTeal,
                   size: 22,
                 ),
               ),
@@ -223,7 +224,7 @@ class _SalaryDistributionAssistantSheetState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Distribute Salary',
+                      context.tr('distribute_salary'),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -231,7 +232,7 @@ class _SalaryDistributionAssistantSheetState
                       ),
                     ),
                     Text(
-                      'Move funds to your wallets & savings',
+                      context.tr('distribute_salary_desc'),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -263,7 +264,7 @@ class _SalaryDistributionAssistantSheetState
               border: Border.all(
                 color: isOverallocated
                     ? Colors.redAccent.withValues(alpha: 0.5)
-                    : const Color(0xFF00E5BF).withValues(alpha: 0.3),
+                    : context.electricTeal.withValues(alpha: 0.3),
               ),
             ),
             child: Row(
@@ -273,7 +274,7 @@ class _SalaryDistributionAssistantSheetState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'From ${widget.sourceAccount.name}',
+                      '${context.tr('from_source_account')}: ${widget.sourceAccount.name}',
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -299,7 +300,7 @@ class _SalaryDistributionAssistantSheetState
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Remaining in Bank',
+                      context.tr('remaining_in_bank'),
                       style: TextStyle(
                         fontSize: 12,
                         color: isOverallocated ? Colors.redAccent : context.textSecondary,
@@ -313,7 +314,7 @@ class _SalaryDistributionAssistantSheetState
                         fontWeight: FontWeight.bold,
                         color: isOverallocated
                             ? Colors.redAccent
-                            : const Color(0xFF00C896),
+                            : context.electricTeal,
                       ),
                     ),
                   ],
@@ -325,10 +326,10 @@ class _SalaryDistributionAssistantSheetState
 
           // Accounts List
           if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF00E5BF)),
+                child: CircularProgressIndicator(color: context.electricTeal),
               ),
             )
           else if (_targetAccounts.isEmpty)
@@ -336,7 +337,7 @@ class _SalaryDistributionAssistantSheetState
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
                 child: Text(
-                  'No secondary accounts found.\nCreate e-wallets or cash accounts to distribute.',
+                  context.tr('no_secondary_accounts'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.textSecondary, fontSize: 13),
                 ),
@@ -364,7 +365,7 @@ class _SalaryDistributionAssistantSheetState
                         Icon(
                           acc.accountType.defaultIcon,
                           size: 22,
-                          color: const Color(0xFF00E5BF),
+                          color: context.electricTeal,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -380,7 +381,7 @@ class _SalaryDistributionAssistantSheetState
                                 ),
                               ),
                               Text(
-                                '${acc.accountType.labelEn} • Current: SAR ${_fmt.format(acc.balance)}',
+                                '${context.tr(acc.accountType.translationKey)} • ${context.tr('current_balance')}: SAR ${_fmt.format(acc.balance)}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: context.textSecondary,
@@ -422,7 +423,7 @@ class _SalaryDistributionAssistantSheetState
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(color: Color(0xFF00E5BF), width: 1.5),
+                                borderSide: BorderSide(color: context.electricTeal, width: 1.5),
                               ),
                             ),
                             onChanged: (_) => setState(() {}),
@@ -448,7 +449,7 @@ class _SalaryDistributionAssistantSheetState
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: Text(
-                    'Keep All in Bank',
+                    context.tr('keep_all_in_bank'),
                     style: TextStyle(
                       color: context.textSecondary,
                       fontWeight: FontWeight.w600,
@@ -463,24 +464,24 @@ class _SalaryDistributionAssistantSheetState
                       ? null
                       : _executeDistribution,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5BF),
-                    foregroundColor: const Color(0xFF051424),
+                    backgroundColor: context.electricTeal,
+                    foregroundColor: context.scaffoldBg,
                     disabledBackgroundColor: context.chipBg,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                   child: _isExecuting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0xFF051424),
+                            color: context.scaffoldBg,
                           ),
                         )
                       : Text(
-                          'Execute (${_fmt.format(totalAllocated)})',
+                          '${context.tr('execute_distribution')} (${_fmt.format(totalAllocated)})',
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,

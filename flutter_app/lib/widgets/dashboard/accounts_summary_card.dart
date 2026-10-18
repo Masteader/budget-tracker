@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../screens/accounts/accounts_overview_screen.dart';
 import '../../services/account_service.dart';
@@ -59,7 +60,7 @@ class AccountsSummaryCard extends StatelessWidget {
                 BoxShadow(
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.2)
-                      : const Color(0xFF00E5BF).withValues(alpha: 0.05),
+                      : context.electricTeal.withValues(alpha: 0.05),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
@@ -74,19 +75,19 @@ class AccountsSummaryCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                        color: context.electricTeal.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.account_balance_wallet_rounded,
-                        color: Color(0xFF00E5BF),
+                        color: context.electricTeal,
                         size: 18,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Accounts & Balances',
+                        context.tr('accounts_balances'),
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -103,14 +104,14 @@ class AccountsSummaryCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 12),
-                            SizedBox(width: 4),
+                            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 12),
+                            const SizedBox(width: 4),
                             Text(
-                              'Deficit',
-                              style: TextStyle(
+                              context.tr('deficit_label'),
+                              style: const TextStyle(
                                 color: Colors.redAccent,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -138,7 +139,7 @@ class AccountsSummaryCard extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF00E5BF),
+                        color: context.electricTeal,
                       ),
                     ),
                     Text(
@@ -151,7 +152,7 @@ class AccountsSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'across ${accounts.length} accounts',
+                      context.tr('across_accounts').replaceAll('{count}', accounts.length.toString()),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -191,7 +192,7 @@ class AccountsSummaryCard extends StatelessWidget {
                             Icon(
                               acc.accountType.defaultIcon,
                               size: 14,
-                              color: isNeg ? Colors.redAccent : const Color(0xFF00E5BF),
+                              color: isNeg ? Colors.redAccent : context.electricTeal,
                             ),
                             const SizedBox(width: 6),
                             Text(
@@ -208,7 +209,7 @@ class AccountsSummaryCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: isNeg ? Colors.redAccent : const Color(0xFF00C896),
+                                color: isNeg ? Colors.redAccent : context.electricTeal,
                               ),
                             ),
                           ],

@@ -925,12 +925,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '⚠️ ${deficitAccount.name} Deficit: -${deficitAccount.currency} ${fmt.format(deficitAmount)}',
+                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: -${deficitAccount.currency} ${fmt.format(deficitAmount)}',
                                         style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Budgets linked to this account exceed its current balance.',
+                                        context.tr('deficit_linked_warning'),
                                         style: TextStyle(color: context.textSecondary, fontSize: 11),
                                       ),
                                     ],
@@ -955,7 +955,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     visualDensity: VisualDensity.compact,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
-                                  child: const Text('Fix', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  child: Text(context.tr('fix'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                 ),
                               ],
                             ),
@@ -1158,7 +1158,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(
                                             color: mappedAccount != null
-                                                ? const Color(0xFF00C896).withValues(alpha: 0.3)
+                                                ? context.electricTeal.withValues(alpha: 0.3)
                                                 : context.borderColor,
                                           ),
                                         ),
@@ -1171,7 +1171,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                   : Icons.link_off_outlined,
                                               size: 11,
                                               color: mappedAccount != null
-                                                  ? const Color(0xFF00C896)
+                                                  ? context.electricTeal
                                                   : context.textSecondary,
                                             ),
                                             const SizedBox(width: 4),
@@ -1183,7 +1183,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w500,
                                                 color: mappedAccount != null
-                                                    ? const Color(0xFF00C896)
+                                                    ? context.electricTeal
                                                     : context.textSecondary,
                                               ),
                                             ),

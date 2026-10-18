@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -65,7 +66,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
         AppSnackBar.showSuccess(
           context,
           '${widget.account.name} balance updated to ${widget.account.currency} ${NumberFormat('#,##0.00').format(_actualBalance)}',
-          title: 'Balance Reconciled',
+          title: context.tr('balance_reconciled'),
         );
       }
     } catch (e) {
@@ -88,15 +89,15 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+              color: context.electricTeal.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.tune_rounded, color: Color(0xFF00E5BF), size: 20),
+            child: Icon(Icons.tune_rounded, color: context.electricTeal, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Reconcile Balance',
+              context.tr('reconcile_balance'),
               style: GoogleFonts.outfit(
                 color: context.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -112,7 +113,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Check your real ${widget.account.name} balance and enter the exact figure. The app ledger will update to match.',
+              context.tr('reconcile_dialog_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -128,7 +129,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('App Calculated Balance:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                  Text(context.tr('app_balance'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
                   Text(
                     '${widget.account.currency} ${fmt.format(widget.account.balance)}',
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
@@ -144,7 +145,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
               decoration: InputDecoration(
-                labelText: 'Actual Bank App Balance',
+                labelText: context.tr('actual_balance'),
                 prefixText: '${widget.account.currency} ',
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
@@ -161,7 +162,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: _variance > 0
-                      ? const Color(0xFF00E5BF).withValues(alpha: 0.1)
+                      ? context.electricTeal.withValues(alpha: 0.1)
                       : Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -170,15 +171,15 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
                     Icon(
                       _variance > 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                       size: 16,
-                      color: _variance > 0 ? const Color(0xFF00E5BF) : Colors.orange,
+                      color: _variance > 0 ? context.electricTeal : Colors.orange,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Adjustment: ${_variance > 0 ? '+' : ''}${fmt.format(_variance)} ${widget.account.currency}',
+                      '${context.tr('adjustment')}: ${_variance > 0 ? '+' : ''}${fmt.format(_variance)} ${widget.account.currency}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: _variance > 0 ? const Color(0xFF00E5BF) : Colors.orange,
+                        color: _variance > 0 ? context.electricTeal : Colors.orange,
                       ),
                     ),
                   ],
@@ -190,17 +191,17 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+          child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
         ),
         ElevatedButton(
           onPressed: _isSaving ? null : _submitReconciliation,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF00E5BF),
-            foregroundColor: Colors.black,
+            backgroundColor: context.electricTeal,
+            foregroundColor: context.scaffoldBg,
           ),
           child: _isSaving
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-              : const Text('Update Balance', style: TextStyle(fontWeight: FontWeight.bold)),
+              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.scaffoldBg))
+              : Text(context.tr('update_balance'), style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

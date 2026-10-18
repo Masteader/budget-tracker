@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -219,16 +220,12 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00E5BF), Color(0xFF4DE6F7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: context.icedAccentGradient,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.payments_rounded,
-                  color: Color(0xFF051424),
+                  color: context.scaffoldBg,
                   size: 24,
                 ),
               ),
@@ -238,7 +235,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Payday Check-in',
+                      context.tr('payday_checkin'),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -246,7 +243,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                       ),
                     ),
                     Text(
-                      'Break down your income & net take-home',
+                      context.tr('payday_checkin_desc'),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -276,7 +273,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
               ),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: const Color(0xFF00E5BF).withValues(alpha: 0.35),
+                color: context.electricTeal.withValues(alpha: 0.35),
                 width: 1.2,
               ),
             ),
@@ -287,12 +284,12 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'NET TAKE-HOME PAY',
+                      context.tr('net_take_home'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1.1,
-                        color: const Color(0xFF00E5BF),
+                        color: context.electricTeal,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -309,19 +306,19 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                    color: context.electricTeal.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, color: Color(0xFF00E5BF), size: 16),
+                      Icon(Icons.check_circle_outline, color: context.electricTeal, size: 16),
                       const SizedBox(width: 4),
                       Text(
-                        'Ready',
+                        context.tr('salary_ready'),
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF00E5BF),
+                          color: context.electricTeal,
                         ),
                       ),
                     ],
@@ -340,8 +337,8 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                 children: [
                   // Base Salary
                   _buildInputField(
-                    label: 'Base Salary',
-                    hint: 'e.g. 10000',
+                    label: context.tr('base_salary'),
+                    hint: context.tr('salary_input_hint'),
                     controller: _baseController,
                     prefixIcon: Icons.account_balance_outlined,
                   ),
@@ -352,7 +349,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                     children: [
                       Expanded(
                         child: _buildInputField(
-                          label: 'Overtime',
+                          label: context.tr('overtime'),
                           hint: '0.00',
                           controller: _overtimeController,
                           prefixIcon: Icons.timer_outlined,
@@ -361,7 +358,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildInputField(
-                          label: 'Bonus',
+                          label: context.tr('bonus'),
                           hint: '0.00',
                           controller: _bonusController,
                           prefixIcon: Icons.card_giftcard_outlined,
@@ -376,7 +373,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                     children: [
                       Expanded(
                         child: _buildInputField(
-                          label: 'Side Gigs',
+                          label: context.tr('side_gigs'),
                           hint: '0.00',
                           controller: _sideGigController,
                           prefixIcon: Icons.work_outline_rounded,
@@ -385,7 +382,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildInputField(
-                          label: 'Deductions (GOSI/Tax)',
+                          label: context.tr('deductions_gosi'),
                           hint: '0.00',
                           controller: _deductionsController,
                           prefixIcon: Icons.remove_circle_outline,
@@ -398,7 +395,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
 
                   // Destination Account Selector
                   Text(
-                    'Deposit Destination Account',
+                    context.tr('destination_account'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -408,7 +405,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                   const SizedBox(height: 8),
 
                   if (_isLoading)
-                    const Center(child: CircularProgressIndicator(color: Color(0xFF00E5BF)))
+                    Center(child: CircularProgressIndicator(color: context.electricTeal))
                   else if (_accounts.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -418,7 +415,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                         border: Border.all(color: context.borderColor),
                       ),
                       child: Text(
-                        'No accounts found. Please add an account first.',
+                        context.tr('no_accounts_configured'),
                         style: TextStyle(color: context.textSecondary, fontSize: 13),
                       ),
                     )
@@ -432,13 +429,13 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                           avatar: Icon(
                             acc.accountType.defaultIcon,
                             size: 14,
-                            color: isSel ? const Color(0xFF051424) : const Color(0xFF00E5BF),
+                            color: isSel ? context.scaffoldBg : context.electricTeal,
                           ),
                           label: Text(acc.name),
                           selected: isSel,
-                          selectedColor: const Color(0xFF00E5BF),
+                          selectedColor: context.electricTeal,
                           labelStyle: TextStyle(
-                            color: isSel ? const Color(0xFF051424) : context.textPrimary,
+                            color: isSel ? context.scaffoldBg : context.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
                             fontSize: 12,
                           ),
@@ -446,7 +443,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                             side: BorderSide(
-                              color: isSel ? const Color(0xFF00E5BF) : context.borderColor,
+                              color: isSel ? context.electricTeal : context.borderColor,
                             ),
                           ),
                           onSelected: (val) {
@@ -465,24 +462,24 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
           ElevatedButton(
             onPressed: (_isSubmitting || net <= 0) ? null : _confirmDeposit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5BF),
-              foregroundColor: const Color(0xFF051424),
+              backgroundColor: context.electricTeal,
+              foregroundColor: context.scaffoldBg,
               disabledBackgroundColor: context.chipBg,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
             child: _isSubmitting
-                ? const SizedBox(
+                ? SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFF051424),
+                      color: context.scaffoldBg,
                     ),
                   )
                 : Text(
-                    'Confirm & Deposit (${_fmt.format(net > 0 ? net : 0)})',
+                    '${context.tr('confirm_deposit')} (${_fmt.format(net > 0 ? net : 0)})',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -530,7 +527,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
             prefixIcon: Icon(
               prefixIcon,
               size: 18,
-              color: isDeduction ? Colors.redAccent : const Color(0xFF00E5BF),
+              color: isDeduction ? Colors.redAccent : context.electricTeal,
             ),
             prefixText: 'SAR ',
             prefixStyle: TextStyle(
@@ -548,7 +545,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: isDeduction ? Colors.redAccent : const Color(0xFF00E5BF),
+                color: isDeduction ? Colors.redAccent : context.electricTeal,
                 width: 1.5,
               ),
             ),
