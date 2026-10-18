@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/account.dart';
-import '../supabase_config.dart';
 
 /// Service managing accounts, transfers, multi-source income records, and budget linkages.
 class AccountService {

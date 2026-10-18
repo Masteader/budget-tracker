@@ -171,7 +171,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
 
             // Account Type
             DropdownButtonFormField<AccountType>(
-              value: _type,
+              initialValue: _type,
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
@@ -210,7 +210,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
-                    value: _supportedCurrencies.contains(_currency) ? _currency : _supportedCurrencies.first,
+                    initialValue: _supportedCurrencies.contains(_currency) ? _currency : _supportedCurrencies.first,
                     dropdownColor: context.cardBg,
                     style: TextStyle(color: context.textPrimary),
                     decoration: InputDecoration(

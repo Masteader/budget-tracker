@@ -26,7 +26,6 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
-  bool _isLoadingBudgets = true;
 
   @override
   void initState() {
@@ -52,12 +51,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
       if (mounted) {
         setState(() {
           _committedBudgets = map;
-          _isLoadingBudgets = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingBudgets = false);
-    }
+    } catch (_) {}
   }
 
   @override

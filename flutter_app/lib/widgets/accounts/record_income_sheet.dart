@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -57,7 +56,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
   List<Account> _accounts = [];
   bool _isLoadingAccounts = true;
   bool _isSaving = false;
-  DateTime _receivedAt = DateTime.now();
+  final DateTime _receivedAt = DateTime.now();
 
   @override
   void initState() {

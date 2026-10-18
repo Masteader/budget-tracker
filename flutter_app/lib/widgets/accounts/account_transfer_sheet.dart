@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
@@ -254,7 +253,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
               Text('From Account (Source)', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _fromAccountId,
+                initialValue: _fromAccountId,
                 dropdownColor: context.cardBg,
                 style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(
@@ -298,7 +297,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
               Text('To Account (Destination)', style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _toAccountId,
+                initialValue: _toAccountId,
                 dropdownColor: context.cardBg,
                 style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(

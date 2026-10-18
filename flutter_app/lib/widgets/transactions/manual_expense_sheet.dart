@@ -424,7 +424,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               // Payment Account Dropdown
               if (_accounts.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
-                  value: _selectedAccountId,
+                  initialValue: _selectedAccountId,
                   dropdownColor: context.cardBg,
                   style: TextStyle(color: context.textPrimary),
                   decoration: InputDecoration(
