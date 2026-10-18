@@ -20,6 +20,7 @@ class Transaction {
   final String paidBy; // 'me' | 'partner'
   final String beneficiary; // 'me' | 'partner' | 'both' | child name
   final List<Map<String, dynamic>> items;
+  final String? accountId;
   final String? receiptUrl;
   final String? dedupFingerprint;
   final String? qrCodeRaw;
@@ -42,6 +43,7 @@ class Transaction {
     this.paidBy = 'me',
     this.beneficiary = 'both',
     this.items = const [],
+    this.accountId,
     this.receiptUrl,
     this.dedupFingerprint,
     this.qrCodeRaw,
@@ -157,6 +159,7 @@ class Transaction {
       paidBy: detectedPaidBy,
       beneficiary: detectedBeneficiary,
       items: parsedItems,
+      accountId: map['account_id'] as String?,
       receiptUrl: map['receipt_url'] as String?,
       dedupFingerprint: map['dedup_fingerprint'] as String?,
       qrCodeRaw: map['qr_code_raw'] as String? ??
@@ -219,6 +222,7 @@ class Transaction {
       'paid_by': paidBy,
       'beneficiary': beneficiary,
       'items': items,
+      'account_id': accountId,
       'receipt_url': receiptUrl,
       'dedup_fingerprint': dedupFingerprint,
       'qr_code_raw': qrCodeRaw,
@@ -243,6 +247,7 @@ class Transaction {
     String? paidBy,
     String? beneficiary,
     List<Map<String, dynamic>>? items,
+    String? accountId,
     String? receiptUrl,
     String? dedupFingerprint,
     String? qrCodeRaw,
@@ -265,6 +270,7 @@ class Transaction {
       paidBy: paidBy ?? this.paidBy,
       beneficiary: beneficiary ?? this.beneficiary,
       items: items ?? this.items,
+      accountId: accountId ?? this.accountId,
       receiptUrl: receiptUrl ?? this.receiptUrl,
       dedupFingerprint: dedupFingerprint ?? this.dedupFingerprint,
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
@@ -287,6 +293,7 @@ class Budget {
   final double previousCycleDelta;
   final bool isActive;
   final Map<String, double> subAllocations;
+  final String? accountId;
 
   const Budget({
     required this.id,
@@ -300,6 +307,7 @@ class Budget {
     this.previousCycleDelta = 0.0,
     this.isActive = true,
     this.subAllocations = const {},
+    this.accountId,
   });
 
   factory Budget.fromMap(Map<String, dynamic> map) => Budget(
@@ -313,6 +321,7 @@ class Budget {
         cycleKey: map['cycle_key'] as String?,
         previousCycleDelta: (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
         isActive: map['is_active'] as bool? ?? true,
+        accountId: map['account_id'] as String?,
         subAllocations: (map['sub_allocations'] as Map<String, dynamic>?)?.map(
               (k, v) => MapEntry(k, (v as num).toDouble()),
             ) ??
