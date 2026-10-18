@@ -13,6 +13,11 @@ import '../../widgets/categories/category_library_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/account.dart';
+import '../../services/account_service.dart';
+import '../../widgets/budgets/link_account_sheet.dart';
+import '../../widgets/accounts/account_transfer_sheet.dart';
+import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
@@ -119,11 +124,17 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       } catch (_) {}
     }
 
+    List<Account> accounts = [];
+    try {
+      accounts = await AccountService.instance.getAccounts(hid);
+    } catch (_) {}
+
     return _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
       allCodes: activeCodes,
       monthlyIncome: income,
+      accounts: accounts,
     );
   }
 
@@ -170,7 +181,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
       final prevBudgets = await supabase
           .from('budgets')
-          .select('category_code, allocated_amount')
+          .select('category_code, allocated_amount, account_id, remaining_amount, spent_amount, sub_allocations')
           .eq('household_id', householdId)
           .eq('month', prevMonthStr);
 
@@ -185,13 +196,68 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         return;
       }
 
-      final newEntries = (prevBudgets as List).map((b) => {
-        'household_id': householdId,
-        'month': _currentMonthStr,
-        'cycle_key': _currentCycleKey,
-        'category_code': b['category_code'],
-        'allocated_amount': b['allocated_amount'],
-        'spent_amount': 0.0,
+      double totalUnspent = 0.0;
+      for (final b in (prevBudgets as List)) {
+        final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+        final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
+        final rem = alloc - spent;
+        if (rem > 0) totalUnspent += rem;
+      }
+
+      bool rolloverToCushion = true;
+      if (totalUnspent > 0 && mounted) {
+        final choice = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: context.cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.savings_outlined, color: Color(0xFF00E5BF), size: 22),
+                const SizedBox(width: 8),
+                Text('Unspent Funds: SAR ${totalUnspent.toStringAsFixed(2)}', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: Text(
+              'You have SAR ${totalUnspent.toStringAsFixed(2)} leftover from the previous cycle.\n\n'
+              '• Option A: Roll over unspent funds into this cycle\'s category cushions.\n'
+              '• Option C: Sweep leftover funds into savings and start with clean target budgets.',
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Option C: Sweep to Savings'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5BF), foregroundColor: Colors.black),
+                child: const Text('Option A: Roll Over Cushion', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        rolloverToCushion = choice ?? true;
+      }
+
+      final newEntries = (prevBudgets as List).map((b) {
+        final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+        final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
+        final rem = alloc - spent;
+        final delta = (rolloverToCushion && rem > 0) ? rem : 0.0;
+
+        return {
+          'household_id': householdId,
+          'month': _currentMonthStr,
+          'cycle_key': _currentCycleKey,
+          'category_code': b['category_code'],
+          'allocated_amount': b['allocated_amount'],
+          'account_id': b['account_id'],
+          'sub_allocations': b['sub_allocations'] ?? {},
+          'previous_cycle_delta': delta,
+          'spent_amount': 0.0,
+          'is_active': true,
+        };
       }).toList();
 
       await supabase.from('budgets').insert(newEntries);
@@ -199,7 +265,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          'Copied ${newEntries.length} allocations from ${DateFormat('MMMM yyyy').format(prevDate)}!',
+          'Copied ${newEntries.length} allocations with mapped accounts from ${DateFormat('MMMM yyyy').format(prevDate)}!',
           title: 'Budget Copied',
         );
       }
@@ -666,6 +732,22 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             title: Text(context.tr('budget_allocations')),
             actions: [
               IconButton(
+                icon: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF00E5BF)),
+                tooltip: 'Accounts & Balances',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AccountsOverviewScreen(householdId: staticData.householdId),
+                    ),
+                  ).then((_) {
+                    setState(() {
+                      _staticFuture = _loadStaticData();
+                    });
+                  });
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
                 tooltip: context.tr('category_library'),
                 onPressed: () => _openCategoryLibrary(staticData),
@@ -802,9 +884,85 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     final savingsReserve = hasIncome ? (income - totalAllocated) : 0.0;
                     final isOverAllocated = hasIncome && savingsReserve < 0;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
+                    // Calculate any account deficits
+                    Account? deficitAccount;
+                    double deficitAmount = 0.0;
+                    if (staticData.accounts.isNotEmpty) {
+                      final Map<String, double> committedByAccount = {};
+                      for (final b in budgets) {
+                        if (b.accountId != null && b.accountId!.isNotEmpty) {
+                          committedByAccount[b.accountId!] = (committedByAccount[b.accountId!] ?? 0.0) + b.allocatedAmount;
+                        }
+                      }
+                      for (final entry in committedByAccount.entries) {
+                        final acc = staticData.accounts.where((a) => a.id == entry.key).firstOrNull;
+                        if (acc != null && acc.balance < entry.value) {
+                          deficitAccount = acc;
+                          deficitAmount = entry.value - acc.balance;
+                          break;
+                        }
+                      }
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (deficitAccount != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '⚠️ ${deficitAccount.name} Deficit: -${deficitAccount.currency} ${fmt.format(deficitAmount)}',
+                                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Budgets linked to this account exceed its current balance.',
+                                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    AccountTransferSheet.show(
+                                      context,
+                                      householdId: staticData.householdId,
+                                      prefilledToAccountId: deficitAccount!.id,
+                                      prefilledAmount: deficitAmount,
+                                      onTransferSuccess: () => setState(() {
+                                        _staticFuture = _loadStaticData();
+                                      }),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.redAccent,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    visualDensity: VisualDensity.compact,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('Fix', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: context.cardBg,
                         borderRadius: BorderRadius.circular(14),
@@ -901,14 +1059,19 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           ],
                         ],
                       ),
-                    );
-                  }
+                    ),
+                  ],
+                );
+              }
 
                 final code = staticData.allCodes[i - 1]['code'] as String;
                 final category = staticData.allCodes[i - 1]['category'] as String;
                 final existing =
                     budgets.where((b) => b.categoryCode == code).firstOrNull;
                 final subCategories = kSubCategoriesByParent[code] ?? const <String>[];
+                final mappedAccount = staticData.accounts
+                    .where((a) => a.id == existing?.accountId)
+                    .firstOrNull;
 
                 return InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -973,6 +1136,62 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ],
                                     ],
                                   ),
+                                  if (existing != null) ...[
+                                    const SizedBox(height: 5),
+                                    InkWell(
+                                      onTap: staticData.isAdmin
+                                          ? () => LinkAccountSheet.show(
+                                                context,
+                                                householdId: staticData.householdId,
+                                                budget: existing,
+                                                categoryName: context.trCat(code),
+                                                onMapped: () => setState(() {}),
+                                              )
+                                          : null,
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: mappedAccount != null
+                                              ? const Color(0xFF00C896).withValues(alpha: 0.1)
+                                              : context.chipBg,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: mappedAccount != null
+                                                ? const Color(0xFF00C896).withValues(alpha: 0.3)
+                                                : context.borderColor,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              mappedAccount != null
+                                                  ? Icons.account_balance_wallet_outlined
+                                                  : Icons.link_off_outlined,
+                                              size: 11,
+                                              color: mappedAccount != null
+                                                  ? const Color(0xFF00C896)
+                                                  : context.textSecondary,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              mappedAccount != null
+                                                  ? mappedAccount.name
+                                                  : context.tr('link_account'),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: mappedAccount != null
+                                                    ? const Color(0xFF00C896)
+                                                    : context.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1035,11 +1254,13 @@ class _BudgetStaticData {
   final bool isAdmin;
   final List<Map<String, String>> allCodes;
   final double monthlyIncome;
+  final List<Account> accounts;
 
   _BudgetStaticData({
     required this.householdId,
     required this.isAdmin,
     required this.allCodes,
     this.monthlyIncome = 0.0,
+    this.accounts = const [],
   });
 }
