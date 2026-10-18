@@ -11,6 +11,8 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/ocr/local_ocr_service.dart';
+import '../../services/offline_queue_manager.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../services/zatca_decoder.dart';
 import '../../widgets/receipt_photo_strip.dart';
@@ -371,6 +373,28 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           });
         }
       } else {
+        if (_imageFiles.isNotEmpty) {
+          try {
+            final draft = await LocalOcrService.instance.extractDraft(_imageFiles.first);
+            if (mounted && draft.amount > 0) {
+              setState(() {
+                _isAnalyzing = false;
+                _merchantController.text = draft.merchant;
+                _scanResult = {
+                  'status': 'preview',
+                  'merchant': draft.merchant,
+                  'amount': draft.amount,
+                  'vat_amount': draft.vatAmount,
+                  'category_code': 'OPEX-GROCERY',
+                  'confidence': 'offline_fallback',
+                  'items': [],
+                  'is_offline_draft': true,
+                };
+              });
+              return;
+            }
+          } catch (_) {}
+        }
         setState(() {
           _isAnalyzing = false;
           _errorMessage = 'Scan failed: $e';
@@ -588,6 +612,41 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         Navigator.pop(context);
       }
     } catch (e) {
+      try {
+        final List<String> base64List = [];
+        for (final file in _imageFiles) {
+          final bytes = await file.readAsBytes();
+          base64List.add(base64Encode(bytes));
+        }
+        await OfflineQueueManager().enqueue(
+          operationType: 'receipt_offline_draft',
+          householdId: widget.householdId,
+          payload: {
+            'merchant': _merchantController.text.trim().isNotEmpty
+                ? _merchantController.text.trim()
+                : 'Merchant',
+            'amount': (_scanResult?['amount'] as num?)?.toDouble() ?? 0.0,
+            'vat_amount': (_scanResult?['vat_amount'] as num?)?.toDouble() ?? 0.0,
+            'category_code': _scanResult?['category_code'] ?? 'OPEX-GROCERY',
+            'images_base64': base64List,
+            'qr_code_raw': _zatcaQrRaw,
+            'user_id': supabase.auth.currentUser?.id,
+            'needs_cloud_enrichment': true,
+          },
+        );
+        setState(() => _isAnalyzing = false);
+        if (mounted) {
+          AppSnackBar.showSuccess(
+            context,
+            context.tr('offline_draft_notice'),
+            title: context.tr('offline_draft_badge'),
+          );
+          _notifyGlobalProviders();
+          Navigator.pop(context);
+        }
+        return;
+      } catch (_) {}
+
       setState(() {
         _isAnalyzing = false;
         _errorMessage = 'Could not save invoice: $e';
@@ -654,6 +713,46 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   _zatcaDecoded = null;
                 }),
               ),
+
+            if (_scanResult?['is_offline_draft'] == true) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5A93C).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5A93C).withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, color: Color(0xFFE5A93C), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('offline_draft_badge'),
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: const Color(0xFFE5A93C),
+                            ),
+                          ),
+                          Text(
+                            context.tr('offline_draft_notice'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // ── Photo Grid / Thumbnails ──
             ReceiptPhotoStrip(

@@ -132,6 +132,30 @@ class SyncWorker {
         allowDuplicate: true,
       );
       return res['status'] == 'success' || res['status'] == 'enriched';
+    } else if (item.operationType == 'receipt_offline_draft') {
+      final images = (payload['images_base64'] as List?)?.cast<String>();
+      if (images != null && images.isNotEmpty) {
+        final res = await ApiService.instance.scanReceipt(
+          imagesBase64: images,
+          qrCodeRaw: payload['qr_code_raw'] as String?,
+          householdId: hid,
+          userId: payload['user_id'] as String?,
+          allowDuplicate: true,
+        );
+        return res['status'] == 'success' || res['status'] == 'enriched';
+      }
+      final amount = (payload['amount'] as num?)?.toDouble() ?? 0.0;
+      final merchant = payload['merchant'] as String? ?? 'Merchant';
+      if (amount > 0) {
+        final res = await ApiService.instance.postChatTransaction(
+          message: '$merchant $amount SAR',
+          householdId: hid,
+          userId: payload['user_id'] as String?,
+          allowDuplicate: true,
+        );
+        return res['status'] == 'success' || res['status'] == 'enriched';
+      }
+      return true;
     }
 
     return false;
