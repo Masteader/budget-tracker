@@ -11,20 +11,23 @@ from main import app
 
 client = TestClient(app)
 
-TEST_SECRET = "test_secret_for_ci_only_do_not_use_in_prod"
+TEST_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "super-secret-test-jwt-key-32bytes-long!")
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 USER_ID = "00000000-0000-0000-0000-000000000001"
 FATIMA_USER_ID = "00000000-0000-0000-0000-000000000002"
 
+supabase_url = os.environ.get("SUPABASE_URL", "https://mockproject.supabase.co").rstrip("/")
+expected_issuer = f"{supabase_url}/auth/v1"
+
 AUTH_TOKEN = jwt.encode(
-    {"sub": USER_ID, "aud": "authenticated", "iss": "https://mockproject.supabase.co/auth/v1", "role": "authenticated"},
+    {"sub": USER_ID, "aud": "authenticated", "iss": expected_issuer, "role": "authenticated"},
     TEST_SECRET,
     algorithm="HS256",
 )
 AUTH_HEADERS = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 FATIMA_TOKEN = jwt.encode(
-    {"sub": FATIMA_USER_ID, "aud": "authenticated", "iss": "https://mockproject.supabase.co/auth/v1", "role": "authenticated"},
+    {"sub": FATIMA_USER_ID, "aud": "authenticated", "iss": expected_issuer, "role": "authenticated"},
     TEST_SECRET,
     algorithm="HS256",
 )

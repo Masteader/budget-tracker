@@ -7,15 +7,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Set test secrets before any imports of main (fall back to mocks if not in .env)
-os.environ.setdefault("WEBHOOK_SECRET", "test_secret_for_ci_only_do_not_use_in_prod")
-os.environ.setdefault("APP_AUTH_TOKEN", "test_token_for_ci_only")
-os.environ.setdefault("ENV", "development")
-os.environ.setdefault("SUPABASE_URL", "https://mockproject.supabase.co")
-os.environ.setdefault("SUPABASE_JWT_SECRET", "super-secret-test-jwt-key-32bytes-long!")
-os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "mock_service_role_key_for_testing")
-os.environ.setdefault("LITELLM_MODEL", "gemini/gemini-2.0-flash")
-os.environ.setdefault("GOOGLE_API_KEY", "mock_google_api_key_for_testing")
+# Set test secrets before any imports of main (fall back to mocks if not set or empty in .env)
+_TEST_DEFAULTS = {
+    "WEBHOOK_SECRET": "test_secret_for_ci_only_do_not_use_in_prod",
+    "APP_AUTH_TOKEN": "test_token_for_ci_only",
+    "ENV": "development",
+    "SUPABASE_URL": "https://mockproject.supabase.co",
+    "SUPABASE_JWT_SECRET": "super-secret-test-jwt-key-32bytes-long!",
+    "SUPABASE_SERVICE_ROLE_KEY": "mock_service_role_key_for_testing",
+    "LITELLM_MODEL": "gemini/gemini-2.0-flash",
+    "GOOGLE_API_KEY": "mock_google_api_key_for_testing",
+}
+for key, val in _TEST_DEFAULTS.items():
+    if not os.environ.get(key, "").strip():
+        os.environ[key] = val
 
 TEST_HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 

@@ -51,16 +51,14 @@ def test_get_cycle_for_date_year_boundary():
     assert info_jan10["cycle_end"] == "2027-01-26"
 
 
-def test_ensure_household_cycle_budgets_existing():
-    client = get_client()
-    # Get a real household ID that has budgets
-    b_res = client.table("budgets").select("household_id").limit(1).execute()
-    if b_res.data:
-        hid = b_res.data[0]["household_id"]
-    else:
-        h_res = client.table("households").select("id").limit(1).execute()
-        assert h_res.data
-        hid = h_res.data[0]["id"]
+def test_ensure_household_cycle_budgets_existing(monkeypatch):
+    from unittest.mock import MagicMock
+    mock_sb = MagicMock()
+    mock_sb.table("budgets").select("*").eq.return_value.eq.return_value.execute.return_value.data = [
+        {"id": "b-1", "household_id": "f860188e-23b5-4749-b180-868c956151a6", "cycle_key": "2026-10", "category_code": "OPEX-GROCERY", "allocated_amount": 1000.0}
+    ]
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_sb)
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
 
     # When called for current date (Oct 2), October budgets already exist
     budgets = ensure_household_cycle_budgets(hid, date(2026, 10, 2))

@@ -9,11 +9,40 @@ from fastapi.testclient import TestClient
 from main import app
 
 client = TestClient(app)
-AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2")}
+AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 
 
-def test_sub_allocations_save_and_breakdown():
+def test_sub_allocations_save_and_breakdown(monkeypatch):
+    mock_save_data = {
+        "status": "success",
+        "category_code": "OPEX-UTILITIES",
+        "allocated_amount": 3750.0,
+        "sub_allocations": {
+            "housing_rent": 3000.0,
+            "electricity_sec": 350.0,
+            "fiber_internet": 250.0,
+            "mobile_sims": 100.0,
+            "water_municipal": 50.0,
+        },
+    }
+    mock_breakdown_data = {
+        "cycle_key": "2026-10",
+        "categories": [
+            {
+                "category_code": "OPEX-UTILITIES",
+                "allocated_amount": 3750.0,
+                "sub_categories": [
+                    {"sub_code": "housing_rent", "allocated_amount": 3000.0},
+                    {"sub_code": "electricity_sec", "allocated_amount": 350.0},
+                ],
+            }
+        ],
+    }
+
+    monkeypatch.setattr("routes.budgets.save_sub_allocations", lambda **kw: mock_save_data)
+    monkeypatch.setattr("routes.budgets.get_cycle_breakdown", lambda *args, **kw: mock_breakdown_data)
+
     # 1. Post sub-allocations for OPEX-UTILITIES
     payload = {
         "household_id": HOUSEHOLD_ID,

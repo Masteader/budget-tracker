@@ -14,7 +14,7 @@ from supabase_client import (
 )
 
 client = TestClient(app)
-AUTH_HEADERS = {"X-App-Token": "bt_sec_99a81f3d4c72e01b88e2"}
+AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
 
 
 def test_default_rollover_rule_is_send_to_savings(tmp_path, monkeypatch):
@@ -71,7 +71,7 @@ def test_savings_surplus_accumulation(tmp_path, monkeypatch):
 def test_rollover_rule_api_endpoints(tmp_path, monkeypatch):
     test_file = str(tmp_path / "test_settings.json")
     monkeypatch.setattr("supabase_client.HOUSEHOLD_SETTINGS_FILE", test_file)
-    hid = "hh_api_test_001"
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
 
     # GET default
     resp = client.get(f"/households/{hid}/rollover-rule", headers=AUTH_HEADERS)

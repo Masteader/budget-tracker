@@ -10,13 +10,15 @@ client = TestClient(app)
 
 def test_dependents_crud_endpoints(monkeypatch):
     from dependents_service import _memory_dependents
-    household_id = "test-household-001"
+    household_id = "f860188e-23b5-4749-b180-868c956151a6"
+    headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
     _memory_dependents.clear()
 
     # 1. Create dependent
     post_res = client.post(
         f"/households/{household_id}/dependents",
-        json={"name": "Sarah", "avatar_icon": "child"}
+        json={"name": "Sarah", "avatar_icon": "child"},
+        headers=headers,
     )
     assert post_res.status_code == 200
     data = post_res.json()
@@ -27,18 +29,18 @@ def test_dependents_crud_endpoints(monkeypatch):
     dep_id = dep["id"]
 
     # 2. List dependents
-    get_res = client.get(f"/households/{household_id}/dependents")
+    get_res = client.get(f"/households/{household_id}/dependents", headers=headers)
     assert get_res.status_code == 200
     deps = get_res.json()["dependents"]
     assert len(deps) >= 1
     assert any(d["name"] == "Sarah" for d in deps)
 
     # 3. Delete dependent
-    del_res = client.delete(f"/households/{household_id}/dependents/{dep_id}")
+    del_res = client.delete(f"/households/{household_id}/dependents/{dep_id}", headers=headers)
     assert del_res.status_code == 200
     assert del_res.json()["status"] == "success"
 
     # 4. Verify removed
-    get_res2 = client.get(f"/households/{household_id}/dependents")
+    get_res2 = client.get(f"/households/{household_id}/dependents", headers=headers)
     deps2 = get_res2.json()["dependents"]
     assert not any(d["id"] == dep_id for d in deps2)

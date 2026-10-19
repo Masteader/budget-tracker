@@ -6,9 +6,33 @@ from fastapi.testclient import TestClient
 OLD_LEAKED_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"
 OLD_LEAKED_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"
 
-os.environ["WEBHOOK_SECRET"] = "new_secure_test_secret_32bytes_value"
-os.environ["APP_AUTH_TOKEN"] = "new_secure_app_token_value"
-os.environ["ENV"] = "production"
+@pytest.fixture(autouse=True, scope="module")
+def setup_security_posture_env():
+    orig_env = os.environ.get("ENV")
+    orig_secret = os.environ.get("WEBHOOK_SECRET")
+    orig_token = os.environ.get("APP_AUTH_TOKEN")
+
+    os.environ["WEBHOOK_SECRET"] = "new_secure_test_secret_32bytes_value"
+    os.environ["APP_AUTH_TOKEN"] = "new_secure_app_token_value"
+    os.environ["ENV"] = "production"
+
+    yield
+
+    if orig_env is not None:
+        os.environ["ENV"] = orig_env
+    else:
+        os.environ.pop("ENV", None)
+
+    if orig_secret is not None:
+        os.environ["WEBHOOK_SECRET"] = orig_secret
+    else:
+        os.environ.pop("WEBHOOK_SECRET", None)
+
+    if orig_token is not None:
+        os.environ["APP_AUTH_TOKEN"] = orig_token
+    else:
+        os.environ.pop("APP_AUTH_TOKEN", None)
+
 
 from main import app
 

@@ -22,7 +22,7 @@ def get_household_dependents(household_id: str) -> List[Dict[str, Any]]:
     try:
         client = get_client()
         res = client.table("household_dependents").select("*").eq("household_id", household_id).order("created_at").execute()
-        if res.data is not None:
+        if res.data:
             return res.data
     except Exception as exc:
         logger.debug("Falling back to local cache for household_dependents (%s)", exc)

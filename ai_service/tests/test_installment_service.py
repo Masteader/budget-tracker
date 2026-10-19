@@ -71,8 +71,10 @@ def test_installments_api():
     assert res.status_code == 422 or res.status_code == 400
 
     # 2. Create installment plan
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
+    headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
     payload = {
-        "household_id": "hh_test_123",
+        "household_id": hid,
         "merchant": "United Electronics Co. eXtra",
         "provider": "Tamara",
         "total_amount": 7408.0,
@@ -82,7 +84,7 @@ def test_installments_api():
         "category_code": "OPEX-SHOPPING",
         "adjust_original_transaction": False,
     }
-    create_res = client.post("/budgets/installments", json=payload)
+    create_res = client.post("/budgets/installments", json=payload, headers=headers)
     assert create_res.status_code == 200
     created_data = create_res.json()
     assert created_data["merchant"] == "United Electronics Co. eXtra"
@@ -91,7 +93,7 @@ def test_installments_api():
     plan_id = created_data["id"]
 
     # 3. List plans
-    list_res = client.get("/budgets/installments?household_id=hh_test_123")
+    list_res = client.get(f"/budgets/installments?household_id={hid}", headers=headers)
     assert list_res.status_code == 200
     data = list_res.json()
     assert "plans" in data
@@ -99,7 +101,7 @@ def test_installments_api():
     assert any(p["id"] == plan_id for p in plans)
 
     # 4. Pay installment
-    pay_res = client.post(f"/budgets/installments/{plan_id}/pay")
+    pay_res = client.post(f"/budgets/installments/{plan_id}/pay", headers=headers)
     assert pay_res.status_code == 200
     paid_data = pay_res.json()
     assert paid_data["paid_installments"] == 2
