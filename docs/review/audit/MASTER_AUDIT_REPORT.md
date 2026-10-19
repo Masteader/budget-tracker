@@ -173,7 +173,7 @@ cd web_app && npm ci && npm run build && npm run lint
 ### 6.2 Deployment order
 1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order. Re-baseline the migration chain for the Supabase CLI (DB-15).
 2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client.
-3. **Mobile:** release a new build with all `--dart-define` values (documented in `flutter_app/README.md`) and a release keystore (`key.properties`).
+3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
 
 ### 6.3 Product decisions needed
