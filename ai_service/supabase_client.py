@@ -938,7 +938,10 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
             if res and hasattr(res, "data") and isinstance(res.data, dict):
                 data = res.data
                 if not data.get("success"):
-                    return {"status": "error", "error": data.get("error", "Invite code is invalid or expired.")}
+                    message = str(data.get("error") or "Invite code is invalid or expired.")
+                    if "too many failed join attempts" in message.lower():
+                        return {"status": "error", "code": "rate_limited", "error": message}
+                    return {"status": "error", "error": message}
                 return {
                     "status": "success",
                     "household_id": data.get("household_id"),
@@ -948,7 +951,15 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
                 }
         except Exception as exc:
             logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
-            return {"status": "error", "error": str(exc)}
+            # Never echo raw database errors to the client. The DB lockout (repeated failed
+            # join attempts) is surfaced distinctly so the route can answer 429.
+            if "too many failed join attempts" in str(exc).lower():
+                return {
+                    "status": "error",
+                    "code": "rate_limited",
+                    "error": "Too many failed join attempts. Please try again later.",
+                }
+            return {"status": "error", "error": "Invite code is invalid, expired or could not be claimed."}
 
     # Fallback ONLY when Supabase is not configured
     try:
@@ -1019,12 +1030,10 @@ def record_household_reimbursement(
         "timestamp": now_iso,
     }
 
-    # Attempt Supabase insert
-    try:
-        client = get_client()
-        client.table("transactions").insert(tx_data).execute()
-    except Exception as e:
-        logger.info(f"Supabase reimbursement transaction insert fallback: {e}")
+    # Persist. A failed insert must propagate: it used to be swallowed and the endpoint still
+    # answered "success", so the client believed a settlement was recorded that never existed.
+    client = get_client()
+    client.table("transactions").insert(tx_data).execute()
 
     return {
         "status": "success",

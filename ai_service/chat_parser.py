@@ -6,6 +6,7 @@ Extracts merchant, total amount, category, and itemized line items.
 from __future__ import annotations
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -37,6 +38,8 @@ class ChatLineItem(BaseModel):
     @field_validator("price")
     @classmethod
     def validate_price(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("Item price must be a finite number")
         if v < 0:
             raise ValueError("Item price cannot be negative")
         if v > 10_000_000:
@@ -46,7 +49,7 @@ class ChatLineItem(BaseModel):
     @field_validator("quantity")
     @classmethod
     def validate_quantity(cls, v: float) -> float:
-        if v <= 0:
+        if not math.isfinite(v) or v <= 0:
             return 1.0
         return min(float(v), 10_000.0)
 
@@ -69,6 +72,9 @@ class ParsedChatExpense(BaseModel):
     @field_validator("total_amount")
     @classmethod
     def validate_total_amount(cls, v: float) -> float:
+        # NaN compares False against every bound, so it slipped through the range checks below.
+        if not math.isfinite(v):
+            raise ValueError("Total expense amount must be a finite number")
         if v < 0:
             raise ValueError("Total expense amount cannot be negative")
         if v > 10_000_000:

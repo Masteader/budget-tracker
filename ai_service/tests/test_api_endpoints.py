@@ -18,6 +18,8 @@ from main import app, WEBHOOK_SECRET
 client = TestClient(app)
 SECRET = os.environ.get("WEBHOOK_SECRET", "test_secret_for_ci_only_do_not_use_in_prod")
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
+# Valid 1x1 PNG: uploads must now be real JPEG/PNG/WebP payloads (API-23).
+TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
 def _make_signed_headers(payload: dict) -> dict:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -147,7 +149,7 @@ def test_scan_receipt_success(mock_dedup, mock_insert, mock_parse):
     mock_insert.return_value = "tx-receipt-555"
 
     payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": HOUSEHOLD_ID,
         "allow_duplicate": False,
     }
@@ -203,7 +205,7 @@ def test_scan_receipt_with_receipt_url():
     payload = {
         "household_id": HOUSEHOLD_ID,
         "qr_code_raw": "ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=",
-        "receipt_url": "https://example.supabase.co/storage/v1/object/public/receipts/hh-123/test.jpg",
+        "receipt_url": f"https://example.supabase.co/storage/v1/object/public/receipts/{HOUSEHOLD_ID}/test.jpg",
         "preview_only": True,
     }
     headers = _make_signed_headers(payload)
@@ -211,7 +213,7 @@ def test_scan_receipt_with_receipt_url():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ("preview", "success")
-    assert data.get("receipt_url") == "hh-123/test.jpg"
+    assert data.get("receipt_url") == f"{HOUSEHOLD_ID}/test.jpg"
     assert data["merchant"] == "United Electronics Co. eXtra"
 
 
@@ -262,7 +264,7 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
 
     target_hh = "a0000000-0000-0000-0000-000000000001"
     payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": target_hh,
         "allow_duplicate": True,
     }
@@ -282,7 +284,7 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
     # The window is keyed by the verified user (API-08): the same user cannot reset it by
     # switching household_id, while a different user is not affected.
     other_payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": "b0000000-0000-0000-0000-000000000002",
         "allow_duplicate": True,
     }

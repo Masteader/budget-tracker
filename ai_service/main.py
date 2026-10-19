@@ -51,6 +51,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# ─── Validation errors ───────────────────────────────────────────────────────
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def sanitized_validation_handler(request: Request, exc: RequestValidationError):
+    """
+    Return 422 with location/type/message only. The default handler echoes the offending
+    input back (leaking payload contents) and crashes with a 500 when that input is NaN or
+    Infinity, which cannot be JSON-encoded.
+    """
+    errors = [
+        {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:3000",

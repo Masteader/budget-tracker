@@ -262,6 +262,12 @@ async def claim_household_role_invite_endpoint(
     user_id = get_current_user_id(request)
     try:
         res = await asyncio.to_thread(claim_household_role_invite, invite_code, user_id)
+        if res.get("code") == "rate_limited":
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=res.get("error", "Too many failed join attempts. Please try again later."),
+                headers={"Retry-After": "900"},
+            )
         if res.get("status") != "success":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -288,6 +294,10 @@ async def record_household_reimbursement_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    if payload.household_id != household_id:
+        raise HTTPException(status_code=400, detail="Body household_id does not match the URL.")
+    if payload.payer_id == payload.recipient_id:
+        raise HTTPException(status_code=400, detail="payer_id and recipient_id must differ.")
     try:
         return await asyncio.to_thread(
             record_household_reimbursement,

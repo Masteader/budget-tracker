@@ -52,17 +52,17 @@ def calculate_installment_terms(
 
 class InstallmentPlanCreate(BaseModel):
     household_id: str
-    merchant: str
-    provider: str = "Tamara"  # Tamara, Tabby, Bank, Other
-    total_amount: float
-    installment_count: int = 4
-    monthly_amount: Optional[float] = None
-    paid_installments: int = 1
-    day_of_month: int = 27
-    start_date: Optional[str] = None
-    category_code: str = "OPEX-SHOPPING"
-    original_transaction_id: Optional[str] = None
-    notes: Optional[str] = None
+    merchant: str = Field(..., min_length=1, max_length=120)
+    provider: str = Field("Tamara", max_length=40)  # Tamara, Tabby, Bank, Other
+    total_amount: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
+    installment_count: int = Field(4, ge=1, le=60)
+    monthly_amount: Optional[float] = Field(None, ge=0, le=10_000_000, allow_inf_nan=False)
+    paid_installments: int = Field(1, ge=0, le=60)
+    day_of_month: int = Field(27, ge=1, le=31)
+    start_date: Optional[str] = Field(None, max_length=32)
+    category_code: str = Field("OPEX-SHOPPING", max_length=60)
+    original_transaction_id: Optional[str] = Field(None, max_length=64)
+    notes: Optional[str] = Field(None, max_length=500)
     adjust_original_transaction: bool = True
 
 

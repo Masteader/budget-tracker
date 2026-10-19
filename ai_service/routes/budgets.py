@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 import logging
+import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
 from models import (
+    MAX_SAR_AMOUNT,
     CategoryCreateRequest,
     SubAllocationsRequest,
     SubCategoryCreateRequest,
@@ -445,9 +447,16 @@ async def simulate_purchase_affordability(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object.")
     household_id = body.get("household_id")
-    target_amount = float(body.get("target_amount") or 0.0)
-    item_name = body.get("item_name") or "Item"
+    try:
+        target_amount = float(body.get("target_amount") or 0.0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="target_amount must be a number.")
+    if not math.isfinite(target_amount) or target_amount < 0 or target_amount > MAX_SAR_AMOUNT:
+        raise HTTPException(status_code=400, detail="target_amount must be between 0 and 10,000,000 SAR.")
+    item_name = str(body.get("item_name") or "Item")[:120]
     category_code = body.get("category_code")
 
     if not household_id:

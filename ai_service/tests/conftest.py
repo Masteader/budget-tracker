@@ -83,6 +83,22 @@ socket.create_connection = _guarded_create_connection  # type: ignore[assignment
 
 
 @pytest.fixture(autouse=True)
+def block_real_llm_calls(monkeypatch):
+    """Unpatched LiteLLM calls fail immediately; tests that need a model response patch it."""
+    import litellm
+
+    def _blocked(*_args, **_kwargs):
+        raise RuntimeError("Real LLM calls are blocked in tests; patch litellm.completion.")
+
+    async def _blocked_async(*_args, **_kwargs):
+        raise RuntimeError("Real LLM calls are blocked in tests; patch litellm.acompletion.")
+
+    monkeypatch.setattr(litellm, "completion", _blocked)
+    monkeypatch.setattr(litellm, "acompletion", _blocked_async)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def fake_supabase(monkeypatch, tmp_path):
     """Route every get_client() call to a fresh in-memory fake and isolate file fallbacks."""
     import supabase_client

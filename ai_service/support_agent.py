@@ -1,8 +1,30 @@
+import asyncio
 import os
 import re
 import logging
 from typing import Optional, List, Dict, Tuple
 import litellm
+
+_HISTORY_MAX_TURNS = 6
+_HISTORY_MAX_CHARS = 2000
+
+
+def _sanitize_history(history: Optional[List[Dict[str, str]]]) -> List[Dict[str, str]]:
+    """
+    Client-supplied history may only contribute 'user' and 'assistant' turns. Passing the
+    client's `role` through verbatim let a caller inject extra 'system' messages and override
+    the support prompt.
+    """
+    clean: List[Dict[str, str]] = []
+    for h in (history or [])[-_HISTORY_MAX_TURNS:]:
+        if not isinstance(h, dict):
+            continue
+        text = h.get("content") or h.get("text") or ""
+        if not isinstance(text, str) or not text.strip():
+            continue
+        is_assistant = h.get("role") == "assistant" or h.get("isUser") is False
+        clean.append({"role": "assistant" if is_assistant else "user", "content": text[:_HISTORY_MAX_CHARS]})
+    return clean
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +131,13 @@ async def handle_support_query(
         try:
             model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
             messages = [{"role": "system", "content": SUPPORT_SYSTEM_PROMPTS[lang_key]}]
-
-            # Add context history if present
-            if history:
-                for h in history[-6:]:  # Keep last 6 exchanges for context
-                    role = h.get("role") or ("user" if h.get("isUser") is True else "assistant")
-                    text = h.get("content") or h.get("text") or ""
-                    if text:
-                        messages.append({"role": role, "content": text})
-
+            messages.extend(_sanitize_history(history))
             messages.append({"role": "user", "content": message})
 
-            response = litellm.completion(
+            # litellm.completion is synchronous network I/O: run it in a worker thread so a
+            # multi-second LLM call does not stall every other request on the event loop.
+            response = await asyncio.to_thread(
+                litellm.completion,
                 model=model,
                 messages=messages,
                 temperature=0.3,
