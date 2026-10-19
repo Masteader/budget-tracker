@@ -120,14 +120,20 @@ def enrich_transaction_items(
     transaction_id: str,
     items: List[Dict[str, Any]],
     receipt_url: Optional[str] = None,
+    household_id: Optional[str] = None,
 ) -> bool:
     """
     Enrich an existing transaction (e.g. from SMS) with itemized breakdown and/or receipt URL.
     Does NOT increment budget spent_amount because the expense was already counted!
+
+    When ``household_id`` is given (always the case for request-driven calls), the update is
+    scoped to that household: the service-role client bypasses RLS, so an unscoped
+    ``.eq("id", ...)`` would let any member rewrite another household's transaction.
+    Returns False when no transaction in that household matched.
     """
     client = get_client()
     update_data: Dict[str, Any] = {}
-    
+
     # Try updating items column
     if items:
         update_data["items"] = items
@@ -137,19 +143,30 @@ def enrich_transaction_items(
     if not update_data:
         return True
 
+    def _scoped(query):
+        query = query.eq("id", transaction_id)
+        if household_id:
+            query = query.eq("household_id", household_id)
+        return query
+
     try:
-        client.table("transactions").update(update_data).eq("id", transaction_id).execute()
+        res = _scoped(client.table("transactions").update(update_data)).execute()
+        if household_id and not (res is not None and res.data):
+            logger.warning(
+                "Enrichment refused: transaction %s not found in household %s.", transaction_id, household_id
+            )
+            return False
         logger.info("Enriched transaction %s with %d items.", transaction_id, len(items))
         return True
     except Exception as exc:
         # If columns don't exist yet, append items into raw_sms as audit trail
         logger.warning("Failed to update items column directly (%s), trying raw_sms fallback.", exc)
         try:
-            current = client.table("transactions").select("raw_sms").eq("id", transaction_id).single().execute()
+            current = _scoped(client.table("transactions").select("raw_sms")).single().execute()
             existing_sms = (current.data or {}).get("raw_sms") or ""
             items_str = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} (SAR {it.get('price', 0)})" for it in items)
             enriched_sms = f"{existing_sms} | Items: [{items_str}]"
-            client.table("transactions").update({"raw_sms": enriched_sms}).eq("id", transaction_id).execute()
+            _scoped(client.table("transactions").update({"raw_sms": enriched_sms})).execute()
             return True
         except Exception as fallback_exc:
             logger.error("Failed fallback enrichment: %s", fallback_exc)

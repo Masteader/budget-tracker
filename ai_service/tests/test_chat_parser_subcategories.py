@@ -77,7 +77,7 @@ def test_confirm_chat_transaction_preserves_category_sub_category_and_attributio
     """Verify confirming pending expense persists category_code and sub_category rather than falling back to OPEX-MISC."""
     mock_insert = MagicMock(return_value="tx-uuid-1234")
     monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
-    monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items: True)
+    monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items, **kw: True)
     monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)
     monkeypatch.setattr("chat_parser.find_duplicate_candidate", lambda *args, **kwargs: None)
 

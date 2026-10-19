@@ -629,25 +629,62 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
     }
 
 
+def get_category_owner_households(category_code: str) -> Dict[str, Any]:
+    """
+    Describe who owns a category code in cost_control_codes.
+
+    Returns {"shared": bool, "owners": [household_id, ...]} where ``shared`` is True when a
+    global/system row (household_id NULL) exists. Shared definitions are visible to every
+    household, so household members must never be allowed to mutate them.
+    """
+    client = get_client()
+    rows = (
+        client.table("cost_control_codes")
+        .select("id, household_id, is_system")
+        .eq("code", category_code)
+        .execute()
+        .data
+        or []
+    )
+    shared = any(r.get("household_id") is None or r.get("is_system") for r in rows)
+    owners = sorted({str(r["household_id"]) for r in rows if r.get("household_id")})
+    return {"shared": shared, "owners": owners}
+
+
 def add_category_and_budget(req: Any) -> Dict[str, Any]:
     from supabase_client import get_client
     client = get_client()
-    
+
     keywords = req.keywords or [req.category.lower()]
-    existing_code = client.table("cost_control_codes").select("id").eq("code", req.code).execute().data
-    if existing_code:
+    rows = (
+        client.table("cost_control_codes")
+        .select("id, household_id, is_system")
+        .eq("code", req.code)
+        .execute()
+        .data
+        or []
+    )
+    own_rows = [r for r in rows if r.get("household_id") == req.household_id]
+    shared_rows = [r for r in rows if r.get("household_id") is None]
+    if own_rows:
+        # Only this household's own custom definition may be edited.
         client.table("cost_control_codes").update({
             "category": req.category,
             "keywords": keywords,
             "is_flexible": req.is_flexible,
-        }).eq("code", req.code).execute()
-    else:
+        }).eq("id", own_rows[0]["id"]).execute()
+    elif not shared_rows:
+        # New category: scope it to the household (an unscoped insert created a global
+        # category that appeared in every household's category list).
         client.table("cost_control_codes").insert({
             "code": req.code,
             "category": req.category,
             "keywords": keywords,
             "is_flexible": req.is_flexible,
+            "is_system": False,
+            "household_id": req.household_id,
         }).execute()
+    # A shared/system code is used as-is: its definition is never rewritten from a household request.
     
     current_cycle = get_cycle_for_date()
     today = datetime.now(timezone.utc).date()
@@ -888,7 +925,12 @@ def remove_sub_category_for_household(
         .limit(1)
         .execute()
     )
-    if not (tx_check.data or []):
+    # 3. Purge the definition only when the parent category is this household's own custom
+    #    category. Definitions under shared/system parents are used by every household; deleting
+    #    them because *this* household has no transactions removed them for everyone.
+    ownership = get_category_owner_households(parent_code)
+    owned_here = (not ownership["shared"]) and ownership["owners"] == [household_id]
+    if owned_here and not (tx_check.data or []):
         try:
             client.table("cost_control_sub_categories").delete().eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
         except Exception as e:

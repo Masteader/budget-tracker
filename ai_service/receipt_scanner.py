@@ -461,7 +461,13 @@ def process_receipt_scan(
 
     # Explicit enrichment
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items)
+        success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -593,7 +599,7 @@ def process_receipt_scan(
     )
 
     if items:
-        enrich_transaction_items(tx_id, items)
+        enrich_transaction_items(tx_id, items, household_id=household_id)
 
     return {
         "status": "success",

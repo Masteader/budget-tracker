@@ -505,7 +505,13 @@ def process_chat_transaction(
 
     # Explicit enrichment request
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items_dicts)
+        success = enrich_transaction_items(enrich_tx_id, items_dicts, household_id=household_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -657,7 +663,7 @@ def process_chat_transaction(
 
     # Attach items fallback if needed
     if items_dicts:
-        enrich_transaction_items(tx_id, items_dicts)
+        enrich_transaction_items(tx_id, items_dicts, household_id=household_id)
 
     return {
         "status": "success",

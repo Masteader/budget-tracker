@@ -97,7 +97,12 @@ def test_add_sub_category_endpoint(monkeypatch):
     assert data["sub_allocations"]["sub-district-cooling"] == 120.0
 
 
-def test_rename_and_remove_sub_category(monkeypatch):
+def test_rename_and_remove_sub_category(monkeypatch, fake_supabase):
+    # Renaming is only allowed under a household-owned custom parent category (API-03).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities", "keywords": [],
+         "is_flexible": False, "household_id": HOUSEHOLD_ID, "is_system": False},
+    ])
     monkeypatch.setattr("routes.budgets.add_sub_category_for_household", lambda **kw: {"status": "success"})
     monkeypatch.setattr("routes.budgets.rename_sub_category", lambda **kw: {"status": "success", "name_en": kw.get("name_en")})
     monkeypatch.setattr("routes.budgets.remove_sub_category_for_household", lambda **kw: {"status": "success"})
