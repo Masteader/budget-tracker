@@ -46,10 +46,10 @@ BEGIN
     ON CONFLICT (household_id, user_id) DO UPDATE SET role = EXCLUDED.role;
 
     -- Setup accounts
-    INSERT INTO public.accounts (id, household_id, owner_user_id, name, type, balance, is_shared_pool) VALUES
-        (v_account_victim_personal, v_victim_hh, v_admin_uid, 'Admin Checking', 'checking', 5000.00, false),
-        (v_account_victim_shared, v_victim_hh, v_admin_uid, 'Household Pool', 'checking', 10000.00, true),
-        (v_account_attacker, v_attacker_hh, v_attacker_uid, 'Attacker Checking', 'checking', 500.00, false)
+    INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool) VALUES
+        (v_account_victim_personal, v_victim_hh, v_admin_uid, 'Admin Checking', 'bank', 5000.00, false),
+        (v_account_victim_shared, v_victim_hh, v_admin_uid, 'Household Pool', 'shared_pool', 10000.00, true),
+        (v_account_attacker, v_attacker_hh, v_attacker_uid, 'Attacker Checking', 'bank', 500.00, false)
     ON CONFLICT (id) DO UPDATE SET balance = EXCLUDED.balance, household_id = EXCLUDED.household_id, is_shared_pool = EXCLUDED.is_shared_pool;
 
     -- Setup cost control codes

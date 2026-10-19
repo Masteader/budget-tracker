@@ -18,7 +18,7 @@ ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'SAR'
 REVOKE UPDATE ON public.accounts FROM PUBLIC, anon, authenticated;
 
 -- Grant column-level UPDATE ONLY on safe metadata columns to authenticated
-GRANT UPDATE (name, account_type, type, currency, color_hex, icon_name, is_archived, updated_at)
+GRANT UPDATE (name, account_type, currency, color_hex, icon_name, is_archived, updated_at)
     ON public.accounts TO authenticated;
 
 -- Ensure RLS policies restrict row visibility and metadata editing
@@ -560,7 +560,6 @@ REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction() FROM PUBLIC, an
 REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction_update() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction_delete() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.adjust_account_balance_on_income_change() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.validate_category_code_exists() FROM PUBLIC, anon, authenticated;
 
 -- 3. Financial RPCs: grant to authenticated and service_role, revoke from anon/PUBLIC
 REVOKE EXECUTE ON FUNCTION public.transfer_between_accounts(UUID, UUID, UUID, NUMERIC, NUMERIC, TEXT) FROM PUBLIC, anon;
@@ -821,6 +820,8 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.validate_category_code_exists() FROM PUBLIC, anon, authenticated;
 
 -- 2. Pre-trigger category code backfill to ensure existing rows satisfy taxonomy constraints
 INSERT INTO public.cost_control_codes (household_id, code, category, is_system)
