@@ -26,12 +26,18 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
   bool _isProcessing = false;
   String? _errorMessage;
 
-  final List<String> _guideSteps = [
-    'Shot 1: Top header & ZATCA QR code',
-    'Shot 2: Middle line items (overlap with shot 1)',
-    'Shot 3: Bottom subtotal, VAT, and totals',
-    'Shot 4+: Additional continuous segments if needed',
+  // Translation keys for the per-shot capture guidance.
+  static const List<String> _guideSteps = [
+    'mp_guide_shot1',
+    'mp_guide_shot2',
+    'mp_guide_shot3',
+    'mp_guide_shot4',
   ];
+
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
 
   Future<void> _captureShot() async {
     try {
@@ -42,13 +48,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         maxHeight: 1600,
       );
       if (picked != null) {
-        setState(() {
+        _safeSetState(() {
           _capturedShots.add(File(picked.path));
           _errorMessage = null;
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Camera capture error: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_camera_error', {'error': e}));
     }
   }
 
@@ -60,13 +66,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         maxHeight: 1600,
       );
       if (picked.isNotEmpty) {
-        setState(() {
+        _safeSetState(() {
           _capturedShots.addAll(picked.map((x) => File(x.path)));
           _errorMessage = null;
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Gallery error: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_gallery_error', {'error': e}));
     }
   }
 
@@ -95,14 +101,14 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         allowDuplicate: false,
       );
 
-      setState(() => _isProcessing = false);
+      _safeSetState(() => _isProcessing = false);
 
       if (mounted) {
         if (res['status'] == 'success') {
           AppSnackBar.showSuccess(
             context,
-            res['message'] ?? 'Receipt stitched and saved successfully!',
-            title: 'Receipt Saved',
+            res['message'] ?? context.tr('mp_saved_msg'),
+            title: context.tr('mp_saved_title'),
           );
           Navigator.pop(context, true);
         } else if (res['status'] == 'error') {
@@ -115,21 +121,21 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           if (mounted) {
             AppSnackBar.showWarning(
               context,
-              'Saved receipt shots to local offline queue. Will sync automatically once connected.',
-              title: 'Queued Offline',
+              context.tr('mp_queued_offline_msg'),
+              title: context.tr('mp_queued_offline'),
               icon: Icons.cloud_off_rounded,
             );
             Navigator.pop(context, true);
           }
         } else {
-          setState(() {
-            _errorMessage = res['message'] ?? 'Could not parse receipt shots.';
+          _safeSetState(() {
+            _errorMessage = res['message'] ?? context.tr('mp_parse_failed');
           });
         }
       }
     } catch (e) {
       // Offline fallback
-      setState(() => _isProcessing = false);
+      _safeSetState(() => _isProcessing = false);
       try {
         final List<String> base64List = [];
         for (final f in _capturedShots) {
@@ -144,14 +150,14 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         if (mounted) {
           AppSnackBar.showWarning(
             context,
-            'Saved receipt shots to local offline queue.',
-            title: 'Queued Offline',
+            context.tr('mp_queued_offline_short'),
+            title: context.tr('mp_queued_offline'),
             icon: Icons.cloud_off_rounded,
           );
           Navigator.pop(context, true);
         }
       } catch (_) {
-        setState(() => _errorMessage = 'Failed to process receipt shots: $e');
+        _safeSetState(() => _errorMessage = context.trArgs('mp_process_failed', {'error': e}));
       }
     }
   }
@@ -159,8 +165,8 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
   @override
   Widget build(BuildContext context) {
     final currentGuide = _capturedShots.length < _guideSteps.length
-        ? _guideSteps[_capturedShots.length]
-        : 'Ready to stitch and process all shots!';
+        ? context.tr(_guideSteps[_capturedShots.length])
+        : context.tr('mp_ready');
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -168,13 +174,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(
-          'Continuous Long Receipt Stitcher',
+          context.tr('mp_title'),
           style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: context.textPrimary),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00C896)),
-            tooltip: 'Scan ZATCA QR',
+            tooltip: context.tr('mp_scan_zatca'),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
@@ -210,7 +216,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Overlap Shots by ~2-3 Items',
+                          context.tr('mp_overlap_hint'),
                           style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 2),
@@ -299,7 +305,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'Latest: Shot #${_capturedShots.length}',
+                              context.trArgs('mp_latest_shot', {'n': _capturedShots.length}),
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ),

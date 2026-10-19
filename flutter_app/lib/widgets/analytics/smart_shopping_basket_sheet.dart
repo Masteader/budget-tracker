@@ -175,11 +175,11 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: context.textPrimary,
                         ),
                       ),
                       Text(
-                        'Compare totals across Panda, Danube, Tamimi & Othaim',
+                        context.tr('basket_compare_desc'),
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           color: context.textSecondary,
@@ -211,7 +211,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         onSubmitted: _addItem,
                         style: TextStyle(color: context.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'Add item (e.g. Olive Oil, Rice)...',
+                          hintText: context.tr('basket_add_hint'),
                           hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                           filled: true,
                           fillColor: context.inputBg,
@@ -249,7 +249,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     children: _popularSuggestions.map((sug) {
                       final inBasket = _basketItems.any((i) => i.toLowerCase() == sug.toLowerCase());
                       return Padding(
-                        padding: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsetsDirectional.only(end: 6),
                         child: ActionChip(
                           label: Text(sug),
                           labelStyle: TextStyle(
@@ -291,7 +291,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            'Optimizing basket prices...',
+                            context.tr('basket_optimizing'),
                             style: TextStyle(color: context.textSecondary, fontSize: 13),
                           ),
                         ],
@@ -308,11 +308,11 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Shopping Checklist (${_checkedItems.length}/${_basketItems.length})',
+                      context.trArgs('basket_checklist', {'done': _checkedItems.length, 'total': _basketItems.length}),
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     ),
                     if (_basketItems.isNotEmpty)
@@ -325,7 +325,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                             _optimizationResult = null;
                           });
                         },
-                        child: const Text('Clear All', style: TextStyle(color: Color(0xFFFF6B6B), fontSize: 12)),
+                        child: Text(context.tr('clear_all'), style: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 12)),
                       ),
                   ],
                 ),
@@ -342,7 +342,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     ),
                     child: Center(
                       child: Text(
-                        'Your shopping list is empty.\nAdd items or tap suggestions above to compare prices.',
+                        context.tr('basket_empty'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.5),
                       ),
@@ -431,7 +431,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     const Icon(Icons.emoji_events, color: Color(0xFF00C896), size: 14),
                     const SizedBox(width: 4),
                     Text(
-                      'CHEAPEST STORE',
+                      context.tr('basket_cheapest_store'),
                       style: GoogleFonts.outfit(
                         color: const Color(0xFF00C896),
                         fontSize: 11,
@@ -443,7 +443,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
               ),
               const Spacer(),
               Text(
-                '${cheapestTotal.toStringAsFixed(2)} SAR',
+                context.sar(cheapestTotal),
                 style: GoogleFonts.outfit(
                   color: const Color(0xFF00C896),
                   fontSize: 18,
@@ -454,8 +454,8 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Complete trip at $cheapestStore saves up to ${singleSavings.toStringAsFixed(2)} SAR vs competitors.',
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            context.trArgs('basket_single_store_saves', {'store': cheapestStore, 'amount': context.sar(singleSavings)}),
+            style: TextStyle(color: context.textPrimary, fontSize: 13),
           ),
 
           const SizedBox(height: 16),
@@ -464,7 +464,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
 
           // Store Breakdown Grid/Row
           Text(
-            'Supermarket Price Comparison',
+            context.tr('basket_price_comparison'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
@@ -475,7 +475,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                 final isWinner = entry.key == cheapestStore;
                 final val = (entry.value as num?)?.toDouble() ?? 0.0;
                 return Container(
-                  margin: const EdgeInsets.only(right: 8),
+                  margin: const EdgeInsetsDirectional.only(end: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isWinner
@@ -499,7 +499,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${val.toStringAsFixed(2)} SAR',
+                        context.sar(val),
                         style: TextStyle(
                           color: isWinner ? (context.isDark ? Colors.white : Colors.black) : context.textSecondary,
                           fontSize: 13,
@@ -531,7 +531,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Multi-Store Split Savings',
+                          context.tr('basket_split_savings'),
                           style: GoogleFonts.outfit(
                             color: const Color(0xFF58A6FF),
                             fontWeight: FontWeight.w600,
@@ -539,7 +539,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                           ),
                         ),
                         Text(
-                          'Splitting items across stores reduces total to ${splitTotal.toStringAsFixed(2)} SAR (saves extra ${splitSavings.toStringAsFixed(2)} SAR).',
+                          context.trArgs('basket_split_desc', {'total': context.sar(splitTotal), 'extra': context.sar(splitSavings)}),
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],

@@ -206,7 +206,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   decoration: InputDecoration(
                     labelText: context.tr('total_price'),
                     labelStyle: TextStyle(color: context.textSecondary),
-                    hintText: 'e.g. 4000',
+                    hintText: '${context.tr('example_prefix')} 4000',
                     hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
@@ -230,7 +230,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              p,
+                              p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: isSel ? const Color(0xFF00C896) : context.textPrimary,
@@ -297,7 +297,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       final merchant = merchantCtrl.text.trim();
                       final total = double.tryParse(amountCtrl.text);
                       if (merchant.isEmpty || total == null || total <= 0) {
-                        AppSnackBar.showError(dCtx, 'Please provide valid merchant and total amount.');
+                        AppSnackBar.showError(dCtx, context.tr('inst_invalid_input'));
                         return;
                       }
                       setDialogState(() => isSubmitting = true);
@@ -319,7 +319,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           await ApiService.instance.createInstallmentPlan(planData);
                         }
                         if (dCtx.mounted) Navigator.pop(dCtx);
-                        setState(() => _loadPlans());
+                        if (mounted) setState(() => _loadPlans());
                         if (context.mounted) {
                           try {
                             context.read<TransactionProvider>().fetchTransactions();
@@ -328,14 +328,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           } catch (_) {}
                           AppSnackBar.showSuccess(
                             context,
-                            'Created $selectedProvider installment plan for $merchant',
+                            context.trArgs('inst_created_msg', {'provider': selectedProvider == 'Bank' ? context.tr('bnpl_provider_bank_other') : selectedProvider, 'merchant': merchant}),
                             title: context.tr('plan_active'),
                           );
                         }
                       } catch (e) {
                         setDialogState(() => isSubmitting = false);
                         if (dCtx.mounted) {
-                          AppSnackBar.showError(dCtx, 'Failed to create plan: $e');
+                          AppSnackBar.showError(dCtx, dCtx.trArgs('inst_create_failed', {'error': e}));
                         }
                       }
                     },
@@ -432,7 +432,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             Text(
                               activePlans.isEmpty
                                   ? context.tr('all_installments_cleared')
-                                  : '${context.tr('sar')} ${fmt.format(totalMonthlyCommitment)} / ${context.tr('month')} ${context.tr('scheduled_monthly')}',
+                                  : '${context.sar(totalMonthlyCommitment)} / ${context.tr('month')} ${context.tr('scheduled_monthly')}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty
@@ -560,7 +560,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       ),
                                     ),
                                     Text(
-                                      '${context.tr('sar')} ${fmt.format(plan.monthlyAmount)} / ${context.tr('month')}',
+                                      '${context.sar(plan.monthlyAmount)} / ${context.tr('month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
                                         color: const Color(0xFF00C896),
@@ -588,18 +588,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      context.isArabic
-                                          ? 'تم سداد ${plan.paidInstallments} من ${plan.installmentCount}'
-                                          : context.isUrdu
-                                              ? '${plan.installmentCount} میں سے ${plan.paidInstallments} قسط ادا ہو چکی'
-                                              : 'Installment ${plan.paidInstallments} of ${plan.installmentCount} paid',
+                                      context.trArgs('inst_x_of_y_paid', {'paid': plan.paidInstallments, 'count': plan.installmentCount}),
                                       style: TextStyle(
                                         color: context.textSecondary,
                                         fontSize: 11,
                                       ),
                                     ),
                                     Text(
-                                      '${context.tr('remaining')}: ${context.tr('sar')} ${fmt.format(plan.remainingAmount)}',
+                                      '${context.tr('remaining')}: ${context.sar(plan.remainingAmount)}',
                                       style: TextStyle(
                                         color: context.textPrimary,
                                         fontSize: 11,

@@ -85,7 +85,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         backgroundColor: const Color(0xFF00C896),
         icon: const Icon(Icons.shopping_basket_rounded, color: Colors.black),
         label: Text(
-          'Shopping List',
+          context.tr('shopping_list'),
           style: GoogleFonts.outfit(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         onPressed: () {
@@ -103,7 +103,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
               onSubmitted: (v) => _loadPrices(query: v),
               style: TextStyle(color: context.textPrimary, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'Search items (e.g. Milk, Chicken, Bread, Danube)...',
+                hintText: context.tr('grocery_search_hint'),
                 hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                 prefixIcon: Icon(Icons.search, color: context.textSecondary, size: 20),
                 suffixIcon: _searchCtrl.text.isNotEmpty
@@ -146,7 +146,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 final f = _quickFilters[i];
                 final isSelected = _selectedChip == f;
                 return ChoiceChip(
-                  label: Text(f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : context.textPrimary)),
+                  label: Text(f == 'All' ? context.tr('all') : f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : context.textPrimary)),
                   selected: isSelected,
                   selectedColor: const Color(0xFF00C896),
                   backgroundColor: context.cardBg,
@@ -175,9 +175,9 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                         padding: const EdgeInsets.all(24.0),
                         child: AppEmptyState(
                           icon: Icons.shopping_basket_outlined,
-                          title: 'No Price History Found',
-                          message: 'Scan receipts or chat line items to automatically build grocery price intelligence.',
-                          actionLabel: 'Refresh',
+                          title: context.tr('grocery_empty_title'),
+                          message: context.tr('grocery_empty_desc'),
+                          actionLabel: context.tr('grocery_refresh'),
                           onAction: () => _loadPrices(),
                         ),
                       )
@@ -230,7 +230,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  isInflationHigh ? '+$inflationPct% Inflation' : 'Stable Price',
+                  isInflationHigh ? context.trArgs('grocery_inflation', {'pct': inflationPct}) : context.tr('grocery_stable'),
                   style: TextStyle(
                     color: isInflationHigh ? Colors.redAccent : const Color(0xFF00C896),
                     fontSize: 11,
@@ -243,11 +243,11 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
           const SizedBox(height: 10),
           Row(
             children: [
-              _buildMetric('Latest Price', 'SAR ${latestPrice.toStringAsFixed(2)}'),
+              _buildMetric(context.tr('grocery_latest_price'), context.sar(latestPrice)),
               const SizedBox(width: 20),
-              _buildMetric('Lowest Recorded', 'SAR ${minPrice.toStringAsFixed(2)}', isHighlight: true),
+              _buildMetric(context.tr('grocery_lowest'), context.sar(minPrice), isHighlight: true),
               const SizedBox(width: 20),
-              _buildMetric('Purchases', '$count times'),
+              _buildMetric(context.tr('grocery_purchases'), context.trArgs('grocery_times', {'count': count})),
             ],
           ),
           const SizedBox(height: 12),
@@ -257,11 +257,11 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Price Trend Curve',
+                context.tr('grocery_trend'),
                 style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
               ),
               Text(
-                'Touch for details',
+                context.tr('grocery_touch'),
                 style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 10, fontWeight: FontWeight.w500),
               ),
             ],
@@ -273,7 +273,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             Divider(color: context.borderColor, height: 1),
             const SizedBox(height: 10),
             Text(
-              'Store Price Comparison',
+              context.tr('grocery_store_comparison'),
               style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
@@ -300,7 +300,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                         const SizedBox(width: 4),
                       ],
                       Text(
-                        '${entry.key}: SAR ${price.toStringAsFixed(2)}',
+                        '${entry.key}: ${context.sar(price)}',
                         style: TextStyle(
                           color: isCheapest ? const Color(0xFF00C896) : context.textPrimary,
                           fontSize: 11,
@@ -369,7 +369,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                       ? (history[idx]['date'] ?? '')
                       : '';
                   return LineTooltipItem(
-                    'SAR ${spot.y.toStringAsFixed(2)}${date.isNotEmpty ? '\n$date' : ''}',
+                    '${context.sar(spot.y)}${date.isNotEmpty ? '\n$date' : ''}',
                     GoogleFonts.outfit(
                       color: const Color(0xFF00C896),
                       fontWeight: FontWeight.bold,
