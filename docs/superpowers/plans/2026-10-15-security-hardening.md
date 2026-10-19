@@ -61,7 +61,7 @@ def test_webhook_secret_requires_env_var():
     with patch.dict(os.environ, {"WEBHOOK_SECRET": "", "ENV": "development"}, clear=False):
         import main
         # Should not contain the old hardcoded value
-        assert main.WEBHOOK_SECRET != "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"
+        assert main.WEBHOOK_SECRET != "<redacted: rotated>"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1831,8 +1831,8 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-OLD_LEAKED_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"
-OLD_LEAKED_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"
+OLD_LEAKED_SECRET = "<redacted: rotated>"
+OLD_LEAKED_TOKEN = "<redacted: rotated>"
 
 os.environ["WEBHOOK_SECRET"] = "new_secure_test_secret_32bytes_value"
 os.environ["APP_AUTH_TOKEN"] = "new_secure_app_token_value"
@@ -1903,8 +1903,8 @@ Create `docs/runbooks/security-secret-rotation.md`:
 
 ## 1. Secrets Compromised in Git History
 The following values were committed to Git and must be treated as permanently compromised:
-- `WEBHOOK_SECRET`: `dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400`
-- `APP_AUTH_TOKEN`: `bt_sec_99a81f3d4c72e01b88e2`
+- `WEBHOOK_SECRET`: `<redacted: rotated>`
+- `APP_AUTH_TOKEN`: `<redacted: rotated>`
 - Default Supabase Anon Key in `supabase_config.dart`
 
 ## 2. Generating New Secrets

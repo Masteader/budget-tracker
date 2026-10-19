@@ -6,6 +6,7 @@ Extracts merchant, total amount, category, and itemized line items.
 from __future__ import annotations
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -26,6 +27,8 @@ from supabase_client import (
     reallocate_budget,
 )
 
+from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 class ChatLineItem(BaseModel):
@@ -37,6 +40,8 @@ class ChatLineItem(BaseModel):
     @field_validator("price")
     @classmethod
     def validate_price(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("Item price must be a finite number")
         if v < 0:
             raise ValueError("Item price cannot be negative")
         if v > 10_000_000:
@@ -46,7 +51,7 @@ class ChatLineItem(BaseModel):
     @field_validator("quantity")
     @classmethod
     def validate_quantity(cls, v: float) -> float:
-        if v <= 0:
+        if not math.isfinite(v) or v <= 0:
             return 1.0
         return min(float(v), 10_000.0)
 
@@ -69,6 +74,9 @@ class ParsedChatExpense(BaseModel):
     @field_validator("total_amount")
     @classmethod
     def validate_total_amount(cls, v: float) -> float:
+        # NaN compares False against every bound, so it slipped through the range checks below.
+        if not math.isfinite(v):
+            raise ValueError("Total expense amount must be a finite number")
         if v < 0:
             raise ValueError("Total expense amount cannot be negative")
         if v > 10_000_000:
@@ -460,6 +468,7 @@ def process_chat_transaction(
     override_sub_category: Optional[str] = None,
     override_paid_by: Optional[str] = None,
     override_beneficiary: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -505,7 +514,13 @@ def process_chat_transaction(
 
     # Explicit enrichment request
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items_dicts)
+        success = enrich_transaction_items(enrich_tx_id, items_dicts, household_id=household_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -611,8 +626,10 @@ def process_chat_transaction(
                 ),
             }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = datetime.now(timezone.utc).date()
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget and reallocate if necessary
     budget = fetch_budget(household_id, category_code, now_date)
@@ -657,7 +674,7 @@ def process_chat_transaction(
 
     # Attach items fallback if needed
     if items_dicts:
-        enrich_transaction_items(tx_id, items_dicts)
+        enrich_transaction_items(tx_id, items_dicts, household_id=household_id)
 
     return {
         "status": "success",

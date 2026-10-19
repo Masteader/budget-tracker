@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 import logging
+import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from auth import verify_household_access
+from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
 from models import (
+    MAX_SAR_AMOUNT,
     CategoryCreateRequest,
     SubAllocationsRequest,
     SubCategoryCreateRequest,
@@ -30,6 +32,7 @@ from salary_cycle import (
     remove_sub_category_for_household,
     archive_category_for_household,
     simulate_affordability,
+    get_category_owner_households,
 )
 from recurring_detector import (
     fetch_household_recurring_bills,
@@ -185,15 +188,19 @@ async def create_installment_plan(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
-    household_id = body.get("household_id")
-    if household_id:
-        validate_uuid(household_id)
-        await verify_household_access(request, household_id)
+    get_current_user_id(request)
+    household_id = body.get("household_id") if isinstance(body, dict) else None
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    validate_uuid(household_id)
+    await verify_household_access(request, household_id)
 
     try:
         req = InstallmentPlanCreate(**body)
         plan = await asyncio.to_thread(InstallmentService.create_plan, req)
         return plan.model_dump()
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
     except Exception as exc:
         raise safe_error_response(exc, status_code=400, public_message="Failed to create installment plan.")
 
@@ -203,9 +210,14 @@ async def create_installment_plan(request: Request):
     tags=["installments"],
     summary="Record an installment payment towards a plan.",
 )
-async def pay_installment_endpoint(plan_id: str):
+async def pay_installment_endpoint(plan_id: str, request: Request):
+    get_current_user_id(request)
+    household_id = await asyncio.to_thread(InstallmentService.get_plan_household_id, plan_id)
+    if not household_id:
+        raise HTTPException(status_code=404, detail="Installment plan not found.")
+    await verify_household_access(request, household_id)
     try:
-        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id)
+        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id, household_id)
         if not plan:
             raise HTTPException(status_code=404, detail="Installment plan not found.")
         return plan.model_dump()
@@ -319,7 +331,8 @@ async def add_sub_category(
     tags=["budgets"],
     summary="Get all sub-categories for a parent category code.",
 )
-async def get_sub_categories_route(parent_code: str):
+async def get_sub_categories_route(parent_code: str, request: Request):
+    get_current_user_id(request)
     try:
         sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code)
         return {
@@ -335,7 +348,33 @@ async def get_sub_categories_route(parent_code: str):
     tags=["budgets"],
     summary="Rename an existing sub-category.",
 )
-async def rename_sub_category_endpoint(req: SubCategoryRenameRequest):
+async def rename_sub_category_endpoint(req: SubCategoryRenameRequest, request: Request):
+    """
+    Sub-category definitions are not household-scoped in the schema. Renaming is therefore
+    only allowed under a parent category that is a household's own custom category, and only
+    by an admin of that household. Shared/system definitions are read-only for households.
+    """
+    get_current_user_id(request)
+    ownership = await asyncio.to_thread(get_category_owner_households, req.parent_code)
+    if ownership["shared"] or not ownership["owners"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Shared system sub-categories cannot be renamed by a household.",
+        )
+    authorized = False
+    for owner_household_id in ownership["owners"]:
+        try:
+            await verify_household_admin_access(request, owner_household_id)
+            authorized = True
+            break
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+                raise
+    if not authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access to the owning household is required.",
+        )
     try:
         return await asyncio.to_thread(
             rename_sub_category,
@@ -408,9 +447,16 @@ async def simulate_purchase_affordability(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object.")
     household_id = body.get("household_id")
-    target_amount = float(body.get("target_amount") or 0.0)
-    item_name = body.get("item_name") or "Item"
+    try:
+        target_amount = float(body.get("target_amount") or 0.0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="target_amount must be a number.")
+    if not math.isfinite(target_amount) or target_amount < 0 or target_amount > MAX_SAR_AMOUNT:
+        raise HTTPException(status_code=400, detail="target_amount must be between 0 and 10,000,000 SAR.")
+    item_name = str(body.get("item_name") or "Item")[:120]
     category_code = body.get("category_code")
 
     if not household_id:

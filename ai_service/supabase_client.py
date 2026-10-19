@@ -15,25 +15,79 @@ from supabase import create_client, Client
 
 from models import BudgetRow, CostControlCode
 
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 # ─── Singleton client ─────────────────────────────────────────────────────────
 _client: Optional[Client] = None
 
+_KEY_ENV_VARS = ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY")
+
+
+def _classify_supabase_key(key: str) -> str:
+    """
+    Classify a Supabase API key WITHOUT verifying or logging it.
+
+    Returns one of: 'secret' (opaque sb_secret_ key), 'service_role', 'anon',
+    'authenticated', 'publishable', 'unknown-jwt', 'unknown'. Only 'secret' and
+    'service_role' grant the privileges this server-side service is designed for.
+    """
+    key = (key or "").strip()
+    if key.startswith("sb_secret_"):
+        return "secret"
+    if key.startswith("sb_publishable_"):
+        return "publishable"
+    parts = key.split(".")
+    if len(parts) == 3 and parts[0].startswith("eyJ"):
+        try:
+            import base64
+            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")))
+            role = str(payload.get("role") or "")
+            return role if role in ("service_role", "anon", "authenticated") else "unknown-jwt"
+        except Exception:
+            return "unknown-jwt"
+    return "unknown"
+
+
+def describe_supabase_key() -> dict:
+    """
+    Pick the privileged key to use. SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SECRET_KEY are both
+    accepted, but a key is only used when it is verifiably privileged. Previously
+    SUPABASE_SECRET_KEY always won, so an anon JWT placed there silently downgraded every
+    query to the anon role (RLS denies → all household checks 403, quota RPC denied →
+    quota checks skipped, writes failed into local JSON fallbacks).
+
+    Returns {"env_var", "role", "key", "rejected": [(env_var, role), ...]}; never log "key".
+    """
+    rejected = []
+    for env_var in _KEY_ENV_VARS:
+        value = (os.environ.get(env_var) or "").strip()
+        if not value:
+            continue
+        role = _classify_supabase_key(value)
+        if role in ("secret", "service_role"):
+            return {"env_var": env_var, "role": role, "key": value, "rejected": rejected}
+        rejected.append((env_var, role))
+    return {"env_var": None, "role": None, "key": None, "rejected": rejected}
+
 
 def get_client() -> Client:
-    """Return (or lazily create) the Supabase service-role client."""
+    """Return (or lazily create) the Supabase service-role client. Fails closed on a non-privileged key."""
     global _client
     if _client is None:
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        if not url or not key:
+        url = (os.environ.get("SUPABASE_URL") or "").strip()
+        info = describe_supabase_key()
+        if not url or not info["key"]:
+            rejected = ", ".join(f"{var} has role '{role}'" for var, role in info["rejected"])
             raise RuntimeError(
-                "Missing SUPABASE_URL or SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in environment. "
-                "Please configure them in your server Environment Variables."
+                "Supabase is not configured with a privileged key. Set SUPABASE_URL and "
+                "SUPABASE_SERVICE_ROLE_KEY (service_role JWT) or SUPABASE_SECRET_KEY (sb_secret_...). "
+                + (f"Rejected: {rejected}." if rejected else "No key found.")
             )
-        _client = create_client(url, key)
-        logger.info("Supabase client initialised (secret/service role).")
+        _client = create_client(url, info["key"])
+        logger.info("Supabase client initialised with %s (%s).", info["env_var"], info["role"])
     return _client
 
 
@@ -100,6 +154,11 @@ def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[Cost
 # BUDGETS
 # =============================================================================
 
+def _cycle_key_for(household_id: str, on_date: date) -> str:
+    from salary_cycle import get_cycle_for_date
+    return get_cycle_for_date(on_date, payday_day=get_household_payday(household_id))["cycle_key"]
+
+
 def fetch_budget(
     household_id: str,
     category_code: str,
@@ -112,16 +171,31 @@ def fetch_budget(
     client = get_client()
     month_str = month.replace(day=1).isoformat()  # always first of month
 
+    # Budgets are keyed by salary cycle: after the 27th the calendar month still matches the
+    # *previous* cycle's row, so a month lookup reallocated against the wrong budget.
+    cycle_key = _cycle_key_for(household_id, month)
     response = (
         client.table("budgets")
         .select("*")
         .eq("household_id", household_id)
         .eq("category_code", category_code)
-        .eq("month", month_str)
+        .eq("cycle_key", cycle_key)
         .limit(1)
         .execute()
     )
     data = response.data
+    if not data:
+        response = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("category_code", category_code)
+            .eq("month", month_str)
+            .is_("cycle_key", "null")
+            .limit(1)
+            .execute()
+        )
+        data = response.data
     if not data:
         logger.warning(
             "No budget found for household=%s category=%s month=%s",
@@ -156,17 +230,31 @@ def fetch_flexible_budgets(
     if not flexible_codes:
         return []
 
+    cycle_key = _cycle_key_for(household_id, month)
     response = (
         client.table("budgets")
         .select("*")
         .eq("household_id", household_id)
-        .eq("month", month_str)
+        .eq("cycle_key", cycle_key)
         .in_("category_code", flexible_codes)
         .gt("remaining_amount", 0)
         .order("remaining_amount", desc=True)
         .execute()
     )
     rows = response.data or []
+    if not rows:
+        response = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("month", month_str)
+            .is_("cycle_key", "null")
+            .in_("category_code", flexible_codes)
+            .gt("remaining_amount", 0)
+            .order("remaining_amount", desc=True)
+            .execute()
+        )
+        rows = response.data or []
     logger.debug("Found %d flexible budgets available for reallocation.", len(rows))
     return [BudgetRow(**r) for r in rows]
 
@@ -243,14 +331,17 @@ def insert_transaction(
     client = get_client()
 
     # Automatically derive cycle_key from timestamp if not supplied
+    # Mirrors the DB trigger populate_transaction_cycle_key: Riyadh calendar date of the
+    # timestamp and the household's configured payday (was: UTC date and a fixed 27th).
     if not cycle_key:
+        from salary_cycle import get_cycle_for_date
+        from utils import riyadh_date_for_timestamp
+        payday_day = get_household_payday(household_id)
         try:
-            from salary_cycle import get_cycle_for_date
-            tx_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            cycle_key = get_cycle_for_date(tx_dt.date())["cycle_key"]
-        except Exception:
-            from salary_cycle import get_cycle_for_date
-            cycle_key = get_cycle_for_date()["cycle_key"]
+            tx_date = riyadh_date_for_timestamp(timestamp)
+        except (TypeError, ValueError):
+            tx_date = riyadh_today()
+        cycle_key = get_cycle_for_date(tx_date, payday_day=payday_day)["cycle_key"]
 
     # Automatically derive sub_category from keywords if not supplied
     if not sub_category and category_code:
@@ -387,7 +478,7 @@ def ensure_household_cycle_budgets(
         return existing
 
     # Fallback check by month
-    target_d = target_date or datetime.now(timezone.utc).date()
+    target_d = target_date or riyadh_today()
     month_str = target_d.replace(day=1).isoformat()
     existing_month = client.table("budgets").select("*").eq("household_id", household_id).eq("month", month_str).execute().data
     if existing_month:
@@ -655,20 +746,20 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
     if not household_id or surplus <= 0:
         return 0.0
 
-    accumulated = 0.0
-    # 1. Update Supabase
+    accumulated: Optional[float] = None
+    # 1. Update Supabase — only authoritative when the household row actually exists;
+    #    otherwise computing from 0 would overwrite the running total kept in the local cache.
     try:
         client = get_client()
         res = client.table("households").select("accumulated_savings").eq("id", household_id).maybe_single().execute()
-        current_savings = 0.0
-        if res.data and res.data.get("accumulated_savings") is not None:
-            current_savings = float(res.data["accumulated_savings"])
-        accumulated = round(current_savings + float(surplus), 2)
-        client.table("households").update({
-            "accumulated_savings": accumulated,
-            "last_rollover_surplus": round(float(surplus), 2),
-            "last_rollover_cycle": cycle_key,
-        }).eq("id", household_id).execute()
+        if res is not None and res.data:
+            current_savings = float(res.data.get("accumulated_savings") or 0.0)
+            accumulated = round(current_savings + float(surplus), 2)
+            client.table("households").update({
+                "accumulated_savings": accumulated,
+                "last_rollover_surplus": round(float(surplus), 2),
+                "last_rollover_cycle": cycle_key,
+            }).eq("id", household_id).execute()
     except Exception as e:
         logger.info(f"Supabase update of accumulated_savings skipped: {e}")
 
@@ -682,7 +773,7 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
         if household_id not in settings:
             settings[household_id] = {}
 
-        if accumulated == 0.0:
+        if accumulated is None:
             accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
         settings[household_id]["accumulated_savings"] = round(accumulated, 2)
         settings[household_id]["last_rollover_surplus"] = round(surplus, 2)
@@ -693,7 +784,7 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
     except Exception as e:
         logger.warning(f"Failed to record savings surplus in household_settings.json: {e}")
 
-    return accumulated
+    return float(accumulated) if accumulated is not None else round(float(surplus), 2)
 
 
 def get_household_savings_summary(household_id: str) -> dict:
@@ -755,8 +846,7 @@ HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "househ
 def is_supabase_configured() -> bool:
     """Return True if Supabase credentials are configured in environment."""
     url = (os.environ.get("SUPABASE_URL") or "").strip()
-    key = (os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-    return bool(url and key)
+    return bool(url and describe_supabase_key()["key"])
 
 
 def create_household_role_invite(
@@ -887,7 +977,10 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
             if res and hasattr(res, "data") and isinstance(res.data, dict):
                 data = res.data
                 if not data.get("success"):
-                    return {"status": "error", "error": data.get("error", "Invite code is invalid or expired.")}
+                    message = str(data.get("error") or "Invite code is invalid or expired.")
+                    if "too many failed join attempts" in message.lower():
+                        return {"status": "error", "code": "rate_limited", "error": message}
+                    return {"status": "error", "error": message}
                 return {
                     "status": "success",
                     "household_id": data.get("household_id"),
@@ -897,7 +990,15 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
                 }
         except Exception as exc:
             logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
-            return {"status": "error", "error": str(exc)}
+            # Never echo raw database errors to the client. The DB lockout (repeated failed
+            # join attempts) is surfaced distinctly so the route can answer 429.
+            if "too many failed join attempts" in str(exc).lower():
+                return {
+                    "status": "error",
+                    "code": "rate_limited",
+                    "error": "Too many failed join attempts. Please try again later.",
+                }
+            return {"status": "error", "error": "Invite code is invalid, expired or could not be claimed."}
 
     # Fallback ONLY when Supabase is not configured
     try:
@@ -968,12 +1069,10 @@ def record_household_reimbursement(
         "timestamp": now_iso,
     }
 
-    # Attempt Supabase insert
-    try:
-        client = get_client()
-        client.table("transactions").insert(tx_data).execute()
-    except Exception as e:
-        logger.info(f"Supabase reimbursement transaction insert fallback: {e}")
+    # Persist. A failed insert must propagate: it used to be swallowed and the endpoint still
+    # answered "success", so the client believed a settlement was recorded that never existed.
+    client = get_client()
+    client.table("transactions").insert(tx_data).execute()
 
     return {
         "status": "success",

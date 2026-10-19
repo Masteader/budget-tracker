@@ -86,7 +86,7 @@ import '../../main.dart';
 import '../../supabase_config.dart';
 
 class BaseApiClient {
-  static const String appAuthToken = 'bt_sec_99a81f3d4c72e01b88e2';
+  static const String appAuthToken = '<redacted: rotated>';
 
   String get baseUrl {
     if (fastapiWebhookUrl.endsWith('/webhook/sms')) {

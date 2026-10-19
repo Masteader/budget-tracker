@@ -9,6 +9,8 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 from supabase_client import get_client, fetch_flexible_budgets
@@ -40,7 +42,7 @@ def get_cycle_for_date(target_date: Optional[date] = None, payday_day: int = 27)
     - If payday_day > 1, cycle is from payday_day of previous month to day before payday of this month (or from this month to next month if today >= payday).
     """
     payday_day = max(1, min(31, int(payday_day)))
-    today = target_date or datetime.now(timezone.utc).date()
+    today = target_date or riyadh_today()
 
     if payday_day == 1:
         start_date = date(today.year, today.month, 1)
@@ -93,7 +95,7 @@ def get_salary_cycle_dates(current: Optional[date] = None, payday_day: int = 27)
     Computes active salary cycle dates, days remaining to payday, and elapsed days.
     """
     payday_day = max(1, min(31, int(payday_day)))
-    today = current or datetime.now(timezone.utc).date()
+    today = current or riyadh_today()
     cycle_info = get_cycle_for_date(today, payday_day=payday_day)
     start_date = date.fromisoformat(cycle_info["cycle_start"])
     end_date = date.fromisoformat(cycle_info["cycle_end"])
@@ -145,7 +147,7 @@ def get_salary_cycle_forecast(
     if payday_day is None:
         payday_day = get_household_payday(household_id)
     cycle = get_salary_cycle_dates(current, payday_day=payday_day)
-    today = current or datetime.now(timezone.utc).date()
+    today = current or riyadh_today()
     client = get_client()
 
     # Query budgets for current cycle
@@ -257,7 +259,7 @@ def simulate_affordability(
     daily_remaining = forecast["daily_remaining_allowance"]
 
     client = get_client()
-    today = datetime.now(timezone.utc).date()
+    today = riyadh_today()
     month_start = today.replace(day=1).isoformat()
 
     # Category budget details
@@ -629,28 +631,65 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
     }
 
 
+def get_category_owner_households(category_code: str) -> Dict[str, Any]:
+    """
+    Describe who owns a category code in cost_control_codes.
+
+    Returns {"shared": bool, "owners": [household_id, ...]} where ``shared`` is True when a
+    global/system row (household_id NULL) exists. Shared definitions are visible to every
+    household, so household members must never be allowed to mutate them.
+    """
+    client = get_client()
+    rows = (
+        client.table("cost_control_codes")
+        .select("id, household_id, is_system")
+        .eq("code", category_code)
+        .execute()
+        .data
+        or []
+    )
+    shared = any(r.get("household_id") is None or r.get("is_system") for r in rows)
+    owners = sorted({str(r["household_id"]) for r in rows if r.get("household_id")})
+    return {"shared": shared, "owners": owners}
+
+
 def add_category_and_budget(req: Any) -> Dict[str, Any]:
     from supabase_client import get_client
     client = get_client()
-    
+
     keywords = req.keywords or [req.category.lower()]
-    existing_code = client.table("cost_control_codes").select("id").eq("code", req.code).execute().data
-    if existing_code:
+    rows = (
+        client.table("cost_control_codes")
+        .select("id, household_id, is_system")
+        .eq("code", req.code)
+        .execute()
+        .data
+        or []
+    )
+    own_rows = [r for r in rows if r.get("household_id") == req.household_id]
+    shared_rows = [r for r in rows if r.get("household_id") is None]
+    if own_rows:
+        # Only this household's own custom definition may be edited.
         client.table("cost_control_codes").update({
             "category": req.category,
             "keywords": keywords,
             "is_flexible": req.is_flexible,
-        }).eq("code", req.code).execute()
-    else:
+        }).eq("id", own_rows[0]["id"]).execute()
+    elif not shared_rows:
+        # New category: scope it to the household (an unscoped insert created a global
+        # category that appeared in every household's category list).
         client.table("cost_control_codes").insert({
             "code": req.code,
             "category": req.category,
             "keywords": keywords,
             "is_flexible": req.is_flexible,
+            "is_system": False,
+            "household_id": req.household_id,
         }).execute()
+    # A shared/system code is used as-is: its definition is never rewritten from a household request.
     
     current_cycle = get_cycle_for_date()
-    today = datetime.now(timezone.utc).date()
+    today = riyadh_today()
     month_str = today.replace(day=1).isoformat()
     
     existing_b = (
@@ -888,7 +927,12 @@ def remove_sub_category_for_household(
         .limit(1)
         .execute()
     )
-    if not (tx_check.data or []):
+    # 3. Purge the definition only when the parent category is this household's own custom
+    #    category. Definitions under shared/system parents are used by every household; deleting
+    #    them because *this* household has no transactions removed them for everyone.
+    ownership = get_category_owner_households(parent_code)
+    owned_here = (not ownership["shared"]) and ownership["owners"] == [household_id]
+    if owned_here and not (tx_check.data or []):
         try:
             client.table("cost_control_sub_categories").delete().eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
         except Exception as e:
@@ -1065,9 +1109,11 @@ def toggle_category_status(household_id: str, category_code: str, is_active: boo
         if is_active and (not update_res.data or len(update_res.data) == 0):
             existing_check = client.table("budgets").select("id").eq("household_id", household_id).eq("category_code", category_code).execute()
             if not existing_check.data or len(existing_check.data) == 0:
-                today = datetime.now(timezone.utc).date()
+                from supabase_client import get_household_payday
+                today = riyadh_today()
                 month_str = today.replace(day=1).isoformat()
-                cycle_key = f"{today.year:04d}-{today.month:02d}"
+                # Salary-cycle key (27th → next month), not the calendar month.
+                cycle_key = get_cycle_for_date(today, payday_day=get_household_payday(household_id))["cycle_key"]
                 client.table("budgets").insert({
                     "household_id": household_id,
                     "category_code": category_code,
@@ -1119,7 +1165,7 @@ def create_household_custom_category(
     # If allocated_amount > 0, create budget
     if allocated_amount > 0:
         current_cycle = get_cycle_for_date()
-        today = datetime.now(timezone.utc).date()
+        today = riyadh_today()
         month_str = today.replace(day=1).isoformat()
         client.table("budgets").insert({
             "household_id": household_id,

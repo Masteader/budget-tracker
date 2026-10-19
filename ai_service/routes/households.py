@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
@@ -211,18 +211,7 @@ async def create_household_role_invite_endpoint(
 
 
 from rate_limiter import default_rate_limiter
-
-
-def get_client_ip(request: Request) -> str:
-    """Extract client IP safely from rightmost X-Forwarded-For hop or client host."""
-    xff = request.headers.get("X-Forwarded-For")
-    if xff:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            return parts[-1]
-    if request.client and request.client.host:
-        return request.client.host
-    return "127.0.0.1"
+from utils import get_client_ip
 
 
 @router.get(
@@ -273,6 +262,12 @@ async def claim_household_role_invite_endpoint(
     user_id = get_current_user_id(request)
     try:
         res = await asyncio.to_thread(claim_household_role_invite, invite_code, user_id)
+        if res.get("code") == "rate_limited":
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=res.get("error", "Too many failed join attempts. Please try again later."),
+                headers={"Retry-After": "900"},
+            )
         if res.get("status") != "success":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -299,6 +294,10 @@ async def record_household_reimbursement_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    if payload.household_id != household_id:
+        raise HTTPException(status_code=400, detail="Body household_id does not match the URL.")
+    if payload.payer_id == payload.recipient_id:
+        raise HTTPException(status_code=400, detail="payer_id and recipient_id must differ.")
     try:
         return await asyncio.to_thread(
             record_household_reimbursement,
@@ -380,18 +379,24 @@ async def remove_household_dependent(
 )
 async def household_settlement(
     household_id: str,
-    split_ratio: float = 0.50,
+    request: Request,
+    split_ratio: float = Query(0.50, ge=0.0, le=1.0, allow_inf_nan=False),
     _auth: str = Depends(verify_household_access),
 ):
     """
     Aggregates transactions in the active salary cycle by spent_by ('me', 'partner', 'both').
     Returns net balance, who owes whom, and copyable STC Pay / Urpay / IBAN transfer note.
+    split_ratio applies to roommate/partner households only; married-family households are
+    settled by Nafaqah rules (no 50/50 spousal split).
     """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    caller_user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
+        return await asyncio.to_thread(
+            calculate_partner_settlement, household_id, split_ratio=split_ratio, caller_user_id=caller_user_id
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to compute partner settlement.")
 

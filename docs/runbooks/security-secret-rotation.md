@@ -2,8 +2,8 @@
 
 ## 1. Secrets Compromised in Git History
 The following values were committed to Git and must be treated as permanently compromised:
-- `WEBHOOK_SECRET`: `dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400`
-- `APP_AUTH_TOKEN`: `bt_sec_99a81f3d4c72e01b88e2`
+- `WEBHOOK_SECRET`: `<redacted: rotated>`
+- `APP_AUTH_TOKEN`: `<redacted: rotated>`
 - Default Supabase Anon Key in `supabase_config.dart`
 
 ## 2. Generating New Secrets

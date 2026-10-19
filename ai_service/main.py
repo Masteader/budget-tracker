@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
-from utils import verify_signature as _verify_signature
+from utils import verify_signature as _verify_signature, is_production
 from landing_page import get_landing_page_html, get_auth_confirmed_html
 from routes.budgets import router as budgets_router
 from routes.households import router as households_router
@@ -50,6 +50,25 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# ─── Validation errors ───────────────────────────────────────────────────────
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def sanitized_validation_handler(request: Request, exc: RequestValidationError):
+    """
+    Return 422 with location/type/message only. The default handler echoes the offending
+    input back (leaking payload contents) and crashes with a 500 when that input is NaN or
+    Infinity, which cannot be JSON-encoded.
+    """
+    errors = [
+        {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
+
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 DEFAULT_ALLOWED_ORIGINS = [
@@ -136,9 +155,18 @@ if not APP_AUTH_TOKEN:
     )
 
 
+_API_DOC_PATHS = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
+
+
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     path = request.url.path
+
+    # Interactive API docs / schema are a development aid only: in production they would hand
+    # an attacker the full route map, so they are hidden unless ENV is explicitly non-production.
+    if path in _API_DOC_PATHS and is_production():
+        from starlette.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     if (
         path in [
@@ -184,12 +212,17 @@ async def firewall_token_middleware(request: Request, call_next):
         except Exception:
             bearer_valid = False
 
+    # The verified per-user Supabase JWT is the credential (current app builds send only that).
+    # X-App-Token is still accepted at this coarse layer for older builds, but it is extractable
+    # from the APK and every route additionally requires a verified JWT. Missing, invalid or
+    # expired credentials answer 401 (not 403) so the client refreshes its session and retries.
     if is_tunnel_or_proxy and not (token_valid or bearer_valid):
-        logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
+        logger.warning("Firewall blocked unauthenticated request from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
-            status_code=403,
-            content={"detail": "Forbidden: Untrusted endpoint access."}
+            status_code=401,
+            content={"detail": "Invalid or expired authentication token."},
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return await call_next(request)
@@ -203,6 +236,28 @@ if not WEBHOOK_SECRET:
         "HMAC signature verification will reject all signed requests. "
         "Set WEBHOOK_SECRET in environment variables."
     )
+
+
+def _log_security_configuration() -> None:
+    """Surface dangerous configuration at startup (never logs secret values)."""
+    from supabase_client import describe_supabase_key
+
+    key_info = describe_supabase_key()
+    for env_var, role in key_info["rejected"]:
+        logger.critical(
+            "%s holds a non-privileged Supabase key (role '%s') and is ignored. "
+            "The service needs a service_role JWT or an sb_secret_ key.", env_var, role,
+        )
+    if not key_info["key"]:
+        logger.critical("No privileged Supabase key configured: all database-backed API routes will fail closed.")
+    if not os.environ.get("SUPABASE_JWT_SECRET", "").strip():
+        logger.warning(
+            "SUPABASE_JWT_SECRET is empty: HS256 user tokens are rejected and only ES256 tokens "
+            "verifiable via the project's JWKS are accepted."
+        )
+
+
+_log_security_configuration()
 
 
 # ─── Public Landing & Health Routes ──────────────────────────────────────────

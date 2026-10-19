@@ -238,14 +238,14 @@ from main import app
 client = TestClient(app)
 
 def test_get_cycles_endpoint():
-    resp = client.get("/budgets/cycles?household_id=f860188e-23b5-4749-b180-868c956151a6", headers={"X-App-Token": "bt_sec_99a81f3d4c72e01b88e2"})
+    resp = client.get("/budgets/cycles?household_id=f860188e-23b5-4749-b180-868c956151a6", headers={"X-App-Token": "<redacted: rotated>"})
     assert resp.status_code == 200
     data = resp.json()
     assert "current_cycle" in data
     assert "cycles" in data
 
 def test_get_category_breakdown():
-    resp = client.get("/budgets/breakdown?household_id=f860188e-23b5-4749-b180-868c956151a6&cycle_key=2026-10", headers={"X-App-Token": "bt_sec_99a81f3d4c72e01b88e2"})
+    resp = client.get("/budgets/breakdown?household_id=f860188e-23b5-4749-b180-868c956151a6&cycle_key=2026-10", headers={"X-App-Token": "<redacted: rotated>"})
     assert resp.status_code == 200
     assert "categories" in resp.json()
 ```

@@ -15,6 +15,8 @@ from typing import Dict, Any, List, Optional, Set
 
 from salary_cycle import get_cycle_for_date
 
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 # Known recurring merchant patterns in Saudi Arabia and global digital subscriptions
@@ -122,7 +124,7 @@ def detect_recurring_bills(
     with historical transaction pattern clustering to calculate reserved funds for
     the active salary cycle.
     """
-    now_date = as_of_date or datetime.now(timezone.utc).date()
+    now_date = as_of_date or riyadh_today()
     cycle_info = get_cycle_for_date(now_date)
     cycle_start = date.fromisoformat(cycle_info["cycle_start"])
     cycle_end = date.fromisoformat(cycle_info["cycle_end"])
@@ -434,7 +436,7 @@ def fetch_household_recurring_bills(
     from supabase_client import get_client
     client = get_client()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=180)).isoformat()
-    now_date = as_of_date or datetime.now(timezone.utc).date()
+    now_date = as_of_date or riyadh_today()
 
     # 1. Transactions
     try:

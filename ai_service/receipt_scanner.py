@@ -8,11 +8,15 @@ Supports:
 
 from __future__ import annotations
 import base64
+import binascii
 import json
 import logging
+import math
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+from urllib.parse import unquote
 
 import litellm
 from dotenv import load_dotenv
@@ -29,7 +33,68 @@ from supabase_client import (
     reallocate_budget,
 )
 
+from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
+
+# ─── Upload validation ───────────────────────────────────────────────────────
+MAX_RECEIPT_IMAGES = 8
+MAX_RECEIPT_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_RECEIPT_PIXELS = 40_000_000  # per image; guards PIL decompression bombs during stitching
+_IMAGE_MAGIC = (
+    (b"\xff\xd8\xff", "jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"RIFF", "webp"),
+)
+_LEGACY_STORAGE_URL_RE = re.compile(
+    r"^https?://[^/]+/storage/v1/object/(?:public|sign|authenticated)/receipts/([^?#]+)(?:[?#].*)?$"
+)
+_RECEIPT_FILE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}\.(?:jpg|jpeg|png|webp|heic)$", re.IGNORECASE)
+
+
+def normalize_receipt_path(receipt_url: Optional[str], household_id: str) -> Optional[str]:
+    """
+    Normalise a client-supplied receipt reference to a storage path inside the caller's
+    household folder ``{household_id}/{file}.{jpg|jpeg|png|webp|heic}``. Legacy public/signed
+    Supabase URLs are converted to that path. Anything else (another household's folder,
+    traversal incl. URL-encoded, absolute paths, foreign URLs, non-image extensions) raises
+    ValueError. Previously the value was stored verbatim on the transaction.
+    """
+    if receipt_url is None or not str(receipt_url).strip():
+        return None
+    value = str(receipt_url).strip()
+    legacy = _LEGACY_STORAGE_URL_RE.match(value)
+    if legacy:
+        value = legacy.group(1)
+    for _ in range(3):  # decode nested percent-encoding (%252e → %2e → .)
+        decoded = unquote(value)
+        if decoded == value:
+            break
+        value = decoded
+    if "://" in value or value.startswith("/") or "\\" in value or ".." in value or "\x00" in value:
+        raise ValueError("receipt_url must be a storage path inside the household folder.")
+    parts = value.split("/")
+    if len(parts) != 2 or parts[0].lower() != str(household_id).lower() or not _RECEIPT_FILE_RE.match(parts[1]):
+        raise ValueError("receipt_url must be a storage path inside the household folder.")
+    return value
+
+
+def validate_receipt_images(images_base64: List[str]) -> None:
+    """Reject too many images, oversized/invalid base64 and payloads that are not JPEG/PNG/WebP."""
+    if len(images_base64) > MAX_RECEIPT_IMAGES:
+        raise ValueError(f"A receipt can have at most {MAX_RECEIPT_IMAGES} photos.")
+    for img in images_base64:
+        data = img.split(",", 1)[1] if isinstance(img, str) and "," in img else img
+        if not isinstance(data, str) or len(data) > (MAX_RECEIPT_IMAGE_BYTES * 4) // 3 + 4:
+            raise ValueError("Receipt photo is too large or malformed.")
+        try:
+            raw = base64.b64decode(data, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("Receipt photo is not valid base64.")
+        if not any(raw.startswith(magic) for magic, _ in _IMAGE_MAGIC):
+            raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
+        if raw.startswith(b"RIFF") and raw[8:12] != b"WEBP":
+            raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
 
 
 def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
@@ -41,38 +106,98 @@ def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
     Tag 4: Total Amount (with VAT)
     Tag 5: VAT Amount
     """
-    if not b64_str or len(b64_str) < 10:
+    if not b64_str or len(b64_str) < 10 or len(b64_str) > 4096:
+        return None
+    raw = _decode_qr_base64(b64_str)
+    if raw is None:
+        return None
+    # Phase 1 encoders use a single length byte (0-255); some Phase 2 encoders emit BER
+    # long-form lengths (0x81 n / 0x82 hi lo) for values >= 128 bytes. Each interpretation
+    # must parse completely AND yield valid fields before it is accepted.
+    for ber_lengths in (False, True):
+        tags = _parse_tlv(raw, ber_lengths=ber_lengths)
+        result = _interpret_zatca_tags(tags) if tags else None
+        if result:
+            return result
+    logger.debug("ZATCA TLV decode failed: no valid interpretation")
+    return None
+
+
+def _interpret_zatca_tags(tags: Dict[int, bytes]) -> Optional[Dict[str, Any]]:
+    try:
+        seller = tags[1].decode("utf-8").strip() if 1 in tags else None
+        vat_no = tags[2].decode("utf-8").strip() if 2 in tags else None
+        ts = tags[3].decode("utf-8").strip() if 3 in tags else None
+    except UnicodeDecodeError:
+        return None
+    total = _parse_sar_amount(tags.get(4))
+    if not seller or not total:
+        return None
+    return {
+        "seller_name": seller,
+        "vat_number": vat_no,
+        "timestamp": ts,
+        "total_amount": total,
+        "vat_amount": _parse_sar_amount(tags.get(5)),
+    }
+
+
+_B64_STD_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+_B64_URL_RE = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+_SAR_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,6})?$")
+
+
+def _decode_qr_base64(value: str) -> Optional[bytes]:
+    """Strict base64 (standard or URL-safe, padding optional); invalid characters are an error
+    rather than being silently discarded (b64decode's default) and yielding garbage TLV."""
+    text = "".join(value.split())
+    padded = text + "=" * (-len(text) % 4)
+    try:
+        if _B64_STD_RE.match(text):
+            return base64.b64decode(padded, validate=True)
+        if _B64_URL_RE.match(text):
+            return base64.urlsafe_b64decode(padded)
+    except (binascii.Error, ValueError):
+        return None
+    return None
+
+
+def _parse_tlv(raw: bytes, ber_lengths: bool) -> Optional[Dict[int, bytes]]:
+    """Parse the whole buffer as TLV; None on any truncation (the old parser silently accepted
+    short values). The first occurrence of a tag wins."""
+    tags: Dict[int, bytes] = {}
+    idx, n = 0, len(raw)
+    while idx < n:
+        if idx + 2 > n:
+            return None
+        tag = raw[idx]
+        length = raw[idx + 1]
+        idx += 2
+        if ber_lengths and length & 0x80:
+            num = length & 0x7F
+            if num == 0 or num > 2 or idx + num > n:
+                return None
+            length = int.from_bytes(raw[idx: idx + num], "big")
+            idx += num
+        if idx + length > n:
+            return None
+        tags.setdefault(tag, raw[idx: idx + length])
+        idx += length
+    return tags
+
+
+def _parse_sar_amount(value: Optional[bytes]) -> Optional[float]:
+    """Decimal amount in SAR; None for anything non-numeric, negative, NaN/inf or exponent form."""
+    if not value:
         return None
     try:
-        raw = base64.b64decode(b64_str.strip())
-        tags: Dict[int, str] = {}
-        idx = 0
-        while idx < len(raw):
-            tag = raw[idx]
-            if idx + 1 >= len(raw):
-                break
-            length = raw[idx + 1]
-            val = raw[idx + 2 : idx + 2 + length].decode("utf-8", errors="replace")
-            tags[tag] = val
-            idx += 2 + length
-
-        seller = tags.get(1)
-        vat_no = tags.get(2)
-        ts = tags.get(3)
-        total = float(tags.get(4, 0)) if tags.get(4) else None
-        vat_amt = float(tags.get(5, 0)) if tags.get(5) else None
-
-        if seller and total:
-            return {
-                "seller_name": seller,
-                "vat_number": vat_no,
-                "timestamp": ts,
-                "total_amount": total,
-                "vat_amount": vat_amt,
-            }
-    except Exception as e:
-        logger.debug("ZATCA TLV decode failed: %s", e)
-    return None
+        text = value.decode("ascii").strip().replace(",", "")
+    except UnicodeDecodeError:
+        return None
+    if not _SAR_AMOUNT_RE.match(text):
+        return None
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def stitch_images_vertically(images_base64: List[str]) -> bytes:
@@ -102,7 +227,10 @@ def stitch_images_vertically(images_base64: List[str]) -> bytes:
         return raw_bytes_list[0]
 
     try:
-        pil_images = [Image.open(io.BytesIO(b)).convert("RGB") for b in raw_bytes_list]
+        opened = [Image.open(io.BytesIO(b)) for b in raw_bytes_list]  # lazy: header only
+        if any(img.width * img.height > MAX_RECEIPT_PIXELS for img in opened):
+            raise ValueError("Receipt photo dimensions exceed the stitching limit.")
+        pil_images = [img.convert("RGB") for img in opened]
         base_width = pil_images[0].width
         resized = []
         total_height = 0
@@ -256,6 +384,8 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
     except (ValueError, TypeError):
         raw_total = 0.0
 
+    if not math.isfinite(raw_total):
+        raise ValueError("Receipt total amount is not a finite number.")
     if raw_total < 0:
         raise ValueError(f"Invalid negative receipt total amount: {raw_total}")
     if raw_total > 10_000_000:
@@ -279,6 +409,8 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, TypeError):
             price = 0.0
 
+        if not (math.isfinite(qty) and math.isfinite(price)):
+            raise ValueError("Receipt item quantity and price must be finite numbers.")
         if qty <= 0 or qty > 10_000:
             raise ValueError(f"Invalid receipt item quantity ({qty}). Must be between 0 and 10,000.")
         if price < 0 or price > 10_000_000:
@@ -313,6 +445,7 @@ def process_receipt_scan(
     override_merchant: Optional[str] = None,
     override_spent_by: Optional[str] = None,
     receipt_url: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -323,10 +456,11 @@ def process_receipt_scan(
     """
     images_base64 = images_base64 or []
 
-    # Normalize legacy public or signed URLs to relative storage paths
-    if receipt_url and ("/storage/v1/object/public/receipts/" in receipt_url or "/storage/v1/object/sign/receipts/" in receipt_url):
-        import re
-        receipt_url = re.sub(r'^https?://[^/]+/storage/v1/object/(?:public|sign)/receipts/([^?]+).*$', r'\1', receipt_url)
+    try:
+        receipt_url = normalize_receipt_path(receipt_url, household_id)
+        validate_receipt_images(images_base64)
+    except ValueError as invalid:
+        return {"status": "error", "message": str(invalid)}
 
     # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
     # IMPORTANT: Only upload when committing/saving (not during preview) and if client hasn't already uploaded
@@ -355,10 +489,11 @@ def process_receipt_scan(
             else:
                 parsed = parse_receipt_images(images_base64, qr_code_raw=qr_code_raw)
         except Exception as exc:
-            logger.error("Failed to parse receipt image(s): %s", exc)
+            # Provider exceptions can carry API URLs, model ids or key fragments: log, don't echo.
+            logger.error("Failed to parse receipt image(s): %s", exc, exc_info=True)
             return {
                 "status": "error",
-                "message": f"Failed to analyze receipt: {str(exc)}",
+                "message": "Failed to analyze receipt. Please try again or enter the expense manually.",
             }
     elif qr_code_raw:
         zatca = decode_zatca_tlv(qr_code_raw)
@@ -461,7 +596,13 @@ def process_receipt_scan(
 
     # Explicit enrichment
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items)
+        success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -553,8 +694,10 @@ def process_receipt_scan(
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = datetime.now(timezone.utc).date()
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget
     budget = fetch_budget(household_id, category_code, now_date)
@@ -593,7 +736,7 @@ def process_receipt_scan(
     )
 
     if items:
-        enrich_transaction_items(tx_id, items)
+        enrich_transaction_items(tx_id, items, household_id=household_id)
 
     return {
         "status": "success",

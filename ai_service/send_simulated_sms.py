@@ -10,7 +10,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SECRET = os.environ.get("WEBHOOK_SECRET", "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400")
+SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
+if not SECRET:
+    sys.exit("WEBHOOK_SECRET must be set in the environment; no default secret is embedded.")
 HOUSEHOLD_ID = os.environ.get("TEST_HOUSEHOLD_ID", "f860188e-23b5-4749-b180-868c956151a6")
 
 def send_sms(raw_text: str, sender: str = "AlRajhi"):

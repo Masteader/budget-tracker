@@ -52,17 +52,17 @@ def calculate_installment_terms(
 
 class InstallmentPlanCreate(BaseModel):
     household_id: str
-    merchant: str
-    provider: str = "Tamara"  # Tamara, Tabby, Bank, Other
-    total_amount: float
-    installment_count: int = 4
-    monthly_amount: Optional[float] = None
-    paid_installments: int = 1
-    day_of_month: int = 27
-    start_date: Optional[str] = None
-    category_code: str = "OPEX-SHOPPING"
-    original_transaction_id: Optional[str] = None
-    notes: Optional[str] = None
+    merchant: str = Field(..., min_length=1, max_length=120)
+    provider: str = Field("Tamara", max_length=40)  # Tamara, Tabby, Bank, Other
+    total_amount: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
+    installment_count: int = Field(4, ge=1, le=60)
+    monthly_amount: Optional[float] = Field(None, ge=0, le=10_000_000, allow_inf_nan=False)
+    paid_installments: int = Field(1, ge=0, le=60)
+    day_of_month: int = Field(27, ge=1, le=31)
+    start_date: Optional[str] = Field(None, max_length=32)
+    category_code: str = Field("OPEX-SHOPPING", max_length=60)
+    original_transaction_id: Optional[str] = Field(None, max_length=64)
+    notes: Optional[str] = Field(None, max_length=500)
     adjust_original_transaction: bool = True
 
 
@@ -85,8 +85,17 @@ class InstallmentPlan(BaseModel):
 
     @property
     def remaining_amount(self) -> float:
-        paid = self.monthly_amount * self.paid_installments
-        return max(0.0, round(self.total_amount - paid, 2))
+        """Outstanding SAR, computed in Decimal halalas. The final installment absorbs the
+        rounding remainder (100/3 → 33.33, 33.33, 33.34), so a completed plan owes exactly 0
+        instead of a residual 0.01 from float math."""
+        from decimal import Decimal, ROUND_HALF_UP
+
+        if self.paid_installments >= self.installment_count:
+            return 0.0
+        total = Decimal(str(self.total_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        monthly = Decimal(str(self.monthly_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        remaining = total - monthly * self.paid_installments
+        return float(max(Decimal("0"), remaining))
 
     @property
     def remaining_installments(self) -> int:
@@ -116,8 +125,48 @@ class InstallmentService:
         with open(FALLBACK_FILE, "w", encoding="utf-8") as f:
             json.dump(plans, f, indent=2, ensure_ascii=False)
 
+    @staticmethod
+    def transaction_belongs_to_household(tx_id: str, household_id: str) -> bool:
+        """True when transaction ``tx_id`` exists inside ``household_id`` (service role bypasses RLS)."""
+        try:
+            sb = supabase_client.get_client()
+            res = (
+                sb.table("transactions")
+                .select("id")
+                .eq("id", tx_id)
+                .eq("household_id", household_id)
+                .limit(1)
+                .execute()
+            )
+            return bool(res is not None and res.data)
+        except Exception as e:
+            logger.warning("Could not verify ownership of transaction %s: %s", tx_id, e)
+            return False
+
+    @classmethod
+    def get_plan_household_id(cls, plan_id: str) -> Optional[str]:
+        """Resolve the owning household of an installment plan (DB first, then local fallback)."""
+        try:
+            sb = supabase_client.get_client()
+            res = sb.table("installment_plans").select("household_id").eq("id", plan_id).limit(1).execute()
+            if res is not None and res.data:
+                return res.data[0].get("household_id")
+        except Exception as e:
+            logger.debug("Supabase plan lookup failed (%s), using local fallback", e)
+        for p in cls._read_fallback_plans():
+            if p.get("id") == plan_id:
+                return p.get("household_id")
+        return None
+
     @classmethod
     def create_plan(cls, req: InstallmentPlanCreate) -> InstallmentPlan:
+        # The optional original transaction must belong to the plan's household; otherwise any
+        # member could rewrite another household's transaction amount through this endpoint.
+        if req.original_transaction_id and not cls.transaction_belongs_to_household(
+            req.original_transaction_id, req.household_id
+        ):
+            raise PermissionError("original_transaction_id does not belong to this household")
+
         # Calculate monthly amount if not provided
         monthly = req.monthly_amount
         if not monthly or monthly <= 0:
@@ -159,6 +208,7 @@ class InstallmentService:
         if req.original_transaction_id and req.adjust_original_transaction:
             cls._adjust_original_transaction(
                 tx_id=req.original_transaction_id,
+                household_id=req.household_id,
                 monthly_amount=monthly,
                 total_amount=req.total_amount,
                 provider=req.provider,
@@ -167,9 +217,11 @@ class InstallmentService:
 
         return InstallmentPlan(**plan_dict)
 
-    @staticmethod
+    @classmethod
     def _adjust_original_transaction(
+        cls,
         tx_id: str,
+        household_id: str,
         monthly_amount: float,
         total_amount: float,
         provider: str,
@@ -181,24 +233,32 @@ class InstallmentService:
             note_suffix = f" [Financed via {provider}: Installment 1 of {installment_count}. Full price: SAR {total_amount:,.2f}]"
             
             # Fetch existing transaction
-            tx = sb.table("transactions").select("raw_sms, household_id").eq("id", tx_id).single().execute()
+            tx = (
+                sb.table("transactions")
+                .select("raw_sms, household_id")
+                .eq("id", tx_id)
+                .eq("household_id", household_id)
+                .single()
+                .execute()
+            )
             raw_sms = (tx.data.get("raw_sms") or "") + note_suffix
-            household_id = tx.data.get("household_id")
 
             sb.table("transactions").update({
                 "amount": monthly_amount,
                 "raw_sms": raw_sms,
-            }).eq("id", tx_id).execute()
+            }).eq("id", tx_id).eq("household_id", household_id).execute()
 
             logger.info(
                 "Adjusted original transaction %s from %s to monthly installment %s",
                 tx_id, total_amount, monthly_amount
             )
 
-            if household_id:
-                cls.recalculate_budgets(household_id)
         except Exception as e:
             logger.warning("Failed to adjust original transaction %s: %s", tx_id, e)
+            return
+        # Previously a @staticmethod referencing `cls` here: the NameError was swallowed by the
+        # except above, so budgets were never recalculated after the amount changed.
+        cls.recalculate_budgets(household_id)
 
     @classmethod
     def recalculate_budgets(cls, household_id: str, cycle_key: Optional[str] = None) -> None:
@@ -362,18 +422,25 @@ class InstallmentService:
         return found_plans
 
     @classmethod
-    def pay_installment(cls, plan_id: str) -> Optional[InstallmentPlan]:
+    def pay_installment(cls, plan_id: str, household_id: str) -> Optional[InstallmentPlan]:
+        """Record one payment on ``plan_id``, scoped to the caller-verified ``household_id``."""
         # Try Supabase first
         try:
             sb = supabase_client.get_client()
-            res = sb.table("installment_plans").select("*").eq("id", plan_id).execute()
+            res = (
+                sb.table("installment_plans")
+                .select("*")
+                .eq("id", plan_id)
+                .eq("household_id", household_id)
+                .execute()
+            )
             if res.data and len(res.data) > 0:
                 plan = InstallmentPlan(**res.data[0])
                 plan.record_payment()
                 sb.table("installment_plans").update({
                     "paid_installments": plan.paid_installments,
                     "status": plan.status,
-                }).eq("id", plan_id).execute()
+                }).eq("id", plan_id).eq("household_id", household_id).execute()
                 return plan
         except Exception as e:
             logger.debug("Supabase pay_installment failed (%s), using local fallback", e)
@@ -381,7 +448,7 @@ class InstallmentService:
         # Fallback
         plans = cls._read_fallback_plans()
         for p in plans:
-            if p.get("id") == plan_id:
+            if p.get("id") == plan_id and p.get("household_id") == household_id:
                 plan = InstallmentPlan(**p)
                 plan.record_payment()
                 p["paid_installments"] = plan.paid_installments

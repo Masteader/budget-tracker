@@ -95,3 +95,13 @@ def test_rollover_rule_api_endpoints(tmp_path, monkeypatch):
     assert sum_resp.status_code == 200
     assert sum_resp.json()["household_id"] == hid
     assert sum_resp.json()["rollover_rule"] == "rollover_to_categories"
+
+
+def test_savings_surplus_accumulates_on_existing_household_row(fake_supabase):
+    """When the households row exists, the DB total is authoritative and incremented, not reset."""
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
+    fake_supabase.seed("households", [{"id": hid, "accumulated_savings": 100.0}])
+    assert add_household_savings_surplus(hid, 50.25, "2026-11") == 150.25
+    row = fake_supabase.tables["households"][0]
+    assert row["accumulated_savings"] == 150.25
+    assert row["last_rollover_cycle"] == "2026-11"

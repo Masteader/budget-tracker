@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
@@ -38,98 +39,120 @@ def _check_household_membership(user_household_id: Optional[str], requested_hous
 
 
 _JWKS_CACHE: dict = {}
+_JWKS_STATE = {"last_fetch": 0.0}
+# Unknown `kid`s are attacker-controlled: never refetch the JWKS more often than this.
+_JWKS_MIN_REFRESH_SECONDS = 60.0
+_JWKS_FETCH_TIMEOUT_SECONDS = 3.0
+_MAX_TOKEN_LENGTH = 8192
+_INVALID_TOKEN_DETAIL = "Invalid or expired authentication token."
+
+
+def _reset_jwks_cache() -> None:
+    """Clear cached JWKS keys (tests / key rotation)."""
+    _JWKS_CACHE.clear()
+    _JWKS_STATE["last_fetch"] = 0.0
+
+
+def _fetch_jwks_document(url: str) -> dict:
+    import json
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS) as resp:
+        return json.loads(resp.read(256 * 1024).decode("utf-8"))
 
 
 def _get_jwk_for_kid(kid: str):
-    """Retrieve and construct a JWK from Supabase JWKS endpoint with in-memory caching."""
-    global _JWKS_CACHE
+    """
+    Return the cached ES256 verification key for ``kid``, refreshing the project's JWKS at most
+    once per _JWKS_MIN_REFRESH_SECONDS. Previously every request with an unknown kid triggered a
+    blocking 5 s outbound fetch on the event loop (trivial DoS with random kids).
+    """
     if kid in _JWKS_CACHE:
         return _JWKS_CACHE[kid]
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     if not supabase_url:
         return None
+    now = time.monotonic()
+    if _JWKS_STATE["last_fetch"] and now - _JWKS_STATE["last_fetch"] < _JWKS_MIN_REFRESH_SECONDS:
+        return None
+    _JWKS_STATE["last_fetch"] = now
     try:
-        import json
-        import urllib.request
         from jose import jwk
-        req = urllib.request.urlopen(f"{supabase_url}/auth/v1/.well-known/jwks.json", timeout=5)
-        data = json.loads(req.read().decode("utf-8"))
+
+        data = _fetch_jwks_document(f"{supabase_url}/auth/v1/.well-known/jwks.json")
         for k in data.get("keys", []):
-            if k.get("kid"):
-                _JWKS_CACHE[k["kid"]] = jwk.construct(k)
+            # Only asymmetric P-256 signing keys are acceptable for the ES256 path.
+            if not k.get("kid") or k.get("kty") != "EC" or k.get("crv", "P-256") != "P-256":
+                continue
+            if k.get("alg", "ES256") != "ES256":
+                continue
+            _JWKS_CACHE[k["kid"]] = jwk.construct(k, algorithm="ES256")
         return _JWKS_CACHE.get(kid)
     except Exception as exc:
         logger.warning("Failed to fetch Supabase JWKS: %s", exc)
         return None
 
 
+def _reject(reason: str, *args) -> HTTPException:
+    logger.info("JWT rejected: " + reason, *args)
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_TOKEN_DETAIL)
+
+
 def _decode_token(token: str) -> dict:
     """
     Decode and validate a Supabase JWT.
     Enforces:
-    1. Signature verification via ES256 (cached JWKS) or HS256 (SUPABASE_JWT_SECRET).
-    2. Audience check: aud must be 'authenticated'.
-    3. Issuer check: iss must be '{SUPABASE_URL}/auth/v1'.
-    4. Fail-closed: rejection on any failure, zero unverified fallback claims.
+    1. Algorithm pinning: only ES256 (key from the project's JWKS, by kid) or HS256
+       (SUPABASE_JWT_SECRET); 'none' and every other alg are rejected before verification.
+    2. Audience 'authenticated', issuer '{SUPABASE_URL}/auth/v1', role 'authenticated'.
+    3. exp, iat and sub are required (a token without exp would never expire).
+    4. Fail-closed: any failure → 401 with a generic detail (reason logged server-side only).
     """
     secret = os.environ.get("SUPABASE_JWT_SECRET", "").strip() or SUPABASE_JWT_SECRET
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    expected_issuer = f"{supabase_url}/auth/v1" if supabase_url else None
+    if not supabase_url:
+        raise _reject("SUPABASE_URL not configured; cannot pin issuer")
+    expected_issuer = f"{supabase_url}/auth/v1"
 
+    if not token or len(token) > _MAX_TOKEN_LENGTH:
+        raise _reject("empty or oversized token")
     try:
         header = jwt.get_unverified_header(token)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Malformed JWT header: {exc}",
-        )
+        raise _reject("malformed header (%s)", type(exc).__name__)
 
-    alg = header.get("alg", "HS256")
+    alg = header.get("alg")
     kid = header.get("kid")
-
-    # 1. Asymmetric ES256 verification via Supabase JWKS
-    if alg == "ES256" and kid:
-        key = _get_jwk_for_kid(kid)
+    if alg == "ES256":
+        if not kid:
+            raise _reject("ES256 token without kid")
+        key = _get_jwk_for_kid(str(kid))
         if not key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unable to fetch or construct verification key for token.",
-            )
-        try:
-            decode_kwargs = {
-                "algorithms": ["ES256"],
-                "audience": "authenticated",
-            }
-            if expected_issuer:
-                decode_kwargs["issuer"] = expected_issuer
-            return jwt.decode(token, key, **decode_kwargs)
-        except JWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired authentication token: {exc}",
-            )
+            raise _reject("no JWKS key for kid")
+        algorithms = ["ES256"]
+    elif alg == "HS256":
+        if not secret:
+            raise _reject("HS256 token but SUPABASE_JWT_SECRET is not configured")
+        key = secret
+        algorithms = ["HS256"]
+    else:
+        raise _reject("algorithm %r is not allowed", alg)
 
-    # 2. Symmetric HS256 verification via SUPABASE_JWT_SECRET
-    if secret and alg == "HS256":
-        try:
-            decode_kwargs = {
-                "algorithms": ["HS256"],
-                "audience": "authenticated",
-            }
-            if expected_issuer:
-                decode_kwargs["issuer"] = expected_issuer
-            return jwt.decode(token, secret, **decode_kwargs)
-        except JWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired authentication token: {exc}",
-            )
+    try:
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=algorithms,
+            audience="authenticated",
+            issuer=expected_issuer,
+            options={"require_exp": True, "require_iat": True, "require_sub": True, "leeway": 30},
+        )
+    except JWTError as exc:
+        raise _reject("verification failed (%s)", type(exc).__name__)
 
-    # 3. Fail closed if no key or secret matches
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unauthorized: No valid cryptographic key or secret configured to verify token signature.",
-    )
+    if payload.get("role") != "authenticated":
+        raise _reject("role %r is not 'authenticated'", payload.get("role"))
+    return payload
 
 
 
@@ -155,7 +178,13 @@ def get_current_user_id(request: Request) -> str:
 
 
 def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
-    """Retrieve the user's role and membership in the given household."""
+    """
+    Retrieve the user's role and membership in the given household.
+
+    household_memberships is authoritative. The legacy users.household_id column is consulted
+    only when the memberships query itself fails (pre-migration databases); a missing membership
+    row is a definitive "no access" (a stale users.household_id after removal must not grant it).
+    """
     client = get_client()
     try:
         res = (
@@ -168,10 +197,11 @@ def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
         )
         if res and res.data:
             return res.data
+        return None
     except Exception as exc:
         logger.warning("Error querying household_memberships: %s", exc)
 
-    # Fallback to users table cache
+    # Fallback to users table cache (memberships table unavailable)
     try:
         user_res = (
             client.table("users")
