@@ -4,87 +4,12 @@
 -- and transactions.receipt_url converts to storage paths.
 -- ====================================================================
 
--- 1. Ensure storage stub schema exists in local test environment
-CREATE SCHEMA IF NOT EXISTS storage;
-CREATE TABLE IF NOT EXISTS storage.buckets (
-    id text PRIMARY KEY,
-    name text NOT NULL,
-    public boolean DEFAULT false
-);
+\set ON_ERROR_STOP on
 
-CREATE OR REPLACE FUNCTION storage.foldername(name text)
-RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
-    SELECT string_to_array(name, '/');
-$$;
-
-CREATE OR REPLACE FUNCTION storage.extension(name text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $$
-    SELECT substring(name from '\.([^\.]+)$');
-$$;
-
-CREATE TABLE IF NOT EXISTS storage.objects (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    bucket_id text REFERENCES storage.buckets(id),
-    name text NOT NULL,
-    owner uuid,
-    created_at timestamptz DEFAULT now()
-);
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE storage.objects FORCE ROW LEVEL SECURITY;
-GRANT ALL ON SCHEMA storage TO authenticated, anon, postgres, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA storage TO authenticated, anon, postgres, service_role;
-
--- Apply SEC-06 migration
-UPDATE storage.buckets SET public = false WHERE id = 'receipts';
-INSERT INTO storage.buckets (id, name, public) VALUES ('receipts', 'receipts', false) ON CONFLICT (id) DO UPDATE SET public = false;
-
-DROP POLICY IF EXISTS "receipts_insert_household" ON storage.objects;
-DROP POLICY IF EXISTS "receipts_select_household" ON storage.objects;
-DROP POLICY IF EXISTS "receipts_delete_household" ON storage.objects;
-
-CREATE POLICY "receipts_insert_household" ON storage.objects
-FOR INSERT TO authenticated
-WITH CHECK (
-    bucket_id = 'receipts'
-    AND auth.uid() IS NOT NULL
-    AND (
-        (storage.foldername(name))[1] IN (
-            SELECT household_id::text FROM public.household_memberships WHERE user_id = auth.uid()
-            UNION
-            SELECT household_id::text FROM public.users WHERE id = auth.uid() AND household_id IS NOT NULL
-        )
-    )
-    AND lower(storage.extension(name)) = ANY (ARRAY['jpg', 'jpeg', 'png', 'webp'])
-    AND name !~ '\.\.'
-);
-
-CREATE POLICY "receipts_select_household" ON storage.objects
-FOR SELECT TO authenticated
-USING (
-    bucket_id = 'receipts'
-    AND auth.uid() IS NOT NULL
-    AND (
-        (storage.foldername(name))[1] IN (
-            SELECT household_id::text FROM public.household_memberships WHERE user_id = auth.uid()
-            UNION
-            SELECT household_id::text FROM public.users WHERE id = auth.uid() AND household_id IS NOT NULL
-        )
-    )
-);
-
-CREATE POLICY "receipts_delete_household" ON storage.objects
-FOR DELETE TO authenticated
-USING (
-    bucket_id = 'receipts'
-    AND auth.uid() IS NOT NULL
-    AND (
-        (storage.foldername(name))[1] IN (
-            SELECT household_id::text FROM public.household_memberships WHERE user_id = auth.uid()
-            UNION
-            SELECT household_id::text FROM public.users WHERE id = auth.uid() AND household_id IS NOT NULL
-        )
-    )
-);
+-- Storage platform objects come from 00_local_supabase_stubs.sql (local) or the
+-- Supabase platform (hosted); the receipts bucket and its storage.objects
+-- policies come from the shipped migrations. This test deliberately does NOT
+-- redefine either, so it exercises the policies exactly as migrated.
 
 -- ====================================================================
 -- Test Fixtures
@@ -122,9 +47,14 @@ BEGIN
            (v_attacker_hh, 'Attacker Household', 27, 5000)
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO public.users (id, email, display_name, role, household_id)
-    VALUES (v_victim_user, 'victim@test.local', 'Victim User', 'member', v_victim_hh),
-           (v_attacker_user, 'attacker@test.local', 'Attacker User', 'member', v_attacker_hh)
+    INSERT INTO auth.users (id, email)
+    VALUES (v_victim_user, 'victim@test.local'),
+           (v_attacker_user, 'attacker@test.local')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.users (id, display_name, role, household_id)
+    VALUES (v_victim_user, 'Victim User', 'member', v_victim_hh),
+           (v_attacker_user, 'Attacker User', 'member', v_attacker_hh)
     ON CONFLICT (id) DO UPDATE SET household_id = EXCLUDED.household_id;
 
     INSERT INTO public.household_memberships (household_id, user_id, role)

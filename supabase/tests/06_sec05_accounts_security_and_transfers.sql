@@ -45,8 +45,8 @@ BEGIN
 
     -- Create accounts under service role
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, is_shared_pool) VALUES
-        (v_acc1, v_hh1, v_user1, 'Admin Current Account', 'checking', 1000.00, false),
-        (v_acc2, v_hh1, v_user2, 'Member Savings Account', 'savings', 500.00, false),
+        (v_acc1, v_hh1, v_user1, 'Admin Current Account', 'bank', 1000.00, false),
+        (v_acc2, v_hh1, v_user2, 'Member Savings Account', 'bank', 500.00, false),
         (v_shared_acc, v_hh1, v_user1, 'Household Emergency Pool', 'shared_pool', 2000.00, true)
     ON CONFLICT (id) DO NOTHING;
 
@@ -60,8 +60,8 @@ BEGIN
     v_caught := false;
     BEGIN
         INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool)
-        VALUES (v_hh1, v_attacker, 'Malicious Account', 'checking', 0.00, false);
-    EXCEPTION WHEN OTHERS THEN
+        VALUES (v_hh1, v_attacker, 'Malicious Account', 'bank', 0.00, false);
+    EXCEPTION WHEN insufficient_privilege THEN
         v_caught := true;
     END;
 
@@ -76,7 +76,7 @@ BEGIN
     BEGIN
         INSERT INTO public.accounts (household_id, owner_user_id, name, account_type, balance, is_shared_pool)
         VALUES (v_hh1, v_user2, 'Member Rogue Pool', 'shared_pool', 0.00, true);
-    EXCEPTION WHEN OTHERS THEN
+    EXCEPTION WHEN insufficient_privilege THEN
         v_caught := true;
     END;
 
