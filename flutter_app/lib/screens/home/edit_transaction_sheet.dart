@@ -322,7 +322,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
-      color = const Color(0xFF00C896);
+      color = AppThemes.success;
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'partner') {
       text = context.trArgs('settle_paid_for_partner', {'amount': context.sar(amount)});
       icon = Icons.volunteer_activism_outlined;
@@ -491,9 +491,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.subtleCardBg,
+                                color: isSelected ? AppThemes.success.withValues(alpha: 0.2) : context.subtleCardBg,
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                                  color: isSelected ? AppThemes.success : context.borderColor,
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -501,7 +501,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                                 context.trArgs('n_months', {'count': count}),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+                                  color: isSelected ? AppThemes.success : context.textPrimary,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   fontSize: 12,
                                 ),
@@ -528,7 +528,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(context.tr('first_month_this_cycle'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                            Text(context.sar(monthly), style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text(context.sar(monthly), style: TextStyle(color: context.successText, fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -544,7 +544,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(context.tr('immediate_headroom'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                            Text('+${context.sar(remainingBalance)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text('+${context.sar(remainingBalance)}', style: TextStyle(color: context.successText, fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                       ],
@@ -554,7 +554,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -629,7 +629,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.child_care_rounded, color: AppThemes.success),
             const SizedBox(width: 8),
             Text(
               context.tr('add_child_dependent'),
@@ -657,7 +657,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
             onPressed: () {
               final n = nameCtrl.text.trim();
               if (n.isNotEmpty) Navigator.pop(dCtx, n);
@@ -943,7 +943,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedBeneficiary == 'both',
                   title: context.tr('both_shared'),
                   icon: Icons.people_alt_outlined,
-                  activeColor: const Color(0xFF00C896),
+                  activeColor: AppThemes.success,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() => _selectedBeneficiary = 'both');
@@ -971,14 +971,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Row(
                       children: [
-                        const Icon(Icons.add_rounded, size: 14, color: Color(0xFF00C896)),
+                        const Icon(Icons.add_rounded, size: 14, color: AppThemes.success),
                         const SizedBox(width: 2),
                         Text(
                           context.tr('add_child'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF00C896),
+                            color: context.successText,
                           ),
                         ),
                       ],
@@ -1059,8 +1059,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   ),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.add, size: 16, color: Color(0xFF00C896)),
-                  label: Text(context.tr('add_item'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 12)),
+                  icon: const Icon(Icons.add, size: 16, color: AppThemes.success),
+                  label: Text(context.tr('add_item'), style: TextStyle(color: context.successText, fontSize: 12)),
                   onPressed: _addItem,
                 ),
               ],
@@ -1109,7 +1109,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       child: TextFormField(
                         initialValue: ((it['price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: context.successText, fontSize: 13, fontWeight: FontWeight.w600),
                         decoration: InputDecoration(
                           prefixText: '${context.tr('sar')} ',
                           border: InputBorder.none,
@@ -1134,7 +1134,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
+                backgroundColor: AppThemes.success,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -134,7 +134,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       decoration: BoxDecoration(
         color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
+        border: Border.all(color: AppThemes.success.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +145,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             children: [
               Row(
                 children: [
-                  const Icon(Icons.edit_note_rounded, color: Color(0xFF00C896), size: 18),
+                  const Icon(Icons.edit_note_rounded, color: AppThemes.success, size: 18),
                   const SizedBox(width: 6),
                   Text(
                     context.tr('pec_title'),
@@ -160,13 +160,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   context.sar(amount),
-                  style: const TextStyle(
-                    color: Color(0xFF00C896),
+                  style: TextStyle(
+                    color: context.successText,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -187,7 +187,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               isDense: true,
               filled: true,
               fillColor: context.inputBg,
-              prefixIcon: const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF00C896)),
+              prefixIcon: const Icon(Icons.storefront_rounded, size: 16, color: AppThemes.success),
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -199,7 +199,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.success),
               ),
             ),
           ),
@@ -265,7 +265,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                               child: SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                               ),
                             ),
                           )
@@ -426,7 +426,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                           ),
                           Text(
                             context.sar((it['price'] as num?) ?? 0),
-                            style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
+                            style: TextStyle(color: context.successText, fontSize: 11),
                           ),
                         ],
                       ),
@@ -443,7 +443,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -497,10 +497,10 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.15) : context.chipBg,
+          color: isSelected ? AppThemes.success.withValues(alpha: 0.15) : context.chipBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.2 : 0.8,
           ),
         ),
@@ -508,7 +508,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00C896) : context.textSecondary),
+              Icon(icon, size: 13, color: isSelected ? AppThemes.success : context.textSecondary),
               const SizedBox(width: 4),
             ],
             Text(
@@ -516,7 +516,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+                color: isSelected ? AppThemes.success : context.textPrimary,
               ),
             ),
           ],

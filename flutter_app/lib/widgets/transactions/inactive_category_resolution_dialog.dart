@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_themes.dart';
 
 /// Modal dialog shown when a new transaction is parsed or logged
 /// against a category that is currently marked inactive for the household.
@@ -109,7 +110,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
         FilledButton(
           onPressed: onReactivate,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF00C896),
+            backgroundColor: AppThemes.success,
             minimumSize: const Size.fromHeight(40),
           ),
           child: Text(context.tr('icr_reactivate')),

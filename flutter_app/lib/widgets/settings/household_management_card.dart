@@ -56,10 +56,10 @@ class HouseholdManagementCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.home_work_rounded, color: Color(0xFF00C896), size: 22),
+                child: const Icon(Icons.home_work_rounded, color: AppThemes.success, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -86,18 +86,18 @@ class HouseholdManagementCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: isAdmin
-                      ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                      ? AppThemes.success.withValues(alpha: 0.15)
                       : const Color(0xFF58A6FF).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isAdmin ? const Color(0xFF00C896) : const Color(0xFF58A6FF),
+                    color: isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
                     width: 0.8,
                   ),
                 ),
                 child: Text(
                   isAdmin ? context.tr('admin') : context.tr('member'),
                   style: TextStyle(
-                    color: isAdmin ? const Color(0xFF00C896) : const Color(0xFF58A6FF),
+                    color: isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -137,7 +137,7 @@ class HouseholdManagementCard extends StatelessWidget {
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2,
-                      color: const Color(0xFF00C896),
+                      color: context.successText,
                     ),
                   ),
                 ),
@@ -155,7 +155,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -184,7 +184,7 @@ class HouseholdManagementCard extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.group_rounded, size: 16, color: Color(0xFF00C896)),
+                    const Icon(Icons.group_rounded, size: 16, color: AppThemes.success),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -204,7 +204,7 @@ class HouseholdManagementCard extends StatelessWidget {
               if (onAddDependent != null)
                 TextButton.icon(
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF00C896),
+                    foregroundColor: AppThemes.success,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -239,10 +239,10 @@ class HouseholdManagementCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline_rounded, color: Color(0xFF00C896), size: 16),
+                    child: const Icon(Icons.person_outline_rounded, color: AppThemes.success, size: 16),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -266,15 +266,15 @@ class HouseholdManagementCard extends StatelessWidget {
                               height: 6,
                               decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Color(0xFF00C896),
+                                color: AppThemes.success,
                               ),
                             ),
                             const SizedBox(width: 5),
                             Text(
                               context.tr('active_account'),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFF00C896),
+                                color: context.successText,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -287,14 +287,14 @@ class HouseholdManagementCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: isAdminMember
-                          ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                          ? AppThemes.success.withValues(alpha: 0.15)
                           : context.chipBg,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       role.toUpperCase(),
                       style: TextStyle(
-                        color: isAdminMember ? const Color(0xFF00C896) : context.textSecondary,
+                        color: isAdminMember ? AppThemes.success : context.textSecondary,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
@@ -383,7 +383,7 @@ class HouseholdManagementCard extends StatelessWidget {
                               height: 6,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: d.isClaimed ? const Color(0xFF00C896) : const Color(0xFFE5A93C),
+                                color: d.isClaimed ? AppThemes.success : const Color(0xFFE5A93C),
                               ),
                             ),
                             const SizedBox(width: 5),
@@ -391,7 +391,7 @@ class HouseholdManagementCard extends StatelessWidget {
                               d.isClaimed ? context.tr('active_account') : context.tr('pre_account_profile'),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: d.isClaimed ? const Color(0xFF00C896) : const Color(0xFFE5A93C),
+                                color: d.isClaimed ? AppThemes.success : const Color(0xFFE5A93C),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -414,7 +414,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                       tooltip: context.tr('invite_linked_profile'),
-                      color: const Color(0xFF00C896),
+                      color: AppThemes.success,
                       onPressed: () {
                         showDialog(
                           context: context,
@@ -472,7 +472,7 @@ class HouseholdManagementCard extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),

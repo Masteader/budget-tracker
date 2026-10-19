@@ -18,7 +18,7 @@ class AppEmptyState extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
-    this.accentColor = const Color(0xFF00C896),
+    this.accentColor = AppThemes.success,
   });
 
   @override

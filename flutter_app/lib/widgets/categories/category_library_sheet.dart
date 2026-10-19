@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_themes.dart';
 
 /// Modal bottom sheet allowing users to view active vs inactive categories,
 /// activate new developer categories from the library, deactivate unused categories,
@@ -149,7 +150,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
+                  const Icon(Icons.category_outlined, color: AppThemes.success),
                   const SizedBox(width: 8),
                   Text(
                     context.tr('category_library'),
@@ -166,8 +167,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
             ),
             // TabBar
             TabBar(
-              indicatorColor: const Color(0xFF00C896),
-              labelColor: const Color(0xFF00C896),
+              indicatorColor: AppThemes.success,
+              labelColor: AppThemes.success,
               unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               tabs: [
                 Tab(text: context.trArgs('cls_active_tab', {'count': _activeCategories.length})),
@@ -190,8 +191,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                             final isBusy = _processingCodes.contains(item.code);
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: const Color(0xFF00C896).withValues(alpha: 0.15),
-                                child: const Icon(Icons.check_circle, color: Color(0xFF00C896), size: 20),
+                                backgroundColor: AppThemes.success.withValues(alpha: 0.15),
+                                child: const Icon(Icons.check_circle, color: AppThemes.success, size: 20),
                               ),
                               title: Text(
                                 item.name,
@@ -251,15 +252,15 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                                        color: AppThemes.success.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         context.tr('cls_available'),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFF00C896),
+                                          color: context.successText,
                                         ),
                                       ),
                                     ),
@@ -283,7 +284,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                       onPressed: () => _confirmActivate(item),
                                       style: FilledButton.styleFrom(
                                         visualDensity: VisualDensity.compact,
-                                        backgroundColor: const Color(0xFF00C896),
+                                        backgroundColor: AppThemes.success,
                                       ),
                                       child: Text(context.tr('activate')),
                                     ),

@@ -44,7 +44,7 @@ class ReceiptPhotoStrip extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.add_a_photo_outlined, color: Color(0xFF00C896), size: 26),
+                        const Icon(Icons.add_a_photo_outlined, color: AppThemes.success, size: 26),
                         const SizedBox(height: 4),
                         Text(context.tr('rps_add_page'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                       ],

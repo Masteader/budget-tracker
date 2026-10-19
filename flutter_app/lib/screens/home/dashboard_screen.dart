@@ -131,20 +131,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       height: 68,
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF071C33).withValues(alpha: 0.94)
+            ? AppThemes.deepGlacial.withValues(alpha: 0.94)
             : Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: isDark
-              ? const Color(0xFF4DE6F7).withValues(alpha: 0.22)
-              : const Color(0xFF00E5BF).withValues(alpha: 0.35),
+              ? AppThemes.iceCyan.withValues(alpha: 0.22)
+              : AppThemes.electricTeal.withValues(alpha: 0.35),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
                 ? Colors.black.withValues(alpha: 0.45)
-                : const Color(0xFF00E5BF).withValues(alpha: 0.12),
+                : AppThemes.electricTeal.withValues(alpha: 0.12),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -197,7 +197,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final isSelected = _selectedIndex == index;
     final isDark = context.isDark;
-    final activeColor = isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A);
+    final activeColor = isDark ? AppThemes.electricTeal : const Color(0xFF008F7A);
     final inactiveColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
 
     return InkWell(
@@ -217,8 +217,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               decoration: BoxDecoration(
                 color: isSelected
                     ? (isDark
-                        ? const Color(0xFF00E5BF).withValues(alpha: 0.16)
-                        : const Color(0xFF00E5BF).withValues(alpha: 0.18))
+                        ? AppThemes.electricTeal.withValues(alpha: 0.16)
+                        : AppThemes.electricTeal.withValues(alpha: 0.18))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -258,11 +258,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF00E5BF), Color(0xFF4DE6F7)],
+                colors: [AppThemes.electricTeal, AppThemes.iceCyan],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF00E5BF).withValues(alpha: isSelected ? 0.65 : 0.4),
+                  color: AppThemes.electricTeal.withValues(alpha: isSelected ? 0.65 : 0.4),
                   blurRadius: isSelected ? 16 : 10,
                   spreadRadius: isSelected ? 2 : 0,
                 ),
@@ -270,7 +270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             child: const Icon(
               Icons.auto_awesome,
-              color: Color(0xFF051424),
+              color: AppThemes.brandDarkBg,
               size: 22,
             ),
           ),
@@ -281,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               color: isSelected
-                  ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A))
+                  ? (context.isDark ? AppThemes.electricTeal : const Color(0xFF008F7A))
                   : (context.isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B)),
             ),
           ),
@@ -415,7 +415,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   .order('category_code'),
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
-                  color: const Color(0xFF00E5BF),
+                  color: AppThemes.electricTeal,
                   backgroundColor: context.cardBg,
                   onRefresh: () async {
                     try {
@@ -490,8 +490,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                           onPressed: () => OfflineSyncService.instance.flushQueue(),
                                           child: Text(
                                             context.tr('sync_now'),
-                                            style: const TextStyle(
-                                              color: Color(0xFF00E5BF),
+                                            style: TextStyle(
+                                              color: context.accentText,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
                                             ),
@@ -516,19 +516,19 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                 decoration: BoxDecoration(
-                                  color: context.isDark ? const Color(0xFF071C33) : Colors.white,
+                                  color: context.isDark ? AppThemes.deepGlacial : Colors.white,
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: context.isDark
-                                        ? const Color(0xFF4DE6F7).withValues(alpha: 0.2)
-                                        : const Color(0xFF00E5BF).withValues(alpha: 0.35),
+                                        ? AppThemes.iceCyan.withValues(alpha: 0.2)
+                                        : AppThemes.electricTeal.withValues(alpha: 0.35),
                                     width: 1.2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: context.isDark
                                           ? Colors.black.withValues(alpha: 0.25)
-                                          : const Color(0xFF00E5BF).withValues(alpha: 0.08),
+                                          : AppThemes.electricTeal.withValues(alpha: 0.08),
                                       blurRadius: 16,
                                       offset: const Offset(0, 4),
                                     ),
@@ -546,7 +546,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     _QuickActionButton(
                                       icon: Icons.qr_code_scanner_rounded,
                                       label: context.tr('scan_receipt'),
-                                      color: const Color(0xFF4DE6F7),
+                                      color: AppThemes.iceCyan,
                                       onTap: () {
                                         showModalBottomSheet(
                                           context: context,
@@ -559,7 +559,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     _QuickActionButton(
                                       icon: Icons.mic_rounded,
                                       label: context.tr('voice_chat'),
-                                      color: const Color(0xFF00E5BF),
+                                      color: AppThemes.electricTeal,
                                       onTap: () {
                                         Navigator.push(
                                           context,
@@ -570,13 +570,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     _QuickActionButton(
                                       icon: Icons.calculate_outlined,
                                       label: context.tr('quick_simulator'),
-                                      color: const Color(0xFFD4AF37),
+                                      color: AppThemes.champagneGold,
                                       onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
                                     ),
                                     _QuickActionButton(
                                       icon: Icons.trending_up_rounded,
                                       label: context.tr('quick_prices'),
-                                      color: const Color(0xFF73FBC4),
+                                      color: AppThemes.mintNeon,
                                       onTap: () {
                                         Navigator.push(
                                           context,
@@ -635,7 +635,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         ),
                                         child: Row(
                                           children: [
-                                            const Icon(Icons.trending_up_rounded, color: Color(0xFF00E5BF), size: 18),
+                                            const Icon(Icons.trending_up_rounded, color: AppThemes.electricTeal, size: 18),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -753,11 +753,11 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+              color: AppThemes.electricTeal.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+              border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
             ),
-            child: const Icon(Icons.waves_rounded, color: Color(0xFF00E5BF), size: 16),
+            child: const Icon(Icons.waves_rounded, color: AppThemes.electricTeal, size: 16),
           ),
           const SizedBox(width: 8),
           Text(
@@ -773,7 +773,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       actions: [
         IconButton(
           key: const Key('switch_household_appbar_button'),
-          icon: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF00E5BF)),
+          icon: const Icon(Icons.swap_horiz_rounded, color: AppThemes.electricTeal),
           tooltip: context.tr('switch_household'),
           onPressed: () {
             HouseholdSwitchSheet.show(
@@ -788,7 +788,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           },
         ),
         IconButton(
-          icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00E5BF)),
+          icon: const Icon(Icons.help_outline_rounded, color: AppThemes.electricTeal),
           tooltip: context.tr('help_support'),
           onPressed: () {
             Navigator.push(
@@ -857,7 +857,7 @@ class _QuickActionButton extends StatelessWidget {
                 icon,
                 color: isDark
                     ? color
-                    : (color == const Color(0xFF00E5BF) ? const Color(0xFF008F7A) : color),
+                    : (color == AppThemes.electricTeal ? const Color(0xFF008F7A) : color),
                 size: 23,
               ),
             ),

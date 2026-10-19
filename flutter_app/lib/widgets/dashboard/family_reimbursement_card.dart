@@ -113,7 +113,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     final owed = summary.wifeReimbursementOwed;
     final isSettled = owed <= 0.01;
 
-    final badgeColor = isSettled ? const Color(0xFF00C896) : const Color(0xFFE5A93C);
+    final badgeColor = isSettled ? AppThemes.success : const Color(0xFFE5A93C);
     final badgeText = isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed');
     final badgeIcon = isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded;
 
@@ -244,7 +244,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           ] else ...[
             Row(
               children: [
-                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
+                const Icon(Icons.verified_rounded, color: AppThemes.success, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

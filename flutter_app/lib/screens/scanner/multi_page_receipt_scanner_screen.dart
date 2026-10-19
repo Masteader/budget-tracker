@@ -179,7 +179,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00C896)),
+            icon: const Icon(Icons.qr_code_scanner, color: AppThemes.success),
             tooltip: context.tr('mp_scan_zatca'),
             onPressed: () => Navigator.push(
               context,
@@ -198,17 +198,17 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
               decoration: BoxDecoration(
                 color: context.cardBg,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+                border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 20),
+                    child: const Icon(Icons.auto_awesome, color: AppThemes.success, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -265,7 +265,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                               shape: BoxShape.circle,
                               border: Border.all(color: context.borderColor),
                             ),
-                            child: const Icon(Icons.receipt_long_rounded, size: 54, color: Color(0xFF00C896)),
+                            child: const Icon(Icons.receipt_long_rounded, size: 54, color: AppThemes.success),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -411,7 +411,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                           Expanded(
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

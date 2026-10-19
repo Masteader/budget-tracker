@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen>
                         ],
                       ),
                       child: const Icon(Icons.account_balance_wallet_rounded,
-                          color: Color(0xFF051424), size: 40),
+                          color: AppThemes.brandDarkBg, size: 40),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -236,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen>
                               onPressed: _loading ? null : _submit,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppThemes.electricTeal,
-                                foregroundColor: const Color(0xFF051424),
+                                foregroundColor: AppThemes.brandDarkBg,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14)),
@@ -246,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       width: 22,
                                       height: 22,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Color(0xFF051424)),
+                                          strokeWidth: 2, color: AppThemes.brandDarkBg),
                                     )
                                   : Text(
                                       _isLogin ? context.tr('auth_sign_in') : context.tr('auth_create_account'),

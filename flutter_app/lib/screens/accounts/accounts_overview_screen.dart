@@ -77,7 +77,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
-            icon: const Icon(Icons.add_rounded, color: Color(0xFF00E5BF)),
+            icon: const Icon(Icons.add_rounded, color: AppThemes.electricTeal),
             tooltip: context.tr('add_account'),
             onPressed: () {
               AddEditAccountDialog.show(
@@ -93,7 +93,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         stream: AccountService.instance.streamAccounts(widget.householdId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5BF)));
+            return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.electricTeal));
           }
 
           final accounts = snapshot.data ?? [];
@@ -108,10 +108,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00E5BF).withValues(alpha: 0.1),
+                        color: AppThemes.electricTeal.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.account_balance_wallet_outlined, size: 48, color: Color(0xFF00E5BF)),
+                      child: const Icon(Icons.account_balance_wallet_outlined, size: 48, color: AppThemes.electricTeal),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -136,8 +136,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       icon: const Icon(Icons.add_rounded),
                       label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00E5BF),
-                        foregroundColor: const Color(0xFF051424),
+                        backgroundColor: AppThemes.electricTeal,
+                        foregroundColor: AppThemes.brandDarkBg,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -172,7 +172,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
           return RefreshIndicator(
             onRefresh: _loadCommittedBudgets,
-            color: const Color(0xFF00E5BF),
+            color: AppThemes.electricTeal,
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [
@@ -183,11 +183,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     gradient: context.icedHeroGradient,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: const Color(0xFF00E5BF).withValues(alpha: isDark ? 0.3 : 0.5),
+                      color: AppThemes.electricTeal.withValues(alpha: isDark ? 0.3 : 0.5),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isDark ? Colors.black.withValues(alpha: 0.3) : const Color(0xFF00E5BF).withValues(alpha: 0.1),
+                        color: isDark ? Colors.black.withValues(alpha: 0.3) : AppThemes.electricTeal.withValues(alpha: 0.1),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -202,7 +202,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                           Text(
                             context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
-                              color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A),
+                              color: isDark ? AppThemes.electricTeal : const Color(0xFF008F7A),
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.1,
@@ -212,7 +212,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: deficitCount == 0
-                                  ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                  ? AppThemes.success.withValues(alpha: 0.15)
                                   : Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -221,7 +221,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 Icon(
                                   deficitCount == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                                   size: 13,
-                                  color: deficitCount == 0 ? const Color(0xFF00C896) : Colors.redAccent,
+                                  color: deficitCount == 0 ? AppThemes.success : Colors.redAccent,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -231,7 +231,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: deficitCount == 0 ? const Color(0xFF00C896) : Colors.redAccent,
+                                    color: deficitCount == 0 ? AppThemes.success : Colors.redAccent,
                                   ),
                                 ),
                               ],
@@ -264,8 +264,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.savings_rounded, size: 16),
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
-                                foregroundColor: const Color(0xFF051424),
+                                backgroundColor: AppThemes.success,
+                                foregroundColor: AppThemes.brandDarkBg,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
@@ -284,8 +284,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                               label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00E5BF),
-                                foregroundColor: const Color(0xFF051424),
+                                backgroundColor: AppThemes.electricTeal,
+                                foregroundColor: AppThemes.brandDarkBg,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),

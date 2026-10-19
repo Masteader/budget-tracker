@@ -25,13 +25,13 @@ class ZatcaStatusBadge extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF00E5BF).withValues(alpha: 0.12),
+        color: AppThemes.electricTeal.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF00E5BF).withValues(alpha: 0.35)),
+        border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.verified_rounded, color: Color(0xFF00E5BF), size: 20),
+          const Icon(Icons.verified_rounded, color: AppThemes.electricTeal, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -45,7 +45,7 @@ class ZatcaStatusBadge extends StatelessWidget {
                 Text(
                   customSubtitle ??
                       context.trArgs('zsb_total_vat', {'total': context.sar(total), 'vat': context.sar(vat)}),
-                  style: const TextStyle(color: Color(0xFF00E5BF), fontSize: 11),
+                  style: TextStyle(color: context.accentText, fontSize: 11),
                 ),
               ],
             ),

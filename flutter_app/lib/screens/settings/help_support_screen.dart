@@ -80,7 +80,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     _FaqCategory(
       titleKey: 'faq_cat_receipts',
       icon: Icons.qr_code_scanner_rounded,
-      color: Color(0xFF00C896),
+      color: AppThemes.success,
       faqs: [
         _FaqItem(questionKey: 'faq_receipts_q1', answerKey: 'faq_receipts_a1'),
         _FaqItem(questionKey: 'faq_receipts_q2', answerKey: 'faq_receipts_a2'),
@@ -217,7 +217,7 @@ User: ${widget.userEmail ?? "N/A"}
         ),
         title: Row(
           children: [
-            const Icon(Icons.mail_rounded, color: Color(0xFF00C896), size: 24),
+            const Icon(Icons.mail_rounded, color: AppThemes.success, size: 24),
             const SizedBox(width: 10),
             Text(context.tr('contact_developer'),
                 style: GoogleFonts.outfit(
@@ -244,7 +244,7 @@ User: ${widget.userEmail ?? "N/A"}
               child: SelectableText(
                 developerEmail,
                 style: GoogleFonts.outfit(
-                    color: const Color(0xFF00C896),
+                    color: context.successText,
                     fontWeight: FontWeight.bold),
               ),
             ),
@@ -273,7 +273,7 @@ User: ${widget.userEmail ?? "N/A"}
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             onPressed: () => Navigator.pop(ctx),
@@ -317,16 +317,16 @@ User: ${widget.userEmail ?? "N/A"}
           ),
           IconButton(
             icon: const Icon(Icons.play_circle_outline_rounded,
-                color: Color(0xFF00C896)),
+                color: AppThemes.success),
             tooltip: context.tr('support_replay_guide'),
             onPressed: () => UserGuideWalkthroughDialog.show(context),
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF00C896),
+          indicatorColor: AppThemes.success,
           indicatorWeight: 3,
-          labelColor: const Color(0xFF00C896),
+          labelColor: AppThemes.success,
           unselectedLabelColor: context.textSecondary,
           labelStyle:
               GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
@@ -364,7 +364,7 @@ User: ${widget.userEmail ?? "N/A"}
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFF00C896) : Colors.transparent,
+            color: selected ? AppThemes.success : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
@@ -418,11 +418,11 @@ User: ${widget.userEmail ?? "N/A"}
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.explore_rounded,
-                    color: Color(0xFF00C896), size: 24),
+                    color: AppThemes.success, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -451,7 +451,7 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -499,7 +499,7 @@ User: ${widget.userEmail ?? "N/A"}
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF00C896)),
+              borderSide: const BorderSide(color: AppThemes.success),
             ),
           ),
         ),
@@ -582,7 +582,7 @@ User: ${widget.userEmail ?? "N/A"}
               Row(
                 children: [
                   const Icon(Icons.mail_outline_rounded,
-                      color: Color(0xFF00C896), size: 20),
+                      color: AppThemes.success, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     context.tr('support_direct_dev'),
@@ -607,8 +607,8 @@ User: ${widget.userEmail ?? "N/A"}
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF00C896),
-                    side: const BorderSide(color: Color(0xFF00C896)),
+                    foregroundColor: AppThemes.success,
+                    side: const BorderSide(color: AppThemes.success),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -682,7 +682,7 @@ User: ${widget.userEmail ?? "N/A"}
                     constraints: const BoxConstraints(maxWidth: 320),
                     decoration: BoxDecoration(
                       color: msg.isUser
-                          ? const Color(0xFF00C896)
+                          ? AppThemes.success
                           : context.cardBg,
                       borderRadius: BorderRadius.circular(14),
                       border: msg.isUser
@@ -710,7 +710,7 @@ User: ${widget.userEmail ?? "N/A"}
                       decoration: BoxDecoration(
                         color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF00C896)),
+                        border: Border.all(color: AppThemes.success),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,7 +718,7 @@ User: ${widget.userEmail ?? "N/A"}
                           Row(
                             children: [
                               const Icon(Icons.engineering_rounded,
-                                  color: Color(0xFF00C896), size: 18),
+                                  color: AppThemes.success, size: 18),
                               const SizedBox(width: 6),
                               Text(
                                 context.tr('support_escalate'),
@@ -743,7 +743,7 @@ User: ${widget.userEmail ?? "N/A"}
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 8),
@@ -785,7 +785,7 @@ User: ${widget.userEmail ?? "N/A"}
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF00C896),
+                    color: AppThemes.success,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -829,7 +829,7 @@ User: ${widget.userEmail ?? "N/A"}
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF00C896)),
+                      borderSide: const BorderSide(color: AppThemes.success),
                     ),
                   ),
                   onSubmitted: (_) => _sendSupportQuery(),
@@ -838,7 +838,7 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               IconButton(
                 style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

@@ -96,12 +96,12 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.payments_rounded,
-                  color: Color(0xFF00C896),
+                  color: AppThemes.success,
                   size: 22,
                 ),
               ),
@@ -131,7 +131,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               ),
               if (!_isEditing)
                 IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF00C896)),
+                  icon: const Icon(Icons.edit_rounded, size: 18, color: AppThemes.success),
                   tooltip: context.tr('isc_edit'),
                   onPressed: () => setState(() => _isEditing = true),
                 ),
@@ -158,7 +158,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                   Text(
                     currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
                     style: GoogleFonts.outfit(
-                      color: currentIncome > 0 ? const Color(0xFF00C896) : subtextColor,
+                      color: currentIncome > 0 ? AppThemes.success : subtextColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -175,7 +175,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               decoration: InputDecoration(
                 labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
-                prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896)),
+                prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success),
                 suffixText: context.tr('sar'),
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
                 filled: true,
@@ -230,7 +230,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),

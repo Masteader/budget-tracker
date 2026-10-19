@@ -60,7 +60,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
           child: SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
           ),
         ),
       );
@@ -78,12 +78,12 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     final stcNote = _data!['stc_pay_note'] as String? ?? context.tr('psc_household_settlement');
     final recEn = _data!['recommendation_en'] as String? ?? '';
 
-    Color badgeColor = const Color(0xFF00C896);
+    Color badgeColor = AppThemes.success;
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String statusTitle = context.tr('psc_balanced');
 
     if (whoOwes == 'partner_owes_me') {
-      badgeColor = const Color(0xFF00C896);
+      badgeColor = AppThemes.success;
       badgeIcon = Icons.arrow_downward_rounded;
       statusTitle = context.tr('psc_partner_owes_you');
     } else if (whoOwes == 'me_owes_partner') {
@@ -259,8 +259,8 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.chipBg,
-                  foregroundColor: const Color(0xFF00C896),
-                  side: const BorderSide(color: Color(0xFF00C896)),
+                  foregroundColor: AppThemes.success,
+                  side: const BorderSide(color: AppThemes.success),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),

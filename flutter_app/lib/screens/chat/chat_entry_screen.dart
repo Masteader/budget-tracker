@@ -226,7 +226,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             onPressed: () {
@@ -518,7 +518,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 18),
+            const Icon(Icons.auto_awesome, color: AppThemes.success, size: 18),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -547,7 +547,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _selectedLocale == 'ar_SA' ? const Color(0xFF00C896) : Colors.transparent,
+                      color: _selectedLocale == 'ar_SA' ? AppThemes.success : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
@@ -565,7 +565,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _selectedLocale == 'en_US' ? const Color(0xFF00C896) : Colors.transparent,
+                      color: _selectedLocale == 'en_US' ? AppThemes.success : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
@@ -583,7 +583,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _selectedLocale == 'ur_PK' ? const Color(0xFF00C896) : Colors.transparent,
+                      color: _selectedLocale == 'ur_PK' ? AppThemes.success : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
@@ -653,7 +653,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                     ),
                     const SizedBox(width: 10),
                     Text(
@@ -720,7 +720,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF00C896)),
+                          borderSide: const BorderSide(color: AppThemes.success),
                         ),
                       ),
                     ),
@@ -749,7 +749,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_rounded,
-                        color: _isListening ? Colors.white : const Color(0xFF00C896),
+                        color: _isListening ? Colors.white : AppThemes.success,
                         size: 20,
                       ),
                       tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
@@ -760,7 +760,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   // Send Button
                   Container(
                     decoration: const BoxDecoration(
-                      color: Color(0xFF00C896),
+                      color: AppThemes.success,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(

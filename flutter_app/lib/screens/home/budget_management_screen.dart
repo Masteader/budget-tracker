@@ -213,7 +213,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
-                const Icon(Icons.savings_outlined, color: Color(0xFF00E5BF), size: 22),
+                const Icon(Icons.savings_outlined, color: AppThemes.electricTeal, size: 22),
                 const SizedBox(width: 8),
                 Flexible(child: Text(context.trArgs('bm_unspent_title', {'amount': context.sar(totalUnspent)}), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16))),
               ],
@@ -229,7 +229,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5BF), foregroundColor: Colors.black),
+                style: ElevatedButton.styleFrom(backgroundColor: AppThemes.electricTeal, foregroundColor: Colors.black),
                 child: Text(context.tr('bm_option_rollover'), style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
@@ -324,7 +324,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: activeTab == 0 ? const Color(0xFF00C896) : Colors.transparent,
+                            color: activeTab == 0 ? AppThemes.success : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: Center(
@@ -346,7 +346,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: activeTab == 1 ? const Color(0xFF00C896) : Colors.transparent,
+                            color: activeTab == 1 ? AppThemes.success : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: Center(
@@ -398,7 +398,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         title: Text(context.tr('flexible_pool'), style: TextStyle(color: context.textPrimary, fontSize: 13)),
                         subtitle: Text(context.tr('flexible_pool_desc'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         value: isFlexible,
-                        activeThumbColor: const Color(0xFF00C896),
+                        activeThumbColor: AppThemes.success,
                         onChanged: (v) => setDialogState(() => isFlexible = v),
                       ),
                     ],
@@ -547,7 +547,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         }
                       }
                     },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
               child: isSubmitting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                   : Text(activeTab == 0 ? context.tr('bm_create_category') : context.tr('add_sub_category'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -737,7 +737,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             title: Text(context.tr('budget_allocations')),
             actions: [
               IconButton(
-                icon: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF00E5BF)),
+                icon: const Icon(Icons.account_balance_wallet_outlined, color: AppThemes.electricTeal),
                 tooltip: context.tr('accounts_balances'),
                 onPressed: () {
                   Navigator.push(
@@ -753,13 +753,13 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
+                icon: const Icon(Icons.category_outlined, color: AppThemes.success),
                 tooltip: context.tr('category_library'),
                 onPressed: () => _openCategoryLibrary(staticData),
               ),
               if (staticData.isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF00C896)),
+                  icon: const Icon(Icons.add_circle_outline_rounded, color: AppThemes.success),
                   tooltip: context.tr('bm_add_tooltip'),
                   onPressed: () => _showAddCategoryDialog(staticData),
                 ),
@@ -809,7 +809,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   onPressed: () => _showAddCategoryDialog(staticData),
                   icon: const Icon(Icons.add_rounded, color: Colors.black),
                   label: Text(context.tr('add_category'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                 )
               : null,
           body: StreamBuilder<List<Map<String, dynamic>>>(
@@ -875,7 +875,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       : const Icon(Icons.copy_rounded, size: 16),
                                   label: Text(_isCopying ? context.tr('bm_copying') : context.tr('copy_previous')),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00C896),
+                                    backgroundColor: AppThemes.success,
                                     foregroundColor: Colors.black,
                                     textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
@@ -995,8 +995,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   const SizedBox(height: 4),
                                   Text(
                                     context.sar(totalAllocated),
-                                    style: const TextStyle(
-                                      color: Color(0xFF00C896),
+                                    style: TextStyle(
+                                      color: context.successText,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1026,7 +1026,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     Icon(
                                       isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
                                       size: 16,
-                                      color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                      color: isOverAllocated ? Colors.redAccent : AppThemes.success,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1046,7 +1046,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                    color: isOverAllocated ? Colors.redAccent : AppThemes.success,
                                   ),
                                 ),
                               ],
@@ -1122,7 +1122,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                             : context.tr('not_set'),
                                         style: TextStyle(
                                           color: existing != null
-                                              ? const Color(0xFF00C896)
+                                              ? AppThemes.success
                                               : context.textSecondary,
                                           fontSize: 13,
                                           fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
@@ -1160,7 +1160,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: mappedAccount != null
-                                              ? const Color(0xFF00C896).withValues(alpha: 0.1)
+                                              ? AppThemes.success.withValues(alpha: 0.1)
                                               : context.chipBg,
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(

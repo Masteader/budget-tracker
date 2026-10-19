@@ -396,7 +396,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                 labelStyle: TextStyle(color: context.textSecondary),
                 prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
                 filled: true,
-                fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -414,7 +414,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                       labelStyle: TextStyle(color: context.textSecondary),
                       prefixIcon: const Icon(Icons.receipt_long_rounded, size: 20),
                       filled: true,
-                      fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -429,7 +429,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                       labelText: context.tr('bir_vat'),
                       labelStyle: TextStyle(color: context.textSecondary),
                       filled: true,
-                      fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -446,7 +446,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                 labelStyle: TextStyle(color: context.textSecondary),
                 prefixIcon: const Icon(Icons.category_rounded, size: 20),
                 filled: true,
-                fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: _categories.map((c) {
@@ -492,7 +492,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                     onPressed: _saveAndNext,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.electricTeal,
-                      foregroundColor: const Color(0xFF051424),
+                      foregroundColor: AppThemes.brandDarkBg,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -543,7 +543,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           width: double.infinity,
           height: 120,
           decoration: BoxDecoration(
-            color: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade200,
+            color: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: context.iceCyan.withValues(alpha: 0.3)),
           ),
@@ -620,7 +620,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+              color: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.electricTeal.withValues(alpha: 0.3)),
             ),
@@ -670,7 +670,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               onPressed: () => Navigator.of(context).pop(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

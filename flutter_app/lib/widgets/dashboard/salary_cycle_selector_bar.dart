@@ -68,16 +68,16 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                          color: AppThemes.success.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: const Color(0xFF00C896).withValues(alpha: 0.6),
+                            color: AppThemes.success.withValues(alpha: 0.6),
                           ),
                         ),
                         child: Text(
                           context.tr('active_badge'),
-                          style: const TextStyle(
-                            color: Color(0xFF00C896),
+                          style: TextStyle(
+                            color: context.successText,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),

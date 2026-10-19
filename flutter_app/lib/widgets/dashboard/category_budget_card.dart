@@ -21,7 +21,7 @@ class CategoryBudgetCard extends StatelessWidget {
   Color get _barColor {
     if (budget.usagePercent >= 1.0) return Colors.redAccent;
     if (budget.usagePercent >= 0.8) return Colors.orange;
-    return const Color(0xFF00C896);
+    return AppThemes.success;
   }
 
   @override
@@ -73,7 +73,7 @@ class CategoryBudgetCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: budget.previousCycleDelta > 0
-                                  ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                  ? AppThemes.success.withValues(alpha: 0.15)
                                   : Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
@@ -83,7 +83,7 @@ class CategoryBudgetCard extends StatelessWidget {
                                   : '-${context.sar(budget.previousCycleDelta.abs())}',
                               style: TextStyle(
                                 color: budget.previousCycleDelta > 0
-                                    ? const Color(0xFF00C896)
+                                    ? AppThemes.success
                                     : Colors.redAccent,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -149,12 +149,12 @@ class CategoryBudgetCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
+                          const Icon(Icons.account_tree_outlined, size: 13, color: AppThemes.success),
                           const SizedBox(width: 6),
                           Text(
                             context.tr('itemized_sub_budgets'),
-                            style: const TextStyle(
-                              color: Color(0xFF00C896),
+                            style: TextStyle(
+                              color: context.successText,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),

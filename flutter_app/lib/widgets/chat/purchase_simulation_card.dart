@@ -21,7 +21,7 @@ class PurchaseSimulationCard extends StatelessWidget {
     final dailyCurrent = (simulationData['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final dailyPost = (simulationData['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
 
-    Color badgeColor = const Color(0xFF00C896);
+    Color badgeColor = AppThemes.success;
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String verdictLabel = context.tr('comfortably_affordable');
 

@@ -90,12 +90,12 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.calendar_month_rounded,
-                  color: Color(0xFF00C896),
+                  color: AppThemes.success,
                   size: 22,
                 ),
               ),
@@ -126,17 +126,17 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFF00C896),
+                    color: AppThemes.success,
                     width: 0.8,
                   ),
                 ),
                 child: Text(
                   context.trArgs('pds_of_month', {'day': _ordinal(context, _selectedDay)}),
-                  style: const TextStyle(
-                    color: Color(0xFF00C896),
+                  style: TextStyle(
+                    color: context.successText,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -214,7 +214,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                 value: _selectedDay,
                 isExpanded: true,
                 dropdownColor: context.cardBg,
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF00C896)),
+                icon: const Icon(Icons.arrow_drop_down, color: AppThemes.success),
                 items: List.generate(31, (index) {
                   final day = index + 1;
                   return DropdownMenuItem<int>(
@@ -248,7 +248,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             height: 44,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
+                backgroundColor: AppThemes.success,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -287,15 +287,15 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: const Color(0xFF00C896).withValues(alpha: 0.25),
+      selectedColor: AppThemes.success.withValues(alpha: 0.25),
       backgroundColor: context.scaffoldBg,
       labelStyle: TextStyle(
-        color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+        color: isSelected ? AppThemes.success : context.textPrimary,
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+        color: isSelected ? AppThemes.success : context.borderColor,
       ),
       onSelected: (_) {
         setState(() => _selectedDay = day);

@@ -373,7 +373,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   labelText: context.tr('amount_sar'),
                   prefixText: '${context.tr('sar')} ',
                   labelStyle: TextStyle(color: context.textSecondary),
-                  prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
+                  prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success, size: 20),
                   filled: true,
                   fillColor: context.inputBg,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -494,7 +494,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _familyPayer == 'me',
                       label: context.tr('payer_nafaqah_me'),
                       icon: Icons.shield_outlined,
-                      activeColor: const Color(0xFF00C896),
+                      activeColor: AppThemes.success,
                       onTap: () => setState(() => _familyPayer = 'me'),
                     ),
                     const SizedBox(width: 8),
@@ -510,7 +510,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _familyPayer == 'wife_personal',
                       label: context.tr('payer_nafaqah_wife_personal'),
                       icon: Icons.shopping_bag_outlined,
-                      activeColor: const Color(0xFF4DE6F7),
+                      activeColor: AppThemes.iceCyan,
                       onTap: () => setState(() => _familyPayer = 'wife_personal'),
                     ),
                   ],
@@ -522,16 +522,16 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                     color: (_familyPayer == 'wife_reimbursable'
                             ? const Color(0xFFFFA657)
                             : _familyPayer == 'wife_personal'
-                                ? const Color(0xFF4DE6F7)
-                                : const Color(0xFF00C896))
+                                ? AppThemes.iceCyan
+                                : AppThemes.success)
                         .withValues(alpha: context.isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: (_familyPayer == 'wife_reimbursable'
                               ? const Color(0xFFFFA657)
                               : _familyPayer == 'wife_personal'
-                                  ? const Color(0xFF4DE6F7)
-                                  : const Color(0xFF00C896))
+                                  ? AppThemes.iceCyan
+                                  : AppThemes.success)
                           .withValues(alpha: context.isDark ? 0.35 : 0.25),
                     ),
                   ),
@@ -547,8 +547,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         color: _familyPayer == 'wife_reimbursable'
                             ? const Color(0xFFFFA657)
                             : _familyPayer == 'wife_personal'
-                                ? const Color(0xFF4DE6F7)
-                                : const Color(0xFF00C896),
+                                ? AppThemes.iceCyan
+                                : AppThemes.success,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -600,17 +600,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                             onSelected: (sel) {
                               if (sel) setState(() => _selectedRoommateId = mid);
                             },
-                            selectedColor: const Color(0xFF00C896).withValues(alpha: 0.2),
+                            selectedColor: AppThemes.success.withValues(alpha: 0.2),
                             backgroundColor: context.subtleCardBg,
                             labelStyle: TextStyle(
                               color: isSelected
-                                  ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A87A))
+                                  ? (context.isDark ? AppThemes.electricTeal : const Color(0xFF00A87A))
                                   : context.textSecondary,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               fontSize: 11.5,
                             ),
                             side: BorderSide(
-                              color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                              color: isSelected ? AppThemes.success : context.borderColor,
                             ),
                           ),
                         );
@@ -625,7 +625,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'all',
                       label: context.tr('roommate_split_all'),
                       icon: Icons.groups_rounded,
-                      activeColor: const Color(0xFF00C896),
+                      activeColor: AppThemes.success,
                       onTap: () => setState(() => _roommateSplit = 'all'),
                     ),
                     const SizedBox(width: 8),
@@ -633,7 +633,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'personal',
                       label: context.tr('roommate_split_personal'),
                       icon: Icons.lock_outline_rounded,
-                      activeColor: const Color(0xFF4DE6F7),
+                      activeColor: AppThemes.iceCyan,
                       onTap: () => setState(() => _roommateSplit = 'personal'),
                     ),
                   ],
@@ -643,14 +643,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: (_roommateSplit == 'all'
-                            ? const Color(0xFF00C896)
-                            : const Color(0xFF4DE6F7))
+                            ? AppThemes.success
+                            : AppThemes.iceCyan)
                         .withValues(alpha: context.isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: (_roommateSplit == 'all'
-                              ? const Color(0xFF00C896)
-                              : const Color(0xFF4DE6F7))
+                              ? AppThemes.success
+                              : AppThemes.iceCyan)
                           .withValues(alpha: context.isDark ? 0.35 : 0.25),
                     ),
                   ),
@@ -659,7 +659,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       Icon(
                         _roommateSplit == 'all' ? Icons.pie_chart_outline_rounded : Icons.lock_outline_rounded,
                         size: 15,
-                        color: _roommateSplit == 'all' ? const Color(0xFF00C896) : const Color(0xFF4DE6F7),
+                        color: _roommateSplit == 'all' ? AppThemes.success : AppThemes.iceCyan,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -683,7 +683,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               // Save Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -727,7 +727,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSelected
-              ? (context.isDark ? const Color(0xFF00C896) : const Color(0xFF00A87A))
+              ? (context.isDark ? AppThemes.success : const Color(0xFF00A87A))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),

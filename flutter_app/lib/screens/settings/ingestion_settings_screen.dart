@@ -356,7 +356,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.settings_suggest_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.settings_suggest_rounded, color: AppThemes.success),
             const SizedBox(width: 8),
             Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
@@ -369,7 +369,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             icon: const Icon(Icons.open_in_new, size: 16),
@@ -500,7 +500,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -566,7 +566,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             child: Text(context.tr('create'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -708,7 +708,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     if (_isLoading) {
       return Scaffold(
         backgroundColor: context.scaffoldBg,
-        body: const Center(child: CircularProgressIndicator(color: Color(0xFF00C896))),
+        body: const Center(child: CircularProgressIndicator(color: AppThemes.success)),
       );
     }
 
@@ -863,7 +863,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                     ),
                     onPressed: () {
@@ -1031,7 +1031,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.table_view_rounded, color: Color(0xFF00C896), size: 20),
+                    const Icon(Icons.table_view_rounded, color: AppThemes.success, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1045,8 +1045,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.chipBg,
-                        foregroundColor: const Color(0xFF00C896),
-                        side: const BorderSide(color: Color(0xFF00C896)),
+                        foregroundColor: AppThemes.success,
+                        side: const BorderSide(color: AppThemes.success),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       ),
                       onPressed: () async {
@@ -1081,7 +1081,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   builder: (ctx, count, _) {
                     return Row(
                       children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : const Color(0xFF00C896), size: 20),
+                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : AppThemes.success, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -1094,7 +1094,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                         ),
                         if (count > 0)
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
                             onPressed: () => OfflineSyncService.instance.flushQueue(),
                             child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
@@ -1129,10 +1129,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.menu_book_rounded, color: Color(0xFF00C896), size: 20),
+                    child: const Icon(Icons.menu_book_rounded, color: AppThemes.success, size: 20),
                   ),
                   title: Text(
                     context.tr('set_app_guide_tutorial'),
@@ -1261,7 +1261,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text(context.tr('set_copy'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: Text(context.tr('set_copy'), style: TextStyle(color: context.successText, fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -1311,7 +1311,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
-    const activeBg = Color(0xFF00C896);
+    const activeBg = AppThemes.success;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1329,10 +1329,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.palette_rounded, color: Color(0xFF00C896), size: 20),
+                child: const Icon(Icons.palette_rounded, color: AppThemes.success, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1395,10 +1395,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: Color(0xFF00C896), size: 20),
+                child: const Icon(Icons.language_rounded, color: AppThemes.success, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1547,7 +1547,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         color: context.cardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.3) : context.borderColor,
+          color: isGranted ? AppThemes.success.withValues(alpha: 0.3) : context.borderColor,
         ),
       ),
       child: Column(
@@ -1559,12 +1559,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+                  color: isGranted ? AppThemes.success.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
-                  color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                  color: isGranted ? AppThemes.success : Colors.orange,
                   size: 20,
                 ),
               ),
@@ -1589,10 +1589,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                  color: isGranted ? AppThemes.success.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                    color: isGranted ? AppThemes.success : Colors.orange,
                     width: 0.8,
                   ),
                 ),
@@ -1602,13 +1602,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Icon(
                       isGranted ? Icons.check_circle : Icons.warning_amber_rounded,
                       size: 12,
-                      color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                      color: isGranted ? AppThemes.success : Colors.orange,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
                       style: TextStyle(
-                        color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                        color: isGranted ? AppThemes.success : Colors.orange,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1625,7 +1625,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1695,10 +1695,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: value ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.chipBg,
+              color: value ? AppThemes.success.withValues(alpha: 0.12) : context.chipBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: value ? const Color(0xFF00C896) : context.textSecondary, size: 20),
+            child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1713,7 +1713,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           Switch(
             value: value,
-            activeThumbColor: const Color(0xFF00C896),
+            activeThumbColor: AppThemes.success,
             onChanged: onChanged,
           ),
         ],
@@ -1739,7 +1739,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           color: context.cardBg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -1748,7 +1748,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
+              color: isSelected ? AppThemes.success : context.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 12),

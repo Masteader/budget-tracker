@@ -198,7 +198,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   }
 
   Widget _buildTargetedClaimBanner(HouseholdInvite invite) {
-    Color bannerColor = const Color(0xFF00C896);
+    Color bannerColor = AppThemes.success;
     IconData roleIcon = Icons.stars_rounded;
     String roleLabel = context.tr('member');
 
@@ -281,8 +281,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
               // Tab bar
               TabBar(
                 controller: _tab,
-                indicatorColor: const Color(0xFF00C896),
-                labelColor: const Color(0xFF00C896),
+                indicatorColor: AppThemes.success,
+                labelColor: AppThemes.success,
                 unselectedLabelColor: context.textSecondary,
                 tabs: [Tab(text: context.tr('create')), Tab(text: context.tr('join'))],
               ),
@@ -377,7 +377,7 @@ class _BigButton extends StatelessWidget {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         onPressed: loading ? null : onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF00C896),
+          backgroundColor: AppThemes.success,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),

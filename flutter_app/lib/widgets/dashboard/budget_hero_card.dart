@@ -79,7 +79,7 @@ class BudgetHeroCard extends StatelessWidget {
       child: Text(
         context.tr('sar'),
         style: GoogleFonts.outfit(
-          color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A887),
+          color: isDark ? AppThemes.electricTeal : const Color(0xFF00A887),
           fontSize: 18,
           fontWeight: FontWeight.w700,
         ),
@@ -89,17 +89,17 @@ class BudgetHeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF071C33) : Colors.white,
+        color: isDark ? AppThemes.deepGlacial : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
-              ? const Color(0xFF4DE6F7).withValues(alpha: 0.28)
-              : const Color(0xFF00E5BF).withValues(alpha: 0.35),
+              ? AppThemes.iceCyan.withValues(alpha: 0.28)
+              : AppThemes.electricTeal.withValues(alpha: 0.35),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00E5BF).withValues(alpha: isDark ? 0.08 : 0.12),
+            color: AppThemes.electricTeal.withValues(alpha: isDark ? 0.08 : 0.12),
             blurRadius: 28,
             offset: const Offset(0, 10),
           ),
@@ -117,7 +117,7 @@ class BudgetHeroCard extends StatelessWidget {
           colors: isDark
               ? const [
                   Color(0xFF0D2542),
-                  Color(0xFF051424),
+                  AppThemes.brandDarkBg,
                 ]
               : const [
                   Colors.white,
@@ -138,11 +138,11 @@ class BudgetHeroCard extends StatelessWidget {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00E5BF),
+                      color: AppThemes.electricTeal,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00E5BF).withValues(alpha: 0.6),
+                          color: AppThemes.electricTeal.withValues(alpha: 0.6),
                           blurRadius: 6,
                           spreadRadius: 1,
                         ),
@@ -153,7 +153,7 @@ class BudgetHeroCard extends StatelessWidget {
                   Text(
                     context.tr('hero_tag'),
                     style: GoogleFonts.outfit(
-                      color: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF008F7A),
+                      color: isDark ? AppThemes.iceCyan : const Color(0xFF008F7A),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.2,
@@ -168,8 +168,8 @@ class BudgetHeroCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isDark
-                        ? const Color(0xFF4DE6F7).withValues(alpha: 0.2)
-                        : const Color(0xFF00E5BF).withValues(alpha: 0.4),
+                        ? AppThemes.iceCyan.withValues(alpha: 0.2)
+                        : AppThemes.electricTeal.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Text(
@@ -236,7 +236,7 @@ class BudgetHeroCard extends StatelessWidget {
                       ? const Color(0xFFFF5252)
                       : (spentRatio > 0.75
                           ? const Color(0xFFFFA657)
-                          : (isDark ? const Color(0xFF00E5BF) : const Color(0xFF00C896))),
+                          : (isDark ? AppThemes.electricTeal : AppThemes.success)),
                 ),
               ),
             ),
@@ -254,7 +254,7 @@ class BudgetHeroCard extends StatelessWidget {
                     size: 14,
                     color: isBurnCaution
                         ? (isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706))
-                        : (isDark ? const Color(0xFF73FBC4) : const Color(0xFF059669)),
+                        : (isDark ? AppThemes.mintNeon : const Color(0xFF059669)),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -264,7 +264,7 @@ class BudgetHeroCard extends StatelessWidget {
                     style: GoogleFonts.outfit(
                       color: isBurnCaution
                           ? (isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706))
-                          : (isDark ? const Color(0xFF73FBC4) : const Color(0xFF059669)),
+                          : (isDark ? AppThemes.mintNeon : const Color(0xFF059669)),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -291,7 +291,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: context.tr('allocated'),
                   value: context.sar(totalAllocated, decimals: 0),
                   icon: Icons.account_balance_wallet_outlined,
-                  accentColor: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF0284C7),
+                  accentColor: isDark ? AppThemes.iceCyan : const Color(0xFF0284C7),
                 ),
               ),
               const SizedBox(width: 8),
@@ -300,7 +300,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: context.tr('spent'),
                   value: context.sar(totalSpent, decimals: 0),
                   icon: Icons.payments_outlined,
-                  accentColor: isDark ? const Color(0xFF00E5BF) : const Color(0xFF059669),
+                  accentColor: isDark ? AppThemes.electricTeal : const Color(0xFF059669),
                 ),
               ),
               const SizedBox(width: 8),
@@ -309,7 +309,7 @@ class BudgetHeroCard extends StatelessWidget {
                   label: context.tr('allowance'),
                   value: context.trArgs('per_day_suffix', {'amount': context.sar(dailyAllowance, decimals: 0)}),
                   icon: Icons.speed_rounded,
-                  accentColor: isDark ? const Color(0xFFD4AF37) : const Color(0xFFB45309),
+                  accentColor: isDark ? AppThemes.champagneGold : const Color(0xFFB45309),
                 ),
               ),
             ],

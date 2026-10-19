@@ -95,8 +95,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         break;
       case 'both':
       default:
-        bg = const Color(0xFF00C896).withValues(alpha: 0.16);
-        fg = const Color(0xFF00C896);
+        bg = AppThemes.success.withValues(alpha: 0.16);
+        fg = AppThemes.success;
         icon = Icons.people_alt_outlined;
         label = detailed ? context.tr('both_shared') : context.tr('both');
         break;
@@ -176,7 +176,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             initiallyExpanded: initiallyExpanded,
-            iconColor: const Color(0xFF00C896),
+            iconColor: AppThemes.success,
             collapsedIconColor: context.textSecondary,
             shape: const Border(),
             collapsedShape: const Border(),
@@ -184,10 +184,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF00C896).withValues(alpha: 0.12),
+              color: AppThemes.success.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(_sourceIcon, color: const Color(0xFF00C896), size: 20),
+            child: Icon(_sourceIcon, color: AppThemes.success, size: 20),
           ),
           title: Row(
             children: [
@@ -239,13 +239,13 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.1),
+                      color: AppThemes.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       context.trCat(categoryCode!),
-                      style: const TextStyle(
-                        color: Color(0xFF00C896),
+                      style: TextStyle(
+                        color: context.successText,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -307,19 +307,19 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00C896).withValues(alpha: 0.16),
+                        color: AppThemes.success.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4), width: 0.8),
+                        border: Border.all(color: AppThemes.success.withValues(alpha: 0.4), width: 0.8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.qr_code_2_rounded, size: 11, color: Color(0xFF00C896)),
+                          const Icon(Icons.qr_code_2_rounded, size: 11, color: AppThemes.success),
                           const SizedBox(width: 4),
                           Text(
                             context.tr('tib_zatca_qr'),
-                            style: const TextStyle(
-                              color: Color(0xFF00C896),
+                            style: TextStyle(
+                              color: context.successText,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
@@ -417,7 +417,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                     width: 6,
                                     height: 6,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF00C896),
+                                      color: AppThemes.success,
                                       borderRadius: BorderRadius.circular(3),
                                     ),
                                   ),
@@ -462,7 +462,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Text(
                                 '$currency ${amount.toStringAsFixed(2)}',
                                 style: GoogleFonts.outfit(
-                                  color: const Color(0xFF00C896),
+                                  color: context.successText,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -602,7 +602,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             fontSize: 11,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF00C896),
+                            color: context.successText,
                           ),
                         ),
                         InkWell(
@@ -617,14 +617,14 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           },
                           child: Row(
                             children: [
-                              const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF00C896)),
+                              const Icon(Icons.copy_rounded, size: 12, color: AppThemes.success),
                               const SizedBox(width: 4),
                               Text(
                                 context.tr('copy_base64'),
                                 style: GoogleFonts.outfit(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF00C896),
+                                  color: context.successText,
                                 ),
                               ),
                             ],
@@ -746,7 +746,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         ),
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896), size: 24),
+            const Icon(Icons.qr_code_2_rounded, color: AppThemes.success, size: 24),
             const SizedBox(width: 8),
             Text(
               context.tr('tib_saudi_zatca_qr'),
@@ -783,7 +783,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   Text(context.tr('verified_total_vat'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(
                     context.trArgs('tib_total_vat', {'total': context.sar(num.tryParse('${decoded['total']}') ?? 0), 'vat': context.sar(num.tryParse('${decoded['vat'] ?? 0}') ?? 0)}),
-                    style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.outfit(color: context.successText, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -813,8 +813,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         ),
         actions: [
           TextButton.icon(
-            icon: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF00C896)),
-            label: Text(context.tr('copy_base64'), style: const TextStyle(color: Color(0xFF00C896))),
+            icon: const Icon(Icons.copy_rounded, size: 14, color: AppThemes.success),
+            label: Text(context.tr('copy_base64'), style: TextStyle(color: context.successText)),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: rawQr));
               Navigator.pop(ctx);

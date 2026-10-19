@@ -173,7 +173,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
       backgroundColor: const Color(0xFF030D18),
       appBar: AppBar(
         key: const Key('batch_scanner_app_bar'),
-        backgroundColor: const Color(0xFF071C33),
+        backgroundColor: AppThemes.deepGlacial,
         elevation: 0,
         leading: IconButton(
           tooltip: context.tr('nav_back'),
@@ -232,7 +232,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: const Color(0xFF071C33).withValues(alpha: 0.5),
+              color: AppThemes.deepGlacial.withValues(alpha: 0.5),
               child: Text(
                 context.tr('batch_scan_desc'),
                 style: GoogleFonts.outfit(
@@ -271,7 +271,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
               child: Container(
                 margin: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF071C33).withValues(alpha: 0.6),
+                  color: AppThemes.deepGlacial.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: context.iceCyan.withValues(alpha: 0.3)),
                 ),
@@ -388,7 +388,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                             ),
                                           )
-                                        : const Icon(Icons.camera_alt_rounded, color: Color(0xFF051424), size: 26),
+                                        : const Icon(Icons.camera_alt_rounded, color: AppThemes.brandDarkBg, size: 26),
                                   ),
                                 ),
                               ),
@@ -423,7 +423,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
-                color: Color(0xFF071C33),
+                color: AppThemes.deepGlacial,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -556,7 +556,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                     onPressed: _queuedImages.isNotEmpty ? _processQueue : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.electricTeal,
-                      foregroundColor: const Color(0xFF051424),
+                      foregroundColor: AppThemes.brandDarkBg,
                       disabledBackgroundColor: Colors.white12,
                       disabledForegroundColor: Colors.white30,
                       padding: const EdgeInsets.symmetric(vertical: 14),

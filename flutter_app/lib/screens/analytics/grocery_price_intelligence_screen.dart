@@ -61,7 +61,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.analytics_outlined, color: Color(0xFF00C896), size: 22),
+            const Icon(Icons.analytics_outlined, color: AppThemes.success, size: 22),
             const SizedBox(width: 8),
             Text(
               context.tr('grocery_price_intelligence'),
@@ -72,7 +72,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         actions: [
           IconButton(
             tooltip: context.tr('smart_basket_optimizer'),
-            icon: const Icon(Icons.shopping_basket_outlined, color: Color(0xFF00C896)),
+            icon: const Icon(Icons.shopping_basket_outlined, color: AppThemes.success),
             onPressed: () {
               HapticFeedback.mediumImpact();
               SmartShoppingBasketSheet.show(context, householdId: widget.householdId);
@@ -82,7 +82,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF00C896),
+        backgroundColor: AppThemes.success,
         icon: const Icon(Icons.shopping_basket_rounded, color: Colors.black),
         label: Text(
           context.tr('shopping_list'),
@@ -129,7 +129,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
             ),
@@ -149,9 +149,9 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 return ChoiceChip(
                   label: Text(f == 'All' ? context.tr('all') : f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : context.textPrimary)),
                   selected: isSelected,
-                  selectedColor: const Color(0xFF00C896),
+                  selectedColor: AppThemes.success,
                   backgroundColor: context.cardBg,
-                  side: BorderSide(color: isSelected ? const Color(0xFF00C896) : context.borderColor),
+                  side: BorderSide(color: isSelected ? AppThemes.success : context.borderColor),
                   onSelected: (val) {
                     HapticFeedback.selectionClick();
                     setState(() => _selectedChip = f);
@@ -227,13 +227,13 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 decoration: BoxDecoration(
                   color: isInflationHigh
                       ? Colors.redAccent.withValues(alpha: 0.15)
-                      : const Color(0xFF00C896).withValues(alpha: 0.15),
+                      : AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   isInflationHigh ? context.trArgs('grocery_inflation', {'pct': inflationPct}) : context.tr('grocery_stable'),
                   style: TextStyle(
-                    color: isInflationHigh ? Colors.redAccent : const Color(0xFF00C896),
+                    color: isInflationHigh ? Colors.redAccent : AppThemes.success,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -263,7 +263,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
               ),
               Text(
                 context.tr('grocery_touch'),
-                style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 10, fontWeight: FontWeight.w500),
+                style: GoogleFonts.outfit(color: context.successText, fontSize: 10, fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -287,23 +287,23 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.1) : context.subtleCardBg,
+                    color: isCheapest ? AppThemes.success.withValues(alpha: 0.1) : context.subtleCardBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isCheapest ? const Color(0xFF00C896).withValues(alpha: 0.4) : context.borderColor,
+                      color: isCheapest ? AppThemes.success.withValues(alpha: 0.4) : context.borderColor,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (isCheapest) ...[
-                        const Icon(Icons.star_rounded, size: 14, color: Color(0xFF00C896)),
+                        const Icon(Icons.star_rounded, size: 14, color: AppThemes.success),
                         const SizedBox(width: 4),
                       ],
                       Text(
                         '${entry.key}: ${context.sar(price)}',
                         style: TextStyle(
-                          color: isCheapest ? const Color(0xFF00C896) : context.textPrimary,
+                          color: isCheapest ? AppThemes.success : context.textPrimary,
                           fontSize: 11,
                           fontWeight: isCheapest ? FontWeight.bold : FontWeight.normal,
                         ),
@@ -372,7 +372,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                   return LineTooltipItem(
                     '${context.sar(spot.y)}${date.isNotEmpty ? '\n$date' : ''}',
                     GoogleFonts.outfit(
-                      color: const Color(0xFF00C896),
+                      color: context.successText,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -386,7 +386,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
               spots: spots,
               isCurved: true,
               curveSmoothness: 0.35,
-              color: const Color(0xFF00C896),
+              color: AppThemes.success,
               barWidth: 2.5,
               isStrokeCapRound: true,
               dotData: FlDotData(
@@ -394,7 +394,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 getDotPainter: (spot, percent, barData, index) {
                   return FlDotCirclePainter(
                     radius: 3.5,
-                    color: const Color(0xFF00C896),
+                    color: AppThemes.success,
                     strokeWidth: 1.5,
                     strokeColor: context.cardBg,
                   );
@@ -404,8 +404,8 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 show: true,
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF00C896).withValues(alpha: 0.25),
-                    const Color(0xFF00C896).withValues(alpha: 0.0),
+                    AppThemes.success.withValues(alpha: 0.25),
+                    AppThemes.success.withValues(alpha: 0.0),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -427,7 +427,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         Text(
           value,
           style: TextStyle(
-            color: isHighlight ? const Color(0xFF00C896) : Colors.white,
+            color: isHighlight ? AppThemes.success : Colors.white,
             fontSize: 13,
             fontWeight: FontWeight.bold,
           ),

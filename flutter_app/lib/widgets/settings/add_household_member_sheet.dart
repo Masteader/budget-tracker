@@ -169,12 +169,12 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: AppThemes.success.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.person_add_alt_1_rounded,
-                    color: Color(0xFF00C896),
+                    color: AppThemes.success,
                     size: 22,
                   ),
                 ),
@@ -241,7 +241,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
               onChanged: (_) {
@@ -367,7 +367,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
             ),
@@ -405,7 +405,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               child: ElevatedButton.icon(
                 key: const Key('add_member_submit_button'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,

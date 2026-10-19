@@ -355,7 +355,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                       labelText: context.tr('enter_amount'),
                       prefixText: '${context.tr('sar')} ',
                       labelStyle: TextStyle(color: context.textSecondary),
-                      prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
+                      prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success, size: 20),
                       filled: true,
                       fillColor: context.inputBg,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -416,7 +416,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   // Simulate Button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -475,7 +475,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     final dailyPost = (res['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final isOffline = res['is_offline'] == true;
 
-    Color badgeColor = const Color(0xFF00C896);
+    Color badgeColor = AppThemes.success;
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String verdictLabel = context.tr('comfortably_affordable');
 
@@ -654,8 +654,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.cardBg,
-              foregroundColor: const Color(0xFF00C896),
-              side: const BorderSide(color: Color(0xFF00C896)),
+              foregroundColor: AppThemes.success,
+              side: const BorderSide(color: AppThemes.success),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),

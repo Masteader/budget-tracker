@@ -102,7 +102,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00E5BF)),
+            const Icon(Icons.qr_code_2_rounded, color: AppThemes.electricTeal),
             const SizedBox(width: 8),
             Text(
               context.tr('zq_manual_title'),
@@ -141,8 +141,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5BF),
-              foregroundColor: const Color(0xFF051424),
+              backgroundColor: AppThemes.electricTeal,
+              foregroundColor: AppThemes.brandDarkBg,
             ),
             onPressed: () {
               final raw = textCtrl.text.trim();
@@ -217,8 +217,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5BF),
-                  foregroundColor: const Color(0xFF051424),
+                  backgroundColor: AppThemes.electricTeal,
+                  foregroundColor: AppThemes.brandDarkBg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -312,13 +312,13 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                     height: 270,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                        color: AppThemes.iceCyan.withValues(alpha: 0.85),
                         width: 2.5,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00E5BF).withValues(alpha: 0.25),
+                          color: AppThemes.electricTeal.withValues(alpha: 0.25),
                           blurRadius: 24,
                           spreadRadius: 2,
                         ),
@@ -334,14 +334,14 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF071C33).withValues(alpha: 0.85),
+                          color: AppThemes.deepGlacial.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                          border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           context.tr('zq_target'),
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF4DE6F7),
+                            color: AppThemes.iceCyan,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.0,
@@ -364,15 +364,15 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                             gradient: const LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                Color(0xFF00E5BF),
-                                Color(0xFF4DE6F7),
-                                Color(0xFF00E5BF),
+                                AppThemes.electricTeal,
+                                AppThemes.iceCyan,
+                                AppThemes.electricTeal,
                                 Colors.transparent,
                               ],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                                color: AppThemes.iceCyan.withValues(alpha: 0.85),
                                 blurRadius: 10,
                                 spreadRadius: 1.5,
                               ),
@@ -393,9 +393,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF071C33).withValues(alpha: 0.92),
+                color: AppThemes.deepGlacial.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.4),
@@ -406,7 +406,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_scanner, color: Color(0xFF00E5BF), size: 22),
+                  const Icon(Icons.qr_code_scanner, color: AppThemes.electricTeal, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

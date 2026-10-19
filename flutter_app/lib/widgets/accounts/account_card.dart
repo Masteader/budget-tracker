@@ -40,12 +40,12 @@ class AccountCard extends StatelessWidget {
 
     switch (status) {
       case AccountCapacityStatus.zeroBased:
-        statusColor = const Color(0xFF00E5BF);
+        statusColor = AppThemes.electricTeal;
         statusLabel = context.tr('zero_based_label');
         statusIcon = Icons.check_circle_outline_rounded;
         break;
       case AccountCapacityStatus.surplus:
-        statusColor = const Color(0xFF4DE6F7);
+        statusColor = AppThemes.iceCyan;
         statusLabel = '+${account.currency} ${fmt.format(margin)} ${context.tr("surplus_buffer_label")}';
         statusIcon = Icons.savings_outlined;
         break;
@@ -117,12 +117,12 @@ class AccountCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
+                                color: AppThemes.electricTeal.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 context.tr('acc_shared_pool'),
-                                style: const TextStyle(color: Color(0xFF00E5BF), fontSize: 10, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: context.accentText, fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
@@ -282,7 +282,7 @@ class AccountCard extends StatelessWidget {
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
                   label: Text(context.tr('transfer_out'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF00E5BF),
+                    foregroundColor: AppThemes.electricTeal,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
                 ),

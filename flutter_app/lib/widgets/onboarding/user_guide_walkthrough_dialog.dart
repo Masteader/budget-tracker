@@ -57,7 +57,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
   final List<_WalkthroughStep> _steps = const [
     _WalkthroughStep(
       icon: Icons.qr_code_scanner_rounded,
-      gradientColors: [Color(0xFF00C896), Color(0xFF007A5A)],
+      gradientColors: [AppThemes.success, Color(0xFF007A5A)],
       title: 'wt1_title',
       subtitle: 'wt1_desc',
       tags: ['wt1_tag1', 'wt1_tag2', 'wt1_tag3'],
@@ -284,7 +284,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                         height: 7,
                         decoration: BoxDecoration(
                           color: _currentPage == idx
-                              ? const Color(0xFF00C896)
+                              ? AppThemes.success
                               : context.borderColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -310,7 +310,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                       const Spacer(),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C896),
+                          backgroundColor: AppThemes.success,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),

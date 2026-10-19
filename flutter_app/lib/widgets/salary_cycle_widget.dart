@@ -39,14 +39,14 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
   Color _getPaceColor(String? status) {
     switch (status) {
       case 'on_track':
-        return const Color(0xFF00E5BF);
+        return AppThemes.electricTeal;
       case 'caution':
         return Colors.orange;
       case 'critical':
       case 'exhausted':
         return Colors.redAccent;
       default:
-        return const Color(0xFF4DE6F7);
+        return AppThemes.iceCyan;
     }
   }
 
@@ -78,7 +78,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5BF)),
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.electricTeal),
           ),
         ),
       );

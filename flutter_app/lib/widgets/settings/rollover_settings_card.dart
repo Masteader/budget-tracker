@@ -81,12 +81,12 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.savings_rounded,
-                  color: Color(0xFF00C896),
+                  color: AppThemes.success,
                   size: 22,
                 ),
               ),
@@ -118,10 +118,10 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFF00C896),
+                    color: AppThemes.success,
                     width: 0.8,
                   ),
                 ),
@@ -131,8 +131,8 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                       : _selectedRule == 'rollover_to_categories'
                           ? context.tr('rsc_badge_carryover')
                           : context.tr('rsc_badge_fresh'),
-                  style: const TextStyle(
-                    color: Color(0xFF00C896),
+                  style: TextStyle(
+                    color: context.successText,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -147,13 +147,13 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF00C896).withValues(alpha: 0.10),
+                color: AppThemes.success.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+                border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF00C896), size: 18),
+                  const Icon(Icons.account_balance_wallet_rounded, color: AppThemes.success, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -170,7 +170,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                     style: GoogleFonts.outfit(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF00C896),
+                      color: context.successText,
                     ),
                   ),
                 ],
@@ -188,7 +188,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
             title: context.tr('rollover_send_to_savings_title'),
             description: context.tr('rollover_send_to_savings_desc'),
             icon: Icons.savings_rounded,
-            iconColor: const Color(0xFF00C896),
+            iconColor: AppThemes.success,
             isRecommended: true,
           ),
           const SizedBox(height: 10),
@@ -223,14 +223,14 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: hasChanges
-                    ? const Color(0xFF00C896)
+                    ? AppThemes.success
                     : context.cardBg,
                 foregroundColor: hasChanges ? Colors.black : context.textPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
                     color: hasChanges
-                        ? const Color(0xFF00C896)
+                        ? AppThemes.success
                         : context.borderColor,
                   ),
                 ),
@@ -330,13 +330,13 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                            color: AppThemes.success.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             context.tr('rollover_recommended'),
-                            style: const TextStyle(
-                              color: Color(0xFF00C896),
+                            style: TextStyle(
+                              color: context.successText,
                               fontSize: 9.5,
                               fontWeight: FontWeight.bold,
                             ),

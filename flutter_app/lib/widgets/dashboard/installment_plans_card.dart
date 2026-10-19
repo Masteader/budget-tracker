@@ -225,15 +225,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
+                                color: isSel ? AppThemes.success : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -259,15 +259,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               '$cnt ${context.tr('months_short')}',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
+                                color: isSel ? AppThemes.success : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -288,7 +288,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
+                backgroundColor: AppThemes.success,
                 foregroundColor: Colors.black,
               ),
               onPressed: isSubmitting
@@ -436,7 +436,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty
-                                    ? const Color(0xFF00C896)
+                                    ? AppThemes.success
                                     : context.textSecondary,
                               ),
                             ),
@@ -491,7 +491,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 14),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00C896),
+                            backgroundColor: AppThemes.success,
                             foregroundColor: Colors.black,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -563,7 +563,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       '${context.sar(plan.monthlyAmount)} / ${context.tr('month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
-                                        color: const Color(0xFF00C896),
+                                        color: context.successText,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -577,7 +577,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                     backgroundColor: context.chipBg,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       plan.isCompleted
-                                          ? const Color(0xFF00C896)
+                                          ? AppThemes.success
                                           : providerColor,
                                     ),
                                     minHeight: 6,
@@ -647,7 +647,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 4),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF00C896),
+                            foregroundColor: AppThemes.success,
                             side: BorderSide(color: context.borderColor),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

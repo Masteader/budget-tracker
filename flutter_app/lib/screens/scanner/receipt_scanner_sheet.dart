@@ -149,7 +149,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.qr_code_2_rounded, color: AppThemes.success),
             const SizedBox(width: 8),
             Text(context.tr('saudi_zatca_vat_qr'), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
           ],
@@ -199,8 +199,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     visualDensity: VisualDensity.compact,
                   ),
-                  icon: const Icon(Icons.receipt_long_outlined, size: 14, color: Color(0xFF00C896)),
-                  label: Text(context.tr('sample_extra'), style: const TextStyle(fontSize: 11, color: Color(0xFF00C896))),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 14, color: AppThemes.success),
+                  label: Text(context.tr('sample_extra'), style: TextStyle(fontSize: 11, color: context.successText)),
                   onPressed: () {
                     ctrl.text = 'ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=';
                   },
@@ -215,7 +215,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
             onPressed: () {
               final text = ctrl.text.trim();
               Navigator.pop(ctx);
@@ -266,7 +266,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                   ),
                   onPressed: () {
@@ -687,7 +687,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.document_scanner_outlined, color: Color(0xFF00C896), size: 24),
+                const Icon(Icons.document_scanner_outlined, color: AppThemes.success, size: 24),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -774,7 +774,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -810,7 +810,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -881,7 +881,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ] else ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -921,7 +921,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 alignment: Alignment.center,
                 child: Column(
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFF00C896)),
+                    const CircularProgressIndicator(color: AppThemes.success),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('scan_ai_scanning'),
@@ -971,7 +971,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                           Expanded(
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1056,13 +1056,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF00C896).withValues(alpha: 0.15),
+              color: AppThemes.success.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF00C896)),
+              border: Border.all(color: AppThemes.success),
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF00C896), size: 28),
+                const Icon(Icons.check_circle_rounded, color: AppThemes.success, size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1075,7 +1075,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                       const SizedBox(height: 2),
                       Text(
                         '${context.trArgs('scan_items_logged', {'count': items.length, 'merchant': merchant, 'amount': context.sar(amount)})}${isZatcaVerified ? ' • ${context.tr('scan_zatca_verified')}' : ''}',
-                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 12),
+                        style: TextStyle(color: context.successText, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1162,7 +1162,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         if (isSuccess) ...[
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1178,7 +1178,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         ] else if (!isCandidate) ...[
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

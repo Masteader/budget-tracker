@@ -187,11 +187,11 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: AppThemes.success.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.pie_chart_outline_rounded,
-                      color: Color(0xFF00C896), size: 22),
+                      color: AppThemes.success, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -218,7 +218,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: Color(0xFF00C896), size: 20),
+                  icon: const Icon(Icons.edit_outlined, color: AppThemes.success, size: 20),
                   tooltip: context.tr('edit_allocations'),
                   onPressed: () async {
                     Budget? existing;
@@ -305,7 +305,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           Text(
                             context.sar(allocated),
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF00C896),
+                              color: context.successText,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -320,7 +320,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: prevDelta > 0
-                            ? const Color(0xFF00C896).withValues(alpha: 0.12)
+                            ? AppThemes.success.withValues(alpha: 0.12)
                             : Colors.redAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -332,7 +332,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 ? Icons.arrow_downward_rounded
                                 : Icons.arrow_upward_rounded,
                             color: prevDelta > 0
-                                ? const Color(0xFF00C896)
+                                ? AppThemes.success
                                 : Colors.redAccent,
                             size: 14,
                           ),
@@ -343,7 +343,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 : '-${context.sar(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
-                                  ? const Color(0xFF00C896)
+                                  ? AppThemes.success
                                   : Colors.redAccent,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -372,7 +372,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 Text(
                   '${context.tr('allocated')} & ${context.tr('spent')}',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF00C896),
+                    color: context.successText,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -438,7 +438,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         } else if (item.spentAmount > item.allocatedAmount * 0.85) {
           progressColor = Colors.orangeAccent;
         } else {
-          progressColor = const Color(0xFF00C896);
+          progressColor = AppThemes.success;
         }
 
         return Container(

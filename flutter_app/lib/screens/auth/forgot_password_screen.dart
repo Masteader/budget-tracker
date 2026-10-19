@@ -244,7 +244,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.lock_reset_rounded, color: Color(0xFF051424), size: 36),
+            child: const Icon(Icons.lock_reset_rounded, color: AppThemes.brandDarkBg, size: 36),
           ),
           const SizedBox(height: 24),
           Text(
@@ -295,7 +295,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               onPressed: _loading ? null : _handleSendResetCode,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppThemes.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
@@ -303,7 +303,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.brandDarkBg),
                     )
                   : Text(
                       context.tr('auth_send_reset_code'),
@@ -338,7 +338,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFF051424), size: 36),
+            child: const Icon(Icons.mark_email_read_rounded, color: AppThemes.brandDarkBg, size: 36),
           ),
           const SizedBox(height: 24),
           Text(
@@ -478,7 +478,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               onPressed: _loading ? null : _handleVerifyAndResetPassword,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppThemes.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
@@ -486,7 +486,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.brandDarkBg),
                     )
                   : Text(
                       context.tr('auth_set_new_password'),
