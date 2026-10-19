@@ -146,16 +146,25 @@ BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
 
-    DELETE FROM public.income_records WHERE id = v_inc_id;
-    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    -- Since audit DB-07 the privilege itself is revoked (permission denied == 0 rows)
+    BEGIN
+        DELETE FROM public.income_records WHERE id = v_inc_id;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_rows := 0;
+    END;
     IF v_rows > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY: Client was able to DELETE income_record!';
     ELSE
         RAISE NOTICE 'PASSED: Client DELETE on income_records blocked (0 rows affected).';
     END IF;
 
-    UPDATE public.income_records SET net_amount = 9999.00 WHERE id = v_inc_id;
-    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    BEGIN
+        UPDATE public.income_records SET net_amount = 9999.00 WHERE id = v_inc_id;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_rows := 0;
+    END;
     IF v_rows > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY: Client was able to UPDATE income_record!';
     ELSE
