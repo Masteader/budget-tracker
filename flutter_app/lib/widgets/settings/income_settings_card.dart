@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -50,7 +49,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
   Future<void> _handleSave() async {
     final parsed = double.tryParse(_incomeCtrl.text.trim()) ?? 0.0;
     if (parsed < 0) {
-      AppSnackBar.showError(context, 'Income cannot be negative');
+      AppSnackBar.showError(context, context.tr('isc_negative'));
       return;
     }
 
@@ -62,11 +61,10 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
         if (success) _isEditing = false;
       });
       if (success) {
-        final formatted = NumberFormat('#,##0.00').format(parsed);
         AppSnackBar.showSuccess(
           context,
-          'Monthly income updated to $formatted SAR',
-          title: 'Income Saved',
+          context.trArgs('isc_updated', {'amount': context.sar(parsed)}),
+          title: context.tr('isc_saved_title'),
           icon: Icons.payments_rounded,
         );
       }
@@ -81,7 +79,6 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
     final subtextColor = context.textSecondary;
 
     final currentIncome = double.tryParse(_incomeCtrl.text) ?? widget.initialIncome;
-    final formattedIncome = NumberFormat('#,##0.00').format(currentIncome);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -114,7 +111,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Monthly Salary / Income',
+                      context.tr('isc_title'),
                       style: GoogleFonts.outfit(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -123,7 +120,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Base for budget allocations & savings reserve',
+                      context.tr('isc_subtitle'),
                       style: TextStyle(
                         color: subtextColor,
                         fontSize: 12,
@@ -135,7 +132,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               if (!_isEditing)
                 IconButton(
                   icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF00C896)),
-                  tooltip: 'Edit Income',
+                  tooltip: context.tr('isc_edit'),
                   onPressed: () => setState(() => _isEditing = true),
                 ),
             ],
@@ -155,11 +152,11 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Configured Income:',
+                    context.tr('isc_configured'),
                     style: TextStyle(color: subtextColor, fontSize: 13),
                   ),
                   Text(
-                    currentIncome > 0 ? '$formattedIncome SAR' : 'Not configured (0 SAR)',
+                    currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
                     style: GoogleFonts.outfit(
                       color: currentIncome > 0 ? const Color(0xFF00C896) : subtextColor,
                       fontWeight: FontWeight.bold,
@@ -176,7 +173,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
               decoration: InputDecoration(
-                labelText: 'Monthly Income (SAR)',
+                labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
                 prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896)),
                 suffixText: 'SAR',
@@ -209,7 +206,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                       border: Border.all(color: borderColor),
                     ),
                     child: Text(
-                      '${NumberFormat('#,###').format(preset)} SAR',
+                      context.sar(preset, decimals: 0),
                       style: TextStyle(
                         fontSize: 11,
                         color: textColor,

@@ -76,7 +76,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${members.length} Active Member${members.length == 1 ? '' : 's'}',
+                      members.length == 1 ? context.tr('hmc_one_active_member') : context.trArgs('hmc_active_members', {'count': members.length}),
                       style: TextStyle(color: context.textSecondary, fontSize: 12),
                     ),
                   ],
@@ -95,7 +95,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  isAdmin ? 'Admin' : 'Member',
+                  isAdmin ? context.tr('admin') : context.tr('member'),
                   style: TextStyle(
                     color: isAdmin ? const Color(0xFF00C896) : const Color(0xFF58A6FF),
                     fontSize: 11,
@@ -112,7 +112,7 @@ class HouseholdManagementCard extends StatelessWidget {
 
           // Invite Code Section
           Text(
-            'HOUSEHOLD INVITE CODE',
+            context.tr('hmc_invite_code_caps'),
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -162,7 +162,7 @@ class HouseholdManagementCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
-                    label: const Text('Invite with Role', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    label: Text(context.tr('hmc_invite_with_role'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       showDialog(
                         context: context,
@@ -188,7 +188,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'HOUSEHOLD & LIVING GROUP MEMBERS',
+                        context.tr('hmc_members_caps'),
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -210,9 +210,9 @@ class HouseholdManagementCard extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
-                  label: const Text(
-                    '+ Add Member / Dependent',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  label: Text(
+                    context.tr('hmc_add_member'),
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                   onPressed: onAddDependent,
                 ),
@@ -222,7 +222,7 @@ class HouseholdManagementCard extends StatelessWidget {
 
           // Active App Accounts
           ...members.map((m) {
-            final email = m['email'] as String? ?? 'User';
+            final email = m['email'] as String? ?? context.tr('set_user');
             final role = m['role'] as String? ?? 'member';
             final isAdminMember = role.toLowerCase() == 'admin';
 
@@ -270,9 +270,9 @@ class HouseholdManagementCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 5),
-                            const Text(
-                              'Active Account',
-                              style: TextStyle(
+                            Text(
+                              context.tr('active_account'),
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFF00C896),
                                 fontWeight: FontWeight.w500,
@@ -309,16 +309,16 @@ class HouseholdManagementCard extends StatelessWidget {
           ...dependents.map((d) {
             Color roleColor = const Color(0xFF34D399);
             IconData roleIcon = Icons.child_care_rounded;
-            String roleName = 'Child';
+            String roleName = context.tr('hmc_child');
 
             if (d.isSpouse) {
               roleColor = const Color(0xFFE5A93C);
               roleIcon = Icons.favorite_rounded;
-              roleName = 'Wife / Spouse';
+              roleName = context.tr('wife_spouse_title');
             } else if (d.isPeer) {
               roleColor = const Color(0xFF38BDF8);
               roleIcon = Icons.group_outlined;
-              roleName = 'Roommate';
+              roleName = context.tr('role_roommate');
             }
 
             return Container(
@@ -388,7 +388,7 @@ class HouseholdManagementCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              d.isClaimed ? 'Active Account' : 'Pre-Account Profile',
+                              d.isClaimed ? context.tr('active_account') : context.tr('pre_account_profile'),
                               style: TextStyle(
                                 fontSize: 11,
                                 color: d.isClaimed ? const Color(0xFF00C896) : const Color(0xFFE5A93C),
@@ -398,7 +398,7 @@ class HouseholdManagementCard extends StatelessWidget {
                             if (d.monthlyAllowance > 0) ...[
                               const SizedBox(width: 8),
                               Text(
-                                '•  ${d.monthlyAllowance.toStringAsFixed(0)} SAR/mo',
+                                context.trArgs('hmc_allowance_per_month', {'amount': d.monthlyAllowance.toStringAsFixed(0)}),
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: context.textSecondary,
@@ -413,7 +413,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   if (!d.isClaimed && householdId != null && householdId!.isNotEmpty) ...[
                     IconButton(
                       icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                      tooltip: 'Invite with linked profile',
+                      tooltip: context.tr('invite_linked_profile'),
                       color: const Color(0xFF00C896),
                       onPressed: () {
                         showDialog(
@@ -431,7 +431,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   if (onRemoveDependent != null) ...[
                     IconButton(
                       icon: Icon(Icons.close_rounded, size: 16, color: context.textSecondary),
-                      tooltip: 'Remove',
+                      tooltip: context.tr('set_remove'),
                       onPressed: () => onRemoveDependent!(d),
                     ),
                   ],
@@ -444,7 +444,7 @@ class HouseholdManagementCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'No members or profiles added yet. Tap "+ Add Member / Dependent" to get started.',
+                context.tr('hmc_empty'),
                 style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF6E7681)),
               ),
             ),

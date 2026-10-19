@@ -111,7 +111,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     setState(() => _isSimulating = true);
 
     final hid = widget.householdId ?? '';
-    final item = _itemCtrl.text.trim().isNotEmpty ? _itemCtrl.text.trim() : 'Item';
+    final item = _itemCtrl.text.trim().isNotEmpty ? _itemCtrl.text.trim() : context.tr('sim_item');
 
     Map<String, dynamic>? data;
 
@@ -352,7 +352,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                     decoration: InputDecoration(
                       labelText: context.tr('enter_amount'),
-                      prefixText: 'SAR ',
+                      prefixText: '${context.tr('sar')} ',
                       labelStyle: TextStyle(color: context.textSecondary),
                       prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
                       filled: true,
@@ -468,7 +468,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     final res = _result!;
     final verdict = res['verdict'] as String? ?? 'comfortable';
     final targetAmt = (res['target_amount'] as num?)?.toDouble() ?? 0.0;
-    final item = res['item_name'] as String? ?? 'Item';
+    final item = res['item_name'] as String? ?? context.tr('sim_item');
     final daysToPayday = res['days_to_payday'] as int? ?? 0;
     final dailyCurrent = (res['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final dailyPost = (res['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
@@ -488,9 +488,13 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
       verdictLabel = context.tr('unaffordable_exceeds');
     }
 
+    // The API/offline estimate provides en + ar advice; Urdu gets a
+    // localized summary of the verdict instead of falling back to English.
     final adviceText = isAr
         ? (res['advice_ar'] as String? ?? '')
-        : (res['advice_en'] as String? ?? '');
+        : (context.isUrdu
+            ? context.tr('sim_advice_$verdict')
+            : (res['advice_en'] as String? ?? ''));
 
     final monthlyBnpl = targetAmt > 0 ? (targetAmt / 4.0) : 0.0;
 
@@ -544,7 +548,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
           // Item and Amount
           Text(
-            '$item • SAR ${targetAmt.toStringAsFixed(2)}',
+            '$item • ${context.sar(targetAmt)}',
             style: GoogleFonts.outfit(
               color: context.textPrimary,
               fontSize: 16,
@@ -578,7 +582,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyCurrent, decimals: 1)}),
                         style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -596,7 +600,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'SAR ${dailyPost.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyPost, decimals: 1)}),
                         style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -631,7 +635,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${context.tr('split_with_bnpl')}: 4 × SAR ${monthlyBnpl.toStringAsFixed(2)}/mo',
+                      '${context.tr('split_with_bnpl')}: 4 × ${context.sar(monthlyBnpl)}/${context.tr('months_short')}',
                       style: const TextStyle(
                         color: Color(0xFF58A6FF),
                         fontSize: 11.5,

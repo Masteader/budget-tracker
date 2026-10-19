@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card for customizing the household/user monthly payday (1-31).
 class PaydaySettingsCard extends StatefulWidget {
@@ -36,6 +37,10 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     }
   }
 
+  /// English ordinal ("27th"); Arabic/Urdu use the plain number.
+  static String _ordinal(BuildContext context, int day) =>
+      Localizations.localeOf(context).languageCode == 'en' ? getOrdinal(day) : '$day';
+
   static String getOrdinal(int day) {
     if (day >= 11 && day <= 13) return '${day}th';
     switch (day % 10) {
@@ -58,8 +63,8 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
       if (success) {
         AppSnackBar.showSuccess(
           context,
-          'Payday updated to ${getOrdinal(_selectedDay)} of every month!',
-          title: 'Payday Saved',
+          context.trArgs('pds_updated_msg', {'day': _ordinal(context, _selectedDay)}),
+          title: context.tr('pds_saved_title'),
           icon: Icons.calendar_month_rounded,
           duration: const Duration(seconds: 3),
         );
@@ -100,7 +105,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Salary & Payday Cycle',
+                      context.tr('pds_title'),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -109,7 +114,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Custom monthly salary arrival date',
+                      context.tr('pds_subtitle'),
                       style: TextStyle(
                         color: context.textSecondary,
                         fontSize: 12,
@@ -129,7 +134,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                   ),
                 ),
                 child: Text(
-                  '${getOrdinal(_selectedDay)} of month',
+                  context.trArgs('pds_of_month', {'day': _ordinal(context, _selectedDay)}),
                   style: const TextStyle(
                     color: Color(0xFF00C896),
                     fontSize: 11,
@@ -142,7 +147,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
 
           const SizedBox(height: 12),
           Text(
-            'Budget cycles, remaining days counter, daily burn rate allowances, and automatic budget rollover will dynamically sync to this date.',
+            context.tr('pds_desc'),
             style: GoogleFonts.outfit(
               fontSize: 12,
               color: context.textSecondary,
@@ -154,7 +159,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
 
           // Presets Label
           Text(
-            'COMMON PRESETS',
+            context.tr('pds_presets_caps'),
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -169,15 +174,15 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             runSpacing: 8,
             children: [
               _buildPresetChip(
-                label: '27th (Govt / Standard)',
+                label: context.trArgs('pds_preset_govt', {'day': _ordinal(context, 27)}),
                 day: 27,
               ),
               _buildPresetChip(
-                label: '1st (Calendar Month)',
+                label: context.trArgs('pds_preset_calendar', {'day': _ordinal(context, 1)}),
                 day: 1,
               ),
               _buildPresetChip(
-                label: '25th',
+                label: _ordinal(context, 25),
                 day: 25,
               ),
             ],
@@ -187,7 +192,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
 
           // Custom Day Dropdown
           Text(
-            'SELECT CUSTOM DAY',
+            context.tr('pds_custom_caps'),
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -215,7 +220,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                   return DropdownMenuItem<int>(
                     value: day,
                     child: Text(
-                      'Day $day (${getOrdinal(day)} of every month)',
+                      context.trArgs('pds_day_option', {'n': day, 'day': _ordinal(context, day)}),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontSize: 14,
@@ -260,7 +265,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                     )
                   : const Icon(Icons.check_rounded, size: 18),
               label: Text(
-                _saving ? 'Saving...' : 'Save Payday',
+                _saving ? context.tr('pds_saving') : context.tr('pds_save'),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,

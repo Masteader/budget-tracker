@@ -176,11 +176,11 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount.');
+      AppSnackBar.showError(context, context.tr('ris_invalid_amount'));
       return;
     }
     if (merchant.isEmpty) {
-      AppSnackBar.showError(context, 'Please enter a merchant or item name.');
+      AppSnackBar.showError(context, context.tr('mes_merchant_required'));
       return;
     }
 
@@ -245,8 +245,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         Navigator.pop(context);
         AppSnackBar.showSuccess(
           context,
-          'Recorded SAR ${amount.toStringAsFixed(2)} at $merchant',
-          title: 'Expense Logged',
+          context.trArgs('mes_recorded', {'amount': context.sar(amount), 'merchant': merchant}),
+          title: context.tr('mes_logged_title'),
         );
       }
     } catch (e) {
@@ -271,15 +271,15 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           Navigator.pop(context);
           AppSnackBar.showSuccess(
             context,
-            'Saved offline: SAR ${amount.toStringAsFixed(2)} at $merchant. Will sync automatically.',
-            title: 'Queued Offline',
+            context.trArgs('mes_saved_offline', {'amount': context.sar(amount), 'merchant': merchant}),
+            title: context.tr('mp_queued_offline'),
             icon: Icons.cloud_off_rounded,
           );
         }
       } catch (err) {
         if (mounted) {
           setState(() => _isSaving = false);
-          AppSnackBar.showError(context, 'Failed to save expense: $err');
+          AppSnackBar.showError(context, context.trArgs('mes_failed', {'error': err}));
         }
       }
     }
@@ -370,7 +370,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 decoration: InputDecoration(
                   labelText: context.tr('amount_sar'),
-                  prefixText: 'SAR ',
+                  prefixText: '${context.tr('sar')} ',
                   labelStyle: TextStyle(color: context.textSecondary),
                   prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
                   filled: true,
@@ -571,9 +571,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 // Multi-Roommate Living Mode
                 if (_householdMembers.isNotEmpty) ...[
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      'Select Payer:',
+                      context.tr('mes_select_payer'),
                       style: TextStyle(
                         color: context.textSecondary,
                         fontSize: 11,
@@ -589,10 +589,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         final mid = m['id'] as String? ?? '';
                         final name = (m['display_name'] as String?)?.isNotEmpty == true
                             ? m['display_name'] as String
-                            : 'Roommate';
+                            : context.tr('role_roommate');
                         final isSelected = _selectedRoommateId == mid;
                         return Padding(
-                          padding: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsetsDirectional.only(end: 8),
                           child: ChoiceChip(
                             label: Text(name),
                             selected: isSelected,

@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 
 class RoleInviteDialog extends StatefulWidget {
   final String householdId;
@@ -50,24 +51,24 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
   final List<Map<String, dynamic>> _roles = const [
     {
       'id': 'spouse',
-      'title': 'Wife / Spouse',
+      'title': 'wife_spouse_title',
       'icon': Icons.favorite_rounded,
       'color': Color(0xFFE5A93C),
-      'desc': 'Islamic Nafaqah household: husband provides and reimburses wife for household advances.',
+      'desc': 'rid_spouse_desc',
     },
     {
       'id': 'peer',
-      'title': 'Roommate / Flatmate',
+      'title': 'invite_role_peer',
       'icon': Icons.group_outlined,
       'color': Color(0xFF38BDF8),
-      'desc': 'Shared living ledger: multi-roommate pairwise settlement with debt simplification.',
+      'desc': 'rid_peer_desc',
     },
     {
       'id': 'family_member',
-      'title': 'Family Dependent',
+      'title': 'invite_role_family',
       'icon': Icons.child_care_rounded,
       'color': Color(0xFF34D399),
-      'desc': 'Family dependent: personal allowance tracking and individual expense reporting.',
+      'desc': 'rid_family_desc',
     },
   ];
 
@@ -132,8 +133,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   Expanded(
                     child: Text(
                       widget.targetMemberName != null
-                          ? 'Invite ${widget.targetMemberName}'
-                          : 'Generate Role Invite',
+                          ? context.trArgs('rid_invite_name', {'name': widget.targetMemberName})
+                          : context.tr('rid_generate_role_invite'),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -146,8 +147,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
               const SizedBox(height: 6),
               Text(
                 widget.targetMemberName != null
-                    ? 'This invite code is linked to ${widget.targetMemberName}\'s profile. When they join, their account is automatically claimed and merged.'
-                    : 'Select the member’s role to configure the correct settlement model automatically.',
+                    ? context.trArgs('rid_linked_desc', {'name': widget.targetMemberName})
+                    : context.tr('rid_select_role_desc'),
                 style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -192,7 +193,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    role['title'] as String,
+                                    context.tr(role['title'] as String),
                                     style: TextStyle(
                                       color: context.textPrimary,
                                       fontWeight: FontWeight.bold,
@@ -201,7 +202,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    role['desc'] as String,
+                                    context.tr(role['desc'] as String),
                                     style: TextStyle(
                                       color: context.textSecondary,
                                       fontSize: 11,
@@ -212,7 +213,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(left: 8, top: 2),
+                              padding: const EdgeInsetsDirectional.only(start: 8, top: 2),
                               child: Icon(
                                 isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                                 color: isSelected ? color : context.textSecondary,
@@ -232,7 +233,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                      child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     const SizedBox(width: 8),
@@ -250,9 +251,9 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                             )
-                          : const Text(
-                              'Generate Invite Code',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          : Text(
+                              context.tr('rid_generate_code'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                     ),
                   ],
@@ -269,7 +270,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   child: Column(
                     children: [
                       Text(
-                        'Invite Code Generated for ${_generatedInvite!.role.toUpperCase()}',
+                        context.trArgs('rid_generated_for', {'role': context.tr(_generatedInvite!.role == 'spouse' ? 'wife_spouse_title' : (_generatedInvite!.role == 'peer' ? 'invite_role_peer' : 'invite_role_family'))}),
                         style: const TextStyle(
                           color: Color(0xFF00C896),
                           fontWeight: FontWeight.bold,
@@ -288,7 +289,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Valid for 7 days. Give this code to join.',
+                        context.tr('rid_valid_7_days'),
                         style: TextStyle(color: context.textSecondary, fontSize: 11),
                       ),
                     ],
@@ -306,7 +307,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Copy Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: Text(context.tr('copy_code'), style: const TextStyle(fontWeight: FontWeight.bold)),
                         onPressed: () async {
                           await Clipboard.setData(
                             ClipboardData(text: _generatedInvite!.inviteCode),
@@ -314,8 +315,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                           if (context.mounted) {
                             AppSnackBar.showSuccess(
                               context,
-                              'Copied invite code: ${_generatedInvite!.inviteCode}',
-                              title: 'Code Copied',
+                              context.trArgs('rid_copied_code', {'code': _generatedInvite!.inviteCode}),
+                              title: context.tr('set_code_copied'),
                             );
                           }
                         },
@@ -329,7 +330,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(context.tr('done'), style: const TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],

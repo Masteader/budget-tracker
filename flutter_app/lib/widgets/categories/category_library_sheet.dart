@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Modal bottom sheet allowing users to view active vs inactive categories,
 /// activate new developer categories from the library, deactivate unused categories,
@@ -41,14 +42,14 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Deactivate "${item.name}"?'),
-        content: const Text(
-          'Inactivating this category removes it from your active monthly budget and returns unspent funds to your Savings Reserve.\n\nAll past transaction history remains safe and intact.',
+        title: Text(context.trArgs('cls_deactivate_title', {'name': item.name})),
+        content: Text(
+          context.tr('cls_deactivate_desc'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -58,7 +59,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               Navigator.pop(ctx);
               _handleDeactivate(item);
             },
-            child: const Text('Deactivate'),
+            child: Text(context.tr('deactivate')),
           ),
         ],
       ),
@@ -151,14 +152,14 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                   const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
                   const SizedBox(width: 8),
                   Text(
-                    'Category Library',
+                    context.tr('category_library'),
                     style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   FilledButton.tonalIcon(
                     onPressed: widget.onAddCustom,
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Custom'),
+                    label: Text(context.tr('cls_custom')),
                   ),
                 ],
               ),
@@ -169,8 +170,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               labelColor: const Color(0xFF00C896),
               unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               tabs: [
-                Tab(text: 'Active (${_activeCategories.length})'),
-                Tab(text: 'Library / Inactive (${_inactiveCategories.length})'),
+                Tab(text: context.trArgs('cls_active_tab', {'count': _activeCategories.length})),
+                Tab(text: context.trArgs('cls_inactive_tab', {'count': _inactiveCategories.length})),
               ],
             ),
             // TabBarView
@@ -179,7 +180,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                 children: [
                   // Active Categories List
                   _activeCategories.isEmpty
-                      ? const Center(child: Text('No active categories'))
+                      ? Center(child: Text(context.tr('cls_no_active')))
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _activeCategories.length,
@@ -215,14 +216,14 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                         visualDensity: VisualDensity.compact,
                                         foregroundColor: theme.colorScheme.error,
                                       ),
-                                      child: const Text('Deactivate'),
+                                      child: Text(context.tr('deactivate')),
                                     ),
                             );
                           },
                         ),
                   // Inactive / Library Categories List
                   _inactiveCategories.isEmpty
-                      ? const Center(child: Text('All categories are currently active'))
+                      ? Center(child: Text(context.tr('cls_all_active')))
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _inactiveCategories.length,
@@ -253,9 +254,9 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                         color: const Color(0xFF00C896).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: const Text(
-                                        'Available',
-                                        style: TextStyle(
+                                      child: Text(
+                                        context.tr('cls_available'),
+                                        style: const TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF00C896),
@@ -284,7 +285,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                         visualDensity: VisualDensity.compact,
                                         backgroundColor: const Color(0xFF00C896),
                                       ),
-                                      child: const Text('Activate'),
+                                      child: Text(context.tr('activate')),
                                     ),
                             );
                           },

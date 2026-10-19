@@ -120,8 +120,8 @@ class _SalaryDistributionAssistantSheetState
     if (_remainingInBank < -0.01) {
       AppSnackBar.showError(
         context,
-        'Allocated amount exceeds deposited salary by SAR ${_fmt.format(-_remainingInBank)}',
-        title: 'Overallocated',
+        context.trArgs('sda_over_msg', {'amount': context.sar(-_remainingInBank)}),
+          title: context.tr('overallocated'),
       );
       return;
     }
@@ -148,8 +148,8 @@ class _SalaryDistributionAssistantSheetState
         widget.onComplete?.call();
         AppSnackBar.showSuccess(
           context,
-          'Successfully distributed funds across $successCount account(s)!',
-          title: 'Distribution Complete',
+          context.trArgs('sda_done_msg', {'count': successCount}),
+          title: context.tr('sda_done_title'),
         );
       }
     } catch (e) {
@@ -157,8 +157,8 @@ class _SalaryDistributionAssistantSheetState
         setState(() => _isExecuting = false);
         AppSnackBar.showError(
           context,
-          'Failed to complete transfers: $e',
-          title: 'Transfer Error',
+          context.trArgs('sda_failed_msg', {'error': e}),
+          title: context.tr('sda_failed_title'),
         );
       }
     }
@@ -282,7 +282,7 @@ class _SalaryDistributionAssistantSheetState
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'SAR ${_fmt.format(widget.netSalaryAmount)}',
+                      context.sar(widget.netSalaryAmount),
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -308,7 +308,7 @@ class _SalaryDistributionAssistantSheetState
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'SAR ${_fmt.format(remaining)}',
+                      context.sar(remaining),
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -381,7 +381,7 @@ class _SalaryDistributionAssistantSheetState
                                 ),
                               ),
                               Text(
-                                '${context.tr(acc.accountType.translationKey)} • ${context.tr('current_balance')}: SAR ${_fmt.format(acc.balance)}',
+                                '${context.tr(acc.accountType.translationKey)} • ${context.tr('current_balance')}: ${context.sar(acc.balance)}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: context.textSecondary,
@@ -408,7 +408,7 @@ class _SalaryDistributionAssistantSheetState
                                 color: context.textSecondary.withValues(alpha: 0.5),
                                 fontSize: 13,
                               ),
-                              prefixText: 'SAR ',
+                              prefixText: '${context.tr('sar')} ',
                               prefixStyle: TextStyle(
                                 fontSize: 11,
                                 color: context.textSecondary,

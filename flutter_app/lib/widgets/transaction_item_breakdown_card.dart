@@ -220,7 +220,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               children: [
                 if (isInstallment)
                   _buildInstallmentBadge(
-                    installmentBadgeText ?? 'Installment',
+                    installmentBadgeText ?? context.tr('tib_installment'),
                     installmentProvider ?? 'Tamara',
                   ),
                 Container(
@@ -311,14 +311,14 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4), width: 0.8),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.qr_code_2_rounded, size: 11, color: Color(0xFF00C896)),
-                          SizedBox(width: 4),
+                          const Icon(Icons.qr_code_2_rounded, size: 11, color: Color(0xFF00C896)),
+                          const SizedBox(width: 4),
                           Text(
-                            'ZATCA QR',
-                            style: TextStyle(
+                            context.tr('tib_zatca_qr'),
+                            style: const TextStyle(
                               color: Color(0xFF00C896),
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -487,7 +487,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '1x $merchant ($currency ${amount.toStringAsFixed(2)})\n${context.tr('no_line_items_desc')}',
+                              '1x $merchant (${currency == 'SAR' ? context.sar(amount) : '$currency ${amount.toStringAsFixed(2)}'})\n${context.tr('no_line_items_desc')}',
                               style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),
@@ -562,8 +562,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Container(
                                 color: Colors.black.withValues(alpha: 0.25),
                               ),
-                              Positioned(
-                                right: 8,
+                              PositionedDirectional(
+                                end: 8,
                                 bottom: 8,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -610,8 +610,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             Clipboard.setData(ClipboardData(text: qrCodeRaw!));
                             AppSnackBar.showSuccess(
                               context,
-                              'ZATCA QR Base64 code copied to clipboard',
-                              title: 'Copied',
+                              context.tr('tib_qr_copied'),
+                              title: context.tr('set_copied'),
                               duration: const Duration(seconds: 2),
                             );
                           },
@@ -678,7 +678,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             },
                           ),
                           Text(
-                            'Raw Base64 TLV:',
+                            context.tr('tib_raw_tlv'),
                             style: GoogleFonts.outfit(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -749,7 +749,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896), size: 24),
             const SizedBox(width: 8),
             Text(
-              'Saudi ZATCA QR',
+              context.tr('tib_saudi_zatca_qr'),
               style: GoogleFonts.outfit(
                 color: context.textPrimary,
                 fontSize: 18,
@@ -782,14 +782,14 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                 if (decoded['total'] != null) ...[
                   Text(context.tr('verified_total_vat'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
                   Text(
-                    'SAR ${decoded['total']} (VAT: SAR ${decoded['vat'] ?? '0.00'})',
+                    context.trArgs('tib_total_vat', {'total': context.sar(num.tryParse('${decoded['total']}') ?? 0), 'vat': context.sar(num.tryParse('${decoded['vat'] ?? 0}') ?? 0)}),
                     style: GoogleFonts.outfit(color: const Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                 ],
                 Divider(color: context.borderColor),
               ],
-              Text('Raw Base64 TLV String:', style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
+              Text(context.tr('tib_raw_tlv_string'), style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 11)),
               const SizedBox(height: 4),
               Container(
                 width: double.infinity,
@@ -820,8 +820,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               Navigator.pop(ctx);
               AppSnackBar.showSuccess(
                 context,
-                'ZATCA Base64 string copied to clipboard',
-                title: 'Copied',
+                context.tr('tib_b64_copied'),
+                title: context.tr('set_copied'),
                 duration: const Duration(seconds: 2),
               );
             },

@@ -85,7 +85,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage = res['message'] as String? ?? 'Failed to load breakdown';
+            _errorMessage = res['message'] as String? ?? context.tr('sbb_load_failed');
           });
         }
         return;
@@ -286,7 +286,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                               style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
-                            context.isRtl ? '${fmt.format(spent)} ر.س' : 'SAR ${fmt.format(spent)}',
+                            context.sar(spent),
                             style: GoogleFonts.outfit(
                               color: context.textPrimary,
                               fontSize: 20,
@@ -302,7 +302,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                               style: TextStyle(color: context.textSecondary, fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
-                            context.isRtl ? '${fmt.format(allocated)} ر.س' : 'SAR ${fmt.format(allocated)}',
+                            context.sar(allocated),
                             style: GoogleFonts.outfit(
                               color: const Color(0xFF00C896),
                               fontSize: 16,
@@ -338,8 +338,8 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           const SizedBox(width: 4),
                           Text(
                             prevDelta > 0
-                                ? '+SAR ${fmt.format(prevDelta)} ${context.tr('rolled_over_surplus')}'
-                                : '-SAR ${fmt.format(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
+                                ? '+${context.sar(prevDelta)} ${context.tr('rolled_over_surplus')}'
+                                : '-${context.sar(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
                                   ? const Color(0xFF00C896)
@@ -410,7 +410,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 color: Colors.grey.withValues(alpha: 0.4), size: 40),
             const SizedBox(height: 10),
             Text(
-              'No itemized sub-budget records yet',
+              context.tr('no_sub_budget_records'),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
           ],
@@ -500,7 +500,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'SAR ${fmt.format(item.spentAmount)}',
+                        context.sar(item.spentAmount),
                         style: GoogleFonts.outfit(
                           color: item.spentAmount > 0 ? context.textPrimary : context.textSecondary,
                           fontSize: 13,
@@ -509,7 +509,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       ),
                       if (hasAllocation)
                         Text(
-                          'of SAR ${fmt.format(item.allocatedAmount)}',
+                          context.trArgs('of_amount', {'amount': context.sar(item.allocatedAmount)}),
                           style: TextStyle(
                             color: item.spentAmount > item.allocatedAmount
                                 ? Colors.redAccent
@@ -522,7 +522,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                         )
                       else if (totalCatSpent > 0 && item.spentAmount > 0)
                         Text(
-                          '${((item.spentAmount / totalCatSpent) * 100).toStringAsFixed(0)}% of cat',
+                          context.trArgs('sbb_pct_of_category', {'percent': ((item.spentAmount / totalCatSpent) * 100).toStringAsFixed(0)}),
                           style: TextStyle(
                             color: context.textSecondary,
                             fontSize: 11,

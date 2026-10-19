@@ -75,21 +75,21 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     final totalShared = (_data!['total_shared_expenses'] as num?)?.toDouble() ?? 0.0;
     final iPaidForPartner = (_data!['i_paid_for_partner_100'] as num?)?.toDouble() ?? 0.0;
     final partnerPaidForMe = (_data!['partner_paid_for_me_100'] as num?)?.toDouble() ?? 0.0;
-    final stcNote = _data!['stc_pay_note'] as String? ?? 'Household Settlement';
-    final recText = _data!['recommendation_en'] as String? ?? '';
+    final stcNote = _data!['stc_pay_note'] as String? ?? context.tr('psc_household_settlement');
+    final recEn = _data!['recommendation_en'] as String? ?? '';
 
     Color badgeColor = const Color(0xFF00C896);
     IconData badgeIcon = Icons.check_circle_outline_rounded;
-    String statusTitle = "Expenses Balanced";
+    String statusTitle = context.tr('psc_balanced');
 
     if (whoOwes == 'partner_owes_me') {
       badgeColor = const Color(0xFF00C896);
       badgeIcon = Icons.arrow_downward_rounded;
-      statusTitle = "Partner Owes You";
+      statusTitle = context.tr('psc_partner_owes_you');
     } else if (whoOwes == 'me_owes_partner') {
       badgeColor = const Color(0xFFFF9E79);
       badgeIcon = Icons.arrow_upward_rounded;
-      statusTitle = "You Owe Partner";
+      statusTitle = context.tr('psc_you_owe_partner');
     }
 
     return Container(
@@ -165,7 +165,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                'SAR ${settleAmt.toStringAsFixed(2)}',
+                context.sar(settleAmt),
                 style: GoogleFonts.outfit(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -175,15 +175,21 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               const SizedBox(width: 8),
               Text(
                 whoOwes == 'settled'
-                    ? 'All square'
-                    : (whoOwes == 'partner_owes_me' ? 'incoming balance' : 'outgoing balance'),
+                    ? context.tr('psc_all_square')
+                    : (whoOwes == 'partner_owes_me' ? context.tr('psc_incoming') : context.tr('psc_outgoing')),
                 style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            recText,
+            context.isRtl
+                ? (whoOwes == 'partner_owes_me'
+                    ? context.trArgs('psc_rec_partner_owes', {'amount': context.sar(settleAmt)})
+                    : (whoOwes == 'me_owes_partner'
+                        ? context.trArgs('psc_rec_you_owe', {'amount': context.sar(settleAmt)})
+                        : context.tr('psc_rec_balanced')))
+                : recEn,
             style: TextStyle(color: context.textPrimary, fontSize: 13, height: 1.3),
           ),
           const SizedBox(height: 12),
@@ -201,7 +207,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                   border: Border.all(color: context.borderColor),
                 ),
                 child: Text(
-                  'Shared 50/50: SAR ${totalShared.toStringAsFixed(2)}',
+                  context.trArgs('psc_shared', {'amount': context.sar(totalShared)}),
                   style: TextStyle(color: context.textSecondary, fontSize: 11),
                 ),
               ),
@@ -216,7 +222,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                     ),
                   ),
                   child: Text(
-                    'Paid for partner: SAR ${iPaidForPartner.toStringAsFixed(2)}',
+                    context.trArgs('psc_paid_for_partner', {'amount': context.sar(iPaidForPartner)}),
                     style: TextStyle(
                       color: context.isDarkMode ? const Color(0xFFBC8CFF) : const Color(0xFF6D28D9),
                       fontSize: 11,
@@ -235,7 +241,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                     ),
                   ),
                   child: Text(
-                    'Partner paid for me: SAR ${partnerPaidForMe.toStringAsFixed(2)}',
+                    context.trArgs('psc_partner_paid_for_me', {'amount': context.sar(partnerPaidForMe)}),
                     style: TextStyle(
                       color: context.isDarkMode ? const Color(0xFFFF9E79) : const Color(0xFFC2410C),
                       fontSize: 11,
@@ -260,7 +266,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                 ),
                 icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
                 label: Text(
-                  'Settle SAR ${settleAmt.toStringAsFixed(2)} via STC Pay / IBAN',
+                  context.trArgs('psc_settle_via', {'amount': context.sar(settleAmt)}),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 onPressed: () async {
@@ -269,8 +275,8 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                   if (context.mounted) {
                     AppSnackBar.showSuccess(
                       context,
-                      'Payment note copied: "$stcNote - SAR ${settleAmt.toStringAsFixed(2)}"',
-                      title: 'Note Copied',
+                      context.trArgs('psc_note_copied', {'note': '$stcNote - SAR ${settleAmt.toStringAsFixed(2)}'}),
+                      title: context.tr('settle_copied_note'),
                       icon: Icons.account_balance_wallet_outlined,
                     );
                   }
