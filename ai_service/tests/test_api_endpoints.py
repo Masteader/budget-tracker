@@ -34,12 +34,12 @@ def test_health():
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-def test_chat_unauthorized_without_signature():
-    payload = {"message": "Dunkin 19 SAR", "household_id": HOUSEHOLD_ID}
+def test_chat_accepts_unsigned_request_from_authenticated_user():
+    """The per-user JWT is the credential; X-Signature is no longer required (client contract).
+    Missing/invalid JWT → 401 is covered with real verification in test_api_audit.py."""
+    payload = {"message": "Dunkin 19 SAR", "household_id": HOUSEHOLD_ID, "preview_only": True}
     response = client.post("/agent/chat-transaction", json=payload)
-    # When WEBHOOK_SECRET is set, requests without valid signature return 401
-    if os.environ.get("WEBHOOK_SECRET"):
-        assert response.status_code == 401
+    assert response.status_code == 200
 
 @patch("chat_parser.parse_chat_expense")
 @patch("chat_parser.insert_transaction")

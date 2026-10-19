@@ -264,3 +264,89 @@ def test_every_non_public_route_rejects_anonymous_requests(two_households):
             checked += 1
     assert not failures, failures
     assert checked > 30
+
+
+# ─── Client contract (Flutter): JWT-only auth, 401 semantics, idempotent replays ──
+
+TUNNEL = {"X-Forwarded-For": "198.51.100.23"}  # request arriving through the reverse proxy
+
+
+def test_verified_jwt_alone_passes_firewall_without_app_token(two_households):
+    resp = client.get("/budgets/installments", params={"household_id": HH_A}, headers={**TUNNEL, **bearer(USER_A)})
+    assert resp.status_code == 200
+
+
+def test_firewall_answers_401_for_missing_or_expired_jwt(two_households):
+    expired = make_token(USER_A, iat=int(time.time()) - 7200, exp=int(time.time()) - 3600)
+    for headers in (TUNNEL, {**TUNNEL, "Authorization": f"Bearer {expired}"}):
+        resp = client.get("/budgets/installments", params={"household_id": HH_A}, headers=headers)
+        assert resp.status_code == 401
+        assert resp.headers.get("WWW-Authenticate") == "Bearer"
+
+
+def _mock_chat(monkeypatch, fake):
+    from chat_parser import ParsedChatExpense
+
+    monkeypatch.setattr("chat_parser.parse_chat_expense", lambda _m: ParsedChatExpense(
+        merchant="Dunkin", total_amount=19.0, category_code="OPEX-DINING"))
+    monkeypatch.setattr("installment_service.InstallmentService.recalculate_budgets", lambda *a, **k: None)
+
+
+def test_chat_commit_needs_jwt_not_webhook_signature(two_households, monkeypatch):
+    import hashlib
+    import hmac
+    import json as _json
+    import os
+
+    _mock_chat(monkeypatch, two_households)
+    payload = {"message": "Dunkin 19", "household_id": HH_A, "allow_duplicate": True}
+    body = _json.dumps(payload).encode()
+    good_sig = "sha256=" + hmac.new(os.environ["WEBHOOK_SECRET"].encode(), body, hashlib.sha256).hexdigest()
+
+    no_sig = client.post("/agent/chat-transaction", content=body,
+                         headers={"Content-Type": "application/json", **bearer(USER_A)})
+    assert no_sig.status_code == 200 and no_sig.json()["status"] == "success"
+    stale_sig = client.post("/agent/chat-transaction", content=body,
+                            headers={"Content-Type": "application/json", "X-Signature": "sha256=" + "0" * 64, **bearer(USER_A)})
+    assert stale_sig.status_code == 200
+    sig_only = client.post("/agent/chat-transaction", content=body,
+                           headers={"Content-Type": "application/json", "X-Signature": good_sig})
+    assert sig_only.status_code == 401
+
+
+def test_idempotency_key_dedupes_replayed_commit(two_households, monkeypatch):
+    _mock_chat(monkeypatch, two_households)
+    payload = {"message": "Dunkin 19", "household_id": HH_A, "allow_duplicate": True}
+    headers = {**bearer(USER_A), "Idempotency-Key": "replay-key-0001"}
+    first = client.post("/agent/chat-transaction", json=payload, headers=headers)
+    second = client.post("/agent/chat-transaction", json=payload, headers=headers)
+    assert first.status_code == second.status_code == 200
+    assert second.json()["transaction_id"] == first.json()["transaction_id"]
+    assert second.headers.get("Idempotent-Replayed") == "true"
+    chat_rows = [t for t in two_households.tables["transactions"] if t.get("source") == "chat"]
+    assert len(chat_rows) == 1
+
+    # Keys are scoped per user: another member reusing the string gets their own transaction.
+    other = client.post("/agent/chat-transaction", json=payload,
+                        headers={**bearer(USER_A_MEMBER), "Idempotency-Key": "replay-key-0001"})
+    assert other.json()["transaction_id"] != first.json()["transaction_id"]
+    assert client.post("/agent/chat-transaction", json=payload,
+                       headers={**bearer(USER_A), "Idempotency-Key": "bad key!"}).status_code == 400
+
+
+def test_client_occurred_at_becomes_transaction_timestamp(two_households, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    _mock_chat(monkeypatch, two_households)
+    occurred = (datetime.now(timezone.utc) - timedelta(days=2)).replace(microsecond=0)
+    payload = {"message": "Dunkin 19", "household_id": HH_A, "allow_duplicate": True,
+               "client_occurred_at": occurred.isoformat().replace("+00:00", "Z")}
+    resp = client.post("/agent/chat-transaction", json=payload, headers=bearer(USER_A))
+    assert resp.status_code == 200
+    row = next(t for t in two_households.tables["transactions"] if t.get("source") == "chat")
+    assert datetime.fromisoformat(row["timestamp"]) == occurred
+
+    for bad in ((datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(), "yesterday"):
+        r = client.post("/agent/chat-transaction", json={**payload, "client_occurred_at": bad}, headers=bearer(USER_A))
+        assert r.status_code == 400

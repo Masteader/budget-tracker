@@ -33,7 +33,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
 
 logger = logging.getLogger(__name__)
 
@@ -445,6 +445,7 @@ def process_receipt_scan(
     override_merchant: Optional[str] = None,
     override_spent_by: Optional[str] = None,
     receipt_url: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -693,8 +694,10 @@ def process_receipt_scan(
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = riyadh_today()
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget
     budget = fetch_budget(household_id, category_code, now_date)

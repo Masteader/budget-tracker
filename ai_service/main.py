@@ -212,12 +212,17 @@ async def firewall_token_middleware(request: Request, call_next):
         except Exception:
             bearer_valid = False
 
+    # The verified per-user Supabase JWT is the credential (current app builds send only that).
+    # X-App-Token is still accepted at this coarse layer for older builds, but it is extractable
+    # from the APK and every route additionally requires a verified JWT. Missing, invalid or
+    # expired credentials answer 401 (not 403) so the client refreshes its session and retries.
     if is_tunnel_or_proxy and not (token_valid or bearer_valid):
-        logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
+        logger.warning("Firewall blocked unauthenticated request from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
-            status_code=403,
-            content={"detail": "Forbidden: Untrusted endpoint access."}
+            status_code=401,
+            content={"detail": "Invalid or expired authentication token."},
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return await call_next(request)

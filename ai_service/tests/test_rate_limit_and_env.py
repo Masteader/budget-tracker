@@ -123,6 +123,21 @@ def test_missing_env_is_treated_as_production(monkeypatch):
     assert verify_signature(b"{}", None) is True
 
 
+@pytest.mark.asyncio
+async def test_idempotency_store_is_shared_across_instances_via_redis(monkeypatch):
+    import fakeredis.aioredis
+    from idempotency import IdempotencyStore
+
+    monkeypatch.setattr(rate_limiter.default_rate_limiter, "_redis", fakeredis.aioredis.FakeRedis(decode_responses=True))
+    instance_a, instance_b = IdempotencyStore(), IdempotencyStore()
+    assert await instance_a.reserve("u1", "chat-transaction", "key-12345678") is None
+    with pytest.raises(HTTPException) as in_flight:
+        await instance_b.reserve("u1", "chat-transaction", "key-12345678")
+    assert in_flight.value.status_code == 409
+    await instance_a.complete("u1", "chat-transaction", "key-12345678", {"transaction_id": "t1"})
+    assert await instance_b.reserve("u1", "chat-transaction", "key-12345678") == {"transaction_id": "t1"}
+
+
 def test_api_docs_hidden_in_production(monkeypatch):
     from main import app
 

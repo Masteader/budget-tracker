@@ -27,7 +27,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +468,7 @@ def process_chat_transaction(
     override_sub_category: Optional[str] = None,
     override_paid_by: Optional[str] = None,
     override_beneficiary: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -625,8 +626,10 @@ def process_chat_transaction(
                 ),
             }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = riyadh_today()
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget and reallocate if necessary
     budget = fetch_budget(household_id, category_code, now_date)

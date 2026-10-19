@@ -111,11 +111,10 @@ def fake_supabase(monkeypatch, tmp_path):
     monkeypatch.setattr(supabase_client, "HOUSEHOLD_SETTINGS_FILE", str(tmp_path / "household_settings.json"))
     monkeypatch.setattr(supabase_client, "HOUSEHOLD_INVITES_FILE", str(tmp_path / "household_invites.json"))
     monkeypatch.setattr(installment_service, "FALLBACK_FILE", tmp_path / "installment_plans.json")
-    try:
-        from rate_limiter import reset_rate_limiters
-        reset_rate_limiters()
-    except ImportError:
-        pass
+    from rate_limiter import reset_rate_limiters
+    from idempotency import idempotency_store
+    reset_rate_limiters()
+    idempotency_store.clear()
     yield fake
 
 

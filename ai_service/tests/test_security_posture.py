@@ -46,7 +46,8 @@ def test_old_leaked_token_rejected_when_rotated():
         "/budgets/cycles?household_id=f860188e-23b5-4749-b180-868c956151a6",
         headers={"X-Forwarded-For": "1.2.3.4", "X-App-Token": OLD_LEAKED_TOKEN},
     )
-    assert response_protected.status_code == 403
+    # 401 (not 403) so clients refresh their session; see API-30 / Flutter contract.
+    assert response_protected.status_code == 401
 
 
 def test_oversized_payload_rejected_with_413():
