@@ -11,6 +11,7 @@ Proof and verification test suite for SEC-04:
 
 import os
 import re
+import time
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -47,6 +48,8 @@ def test_jwt_with_invalid_audience_rejected():
             "aud": "wrong_audience",
             "iss": f"{SUPABASE_URL}/auth/v1",
             "role": "authenticated",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
         },
         TEST_SECRET,
         algorithm="HS256",
@@ -64,6 +67,8 @@ def test_jwt_with_invalid_issuer_rejected():
             "aud": "authenticated",
             "iss": "https://attacker-supabase.com/auth/v1",
             "role": "authenticated",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
         },
         TEST_SECRET,
         algorithm="HS256",
@@ -81,6 +86,8 @@ def test_jwt_valid_audience_and_issuer_accepted():
             "aud": "authenticated",
             "iss": f"{SUPABASE_URL}/auth/v1",
             "role": "authenticated",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
         },
         TEST_SECRET,
         algorithm="HS256",
