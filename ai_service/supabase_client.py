@@ -650,11 +650,29 @@ def set_household_rollover_rule(household_id: str, rollover_rule: str) -> str:
 def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: str) -> float:
     """
     Sweeps unspent positive cycle surplus into the household's accumulated savings pool.
+    Updates Supabase households table and syncs local cache.
     """
     if not household_id or surplus <= 0:
         return 0.0
 
     accumulated = 0.0
+    # 1. Update Supabase
+    try:
+        client = get_client()
+        res = client.table("households").select("accumulated_savings").eq("id", household_id).maybe_single().execute()
+        current_savings = 0.0
+        if res.data and res.data.get("accumulated_savings") is not None:
+            current_savings = float(res.data["accumulated_savings"])
+        accumulated = round(current_savings + float(surplus), 2)
+        client.table("households").update({
+            "accumulated_savings": accumulated,
+            "last_rollover_surplus": round(float(surplus), 2),
+            "last_rollover_cycle": cycle_key,
+        }).eq("id", household_id).execute()
+    except Exception as e:
+        logger.info(f"Supabase update of accumulated_savings skipped: {e}")
+
+    # 2. Update local fallback cache
     try:
         os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
         settings = {}
@@ -664,7 +682,8 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
         if household_id not in settings:
             settings[household_id] = {}
 
-        accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
+        if accumulated == 0.0:
+            accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
         settings[household_id]["accumulated_savings"] = round(accumulated, 2)
         settings[household_id]["last_rollover_surplus"] = round(surplus, 2)
         settings[household_id]["last_rollover_cycle"] = cycle_key
@@ -680,11 +699,31 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
 def get_household_savings_summary(household_id: str) -> dict:
     """
     Returns accumulated savings surplus and configured rollover rule.
+    Queries Supabase first, falls back to local cache.
     """
     rule = get_household_rollover_rule(household_id)
     accumulated = 0.0
     last_surplus = 0.0
     last_cycle = None
+
+    try:
+        client = get_client()
+        res = client.table("households").select("accumulated_savings, last_rollover_surplus, last_rollover_cycle").eq("id", household_id).maybe_single().execute()
+        if res.data:
+            if res.data.get("accumulated_savings") is not None:
+                accumulated = float(res.data["accumulated_savings"])
+            if res.data.get("last_rollover_surplus") is not None:
+                last_surplus = float(res.data["last_rollover_surplus"])
+            last_cycle = res.data.get("last_rollover_cycle")
+            return {
+                "household_id": household_id,
+                "rollover_rule": rule,
+                "accumulated_savings": round(accumulated, 2),
+                "last_rollover_surplus": round(last_surplus, 2),
+                "last_rollover_cycle": last_cycle,
+            }
+    except Exception:
+        pass
 
     try:
         if os.path.exists(HOUSEHOLD_SETTINGS_FILE):

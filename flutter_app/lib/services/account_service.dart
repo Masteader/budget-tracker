@@ -92,7 +92,7 @@ class AccountService {
     }).eq('id', accountId);
   }
 
-  /// Execute an inter-account fund transfer.
+  /// Execute an inter-account fund transfer via atomic database RPC.
   Future<AccountTransfer> transferFunds({
     required String householdId,
     required String fromAccountId,
@@ -101,45 +101,19 @@ class AccountService {
     double fee = 0.0,
     String? notes,
   }) async {
-    final userId = _client.auth.currentUser?.id ?? '';
-    final totalDeduction = amount + fee;
+    final res = await _client.rpc('transfer_between_accounts', params: {
+      'p_household_id': householdId,
+      'p_from_account_id': fromAccountId,
+      'p_to_account_id': toAccountId,
+      'p_amount': amount,
+      'p_fee': fee,
+      'p_notes': notes,
+    });
 
-    // Fetch current balances
-    final fromAccRes = await _client.from('accounts').select('balance').eq('id', fromAccountId).single();
-    final toAccRes = await _client.from('accounts').select('balance').eq('id', toAccountId).single();
-
-    final fromBalance = (fromAccRes['balance'] as num).toDouble();
-    final toBalance = (toAccRes['balance'] as num).toDouble();
-
-    // Insert transfer record
-    final transferData = {
-      'household_id': householdId,
-      'user_id': userId,
-      'from_account_id': fromAccountId,
-      'to_account_id': toAccountId,
-      'amount': amount,
-      'fee': fee,
-      'timestamp': DateTime.now().toIso8601String(),
-      'notes': notes,
-    };
-
-    final transferRes = await _client.from('account_transfers').insert(transferData).select().single();
-
-    // Update both account balances
-    await _client.from('accounts').update({
-      'balance': fromBalance - totalDeduction,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', fromAccountId);
-
-    await _client.from('accounts').update({
-      'balance': toBalance + amount,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', toAccountId);
-
-    return AccountTransfer.fromMap(transferRes);
+    return AccountTransfer.fromMap(Map<String, dynamic>.from(res as Map));
   }
 
-  /// Log received multi-source income (Salary, Overtime, Bonus, Side Gig, Roommate Share).
+  /// Log received multi-source income via atomic database RPC.
   Future<IncomeRecord> logIncome({
     required String householdId,
     required String accountId,
@@ -153,37 +127,21 @@ class AccountService {
     DateTime? receivedAt,
     String? notes,
   }) async {
-    final userId = _client.auth.currentUser?.id ?? '';
-    final netAmount = baseAmount + overtime + bonus - deductions;
+    final res = await _client.rpc('record_income', params: {
+      'p_household_id': householdId,
+      'p_account_id': accountId,
+      'p_cycle_key': cycleKey,
+      'p_source_type': sourceType.value,
+      'p_title': title.trim(),
+      'p_base_amount': baseAmount,
+      'p_overtime': overtime,
+      'p_bonus': bonus,
+      'p_deductions': deductions,
+      'p_received_at': (receivedAt ?? DateTime.now()).toIso8601String(),
+      'p_notes': notes,
+    });
 
-    final incomeData = {
-      'household_id': householdId,
-      'user_id': userId,
-      'account_id': accountId,
-      'cycle_key': cycleKey,
-      'source_type': sourceType.value,
-      'title': title.trim(),
-      'base_amount': baseAmount,
-      'overtime': overtime,
-      'bonus': bonus,
-      'deductions': deductions,
-      'net_amount': netAmount,
-      'received_at': (receivedAt ?? DateTime.now()).toIso8601String(),
-      'notes': notes,
-    };
-
-    final res = await _client.from('income_records').insert(incomeData).select().single();
-
-    // Fetch account and increment balance
-    final accRes = await _client.from('accounts').select('balance').eq('id', accountId).single();
-    final currentBalance = (accRes['balance'] as num).toDouble();
-
-    await _client.from('accounts').update({
-      'balance': currentBalance + netAmount,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', accountId);
-
-    return IncomeRecord.fromMap(res);
+    return IncomeRecord.fromMap(Map<String, dynamic>.from(res as Map));
   }
 
   /// Fetch income records for a specific cycle.
