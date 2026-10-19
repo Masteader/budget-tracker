@@ -114,6 +114,7 @@ void main() {
             onSettled: () {
               callbackCalled = true;
             },
+            recordPayment: (_) async => {'status': 'success'},
           ),
         ),
       ),

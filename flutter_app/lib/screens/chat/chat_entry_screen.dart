@@ -15,6 +15,7 @@ import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/voice_listening_banner.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
@@ -53,13 +54,20 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     _speech = stt.SpeechToText();
     _initSpeech();
     _fetchHousehold();
-    _messages.add(
-      ChatMessage(
-        isUser: false,
-        text: "👋 Hi! You can speak or type your expenses in English or Arabic.\n"
-            "Tap the 🎙️ mic button or try: 'فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25' or 'Dunkin 19 SAR: 16 latte and 3 donut'",
-      ),
-    );
+  }
+
+  bool _welcomeAdded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_welcomeAdded) {
+      _welcomeAdded = true;
+      // Voice recognition and the welcome text follow the app language.
+      final lang = Localizations.maybeLocaleOf(context)?.languageCode;
+      _selectedLocale = lang == 'en' ? 'en_US' : (lang == 'ur' ? 'ur_PK' : 'ar_SA');
+      _messages.add(ChatMessage(isUser: false, text: context.tr('chat_welcome')));
+    }
   }
 
   @override
@@ -121,8 +129,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         } else if (mounted) {
           AppSnackBar.showWarning(
             context,
-            'Microphone permission required for voice entry.',
-            title: 'Permission Required',
+            context.tr('chat_mic_required'),
+            title: context.tr('chat_permission_required'),
           );
         }
         return;
@@ -134,14 +142,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       if (!_speechAvailable && mounted) {
         AppSnackBar.showInfo(
           context,
-          'Speech recognition is initializing or not available on device.',
-          title: 'Speech Recognition',
+          context.tr('chat_speech_unavailable'),
+          title: context.tr('chat_speech_recognition'),
         );
         return;
       }
     }
 
     final initialText = _controller.text.trim();
+    if (!mounted) return;
     setState(() {
       _isListening = true;
     });
@@ -201,19 +210,19 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             const Icon(Icons.mic_off, color: Colors.orange, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Microphone Permission',
-              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              context.tr('chat_mic_permission_title'),
+              style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
         ),
         content: Text(
-          'Microphone access is required to speak your invoice items into the chat. Please tap "Open Settings" to enable Microphone access.',
+          context.tr('chat_mic_permission_desc'),
           style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -224,7 +233,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               Navigator.pop(ctx);
               openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(context.tr('open_settings')),
           ),
         ],
       ),
@@ -240,6 +249,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           .select('household_id')
           .eq('id', user.id)
           .single();
+      if (!mounted) return;
       setState(() {
         _householdId = res['household_id'] as String?;
       });
@@ -275,6 +285,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   }) async {
     if (_isListening) {
       await _speech.stop();
+      if (!mounted) return;
       setState(() => _isListening = false);
     }
 
@@ -312,6 +323,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       previewOnly: isPreview,
     );
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
@@ -320,15 +332,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Affordability simulation complete.',
+            text: res['message'] ?? context.tr('chat_simulation_complete'),
             simulationData: res,
           ),
         );
       } else if (status == 'pending_confirmation') {
         if (res['is_category_inactive'] == true) {
-          final catCode = res['category_code']?.toString() ?? 'Category';
+          final catCode = res['category_code']?.toString() ?? context.tr('category');
           final amt = (res['amount'] as num?)?.toDouble() ?? 0.0;
-          final store = res['merchant']?.toString() ?? 'Merchant';
+          final store = res['merchant']?.toString() ?? context.tr('merchant_generic');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             InactiveCategoryResolutionDialog.show(
               context: context,
@@ -353,7 +365,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Please confirm the store name and who spent it before adding:',
+            text: res['message'] ?? context.tr('chat_confirm_before_adding'),
             isPendingConfirmation: true,
             pendingData: res,
           ),
@@ -362,7 +374,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Recent matching transaction found.',
+            text: res['message'] ?? context.tr('chat_recent_match'),
             isDuplicatePrompt: true,
             candidateData: res,
           ),
@@ -376,9 +388,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Transaction recorded successfully!',
+            text: res['message'] ?? context.tr('chat_tx_recorded'),
             transactionData: {
-              'merchant': res['merchant'] ?? 'Merchant',
+              'merchant': res['merchant'] ?? context.tr('merchant_generic'),
               'amount': (res['amount'] as num?)?.toDouble() ?? 0.0,
               'category_code': res['category_code'],
               'items': parsedItems,
@@ -404,14 +416,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           _messages.add(
             ChatMessage(
               isUser: false,
-              text: '📶 Offline: Stored in local SQLite queue. Will sync automatically when network returns.',
+              text: context.tr('chat_offline_queued'),
             ),
           );
         } else {
           _messages.add(
             ChatMessage(
               isUser: false,
-              text: res['message'] ?? 'Could not parse transaction details.',
+              text: res['message'] ?? context.tr('chat_parse_failed'),
             ),
           );
         }
@@ -452,6 +464,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       beneficiary: beneficiary,
     );
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
@@ -464,7 +477,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         final idx = _messages.indexOf(originalMsg);
         final confirmedMsg = ChatMessage(
           isUser: false,
-          text: res['message'] ?? 'Transaction recorded successfully!',
+          text: res['message'] ?? context.tr('chat_tx_recorded'),
           transactionData: {
             'merchant': res['merchant'] ?? merchant,
             'amount': (res['amount'] as num?)?.toDouble() ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
@@ -487,8 +500,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       } else {
         AppSnackBar.showError(
           context,
-          res['message'] ?? 'Failed to save transaction.',
-          title: 'Save Error',
+          res['message'] ?? context.tr('chat_save_failed'),
+          title: context.tr('chat_save_error'),
         );
       }
     });
@@ -509,7 +522,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                'AI Transaction Chat',
+                context.tr('chat_title'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -519,7 +532,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         actions: [
           // Language selector toggle pill
           Container(
-            margin: const EdgeInsets.only(right: 12),
+            margin: const EdgeInsetsDirectional.only(end: 12),
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               color: context.chipBg,
@@ -622,7 +635,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         _messages.add(
                           ChatMessage(
                             isUser: false,
-                            text: 'Duplicate expense discarded.',
+                            text: context.tr('chat_duplicate_discarded'),
                           ),
                         );
                       });
@@ -644,7 +657,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      "Magic is happening...",
+                      context.tr('chat_thinking'),
                       style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                     ),
                   ],
@@ -690,11 +703,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       controller: _controller,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (v) => _sendMessage(v),
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: _selectedLocale == 'ar_SA'
-                            ? "تحدث أو اكتب: بنده 85 ريال حليب 15..."
-                            : "Speak or type: Dunkin 19 SAR...",
+                        hintText: AppLocalizations(Locale(_selectedLocale.substring(0, 2))).get('chat_input_hint'),
                         hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                         filled: true,
                         fillColor: context.inputBg,
@@ -741,7 +752,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         color: _isListening ? Colors.white : const Color(0xFF00C896),
                         size: 20,
                       ),
-                      tooltip: _isListening ? 'Stop Listening' : 'Voice Input',
+                      tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
                       onPressed: _toggleListening,
                     ),
                   ),
@@ -754,7 +765,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
-                      tooltip: 'Send',
+                      tooltip: context.tr('support_send'),
                       onPressed: () => _sendMessage(_controller.text),
                     ),
                   ),

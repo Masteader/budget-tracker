@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/recurring_bill.dart';
@@ -78,7 +77,6 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     return Consumer<RecurringBillsProvider>(
       builder: (context, provider, child) {
@@ -170,7 +168,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             const SizedBox(height: 3),
                             Text(
                               summary.reservedAmount > 0
-                                  ? 'SAR ${fmt.format(summary.reservedAmount)} ${context.tr('reserved')} • $upcomingCount ${context.tr('pending')}'
+                                  ? '${context.sar(summary.reservedAmount)} ${context.tr('reserved')} • $upcomingCount ${context.tr('pending')}'
                                   : '${context.tr('all_cleared')} ✓',
                               style: TextStyle(
                                 fontSize: 12,
@@ -225,11 +223,14 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // Wrap instead of Row: the three totals overflow on
+                    // narrow phones / large text, especially in Arabic.
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      runSpacing: 4,
                       children: [
                         Text(
-                          '${context.tr('total')}: SAR ${fmt.format(summary.totalRecurringMonthly)}',
+                          '${context.tr('total')}: ${context.sar(summary.totalRecurringMonthly)}',
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                         Row(
@@ -237,14 +238,14 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00C896), shape: BoxShape.circle)),
                             const SizedBox(width: 4),
                             Text(
-                              '${context.tr('paid')} SAR ${fmt.format(summary.paidThisCycle)}',
+                              '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
                               style: const TextStyle(color: Color(0xFF00C896), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 12),
                             Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
                             const SizedBox(width: 4),
                             Text(
-                              '${context.tr('reserved')} SAR ${fmt.format(summary.reservedAmount)}',
+                              '${context.tr('reserved')} ${context.sar(summary.reservedAmount)}',
                               style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -280,8 +281,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                     child: Center(
                       child: Text(
                         _selectedFilter == 1
-                            ? 'All recurring bills are paid for this cycle!'
-                            : 'No bills found in this filter.',
+                            ? context.tr('rb_all_paid')
+                            : context.tr('rb_none_in_filter'),
                         style: TextStyle(color: context.textSecondary, fontSize: 12),
                       ),
                     ),
@@ -338,7 +339,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Set up monthly bills (utilities, iqama fees, rent) to reserve funds.',
+                  context.tr('recurring_bills_empty_desc'),
                   style: TextStyle(fontSize: 11, color: context.textSecondary),
                 ),
               ],
@@ -352,7 +353,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => _showManageRecurringBillsSheet(context),
-            child: const Text('Configure', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            child: Text(context.tr('rb_configure'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -386,26 +387,25 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
   }
 
   Future<void> _recordBillPayment(RecurringBillItem bill) async {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Record Bill Payment', style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(context.tr('rb_record_payment_title'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
-          'Confirm payment of SAR ${fmt.format(bill.averageAmount)} for "${bill.merchant}" in this cycle?',
+          context.trArgs('rb_confirm_payment_msg', {'amount': context.sar(bill.averageAmount), 'merchant': bill.merchant}),
           style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00C896)),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm Paid', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: Text(context.tr('rb_confirm_paid'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -422,15 +422,15 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
         context.read<BudgetProvider>().refresh();
         AppSnackBar.showSuccess(
           context,
-          'Recorded payment for ${bill.merchant}!',
-          title: 'Bill Paid',
+          context.trArgs('rb_recorded_payment', {'merchant': bill.merchant}),
+          title: context.tr('rb_bill_paid'),
         );
       } else {
-        AppSnackBar.showError(context, 'Failed to record payment', title: 'Payment Error');
+        AppSnackBar.showError(context, context.tr('rb_payment_failed'), title: context.tr('rb_payment_error'));
       }
     } catch (e) {
       if (mounted) {
-        AppSnackBar.showError(context, 'Failed to record payment: $e', title: 'Payment Error');
+        AppSnackBar.showError(context, context.trArgs('rb_payment_failed_msg', {'error': e}), title: context.tr('rb_payment_error'));
       }
     }
   }
@@ -462,7 +462,6 @@ class _BillRowItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     Color badgeColor;
     String badgeText;
@@ -548,7 +547,7 @@ class _BillRowItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'SAR ${fmt.format(bill.averageAmount)}',
+                context.sar(bill.averageAmount),
                 style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 3),
@@ -585,9 +584,9 @@ class _BillRowItem extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
                         ),
-                        child: const Text(
-                          'Pay',
-                          style: TextStyle(color: Color(0xFF00C896), fontSize: 9, fontWeight: FontWeight.bold),
+                        child: Text(
+                          context.tr('rb_pay'),
+                          style: const TextStyle(color: Color(0xFF00C896), fontSize: 9, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -627,7 +626,6 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -651,7 +649,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Manage Recurring Bills',
+                  context.tr('rb_manage_title'),
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
                 ),
                 IconButton(
@@ -661,7 +659,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
               ],
             ),
             Text(
-              'Toggle which budgeted sub-items (utilities, iqama fees, rent, subscriptions) should be tracked as monthly recurring obligations and reserved from salary.',
+              context.tr('rb_manage_desc'),
               style: TextStyle(fontSize: 12, color: context.textSecondary, height: 1.4),
             ),
             const SizedBox(height: 16),
@@ -675,7 +673,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                   if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
                     return Center(
                       child: Text(
-                        'No budgeted sub-categories found. Allocate amounts in Budget Management first.',
+                        context.tr('rb_manage_empty'),
                         style: TextStyle(color: context.textSecondary, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -720,7 +718,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     ),
                                   ),
                                   Text(
-                                    '${context.trCat(c.categoryCode)} • SAR ${fmt.format(c.allocatedAmount)}',
+                                    '${context.trCat(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
                                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                                   ),
                                 ],
