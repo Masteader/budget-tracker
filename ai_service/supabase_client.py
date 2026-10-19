@@ -764,23 +764,37 @@ def create_household_role_invite(
 
 def inspect_household_role_invite(invite_code: str) -> dict:
     """
-    Retrieves metadata for an invite code: household_id, assigned role, and target_member_id.
+    Retrieves metadata for an invite code: household_id, assigned role, target_member_id, expiry.
     """
     code = invite_code.strip().upper()
     try:
         client = get_client()
         res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
-        if res.data:
-            return res.data
-    except Exception:
-        pass
+        if res and hasattr(res, "data") and res.data:
+            inv = res.data
+            is_valid = True
+            if inv.get("used_by"):
+                is_valid = False
+            if inv.get("expires_at"):
+                try:
+                    exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
+                    if exp < datetime.now(timezone.utc):
+                        is_valid = False
+                except Exception:
+                    pass
+            inv["is_valid"] = is_valid
+            return inv
+    except Exception as exc:
+        logger.warning("Supabase inspect invite query failed: %s", exc)
 
     try:
         if os.path.exists(HOUSEHOLD_INVITES_FILE):
             with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
                 invites = json.load(f)
                 if code in invites:
-                    return invites[code]
+                    data = dict(invites[code])
+                    data["is_valid"] = not bool(data.get("used_by"))
+                    return data
     except Exception:
         pass
 
@@ -795,38 +809,92 @@ def inspect_household_role_invite(invite_code: str) -> dict:
 
 def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
     """
-    Claims a household invite for a user: links the pre-created member profile (if target_member_id is set)
-    and updates the user's household_id and financial_role.
+    Claims a household invite for a user:
+    1. Atomically consumes the invite (used_by = user_id WHERE used_by IS NULL and not expired)
+    2. Links target_member_id if present
+    3. Updates user's household_id, role='member', financial_role
+    4. Inserts household_memberships row
     """
-    from dependents_service import link_dependent_user
-    inv = inspect_household_role_invite(invite_code)
+    code = invite_code.strip().upper()
+    client = get_client()
+
+    inv = inspect_household_role_invite(code)
+    if not inv or not inv.get("is_valid", True):
+        return {"status": "error", "error": "Invite code is invalid or expired."}
+
     hid = inv.get("household_id")
     target_mid = inv.get("target_member_id")
     role = inv.get("role", "peer")
 
-    if target_mid and hid:
-        link_dependent_user(hid, target_mid, user_id)
-
-    # Attempt Supabase updates
     try:
-        client = get_client()
-        if hid:
-            client.table("users").update({
-                "household_id": hid,
-                "role": "member",
-                "financial_role": role,
-            }).eq("id", user_id).execute()
-        client.table("household_invites").update({"used_by": user_id}).eq("invite_code", invite_code.strip().upper()).execute()
-    except Exception as e:
-        logger.info(f"Supabase claim invite fallback: {e}")
+        if inv.get("used_by"):
+            return {"status": "error", "error": "Invite code has already been used."}
 
-    return {
-        "status": "success",
-        "household_id": hid,
-        "user_id": user_id,
-        "linked_member_id": target_mid,
-        "financial_role": role,
-    }
+        # Attempt atomic database update
+        updated_db = False
+        try:
+            update_res = (
+                client.table("household_invites")
+                .update({"used_by": user_id})
+                .eq("invite_code", code)
+                .is_("used_by", "null")
+                .execute()
+            )
+            if update_res and hasattr(update_res, "data") and update_res.data:
+                updated_db = True
+        except Exception as db_err:
+            logger.info("Supabase atomic invite update skipped/failed: %s", db_err)
+
+        # Update JSON cache fallback if exists
+        updated_file = False
+        if os.path.exists(HOUSEHOLD_INVITES_FILE):
+            try:
+                with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
+                    invites = json.load(f)
+                if code in invites and not invites[code].get("used_by"):
+                    invites[code]["used_by"] = user_id
+                    with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
+                        json.dump(invites, f, indent=2)
+                    updated_file = True
+            except Exception as file_err:
+                logger.warning("Failed to update household_invites.json: %s", file_err)
+
+        if not updated_db and not updated_file:
+            return {"status": "error", "error": "Invite code has already been used or expired."}
+
+        if target_mid and hid:
+            from dependents_service import link_dependent_user
+            link_dependent_user(hid, target_mid, user_id)
+
+        if hid:
+            try:
+                client.table("users").update({
+                    "household_id": hid,
+                    "role": "member",
+                    "financial_role": role,
+                }).eq("id", user_id).execute()
+
+                client.table("household_memberships").upsert({
+                    "household_id": hid,
+                    "user_id": user_id,
+                    "role": "member",
+                    "is_default": False,
+                }, on_conflict="household_id,user_id").execute()
+            except Exception as e:
+                logger.info("Supabase user/membership update fallback: %s", e)
+
+        return {
+            "status": "success",
+            "household_id": hid,
+            "user_id": user_id,
+            "linked_member_id": target_mid,
+            "financial_role": role,
+        }
+    except Exception as e:
+        logger.error("Failed to claim household invite: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
 
 
 def record_household_reimbursement(

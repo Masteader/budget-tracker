@@ -122,19 +122,8 @@ def _decode_token(token: str) -> dict:
             )
 
 
-async def verify_household_access(request: Request, household_id: str) -> str:
-    """
-    FastAPI dependency that:
-    1. Validates household_id format
-    2. Extracts Bearer token from Authorization header
-    3. Decodes the Supabase JWT to get user_id (sub claim)
-    4. Queries users table to find user's household_id
-    5. Confirms user belongs to the requested household
-    6. Returns the validated household_id
-    """
-    if household_id:
-        validate_uuid(household_id)
-
+def get_current_user_id(request: Request) -> str:
+    """Extract and verify the current authenticated user's ID from Supabase JWT."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -151,23 +140,84 @@ async def verify_household_access(request: Request, household_id: str) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token does not contain a valid user ID.",
         )
+    return str(user_id)
 
-    # Look up the user's household from the database
+
+def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
+    """Retrieve the user's role and membership in the given household."""
     client = get_client()
-    response = await asyncio.to_thread(
-        lambda: client.table("users")
-        .select("household_id")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
+    try:
+        res = (
+            client.table("household_memberships")
+            .select("role, household_id")
+            .eq("user_id", user_id)
+            .eq("household_id", household_id)
+            .maybe_single()
+            .execute()
+        )
+        if res and res.data:
+            return res.data
+    except Exception as exc:
+        logger.warning("Error querying household_memberships: %s", exc)
 
-    user_data = response.data
-    if not user_data:
+    # Fallback to users table cache
+    try:
+        user_res = (
+            client.table("users")
+            .select("household_id, role")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if user_res and user_res.data and user_res.data.get("household_id") == household_id:
+            return {
+                "household_id": household_id,
+                "role": user_res.data.get("role", "member"),
+            }
+    except Exception as exc:
+        logger.warning("Error querying users fallback: %s", exc)
+
+    return None
+
+
+async def verify_household_access(request: Request, household_id: str) -> str:
+    """
+    FastAPI dependency that confirms caller belongs to the requested household.
+    """
+    if household_id:
+        validate_uuid(household_id)
+
+    user_id = get_current_user_id(request)
+    membership = await asyncio.to_thread(_get_user_membership, user_id, household_id)
+    if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User profile not found.",
+            detail="Forbidden: You do not have access to this household's data.",
         )
 
-    _check_household_membership(user_data.get("household_id"), household_id)
     return household_id
+
+
+async def verify_household_admin_access(request: Request, household_id: str) -> str:
+    """
+    FastAPI dependency that confirms caller is an admin of the requested household.
+    """
+    if household_id:
+        validate_uuid(household_id)
+
+    user_id = get_current_user_id(request)
+    membership = await asyncio.to_thread(_get_user_membership, user_id, household_id)
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You do not have access to this household's data.",
+        )
+
+    if membership.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required for this household.",
+        )
+
+    return household_id
+

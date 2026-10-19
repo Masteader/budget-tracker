@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from auth import verify_household_access
+from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
 from models import (
     PaydayUpdateRequest,
@@ -78,7 +78,7 @@ async def get_household_payday_endpoint(
 async def update_household_payday_endpoint(
     household_id: str,
     payload: PaydayUpdateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -117,7 +117,7 @@ async def get_household_income_endpoint(
 async def update_household_income_endpoint(
     household_id: str,
     payload: HouseholdIncomeRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -156,7 +156,7 @@ async def get_household_rollover_rule_endpoint(
 async def update_household_rollover_rule_endpoint(
     household_id: str,
     payload: RolloverRuleUpdateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -194,7 +194,7 @@ async def get_household_savings_summary_endpoint(
 async def create_household_role_invite_endpoint(
     household_id: str,
     payload: HouseholdInviteCreateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -219,7 +219,15 @@ async def inspect_household_role_invite_endpoint(invite_code: str):
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
     try:
-        return await asyncio.to_thread(inspect_household_role_invite, invite_code)
+        raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)
+        # Return minimal safe public metadata: never leak target_member_id or created_by
+        return {
+            "invite_code": raw.get("invite_code", invite_code.strip().upper()),
+            "household_id": raw.get("household_id"),
+            "role": raw.get("role", "peer"),
+            "is_valid": raw.get("is_valid", False),
+            "expires_at": raw.get("expires_at"),
+        }
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to inspect invite.")
 
@@ -231,14 +239,27 @@ async def inspect_household_role_invite_endpoint(invite_code: str):
 )
 async def claim_household_role_invite_endpoint(
     invite_code: str,
-    payload: HouseholdProfileClaimRequest,
+    request: Request,
+    payload: Optional[HouseholdProfileClaimRequest] = None,
 ):
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
+    
+    # Must be authenticated with Supabase JWT; user_id is extracted from token, never request body
+    user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(claim_household_role_invite, invite_code, payload.user_id)
+        res = await asyncio.to_thread(claim_household_role_invite, invite_code, user_id)
+        if res.get("status") != "success":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=res.get("error", "Failed to claim invite code."),
+            )
+        return res
+    except HTTPException:
+        raise
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to claim invite.")
+
 
 
 @router.post(
@@ -396,7 +417,7 @@ async def get_household_categories_endpoint(
 async def toggle_category_endpoint(
     household_id: str,
     req: CategoryToggleRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -420,7 +441,7 @@ async def toggle_category_endpoint(
 async def create_custom_category_endpoint(
     household_id: str,
     req: CustomCategoryCreateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
