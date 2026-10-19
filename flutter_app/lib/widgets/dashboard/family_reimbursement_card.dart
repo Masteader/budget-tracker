@@ -521,13 +521,12 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               label: Text(context.tr('copy_stc_pay_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
                 final amt = _amountCtrl.text;
-                await Clipboard.setData(
-                  ClipboardData(text: 'Nafaqah Reimbursement - SAR $amt'),
-                );
+                final note = context.tr('nafaqah_reimbursement_note').replaceAll('{amount}', amt);
+                await Clipboard.setData(ClipboardData(text: note));
                 if (context.mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Copied: "Nafaqah Reimbursement - SAR $amt"',
+                    context.tr('copied_amount_note').replaceAll('{note}', note),
                     title: context.tr('copied_note'),
                   );
                 }

@@ -1111,22 +1111,30 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   builder: (ctx, count, _) {
                     return Row(
                       children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : const Color(0xFF00C896), size: 20),
+                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : context.electricTeal, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(context.tr('offline_sqlite_queue'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                              Text(count > 0 ? '$count transaction(s) pending sync' : context.tr('all_synced'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                              Text(
+                                count > 0
+                                    ? context.tr('pending_sync_count').replaceAll('{count}', count.toString())
+                                    : context.tr('all_synced'),
+                                style: TextStyle(color: context.textSecondary, fontSize: 11),
+                              ),
                             ],
                           ),
                         ),
                         if (count > 0)
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: context.electricTeal,
+                              foregroundColor: context.isDark ? Colors.black : Colors.white,
+                            ),
                             onPressed: () => OfflineSyncService.instance.flushQueue(),
-                            child: const Text('Sync Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                       ],
                     );
@@ -1229,7 +1237,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
                     AppSnackBar.showSuccess(
                       context,
-                      'Developer email copied: fmscoinfo@fmsco.com.sa',
+                      context.tr('developer_email_copied').replaceAll('{email}', 'fmscoinfo@fmsco.com.sa'),
                       title: context.tr('copied'),
                       icon: Icons.copy_rounded,
                     );
@@ -1284,14 +1292,21 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           Clipboard.setData(ClipboardData(text: _householdId!));
                           AppSnackBar.showSuccess(
                             context,
-                            'Household ID copied to clipboard',
+                            context.tr('household_id_copied'),
                             title: context.tr('copied'),
                             icon: Icons.copy_rounded,
                           );
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text(context.tr('copy_pdf_link').split(' ').first, style: TextStyle(color: context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF0F766E), fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            context.tr('copy_btn'),
+                            style: TextStyle(
+                              color: context.electricTeal,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -1425,10 +1440,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: context.electricTeal.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: Color(0xFF00C896), size: 20),
+                child: Icon(Icons.language_rounded, color: context.electricTeal, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1570,6 +1585,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     String? testLabel,
   }) {
     final isGranted = status.isGranted;
+    final activeColor = context.electricTeal;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1580,12 +1596,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+              color: isGranted ? activeColor.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+              color: isGranted ? activeColor : Colors.orange,
               size: 18,
             ),
           ),
@@ -1607,13 +1623,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                        color: isGranted ? activeColor.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(5),
                       ),
                       child: Text(
                         isGranted ? context.tr('permission_granted') : context.tr('permission_not_granted'),
                         style: TextStyle(
-                          color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                          color: isGranted ? activeColor : Colors.orange,
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1635,8 +1651,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           if (!isGranted)
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
-                foregroundColor: Colors.black,
+                backgroundColor: activeColor,
+                foregroundColor: context.isDark ? Colors.black : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 minimumSize: Size.zero,

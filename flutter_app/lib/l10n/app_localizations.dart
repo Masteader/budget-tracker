@@ -837,22 +837,21 @@ class AppLocalizations {
 
       // Additional UI, Settings, Help & Settlement Keys
       'unknown_merchant': 'Unknown Merchant',
-      'delete_transaction_confirm': 'Delete SAR {amount} at {merchant}?\nYour budget will be updated.',
+      'copy_btn': 'Copy',
+      'pending_sync_count': '{count} transaction(s) pending sync',
+      'developer_email_copied': 'Developer email copied: {email}',
+      'household_id_copied': 'Household ID copied to clipboard',
+      'copied_amount_note': 'Copied: "{note}"',
+      'nafaqah_reimbursement_note': 'Nafaqah Reimbursement - SAR {amount}',
+      'roommate_settlement_note': 'Roommate Settlement - SAR {amount} to {name}',
       'net_balances': 'Net Balances',
       'record_roommate_settlement': 'Record Roommate Settlement',
       'record_settlement_payment': 'Record Settlement Payment',
       'copy_stc_pay_note': 'Copy STC Pay Note',
       'payment_method': 'Payment Method',
-      'full_amount': 'Full',
-      'half_amount': 'Half',
       'settlement_recorded': 'Settlement Recorded',
-      'all_settled_nafaqah': 'All Settled',
       'reimbursement_owed': 'Reimbursement Owed',
-      'wife_advanced_expenses': 'Wife advanced household expenses from personal funds',
       'all_nafaqah_settled_desc': 'All Nafaqah expenses are settled! Wife has no pending household reimbursements.',
-      'children_label': 'Children',
-      'wife_label': 'Wife',
-      'household_label': 'Household',
       'settle_wife_reimbursement': 'Settle Wife Reimbursement',
       'settle_wife_desc': 'Record full or partial reimbursement for advanced household expenses.',
       'household_membership_section': 'HOUSEHOLD & MEMBERSHIP',
@@ -1442,22 +1441,21 @@ class AppLocalizations {
 
       // Additional UI, Settings, Help & Settlement Keys
       'unknown_merchant': 'تاجر غير محدد',
-      'delete_transaction_confirm': 'هل تريد حذف {amount} ر.س لدى {merchant}؟\nسيتم تحديث الميزانية تلقائياً.',
+      'copy_btn': 'نسخ',
+      'pending_sync_count': '{count} معاملة بانتظار المزامنة',
+      'developer_email_copied': 'تم نسخ بريد المطور: {email}',
+      'household_id_copied': 'تم نسخ معرف المنزل إلى الحافظة',
+      'copied_amount_note': 'تم النسخ: "{note}"',
+      'nafaqah_reimbursement_note': 'تعويض نفقة - {amount} ر.س',
+      'roommate_settlement_note': 'تسوية سكن - {amount} ر.س إلى {name}',
       'net_balances': 'صافي الأرصدة',
       'record_roommate_settlement': 'تسجيل تسوية السكن المشترك',
       'record_settlement_payment': 'تسجيل سداد التسوية',
       'copy_stc_pay_note': 'نسخ ملاحظة STC Pay',
       'payment_method': 'طريقة الدفع',
-      'full_amount': 'الكامل',
-      'half_amount': 'النصف',
       'settlement_recorded': 'تم تسجيل التسوية بنجاح',
-      'all_settled_nafaqah': 'تمت التسوية بالكامل',
       'reimbursement_owed': 'مستحقات واجبة السداد',
-      'wife_advanced_expenses': 'قدمت الزوجة مصاريف المنزل من مالها الخاص',
       'all_nafaqah_settled_desc': 'تمت تسوية جميع نفقات الأسرة! لا توجد مستحقات معلقة للزوجة.',
-      'children_label': 'الأبناء',
-      'wife_label': 'الزوجة',
-      'household_label': 'المنزل',
       'settle_wife_reimbursement': 'تسوية مستحقات نفقة الزوجة',
       'settle_wife_desc': 'تسجيل سداد كلي أو جزئي لنفقات المنزل المدفوعة مسبقاً.',
       'household_membership_section': 'الأسرة والعضوية',
@@ -2047,22 +2045,21 @@ class AppLocalizations {
 
       // Additional UI, Settings, Help & Settlement Keys
       'unknown_merchant': 'نامعلوم تاجر',
-      'delete_transaction_confirm': 'کیا آپ {merchant} پر {amount} ریال کا لین دین حذف کرنا چاہتے ہیں؟\nآپ کا بجٹ خود بخود اپ ڈیٹ ہو جائے گا۔',
+      'copy_btn': 'کاپی',
+      'pending_sync_count': '{count} لین دین مطابقت پذیری کے منتظر',
+      'developer_email_copied': 'ڈویلپر کا ای میل کاپی ہو گیا: {email}',
+      'household_id_copied': 'گھرانے کا شناختی کوڈ کلپ بورڈ پر کاپی ہو گیا',
+      'copied_amount_note': 'کاپی ہو گیا: "{note}"',
+      'nafaqah_reimbursement_note': 'نفقہ کی واپسی - {amount} ریال',
+      'roommate_settlement_note': 'روم میٹ سیٹلمنٹ - {amount} ریال بنام {name}',
       'net_balances': 'خالص بیلنس',
       'record_roommate_settlement': 'روم میٹ سیٹلمنٹ درج کریں',
       'record_settlement_payment': 'ادائیگی کی تسویہ درج کریں',
       'copy_stc_pay_note': 'ایس ٹی سی پے نوٹ کاپی کریں',
       'payment_method': 'طریقہ ادائیگی',
-      'full_amount': 'مکمل',
-      'half_amount': 'نصف',
       'settlement_recorded': 'سیٹلمنٹ کامیابی سے درج ہو گئی',
-      'all_settled_nafaqah': 'سب بے باق ہو گیا',
       'reimbursement_owed': 'واجب الادا رقم',
-      'wife_advanced_expenses': 'بیوی نے گھریلو اخراجات اپنے ذاتی پیسوں سے ادا کیے',
       'all_nafaqah_settled_desc': 'تمام نفقہ کے اخراجات ادا ہو چکے ہیں! کوئی بقایا نہیں ہے۔',
-      'children_label': 'بچے',
-      'wife_label': 'بیوی',
-      'household_label': 'گھر',
       'settle_wife_reimbursement': 'بیوی کے اخراجات کی ادائیگی',
       'settle_wife_desc': 'گھریلو اخراجات کی واپسی درج کریں۔',
       'household_membership_section': 'گھرانہ اور رکنیت',
@@ -2294,8 +2291,45 @@ class AppLocalizations {
     final clean = raw.trim();
     final lower = clean.toLowerCase();
 
+    // 1. Exact match handling for generic placeholders
+    if (lower == 'unknown' || lower == 'unknown merchant') {
+      return get('unknown_merchant');
+    }
+    if (lower == 'direct' || lower == 'direct entry') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['direct']?[lang] ?? _merchantDictionary['direct']?['en'] ?? clean;
+    }
+    if (lower == 'manual' || lower == 'manual expense') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['manual']?[lang] ?? _merchantDictionary['manual']?['en'] ?? clean;
+    }
+    if (lower == 'installment purchase') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['installment purchase']?[lang] ?? _merchantDictionary['installment purchase']?['en'] ?? clean;
+    }
+
+    // 2. Explicit exclusions to prevent false positive compound phrases
+    // e.g., 'Panda Express' is a Chinese fast-food chain, not Panda Supermarket
+    if (lower.contains('panda express')) {
+      return clean;
+    }
+
+    // 3. Word-boundary regex matching across registered merchants
     for (final entry in _merchantDictionary.entries) {
-      if (lower == entry.key || lower.contains(entry.key)) {
+      if (entry.key == 'unknown' ||
+          entry.key == 'direct' ||
+          entry.key == 'manual' ||
+          entry.key == 'installment purchase') {
+        continue;
+      }
+
+      // Word boundary matching ensures short tokens like 'stc' or 'extra' do not
+      // greedily match inside words like 'Fastcare', 'Postcard', or 'Extraordinary'
+      final pattern = RegExp(
+        r'(?:^|[\s\b.,_\-/])' + RegExp.escape(entry.key) + r'(?:[\s\b.,_\-/]|$)',
+        caseSensitive: false,
+      );
+      if (pattern.hasMatch(lower)) {
         final lang = locale.languageCode;
         return entry.value[lang] ?? entry.value['en'] ?? clean;
       }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -27,7 +29,7 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
-  late Stream<List<Account>> _accountsStream;
+  StreamSubscription<List<Account>>? _accountsSub;
   List<Account> _cachedAccounts = [];
   bool _isLoadingAccounts = true;
 
@@ -39,7 +41,24 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   void _initStream() {
-    _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+    _accountsSub?.cancel();
+    _accountsSub = AccountService.instance.streamAccounts(widget.householdId).listen(
+      (data) {
+        if (mounted) {
+          setState(() {
+            _cachedAccounts = data;
+            _isLoadingAccounts = false;
+          });
+        }
+      },
+      onError: (err) {
+        if (mounted && _cachedAccounts.isEmpty) {
+          setState(() {
+            _isLoadingAccounts = false;
+          });
+        }
+      },
+    );
   }
 
   @override
@@ -49,6 +68,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
       _initStream();
       _refreshAll();
     }
+  }
+
+  @override
+  void dispose() {
+    _accountsSub?.cancel();
+    super.dispose();
   }
 
   String get _currentCycleKey {
@@ -132,75 +157,71 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Account>>(
-        stream: _accountsStream,
-        initialData: _cachedAccounts.isNotEmpty ? _cachedAccounts : null,
-        builder: (context, snapshot) {
-          if (snapshot.hasData && snapshot.data != null) {
-            _cachedAccounts = snapshot.data!;
-            _isLoadingAccounts = false;
-          }
+      body: _buildBody(context, fmt, isDark),
+    );
+  }
 
-          if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
-            return Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: context.electricTeal,
+  Widget _buildBody(BuildContext context, NumberFormat fmt, bool isDark) {
+    if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: context.electricTeal,
+        ),
+      );
+    }
+
+    final accounts = _cachedAccounts;
+
+    if (accounts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: context.electricTeal.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.account_balance_wallet_outlined, size: 48, color: context.electricTeal),
               ),
-            );
-          }
-
-          final accounts = _cachedAccounts;
-
-          if (accounts.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: context.electricTeal.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.account_balance_wallet_outlined, size: 48, color: context.electricTeal),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('no_accounts_configured'),
-                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      context.tr('accounts_balances_desc'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: context.textSecondary, fontSize: 13),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        AddEditAccountDialog.show(
-                          context,
-                          householdId: widget.householdId,
-                          onSuccess: _refreshAll,
-                        );
-                      },
-                      icon: const Icon(Icons.add_rounded),
-                      label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.electricTeal,
-                        foregroundColor: context.scaffoldBg,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 16),
+              Text(
+                context.tr('no_accounts_configured'),
+                style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('accounts_balances_desc'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  AddEditAccountDialog.show(
+                    context,
+                    householdId: widget.householdId,
+                    onSuccess: _refreshAll,
+                  );
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.electricTeal,
+                  foregroundColor: context.scaffoldBg,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-            );
-          }
+            ],
+          ),
+        ),
+      );
+    }
 
           // Calculate total net assets in SAR baseline
           double totalNetSAR = 0.0;
@@ -389,9 +410,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               ],
             ),
           );
-        },
-      ),
-    );
   }
 
   Widget _buildSectionHeader(String title, int count) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -20,21 +22,54 @@ class AccountsSummaryCard extends StatefulWidget {
 }
 
 class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
-  late Stream<List<Account>> _accountsStream;
+  StreamSubscription<List<Account>>? _accountsSub;
   List<Account> _cachedAccounts = [];
 
   @override
   void initState() {
     super.initState();
-    _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+    _initStream();
+    _fetchDirectly();
+  }
+
+  void _initStream() {
+    _accountsSub?.cancel();
+    _accountsSub = AccountService.instance.streamAccounts(widget.householdId).listen(
+      (data) {
+        if (mounted) {
+          setState(() {
+            _cachedAccounts = data;
+          });
+        }
+      },
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _fetchDirectly() async {
+    try {
+      final list = await AccountService.instance.getAccounts(widget.householdId);
+      if (mounted) {
+        setState(() {
+          _cachedAccounts = list;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
   void didUpdateWidget(covariant AccountsSummaryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.householdId != widget.householdId) {
-      _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+      _initStream();
+      _fetchDirectly();
     }
+  }
+
+  @override
+  void dispose() {
+    _accountsSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -42,16 +77,8 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final isDark = context.isDark;
 
-    return StreamBuilder<List<Account>>(
-      stream: _accountsStream,
-      initialData: _cachedAccounts.isNotEmpty ? _cachedAccounts : null,
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data != null) {
-          _cachedAccounts = snapshot.data!;
-        }
-
-        final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
-        if (accounts.isEmpty) return const SizedBox.shrink();
+    final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
+    if (accounts.isEmpty) return const SizedBox.shrink();
 
         final totalLiquidity =
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);
@@ -245,7 +272,5 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
             ),
           ),
         );
-      },
-    );
   }
 }

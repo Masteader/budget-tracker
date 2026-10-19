@@ -602,13 +602,15 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               label: Text(context.tr('copy_stc_pay_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
                 final amt = _amountCtrl.text;
-                await Clipboard.setData(
-                  ClipboardData(text: 'Roommate Settlement - SAR $amt to ${widget.toName}'),
-                );
+                final note = context
+                    .tr('roommate_settlement_note')
+                    .replaceAll('{amount}', amt)
+                    .replaceAll('{name}', widget.toName);
+                await Clipboard.setData(ClipboardData(text: note));
                 if (context.mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Copied: "Roommate Settlement - SAR $amt to ${widget.toName}"',
+                    context.tr('copied_amount_note').replaceAll('{note}', note),
                     title: context.tr('copied_note'),
                   );
                 }
