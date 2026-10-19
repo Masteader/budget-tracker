@@ -22,6 +22,7 @@ import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
 import 'services/household_resolver.dart';
 import 'services/offline_sync_service.dart';
+import 'services/receipt_storage_service.dart';
 import 'services/salary_cycle_service.dart';
 import 'supabase_config.dart';
 import 'theme/app_themes.dart';
@@ -169,6 +170,7 @@ class _AuthGateState extends State<AuthGate> {
       } else {
         context.read<TransactionProvider>().reset();
         context.read<BudgetProvider>().reset();
+        ReceiptStorageService.clearSignedUrlCache();
       }
     });
   }

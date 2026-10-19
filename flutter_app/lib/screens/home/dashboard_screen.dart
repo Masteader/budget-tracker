@@ -2,6 +2,8 @@
 /// Uses Supabase Realtime streams to update instantly when new data arrives.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -52,6 +54,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   String? _householdId;
+  StreamSubscription<int>? _flushSubscription;
 
   @override
   void initState() {
@@ -60,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     OfflineSyncService.instance.flushQueue();
     OfflineSyncService.instance.updatePendingCount();
 
-    OfflineSyncService.instance.onItemsFlushed.listen((count) {
+    _flushSubscription = OfflineSyncService.instance.onItemsFlushed.listen((count) {
       if (mounted && count > 0) {
         context.read<TransactionProvider>().fetchTransactions();
         context.read<BudgetProvider>().refresh();
@@ -75,6 +78,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     _fetchHouseholdId();
+  }
+
+  @override
+  void dispose() {
+    // The sync stream is app-lifetime; without cancelling, every dashboard
+    // instance kept its listener (and a dead BuildContext) alive.
+    _flushSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchHouseholdId() async {
