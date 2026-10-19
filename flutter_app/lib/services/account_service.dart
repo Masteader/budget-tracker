@@ -71,7 +71,7 @@ class AccountService {
       'currency': account.currency,
       'color_hex': account.colorHex,
       'icon_name': account.iconName,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', account.id);
   }
 
@@ -87,7 +87,7 @@ class AccountService {
   Future<void> archiveAccount(String accountId) async {
     await _client.from('accounts').update({
       'is_archived': true,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', accountId);
   }
 
@@ -136,7 +136,7 @@ class AccountService {
       'p_overtime': overtime,
       'p_bonus': bonus,
       'p_deductions': deductions,
-      'p_received_at': (receivedAt ?? DateTime.now()).toIso8601String(),
+      'p_received_at': (receivedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'p_notes': notes,
     });
 

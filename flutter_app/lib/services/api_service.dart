@@ -67,6 +67,8 @@ class ApiService {
     String? subCategory,
     String? paidBy,
     String? beneficiary,
+    String? idempotencyKey,
+    DateTime? occurredAt,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -81,6 +83,8 @@ class ApiService {
         subCategory: subCategory,
         paidBy: paidBy,
         beneficiary: beneficiary,
+        idempotencyKey: idempotencyKey,
+        occurredAt: occurredAt,
       );
 
   Future<Map<String, dynamic>> simulatePurchase({
@@ -110,6 +114,8 @@ class ApiService {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? idempotencyKey,
+    DateTime? occurredAt,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -123,6 +129,8 @@ class ApiService {
       merchant: merchant,
       spentBy: spentBy,
       receiptUrl: receiptUrl,
+      idempotencyKey: idempotencyKey,
+      occurredAt: occurredAt,
     );
   }
 

@@ -39,7 +39,7 @@ void main() {
       expect(items.first.idempotencyKey, isNotEmpty);
     });
 
-    test('Prevents duplicate enqueue with identical payload and household', () async {
+    test('Identical payloads are separate expenses; only an explicit key deduplicates (MOB-05)', () async {
       final id1 = await queueManager.enqueue(
         operationType: 'chat',
         payload: {'message': 'Spent 20 SAR on shawarma'},
@@ -52,10 +52,24 @@ void main() {
         householdId: 'h-1',
       );
 
-      // Should return the existing ID and not create a duplicate row
-      expect(id1, equals(id2));
-      final count = await queueManager.getPendingCount();
-      expect(count, equals(1));
+      // Two shawarmas bought offline are two purchases.
+      expect(id1, isNot(equals(id2)));
+      expect(await queueManager.getPendingCount(), equals(2));
+
+      final id3 = await queueManager.enqueue(
+        operationType: 'chat',
+        payload: {'message': 'Spent 20 SAR on shawarma'},
+        householdId: 'h-1',
+        idempotencyKey: 'submit-42',
+      );
+      final id4 = await queueManager.enqueue(
+        operationType: 'chat',
+        payload: {'message': 'Spent 20 SAR on shawarma'},
+        householdId: 'h-1',
+        idempotencyKey: 'submit-42',
+      );
+      expect(id3, equals(id4));
+      expect(await queueManager.getPendingCount(), equals(3));
     });
 
     test('Transitions status: syncing -> failed (with retry increment) -> success', () async {

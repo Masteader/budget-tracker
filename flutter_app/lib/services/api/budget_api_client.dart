@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/recurring_bill.dart';
 import '../../models/installment_plan.dart';
@@ -364,18 +362,11 @@ class BudgetApiClient {
     String householdId,
     String categoryCode,
   ) async {
-    try {
-      final uri = Uri.parse('${baseClient.baseUrl}/budgets/categories/$categoryCode?household_id=$householdId');
-      final response = await http
-          .delete(uri, headers: baseClient.buildHeaders())
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+    return baseClient.delete(
+      '/budgets/categories/${Uri.encodeComponent(categoryCode)}',
+      queryParams: {'household_id': householdId},
+      timeout: const Duration(seconds: 8),
+    );
   }
 
   Future<Map<String, dynamic>> saveSubAllocations({
@@ -438,28 +429,16 @@ class BudgetApiClient {
     required String nameEn,
     String? nameAr,
   }) async {
-    final payload = jsonEncode({
-      'parent_code': parentCode,
-      'sub_code': subCode,
-      'name_en': nameEn,
-      if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
-    });
-
-    try {
-      final response = await http
-          .patch(
-            Uri.parse('${baseClient.baseUrl}/budgets/sub-categories'),
-            headers: baseClient.buildHeaders(),
-            body: payload,
-          )
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+    return baseClient.patch(
+      '/budgets/sub-categories',
+      body: {
+        'parent_code': parentCode,
+        'sub_code': subCode,
+        'name_en': nameEn,
+        if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
+      },
+      timeout: const Duration(seconds: 10),
+    );
   }
 
   Future<Map<String, dynamic>> removeSubCategory({
@@ -468,25 +447,16 @@ class BudgetApiClient {
     required String subCode,
     String? cycleKey,
   }) async {
-    try {
-      final queryParams = {
+    return baseClient.delete(
+      '/budgets/sub-categories',
+      queryParams: {
         'household_id': householdId,
         'parent_code': parentCode,
         'sub_code': subCode,
         if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
-      };
-      final uri = Uri.parse('${baseClient.baseUrl}/budgets/sub-categories')
-          .replace(queryParameters: queryParams);
-      final response = await http
-          .delete(uri, headers: baseClient.buildHeaders())
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+      },
+      timeout: const Duration(seconds: 10),
+    );
   }
 
   Future<List<InstallmentPlan>> fetchInstallments({required String householdId}) async {

@@ -225,10 +225,13 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             'user_id': user?.id,
             'merchant': merchant,
             'amount': parsedAmount,
-            'vat_amount': parsedVat,
             'category_code': _selectedCategory,
             'spent_by': _selectedSpentBy,
-            'date': DateTime.now().toIso8601String(),
+            'source': 'receipt_scan',
+            // `transactions` has no `date`/`vat_amount` columns: an insert
+            // naming them always failed and diverted every save offline.
+            'timestamp': DateTime.now().toUtc().toIso8601String(),
+            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR | SpentBy: $_selectedSpentBy',
           });
         } catch (_) {
           // If network failed during submit, queue offline

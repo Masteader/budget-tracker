@@ -25,30 +25,37 @@ class OfflineQueueItem {
     this.lastError,
   });
 
-  /// Computes a deterministic SHA-256 fingerprint for the given operation
+  /// Computes a SHA-256 fingerprint for the given operation.
+  ///
+  /// Without a [nonce] the key is deterministic for an identical
+  /// (operation, household, payload) triple. The offline queue always passes a
+  /// per-submission nonce so that two genuinely identical expenses (two coffees
+  /// at the same price) are never collapsed into one; callers that need
+  /// double-submit protection pass an explicit, stable key instead.
   static String generateIdempotencyKey({
     required String operationType,
     required String householdId,
     required Map<String, dynamic> payload,
+    String? nonce,
   }) {
     // Sort keys recursively for canonical JSON representation
-    final sortedPayload = _canonicalizeMap(payload);
-    final raw = '$operationType:$householdId:${jsonEncode(sortedPayload)}';
+    final sortedPayload = _canonicalize(payload);
+    final suffix = nonce == null ? '' : ':$nonce';
+    final raw = '$operationType:$householdId:${jsonEncode(sortedPayload)}$suffix';
     return sha256.convert(utf8.encode(raw)).toString();
   }
 
-  static Map<String, dynamic> _canonicalizeMap(Map<String, dynamic> map) {
-    final sortedKeys = map.keys.toList()..sort();
-    final result = <String, dynamic>{};
-    for (final k in sortedKeys) {
-      final v = map[k];
-      if (v is Map<String, dynamic>) {
-        result[k] = _canonicalizeMap(v);
-      } else {
-        result[k] = v;
-      }
+  static dynamic _canonicalize(dynamic value) {
+    if (value is Map) {
+      final sortedKeys = value.keys.map((k) => k.toString()).toList()..sort();
+      return <String, dynamic>{
+        for (final k in sortedKeys) k: _canonicalize(value[k]),
+      };
     }
-    return result;
+    if (value is List) {
+      return value.map(_canonicalize).toList();
+    }
+    return value;
   }
 
   Map<String, dynamic> toMap() {

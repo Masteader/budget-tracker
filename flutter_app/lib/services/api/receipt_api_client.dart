@@ -17,6 +17,8 @@ class ReceiptApiClient {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? idempotencyKey,
+    DateTime? occurredAt,
   }) async {
     final payload = <String, dynamic>{
       'images_base64': imagesBase64,
@@ -29,6 +31,7 @@ class ReceiptApiClient {
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
       if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
       if (receiptUrl != null && receiptUrl.trim().isNotEmpty) 'receipt_url': receiptUrl.trim(),
+      if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
     };
 
     return baseClient.post(
@@ -36,6 +39,7 @@ class ReceiptApiClient {
       payload,
       shouldSign: true,
       timeout: const Duration(seconds: 45),
+      extraHeaders: idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
     );
   }
 }

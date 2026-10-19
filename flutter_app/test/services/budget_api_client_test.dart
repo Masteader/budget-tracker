@@ -18,7 +18,7 @@ class MockBaseApiClient extends BaseApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body, {bool shouldSign = true, Duration timeout = const Duration(seconds: 20)}) async {
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body, {bool shouldSign = true, Duration timeout = const Duration(seconds: 20), Map<String, String>? extraHeaders}) async {
     lastPostPath = path;
     lastPostBody = body;
     return mockPostResponse;

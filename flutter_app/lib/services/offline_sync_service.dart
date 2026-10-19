@@ -28,12 +28,14 @@ class OfflineSyncService {
     required Map<String, dynamic> payload,
     required String householdId,
     String? customId,
+    String? idempotencyKey,
   }) async {
     final id = await queueManager.enqueue(
       operationType: endpoint,
       payload: payload,
       householdId: householdId,
       customId: customId,
+      idempotencyKey: idempotencyKey,
     );
     await updatePendingCount();
     return id;
@@ -44,4 +46,14 @@ class OfflineSyncService {
 
   /// Manually triggers an immediate background drain of all queued items.
   Future<int> flushQueue() => syncWorker.drainQueue();
+
+  /// Number of poison items the server rejected repeatedly.
+  Future<int> failedCount() => queueManager.getFailedCount();
+
+  /// Gives parked `failed` items a fresh retry budget and drains again.
+  Future<int> retryFailed() async {
+    await queueManager.requeueFailed();
+    await updatePendingCount();
+    return syncWorker.drainQueue();
+  }
 }
