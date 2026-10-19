@@ -154,6 +154,11 @@ def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[Cost
 # BUDGETS
 # =============================================================================
 
+def _cycle_key_for(household_id: str, on_date: date) -> str:
+    from salary_cycle import get_cycle_for_date
+    return get_cycle_for_date(on_date, payday_day=get_household_payday(household_id))["cycle_key"]
+
+
 def fetch_budget(
     household_id: str,
     category_code: str,
@@ -166,16 +171,31 @@ def fetch_budget(
     client = get_client()
     month_str = month.replace(day=1).isoformat()  # always first of month
 
+    # Budgets are keyed by salary cycle: after the 27th the calendar month still matches the
+    # *previous* cycle's row, so a month lookup reallocated against the wrong budget.
+    cycle_key = _cycle_key_for(household_id, month)
     response = (
         client.table("budgets")
         .select("*")
         .eq("household_id", household_id)
         .eq("category_code", category_code)
-        .eq("month", month_str)
+        .eq("cycle_key", cycle_key)
         .limit(1)
         .execute()
     )
     data = response.data
+    if not data:
+        response = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("category_code", category_code)
+            .eq("month", month_str)
+            .is_("cycle_key", "null")
+            .limit(1)
+            .execute()
+        )
+        data = response.data
     if not data:
         logger.warning(
             "No budget found for household=%s category=%s month=%s",
@@ -210,17 +230,31 @@ def fetch_flexible_budgets(
     if not flexible_codes:
         return []
 
+    cycle_key = _cycle_key_for(household_id, month)
     response = (
         client.table("budgets")
         .select("*")
         .eq("household_id", household_id)
-        .eq("month", month_str)
+        .eq("cycle_key", cycle_key)
         .in_("category_code", flexible_codes)
         .gt("remaining_amount", 0)
         .order("remaining_amount", desc=True)
         .execute()
     )
     rows = response.data or []
+    if not rows:
+        response = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("month", month_str)
+            .is_("cycle_key", "null")
+            .in_("category_code", flexible_codes)
+            .gt("remaining_amount", 0)
+            .order("remaining_amount", desc=True)
+            .execute()
+        )
+        rows = response.data or []
     logger.debug("Found %d flexible budgets available for reallocation.", len(rows))
     return [BudgetRow(**r) for r in rows]
 
