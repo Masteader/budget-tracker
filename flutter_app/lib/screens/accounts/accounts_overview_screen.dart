@@ -10,6 +10,7 @@ import '../../widgets/accounts/account_card.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../../widgets/accounts/add_edit_account_dialog.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Screen displaying all user accounts, live balances, budget capacity statuses, and quick transfers.
 class AccountsOverviewScreen extends StatefulWidget {
@@ -35,12 +36,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   String get _currentCycleKey {
-    final now = DateTime.now();
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
   Future<void> _loadCommittedBudgets() async {

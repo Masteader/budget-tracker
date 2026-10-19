@@ -7,6 +7,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Assistant sheet to distribute newly received salary from bank into
 /// e-wallets, cash, or savings accounts in one seamless workflow.
@@ -95,7 +96,7 @@ class _SalaryDistributionAssistantSheetState
   double get _totalAllocated {
     double sum = 0.0;
     for (final c in _controllers.values) {
-      final v = double.tryParse(c.text.trim()) ?? 0.0;
+      final v = parseMoneyInput(c.text.trim()) ?? 0.0;
       sum += v;
     }
     return sum;
@@ -106,7 +107,7 @@ class _SalaryDistributionAssistantSheetState
   Future<void> _executeDistribution() async {
     final targets = <String, double>{};
     for (final entry in _controllers.entries) {
-      final val = double.tryParse(entry.value.text.trim()) ?? 0.0;
+      final val = parseMoneyInput(entry.value.text.trim()) ?? 0.0;
       if (val > 0) {
         targets[entry.key] = val;
       }

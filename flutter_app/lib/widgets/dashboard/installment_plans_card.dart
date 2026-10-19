@@ -12,6 +12,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Card displayed on the dashboard for tracking BNPL installment plans (Tamara, Tabby, etc.).
 class InstallmentPlansCard extends StatefulWidget {
@@ -295,7 +296,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   ? null
                   : () async {
                       final merchant = merchantCtrl.text.trim();
-                      final total = double.tryParse(amountCtrl.text);
+                      final total = parseMoneyInput(amountCtrl.text);
                       if (merchant.isEmpty || total == null || total <= 0) {
                         AppSnackBar.showError(dCtx, 'Please provide valid merchant and total amount.');
                         return;

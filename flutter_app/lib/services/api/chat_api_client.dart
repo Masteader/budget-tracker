@@ -19,6 +19,8 @@ class ChatApiClient {
     String? subCategory,
     String? paidBy,
     String? beneficiary,
+    String? idempotencyKey,
+    DateTime? occurredAt,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
@@ -33,9 +35,15 @@ class ChatApiClient {
       if (subCategory != null && subCategory.trim().isNotEmpty) 'sub_category': subCategory.trim(),
       if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
       if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
+      if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
     };
 
-    final res = await baseClient.post('/agent/chat-transaction', payload, shouldSign: true);
+    final res = await baseClient.post(
+      '/agent/chat-transaction',
+      payload,
+      shouldSign: true,
+      extraHeaders: idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
+    );
     if (res['status'] == 'error' && (res['message'] as String? ?? '').contains('Failed to connect')) {
       return fallbackDirectCloudChat(message, householdId);
     }

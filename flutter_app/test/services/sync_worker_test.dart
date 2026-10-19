@@ -72,11 +72,12 @@ void main() {
       final count = await worker.drainQueue();
       expect(count, equals(0));
 
-      // Item should still be in queue with retry_count = 1
+      // MOB-09: an unreachable backend is transient; the item stays pending
+      // and keeps its full retry budget (retry_count only counts rejections).
       final pending = await queueManager.getPendingItems();
       expect(pending.length, equals(1));
       expect(pending.first.id, equals(id));
-      expect(pending.first.retryCount, equals(1));
+      expect(pending.first.retryCount, equals(0));
       expect(pending.first.lastError, contains('Backend unreachable'));
     });
   });

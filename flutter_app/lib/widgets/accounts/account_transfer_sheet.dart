@@ -8,6 +8,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet for executing an inter-account fund transfer.
 class AccountTransferSheet extends StatefulWidget {
@@ -112,8 +113,8 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     }
   }
 
-  double get _amount => double.tryParse(_amountCtrl.text) ?? 0.0;
-  double get _fee => double.tryParse(_feeCtrl.text) ?? 0.0;
+  double get _amount => parseMoneyInput(_amountCtrl.text) ?? 0.0;
+  double get _fee => parseMoneyInput(_feeCtrl.text) ?? 0.0;
   double get _totalDeduction => _amount + _fee;
 
   Account? get _fromAccount =>

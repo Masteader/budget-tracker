@@ -2,9 +2,10 @@
 /// Uses Supabase Realtime streams to update instantly when new data arrives.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
@@ -41,6 +42,7 @@ import '../chat/chat_entry_screen.dart';
 import '../scanner/receipt_scanner_sheet.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
+import '../../services/salary_cycle_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -52,6 +54,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   String? _householdId;
+  StreamSubscription<int>? _flushSubscription;
 
   @override
   void initState() {
@@ -60,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     OfflineSyncService.instance.flushQueue();
     OfflineSyncService.instance.updatePendingCount();
 
-    OfflineSyncService.instance.onItemsFlushed.listen((count) {
+    _flushSubscription = OfflineSyncService.instance.onItemsFlushed.listen((count) {
       if (mounted && count > 0) {
         context.read<TransactionProvider>().fetchTransactions();
         context.read<BudgetProvider>().refresh();
@@ -75,6 +78,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     _fetchHouseholdId();
+  }
+
+  @override
+  void dispose() {
+    // The sync stream is app-lifetime; without cancelling, every dashboard
+    // instance kept its listener (and a dead BuildContext) alive.
+    _flushSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchHouseholdId() async {
@@ -344,12 +355,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    final now = DateTime.now();
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
   bool _matchesSelectedCycle(Budget b) {

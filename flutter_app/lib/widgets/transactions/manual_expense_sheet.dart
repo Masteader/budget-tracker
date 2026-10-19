@@ -7,10 +7,14 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/sync_worker.dart' show kTransactionInsertOperation;
+import '../../models/manual_expense_row.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
 class ManualExpenseSheet extends StatefulWidget {
@@ -172,7 +176,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   }
 
   Future<void> _saveExpense() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final amount = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {
@@ -217,27 +221,24 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       }
     }
 
+    final row = buildManualExpenseRow(
+      id: const Uuid().v4(),
+      householdId: hid,
+      userId: supabase.auth.currentUser?.id,
+      amount: amount,
+      merchant: merchant,
+      categoryCode: _selectedCategory,
+      spentBy: spentBy,
+      paidBy: paidBy,
+      beneficiaryType: benType,
+      beneficiaryId: benId,
+      accountId: _selectedAccountId,
+      occurredAt: DateTime.now(),
+    );
+
     try {
       // 1. Direct Supabase insert
-      await supabase.from('transactions').insert({
-        'household_id': hid,
-        'amount': amount,
-        'currency': 'SAR',
-        'merchant': merchant,
-        'category_code': _selectedCategory,
-        'spent_by': spentBy,
-        'paid_by': paidBy,
-        'beneficiary_type': benType,
-        'beneficiary_id': benId,
-        'account_id': _selectedAccountId,
-        'source': 'manual',
-        'timestamp': DateTime.now().toIso8601String(),
-        'items': [
-          {'name': merchant, 'price': amount, 'quantity': 1}
-        ],
-      });
-
-
+      await supabase.from('transactions').insert(row);
 
       if (mounted) {
         context.read<TransactionProvider>().fetchTransactions();
@@ -252,17 +253,13 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     } catch (e) {
       // 2. Offline fallback queue
       try {
+        // Replayed verbatim later; the client-generated id makes the replay
+        // idempotent if the insert above actually reached the server.
         await OfflineSyncService.instance.enqueue(
-          endpoint: 'chat',
-          payload: {
-            'message': '$merchant SAR ${amount.toStringAsFixed(2)} in $_selectedCategory',
-            'user_id': supabase.auth.currentUser?.id,
-            'paid_by': paidBy,
-            'beneficiary_type': benType,
-            'beneficiary_id': benId,
-            'spent_by': spentBy,
-          },
+          endpoint: kTransactionInsertOperation,
+          payload: row,
           householdId: hid,
+          customId: row['id'] as String,
         );
 
         if (mounted) {

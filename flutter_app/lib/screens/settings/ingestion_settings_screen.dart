@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../main.dart';
+import '../onboarding/household_screen.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
@@ -23,11 +24,11 @@ import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
-import '../onboarding/household_screen.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../accounts/accounts_overview_screen.dart';
 import 'help_support_screen.dart';
+import '../../services/salary_cycle_service.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
   const IngestionSettingsScreen({super.key});
@@ -125,11 +126,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   Future<void> _loadHouseholdDetails(String hid) async {
     try {
-      final hh = await supabase
-          .from('households')
-          .select('name, invite_code')
-          .eq('id', hid)
-          .maybeSingle();
+      // Via get_user_households(): the RPC returns the invite code to admins
+      // only, so the households table no longer needs to expose it (DB-17).
+      final membership = await ApiService.instance.getHouseholdMembership(hid);
       final membersData = await supabase
           .from('users')
           .select('display_name, role')
@@ -137,8 +136,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
       if (mounted) {
         setState(() {
-          _householdName = hh?['name'] as String? ?? 'My Household';
-          _inviteCode = hh?['invite_code'] as String? ?? '--------';
+          _householdName = membership?.householdName ?? 'My Household';
+          final code = membership?.inviteCode ?? '';
+          _inviteCode = code.isNotEmpty ? code : '--------';
           _members = (membersData as List?)
                   ?.map((e) {
                     final map = Map<String, dynamic>.from(e as Map);
@@ -217,6 +217,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('payday_day', newDay);
+      SalaryCycleService.paydayDay = newDay;
       if (mounted) setState(() => _paydayDay = newDay);
 
       if (_householdId != null) {
@@ -441,7 +442,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const HouseholdScreen()),
+            // Back through the gate: it re-resolves (now no household) and
+            // keeps sign-out handling at the root of the navigator.
+            MaterialPageRoute(builder: (_) => const AuthGate()),
             (route) => false,
           );
         }

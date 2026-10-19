@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
+import '../../models/money.dart';
 
 typedef AddMemberCallback = Future<void> Function({
   required String name,
@@ -96,7 +97,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
       return;
     }
 
-    final allowance = double.tryParse(_allowanceController.text.trim()) ?? 0.0;
+    final allowance = parseMoneyInput(_allowanceController.text.trim()) ?? 0.0;
     final selectedOption = _roleOptions.firstWhere((r) => r['id'] == _selectedRole);
     final avatar = selectedOption['avatar'] as String;
 
@@ -350,7 +351,8 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               key: const Key('add_member_allowance_input'),
               controller: _allowanceController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
+              // Accept Arabic-Indic / Urdu digits and the Arabic decimal separator too.
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^[0-9\u0660-\u0669\u06F0-\u06F9]+[.\u066B]?[0-9\u0660-\u0669\u06F0-\u06F9]{0,2}'))],
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 hintText: '0.00 SAR',

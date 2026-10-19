@@ -178,8 +178,14 @@ On first launch the app may request:
 | Flag | Required | Description |
 |---|---|---|
 | `SUPABASE_URL` | ✅ | Same as above |
-| `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients) |
-| `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend |
+| `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients; `SUPABASE_ANON_KEY` accepted as alias). Service-role / `sb_secret_` keys are rejected at startup. |
+| `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend (`https://` required in release builds) |
+| `WEBHOOK_SECRET` | ✅ release | HMAC key for `X-Signature` on chat/receipt calls (backend requires it in production) |
+| `AUTH_REDIRECT_URL` | ❌ | Email-confirmation redirect (defaults to `FASTAPI_BASE_URL`) |
+
+The app has no built-in defaults: a build missing a required flag stops at startup with a
+`StateError` naming each missing flag. Release signing reads `flutter_app/android/key.properties`
+(git-ignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`).
 
 ---
 

@@ -13,7 +13,6 @@ import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
-import '../home/dashboard_screen.dart';
 
 class HouseholdScreen extends StatefulWidget {
   final ApiService? apiService;
@@ -107,7 +106,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           title: 'Household Ready',
         );
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const AuthGate()),
           (route) => false,
         );
       }
@@ -174,7 +173,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           title: 'Welcome to Household',
         );
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const AuthGate()),
           (route) => false,
         );
       }

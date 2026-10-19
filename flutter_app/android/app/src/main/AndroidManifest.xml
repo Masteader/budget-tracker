@@ -21,10 +21,16 @@
         </intent>
     </queries>
 
+    <!-- Backups are disabled: app storage holds the Supabase session tokens,
+         the offline expense queue and receipt images (financial PII). -->
     <application
         android:label="Budget Tracker"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false">
 
         <!-- ── Main Flutter Activity ────────────────────────────────────────── -->
         <activity

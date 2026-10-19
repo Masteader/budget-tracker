@@ -8,6 +8,7 @@ import '../../providers/budget_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../transactions/manual_expense_sheet.dart';
+import '../../models/money.dart';
 
 /// Pre-Purchase Affordability Simulator ("Can I Afford This? / هل أقدر أشتري؟")
 /// Evaluates potential purchase impact against salary cycle headroom, category budgets,
@@ -98,14 +99,14 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
   }
 
   void _addPresetAmount(double delta) {
-    final current = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final current = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
     final next = current + delta;
     _amountCtrl.text = next.toStringAsFixed(0);
     _simulate();
   }
 
   Future<void> _simulate() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final amount = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
     if (amount <= 0) return;
 
     setState(() => _isSimulating = true);
@@ -231,7 +232,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
   void _onProceedToLogExpense() {
     Navigator.pop(context);
-    final amt = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final amt = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
     ManualExpenseSheet.show(
       context,
       householdId: widget.householdId,

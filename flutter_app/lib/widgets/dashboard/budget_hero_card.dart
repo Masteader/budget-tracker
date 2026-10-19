@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
+import '../../services/salary_cycle_service.dart';
 
 class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;
@@ -21,37 +22,19 @@ class BudgetHeroCard extends StatelessWidget {
     final totalSpent = budgets.fold(0.0, (s, b) => s + b.spentAmount);
     final remaining = (totalAllocated - totalSpent);
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    DateTime fallbackCycleStart;
-    if (now.day >= 27) {
-      fallbackCycleStart = DateTime(now.year, now.month, 27);
-    } else {
-      fallbackCycleStart = DateTime(now.year, now.month - 1, 27);
-    }
-    final fallbackDaysElapsed = now.difference(fallbackCycleStart).inDays + 1;
+    // Cycle arithmetic runs on the Riyadh calendar date with the household
+    // payday, whatever the device time zone (parity with the DB cycle_key).
+    final today = SalaryCycleService.riyadhToday();
+    final currentCycle = SalaryCycleService.currentCycle();
+    final fallbackDaysElapsed = today.difference(currentCycle.start).inDays + 1;
 
-    final daysTotal = cycle?.daysTotal ?? 30;
+    final daysTotal = cycle?.daysTotal ?? currentCycle.lengthInDays;
     final daysElapsed = (cycle?.daysElapsed ?? fallbackDaysElapsed).clamp(1, daysTotal);
     final daysRemaining = (daysTotal - daysElapsed).clamp(0, daysTotal);
 
-    // Compute dynamic days until payday accurately
-    int paydayDay = 27;
-    if (cycle != null && cycle!.cycleStart.isNotEmpty) {
-      try {
-        paydayDay = DateTime.parse(cycle!.cycleStart).day;
-      } catch (_) {}
-    }
-    DateTime nextPayday = DateTime(today.year, today.month, paydayDay);
-    int daysUntilPayday;
-    if (today.isAtSameMomentAs(nextPayday)) {
-      daysUntilPayday = 0;
-    } else {
-      if (today.isAfter(nextPayday)) {
-        nextPayday = DateTime(today.year, today.month + 1, paydayDay);
-      }
-      daysUntilPayday = nextPayday.difference(today).inDays;
-    }
+    // 0 on payday itself, otherwise whole days until the next cycle starts.
+    final daysUntilPayday =
+        today == currentCycle.start ? 0 : currentCycle.end.difference(today).inDays + 1;
 
     // Separate fixed lump-sum monthly commitments (rent, utilities) from variable daily expenses
     const fixedCodes = {'HOUSING-RENT', 'HOUSING', 'OPEX-UTILITIES', 'UTILITIES-BILLS'};

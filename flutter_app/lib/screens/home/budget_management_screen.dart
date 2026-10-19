@@ -19,6 +19,8 @@ import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
+import '../../services/salary_cycle_service.dart';
+import '../../models/money.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -163,12 +165,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    final now = _selectedDate;
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(_selectedDate);
   }
 
   String get _currentMonthStr => DateFormat('yyyy-MM-01').format(_selectedDate);
@@ -462,7 +459,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   : () async {
                       if (activeTab == 0) {
                         final name = catNameCtrl.text.trim();
-                        final amount = double.tryParse(catAmountCtrl.text) ?? 0.0;
+                        final amount = parseMoneyInput(catAmountCtrl.text) ?? 0.0;
                         if (name.isEmpty) return;
 
                         setDialogState(() => isSubmitting = true);
@@ -505,7 +502,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         }
                       } else {
                         final subName = subNameCtrl.text.trim();
-                        final subAmount = double.tryParse(subAmountCtrl.text) ?? 0.0;
+                        final subAmount = parseMoneyInput(subAmountCtrl.text) ?? 0.0;
                         if (subName.isEmpty || selectedParentCode.isEmpty) return;
 
                         setDialogState(() => isSubmitting = true);

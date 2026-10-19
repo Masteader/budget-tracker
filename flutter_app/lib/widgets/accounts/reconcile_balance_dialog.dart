@@ -7,6 +7,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Dialog to reconcile app account balance against actual bank/wallet balance.
 class ReconcileBalanceDialog extends StatefulWidget {
@@ -53,7 +54,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
     super.dispose();
   }
 
-  double get _actualBalance => double.tryParse(_actualBalanceCtrl.text) ?? widget.account.balance;
+  double get _actualBalance => parseMoneyInput(_actualBalanceCtrl.text) ?? widget.account.balance;
   double get _variance => _actualBalance - widget.account.balance;
 
   Future<void> _submitReconciliation() async {
