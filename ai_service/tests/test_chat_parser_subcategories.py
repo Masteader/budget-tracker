@@ -6,12 +6,11 @@ import pytest
 from unittest.mock import MagicMock
 from chat_parser import process_chat_transaction, ParsedChatExpense
 
-def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch):
+def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch, fake_supabase):
     """Verify Beit Al Shawarma generates OPEX-DINING with restaurants_dinners subcategory in preview."""
-    from dependents_service import _memory_dependents
-    _memory_dependents["test-household-001"] = [
-        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001"}
-    ]
+    fake_supabase.seed("household_dependents", [
+        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001", "created_at": "2026-10-01T00:00:00+00:00"}
+    ])
 
     mock_parsed = ParsedChatExpense(
         merchant="Beit Al Shawarma",
@@ -43,12 +42,11 @@ def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch):
     assert res["items"][0]["sub_category"] == "restaurants_dinners"
 
 
-def test_child_attribution_in_chat_expense(monkeypatch):
+def test_child_attribution_in_chat_expense(monkeypatch, fake_supabase):
     """Verify mention of child is reflected in beneficiary field."""
-    from dependents_service import _memory_dependents
-    _memory_dependents["test-household-001"] = [
-        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001"}
-    ]
+    fake_supabase.seed("household_dependents", [
+        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001", "created_at": "2026-10-01T00:00:00+00:00"}
+    ])
 
     mock_parsed = ParsedChatExpense(
         merchant="Nahdi",
