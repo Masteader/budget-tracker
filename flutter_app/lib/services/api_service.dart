@@ -225,6 +225,9 @@ class ApiService {
   Future<List<HouseholdMembership>> getUserHouseholds() =>
       budget.getUserHouseholds();
 
+  Future<HouseholdMembership?> getHouseholdMembership(String householdId) =>
+      budget.fetchHouseholdMembership(householdId);
+
   Future<bool> switchActiveHousehold(String householdId) =>
       budget.switchActiveHousehold(householdId);
 

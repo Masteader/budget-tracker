@@ -8,6 +8,7 @@ import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import 'salary_distribution_assistant_sheet.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Modal bottom sheet prompted on or around Payday (e.g. 27th) to log itemized salary
 /// (Base + Overtime + Bonus + Side - Deductions) into a designated bank account,
@@ -128,10 +129,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
           '${_sideGig > 0 ? " | Side: SAR ${_fmt.format(_sideGig)}" : ""}'
           '${_deductions > 0 ? " | Ded: -SAR ${_fmt.format(_deductions)}" : ""}';
 
-      final now = DateTime.now();
-      final cycleKey = DateFormat('yyyy-MM').format(
-        now.day >= 27 ? DateTime(now.year, now.month + 1, 1) : now,
-      );
+      final cycleKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
 
       await AccountService.instance.logIncome(
         householdId: widget.householdId,

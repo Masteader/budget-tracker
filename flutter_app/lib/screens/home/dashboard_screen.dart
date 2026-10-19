@@ -4,7 +4,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
@@ -41,6 +40,7 @@ import '../chat/chat_entry_screen.dart';
 import '../scanner/receipt_scanner_sheet.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
+import '../../services/salary_cycle_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -344,12 +344,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    final now = DateTime.now();
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
   bool _matchesSelectedCycle(Budget b) {

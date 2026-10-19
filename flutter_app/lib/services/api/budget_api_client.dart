@@ -561,7 +561,7 @@ class BudgetApiClient {
         if (uid != null) {
           final res = await client
               .from('household_memberships')
-              .select('household_id, role, households(name, invite_code)')
+              .select('household_id, role, households(name)')
               .eq('user_id', uid);
           final activeHid = (await client
               .from('users')
@@ -575,7 +575,9 @@ class BudgetApiClient {
             return HouseholdMembership(
               householdId: hid,
               householdName: hh['name'] as String? ?? 'Household',
-              inviteCode: hh['invite_code'] as String? ?? '',
+              // The invite code is only ever served by get_user_households()
+              // (admins only); never read it from the households table (DB-17).
+              inviteCode: '',
               role: m['role'] as String? ?? 'member',
               isActive: hid == activeHid,
             );
@@ -584,6 +586,16 @@ class BudgetApiClient {
       } catch (_) {}
     }
     return [];
+  }
+
+  /// Name and (for admins only) invite code of one of the caller's households,
+  /// served by the `get_user_households()` RPC.
+  Future<HouseholdMembership?> fetchHouseholdMembership(String householdId) async {
+    final memberships = await getUserHouseholds();
+    for (final m in memberships) {
+      if (m.householdId == householdId) return m;
+    }
+    return null;
   }
 
   Future<bool> switchActiveHousehold(String householdId) async {

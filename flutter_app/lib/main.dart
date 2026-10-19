@@ -1,7 +1,9 @@
-/// App entry point. Initialises Supabase, starts the offline sync engine,
-/// and routes to Auth or Home based on session state.
+/// App entry point. Validates build configuration, initialises Supabase,
+/// starts the offline sync engine, and routes to Auth or Home based on
+/// session state.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -18,12 +20,18 @@ import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
+import 'services/household_resolver.dart';
 import 'services/offline_sync_service.dart';
+import 'services/salary_cycle_service.dart';
 import 'supabase_config.dart';
 import 'theme/app_themes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Fail fast with an explicit list of missing/invalid --dart-define flags
+  // rather than starting against an unknown or production backend.
+  ensureValidClientConfig(isRelease: kReleaseMode);
 
   // Lock to portrait
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -33,6 +41,9 @@ Future<void> main() async {
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
   );
+
+  // Household payday for client-side salary-cycle arithmetic.
+  await SalaryCycleService.loadCachedPayday();
 
   // Offline SQLite Queue & Sync Engine
   OfflineSyncService.instance.initialize();
@@ -74,7 +85,7 @@ class BudgetTrackerApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: const _AuthGate(),
+            home: const AuthGate(),
           );
         },
       ),
@@ -82,47 +93,148 @@ class BudgetTrackerApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
+Future<String?> _fetchHouseholdFromSupabase(String userId) async {
+  final row = await supabase.from('users').select('household_id').eq('id', userId).maybeSingle();
+  return row?['household_id'] as String?;
+}
+
+/// Routes between login, household onboarding and the dashboard.
+///
+/// * The household lookup runs once per signed-in user, not on every auth
+///   event: Supabase emits `tokenRefreshed` roughly hourly and rebuilding the
+///   lookup used to tear down and recreate the whole dashboard each time.
+/// * The lookup is offline-first ([HouseholdResolver]); a network failure
+///   with nothing cached shows a retry state, never the onboarding screen.
+/// * Household-scoped providers are initialised once per household and reset
+///   on sign-out, so a second account on the same device never sees the
+///   previous account's data.
+class AuthGate extends StatefulWidget {
+  final Stream<AuthState>? authStates;
+  final HouseholdResolver? resolver;
+  final WidgetBuilder? loginBuilder;
+  final WidgetBuilder? onboardingBuilder;
+  final WidgetBuilder? homeBuilder;
+  final void Function(BuildContext context, String householdId)? onHouseholdReady;
+  final void Function(BuildContext context)? onSignedOut;
+
+  const AuthGate({
+    super.key,
+    this.authStates,
+    this.resolver,
+    this.loginBuilder,
+    this.onboardingBuilder,
+    this.homeBuilder,
+    this.onHouseholdReady,
+    this.onSignedOut,
+  });
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final Stream<AuthState> _authStates = widget.authStates ?? supabase.auth.onAuthStateChange;
+  late final HouseholdResolver _resolver =
+      widget.resolver ?? const HouseholdResolver(fetchRemote: _fetchHouseholdFromSupabase);
+
+  String? _userId;
+  Future<String?>? _householdFuture;
+  String? _initializedHouseholdId;
+
+  void _ensureLookup(String userId) {
+    if (_userId == userId && _householdFuture != null) return;
+    _userId = userId;
+    _householdFuture = _resolver.resolve(userId);
+  }
+
+  void _retry() {
+    final userId = _userId;
+    if (userId == null) return;
+    final lookup = _resolver.resolve(userId);
+    setState(() {
+      _householdFuture = lookup;
+    });
+  }
+
+  void _handleSignedOut(BuildContext context) {
+    if (_userId == null && _initializedHouseholdId == null) return;
+    _userId = null;
+    _householdFuture = null;
+    _initializedHouseholdId = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      final onSignedOut = widget.onSignedOut;
+      if (onSignedOut != null) {
+        onSignedOut(context);
+      } else {
+        context.read<TransactionProvider>().reset();
+        context.read<BudgetProvider>().reset();
+      }
+    });
+  }
+
+  void _handleHouseholdReady(BuildContext context, String householdId) {
+    if (_initializedHouseholdId == householdId) return;
+    _initializedHouseholdId = householdId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      final onReady = widget.onHouseholdReady;
+      if (onReady != null) {
+        onReady(context, householdId);
+      } else {
+        context.read<TransactionProvider>().init(householdId);
+        context.read<BudgetProvider>().init(householdId);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AuthState>(
-      stream: supabase.auth.onAuthStateChange,
+      stream: _authStates,
       builder: (context, snapshot) {
         final session = snapshot.data?.session;
 
         if (session == null) {
-          return const LoginScreen();
+          _handleSignedOut(context);
+          return (widget.loginBuilder ?? (_) => const LoginScreen())(context);
         }
 
-        // Check if user has joined a household
-        return FutureBuilder<Map<String, dynamic>>(
-          future: supabase
-              .from('users')
-              .select('household_id')
-              .eq('id', session.user.id)
-              .single(),
+        _ensureLookup(session.user.id);
+        return FutureBuilder<String?>(
+          future: _householdFuture,
           builder: (context, profileSnap) {
-            if (profileSnap.connectionState == ConnectionState.waiting) {
+            if (profileSnap.connectionState != ConnectionState.done) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-            final householdId = profileSnap.data?['household_id'] as String?;
-            if (householdId == null) {
-              return const HouseholdScreen();
+            if (profileSnap.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded, size: 48),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _retry,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: Text(context.tr('try_again')),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
 
-            // Populate centralized state providers
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) {
-                context.read<TransactionProvider>().init(householdId);
-                context.read<BudgetProvider>().init(householdId);
-              }
-            });
+            final householdId = profileSnap.data;
+            if (householdId == null) {
+              return (widget.onboardingBuilder ?? (_) => const HouseholdScreen())(context);
+            }
 
-            return const DashboardScreen();
+            _handleHouseholdReady(context, householdId);
+            return (widget.homeBuilder ?? (_) => const DashboardScreen())(context);
           },
         );
       },

@@ -13,6 +13,7 @@ class TransactionProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   RealtimeChannel? _realtimeChannel;
+  int _fetchGeneration = 0;
 
   // Filter state
   String _searchQuery = '';
@@ -92,9 +93,31 @@ class TransactionProvider extends ChangeNotifier {
   /// Initialize provider with active household ID and start Realtime sync.
   Future<void> init(String householdId) async {
     if (_householdId == householdId && _transactions.isNotEmpty) return;
+    if (_householdId != householdId) {
+      // Never show (or keep streaming) another household's transactions
+      // while the new household loads.
+      _clearState();
+    }
     _householdId = householdId;
     await fetchTransactions();
     _subscribeRealtime();
+  }
+
+  /// Drops all cached data and the Realtime channel (sign-out / account switch).
+  void reset() {
+    _householdId = null;
+    _clearState();
+    notifyListeners();
+  }
+
+  void _clearState() {
+    _fetchGeneration++;
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+    _transactions = [];
+    _filteredTransactions = [];
+    _error = null;
+    _isLoading = false;
   }
 
   /// Refresh transactions alias for uniform provider API.
@@ -102,7 +125,9 @@ class TransactionProvider extends ChangeNotifier {
 
   /// Fetch latest transactions from Supabase.
   Future<void> fetchTransactions() async {
-    if (_householdId == null) return;
+    final householdId = _householdId;
+    if (householdId == null) return;
+    final generation = ++_fetchGeneration;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -111,9 +136,11 @@ class TransactionProvider extends ChangeNotifier {
       final data = await supabase
           .from('transactions')
           .select()
-          .eq('household_id', _householdId!)
+          .eq('household_id', householdId)
           .order('timestamp', ascending: false);
 
+      // A reset or household switch happened while this request was in flight.
+      if (generation != _fetchGeneration) return;
       _transactions = (data as List)
           .map((row) => Transaction.fromMap(Map<String, dynamic>.from(row as Map)))
           .toList();
@@ -121,6 +148,7 @@ class TransactionProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      if (generation != _fetchGeneration) return;
       _isLoading = false;
       _error = e.toString();
       debugPrint('[TransactionProvider] Error fetching transactions: $e');

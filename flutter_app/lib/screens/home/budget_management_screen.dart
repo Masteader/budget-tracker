@@ -19,6 +19,7 @@ import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
+import '../../services/salary_cycle_service.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -163,12 +164,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    final now = _selectedDate;
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(_selectedDate);
   }
 
   String get _currentMonthStr => DateFormat('yyyy-MM-01').format(_selectedDate);

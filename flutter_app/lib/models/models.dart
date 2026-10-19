@@ -1,6 +1,8 @@
 /// Data models for the Budget Tracker app.
 library;
 
+import '../services/salary_cycle_service.dart';
+
 export 'household_membership.dart';
 
 // ── Transaction ──────────────────────────────────────────────────────────────
@@ -362,11 +364,16 @@ class SalaryCycleInfo {
         isCurrent: map['is_current'] as bool? ?? false,
       );
 
+  /// Calendar-date arithmetic in UTC so a device DST change (23 h / 25 h day)
+  /// cannot shift the count; "today" is the Asia/Riyadh date.
+  static DateTime _asDate(String iso) {
+    final d = DateTime.parse(iso);
+    return DateTime.utc(d.year, d.month, d.day);
+  }
+
   int get daysTotal {
     try {
-      final start = DateTime.parse(cycleStart);
-      final end = DateTime.parse(cycleEnd);
-      return end.difference(start).inDays + 1;
+      return _asDate(cycleEnd).difference(_asDate(cycleStart)).inDays + 1;
     } catch (_) {
       return 30;
     }
@@ -374,9 +381,7 @@ class SalaryCycleInfo {
 
   int get daysElapsed {
     try {
-      final start = DateTime.parse(cycleStart);
-      final now = DateTime.now();
-      final diff = now.difference(start).inDays + 1;
+      final diff = SalaryCycleService.riyadhToday().difference(_asDate(cycleStart)).inDays + 1;
       return diff.clamp(1, daysTotal);
     } catch (_) {
       return 1;
