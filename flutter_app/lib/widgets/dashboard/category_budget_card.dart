@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../sub_budget_breakdown_sheet.dart';
@@ -27,7 +26,6 @@ class CategoryBudgetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final hasRollover = budget.previousCycleDelta != 0.0;
     final subCategories = kSubCategoriesByParent[budget.categoryCode] ?? const <String>[];
 
@@ -81,8 +79,8 @@ class CategoryBudgetCard extends StatelessWidget {
                             ),
                             child: Text(
                               budget.previousCycleDelta > 0
-                                  ? '+SAR ${fmt.format(budget.previousCycleDelta)}'
-                                  : '-SAR ${fmt.format(budget.previousCycleDelta.abs())}',
+                                  ? '+${context.sar(budget.previousCycleDelta)}'
+                                  : '-${context.sar(budget.previousCycleDelta.abs())}',
                               style: TextStyle(
                                 color: budget.previousCycleDelta > 0
                                     ? const Color(0xFF00C896)
@@ -128,15 +126,11 @@ class CategoryBudgetCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    context.isRtl
-                        ? '${fmt.format(budget.spentAmount)} ر.س ${context.tr('spent')}'
-                        : 'SAR ${fmt.format(budget.spentAmount)} ${context.tr('spent')}',
+                    context.trArgs('amount_spent_suffix', {'amount': context.sar(budget.spentAmount)}),
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                   Text(
-                    context.isRtl
-                        ? 'من ${fmt.format(budget.allocatedAmount)} ر.س'
-                        : 'of SAR ${fmt.format(budget.allocatedAmount)}',
+                    context.trArgs('of_amount', {'amount': context.sar(budget.allocatedAmount)}),
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -167,7 +161,7 @@ class CategoryBudgetCard extends StatelessWidget {
                           ),
                           const Spacer(),
                           Text(
-                            'Breakdown',
+                            context.tr('breakdown'),
                             style: TextStyle(color: context.textSecondary, fontSize: 10),
                           ),
                           const SizedBox(width: 2),

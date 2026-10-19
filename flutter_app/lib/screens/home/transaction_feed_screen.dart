@@ -545,7 +545,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           backgroundColor: context.cardBg,
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
-            'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
+            context.trArgs('tx_delete_confirm_auto', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
             style: TextStyle(color: context.textSecondary),
           ),
           actions: [
@@ -573,8 +573,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          'Could not delete transaction. Please check your network connection.',
-          title: 'Delete Failed',
+          context.tr('tx_delete_failed_msg'),
+          title: context.tr('tx_delete_failed'),
         );
       }
       return;
@@ -592,8 +592,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     if (context.mounted) {
       AppSnackBar.showDelete(
         context,
-        'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}',
-        title: 'Transaction Removed',
+        context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+        title: context.tr('tx_removed'),
         onUndo: () async {
           await supabase.from('transactions').insert({
             'household_id': tx.householdId,
@@ -615,8 +615,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
-              'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"} has been restored.',
-              title: 'Transaction Restored',
+              context.trArgs('tx_restored_msg', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+              title: context.tr('tx_restored'),
             );
           }
         },
@@ -843,7 +843,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Executive monthly statement with partner attribution split, 15% VAT, and category budgets.',
+                                              context.tr('pdf_statement_desc'),
                                               style: TextStyle(color: context.textSecondary, fontSize: 13),
                                             ),
                                             const SizedBox(height: 14),
@@ -874,7 +874,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
-                                            child: Text('Close', style: TextStyle(color: context.textSecondary)),
+                                            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
                                           ),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
@@ -889,8 +889,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                 Navigator.pop(ctx);
                                                 AppSnackBar.showSuccess(
                                                   context,
-                                                  'PDF Statement link copied to clipboard. Paste into browser to download.',
-                                                  title: 'Link Copied',
+                                                  context.tr('pdf_link_copied_msg'),
+                                                  title: context.tr('link_copied'),
                                                   icon: Icons.picture_as_pdf_rounded,
                                                 );
                                               }
@@ -940,7 +940,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     child: AppEmptyState(
                                       icon: Icons.search_off_rounded,
                                       title: context.tr('no_matching_transactions'),
-                                      message: 'Try adjusting your filters, date range, or category selection to find what you need.',
+                                      message: context.tr('no_matching_tx_desc'),
                                       actionLabel: context.tr('reset_filters'),
                                       onAction: () {
                                         HapticFeedback.lightImpact();
@@ -969,8 +969,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         key: Key(tx.id),
                                         direction: DismissDirection.endToStart,
                                         background: Container(
-                                          alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.only(right: 20),
+                                          alignment: AlignmentDirectional.centerEnd,
+                                          padding: const EdgeInsetsDirectional.only(end: 20),
                                           decoration: BoxDecoration(
                                             color: Colors.redAccent.withValues(alpha: 0.8),
                                             borderRadius: BorderRadius.circular(16),
@@ -989,15 +989,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             context: context,
                                             builder: (dCtx) => AlertDialog(
                                               backgroundColor: context.cardBg,
-                                              title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
+                                              title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
                                               content: Text(
-                                                'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated.',
+                                                context.trArgs('tx_delete_confirm', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
                                                 style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [
                                                 TextButton(
                                                   onPressed: () => Navigator.pop(dCtx, false),
-                                                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                                                  child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                                                 ),
                                                 ElevatedButton(
                                                   style: ElevatedButton.styleFrom(
@@ -1013,7 +1013,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         },
                                         onDismissed: (_) => _deleteTransaction(context, tx),
                                         child: TransactionItemBreakdownCard(
-                                          merchant: tx.merchant ?? 'Unknown',
+                                          merchant: tx.merchant ?? context.tr('unknown'),
                                           amount: tx.amount,
                                           currency: tx.currency,
                                           categoryCode: tx.categoryCode,

@@ -60,7 +60,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
-    final fmt = NumberFormat('#,##0.00');
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -74,7 +73,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         actions: [
           IconButton(
             icon: Icon(_hideBalances ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-            tooltip: _hideBalances ? 'Show' : 'Hide',
+            tooltip: _hideBalances ? context.tr('show_balances') : context.tr('hide_balances'),
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
@@ -227,7 +226,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   deficitCount == 0
-                                      ? 'Funded'
+                                      ? context.tr('funded')
                                       : '$deficitCount ${context.tr("deficit_label")}',
                                   style: TextStyle(
                                     fontSize: 11,
@@ -242,7 +241,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _hideBalances ? '••••••••' : 'SAR ${fmt.format(totalNetSAR)}',
+                        _hideBalances ? '••••••••' : context.sar(totalNetSAR),
                         style: GoogleFonts.outfit(
                           color: context.textPrimary,
                           fontSize: 28,
@@ -343,7 +342,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
   Widget _buildSectionHeader(String title, int count) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      padding: const EdgeInsetsDirectional.only(bottom: 8, start: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

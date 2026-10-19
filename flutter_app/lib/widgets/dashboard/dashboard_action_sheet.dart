@@ -75,7 +75,7 @@ class DashboardActionSheet extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
                 subtitle: Text(
-                  'ZATCA QR camera, manual code input, or photos',
+                  context.tr('action_scan_desc'),
                   style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
                 trailing: Icon(Icons.chevron_right, color: context.textSecondary),
@@ -108,7 +108,7 @@ class DashboardActionSheet extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w600, color: context.textPrimary),
                 ),
                 subtitle: Text(
-                  'Speak or chat what you spent in plain language',
+                  context.tr('action_voice_desc'),
                   style: TextStyle(color: context.textSecondary, fontSize: 12),
                 ),
                 trailing: Icon(Icons.chevron_right, color: context.textSecondary),

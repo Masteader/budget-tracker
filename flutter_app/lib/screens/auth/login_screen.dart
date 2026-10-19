@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../supabase_config.dart';
 import '../../widgets/app_snackbar.dart';
@@ -68,8 +69,8 @@ class _LoginScreenState extends State<LoginScreen>
         if (mounted) {
           AppSnackBar.showSuccess(
             context,
-            'Account created! Check your email to confirm.',
-            title: 'Welcome',
+            context.tr('auth_account_created'),
+            title: context.tr('auth_welcome'),
             icon: Icons.mark_email_read_outlined,
           );
         }
@@ -79,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen>
         AppSnackBar.showError(
           context,
           e.message,
-          title: 'Authentication Failed',
+          title: context.tr('auth_failed'),
         );
       }
     } catch (e) {
@@ -87,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen>
         AppSnackBar.showError(
           context,
           e.toString().replaceAll('Exception: ', ''),
-          title: 'Authentication Error',
+          title: context.tr('auth_error'),
         );
       }
     } finally {
@@ -138,14 +139,14 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Budget Tracker',
+                      context.tr('app_title'),
                       style: GoogleFonts.outfit(
                         fontSize: 30, fontWeight: FontWeight.w700, color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _isLogin ? 'Welcome back' : 'Create your account',
+                      _isLogin ? context.tr('auth_welcome_back') : context.tr('auth_create_your_account'),
                       style: TextStyle(color: context.textSecondary, fontSize: 15),
                     ),
                     const SizedBox(height: 40),
@@ -158,33 +159,34 @@ class _LoginScreenState extends State<LoginScreen>
                           if (!_isLogin) ...[
                             TextFormField(
                               controller: _nameCtrl,
-                              decoration: const InputDecoration(
-                                hintText: 'Display name',
-                                prefixIcon: Icon(Icons.person_outline),
+                              decoration: InputDecoration(
+                                hintText: context.tr('auth_display_name'),
+                                prefixIcon: const Icon(Icons.person_outline),
                               ),
                               validator: (v) =>
-                                  v == null || v.isEmpty ? 'Enter your name' : null,
+                                  v == null || v.trim().isEmpty ? context.tr('auth_enter_your_name') : null,
                             ),
                             const SizedBox(height: 14),
                           ],
                           TextFormField(
                             controller: _emailCtrl,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              hintText: 'Email address',
-                              prefixIcon: Icon(Icons.email_outlined),
+                            decoration: InputDecoration(
+                              hintText: context.tr('auth_email_address'),
+                              prefixIcon: const Icon(Icons.email_outlined),
                             ),
                             validator: (v) =>
-                                v != null && v.contains('@') ? null : 'Enter a valid email',
+                                v != null && v.contains('@') ? null : context.tr('auth_enter_valid_email'),
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _passwordCtrl,
                             obscureText: _obscure,
                             decoration: InputDecoration(
-                              hintText: 'Password',
+                              hintText: context.tr('auth_password'),
                               prefixIcon: const Icon(Icons.lock_outline),
                               suffixIcon: IconButton(
+                                tooltip: context.tr('auth_toggle_password_visibility'),
                                 icon: Icon(_obscure
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined),
@@ -192,12 +194,12 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                             validator: (v) =>
-                                v != null && v.length >= 6 ? null : 'Min 6 characters',
+                                v != null && v.length >= 6 ? null : context.tr('auth_min_6_chars'),
                           ),
                           if (_isLogin) ...[
                             const SizedBox(height: 6),
                             Align(
-                              alignment: Alignment.centerRight,
+                              alignment: AlignmentDirectional.centerEnd,
                               child: TextButton(
                                 onPressed: () {
                                   Navigator.of(context).push(
@@ -210,15 +212,13 @@ class _LoginScreenState extends State<LoginScreen>
                                 },
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 2),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                                      horizontal: 8, vertical: 4),
+                                  minimumSize: const Size(48, 48),
                                 ),
-                                child: const Text(
-                                  'Forgot password?',
+                                child: Text(
+                                  context.tr('auth_forgot_password'),
                                   style: TextStyle(
-                                    color: AppThemes.electricTeal,
+                                    color: context.accentText,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -249,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           strokeWidth: 2, color: Color(0xFF051424)),
                                     )
                                   : Text(
-                                      _isLogin ? 'Sign In' : 'Create Account',
+                                      _isLogin ? context.tr('auth_sign_in') : context.tr('auth_create_account'),
                                       style: const TextStyle(
                                           fontSize: 16, fontWeight: FontWeight.w700),
                                     ),
@@ -262,10 +262,10 @@ class _LoginScreenState extends State<LoginScreen>
                             onPressed: () => setState(() => _isLogin = !_isLogin),
                             child: Text(
                               _isLogin
-                                  ? "Don't have an account? Sign up"
-                                  : 'Already have an account? Sign in',
-                              style: const TextStyle(
-                                color: AppThemes.electricTeal,
+                                  ? context.tr('auth_no_account_sign_up')
+                                  : context.tr('auth_have_account_sign_in'),
+                              style: TextStyle(
+                                color: context.accentText,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),

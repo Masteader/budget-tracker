@@ -2,6 +2,8 @@
 /// Uses Supabase Realtime streams to update instantly when new data arrives.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -52,6 +54,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   String? _householdId;
+  StreamSubscription<int>? _flushSub;
 
   @override
   void initState() {
@@ -60,21 +63,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     OfflineSyncService.instance.flushQueue();
     OfflineSyncService.instance.updatePendingCount();
 
-    OfflineSyncService.instance.onItemsFlushed.listen((count) {
+    _flushSub = OfflineSyncService.instance.onItemsFlushed.listen((count) {
       if (mounted && count > 0) {
         context.read<TransactionProvider>().fetchTransactions();
         context.read<BudgetProvider>().refresh();
         context.read<RecurringBillsProvider>().fetchBills();
         AppSnackBar.showSuccess(
           context,
-          'Synced $count queued offline transaction(s) with cloud.',
-          title: 'Sync Complete',
+          context.trArgs('sync_complete_msg', {'count': count}),
+          title: context.tr('sync_complete'),
           icon: Icons.cloud_done_rounded,
         );
       }
     });
 
     _fetchHouseholdId();
+  }
+
+  @override
+  void dispose() {
+    _flushSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchHouseholdId() async {
@@ -470,8 +479,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         Expanded(
                                           child: Text(
                                             '$pending ${context.tr('queued_offline')}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
+                                            style: TextStyle(
+                                              color: context.textPrimary,
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -560,13 +569,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     ),
                                     _QuickActionButton(
                                       icon: Icons.calculate_outlined,
-                                      label: 'Simulator',
+                                      label: context.tr('quick_simulator'),
                                       color: const Color(0xFFD4AF37),
                                       onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
                                     ),
                                     _QuickActionButton(
                                       icon: Icons.trending_up_rounded,
-                                      label: 'Prices',
+                                      label: context.tr('quick_prices'),
                                       color: const Color(0xFF73FBC4),
                                       onTap: () {
                                         Navigator.push(

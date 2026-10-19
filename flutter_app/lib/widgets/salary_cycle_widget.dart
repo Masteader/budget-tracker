@@ -102,7 +102,7 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
         ? context.tr('on_track')
         : (paceStatus == 'exhausted' || paceStatus == 'critical'
             ? context.tr('over_budget')
-            : (_data!['pace_label_en'] as String? ?? 'On Track'));
+            : context.tr('pace_caution'));
     final paceColor = _getPaceColor(paceStatus);
     final fmt = NumberFormat('#,##0.0', 'en_US');
 
@@ -256,8 +256,8 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                   Expanded(
                     child: Text(
                       paceStatus == 'exhausted'
-                          ? 'Alert: Total allocations for this cycle have been exceeded.'
-                          : 'Alert: Burn rate is high! Projected to run out around ${_data!['forecast_run_out_date'] ?? 'before payday'}.',
+                          ? context.tr('cycle_alert_exceeded')
+                          : context.trArgs('cycle_alert_burn_high', {'date': _data!['forecast_run_out_date'] ?? context.tr('before_payday')}),
                       style: TextStyle(color: paceColor, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                   ),

@@ -16,6 +16,9 @@ class AppThemes {
   static const Color electricTeal = Color(0xFF00E5BF);  // Sovereign Electric Teal
   static const Color mintNeon = Color(0xFF73FBC4);      // Mint Neon Status
   static const Color champagneGold = Color(0xFFD4AF37); // Sovereign Gold Accent
+  static const Color success = Color(0xFF00C896);       // Surplus / Safe Emerald
+  static const Color accentTextLight = Color(0xFF00796B); // AA-contrast teal on light canvas
+  static const Color successTextLight = Color(0xFF047857); // AA-contrast emerald on light canvas
   static const Color deepGlacial = Color(0xFF071C33);   // Nav & Elevated HUD
 
   static const Color brandLightBg = Color(0xFFF8FAFC);
@@ -221,6 +224,14 @@ extension ThemeContextExtension on BuildContext {
   Color get iceCyan => AppThemes.iceCyan;
   Color get mintNeon => AppThemes.mintNeon;
   Color get champagneGold => AppThemes.champagneGold;
+
+  /// Teal accent for *text and icons*. The electric teal brand colour only
+  /// reaches ~1.6:1 contrast on the light canvas, so light mode uses a deeper
+  /// teal that meets WCAG AA (≥4.5:1) for body-size text.
+  Color get accentText => isDarkMode ? AppThemes.electricTeal : AppThemes.accentTextLight;
+
+  /// Success/surplus green for *text and icons*, contrast-safe in light mode.
+  Color get successText => isDarkMode ? AppThemes.success : AppThemes.successTextLight;
 
   LinearGradient get icedHeroGradient => isDarkMode
       ? const LinearGradient(

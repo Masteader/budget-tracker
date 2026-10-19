@@ -14,6 +14,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../home/dashboard_screen.dart';
+import '../../l10n/app_localizations.dart';
 
 class HouseholdScreen extends StatefulWidget {
   final ApiService? apiService;
@@ -103,8 +104,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         context.read<BudgetProvider>().init(householdId);
         AppSnackBar.showSuccess(
           context,
-          'Household "${hh['name']}" created! Invite code: ${hh['invite_code']}',
-          title: 'Household Ready',
+          context.trArgs('hh_created_with_code', {'name': hh['name'], 'code': hh['invite_code']}),
+          title: context.tr('hh_ready'),
         );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
@@ -123,7 +124,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   Future<void> _joinHousehold() async {
     final code = _joinCodeCtrl.text.trim().toUpperCase();
     if (code.length < 8 || code.length > 16) {
-      _showError('Invite code must be between 8 and 16 characters.');
+      _showError(context.tr('hh_invite_code_length'));
       return;
     }
     setState(() => _loading = true);
@@ -163,15 +164,15 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         } catch (_) {}
         if (!mounted) return;
         final roleLabel = invite.isSpouse
-            ? 'Wife / Spouse'
-            : (invite.isPeer ? 'Roommate' : 'Family Member');
+            ? context.tr('wife_spouse_title')
+            : (invite.isPeer ? context.tr('role_roommate') : context.tr('role_family_member'));
         final welcomeMsg = targetMemberName != null && targetMemberName.isNotEmpty
-            ? 'Welcome $targetMemberName! Claimed profile as $roleLabel!'
-            : 'Joined household "${hh['name'] ?? code}" as $roleLabel!';
+            ? context.trArgs('hh_welcome_claimed', {'name': targetMemberName, 'role': roleLabel})
+            : context.trArgs('hh_joined_as', {'name': hh['name'] ?? code, 'role': roleLabel});
         AppSnackBar.showSuccess(
           context,
           welcomeMsg,
-          title: 'Welcome to Household',
+          title: context.tr('hh_welcome_to_household'),
         );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: widget.destinationBuilder ?? (_) => const DashboardScreen()),
@@ -188,26 +189,27 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     AppSnackBar.showError(
       context,
       msg,
-      title: 'Action Failed',
+      title: context.tr('action_failed'),
     );
   }
 
   Widget _buildTargetedClaimBanner(HouseholdInvite invite) {
     Color bannerColor = const Color(0xFF00C896);
     IconData roleIcon = Icons.stars_rounded;
-    String roleLabel = 'Member';
+    String roleLabel = context.tr('member');
 
     if (invite.isSpouse) {
       bannerColor = const Color(0xFFE5A93C);
       roleIcon = Icons.favorite_rounded;
-      roleLabel = 'Wife / Spouse';
+      roleLabel = context.tr('wife_spouse_title');
     } else if (invite.isPeer) {
       bannerColor = const Color(0xFF38BDF8);
       roleIcon = Icons.group_outlined;
-      roleLabel = 'Roommate';
+      roleLabel = context.tr('role_roommate');
     }
 
     return Container(
@@ -235,7 +237,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome ${invite.targetMemberName}!',
+                  context.trArgs('hh_welcome_name', {'name': invite.targetMemberName}),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -244,7 +246,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Joining as $roleLabel. Your pre-created profile & balance will merge automatically.',
+                  context.trArgs('hh_joining_as_merge', {'role': roleLabel}),
                   style: TextStyle(
                     fontSize: 11,
                     color: context.textSecondary,
@@ -268,11 +270,11 @@ class _HouseholdScreenState extends State<HouseholdScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
-              Text('Your Household',
+              Text(context.tr('hh_your_household'),
                   style: GoogleFonts.outfit(
                       fontSize: 28, fontWeight: FontWeight.w700, color: context.textPrimary)),
               const SizedBox(height: 8),
-              Text('Create a new household or join one.',
+              Text(context.tr('hh_create_or_join'),
                   style: TextStyle(color: context.textSecondary)),
               const SizedBox(height: 32),
 
@@ -282,7 +284,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                 indicatorColor: const Color(0xFF00C896),
                 labelColor: const Color(0xFF00C896),
                 unselectedLabelColor: context.textSecondary,
-                tabs: const [Tab(text: 'Create'), Tab(text: 'Join')],
+                tabs: [Tab(text: context.tr('create')), Tab(text: context.tr('join'))],
               ),
               const SizedBox(height: 28),
 
@@ -295,14 +297,14 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                       children: [
                         TextField(
                           controller: _createNameCtrl,
-                          decoration: const InputDecoration(
-                            hintText: 'Household name (e.g. Al-Rashidi Family)',
-                            prefixIcon: Icon(Icons.home_outlined),
+                          decoration: InputDecoration(
+                            hintText: context.tr('hh_name_hint'),
+                            prefixIcon: const Icon(Icons.home_outlined),
                           ),
                         ),
                         const SizedBox(height: 24),
                         _BigButton(
-                          label: 'Create Household',
+                          label: context.tr('hh_create_household'),
                           icon: Icons.add_home_outlined,
                           loading: _loading,
                           onTap: _createHousehold,
@@ -318,9 +320,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                           controller: _joinCodeCtrl,
                           textCapitalization: TextCapitalization.characters,
                           maxLength: 16,
-                          decoration: const InputDecoration(
-                            hintText: '8 to 16 character invite code',
-                            prefixIcon: Icon(Icons.qr_code_outlined),
+                          decoration: InputDecoration(
+                            hintText: context.tr('hh_invite_code_hint'),
+                            prefixIcon: const Icon(Icons.qr_code_outlined),
                           ),
                         ),
                         if (_inspectedInvite != null &&
@@ -329,7 +331,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                           _buildTargetedClaimBanner(_inspectedInvite!),
                         const SizedBox(height: 24),
                         _BigButton(
-                          label: 'Join Household',
+                          label: context.tr('join_household'),
                           icon: Icons.group_add_outlined,
                           loading: _loading,
                           onTap: _joinHousehold,

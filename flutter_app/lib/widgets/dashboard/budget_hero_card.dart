@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;
@@ -73,7 +74,17 @@ class BudgetHeroCard extends StatelessWidget {
     final spentRatio = totalAllocated > 0 ? (totalSpent / totalAllocated).clamp(0.0, 1.0) : 0.0;
 
     final fmt = NumberFormat('#,##0.00', 'en_US');
-    final compactFmt = NumberFormat('#,##0', 'en_US');
+    final currencyUnit = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        context.tr('sar'),
+        style: GoogleFonts.outfit(
+          color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A887),
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -140,7 +151,7 @@ class BudgetHeroCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'SOVEREIGN HUD',
+                    context.tr('hero_tag'),
                     style: GoogleFonts.outfit(
                       color: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF008F7A),
                       fontSize: 11,
@@ -162,7 +173,7 @@ class BudgetHeroCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  '$daysUntilPayday DAYS TO PAYDAY',
+                  context.trArgs('days_to_payday_badge', {'days': daysUntilPayday}),
                   style: GoogleFonts.outfit(
                     color: isDark ? Colors.white70 : const Color(0xFF065F54),
                     fontSize: 10.5,
@@ -176,7 +187,7 @@ class BudgetHeroCard extends StatelessWidget {
 
           // ─── Big Remaining Amount ──────────────────────────────────
           Text(
-            'CYCLE REMAINING BUDGET',
+            context.tr('cycle_remaining_budget'),
             style: GoogleFonts.outfit(
               color: isDark ? Colors.white.withValues(alpha: 0.65) : const Color(0xFF64748B),
               fontSize: 11.5,
@@ -185,28 +196,30 @@ class BudgetHeroCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                'SAR ',
-                style: GoogleFonts.outfit(
-                  color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A887),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+          // The amount scales down instead of overflowing on narrow screens
+          // or with large accessibility text. Arabic/Urdu place the unit after
+          // the number ("1,250.00 ر.س"), English before it ("SAR 1,250.00").
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                if (!context.isRtl) currencyUnit,
+                Text(
+                  fmt.format(remaining),
+                  style: GoogleFonts.outfit(
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
-              Text(
-                fmt.format(remaining),
-                style: GoogleFonts.outfit(
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
+                if (context.isRtl) currencyUnit,
+              ],
+            ),
           ),
           const SizedBox(height: 12),
 
@@ -246,8 +259,8 @@ class BudgetHeroCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     isBurnCaution
-                        ? 'Burn SAR ${compactFmt.format(dailyBurn)}/d (Pacing High)'
-                        : 'Burn SAR ${compactFmt.format(dailyBurn)}/d (On Track)',
+                        ? context.trArgs('burn_pacing_high', {'amount': context.sar(dailyBurn, decimals: 0)})
+                        : context.trArgs('burn_on_track', {'amount': context.sar(dailyBurn, decimals: 0)}),
                     style: GoogleFonts.outfit(
                       color: isBurnCaution
                           ? (isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706))
@@ -259,7 +272,7 @@ class BudgetHeroCard extends StatelessWidget {
                 ],
               ),
               Text(
-                '${(spentRatio * 100).toInt()}% Spent',
+                context.trArgs('percent_spent', {'percent': (spentRatio * 100).toInt()}),
                 style: GoogleFonts.outfit(
                   color: isDark ? Colors.white60 : const Color(0xFF64748B),
                   fontSize: 11,
@@ -275,8 +288,8 @@ class BudgetHeroCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCapsule(
-                  label: 'Allocated',
-                  value: 'SAR ${compactFmt.format(totalAllocated)}',
+                  label: context.tr('allocated'),
+                  value: context.sar(totalAllocated, decimals: 0),
                   icon: Icons.account_balance_wallet_outlined,
                   accentColor: isDark ? const Color(0xFF4DE6F7) : const Color(0xFF0284C7),
                 ),
@@ -284,8 +297,8 @@ class BudgetHeroCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _StatCapsule(
-                  label: 'Spent',
-                  value: 'SAR ${compactFmt.format(totalSpent)}',
+                  label: context.tr('spent'),
+                  value: context.sar(totalSpent, decimals: 0),
                   icon: Icons.payments_outlined,
                   accentColor: isDark ? const Color(0xFF00E5BF) : const Color(0xFF059669),
                 ),
@@ -293,8 +306,8 @@ class BudgetHeroCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _StatCapsule(
-                  label: 'Allowance',
-                  value: 'SAR ${compactFmt.format(dailyAllowance)}/d',
+                  label: context.tr('allowance'),
+                  value: context.trArgs('per_day_suffix', {'amount': context.sar(dailyAllowance, decimals: 0)}),
                   icon: Icons.speed_rounded,
                   accentColor: isDark ? const Color(0xFFD4AF37) : const Color(0xFFB45309),
                 ),
@@ -328,7 +341,7 @@ class BudgetHeroCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Projected: SAR ${fmt.format(projectedSpend)} (Over budget)',
+                      context.trArgs('projected_over_budget', {'amount': context.sar(projectedSpend)}),
                       style: GoogleFonts.outfit(
                         color: isDark ? const Color(0xFFFFA657) : const Color(0xFFDC2626),
                         fontSize: 11.5,
