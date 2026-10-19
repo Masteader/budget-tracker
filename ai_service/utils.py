@@ -5,11 +5,41 @@ import hmac
 import logging
 import os
 import uuid as _uuid
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
+
+# Saudi Arabia is UTC+3 all year (no DST since 1979). A fixed offset avoids a runtime dependency
+# on the tzdata package in slim containers and matches Postgres' AT TIME ZONE 'Asia/Riyadh'.
+RIYADH_TZ = timezone(timedelta(hours=3), "Asia/Riyadh")
+
+
+def utc_now() -> datetime:
+    """Current UTC time (single seam for tests)."""
+    return datetime.now(timezone.utc)
+
+
+def riyadh_today() -> date:
+    """
+    Today's calendar date in Riyadh. Salary cycles are defined on Riyadh dates (the DB function
+    get_saudi_cycle_for_timestamp converts to Asia/Riyadh); using the UTC date reported the
+    previous cycle between 00:00 and 03:00 Riyadh time on payday.
+    """
+    return utc_now().astimezone(RIYADH_TZ).date()
+
+
+def riyadh_date_for_timestamp(ts: Optional[str | datetime]) -> date:
+    """Riyadh calendar date of an ISO-8601 timestamp (naive values are treated as UTC)."""
+    if ts is None or ts == "":
+        return riyadh_today()
+    dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(RIYADH_TZ).date()
 
 
 def safe_error_response(

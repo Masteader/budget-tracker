@@ -27,6 +27,8 @@ from supabase_client import (
     reallocate_budget,
 )
 
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 class ChatLineItem(BaseModel):
@@ -624,7 +626,7 @@ def process_chat_transaction(
             }
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = datetime.now(timezone.utc).date()
+    now_date = riyadh_today()
 
     # Check budget and reallocate if necessary
     budget = fetch_budget(household_id, category_code, now_date)

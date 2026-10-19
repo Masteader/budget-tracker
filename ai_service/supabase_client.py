@@ -15,6 +15,8 @@ from supabase import create_client, Client
 
 from models import BudgetRow, CostControlCode
 
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
+
 logger = logging.getLogger(__name__)
 
 # ─── Singleton client ─────────────────────────────────────────────────────────
@@ -295,14 +297,17 @@ def insert_transaction(
     client = get_client()
 
     # Automatically derive cycle_key from timestamp if not supplied
+    # Mirrors the DB trigger populate_transaction_cycle_key: Riyadh calendar date of the
+    # timestamp and the household's configured payday (was: UTC date and a fixed 27th).
     if not cycle_key:
+        from salary_cycle import get_cycle_for_date
+        from utils import riyadh_date_for_timestamp
+        payday_day = get_household_payday(household_id)
         try:
-            from salary_cycle import get_cycle_for_date
-            tx_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            cycle_key = get_cycle_for_date(tx_dt.date())["cycle_key"]
-        except Exception:
-            from salary_cycle import get_cycle_for_date
-            cycle_key = get_cycle_for_date()["cycle_key"]
+            tx_date = riyadh_date_for_timestamp(timestamp)
+        except (TypeError, ValueError):
+            tx_date = riyadh_today()
+        cycle_key = get_cycle_for_date(tx_date, payday_day=payday_day)["cycle_key"]
 
     # Automatically derive sub_category from keywords if not supplied
     if not sub_category and category_code:
@@ -439,7 +444,7 @@ def ensure_household_cycle_budgets(
         return existing
 
     # Fallback check by month
-    target_d = target_date or datetime.now(timezone.utc).date()
+    target_d = target_date or riyadh_today()
     month_str = target_d.replace(day=1).isoformat()
     existing_month = client.table("budgets").select("*").eq("household_id", household_id).eq("month", month_str).execute().data
     if existing_month:

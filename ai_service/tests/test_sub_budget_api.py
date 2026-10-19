@@ -18,7 +18,8 @@ def test_get_cycles_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert "current_cycle" in data
-    assert data["current_cycle"]["cycle_key"] == "2026-10"
+    from salary_cycle import get_cycle_for_date
+    assert data["current_cycle"]["cycle_key"] == get_cycle_for_date()["cycle_key"]
     assert "cycles" in data
     assert len(data["cycles"]) >= 1
 
