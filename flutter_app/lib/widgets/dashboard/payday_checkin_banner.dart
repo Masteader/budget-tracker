@@ -3,15 +3,52 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
+import '../../models/account.dart';
 import '../../theme/app_themes.dart';
 import '../salary/payday_income_sheet.dart';
+
+/// Looks up whether a salary income record was received for [householdId]
+/// on or after [since].
+typedef RecentSalaryLookup = Future<bool> Function(String householdId, DateTime since);
 
 /// Dismissible banner shown around payday (e.g. 25th-31st or 1st-3rd)
 /// if no salary has been logged yet for the current cycle.
 class PaydayCheckinBanner extends StatefulWidget {
   final String householdId;
 
-  const PaydayCheckinBanner({super.key, required this.householdId});
+  /// Overrides the Supabase lookup (used by tests).
+  final RecentSalaryLookup? salaryLookup;
+
+  /// Overrides the clock (used by tests).
+  final DateTime Function()? clock;
+
+  const PaydayCheckinBanner({
+    super.key,
+    required this.householdId,
+    this.salaryLookup,
+    this.clock,
+  });
+
+  /// Column of `income_records` holding the income kind ('salary', 'bonus', ...).
+  /// It is `source_type` (see IncomeRecord.toMap); an earlier version queried a
+  /// non-existent `income_type` column, so the query always failed and the
+  /// banner never appeared.
+  static const String sourceTypeColumn = 'source_type';
+
+  /// Whether [now] falls in the typical Saudi payday window (25th to 3rd).
+  static bool isPaydayWindow(DateTime now) => now.day >= 25 || now.day <= 3;
+
+  /// Default lookup against Supabase.
+  static Future<bool> supabaseSalaryLookup(String householdId, DateTime since) async {
+    final records = await supabase
+        .from('income_records')
+        .select('id')
+        .eq('household_id', householdId)
+        .eq(sourceTypeColumn, IncomeSourceType.salary.value)
+        .gte('received_at', since.toIso8601String())
+        .limit(1);
+    return records.isNotEmpty;
+  }
 
   @override
   State<PaydayCheckinBanner> createState() => _PaydayCheckinBannerState();
@@ -28,31 +65,27 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
   }
 
   Future<void> _checkPaydayStatus() async {
-    final now = DateTime.now();
-    // Typical Saudi payday window is 25th to 31st or 1st to 3rd
-    final isPaydayWindow = now.day >= 25 || now.day <= 3;
-    if (!isPaydayWindow) {
+    final now = (widget.clock ?? DateTime.now)();
+    if (!PaydayCheckinBanner.isPaydayWindow(now)) {
       if (mounted) setState(() => _checked = true);
       return;
     }
 
     try {
-      final since = now.subtract(const Duration(days: 20)).toIso8601String();
-      final records = await supabase
-          .from('income_records')
-          .select('id')
-          .eq('household_id', widget.householdId)
-          .eq('income_type', 'salary')
-          .gte('received_at', since)
-          .limit(1);
+      final since = now.subtract(const Duration(days: 20));
+      final lookup = widget.salaryLookup ?? PaydayCheckinBanner.supabaseSalaryLookup;
+      final hasSalary = await lookup(widget.householdId, since);
 
       if (mounted) {
         setState(() {
-          _shouldShow = records.isEmpty;
+          _shouldShow = !hasSalary;
           _checked = true;
         });
       }
-    } catch (_) {
+    } catch (e, st) {
+      // Do not fail silently: a broken query hides the banner for everyone.
+      debugPrint('[PaydayCheckinBanner] salary lookup failed: $e');
+      debugPrintStack(stackTrace: st, maxFrames: 5);
       if (mounted) setState(() => _checked = true);
     }
   }
@@ -130,15 +163,16 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               PaydayIncomeSheet.show(
                 context,
                 householdId: widget.householdId,
-                onCompleted: () => setState(() => _shouldShow = false),
+                onCompleted: () {
+                  if (mounted) setState(() => _shouldShow = false);
+                },
               );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: context.electricTeal,
               foregroundColor: context.scaffoldBg,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(48, 40),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
@@ -152,9 +186,10 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
           ),
           const SizedBox(width: 4),
           IconButton(
+            tooltip: context.tr('dismiss'),
             icon: Icon(Icons.close, size: 16, color: context.textSecondary),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
             onPressed: () => setState(() => _shouldShow = false),
           ),
         ],
