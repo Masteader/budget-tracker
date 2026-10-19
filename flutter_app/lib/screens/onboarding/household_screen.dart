@@ -87,25 +87,14 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     setState(() => _loading = true);
     try {
       Map<String, dynamic> hh;
-      try {
-        final res = await supabase.rpc(
-          'create_household_and_claim',
-          params: {'p_name': name},
-        );
-        hh = Map<String, dynamic>.from(res as Map);
-      } catch (_) {
-        final uid = supabase.auth.currentUser!.id;
-        final res = await supabase
-            .from('households')
-            .insert({'name': name})
-            .select()
-            .single();
-        hh = res;
-        await supabase
-            .from('users')
-            .update({'household_id': hh['id'], 'role': 'admin'})
-            .eq('id', uid);
+      final res = await supabase.rpc(
+        'create_household_and_claim',
+        params: {'p_name': name},
+      );
+      if (res is Map && res['error'] != null) {
+        throw Exception(res['error']);
       }
+      hh = Map<String, dynamic>.from(res as Map);
       final householdId = hh['id'] as String;
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
@@ -138,7 +127,6 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     setState(() => _loading = true);
     try {
       final invite = _inspectedInvite ?? await _api.inspectInviteCode(code);
-      final confirmedRole = invite.role;
       final targetMemberId = invite.targetMemberId;
       final targetMemberName = invite.targetMemberName;
       final uid = _currentUserId;
@@ -155,28 +143,18 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           'join_household_by_code',
           params: {'p_invite_code': code},
         );
+        if (res is Map && res['error'] != null) {
+          throw Exception(res['error']);
+        }
         hh = Map<String, dynamic>.from(res as Map);
-      } catch (_) {
-        try {
-          final res = await supabase
-              .from('households')
-              .select()
-              .eq('invite_code', code)
-              .single();
-          hh = res;
-          await supabase
-              .from('users')
-              .update({
-                'household_id': hh['id'],
-                'role': 'member',
-                'financial_role': confirmedRole,
-              })
-              .eq('id', uid);
-        } catch (_) {
+      } catch (e) {
+        if (invite.householdId.isNotEmpty) {
           hh = {
-            'id': invite.householdId.isNotEmpty ? invite.householdId : 'hh_default',
+            'id': invite.householdId,
             'name': 'Household',
           };
+        } else {
+          rethrow;
         }
       }
       final householdId = hh['id'] as String;

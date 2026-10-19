@@ -433,10 +433,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       final uid = supabase.auth.currentUser?.id;
       if (uid == null) return;
       try {
-        await supabase
-            .from('users')
-            .update({'household_id': null, 'role': null})
-            .eq('id', uid);
+        final res = await supabase.rpc('leave_household');
+        if (res is Map && res['error'] != null) {
+          throw Exception(res['error']);
+        }
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(
@@ -509,19 +509,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               if (code.length != 8) return;
               Navigator.pop(ctx);
               try {
-                try {
-                  await supabase.rpc('join_household_by_code', params: {'p_invite_code': code});
-                } catch (_) {
-                  final uid = supabase.auth.currentUser!.id;
-                  final hh = await supabase
-                      .from('households')
-                      .select()
-                      .eq('invite_code', code)
-                      .single();
-                  await supabase
-                      .from('users')
-                      .update({'household_id': hh['id'], 'role': 'member'})
-                      .eq('id', uid);
+                final res = await supabase.rpc('join_household_by_code', params: {'p_invite_code': code});
+                if (res is Map && res['error'] != null) {
+                  throw Exception(res['error']);
                 }
                 if (mounted) {
                   AppSnackBar.showSuccess(
@@ -585,21 +575,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               if (name.isEmpty) return;
               Navigator.pop(ctx);
               try {
-                final uid = supabase.auth.currentUser!.id;
-                final res = await supabase
-                    .from('households')
-                    .insert({'name': name})
-                    .select()
-                    .single();
-                await supabase
-                    .from('users')
-                    .update({'household_id': res['id'], 'role': 'admin'})
-                    .eq('id', uid);
+                final res = await supabase.rpc('create_household_and_claim', params: {'p_name': name});
+                final hhName = (res is Map && res['name'] != null) ? res['name'] : name;
 
                 if (mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Created household "${res['name']}"!',
+                    'Created household "$hhName"!',
                     title: 'Household Created',
                   );
                   _loadUserInfo();

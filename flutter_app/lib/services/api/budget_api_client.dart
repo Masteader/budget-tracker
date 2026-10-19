@@ -626,27 +626,7 @@ class BudgetApiClient {
       if (res is Map && res['success'] == true) {
         return true;
       }
-    } catch (_) {
-      try {
-        final client = Supabase.instance.client;
-        final uid = client.auth.currentUser?.id;
-        if (uid != null) {
-          final membership = await client
-              .from('household_memberships')
-              .select('role')
-              .eq('household_id', householdId)
-              .eq('user_id', uid)
-              .maybeSingle();
-          if (membership != null) {
-            await client.from('users').update({
-              'household_id': householdId,
-              'role': membership['role'] ?? 'member',
-            }).eq('id', uid);
-            return true;
-          }
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
     return false;
   }
 }
