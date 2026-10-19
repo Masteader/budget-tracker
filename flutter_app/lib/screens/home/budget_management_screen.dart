@@ -855,7 +855,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 const SizedBox(width: 8),
                                 Text(
                                   context.tr('no_allocations_set'),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
                               ],
                             ),

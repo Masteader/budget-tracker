@@ -220,7 +220,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
             children: [
               Text(
                 name,
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: context.textPrimary),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

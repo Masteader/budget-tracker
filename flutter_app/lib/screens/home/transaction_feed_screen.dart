@@ -195,7 +195,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: context.textPrimary,
                           ),
                         ),
                         TextButton(

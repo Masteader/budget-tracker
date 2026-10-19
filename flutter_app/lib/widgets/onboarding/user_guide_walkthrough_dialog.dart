@@ -215,7 +215,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                               style: GoogleFonts.outfit(
                                 fontSize: 19,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 10),
