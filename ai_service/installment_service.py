@@ -85,8 +85,17 @@ class InstallmentPlan(BaseModel):
 
     @property
     def remaining_amount(self) -> float:
-        paid = self.monthly_amount * self.paid_installments
-        return max(0.0, round(self.total_amount - paid, 2))
+        """Outstanding SAR, computed in Decimal halalas. The final installment absorbs the
+        rounding remainder (100/3 → 33.33, 33.33, 33.34), so a completed plan owes exactly 0
+        instead of a residual 0.01 from float math."""
+        from decimal import Decimal, ROUND_HALF_UP
+
+        if self.paid_installments >= self.installment_count:
+            return 0.0
+        total = Decimal(str(self.total_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        monthly = Decimal(str(self.monthly_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        remaining = total - monthly * self.paid_installments
+        return float(max(Decimal("0"), remaining))
 
     @property
     def remaining_installments(self) -> int:

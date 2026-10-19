@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
@@ -379,18 +379,24 @@ async def remove_household_dependent(
 )
 async def household_settlement(
     household_id: str,
-    split_ratio: float = 0.50,
+    request: Request,
+    split_ratio: float = Query(0.50, ge=0.0, le=1.0, allow_inf_nan=False),
     _auth: str = Depends(verify_household_access),
 ):
     """
     Aggregates transactions in the active salary cycle by spent_by ('me', 'partner', 'both').
     Returns net balance, who owes whom, and copyable STC Pay / Urpay / IBAN transfer note.
+    split_ratio applies to roommate/partner households only; married-family households are
+    settled by Nafaqah rules (no 50/50 spousal split).
     """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    caller_user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
+        return await asyncio.to_thread(
+            calculate_partner_settlement, household_id, split_ratio=split_ratio, caller_user_id=caller_user_id
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to compute partner settlement.")
 

@@ -6,17 +6,46 @@ Calculates balance between partners for shared household expenses and generates 
 from __future__ import annotations
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, Any, List, Optional, Tuple
 
 from supabase_client import get_client
 from salary_cycle import get_salary_cycle_dates
 
 logger = logging.getLogger(__name__)
 
+_HALALA = Decimal("0.01")
+
+
+def _to_halalas(amount: Any) -> int:
+    """SAR amount → integer halalas (1/100 SAR), rounding half-up on the decimal value."""
+    return int((Decimal(str(amount or 0)) / _HALALA).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _to_sar(halalas: int) -> float:
+    return float((Decimal(halalas) * _HALALA).quantize(_HALALA))
+
+
+def _household_family_roles(client, household_id: str) -> Tuple[bool, Dict[str, str]]:
+    """
+    Returns (is_family_household, {user_id: financial_role}). A household with a member whose
+    financial_role is 'spouse' is a married family: Nafaqah applies, never a 50/50 split.
+    """
+    try:
+        res = client.table("users").select("id, role, financial_role").eq("household_id", household_id).execute()
+        rows = res.data if isinstance(getattr(res, "data", None), list) else []
+    except Exception as exc:
+        logger.warning("Could not load household roles for settlement: %s", exc)
+        rows = []
+    roles = {str(r.get("id")): str(r.get("financial_role") or "").lower() for r in rows if r.get("id")}
+    return any(role == "spouse" for role in roles.values()), roles
+
+
 def calculate_partner_settlement(
     household_id: str,
     cycle_start: Optional[str] = None,
-    split_ratio: float = 0.50,  # default 50/50
+    split_ratio: float = 0.50,  # roommate/partner households only
+    caller_user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Computes household partner balance for the current active salary cycle.
@@ -24,8 +53,18 @@ def calculate_partner_settlement(
       - paid_by: 'me' | 'partner' (who actually paid/tapped card)
       - beneficiary: 'me' | 'partner' | 'both' (who benefits from purchase)
     Backward compatible with legacy 'spent_by' field.
+
+    In a married-family household (a member with financial_role 'spouse') the Islamic Nafaqah
+    rule applies instead of ``split_ratio``: the husband bears household, children and wife
+    expenses in full, so nothing he pays creates a debt for the wife, and everything the wife
+    pays for the household/husband/children is owed back to her in full. ``caller_user_id``
+    identifies which spouse "me" refers to.
     """
+    if not (0.0 <= float(split_ratio) <= 1.0):
+        raise ValueError("split_ratio must be between 0 and 1")
     client = get_client()
+    is_family, roles = _household_family_roles(client, household_id)
+    caller_is_wife = roles.get(str(caller_user_id or ""), "") == "spouse"
     dates = get_salary_cycle_dates()
     start_iso = cycle_start or dates["cycle_start"]
 
@@ -134,17 +173,28 @@ def calculate_partner_settlement(
             shared_txs.append(tx)
 
     total_shared = shared_paid_by_me + shared_paid_by_partner
-    fair_share_me = round(total_shared * split_ratio, 2)
-    fair_share_partner = round(total_shared * (1.0 - split_ratio), 2)
+    if is_family:
+        # Nafaqah: husband carries 100% of shared family expenses; no spousal 50/50 split.
+        if caller_is_wife:
+            fair_share_me, fair_share_partner = 0.0, round(total_shared, 2)
+            total_owed_to_me = shared_paid_by_me + i_paid_for_partner_100
+            total_owed_to_partner = 0.0
+        else:
+            fair_share_me, fair_share_partner = round(total_shared, 2), 0.0
+            total_owed_to_me = 0.0
+            total_owed_to_partner = shared_paid_by_partner + partner_paid_for_me_100
+    else:
+        fair_share_me = round(total_shared * split_ratio, 2)
+        fair_share_partner = round(total_shared * (1.0 - split_ratio), 2)
 
-    # Calculate net debt:
-    # What partner owes me:
-    partner_owes_for_shared = shared_paid_by_me * (1.0 - split_ratio)
-    total_owed_to_me = i_paid_for_partner_100 + partner_owes_for_shared
+        # Calculate net debt:
+        # What partner owes me:
+        partner_owes_for_shared = shared_paid_by_me * (1.0 - split_ratio)
+        total_owed_to_me = i_paid_for_partner_100 + partner_owes_for_shared
 
-    # What I owe partner:
-    i_owe_for_shared = shared_paid_by_partner * split_ratio
-    total_owed_to_partner = partner_paid_for_me_100 + i_owe_for_shared
+        # What I owe partner:
+        i_owe_for_shared = shared_paid_by_partner * split_ratio
+        total_owed_to_partner = partner_paid_for_me_100 + i_owe_for_shared
 
     # Net balance: positive = partner owes me, negative = I owe partner
     net_balance = round(total_owed_to_me - total_owed_to_partner, 2)
@@ -166,6 +216,7 @@ def calculate_partner_settlement(
         recommendation_ar = f"أنت مدين للشريك بمبلغ {settle_amt:.2f} ريال لتسوية المصاريف المشتركة والخاصة."
 
     return {
+        "mode": "family_nafaqah" if is_family else "shared_split",
         "cycle_start": start_iso,
         "total_shared_expenses": round(total_shared, 2),
         "shared_paid_by_me": round(shared_paid_by_me, 2),
@@ -224,17 +275,22 @@ def calculate_family_nafaqah(
             continue
 
         # Normal expenses
+        is_tabarru = bool(tx.get("is_tabarru") or tx.get("is_gift"))
         if paid_by in (wife_id.lower(), "wife", "spouse"):
-            # Wife paid for household, kids, or husband -> Husband owes 100% reimbursement
-            if ben_type in ("household", "all_peers", "") or ben_id in ("household", "kids", "children", husband_id.lower(), "husband", "") or "child" in ben_id:
-                wife_reimbursement_owed += amt
-                if "child" in ben_id or ben_id in ("kids", "children"):
+            if ben_id in (wife_id.lower(), "wife", "spouse"):
+                # Wife personal expenditure from own pocket
+                spent_on_wife += amt
+            else:
+                # Wife paid for the household, the husband, children or any dependent (incl. a
+                # dependent referenced only by id, which previously fell through uncounted):
+                # the husband owes it back in full unless she gave it as Tabarru' (voluntary gift).
+                is_child = "child" in ben_id or ben_id in ("kids", "children") or ben_type in ("individual", "dependent")
+                if not is_tabarru:
+                    wife_reimbursement_owed += amt
+                if is_child and ben_id not in (husband_id.lower(), "husband"):
                     spent_on_children += amt
                 else:
                     family_general_total += amt
-            elif ben_id in (wife_id.lower(), "wife", "spouse"):
-                # Wife personal expenditure from own pocket
-                spent_on_wife += amt
         else:
             # Husband or general household payer
             if ben_id in (wife_id.lower(), "wife", "spouse"):
@@ -268,113 +324,101 @@ def calculate_roommate_pairwise_debts(
     """
     Computes pairwise debt balance across multiple roommates, honoring line-item tags.
     Returns: [{'from_id': 'omar', 'to_id': 'ahmed', 'amount': 100.0}, ...]
+
+    All arithmetic is in integer halalas. Equal splits distribute the indivisible remainder
+    one halala at a time in sorted peer order, so every halala paid is attributed exactly once
+    (float shares such as 100/3 previously leaked or invented fractions of a halala per split).
     """
-    peers_norm = [p.strip().lower() for p in peers if p]
-    if not peers_norm or len(peers_norm) < 2:
+    peers_norm = sorted({p.strip().lower() for p in peers if p})
+    if len(peers_norm) < 2:
         return []
 
-    # balance[i][j]: how much money person i paid on behalf of person j
-    balance: Dict[str, Dict[str, float]] = {p: {q: 0.0 for q in peers_norm} for p in peers_norm}
+    # balance[i][j]: halalas person i paid on behalf of person j
+    balance: Dict[str, Dict[str, int]] = {p: {q: 0 for q in peers_norm} for p in peers_norm}
+
+    def split_equally(payer: str, amount_halalas: int) -> None:
+        n = len(peers_norm)
+        base, remainder = divmod(amount_halalas, n)
+        for idx, p in enumerate(peers_norm):
+            share = base + (1 if idx < remainder else 0)
+            if p != payer:
+                balance[payer][p] += share
 
     for tx in txs:
-        amt = float(tx.get("amount") or 0.0)
+        amt = _to_halalas(tx.get("amount"))
         paid_by = str(tx.get("paid_by") or "").strip().lower()
         if paid_by not in balance:
             continue
 
-        is_settlement = bool(tx.get("is_settlement", False))
-        if is_settlement:
+        if bool(tx.get("is_settlement", False)):
             target_id = str(tx.get("settlement_target_id") or tx.get("beneficiary_id") or "").strip().lower()
             if target_id in balance and target_id != paid_by:
-                # Direct settlement payment from paid_by to target_id reduces target_id's debt
+                # Direct settlement payment from paid_by to target_id reduces paid_by's debt
                 balance[paid_by][target_id] += amt
             continue
 
         line_items = tx.get("line_items") or []
         if isinstance(line_items, list) and len(line_items) > 0:
             for item in line_items:
-                item_amt = float(item.get("amount") or 0.0)
+                item_amt = _to_halalas(item.get("amount"))
                 ben = str(item.get("beneficiary") or item.get("beneficiary_id") or "all_peers").strip().lower()
                 if ben in ("all_peers", "all", "shared", "household", ""):
-                    share = item_amt / len(peers_norm)
-                    for p in peers_norm:
-                        if p != paid_by:
-                            balance[paid_by][p] += share
+                    split_equally(paid_by, item_amt)
                 elif ben in balance and ben != paid_by:
                     balance[paid_by][ben] += item_amt
         else:
             ben_type = str(tx.get("beneficiary_type") or "all_peers").strip().lower()
             ben_id = str(tx.get("beneficiary_id") or "").strip().lower()
-
             if ben_type in ("all_peers", "household", "both") or not ben_id:
-                share = amt / len(peers_norm)
-                for p in peers_norm:
-                    if p != paid_by:
-                        balance[paid_by][p] += share
+                split_equally(paid_by, amt)
             elif ben_id in balance and ben_id != paid_by:
                 balance[paid_by][ben_id] += amt
 
     # Compute net pairwise debts
     debts: List[Dict[str, Any]] = []
-    peers_list = sorted(list(peers_norm))
-    for i in range(len(peers_list)):
-        for j in range(i + 1, len(peers_list)):
-            p1 = peers_list[i]
-            p2 = peers_list[j]
+    for i in range(len(peers_norm)):
+        for j in range(i + 1, len(peers_norm)):
+            p1, p2 = peers_norm[i], peers_norm[j]
             net = balance[p1][p2] - balance[p2][p1]
-            if net > 0.01:
-                debts.append({"from_id": p2, "to_id": p1, "amount": round(net, 2)})
-            elif net < -0.01:
-                debts.append({"from_id": p1, "to_id": p2, "amount": round(abs(net), 2)})
+            if net > 0:
+                debts.append({"from_id": p2, "to_id": p1, "amount": _to_sar(net)})
+            elif net < 0:
+                debts.append({"from_id": p1, "to_id": p2, "amount": _to_sar(-net)})
 
     return debts
 
 
 def simplify_debts(debts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Minimizes transaction count among multi-party debts using net balance matching.
-    """
-    net_balances: Dict[str, float] = {}
-    for d in debts:
-        from_id = d["from_id"]
-        to_id = d["to_id"]
-        amt = float(d["amount"])
-        net_balances[from_id] = net_balances.get(from_id, 0.0) - amt
-        net_balances[to_id] = net_balances.get(to_id, 0.0) + amt
+    Minimises transfers among multi-party debts by settling net balances.
 
-    # Separate into creditors (> 0) and debtors (< 0)
-    debtors = []
-    creditors = []
-    for person, bal in net_balances.items():
-        round_bal = round(bal, 2)
-        if round_bal < -0.01:
-            debtors.append([person, abs(round_bal)])
-        elif round_bal > 0.01:
-            creditors.append([person, round_bal])
+    Net positions are computed exactly in halalas; the largest debtor is repeatedly matched with
+    the largest creditor. The result preserves every participant's net position to the halala
+    and needs at most (participants with a non-zero balance - 1) transfers. Finding the absolute
+    minimum number of transfers is NP-hard (subset-sum); this greedy bound is the standard one.
+    """
+    net: Dict[str, int] = {}
+    for d in debts:
+        amt = _to_halalas(d["amount"])
+        net[d["from_id"]] = net.get(d["from_id"], 0) - amt
+        net[d["to_id"]] = net.get(d["to_id"], 0) + amt
+
+    debtors = sorted(([p, -b] for p, b in net.items() if b < 0), key=lambda x: (-x[1], x[0]))
+    creditors = sorted(([p, b] for p, b in net.items() if b > 0), key=lambda x: (-x[1], x[0]))
 
     simplified: List[Dict[str, Any]] = []
-    d_idx = 0
-    c_idx = 0
-
-    while d_idx < len(debtors) and c_idx < len(creditors):
-        debtor_person, debtor_amt = debtors[d_idx]
-        creditor_person, creditor_amt = creditors[c_idx]
-
-        settle_amt = min(debtor_amt, creditor_amt)
-        if settle_amt > 0.01:
-            simplified.append({
-                "from_id": debtor_person,
-                "to_id": creditor_person,
-                "amount": round(settle_amt, 2),
-            })
-
-        debtors[d_idx][1] -= settle_amt
-        creditors[c_idx][1] -= settle_amt
-
-        if debtors[d_idx][1] < 0.01:
-            d_idx += 1
-        if creditors[c_idx][1] < 0.01:
-            c_idx += 1
+    while debtors and creditors:
+        debtor, creditor = debtors[0], creditors[0]
+        settle = min(debtor[1], creditor[1])
+        simplified.append({"from_id": debtor[0], "to_id": creditor[0], "amount": _to_sar(settle)})
+        debtor[1] -= settle
+        creditor[1] -= settle
+        if debtor[1] == 0:
+            debtors.pop(0)
+        if creditor[1] == 0:
+            creditors.pop(0)
+        debtors.sort(key=lambda x: (-x[1], x[0]))
+        creditors.sort(key=lambda x: (-x[1], x[0]))
 
     return simplified
 
@@ -435,12 +479,19 @@ def calculate_settlement_v2(
     else:
         husband_id = "provider"
         wife_id = "spouse"
+        # financial_role decides; household admin rights say nothing about who the husband is
+        # (a wife who administers the household was previously treated as the provider).
         for m in members:
             f_role = (m.get("financial_role") or "").lower()
-            if f_role == "provider" or m.get("role") == "admin":
-                husband_id = m.get("id") or "provider"
-            elif f_role == "spouse":
+            if f_role == "spouse":
                 wife_id = m.get("id") or "spouse"
+            elif f_role == "provider":
+                husband_id = m.get("id") or "provider"
+        if husband_id == "provider":
+            for m in members:
+                if m.get("role") == "admin" and (m.get("financial_role") or "").lower() != "spouse":
+                    husband_id = m.get("id") or "provider"
+                    break
 
         family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
         return {
