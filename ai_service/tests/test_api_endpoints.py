@@ -279,14 +279,24 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
     assert "Rate limit exceeded" in blocked_resp.json()["detail"]
     assert "Retry-After" in blocked_resp.headers
 
-    # Another household should NOT be blocked
+    # The window is keyed by the verified user (API-08): the same user cannot reset it by
+    # switching household_id, while a different user is not affected.
     other_payload = {
         "image_base64": "fake_base64_data",
         "household_id": "b0000000-0000-0000-0000-000000000002",
         "allow_duplicate": True,
     }
     other_headers = _make_signed_headers(other_payload)
-    other_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    same_user_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    assert same_user_resp.status_code == 429
+
+    import routes.receipts as receipts_routes
+    original_user = receipts_routes.get_current_user_id
+    receipts_routes.get_current_user_id = lambda request: "00000000-0000-0000-0000-000000000002"
+    try:
+        other_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    finally:
+        receipts_routes.get_current_user_id = original_user
     assert other_resp.status_code == 200
 
     _reset_receipt_scan_rate_limits()

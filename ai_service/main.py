@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
-from utils import verify_signature as _verify_signature
+from utils import verify_signature as _verify_signature, is_production
 from landing_page import get_landing_page_html, get_auth_confirmed_html
 from routes.budgets import router as budgets_router
 from routes.households import router as households_router
@@ -136,9 +136,18 @@ if not APP_AUTH_TOKEN:
     )
 
 
+_API_DOC_PATHS = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
+
+
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     path = request.url.path
+
+    # Interactive API docs / schema are a development aid only: in production they would hand
+    # an attacker the full route map, so they are hidden unless ENV is explicitly non-production.
+    if path in _API_DOC_PATHS and is_production():
+        from starlette.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     if (
         path in [

@@ -41,13 +41,54 @@ def validate_uuid(value: str, field_name: str = "household_id") -> str:
     return value
 
 
+_NON_PRODUCTION_ENVS = {"development", "dev", "local", "test", "testing"}
+
+
+def is_production() -> bool:
+    """
+    True unless ENV explicitly names a development/test environment.
+
+    Security-relevant relaxations (unsigned requests, quota fail-open, public API docs) must
+    require an explicit opt-in: previously a deployment that simply forgot to set ENV ran in
+    "development" mode and accepted unsigned requests when WEBHOOK_SECRET was empty.
+    """
+    return os.environ.get("ENV", "").strip().lower() not in _NON_PRODUCTION_ENVS
+
+
+def _trusted_proxies() -> set[str]:
+    raw = os.environ.get("TRUSTED_PROXY_IPS", "127.0.0.1,::1")
+    return {p.strip() for p in raw.split(",") if p.strip()}
+
+
+def get_client_ip(request) -> str:
+    """
+    Client IP for rate limiting. X-Forwarded-For is honoured only when the direct peer is a
+    configured trusted proxy (TRUSTED_PROXY_IPS, default loopback); otherwise any caller could
+    rotate the header to get a fresh rate-limit bucket per request. With a trusted proxy the
+    rightmost entry (appended by that proxy) is used.
+    """
+    peer = request.client.host if request.client and request.client.host else ""
+    xff = request.headers.get("X-Forwarded-For")
+    if xff and peer in _trusted_proxies():
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    return peer or "unknown"
+
+
 def verify_signature(body: bytes, signature_header: str | None) -> bool:
-    """Return True if the HMAC-SHA256 signature matches, or if no secret is configured in dev."""
+    """
+    Return True if the HMAC-SHA256 signature matches, or if no secret is configured in an
+    explicitly non-production ENV.
+
+    NOTE: this is an integrity check, not authentication. The same WEBHOOK_SECRET is compiled
+    into the mobile app and is extractable from the APK; callers are authenticated by the
+    per-user Supabase JWT that every protected route verifies.
+    """
     webhook_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
-    is_production = os.environ.get("ENV", "development").lower() == "production"
 
     if not webhook_secret:
-        if is_production:
+        if is_production():
             logger.error("WEBHOOK_SECRET is not set in production — rejecting request.")
             return False
         logger.warning("WEBHOOK_SECRET not set — skipping signature verification (dev mode).")

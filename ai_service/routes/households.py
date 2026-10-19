@@ -211,18 +211,7 @@ async def create_household_role_invite_endpoint(
 
 
 from rate_limiter import default_rate_limiter
-
-
-def get_client_ip(request: Request) -> str:
-    """Extract client IP safely from rightmost X-Forwarded-For hop or client host."""
-    xff = request.headers.get("X-Forwarded-For")
-    if xff:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            return parts[-1]
-    if request.client and request.client.host:
-        return request.client.host
-    return "127.0.0.1"
+from utils import get_client_ip
 
 
 @router.get(
