@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 typedef SendResetCodeFn = Future<void> Function(String email);
 typedef VerifyAndResetPasswordFn = Future<void> Function(String email, String token, String newPassword);
@@ -97,8 +98,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       AppSnackBar.showSuccess(
         context,
-        'Verification code sent to $email',
-        title: 'Code Sent',
+        context.trArgs('auth_code_sent_to', {'email': email}),
+        title: context.tr('auth_code_sent'),
         icon: Icons.mark_email_read_outlined,
       );
     } on AuthException catch (e) {
@@ -106,14 +107,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       AppSnackBar.showError(
         context,
         e.message,
-        title: 'Authentication Error',
+        title: context.tr('auth_error'),
       );
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.showError(
         context,
-        'Failed to send reset code: $e',
-        title: 'Request Failed',
+        context.trArgs('auth_send_code_failed', {'error': e}),
+        title: context.tr('auth_request_failed'),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -153,8 +154,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (!mounted) return;
       AppSnackBar.showSuccess(
         context,
-        'Password updated successfully! You can now log in.',
-        title: 'Password Updated',
+        context.tr('auth_password_updated_msg'),
+        title: context.tr('auth_password_updated'),
       );
 
       Navigator.of(context).pop();
@@ -163,14 +164,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       AppSnackBar.showError(
         context,
         e.message,
-        title: 'Authentication Error',
+        title: context.tr('auth_error'),
       );
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.showError(
         context,
-        'Failed to update password: $e',
-        title: 'Update Failed',
+        context.trArgs('auth_update_password_failed', {'error': e}),
+        title: context.tr('auth_update_failed'),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -185,6 +186,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: context.tr('nav_back'),
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 20),
           onPressed: () {
             if (_currentStep == 2) {
@@ -242,11 +244,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.lock_reset_rounded, color: Color(0xFF051424), size: 36),
+            child: const Icon(Icons.lock_reset_rounded, color: AppThemes.brandDarkBg, size: 36),
           ),
           const SizedBox(height: 24),
           Text(
-            'Reset Password',
+            context.tr('auth_reset_password'),
             style: GoogleFonts.outfit(
               fontSize: 28,
               fontWeight: FontWeight.w700,
@@ -255,7 +257,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Enter your account email address and we will send you a verification code.',
+            context.tr('auth_reset_password_desc'),
             textAlign: TextAlign.center,
             style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
           ),
@@ -265,7 +267,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             keyboardType: TextInputType.emailAddress,
             style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
-              hintText: 'Email address',
+              hintText: context.tr('auth_email_address'),
               hintStyle: TextStyle(color: context.textSecondary),
               prefixIcon: Icon(Icons.email_outlined, color: context.textSecondary),
               filled: true,
@@ -283,7 +285,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
-            validator: (v) => v != null && v.contains('@') ? null : 'Enter a valid email',
+            validator: (v) => v != null && v.contains('@') ? null : context.tr('auth_enter_valid_email'),
           ),
           const SizedBox(height: 28),
           SizedBox(
@@ -293,7 +295,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               onPressed: _loading ? null : _handleSendResetCode,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppThemes.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
@@ -301,11 +303,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.brandDarkBg),
                     )
-                  : const Text(
-                      'Send Reset Code',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  : Text(
+                      context.tr('auth_send_reset_code'),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
             ),
           ),
@@ -336,20 +338,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ],
             ),
-            child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFF051424), size: 36),
+            child: const Icon(Icons.mark_email_read_rounded, color: AppThemes.brandDarkBg, size: 36),
           ),
           const SizedBox(height: 24),
           Text(
-            'Enter Verification Code',
+            context.tr('auth_enter_verification_code_title'),
             style: GoogleFonts.outfit(
               fontSize: 26,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: context.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'We sent a verification code to ${_emailCtrl.text.trim()}. Check your inbox or spam folder.',
+            context.trArgs('auth_code_sent_check_inbox', {'email': _emailCtrl.text.trim()}),
             textAlign: TextAlign.center,
             style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
           ),
@@ -359,15 +361,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             keyboardType: TextInputType.number,
             maxLength: 8,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.textPrimary,
               fontSize: 20,
               letterSpacing: 6,
               fontWeight: FontWeight.bold,
             ),
             decoration: InputDecoration(
               counterText: '',
-              hintText: 'Code',
+              hintText: context.tr('auth_code_hint'),
               hintStyle: TextStyle(
                 color: context.textSecondary.withValues(alpha: 0.5),
                 letterSpacing: 4,
@@ -390,7 +392,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             validator: (v) {
               if (v == null || v.trim().length < 6 || v.trim().length > 8) {
-                return 'Enter verification code';
+                return context.tr('auth_enter_verification_code');
               }
               return null;
             },
@@ -401,10 +403,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             obscureText: _obscurePass,
             style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
-              hintText: 'New password',
+              hintText: context.tr('auth_new_password'),
               hintStyle: TextStyle(color: context.textSecondary),
               prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
+                tooltip: context.tr('auth_toggle_password_visibility'),
                 icon: Icon(
                   _obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: context.textSecondary,
@@ -426,7 +429,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 borderSide: const BorderSide(color: AppThemes.electricTeal),
               ),
             ),
-            validator: (v) => v != null && v.length >= 6 ? null : 'Min 6 characters',
+            validator: (v) => v != null && v.length >= 6 ? null : context.tr('auth_min_6_chars'),
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -434,10 +437,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             obscureText: _obscureConfirm,
             style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
-              hintText: 'Confirm new password',
+              hintText: context.tr('auth_confirm_new_password'),
               hintStyle: TextStyle(color: context.textSecondary),
               prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
+                tooltip: context.tr('auth_toggle_password_visibility'),
                 icon: Icon(
                   _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: context.textSecondary,
@@ -461,7 +465,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             validator: (v) {
               if (v == null || v != _passwordCtrl.text) {
-                return 'Passwords do not match';
+                return context.tr('auth_passwords_mismatch');
               }
               return null;
             },
@@ -474,7 +478,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               onPressed: _loading ? null : _handleVerifyAndResetPassword,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppThemes.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
@@ -482,11 +486,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF051424)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.brandDarkBg),
                     )
-                  : const Text(
-                      'Set New Password',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  : Text(
+                      context.tr('auth_set_new_password'),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
             ),
           ),
@@ -495,10 +499,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             onPressed: (_resendCooldown > 0 || _loading) ? null : _handleSendResetCode,
             child: Text(
               _resendCooldown > 0
-                  ? 'Resend code in ${_resendCooldown}s'
-                  : 'Didn\'t receive code? Resend',
+                  ? context.trArgs('auth_resend_in', {'seconds': _resendCooldown})
+                  : context.tr('auth_resend_code'),
               style: TextStyle(
-                color: _resendCooldown > 0 ? context.textSecondary : AppThemes.electricTeal,
+                color: _resendCooldown > 0 ? context.textSecondary : context.accentText,
                 fontWeight: FontWeight.w600,
               ),
             ),

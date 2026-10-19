@@ -9,16 +9,22 @@ import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../../models/money.dart';
 
+/// Records a reimbursement / settlement payment. Defaults to the API client;
+/// injectable so widget tests can exercise success and failure paths.
+typedef ReimbursementRecorder = Future<Map<String, dynamic>> Function(ReimbursementRecordRequest request);
+
 class FamilyReimbursementCard extends StatefulWidget {
   final String householdId;
   final FamilyNafaqahSummary? summary;
   final VoidCallback? onReimbursed;
+  final ReimbursementRecorder? recordPayment;
 
   const FamilyReimbursementCard({
     super.key,
     required this.householdId,
     this.summary,
     this.onReimbursed,
+    this.recordPayment,
   });
 
   @override
@@ -75,6 +81,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
       builder: (ctx) => _ReimburseBottomSheet(
         householdId: widget.householdId,
         totalOwed: totalOwed,
+        recordPayment: widget.recordPayment,
         onConfirmed: () {
           widget.onReimbursed?.call();
           _loadSummary();
@@ -107,8 +114,8 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     final owed = summary.wifeReimbursementOwed;
     final isSettled = owed <= 0.01;
 
-    final badgeColor = isSettled ? const Color(0xFF00C896) : const Color(0xFFE5A93C);
-    final badgeText = isSettled ? 'All Settled' : 'Reimbursement Owed';
+    final badgeColor = isSettled ? AppThemes.success : const Color(0xFFE5A93C);
+    final badgeText = isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed');
     final badgeIcon = isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded;
 
     return Container(
@@ -209,7 +216,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           // Main Balance Display
           if (!isSettled) ...[
             Text(
-              'Husband owes Wife:',
+              '${context.tr('husband_owes_wife')}:',
               style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 2),
@@ -218,7 +225,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Text(
-                  'SAR ${owed.toStringAsFixed(2)}',
+                  context.sar(owed),
                   style: GoogleFonts.outfit(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
@@ -228,7 +235,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Wife advanced household expenses from personal funds',
+                    context.tr('settle_wife_advanced'),
                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
                 ),
@@ -238,11 +245,11 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           ] else ...[
             Row(
               children: [
-                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
+                const Icon(Icons.verified_rounded, color: AppThemes.success, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'All Nafaqah expenses are settled! Wife has no pending household reimbursements.',
+                    context.tr('settle_nafaqah_all_settled'),
                     style: TextStyle(color: context.textPrimary, fontSize: 12),
                   ),
                 ),
@@ -259,19 +266,19 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               _buildPill(
                 context,
                 icon: Icons.child_care_rounded,
-                label: 'Children: SAR ${summary.spentOnChildren.toStringAsFixed(2)}',
+                label: context.trArgs('settle_children_amount', {'amount': context.sar(summary.spentOnChildren)}),
                 color: const Color(0xFF38BDF8),
               ),
               _buildPill(
                 context,
                 icon: Icons.favorite_border_rounded,
-                label: 'Wife: SAR ${summary.spentOnWife.toStringAsFixed(2)}',
+                label: context.trArgs('settle_wife_amount', {'amount': context.sar(summary.spentOnWife)}),
                 color: const Color(0xFFEC4899),
               ),
               _buildPill(
                 context,
                 icon: Icons.home_outlined,
-                label: 'Household: SAR ${summary.familyGeneralTotal.toStringAsFixed(2)}',
+                label: context.trArgs('settle_household_amount', {'amount': context.sar(summary.familyGeneralTotal)}),
                 color: const Color(0xFF94A3B8),
               ),
             ],
@@ -290,9 +297,9 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text(
-                  'Reimburse Wife',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                label: Text(
+                  context.tr('reimburse_wife'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
@@ -344,11 +351,13 @@ class _ReimburseBottomSheet extends StatefulWidget {
   final String householdId;
   final double totalOwed;
   final VoidCallback onConfirmed;
+  final ReimbursementRecorder? recordPayment;
 
   const _ReimburseBottomSheet({
     required this.householdId,
     required this.totalOwed,
     required this.onConfirmed,
+    this.recordPayment,
   });
 
   @override
@@ -375,14 +384,15 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   Future<void> _submitSettlement() async {
     final amt = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
     if (amt <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid payment amount');
+      AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
       return;
     }
 
     setState(() => _isSubmitting = true);
 
     try {
-      await ApiService.instance.recordReimbursementPayment(
+      final record = widget.recordPayment ?? ApiService.instance.recordReimbursementPayment;
+      await record(
         ReimbursementRecordRequest(
           householdId: widget.householdId,
           payerId: 'husband',
@@ -392,15 +402,23 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
           notes: 'Wife household reimbursement via ${_paymentMethod.toUpperCase()}',
         ),
       );
-    } catch (_) {
-      // In tests or offline mode, continue gracefully
+    } catch (e) {
+      // Never report a settlement as recorded when the server rejected it.
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      AppSnackBar.showError(
+        context,
+        context.trArgs('settle_record_failed_msg', {'error': e}),
+        title: context.tr('settle_record_failed'),
+      );
+      return;
     }
 
     if (mounted) {
       AppSnackBar.showSuccess(
         context,
-        'Recorded settlement of SAR ${amt.toStringAsFixed(2)} via ${_paymentMethod.toUpperCase()}',
-        title: 'Settlement Recorded',
+        context.trArgs('settle_recorded_via', {'amount': context.sar(amt), 'method': context.tr('pay_method_$_paymentMethod')}),
+        title: context.tr('settle_recorded_title'),
         icon: Icons.check_circle_outline,
       );
       Navigator.of(context).pop();
@@ -439,7 +457,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Settle Wife Reimbursement',
+              context.tr('settle_wife_title'),
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -448,7 +466,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Record full or partial reimbursement for advanced household expenses.',
+              context.tr('settle_wife_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 16),
@@ -458,7 +476,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               spacing: 8,
               children: [
                 ChoiceChip(
-                  label: Text('Full (SAR ${widget.totalOwed.toStringAsFixed(2)})'),
+                  label: Text(context.trArgs('settle_full', {'amount': context.sar(widget.totalOwed)})),
                   selected: _amountCtrl.text == widget.totalOwed.toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -469,7 +487,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                   },
                 ),
                 ChoiceChip(
-                  label: Text('Half (SAR ${(widget.totalOwed / 2).toStringAsFixed(2)})'),
+                  label: Text(context.trArgs('settle_half', {'amount': context.sar(widget.totalOwed / 2)})),
                   selected: _amountCtrl.text == (widget.totalOwed / 2).toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -488,7 +506,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Payment Amount (SAR)',
+                labelText: context.tr('settle_payment_amount'),
                 prefixIcon: const Icon(Icons.attach_money_rounded),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -497,17 +515,17 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
 
             // Payment Method Selector
             Text(
-              'Payment Method',
+              context.tr('settle_payment_method'),
               style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildMethodChip('stc_pay', 'STC Pay', Icons.phone_android_rounded),
+                _buildMethodChip('stc_pay', context.tr('pay_method_stc_pay'), Icons.phone_android_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('bank_transfer', 'Bank', Icons.account_balance_rounded),
+                _buildMethodChip('bank_transfer', context.tr('pay_method_bank_transfer'), Icons.account_balance_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('cash', 'Cash', Icons.payments_rounded),
+                _buildMethodChip('cash', context.tr('pay_method_cash'), Icons.payments_rounded),
               ],
             ),
             const SizedBox(height: 16),
@@ -519,17 +537,17 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy STC Pay Note', style: TextStyle(fontSize: 12)),
+              label: Text(context.tr('settle_copy_stc_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
                 final amt = _amountCtrl.text;
                 await Clipboard.setData(
-                  ClipboardData(text: 'Nafaqah Reimbursement - SAR $amt'),
+                  ClipboardData(text: context.trArgs('settle_nafaqah_note', {'amount': amt})),
                 );
                 if (context.mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Copied: "Nafaqah Reimbursement - SAR $amt"',
-                    title: 'Copied Note',
+                    context.trArgs('settle_copied_quote', {'text': context.trArgs('settle_nafaqah_note', {'amount': amt})}),
+                    title: context.tr('settle_copied_note'),
                   );
                 }
               },
@@ -553,9 +571,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
-                label: const Text(
-                  'Record Settlement Payment',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                label: Text(
+                  context.tr('settle_record_payment'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 onPressed: _isSubmitting ? null : _submitSettlement,
               ),

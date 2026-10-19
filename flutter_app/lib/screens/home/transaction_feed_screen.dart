@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
@@ -196,7 +195,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: context.textPrimary,
                           ),
                         ),
                         TextButton(
@@ -205,7 +204,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             setModalState(() {});
                             Navigator.pop(ctx);
                           },
-                          child: Text(context.tr('reset_all'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 13)),
+                          child: Text(context.tr('reset_all'), style: TextStyle(color: context.successText, fontSize: 13)),
                         ),
                       ],
                     ),
@@ -325,7 +324,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildFilterChip(
                           label: _customDateRange != null
-                              ? '${DateFormat('d MMM').format(_customDateRange!.start)} - ${DateFormat('d MMM').format(_customDateRange!.end)}'
+                              ? '${context.fmtDate(_customDateRange!.start, 'd MMM')} - ${context.fmtDate(_customDateRange!.end, 'd MMM')}'
                               : context.tr('custom_range'),
                           selected: _selectedDatePeriod == 'CUSTOM',
                           icon: Icons.calendar_today,
@@ -343,9 +342,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 return Theme(
                                   data: (context.isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
                                     colorScheme: ColorScheme.fromSeed(
-                                      seedColor: const Color(0xFF00C896),
+                                      seedColor: AppThemes.success,
                                       brightness: context.isDark ? Brightness.dark : Brightness.light,
-                                      primary: const Color(0xFF00C896),
+                                      primary: AppThemes.success,
                                       onPrimary: Colors.black,
                                       surface: context.cardBg,
                                       onSurface: context.textPrimary,
@@ -428,7 +427,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C896),
+                          backgroundColor: AppThemes.success,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -465,10 +464,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         width: (MediaQuery.of(context).size.width - 48) / 2,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.inputBg,
+          color: isSelected ? AppThemes.success.withValues(alpha: 0.12) : context.inputBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -480,11 +479,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
+                  color: isSelected ? AppThemes.success : context.textSecondary,
                 ),
                 const Spacer(),
                 if (isSelected)
-                  const Icon(Icons.check_circle, size: 16, color: Color(0xFF00C896)),
+                  const Icon(Icons.check_circle, size: 16, color: AppThemes.success),
               ],
             ),
             const SizedBox(height: 6),
@@ -493,7 +492,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+                color: isSelected ? AppThemes.success : context.textPrimary,
               ),
             ),
             Text(
@@ -525,10 +524,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         ),
       ),
       selected: selected,
-      selectedColor: const Color(0xFF00C896),
+      selectedColor: AppThemes.success,
       backgroundColor: context.cardBg,
       side: BorderSide(
-        color: selected ? const Color(0xFF00C896) : context.borderColor,
+        color: selected ? AppThemes.success : context.borderColor,
       ),
       onSelected: onSelected,
     );
@@ -545,7 +544,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           backgroundColor: context.cardBg,
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
-            'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
+            context.trArgs('tx_delete_confirm_auto', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
             style: TextStyle(color: context.textSecondary),
           ),
           actions: [
@@ -573,8 +572,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          'Could not delete transaction. Please check your network connection.',
-          title: 'Delete Failed',
+          context.tr('tx_delete_failed_msg'),
+          title: context.tr('tx_delete_failed'),
         );
       }
       return;
@@ -592,8 +591,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     if (context.mounted) {
       AppSnackBar.showDelete(
         context,
-        'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}',
-        title: 'Transaction Removed',
+        context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+        title: context.tr('tx_removed'),
         onUndo: () async {
           await supabase.from('transactions').insert({
             'household_id': tx.householdId,
@@ -615,8 +614,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
-              'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"} has been restored.',
-              title: 'Transaction Restored',
+              context.trArgs('tx_restored_msg', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+              title: context.tr('tx_restored'),
             );
           }
         },
@@ -642,13 +641,13 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 onPressed: _showSortFilterModal,
               ),
               if (_activeFilterCount > 0)
-                Positioned(
-                  right: 8,
+                PositionedDirectional(
+                  end: 8,
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF00C896),
+                      color: AppThemes.success,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -685,10 +684,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                       ),
                       selected: isSelected,
-                      selectedColor: const Color(0xFF00C896),
+                      selectedColor: AppThemes.success,
                       backgroundColor: context.cardBg,
                       side: BorderSide(
-                        color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                        color: isSelected ? AppThemes.success : context.borderColor,
                       ),
                       onSelected: (val) {
                         HapticFeedback.selectionClick();
@@ -742,7 +741,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
                                       color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
-                                          ? const Color(0xFF00C896)
+                                          ? AppThemes.success
                                           : context.borderColor,
                                     ),
                                   ),
@@ -753,7 +752,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         Icons.swap_vert_rounded,
                                         size: 14,
                                         color: _selectedSort != 'newest'
-                                            ? const Color(0xFF00C896)
+                                            ? AppThemes.success
                                             : context.textSecondary,
                                       ),
                                       const SizedBox(width: 4),
@@ -763,7 +762,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           color: _selectedSort != 'newest'
-                                              ? const Color(0xFF00C896)
+                                              ? AppThemes.success
                                               : context.textPrimary,
                                         ),
                                       ),
@@ -843,7 +842,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Executive monthly statement with partner attribution split, 15% VAT, and category budgets.',
+                                              context.tr('pdf_statement_desc'),
                                               style: TextStyle(color: context.textSecondary, fontSize: 13),
                                             ),
                                             const SizedBox(height: 14),
@@ -856,7 +855,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               ),
                                               child: Row(
                                                 children: [
-                                                  const Icon(Icons.link_rounded, color: Color(0xFF00C896), size: 18),
+                                                  const Icon(Icons.link_rounded, color: AppThemes.success, size: 18),
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Text(
@@ -874,11 +873,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
-                                            child: Text('Close', style: TextStyle(color: context.textSecondary)),
+                                            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
                                           ),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF00C896),
+                                              backgroundColor: AppThemes.success,
                                               foregroundColor: Colors.black,
                                             ),
                                             icon: const Icon(Icons.copy_rounded, size: 16),
@@ -889,8 +888,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                 Navigator.pop(ctx);
                                                 AppSnackBar.showSuccess(
                                                   context,
-                                                  'PDF Statement link copied to clipboard. Paste into browser to download.',
-                                                  title: 'Link Copied',
+                                                  context.tr('pdf_link_copied_msg'),
+                                                  title: context.tr('link_copied'),
                                                   icon: Icons.picture_as_pdf_rounded,
                                                 );
                                               }
@@ -940,7 +939,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     child: AppEmptyState(
                                       icon: Icons.search_off_rounded,
                                       title: context.tr('no_matching_transactions'),
-                                      message: 'Try adjusting your filters, date range, or category selection to find what you need.',
+                                      message: context.tr('no_matching_tx_desc'),
                                       actionLabel: context.tr('reset_filters'),
                                       onAction: () {
                                         HapticFeedback.lightImpact();
@@ -950,7 +949,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                                 )
                               : RefreshIndicator(
-                                  color: const Color(0xFF00C896),
+                                  color: AppThemes.success,
                                   onRefresh: () async {
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),
@@ -969,8 +968,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         key: Key(tx.id),
                                         direction: DismissDirection.endToStart,
                                         background: Container(
-                                          alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.only(right: 20),
+                                          alignment: AlignmentDirectional.centerEnd,
+                                          padding: const EdgeInsetsDirectional.only(end: 20),
                                           decoration: BoxDecoration(
                                             color: Colors.redAccent.withValues(alpha: 0.8),
                                             borderRadius: BorderRadius.circular(16),
@@ -989,15 +988,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             context: context,
                                             builder: (dCtx) => AlertDialog(
                                               backgroundColor: context.cardBg,
-                                              title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
+                                              title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
                                               content: Text(
-                                                'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated.',
+                                                context.trArgs('tx_delete_confirm', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
                                                 style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [
                                                 TextButton(
                                                   onPressed: () => Navigator.pop(dCtx, false),
-                                                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                                                  child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                                                 ),
                                                 ElevatedButton(
                                                   style: ElevatedButton.styleFrom(
@@ -1013,7 +1012,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         },
                                         onDismissed: (_) => _deleteTransaction(context, tx),
                                         child: TransactionItemBreakdownCard(
-                                          merchant: tx.merchant ?? 'Unknown',
+                                          merchant: tx.merchant ?? context.tr('unknown'),
                                           amount: tx.amount,
                                           currency: tx.currency,
                                           categoryCode: tx.categoryCode,

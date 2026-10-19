@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -24,7 +23,9 @@ class SalaryCycleSelectorBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
+    final titleText = currentCycle != null
+        ? context.cycleMonth(currentCycle!.cycleKey, fallback: currentCycle!.monthName)
+        : context.fmtDate(DateTime.now(), 'MMMM yyyy');
     final subText = currentCycle != null
         ? '${currentCycle!.cycleStart.substring(5)} - ${currentCycle!.cycleEnd.substring(5)}'
         : context.tr('active_salary_cycle');
@@ -41,6 +42,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
+            tooltip: context.tr('a11y_previous'),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: Icon(Icons.chevron_left_rounded, color: hasPrevious ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),
@@ -66,16 +68,16 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                          color: AppThemes.success.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: const Color(0xFF00C896).withValues(alpha: 0.6),
+                            color: AppThemes.success.withValues(alpha: 0.6),
                           ),
                         ),
                         child: Text(
                           context.tr('active_badge'),
-                          style: const TextStyle(
-                            color: Color(0xFF00C896),
+                          style: TextStyle(
+                            color: context.successText,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -96,6 +98,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: context.tr('a11y_next'),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: Icon(Icons.chevron_right_rounded, color: hasNext ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),

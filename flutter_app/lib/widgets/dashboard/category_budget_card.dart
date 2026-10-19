@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../sub_budget_breakdown_sheet.dart';
@@ -22,12 +21,11 @@ class CategoryBudgetCard extends StatelessWidget {
   Color get _barColor {
     if (budget.usagePercent >= 1.0) return Colors.redAccent;
     if (budget.usagePercent >= 0.8) return Colors.orange;
-    return const Color(0xFF00C896);
+    return AppThemes.success;
   }
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final hasRollover = budget.previousCycleDelta != 0.0;
     final subCategories = kSubCategoriesByParent[budget.categoryCode] ?? const <String>[];
 
@@ -75,17 +73,17 @@ class CategoryBudgetCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: budget.previousCycleDelta > 0
-                                  ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                  ? AppThemes.success.withValues(alpha: 0.15)
                                   : Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               budget.previousCycleDelta > 0
-                                  ? '+SAR ${fmt.format(budget.previousCycleDelta)}'
-                                  : '-SAR ${fmt.format(budget.previousCycleDelta.abs())}',
+                                  ? '+${context.sar(budget.previousCycleDelta)}'
+                                  : '-${context.sar(budget.previousCycleDelta.abs())}',
                               style: TextStyle(
                                 color: budget.previousCycleDelta > 0
-                                    ? const Color(0xFF00C896)
+                                    ? AppThemes.success
                                     : Colors.redAccent,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -128,15 +126,11 @@ class CategoryBudgetCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    context.isRtl
-                        ? '${fmt.format(budget.spentAmount)} ر.س ${context.tr('spent')}'
-                        : 'SAR ${fmt.format(budget.spentAmount)} ${context.tr('spent')}',
+                    context.trArgs('amount_spent_suffix', {'amount': context.sar(budget.spentAmount)}),
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                   Text(
-                    context.isRtl
-                        ? 'من ${fmt.format(budget.allocatedAmount)} ر.س'
-                        : 'of SAR ${fmt.format(budget.allocatedAmount)}',
+                    context.trArgs('of_amount', {'amount': context.sar(budget.allocatedAmount)}),
                     style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -155,19 +149,19 @@ class CategoryBudgetCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.account_tree_outlined, size: 13, color: Color(0xFF00C896)),
+                          const Icon(Icons.account_tree_outlined, size: 13, color: AppThemes.success),
                           const SizedBox(width: 6),
                           Text(
                             context.tr('itemized_sub_budgets'),
-                            style: const TextStyle(
-                              color: Color(0xFF00C896),
+                            style: TextStyle(
+                              color: context.successText,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const Spacer(),
                           Text(
-                            'Breakdown',
+                            context.tr('breakdown'),
                             style: TextStyle(color: context.textSecondary, fontSize: 10),
                           ),
                           const SizedBox(width: 2),

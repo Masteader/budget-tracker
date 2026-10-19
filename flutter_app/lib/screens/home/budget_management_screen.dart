@@ -186,8 +186,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         if (mounted) {
           AppSnackBar.showInfo(
             context,
-            'No allocations found in ${DateFormat('MMMM yyyy').format(prevDate)} to copy.',
-            title: 'No Prior Allocations',
+            context.trArgs('bm_no_prior_msg', {'month': context.fmtDate(prevDate, 'MMMM yyyy')}),
+            title: context.tr('bm_no_prior_title'),
           );
         }
         return;
@@ -210,26 +210,24 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
-                const Icon(Icons.savings_outlined, color: Color(0xFF00E5BF), size: 22),
+                const Icon(Icons.savings_outlined, color: AppThemes.electricTeal, size: 22),
                 const SizedBox(width: 8),
-                Text('Unspent Funds: SAR ${totalUnspent.toStringAsFixed(2)}', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                Flexible(child: Text(context.trArgs('bm_unspent_title', {'amount': context.sar(totalUnspent)}), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16))),
               ],
             ),
             content: Text(
-              'You have SAR ${totalUnspent.toStringAsFixed(2)} leftover from the previous cycle.\n\n'
-              '• Option A: Roll over unspent funds into this cycle\'s category cushions.\n'
-              '• Option C: Sweep leftover funds into savings and start with clean target budgets.',
+              context.trArgs('bm_unspent_desc', {'amount': context.sar(totalUnspent)}),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Option C: Sweep to Savings'),
+                child: Text(context.tr('bm_option_sweep')),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5BF), foregroundColor: Colors.black),
-                child: const Text('Option A: Roll Over Cushion', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: AppThemes.electricTeal, foregroundColor: Colors.black),
+                child: Text(context.tr('bm_option_rollover'), style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -262,16 +260,16 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          'Copied ${newEntries.length} allocations with mapped accounts from ${DateFormat('MMMM yyyy').format(prevDate)}!',
-          title: 'Budget Copied',
+          context.trArgs('bm_copied_msg', {'count': newEntries.length, 'month': context.fmtDate(prevDate, 'MMMM yyyy')}),
+          title: context.tr('bm_copied_title'),
         );
       }
     } catch (e) {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Error copying allocations: $e',
-          title: 'Copy Failed',
+          context.trArgs('bm_copy_error_msg', {'error': e}),
+          title: context.tr('bm_copy_failed'),
         );
       }
     } finally {
@@ -323,7 +321,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: activeTab == 0 ? const Color(0xFF00C896) : Colors.transparent,
+                            color: activeTab == 0 ? AppThemes.success : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: Center(
@@ -345,7 +343,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: activeTab == 1 ? const Color(0xFF00C896) : Colors.transparent,
+                            color: activeTab == 1 ? AppThemes.success : Colors.transparent,
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: Center(
@@ -377,7 +375,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         style: TextStyle(color: context.textPrimary),
                         decoration: InputDecoration(
                           labelText: context.tr('category_name'),
-                          hintText: 'e.g. Pet Care, Fitness & Gym',
+                          hintText: context.tr('bm_category_hint'),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -387,7 +385,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         style: TextStyle(color: context.textPrimary),
                         decoration: InputDecoration(
                           labelText: context.tr('monthly_allocation'),
-                          prefixText: 'SAR ',
+                          prefixText: '${context.tr('sar')} ',
                           hintText: '500.00',
                         ),
                       ),
@@ -397,7 +395,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         title: Text(context.tr('flexible_pool'), style: TextStyle(color: context.textPrimary, fontSize: 13)),
                         subtitle: Text(context.tr('flexible_pool_desc'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         value: isFlexible,
-                        activeThumbColor: const Color(0xFF00C896),
+                        activeThumbColor: AppThemes.success,
                         onChanged: (v) => setDialogState(() => isFlexible = v),
                       ),
                     ],
@@ -431,7 +429,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         style: TextStyle(color: context.textPrimary),
                         decoration: InputDecoration(
                           labelText: context.tr('sub_category_name'),
-                          hintText: 'e.g. Specialty Coffee, Dog Food',
+                          hintText: context.tr('bm_sub_hint'),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -441,7 +439,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         style: TextStyle(color: context.textPrimary),
                         decoration: InputDecoration(
                           labelText: context.tr('initial_allocation'),
-                          prefixText: 'SAR ',
+                          prefixText: '${context.tr('sar')} ',
                           hintText: '150.00',
                         ),
                       ),
@@ -463,7 +461,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         if (name.isEmpty) return;
 
                         setDialogState(() => isSubmitting = true);
-                        final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+                        // Arabic/Urdu names contain no ASCII letters; fall back to a
+                        // unique generated code instead of the bare "OPEX-" prefix.
+                        final asciiSlug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+                        final slug = asciiSlug.isNotEmpty
+                            ? asciiSlug
+                            : 'CUSTOM${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}';
                         final code = 'OPEX-$slug';
 
                         try {
@@ -477,26 +480,26 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           );
                           if (res['status'] == 'success') {
                             if (ctx.mounted) Navigator.pop(ctx);
-                            setState(() {
-                              _staticFuture = _loadStaticData();
-                            });
                             if (mounted) {
+                              setState(() {
+                                _staticFuture = _loadStaticData();
+                              });
                               AppSnackBar.showSuccess(
                                 context,
-                                'Added category "$name" (SAR ${amount.toStringAsFixed(2)})!',
-                                title: 'Category Created',
+                                context.trArgs('bm_category_added_msg', {'name': name, 'amount': context.sar(amount)}),
+                                title: context.tr('bm_category_created'),
                               );
                             }
                           } else {
                             throw Exception(res['message'] ?? 'Failed to add category');
                           }
                         } catch (e) {
-                          setDialogState(() => isSubmitting = false);
+                          if (ctx.mounted) setDialogState(() => isSubmitting = false);
                           if (mounted) {
                             AppSnackBar.showError(
                               context,
-                              'Failed to add category: $e',
-                              title: 'Add Failed',
+                              context.trArgs('bm_add_category_failed_msg', {'error': e}),
+                              title: context.tr('bm_add_failed'),
                             );
                           }
                         }
@@ -516,35 +519,35 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           );
                           if (res['status'] == 'success') {
                             if (ctx.mounted) Navigator.pop(ctx);
-                            setState(() {
-                              _staticFuture = _loadStaticData();
-                            });
                             if (mounted) {
+                              setState(() {
+                                _staticFuture = _loadStaticData();
+                              });
                               AppSnackBar.showSuccess(
                                 context,
-                                'Added sub-category "$subName" to budget!',
-                                title: 'Sub-Category Added',
+                                context.trArgs('bm_sub_added_msg', {'name': subName}),
+                                title: context.tr('bm_sub_added_title'),
                               );
                             }
                           } else {
                             throw Exception(res['message'] ?? 'Failed to add sub-category');
                           }
                         } catch (e) {
-                          setDialogState(() => isSubmitting = false);
+                          if (ctx.mounted) setDialogState(() => isSubmitting = false);
                           if (mounted) {
                             AppSnackBar.showError(
                               context,
-                              'Failed to add sub-category: $e',
-                              title: 'Add Failed',
+                              context.trArgs('bm_add_sub_failed_msg', {'error': e}),
+                              title: context.tr('bm_add_failed'),
                             );
                           }
                         }
                       }
                     },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
               child: isSubmitting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : Text(activeTab == 0 ? 'Create Category' : 'Add Sub-Category', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(activeTab == 0 ? context.tr('bm_create_category') : context.tr('add_sub_category'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -564,7 +567,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('${context.tr('deactivate')} ${context.trCat(categoryCode)}?', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
-          'This will deactivate ${context.trCat(categoryCode)} and move it to your Category Library. Categories are never deleted, so your financial history remains safe and you can reactivate it at any time.',
+          context.trArgs('bm_deactivate_desc', {'category': context.trCat(categoryCode)}),
           style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -589,7 +592,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         categoryCode,
       );
 
-      if (res['status'] == 'success') {
+      if (res['status'] == 'success' && mounted) {
         setState(() {
           staticData.allCodes.removeWhere((c) => c['code'] == categoryCode);
           _staticFuture = _loadStaticData();
@@ -597,8 +600,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         if (mounted) {
           AppSnackBar.showSuccess(
             context,
-            'Category "$categoryName" moved to Category Library (inactive).',
-            title: 'Category Deactivated',
+            context.trArgs('bm_deactivated_msg', {'name': categoryName}),
+            title: context.tr('bm_deactivated_title'),
           );
         }
       }
@@ -606,8 +609,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Failed to deactivate category: $e',
-          title: 'Deactivation Failed',
+          context.trArgs('bm_deactivate_failed_msg', {'error': e}),
+          title: context.tr('bm_deactivate_failed_title'),
         );
       }
     }
@@ -685,8 +688,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             AppSnackBar.showSuccess(
               context,
               isActive
-                  ? 'Category "${cat.name}" activated.'
-                  : 'Category "${cat.name}" deactivated.',
+                  ? context.trArgs('bm_cat_activated', {'name': cat.name})
+                  : context.trArgs('bm_cat_deactivated', {'name': cat.name}),
             );
           }
         },
@@ -702,10 +705,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final cycle = _selectedCycle;
-    final headerTitle = cycle?.monthName ?? DateFormat('MMMM yyyy').format(_selectedDate);
+    final headerTitle = cycle != null
+        ? context.cycleMonth(cycle.cycleKey, fallback: cycle.monthName)
+        : context.fmtDate(_selectedDate, 'MMMM yyyy');
     final headerSub = cycle != null
         ? '${cycle.cycleStart.substring(5)} - ${cycle.cycleEnd.substring(5)}'
-        : 'Active Salary Cycle';
+        : context.tr('active_salary_cycle');
 
     return FutureBuilder<_BudgetStaticData>(
       future: _staticFuture,
@@ -714,7 +719,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           return Scaffold(
             backgroundColor: context.scaffoldBg,
             appBar: AppBar(
-              title: const Text('Budget Allocations'),
+              title: Text(context.tr('budget_allocations')),
             ),
             body: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -729,8 +734,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             title: Text(context.tr('budget_allocations')),
             actions: [
               IconButton(
-                icon: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF00E5BF)),
-                tooltip: 'Accounts & Balances',
+                icon: const Icon(Icons.account_balance_wallet_outlined, color: AppThemes.electricTeal),
+                tooltip: context.tr('accounts_balances'),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -745,14 +750,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.category_outlined, color: Color(0xFF00C896)),
+                icon: const Icon(Icons.category_outlined, color: AppThemes.success),
                 tooltip: context.tr('category_library'),
                 onPressed: () => _openCategoryLibrary(staticData),
               ),
               if (staticData.isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF00C896)),
-                  tooltip: 'Add Category or Sub-Category',
+                  icon: const Icon(Icons.add_circle_outline_rounded, color: AppThemes.success),
+                  tooltip: context.tr('bm_add_tooltip'),
                   onPressed: () => _showAddCategoryDialog(staticData),
                 ),
             ],
@@ -765,6 +770,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
+                      tooltip: context.tr('a11y_previous'),
                       icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                           ? () => setState(() => _currentCycleIndex++)
@@ -784,6 +790,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       ],
                     ),
                     IconButton(
+                      tooltip: context.tr('a11y_next'),
                       icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                           ? () => setState(() => _currentCycleIndex--)
@@ -799,7 +806,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   onPressed: () => _showAddCategoryDialog(staticData),
                   icon: const Icon(Icons.add_rounded, color: Colors.black),
                   label: Text(context.tr('add_category'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                 )
               : null,
           body: StreamBuilder<List<Map<String, dynamic>>>(
@@ -845,7 +852,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 const SizedBox(width: 8),
                                 Text(
                                   context.tr('no_allocations_set'),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
                               ],
                             ),
@@ -863,9 +870,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   icon: _isCopying
                                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                                       : const Icon(Icons.copy_rounded, size: 16),
-                                  label: Text(_isCopying ? 'Copying...' : context.tr('copy_previous')),
+                                  label: Text(_isCopying ? context.tr('bm_copying') : context.tr('copy_previous')),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00C896),
+                                    backgroundColor: AppThemes.success,
                                     foregroundColor: Colors.black,
                                     textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
@@ -984,9 +991,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'SAR ${fmt.format(totalAllocated)}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF00C896),
+                                    context.sar(totalAllocated),
+                                    style: TextStyle(
+                                      color: context.successText,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1016,7 +1023,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     Icon(
                                       isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
                                       size: 16,
-                                      color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                      color: isOverAllocated ? Colors.redAccent : AppThemes.success,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1031,12 +1038,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 ),
                                 Text(
                                   isOverAllocated
-                                      ? '-SAR ${fmt.format(-savingsReserve)}'
-                                      : '+SAR ${fmt.format(savingsReserve)}',
+                                      ? '-${context.sar(-savingsReserve)}'
+                                      : '+${context.sar(savingsReserve)}',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: isOverAllocated ? Colors.redAccent : const Color(0xFF00C896),
+                                    color: isOverAllocated ? Colors.redAccent : AppThemes.success,
                                   ),
                                 ),
                               ],
@@ -1108,11 +1115,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     children: [
                                       Text(
                                         existing != null
-                                            ? 'SAR ${fmt.format(existing.allocatedAmount)}'
+                                            ? context.sar(existing.allocatedAmount)
                                             : context.tr('not_set'),
                                         style: TextStyle(
                                           color: existing != null
-                                              ? const Color(0xFF00C896)
+                                              ? AppThemes.success
                                               : context.textSecondary,
                                           fontSize: 13,
                                           fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
@@ -1121,7 +1128,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       if (existing != null && existing.spentAmount > 0) ...[
                                         const SizedBox(width: 8),
                                         Text(
-                                          '• ${context.tr('spent')}: SAR ${fmt.format(existing.spentAmount)}',
+                                          '• ${context.tr('spent')}: ${context.sar(existing.spentAmount)}',
                                           style: TextStyle(
                                             color: existing.spentAmount > existing.allocatedAmount && existing.allocatedAmount > 0
                                                 ? Colors.redAccent
@@ -1150,7 +1157,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: mappedAccount != null
-                                              ? const Color(0xFF00C896).withValues(alpha: 0.1)
+                                              ? AppThemes.success.withValues(alpha: 0.1)
                                               : context.chipBg,
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(

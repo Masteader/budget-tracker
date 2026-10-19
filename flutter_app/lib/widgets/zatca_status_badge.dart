@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 
 /// Displays a verified green status banner for Saudi ZATCA e-invoices with seller, total, and 15% VAT.
 class ZatcaStatusBadge extends StatelessWidget {
@@ -24,33 +25,34 @@ class ZatcaStatusBadge extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF00E5BF).withValues(alpha: 0.12),
+        color: AppThemes.electricTeal.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF00E5BF).withValues(alpha: 0.35)),
+        border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.verified_rounded, color: Color(0xFF00E5BF), size: 20),
+          const Icon(Icons.verified_rounded, color: AppThemes.electricTeal, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ZATCA Verified: $seller',
+                  context.trArgs('zsb_verified', {'seller': seller}),
                   style: TextStyle(fontWeight: FontWeight.bold, color: context.textPrimary, fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   customSubtitle ??
-                      'Total: SAR ${total.toStringAsFixed(2)}  •  VAT: SAR ${vat.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Color(0xFF00E5BF), fontSize: 11),
+                      context.trArgs('zsb_total_vat', {'total': context.sar(total), 'vat': context.sar(vat)}),
+                  style: TextStyle(color: context.accentText, fontSize: 11),
                 ),
               ],
             ),
           ),
           if (onDismiss != null)
             IconButton(
+              tooltip: context.tr('close'),
               icon: Icon(Icons.close, size: 18, color: context.textSecondary),
               onPressed: onDismiss,
               padding: EdgeInsets.zero,

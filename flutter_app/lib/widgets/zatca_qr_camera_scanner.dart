@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'app_snackbar.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 
 /// Live Camera QR Scanner specifically designed for Saudi ZATCA e-invoicing QR codes.
 class ZatcaQrCameraScanner extends StatefulWidget {
@@ -71,9 +72,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
       if (mounted) {
         AppSnackBar.showWarning(
           context,
-          'Camera permission is permanently denied. Please enable it in Settings.',
-          title: 'Camera Permission',
-          actionLabel: 'Settings',
+          context.tr('zq_perm_permanent'),
+          title: context.tr('zq_perm_title'),
+          actionLabel: context.tr('nav_settings'),
           onAction: () => openAppSettings(),
         );
       }
@@ -101,10 +102,10 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00E5BF)),
+            const Icon(Icons.qr_code_2_rounded, color: AppThemes.electricTeal),
             const SizedBox(width: 8),
             Text(
-              'Enter Invoice QR Data',
+              context.tr('zq_manual_title'),
               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
             ),
           ],
@@ -114,7 +115,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paste the Base64 ZATCA QR code from your tax invoice:',
+              context.tr('zq_manual_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -136,12 +137,12 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5BF),
-              foregroundColor: const Color(0xFF051424),
+              backgroundColor: AppThemes.electricTeal,
+              foregroundColor: AppThemes.brandDarkBg,
             ),
             onPressed: () {
               final raw = textCtrl.text.trim();
@@ -150,7 +151,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                 Navigator.pop(context, raw);
               }
             },
-            child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('zq_apply'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -183,8 +184,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             const SizedBox(height: 20),
             Text(
               isPermissionDenied
-                  ? 'Camera Access Denied'
-                  : 'Camera Unavailable',
+                  ? context.tr('zq_access_denied')
+                  : context.tr('zq_unavailable'),
               style: GoogleFonts.outfit(
                 color: Colors.white,
                 fontSize: 20,
@@ -195,8 +196,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             const SizedBox(height: 10),
             Text(
               isPermissionDenied
-                  ? 'Camera access is required to scan Saudi ZATCA e-invoicing QR codes directly from receipts.\n\nPlease allow camera access in App Settings or tap Request Access.'
-                  : 'Unable to start camera preview: ${error.errorDetails?.message ?? error.errorCode.name}',
+                  ? context.tr('zq_access_required_desc')
+                  : context.trArgs('zq_preview_error', {'error': error.errorDetails?.message ?? error.errorCode.name}),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: context.textSecondary,
@@ -211,13 +212,13 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               child: ElevatedButton.icon(
                 onPressed: () => openAppSettings(),
                 icon: const Icon(Icons.settings_outlined, size: 20),
-                label: const Text(
-                  'Open App Settings',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                label: Text(
+                  context.tr('set_open_app_settings'),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5BF),
-                  foregroundColor: const Color(0xFF051424),
+                  backgroundColor: AppThemes.electricTeal,
+                  foregroundColor: AppThemes.brandDarkBg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -231,9 +232,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               child: OutlinedButton.icon(
                 onPressed: _requestPermission,
                 icon: const Icon(Icons.refresh_rounded, size: 20),
-                label: const Text(
-                  'Request Access Again',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                label: Text(
+                  context.tr('zq_request_again'),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: context.textPrimary,
@@ -253,7 +254,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                 color: context.textSecondary,
               ),
               label: Text(
-                'Enter QR Text Manually',
+                context.tr('zq_enter_manually_long'),
                 style: TextStyle(color: context.textSecondary, fontSize: 14),
               ),
             ),
@@ -269,7 +270,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text(
-          'Scan Tax Invoice QR',
+          context.tr('zq_title'),
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: context.textPrimary),
         ),
         backgroundColor: context.cardBg,
@@ -277,17 +278,17 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         actions: [
           IconButton(
             icon: Icon(Icons.keyboard_alt_outlined, color: context.textSecondary),
-            tooltip: 'Enter Manually',
+            tooltip: context.tr('zq_enter_manually'),
             onPressed: _showManualInputDialog,
           ),
           IconButton(
             icon: const Icon(Icons.flash_on, color: Colors.amber),
-            tooltip: 'Flashlight',
+            tooltip: context.tr('zq_flashlight'),
             onPressed: () => _controller.toggleTorch(),
           ),
           IconButton(
             icon: Icon(Icons.cameraswitch_outlined, color: context.textPrimary),
-            tooltip: 'Flip Camera',
+            tooltip: context.tr('zq_flip_camera'),
             onPressed: () => _controller.switchCamera(),
           ),
         ],
@@ -311,13 +312,13 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                     height: 270,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                        color: AppThemes.iceCyan.withValues(alpha: 0.85),
                         width: 2.5,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00E5BF).withValues(alpha: 0.25),
+                          color: AppThemes.electricTeal.withValues(alpha: 0.25),
                           blurRadius: 24,
                           spreadRadius: 2,
                         ),
@@ -333,14 +334,14 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF071C33).withValues(alpha: 0.85),
+                          color: AppThemes.deepGlacial.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                          border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
                         ),
                         child: Text(
-                          'ZATCA PHASE 2 TARGET',
+                          context.tr('zq_target'),
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF4DE6F7),
+                            color: AppThemes.iceCyan,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.0,
@@ -363,15 +364,15 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                             gradient: const LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                Color(0xFF00E5BF),
-                                Color(0xFF4DE6F7),
-                                Color(0xFF00E5BF),
+                                AppThemes.electricTeal,
+                                AppThemes.iceCyan,
+                                AppThemes.electricTeal,
                                 Colors.transparent,
                               ],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF4DE6F7).withValues(alpha: 0.85),
+                                color: AppThemes.iceCyan.withValues(alpha: 0.85),
                                 blurRadius: 10,
                                 spreadRadius: 1.5,
                               ),
@@ -392,9 +393,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF071C33).withValues(alpha: 0.92),
+                color: AppThemes.deepGlacial.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF4DE6F7).withValues(alpha: 0.3)),
+                border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.4),
@@ -405,11 +406,11 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_scanner, color: Color(0xFF00E5BF), size: 22),
+                  const Icon(Icons.qr_code_scanner, color: AppThemes.electricTeal, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Hold camera over the QR code on your printed receipt',
+                      context.tr('zq_hold_camera'),
                       style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),

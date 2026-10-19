@@ -114,7 +114,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           setState(() {
             _householdId = hid;
             _userRole = data['role'] as String? ?? 'member';
-            _userEmail = user.email ?? (data['display_name'] as String?) ?? 'User';
+            _userEmail = user.email ?? (data['display_name'] as String?) ?? context.tr('set_user');
           });
           if (hid != null) {
             await _loadHouseholdDetails(hid);
@@ -136,14 +136,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
       if (mounted) {
         setState(() {
-          _householdName = membership?.householdName ?? 'My Household';
+          _householdName = membership?.householdName ?? context.tr('set_my_household');
           final code = membership?.inviteCode ?? '';
           _inviteCode = code.isNotEmpty ? code : '--------';
           _members = (membersData as List?)
                   ?.map((e) {
                     final map = Map<String, dynamic>.from(e as Map);
                     return {
-                      'email': (map['display_name'] as String?) ?? 'Member',
+                      'email': (map['display_name'] as String?) ?? context.tr('member'),
                       'role': map['role'] ?? 'member',
                     };
                   })
@@ -231,8 +231,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Failed to save payday: $e',
-          title: 'Payday Error',
+          context.trArgs('set_failed_save_payday', {'error': e}),
+          title: context.tr('set_payday_error'),
         );
       }
       return false;
@@ -256,8 +256,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Failed to save income: $e',
-          title: 'Income Error',
+          context.trArgs('set_failed_save_income', {'error': e}),
+          title: context.tr('set_income_error'),
         );
       }
       return false;
@@ -281,8 +281,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Failed to save rollover policy: $e',
-          title: 'Rollover Error',
+          context.trArgs('set_failed_save_rollover_policy', {'error': e}),
+          title: context.tr('set_rollover_error'),
         );
       }
       return false;
@@ -317,14 +317,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (status.isGranted) {
         AppSnackBar.showSuccess(
           context,
-          'Camera permission granted! Ready to scan receipts & invoices.',
-          title: 'Camera Enabled',
+          context.tr('set_camera_permission_granted_ready_scan'),
+          title: context.tr('set_camera_enabled'),
         );
       } else if (status.isPermanentlyDenied) {
         _showPermissionDialog(
-          title: 'Camera Permission Denied',
+          title: context.tr('set_camera_permission_denied'),
           message:
-              'Camera access has been permanently denied. Please tap "Open Settings" to enable Camera access for Budget Tracker in Android Settings.',
+              context.tr('set_camera_access_has_been_permanently'),
         );
       }
     }
@@ -337,14 +337,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       if (status.isGranted) {
         AppSnackBar.showSuccess(
           context,
-          'Microphone permission granted! Ready for voice invoice entries.',
-          title: 'Microphone Enabled',
+          context.tr('set_microphone_permission_granted_ready_voice'),
+          title: context.tr('set_microphone_enabled'),
         );
       } else if (status.isPermanentlyDenied) {
         _showPermissionDialog(
-          title: 'Microphone Permission Denied',
+          title: context.tr('set_microphone_permission_denied'),
           message:
-              'Microphone access has been permanently denied. Please tap "Open Settings" to enable Microphone access for Budget Tracker in Android Settings.',
+              context.tr('set_microphone_access_has_been_permanently'),
         );
       }
     }
@@ -357,7 +357,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.settings_suggest_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.settings_suggest_rounded, color: AppThemes.success),
             const SizedBox(width: 8),
             Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
@@ -366,15 +366,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             icon: const Icon(Icons.open_in_new, size: 16),
-            label: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () {
               Navigator.pop(ctx);
               openAppSettings();
@@ -390,8 +390,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       Clipboard.setData(ClipboardData(text: _inviteCode!));
       AppSnackBar.showSuccess(
         context,
-        'Invite code "$_inviteCode" copied! Share with your partner.',
-        title: 'Code Copied',
+        context.trArgs('set_invite_code_copied_share_partner', {'code': _inviteCode}),
+        title: context.tr('set_code_copied'),
         icon: Icons.copy_rounded,
       );
     }
@@ -416,7 +416,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -452,8 +452,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to leave household: $e',
-            title: 'Leave Household Error',
+            context.trArgs('set_failed_leave_household', {'error': e}),
+            title: context.tr('set_leave_household_error'),
           );
         }
       }
@@ -489,8 +489,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               textCapitalization: TextCapitalization.characters,
               maxLength: 16,
               style: GoogleFonts.jetBrainsMono(color: context.textPrimary, fontSize: 16, letterSpacing: 2),
-              decoration: const InputDecoration(
-                hintText: '8-16 characters',
+              decoration: InputDecoration(
+                hintText: context.tr('set_8_16_characters'),
                 counterText: '',
               ),
             ),
@@ -499,11 +499,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -519,8 +519,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 if (mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'You have successfully joined the household!',
-                    title: 'Household Joined',
+                    context.tr('set_have_successfully_joined_household'),
+                    title: context.tr('set_household_joined'),
                   );
                   _loadUserInfo();
                 }
@@ -528,8 +528,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    'Failed to join: $e',
-                    title: 'Join Error',
+                    context.trArgs('set_failed_join', {'error': e}),
+                    title: context.tr('set_join_error'),
                   );
                 }
               }
@@ -546,18 +546,18 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
-        title: Text('New Household', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+        title: Text(context.tr('new_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Enter a name for the new household:', style: TextStyle(color: context.textSecondary, fontSize: 13)),
+            Text(context.tr('set_enter_name_new_household'), style: TextStyle(color: context.textSecondary, fontSize: 13)),
             const SizedBox(height: 12),
             TextField(
               controller: nameCtrl,
               style: TextStyle(color: context.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'e.g. Summer Beach House',
+              decoration: InputDecoration(
+                hintText: context.tr('set_e_g_summer_beach_house'),
               ),
             ),
           ],
@@ -565,14 +565,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('create'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
@@ -584,8 +584,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 if (mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Created household "$hhName"!',
-                    title: 'Household Created',
+                    context.trArgs('set_created_household', {'name': hhName}),
+                    title: context.tr('set_household_created'),
                   );
                   _loadUserInfo();
                 }
@@ -593,8 +593,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    'Failed to create household: $e',
-                    title: 'Creation Error',
+                    context.trArgs('set_failed_create_household', {'error': e}),
+                    title: context.tr('set_creation_error'),
                   );
                 }
               }
@@ -623,8 +623,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             setState(() => _dependents = updated);
             AppSnackBar.showSuccess(
               context,
-              'Added member "${result.name}" successfully.',
-              title: 'Member Added',
+              context.trArgs('set_added_member_successfully', {'name': result.name}),
+              title: context.tr('set_member_added'),
             );
           }
         }
@@ -632,8 +632,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to add member: $e',
-            title: 'Error',
+            context.trArgs('set_failed_add_member', {'error': e}),
+            title: context.tr('set_error'),
           );
         }
       }
@@ -654,19 +654,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             const Icon(Icons.delete_outline_rounded, color: Color(0xFFF85149)),
             const SizedBox(width: 8),
             Text(
-              'Remove Dependent',
+              context.tr('set_remove_dependent'),
               style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary),
             ),
           ],
         ),
         content: Text(
-          'Are you sure you want to remove "${dependent.name}" from your household dependents?',
+          context.trArgs('set_are_sure_want_remove_from', {'name': dependent.name}),
           style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -674,7 +674,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('set_remove'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -689,8 +689,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             setState(() => _dependents = updated);
             AppSnackBar.showSuccess(
               context,
-              'Removed dependent "${dependent.name}".',
-              title: 'Dependent Removed',
+              context.trArgs('set_removed_dependent', {'name': dependent.name}),
+              title: context.tr('set_dependent_removed'),
             );
           }
         }
@@ -698,8 +698,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to remove dependent: $e',
-            title: 'Error',
+            context.trArgs('set_failed_remove_dependent', {'error': e}),
+            title: context.tr('set_error'),
           );
         }
       }
@@ -711,7 +711,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     if (_isLoading) {
       return Scaffold(
         backgroundColor: context.scaffoldBg,
-        body: const Center(child: CircularProgressIndicator(color: Color(0xFF00C896))),
+        body: const Center(child: CircularProgressIndicator(color: AppThemes.success)),
       );
     }
 
@@ -724,7 +724,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded, color: context.textSecondary),
-            tooltip: 'Refresh Permissions',
+            tooltip: context.tr('set_refresh_permissions'),
             onPressed: _checkPermissions,
           ),
         ],
@@ -733,16 +733,16 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         children: [
           // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
-          _buildSectionHeader('HOUSEHOLD & MEMBERSHIP'),
+          _buildSectionHeader(context.tr('set_household_membership')),
           const SizedBox(height: 6),
           Text(
-            'Manage your shared budget group, invite others with your code, or switch households.',
+            context.tr('set_manage_shared_budget_group_invite'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
           if (_householdId != null) ...[
             HouseholdManagementCard(
-              householdName: _householdName ?? 'Household',
+              householdName: _householdName ?? context.tr('set_household'),
               householdId: _householdId,
               inviteCode: _inviteCode ?? '--------',
               userRole: _userRole,
@@ -860,13 +860,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               child: Column(
                 children: [
                   Text(
-                    'You have not joined any household yet.',
+                    context.tr('set_have_not_joined_any_household'),
                     style: TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                     ),
                     onPressed: () {
@@ -875,7 +875,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                         MaterialPageRoute(builder: (_) => const HouseholdScreen()),
                       );
                     },
-                    child: const Text('Join or Create Household', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(context.tr('set_join_create_household'), style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -887,7 +887,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _buildSectionHeader(context.tr('appearance_language')),
           const SizedBox(height: 6),
           Text(
-            'Customize your app theme and system language.',
+            context.tr('set_customize_app_theme_system_language'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -898,7 +898,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _buildSectionHeader(context.tr('hardware_permissions')),
           const SizedBox(height: 6),
           Text(
-            'Check and manage camera and microphone access for expense scanning and AI voice input.',
+            context.tr('set_check_manage_camera_microphone_access'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -976,7 +976,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _buildSectionHeader(context.tr('duplicate_resolution')),
           const SizedBox(height: 6),
           Text(
-            'Choose how the system handles transactions when multiple methods are used.',
+            context.tr('dup_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -1034,22 +1034,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.table_view_rounded, color: Color(0xFF00C896), size: 20),
+                    const Icon(Icons.table_view_rounded, color: AppThemes.success, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Export Monthly Report', style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text('Generate standard CSV with Date, Merchant, Category, and Items', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                          Text(context.tr('set_export_monthly_report'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text(context.tr('set_generate_standard_csv_date_merchant'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         ],
                       ),
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.chipBg,
-                        foregroundColor: const Color(0xFF00C896),
-                        side: const BorderSide(color: Color(0xFF00C896)),
+                        foregroundColor: AppThemes.success,
+                        side: const BorderSide(color: AppThemes.success),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       ),
                       onPressed: () async {
@@ -1067,12 +1067,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           if (!context.mounted) return;
                           AppSnackBar.showError(
                             context,
-                            'Export error: $e',
-                            title: 'Export Failed',
+                            context.trArgs('set_export_error', {'error': e}),
+                            title: context.tr('set_export_failed'),
                           );
                         }
                       },
-                      child: const Text('Export CSV', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: Text(context.tr('export_csv'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1084,22 +1084,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   builder: (ctx, count, _) {
                     return Row(
                       children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : const Color(0xFF00C896), size: 20),
+                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : AppThemes.success, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Offline SQLite Queue', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                              Text(count > 0 ? '$count transaction(s) pending sync' : 'All transactions synchronized', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                              Text(context.tr('set_offline_sqlite_queue'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(count > 0 ? context.trArgs('set_transaction_s_pending_sync', {'count': count}) : context.tr('set_all_transactions_synchronized'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                             ],
                           ),
                         ),
                         if (count > 0)
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
                             onPressed: () => OfflineSyncService.instance.flushQueue(),
-                            child: const Text('Sync Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                       ],
                     );
@@ -1111,10 +1111,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── HELP & SUPPORT ──
-          _buildSectionHeader('HELP & SUPPORT'),
+          _buildSectionHeader(context.tr('set_help_support')),
           const SizedBox(height: 6),
           Text(
-            'Explore user guides, interactive walkthroughs, ask our AI assistant, or email the developer.',
+            context.tr('set_explore_user_guides_interactive_walkthroughs'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -1132,17 +1132,17 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.menu_book_rounded, color: Color(0xFF00C896), size: 20),
+                    child: const Icon(Icons.menu_book_rounded, color: AppThemes.success, size: 20),
                   ),
                   title: Text(
-                    'App Guide & Tutorial',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('set_app_guide_tutorial'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Replay the 5-step interactive feature walkthrough',
+                    context.tr('set_replay_5_step_interactive_feature'),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1159,11 +1159,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     child: const Icon(Icons.support_agent_rounded, color: Color(0xFF3B82F6), size: 20),
                   ),
                   title: Text(
-                    'Help Center & AI Support',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('set_help_center_ai_support'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Searchable FAQs, salary cycle guide & AI chatbot',
+                    context.tr('set_searchable_faqs_salary_cycle_guide'),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1190,11 +1190,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     child: const Icon(Icons.mail_outline_rounded, color: Color(0xFFF59E0B), size: 20),
                   ),
                   title: Text(
-                    'Contact Developer',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('contact_developer'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Email fmscoinfo@fmsco.com.sa for feedback or bug reports',
+                    context.trArgs('set_email_dev_feedback', {'email': 'fmscoinfo@fmsco.com.sa'}),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1202,8 +1202,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
                     AppSnackBar.showSuccess(
                       context,
-                      'Developer email copied: fmscoinfo@fmsco.com.sa',
-                      title: 'Copied',
+                      context.trArgs('set_dev_email_copied', {'email': 'fmscoinfo@fmsco.com.sa'}),
+                      title: context.tr('set_copied'),
                       icon: Icons.copy_rounded,
                     );
                   },
@@ -1214,7 +1214,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           const SizedBox(height: 28),
 
           // ── 4. HOUSEHOLD & ACCOUNT ──
-          _buildSectionHeader('HOUSEHOLD & ACCOUNT'),
+          _buildSectionHeader(context.tr('set_household_account')),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -1234,7 +1234,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       Expanded(
                         child: Text(
                           _userEmail!,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ),
                     ],
@@ -1248,7 +1248,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Household: ${_householdId!.substring(0, 8)}...',
+                          context.trArgs('set_household_short_id', {'id': _householdId!.substring(0, 8)}),
                           style: TextStyle(color: context.textSecondary, fontSize: 12, fontFamily: 'monospace'),
                         ),
                       ),
@@ -1257,14 +1257,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           Clipboard.setData(ClipboardData(text: _householdId!));
                           AppSnackBar.showSuccess(
                             context,
-                            'Household ID copied to clipboard',
-                            title: 'Copied',
+                            context.tr('set_household_id_copied_clipboard'),
+                            title: context.tr('set_copied'),
                             icon: Icons.copy_rounded,
                           );
                         },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text('Copy', style: TextStyle(color: Color(0xFF00C896), fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Text(context.tr('set_copy'), style: TextStyle(color: context.successText, fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -1281,7 +1281,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.logout, size: 18),
-                    label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: Text(context.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () => supabase.auth.signOut(),
                   ),
                 ),
@@ -1314,7 +1314,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
-    const activeBg = Color(0xFF00C896);
+    const activeBg = AppThemes.success;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1332,10 +1332,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.palette_rounded, color: Color(0xFF00C896), size: 20),
+                child: const Icon(Icons.palette_rounded, color: AppThemes.success, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1343,7 +1343,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.tr('appearance'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                    Text('System default, light mode, or dark mode', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Text(context.tr('set_system_default_light_mode_dark'), style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1398,10 +1398,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: Color(0xFF00C896), size: 20),
+                child: const Icon(Icons.language_rounded, color: AppThemes.success, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1409,7 +1409,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.tr('language'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                    Text('General application language (EN, AR, UR)', style: TextStyle(color: subtextColor, fontSize: 12)),
+                    Text(context.tr('set_general_application_language_en_ar'), style: TextStyle(color: subtextColor, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1550,7 +1550,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         color: context.cardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.3) : context.borderColor,
+          color: isGranted ? AppThemes.success.withValues(alpha: 0.3) : context.borderColor,
         ),
       ),
       child: Column(
@@ -1562,12 +1562,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+                  color: isGranted ? AppThemes.success.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
-                  color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                  color: isGranted ? AppThemes.success : Colors.orange,
                   size: 20,
                 ),
               ),
@@ -1592,10 +1592,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                  color: isGranted ? AppThemes.success.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                    color: isGranted ? AppThemes.success : Colors.orange,
                     width: 0.8,
                   ),
                 ),
@@ -1605,13 +1605,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Icon(
                       isGranted ? Icons.check_circle : Icons.warning_amber_rounded,
                       size: 12,
-                      color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                      color: isGranted ? AppThemes.success : Colors.orange,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isGranted ? 'GRANTED' : 'NOT GRANTED',
+                      isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
                       style: TextStyle(
-                        color: isGranted ? const Color(0xFF00C896) : Colors.orange,
+                        color: isGranted ? AppThemes.success : Colors.orange,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1628,13 +1628,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     icon: const Icon(Icons.lock_open, size: 15),
-                    label: const Text('Grant Access', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    label: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: onRequest,
                   ),
                 ),
@@ -1653,7 +1653,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.settings_outlined, size: 15),
-                  label: const Text('Open App Settings', style: TextStyle(fontSize: 12)),
+                  label: Text(context.tr('set_open_app_settings'), style: const TextStyle(fontSize: 12)),
                   onPressed: onOpenSettings,
                 ),
               ),
@@ -1667,7 +1667,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.visibility, size: 14),
-                  label: Text(testLabel ?? 'Test', style: const TextStyle(fontSize: 11)),
+                  label: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 11)),
                   onPressed: testAction,
                 ),
               ],
@@ -1698,10 +1698,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: value ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.chipBg,
+              color: value ? AppThemes.success.withValues(alpha: 0.12) : context.chipBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: value ? const Color(0xFF00C896) : context.textSecondary, size: 20),
+            child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1716,7 +1716,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           Switch(
             value: value,
-            activeThumbColor: const Color(0xFF00C896),
+            activeThumbColor: AppThemes.success,
             onChanged: onChanged,
           ),
         ],
@@ -1742,7 +1742,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           color: context.cardBg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -1751,7 +1751,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
+              color: isSelected ? AppThemes.success : context.textSecondary,
               size: 20,
             ),
             const SizedBox(width: 12),

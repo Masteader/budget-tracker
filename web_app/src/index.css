@@ -72,3 +72,25 @@
 .pulse-glow {
   animation: pulseGlow 2s ease-in-out infinite;
 }
+
+/* Visible keyboard focus for every interactive element (WCAG 2.4.7). */
+:focus-visible {
+  outline: 3px solid #00808c;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Respect the OS "reduce motion" preference: stop decorative loops
+   (telemetry gradient, pulse glows, river dash flow, Tailwind animate-*). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -105,8 +105,8 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
     if (net <= 0) {
       AppSnackBar.showError(
         context,
-        'Please enter a valid salary breakdown with positive take-home pay.',
-        title: 'Invalid Salary',
+        context.tr('pis_invalid_msg'),
+        title: context.tr('pis_invalid_title'),
       );
       return;
     }
@@ -114,8 +114,8 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
     if (_selectedAccountId == null) {
       AppSnackBar.showError(
         context,
-        'Please select a destination account for the deposit.',
-        title: 'Account Required',
+        context.tr('pis_account_msg'),
+        title: context.tr('pis_account_title'),
       );
       return;
     }
@@ -137,7 +137,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
         accountId: _selectedAccountId!,
         cycleKey: cycleKey,
         sourceType: IncomeSourceType.salary,
-        title: 'Monthly Salary',
+        title: context.tr('income_source_salary'),
         baseAmount: _base + _sideGig,
         overtime: _overtime,
         bonus: _bonus,
@@ -151,8 +151,8 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
 
         AppSnackBar.showSuccess(
           context,
-          'Deposited SAR ${_fmt.format(net)} to ${destAccount.name}!',
-          title: 'Salary Deposited',
+          context.trArgs('ris_deposited', {'amount': context.sar(net), 'account': destAccount.name}),
+          title: context.tr('pis_deposited_title'),
         );
 
         // Prompt salary distribution assistant
@@ -169,8 +169,8 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
         setState(() => _isSubmitting = false);
         AppSnackBar.showError(
           context,
-          'Failed to record salary deposit: $e',
-          title: 'Error',
+          context.trArgs('pis_failed_msg', {'error': e}),
+          title: context.tr('set_error'),
         );
       }
     }
@@ -252,6 +252,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                 ),
               ),
               IconButton(
+                tooltip: context.tr('close'),
                 icon: Icon(Icons.close, color: context.textSecondary),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -293,7 +294,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'SAR ${_fmt.format(net > 0 ? net : 0.0)}',
+                      context.sar(net > 0 ? net : 0.0),
                       style: GoogleFonts.outfit(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -528,7 +529,7 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
               size: 18,
               color: isDeduction ? Colors.redAccent : context.electricTeal,
             ),
-            prefixText: 'SAR ',
+            prefixText: '${context.tr('sar')} ',
             prefixStyle: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,

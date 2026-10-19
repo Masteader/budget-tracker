@@ -168,7 +168,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: context.isDark ? const Color(0xFF071C33) : Colors.white,
+                        color: context.isDark ? AppThemes.deepGlacial : Colors.white,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: context.isDark
@@ -217,7 +217,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
   @override
   Widget build(BuildContext context) {
     return Stack(
-      alignment: Alignment.bottomRight,
+      alignment: AlignmentDirectional.bottomEnd,
       clipBehavior: Clip.none,
       children: [
         if (_isOpen)
@@ -239,14 +239,14 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         _buildOption(
           icon: Icons.camera_alt_rounded,
           label: context.tr('scan_receipt'),
-          color: const Color(0xFF4DE6F7),
+          color: AppThemes.iceCyan,
           onTap: _onScanReceipt,
           offset: 290,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
-          color: const Color(0xFF00E5BF),
+          color: AppThemes.electricTeal,
           onTap: _onVoiceEntry,
           offset: 240,
         ),
@@ -267,7 +267,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         _buildOption(
           icon: Icons.calculate_outlined,
           label: context.tr('affordability_simulator'),
-          color: const Color(0xFFD4AF37),
+          color: AppThemes.champagneGold,
           onTap: _onAffordabilitySimulator,
           offset: 95,
         ),
@@ -280,8 +280,8 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         ),
         FloatingActionButton.extended(
           heroTag: 'main_speed_dial_fab',
-          backgroundColor: const Color(0xFF00E5BF),
-          foregroundColor: const Color(0xFF051424),
+          backgroundColor: AppThemes.electricTeal,
+          foregroundColor: AppThemes.brandDarkBg,
           elevation: 6,
           onPressed: _toggle,
           icon: AnimatedRotation(

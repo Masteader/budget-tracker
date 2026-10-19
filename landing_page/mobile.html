@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+  <meta name="description" content="BUDGET Tracker • ميزانية الأسرة — معاينة تطبيق الجوال لإدارة ميزانية الأسرة والسكن المشترك." />
+  <meta name="theme-color" content="#0b1528" />
   <title>BUDGET Tracker | لوحة تحكم التطبيق المحمول (ميزانية وأكثر)</title>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
@@ -82,6 +84,19 @@
       border: 1px solid rgba(13, 148, 136, 0.15);
       box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
     }
+
+    /* Respect the OS "reduce motion" setting (flow glows, pulses, smooth scroll). */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto !important; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Visible keyboard focus. */
+    :focus-visible { outline: 3px solid #00808c; outline-offset: 2px; }
   </style>
 </head>
 <body class="bg-background text-on-background pb-28">

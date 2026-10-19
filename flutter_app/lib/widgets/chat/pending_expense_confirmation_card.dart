@@ -3,6 +3,7 @@ import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_service.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Interactive confirmation card embedded within chat bubbles that allows
 /// the user to review and modify Merchant, Category, Sub-Category, Who Paid,
@@ -54,7 +55,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   @override
   void initState() {
     super.initState();
-    final defaultMerchant = widget.pendingData['merchant'] as String? ?? 'Store Name';
+    // Empty (with a localized hint) instead of an English placeholder value.
+    final defaultMerchant = widget.pendingData['merchant'] as String? ?? '';
     _merchantController = TextEditingController(text: defaultMerchant);
 
     var rawCat = (widget.pendingData['category_code'] as String? ?? 'OPEX-MISC').toUpperCase();
@@ -132,7 +134,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       decoration: BoxDecoration(
         color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
+        border: Border.all(color: AppThemes.success.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,10 +145,10 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             children: [
               Row(
                 children: [
-                  const Icon(Icons.edit_note_rounded, color: Color(0xFF00C896), size: 18),
+                  const Icon(Icons.edit_note_rounded, color: AppThemes.success, size: 18),
                   const SizedBox(width: 6),
                   Text(
-                    'Confirm Expense Details',
+                    context.tr('pec_title'),
                     style: GoogleFonts.outfit(
                       color: context.textPrimary,
                       fontWeight: FontWeight.bold,
@@ -158,13 +160,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'SAR ${amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFF00C896),
+                  context.sar(amount),
+                  style: TextStyle(
+                    color: context.successText,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -179,12 +181,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             controller: _merchantController,
             style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13),
             decoration: InputDecoration(
-              labelText: 'Merchant / Store',
+              labelText: context.tr('merchant'),
+              hintText: context.tr('store_name'),
               labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
               isDense: true,
               filled: true,
               fillColor: context.inputBg,
-              prefixIcon: const Icon(Icons.storefront_rounded, size: 16, color: Color(0xFF00C896)),
+              prefixIcon: const Icon(Icons.storefront_rounded, size: 16, color: AppThemes.success),
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -196,7 +199,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.success),
               ),
             ),
           ),
@@ -226,7 +229,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                       items: _defaultCategories.map((c) {
                         return DropdownMenuItem(
                           value: c['code'],
-                          child: Text(c['label'] ?? c['code']!),
+                          child: Text(context.trCat(c['code']!)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -262,7 +265,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                               child: SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                               ),
                             ),
                           )
@@ -274,7 +277,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                                     : null),
                             isExpanded: true,
                             hint: Text(
-                              _availableSubCategories.isEmpty ? 'General' : 'Sub-Category',
+                              _availableSubCategories.isEmpty ? context.tr('pec_general') : context.tr('sub_category'),
                               style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
                             ),
                             dropdownColor: context.cardBg,
@@ -285,7 +288,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                               return DropdownMenuItem<String>(
                                 value: subCode,
                                 child: Text(
-                                  nameEn,
+                                  context.trSub(subCode, nameAr: s['name_ar'] as String?, nameEn: nameEn),
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontSize: 12),
                                 ),
@@ -304,7 +307,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
 
           // ── WHO PAID? ──
           Text(
-            'WHO PAID?',
+            context.tr('pec_who_paid_caps'),
             style: GoogleFonts.outfit(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -316,13 +319,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           Row(
             children: [
               _buildChoiceChip(
-                label: 'Me',
+                label: context.tr('me'),
                 isSelected: _selectedPaidBy == 'me',
                 onSelected: () => setState(() => _selectedPaidBy = 'me'),
               ),
               const SizedBox(width: 8),
               _buildChoiceChip(
-                label: 'Partner',
+                label: context.tr('partner'),
                 isSelected: _selectedPaidBy == 'partner',
                 onSelected: () => setState(() => _selectedPaidBy = 'partner'),
               ),
@@ -332,7 +335,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
 
           // ── FOR WHOM? ──
           Text(
-            'FOR WHOM?',
+            context.tr('pec_for_whom_caps'),
             style: GoogleFonts.outfit(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -346,17 +349,17 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             runSpacing: 6,
             children: [
               _buildChoiceChip(
-                label: 'Both / Family',
+                label: context.tr('pec_both_family'),
                 isSelected: _selectedBeneficiary == 'both',
                 onSelected: () => setState(() => _selectedBeneficiary = 'both'),
               ),
               _buildChoiceChip(
-                label: 'Me',
+                label: context.tr('me'),
                 isSelected: _selectedBeneficiary == 'me',
                 onSelected: () => setState(() => _selectedBeneficiary = 'me'),
               ),
               _buildChoiceChip(
-                label: 'Partner',
+                label: context.tr('partner'),
                 isSelected: _selectedBeneficiary == 'partner',
                 onSelected: () => setState(() => _selectedBeneficiary = 'partner'),
               ),
@@ -386,7 +389,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${items.length} item(s) found:',
+                    context.trArgs('pec_items_found', {'count': items.length}),
                     style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
@@ -422,8 +425,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                             ),
                           ),
                           Text(
-                            'SAR ${(it['price'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                            style: const TextStyle(color: Color(0xFF00C896), fontSize: 11),
+                            context.sar((it['price'] as num?) ?? 0),
+                            style: TextStyle(color: context.successText, fontSize: 11),
                           ),
                         ],
                       ),
@@ -440,15 +443,15 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.check_circle_rounded, size: 16),
-                  label: const Text(
-                    'Confirm & Add Expense',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  label: Text(
+                    context.tr('pec_confirm_add'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   onPressed: () {
                     final store = _merchantController.text.trim();
@@ -457,7 +460,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                             ? _availableSubCategories.first['sub_code'] as String?
                             : null);
                     widget.onConfirm(
-                      store.isNotEmpty ? store : 'Store Name',
+                      store.isNotEmpty ? store : context.tr('store_name'),
                       _selectedCategoryCode,
                       resolvedSub,
                       _selectedPaidBy,
@@ -473,7 +476,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   foregroundColor: context.textSecondary,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
-                child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                child: Text(context.tr('cancel'), style: const TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -494,10 +497,10 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.15) : context.chipBg,
+          color: isSelected ? AppThemes.success.withValues(alpha: 0.15) : context.chipBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.2 : 0.8,
           ),
         ),
@@ -505,7 +508,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 13, color: isSelected ? const Color(0xFF00C896) : context.textSecondary),
+              Icon(icon, size: 13, color: isSelected ? AppThemes.success : context.textSecondary),
               const SizedBox(width: 4),
             ],
             Text(
@@ -513,7 +516,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+                color: isSelected ? AppThemes.success : context.textPrimary,
               ),
             ),
           ],

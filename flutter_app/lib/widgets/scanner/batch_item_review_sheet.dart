@@ -106,7 +106,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
       final res = widget.mockInitialParse!(file);
       setState(() {
         _currentIndex = index;
-        _merchantCtrl.text = res['merchant'] as String? ?? 'Merchant';
+        _merchantCtrl.text = res['merchant'] as String? ?? context.tr('merchant_generic');
         _amountCtrl.text = (res['amount'] as num?)?.toStringAsFixed(2) ?? '0.00';
         _vatCtrl.text = (res['vat_amount'] as num?)?.toStringAsFixed(2) ?? '0.00';
         _selectedCategory = res['category_code'] as String? ?? 'OPEX-GROCERY';
@@ -138,7 +138,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
         if (mounted) {
           final merchant = res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
-              'Store';
+              context.tr('store_name');
           final amount = (res['amount'] as num?)?.toDouble() ?? 0.0;
           final vat = (res['vat_amount'] as num?)?.toDouble() ?? 0.0;
           final cat = res['category_code'] as String? ?? 'OPEX-GROCERY';
@@ -174,7 +174,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
     if (mounted) {
       setState(() {
-        _merchantCtrl.text = 'Merchant';
+        _merchantCtrl.text = context.tr('merchant_generic');
         _amountCtrl.text = '0.00';
         _vatCtrl.text = '0.00';
         _isAnalyzing = false;
@@ -189,7 +189,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
     final parsedVat = parseMoneyInput(_vatCtrl.text.trim()) ?? 0.0;
     final merchant = _merchantCtrl.text.trim().isNotEmpty
         ? _merchantCtrl.text.trim()
-        : 'Store';
+        : context.tr('store_name');
 
     if (widget.mockInitialParse != null) {
       _savedCount++;
@@ -322,7 +322,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${context.tr('receipt_x_of_y')} $current of $total',
+                context.trArgs('receipt_n_of_m', {'current': current, 'total': total}),
                 style: GoogleFonts.outfit(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -384,7 +384,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Analyzing receipt...',
+                      context.tr('bir_analyzing'),
                       style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                     ),
                   ],
@@ -396,11 +396,11 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             TextField(
               controller: _merchantCtrl,
               decoration: InputDecoration(
-                labelText: 'Merchant',
+                labelText: context.tr('merchant'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
                 filled: true,
-                fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -414,11 +414,11 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                     controller: _amountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
-                      labelText: 'Total (SAR)',
+                      labelText: context.tr('bir_total_sar'),
                       labelStyle: TextStyle(color: context.textSecondary),
                       prefixIcon: const Icon(Icons.receipt_long_rounded, size: 20),
                       filled: true,
-                      fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -430,10 +430,10 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                     controller: _vatCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
-                      labelText: 'VAT (15%)',
+                      labelText: context.tr('bir_vat'),
                       labelStyle: TextStyle(color: context.textSecondary),
                       filled: true,
-                      fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -446,11 +446,11 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             DropdownButtonFormField<String>(
               initialValue: _selectedCategory,
               decoration: InputDecoration(
-                labelText: 'Category',
+                labelText: context.tr('category'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 prefixIcon: const Icon(Icons.category_rounded, size: 20),
                 filled: true,
-                fillColor: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               items: _categories.map((c) {
@@ -496,7 +496,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                     onPressed: _saveAndNext,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.electricTeal,
-                      foregroundColor: const Color(0xFF051424),
+                      foregroundColor: AppThemes.brandDarkBg,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -547,7 +547,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           width: double.infinity,
           height: 120,
           decoration: BoxDecoration(
-            color: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade200,
+            color: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: context.iceCyan.withValues(alpha: 0.3)),
           ),
@@ -624,7 +624,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: context.isDark ? const Color(0xFF071C33) : Colors.grey.shade100,
+              color: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.electricTeal.withValues(alpha: 0.3)),
             ),
@@ -642,7 +642,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                       ),
                     ),
                     Text(
-                      'Saved',
+                      context.tr('bir_saved'),
                       style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
                   ],
@@ -651,7 +651,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                 Column(
                   children: [
                     Text(
-                      'SAR ${_totalBatchAmount.toStringAsFixed(2)}',
+                      context.sar(_totalBatchAmount),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -659,7 +659,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                       ),
                     ),
                     Text(
-                      'Total Logged',
+                      context.tr('bir_total_logged'),
                       style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
                   ],
@@ -674,7 +674,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               onPressed: () => Navigator.of(context).pop(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.electricTeal,
-                foregroundColor: const Color(0xFF051424),
+                foregroundColor: AppThemes.brandDarkBg,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

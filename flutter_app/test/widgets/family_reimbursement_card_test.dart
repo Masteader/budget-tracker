@@ -47,6 +47,7 @@ void main() {
             onReimbursed: () {
               callbackCalled = true;
             },
+            recordPayment: (_) async => {'status': 'success'},
           ),
         ),
       ),

@@ -66,14 +66,14 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
         widget.onReconcileSuccess?.call();
         AppSnackBar.showSuccess(
           context,
-          '${widget.account.name} balance updated to ${widget.account.currency} ${NumberFormat('#,##0.00').format(_actualBalance)}',
+          context.trArgs('rbd_updated_msg', {'name': widget.account.name, 'amount': widget.account.currency == 'SAR' ? context.sar(_actualBalance) : '${widget.account.currency} ${NumberFormat('#,##0.00').format(_actualBalance)}'}),
           title: context.tr('balance_reconciled'),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, 'Failed to reconcile balance: $e');
+        AppSnackBar.showError(context, context.trArgs('rbd_failed', {'error': e}));
       }
     }
   }

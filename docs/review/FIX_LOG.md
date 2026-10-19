@@ -58,3 +58,23 @@
 | API-30 | New app sends only the JWT: firewall gave 403 on expired JWT, HMAC required, no idempotent replays. | `tests/test_api_audit.py` contract tests | JWT-only auth, 401 + WWW-Authenticate, signature optional with JWT, Idempotency-Key + client_occurred_at. | `8c7ab2b` | N/A | 248 passed |
 | API-25 / API-28 | `.env`/fixtures/dev scripts copied into image; python-jose < 3.4.0. | n/a (config) | `.dockerignore`, `python-jose>=3.4.0`, `redis>=5.0.0`. | `5a457d9` | N/A | 248 passed |
 | API-31 | Chat/receipt reallocation used calendar-month budgets. | `tests/test_budget_cycle_lookup.py` | Lookup by household `cycle_key`. | `d1b60db` | N/A | 251 passed, 6 skipped |
+
+
+
+
+
+
+## UI / Localization / Web audit (details: `docs/review/audit/ui_web.md`)
+
+| Finding ID | What Was Wrong | Proof Test | Fix Summary | Commit | Applied to Live? | Verification Output |
+|---|---|---|---|---|---|---|
+| UI-01 | Urdu currency translated as rupees ("روپے") in `sar`, `amount_sar` and sort labels. | `test/ui_l10n_guard_test.dart` (riyal check) | Urdu unit is now "ریال". | 4c39b67 | N/A (app) | Guard test passes. |
+| UI-02/03/04 | About 760 hardcoded UI strings; 4 keys used but undefined (raw key shown); 4 keys English-only. | `test/ui_l10n_guard_test.dart` (key parity, undefined keys, literal scan) | 698 new keys in en/ar/ur (508 → 1206 per language); `trArgs`, `sar`, `fmtDate`, `cycleMonth` helpers. | 4c39b67 … c1665dd | N/A | `flutter analyze` 0 issues; 168/168 tests. |
+| UI-09 | Payday banner filtered on the non-existent `income_type` column and swallowed the error, so the banner never showed. | `test/widgets/ui_payday_checkin_banner_test.dart` | Filter on `source_type`; log failures; injectable lookup and clock. | 5503698 | N/A | 7/7 tests pass. |
+| UI-10 | Family and roommate settlement sheets showed success when the API call failed. | `test/widgets/ui_settlement_failure_test.dart` | Show the error and keep the sheet open; injectable recorder. | 886913f | N/A | 3/3 tests pass. |
+| UI-11 | Custom categories with Arabic/Urdu names all got the code `OPEX-` (collision). | Manual review | Generated `OPEX-CUSTOM<id>` when the name has no ASCII letters. | 9c67fef | N/A | Analyzer clean. |
+| UI-12/13 | Text hardcoded white was invisible in light mode; brand teal/emerald text had 1.6–2.3:1 contrast. | `test/screens/ui_light_mode_test.dart` | `textPrimary`; new `accentText`/`successText` tokens (AA). | a349f81, 8be0ab0 | N/A | 2/2 tests pass. |
+| UI-15/16 | Layout not mirrored in RTL (chat bubbles, overlays, insets); 22 icon buttons with no label; tap targets under 48 dp. | `test/screens/ui_rtl_locale_test.dart` | Directional widgets (32 sites); localized tooltips and semantic labels. | 4c39b67, 2b4acb8 | N/A | 5/5 tests pass. |
+| UI-17/18/19 | Leaked dashboard stream subscription; setState after await without a mounted check; PageController never disposed. | Analyzer and existing tests | Cancel in dispose; mounted guards / `_safeSetState`; dispose PageController. | 4c39b67 … 2d0e26e | N/A | Analyzer clean. |
+| WEB-01..08, 14 | Web: hardcoded Arabic in English mode; missing ARIA labels and states; no reduced-motion support; NaN canvas particles; full icon font (several MB); no favicon/OG; lint warning. | Playwright at 360/1280 px in ar/en: no horizontal scroll, 0 unnamed controls, 0 page errors | Dictionary keys, ARIA attributes, reduced motion, canvas fixes, icon subset, meta tags. | b627c01 | No (not deployed) | `npm run build` pass; oxlint 0 warnings. |
+| WEB-13 | Landing prototypes had no reduced-motion support, no focus ring, no meta description, and mixed digit systems. | Playwright at 360 px | CSS and meta added; digits consistent. | 3fdb8cd | No | No overflow at 360 px. |

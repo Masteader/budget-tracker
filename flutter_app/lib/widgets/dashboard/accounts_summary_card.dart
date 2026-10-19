@@ -18,6 +18,14 @@ class AccountsSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
+    final unitSpan = TextSpan(
+      text: context.isRtl ? ' ${context.tr('sar')}' : '${context.tr('sar')} ',
+      style: GoogleFonts.outfit(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: context.electricTeal,
+      ),
+    );
     final isDark = context.isDark;
 
     return StreamBuilder<List<Account>>(
@@ -98,7 +106,7 @@ class AccountsSummaryCard extends StatelessWidget {
                     if (hasDeficit)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        margin: const EdgeInsets.only(right: 6),
+                        margin: const EdgeInsetsDirectional.only(end: 6),
                         decoration: BoxDecoration(
                           color: Colors.redAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
@@ -130,29 +138,29 @@ class AccountsSummaryCard extends StatelessWidget {
                 const SizedBox(height: 14),
 
                 // Total Liquidity Balance
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                // Wrap (not Row) so large accessibility text cannot overflow.
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.end,
                   children: [
-                    Text(
-                      'SAR ',
-                      style: GoogleFonts.outfit(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: context.electricTeal,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          if (!context.isRtl) unitSpan,
+                          TextSpan(
+                            text: fmt.format(totalLiquidity),
+                            style: GoogleFonts.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          if (context.isRtl) unitSpan,
+                        ],
                       ),
                     ),
                     Text(
-                      fmt.format(totalLiquidity),
-                      style: GoogleFonts.outfit(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.tr('across_accounts').replaceAll('{count}', accounts.length.toString()),
+                      context.trArgs('across_accounts', {'count': accounts.length}),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -205,7 +213,7 @@ class AccountsSummaryCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'SAR ${fmt.format(acc.balance)}',
+                              context.sar(acc.balance),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,

@@ -48,7 +48,7 @@ export const Metrics: React.FC<MetricsProps> = ({ dict }) => {
           >
             <div>
               <div className="w-10 h-10 rounded-xl bg-[#e3f7fa] text-[#00808c] flex items-center justify-center mb-4 group-hover:scale-105 group-hover:bg-[#00808c] group-hover:text-white transition-all">
-                <span className="material-symbols-outlined text-[22px]">{card.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[22px]">{card.icon}</span>
               </div>
               <div className="text-3xl lg:text-4xl font-bold font-mono text-[#0c2530] mb-1.5">
                 {card.val}

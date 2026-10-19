@@ -112,7 +112,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     setState(() => _isSimulating = true);
 
     final hid = widget.householdId ?? '';
-    final item = _itemCtrl.text.trim().isNotEmpty ? _itemCtrl.text.trim() : 'Item';
+    final item = _itemCtrl.text.trim().isNotEmpty ? _itemCtrl.text.trim() : context.tr('sim_item');
 
     Map<String, dynamic>? data;
 
@@ -279,7 +279,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
           // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 16, 12),
             child: Row(
               children: [
                 Container(
@@ -315,6 +315,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -353,9 +354,9 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                     decoration: InputDecoration(
                       labelText: context.tr('enter_amount'),
-                      prefixText: 'SAR ',
+                      prefixText: '${context.tr('sar')} ',
                       labelStyle: TextStyle(color: context.textSecondary),
-                      prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
+                      prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success, size: 20),
                       filled: true,
                       fillColor: context.inputBg,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -416,7 +417,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   // Simulate Button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -469,13 +470,13 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     final res = _result!;
     final verdict = res['verdict'] as String? ?? 'comfortable';
     final targetAmt = (res['target_amount'] as num?)?.toDouble() ?? 0.0;
-    final item = res['item_name'] as String? ?? 'Item';
+    final item = res['item_name'] as String? ?? context.tr('sim_item');
     final daysToPayday = res['days_to_payday'] as int? ?? 0;
     final dailyCurrent = (res['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final dailyPost = (res['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final isOffline = res['is_offline'] == true;
 
-    Color badgeColor = const Color(0xFF00C896);
+    Color badgeColor = AppThemes.success;
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String verdictLabel = context.tr('comfortably_affordable');
 
@@ -489,9 +490,13 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
       verdictLabel = context.tr('unaffordable_exceeds');
     }
 
+    // The API/offline estimate provides en + ar advice; Urdu gets a
+    // localized summary of the verdict instead of falling back to English.
     final adviceText = isAr
         ? (res['advice_ar'] as String? ?? '')
-        : (res['advice_en'] as String? ?? '');
+        : (context.isUrdu
+            ? context.tr('sim_advice_$verdict')
+            : (res['advice_en'] as String? ?? ''));
 
     final monthlyBnpl = targetAmt > 0 ? (targetAmt / 4.0) : 0.0;
 
@@ -545,7 +550,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
           // Item and Amount
           Text(
-            '$item • SAR ${targetAmt.toStringAsFixed(2)}',
+            '$item • ${context.sar(targetAmt)}',
             style: GoogleFonts.outfit(
               color: context.textPrimary,
               fontSize: 16,
@@ -579,7 +584,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyCurrent, decimals: 1)}),
                         style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -597,7 +602,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'SAR ${dailyPost.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyPost, decimals: 1)}),
                         style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -632,7 +637,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${context.tr('split_with_bnpl')}: 4 × SAR ${monthlyBnpl.toStringAsFixed(2)}/mo',
+                      '${context.tr('split_with_bnpl')}: 4 × ${context.sar(monthlyBnpl)}/${context.tr('months_short')}',
                       style: const TextStyle(
                         color: Color(0xFF58A6FF),
                         fontSize: 11.5,
@@ -650,8 +655,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.cardBg,
-              foregroundColor: const Color(0xFF00C896),
-              side: const BorderSide(color: Color(0xFF00C896)),
+              foregroundColor: AppThemes.success,
+              side: const BorderSide(color: AppThemes.success),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),

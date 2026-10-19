@@ -8,17 +8,20 @@ import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../../models/money.dart';
+import 'family_reimbursement_card.dart' show ReimbursementRecorder;
 
 class MultiRoommateSettlementCard extends StatefulWidget {
   final String householdId;
   final SettlementV2Summary? summary;
   final VoidCallback? onSettled;
+  final ReimbursementRecorder? recordPayment;
 
   const MultiRoommateSettlementCard({
     super.key,
     required this.householdId,
     this.summary,
     this.onSettled,
+    this.recordPayment,
   });
 
   @override
@@ -85,6 +88,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
         fromName: fromName,
         toName: toName,
         amount: amount,
+        recordPayment: widget.recordPayment,
         onConfirmed: () {
           widget.onSettled?.call();
           _loadSummary();
@@ -128,7 +132,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
         border: Border.all(
           color: isAllSettled
               ? context.borderColor
-              : const Color(0xFF4DE6F7).withValues(alpha: 0.35),
+              : AppThemes.iceCyan.withValues(alpha: 0.35),
           width: 1.2,
         ),
         boxShadow: [
@@ -152,15 +156,15 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4DE6F7).withValues(alpha: 0.15),
+                        color: AppThemes.iceCyan.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: const Color(0xFF4DE6F7).withValues(alpha: 0.25),
+                          color: AppThemes.iceCyan.withValues(alpha: 0.25),
                         ),
                       ),
                       child: const Icon(
                         Icons.group_outlined,
-                        color: Color(0xFF4DE6F7),
+                        color: AppThemes.iceCyan,
                         size: 20,
                       ),
                     ),
@@ -195,9 +199,9 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Simplify Debts',
+                    context.tr('simplify_debts'),
                     style: TextStyle(
-                      color: _simplifyDebts ? const Color(0xFF4DE6F7) : context.textSecondary,
+                      color: _simplifyDebts ? AppThemes.iceCyan : context.textSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -206,8 +210,8 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                     scale: 0.75,
                     child: Switch(
                       value: _simplifyDebts,
-                      activeThumbColor: const Color(0xFF00E5BF),
-                      activeTrackColor: const Color(0xFF00E5BF).withValues(alpha: 0.3),
+                      activeThumbColor: AppThemes.electricTeal,
+                      activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
                       onChanged: (val) {
                         setState(() => _simplifyDebts = val);
                       },
@@ -222,7 +226,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
           // Member Net Balances
           if (summary.roommateBalances.isNotEmpty) ...[
             Text(
-              'Net Balances',
+              context.tr('settle_net_balances'),
               style: TextStyle(
                 color: context.textSecondary,
                 fontSize: 11,
@@ -238,11 +242,11 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 final isPositive = balance > 0.01;
                 final isNegative = balance < -0.01;
                 final color = isPositive
-                    ? const Color(0xFF00E5BF)
+                    ? AppThemes.electricTeal
                     : (isNegative ? const Color(0xFFFF6B6B) : context.textSecondary);
 
-                final prefix = isPositive ? '+SAR ' : (isNegative ? '-SAR ' : 'SAR ');
-                final displayAmt = '$prefix${balance.abs().toStringAsFixed(2)}';
+                final sign = isPositive ? '+' : (isNegative ? '-' : '');
+                final displayAmt = '$sign${context.sar(balance.abs())}';
 
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -283,28 +287,28 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF00E5BF).withValues(alpha: 0.08),
+                color: AppThemes.electricTeal.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF00E5BF).withValues(alpha: 0.2)),
+                border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00E5BF), size: 20),
+                  const Icon(Icons.check_circle_outline_rounded, color: AppThemes.electricTeal, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'All Settled',
+                        Text(
+                          context.tr('settle_all_settled'),
                           style: TextStyle(
-                            color: Color(0xFF00E5BF),
+                            color: context.accentText,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
                         ),
                         Text(
-                          'No pending roommate debts. Everyone is squared away!',
+                          context.tr('all_roommates_settled'),
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],
@@ -327,7 +331,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                     color: context.chipBg,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: const Color(0xFF4DE6F7).withValues(alpha: 0.15),
+                      color: AppThemes.iceCyan.withValues(alpha: 0.15),
                     ),
                   ),
                   child: Row(
@@ -337,7 +341,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${debt.fromName} owes ${debt.toName}',
+                              context.trArgs('settle_owes', {'from': debt.fromName, 'to': debt.toName}),
                               style: TextStyle(
                                 color: context.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -346,9 +350,9 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'SAR ${debt.amount.toStringAsFixed(2)}',
+                              context.sar(debt.amount),
                               style: GoogleFonts.outfit(
-                                color: const Color(0xFF4DE6F7),
+                                color: AppThemes.iceCyan,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -358,16 +362,16 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                       ),
                       // 1-Click WhatsApp Settle Share Action
                       IconButton(
-                        tooltip: 'Share via WhatsApp',
-                        icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFF00E5BF)),
+                        tooltip: context.tr('settle_share_whatsapp'),
+                        icon: const Icon(Icons.share_rounded, size: 18, color: AppThemes.electricTeal),
                         onPressed: () {
                           HapticFeedback.selectionClick();
-                          final text = 'مرحباً ${debt.fromName}، لتسوية مصاريف السكن المشترك: المبلغ المستحق SAR ${debt.amount.toStringAsFixed(2)} لصالح ${debt.toName}.';
+                          final text = context.trArgs('settle_whatsapp_msg', {'from': debt.fromName, 'amount': context.sar(debt.amount), 'to': debt.toName});
                           Clipboard.setData(ClipboardData(text: text));
                           AppSnackBar.showSuccess(
                             context,
-                            'WhatsApp settlement text copied to clipboard!',
-                            title: '1-Click Settle',
+                            context.tr('settle_whatsapp_copied'),
+                            title: context.tr('settle_one_click'),
                             icon: Icons.check_circle_outline_rounded,
                           );
                         },
@@ -375,15 +379,15 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                       const SizedBox(width: 4),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00E5BF),
-                          foregroundColor: const Color(0xFF051424),
+                          backgroundColor: AppThemes.electricTeal,
+                          foregroundColor: AppThemes.brandDarkBg,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text(
-                          'Settle',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        child: Text(
+                          context.tr('settle_now'),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         onPressed: () {
                           HapticFeedback.lightImpact();
@@ -429,6 +433,7 @@ class _RoommateSettleBottomSheet extends StatefulWidget {
   final String toName;
   final double amount;
   final VoidCallback onConfirmed;
+  final ReimbursementRecorder? recordPayment;
 
   const _RoommateSettleBottomSheet({
     required this.householdId,
@@ -438,6 +443,7 @@ class _RoommateSettleBottomSheet extends StatefulWidget {
     required this.toName,
     required this.amount,
     required this.onConfirmed,
+    this.recordPayment,
   });
 
   @override
@@ -464,14 +470,15 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
   Future<void> _submitSettlement() async {
     final amt = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
     if (amt <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount');
+      AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
       return;
     }
 
     setState(() => _isSubmitting = true);
 
     try {
-      await ApiService.instance.recordReimbursementPayment(
+      final record = widget.recordPayment ?? ApiService.instance.recordReimbursementPayment;
+      await record(
         ReimbursementRecordRequest(
           householdId: widget.householdId,
           payerId: widget.fromId,
@@ -481,13 +488,23 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
           notes: '${widget.fromName} paid ${widget.toName} via ${_paymentMethod.toUpperCase()}',
         ),
       );
-    } catch (_) {}
+    } catch (e) {
+      // Never report a settlement as recorded when the server rejected it.
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      AppSnackBar.showError(
+        context,
+        context.trArgs('settle_record_failed_msg', {'error': e}),
+        title: context.tr('settle_record_failed'),
+      );
+      return;
+    }
 
     if (mounted) {
       AppSnackBar.showSuccess(
         context,
-        'Recorded settlement: ${widget.fromName} paid ${widget.toName} SAR ${amt.toStringAsFixed(2)}',
-        title: 'Settlement Recorded',
+        context.trArgs('settle_roommate_recorded', {'from': widget.fromName, 'to': widget.toName, 'amount': context.sar(amt)}),
+        title: context.tr('settle_recorded_title'),
       );
       Navigator.of(context).pop();
       widget.onConfirmed();
@@ -525,7 +542,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
             ),
             const SizedBox(height: 16),
             Text(
-              'Record Roommate Settlement',
+              context.tr('settle_roommate_title'),
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -534,7 +551,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
             ),
             const SizedBox(height: 4),
             Text(
-              '${widget.fromName} pays ${widget.toName}',
+              context.trArgs('settle_pays', {'from': widget.fromName, 'to': widget.toName}),
               style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -544,7 +561,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               spacing: 8,
               children: [
                 ChoiceChip(
-                  label: Text('Full (SAR ${widget.amount.toStringAsFixed(2)})'),
+                  label: Text(context.trArgs('settle_full', {'amount': context.sar(widget.amount)})),
                   selected: _amountCtrl.text == widget.amount.toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -553,7 +570,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
                   },
                 ),
                 ChoiceChip(
-                  label: Text('Half (SAR ${(widget.amount / 2).toStringAsFixed(2)})'),
+                  label: Text(context.trArgs('settle_half', {'amount': context.sar(widget.amount / 2)})),
                   selected: _amountCtrl.text == (widget.amount / 2).toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -569,7 +586,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Amount (SAR)',
+                labelText: context.tr('amount_sar'),
                 prefixIcon: const Icon(Icons.attach_money_rounded),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -578,17 +595,17 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
 
             // Method Selector
             Text(
-              'Payment Method',
+              context.tr('settle_payment_method'),
               style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildMethodChip('stc_pay', 'STC Pay', Icons.phone_android_rounded),
+                _buildMethodChip('stc_pay', context.tr('pay_method_stc_pay'), Icons.phone_android_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('bank_transfer', 'Bank', Icons.account_balance_rounded),
+                _buildMethodChip('bank_transfer', context.tr('pay_method_bank_transfer'), Icons.account_balance_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('cash', 'Cash', Icons.payments_rounded),
+                _buildMethodChip('cash', context.tr('pay_method_cash'), Icons.payments_rounded),
               ],
             ),
             const SizedBox(height: 16),
@@ -600,17 +617,17 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy STC Pay Note', style: TextStyle(fontSize: 12)),
+              label: Text(context.tr('settle_copy_stc_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
                 final amt = _amountCtrl.text;
                 await Clipboard.setData(
-                  ClipboardData(text: 'Roommate Settlement - SAR $amt to ${widget.toName}'),
+                  ClipboardData(text: context.trArgs('settle_roommate_note', {'amount': amt, 'to': widget.toName})),
                 );
                 if (context.mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Copied: "Roommate Settlement - SAR $amt to ${widget.toName}"',
-                    title: 'Copied Note',
+                    context.trArgs('settle_copied_quote', {'text': context.trArgs('settle_roommate_note', {'amount': amt, 'to': widget.toName})}),
+                    title: context.tr('settle_copied_note'),
                   );
                 }
               },
@@ -634,9 +651,9 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
-                label: const Text(
-                  'Record Settlement Payment',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                label: Text(
+                  context.tr('settle_record_payment'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 onPressed: _isSubmitting ? null : _submitSettlement,
               ),
