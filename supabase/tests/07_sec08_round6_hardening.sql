@@ -25,6 +25,9 @@ BEGIN
         (v_attacker_uid, 'attacker@example.com')
     ON CONFLICT (id) DO NOTHING;
 
+    -- Re-runnable: this suite commits, so clear lockout history from earlier runs
+    DELETE FROM public.invite_attempt_log WHERE user_id IN (v_admin_uid, v_member_uid, v_attacker_uid);
+
     -- Setup households
     INSERT INTO public.households (id, name, invite_code) VALUES
         (v_victim_hh, 'Victim Household', 'VICTIM16CHARCODE'),
