@@ -94,8 +94,13 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_acc RECORD;
-    v_caller_uid UUID := auth.uid();
+    v_caller_uid UUID;
 BEGIN
+    BEGIN
+        v_caller_uid := auth.uid();
+    EXCEPTION WHEN OTHERS THEN
+        v_caller_uid := NULL;
+    END;
     IF TG_OP = 'INSERT' THEN
         IF NEW.account_id IS NOT NULL THEN
             SELECT * INTO v_acc FROM public.accounts WHERE id = NEW.account_id FOR UPDATE;
@@ -473,6 +478,68 @@ BEGIN
 END;
 $$;
 
+-- 4. Balance reconciliation RPC (for legitimate adjustments by account owners or admins)
+CREATE OR REPLACE FUNCTION public.reconcile_account_balance(
+    p_account_id UUID,
+    p_new_balance NUMERIC
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_uid UUID := auth.uid();
+    v_caller_hh UUID := public.get_auth_user_household_id();
+    v_caller_role TEXT := public.get_auth_user_role();
+    v_account public.accounts%ROWTYPE;
+BEGIN
+    IF v_uid IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+    END IF;
+
+    IF p_account_id IS NULL OR p_new_balance IS NULL THEN
+        RAISE EXCEPTION 'Account ID and new balance must not be null' USING ERRCODE = '22004';
+    END IF;
+
+    SELECT * INTO v_account
+    FROM public.accounts
+    WHERE id = p_account_id
+    FOR UPDATE;
+
+    IF v_account.id IS NULL THEN
+        RAISE EXCEPTION 'Account not found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_caller_hh IS NULL OR v_account.household_id IS DISTINCT FROM v_caller_hh THEN
+        RAISE EXCEPTION 'Access denied: caller does not belong to specified household' USING ERRCODE = '42501';
+    END IF;
+
+    IF NOT (
+        (v_account.is_shared_pool = false AND v_account.owner_user_id = v_uid)
+        OR
+        (v_account.is_shared_pool = true AND v_caller_role = 'admin')
+    ) THEN
+        RAISE EXCEPTION 'Access denied: insufficient privileges to reconcile this account balance' USING ERRCODE = '42501';
+    END IF;
+
+    UPDATE public.accounts
+    SET balance = p_new_balance,
+        updated_at = now()
+    WHERE id = v_account.id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'account_id', v_account.id,
+        'balance', p_new_balance
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.reconcile_account_balance(UUID, NUMERIC) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reconcile_account_balance(UUID, NUMERIC) TO authenticated, service_role;
+
+
 
 -- ============================================================================
 -- C. FUNCTION GRANTS & QUOTA RPC HARDENING
@@ -492,6 +559,8 @@ REVOKE EXECUTE ON FUNCTION public.update_account_balance_on_transaction() FROM P
 REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction_update() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_budget_on_transaction_delete() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.adjust_account_balance_on_income_change() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.validate_category_code_exists() FROM PUBLIC, anon, authenticated;
 
 -- 3. Financial RPCs: grant to authenticated and service_role, revoke from anon/PUBLIC
 REVOKE EXECUTE ON FUNCTION public.transfer_between_accounts(UUID, UUID, UUID, NUMERIC, NUMERIC, TEXT) FROM PUBLIC, anon;
@@ -559,12 +628,21 @@ BEGIN
         END IF;
 
         -- Atomic update with RETURNING to prevent race conditions
-        UPDATE public.household_invites
-        SET used_by = v_uid
-        WHERE id = v_invite.id AND used_by IS NULL
-        RETURNING id INTO v_claimed_id;
+        IF v_invite.used_by = v_uid THEN
+            -- Already claimed by the same authenticated caller (idempotent / targeted claim flow)
+            v_claimed_id := v_invite.id;
+        ELSIF v_invite.used_by IS NULL THEN
+            UPDATE public.household_invites
+            SET used_by = v_uid
+            WHERE id = v_invite.id AND used_by IS NULL
+            RETURNING id INTO v_claimed_id;
 
-        IF v_claimed_id IS NULL THEN
+            IF v_claimed_id IS NULL THEN
+                INSERT INTO public.invite_attempt_log (user_id, success) VALUES (v_uid, false);
+                RETURN jsonb_build_object('success', false, 'error', 'Invite code has already been used');
+            END IF;
+        ELSE
+            -- Used by another user
             INSERT INTO public.invite_attempt_log (user_id, success) VALUES (v_uid, false);
             RETURN jsonb_build_object('success', false, 'error', 'Invite code has already been used');
         END IF;
@@ -630,11 +708,17 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_uid uuid := COALESCE(p_user_id, auth.uid());
+    v_uid uuid;
     v_clean_code text := upper(trim(p_invite_code));
     v_invite public.household_invites%ROWTYPE;
     v_hh public.households%ROWTYPE;
 BEGIN
+    IF auth.uid() IS NOT NULL AND p_user_id IS NOT NULL AND p_user_id IS DISTINCT FROM auth.uid() THEN
+        RAISE EXCEPTION 'Forbidden: cannot claim an invite on behalf of another user' USING ERRCODE = '42501';
+    END IF;
+
+    v_uid := COALESCE(auth.uid(), p_user_id);
+
     IF v_uid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
     END IF;
@@ -738,6 +822,53 @@ BEGIN
 END;
 $$;
 
+-- 2. Pre-trigger category code backfill to ensure existing rows satisfy taxonomy constraints
+INSERT INTO public.cost_control_codes (household_id, code, category, is_system)
+SELECT DISTINCT 
+    b.household_id, 
+    b.category_code, 
+    b.category_code, 
+    false
+FROM public.budgets b
+WHERE b.category_code IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM public.cost_control_codes c 
+      WHERE c.code = b.category_code 
+        AND (c.household_id IS NULL OR c.household_id = b.household_id)
+  )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.cost_control_codes (household_id, code, category, is_system)
+SELECT DISTINCT 
+    t.household_id, 
+    t.category_code, 
+    t.category_code, 
+    false
+FROM public.transactions t
+WHERE t.category_code IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM public.cost_control_codes c 
+      WHERE c.code = t.category_code 
+        AND (c.household_id IS NULL OR c.household_id = t.household_id)
+  )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.cost_control_codes (household_id, code, category, is_system)
+SELECT DISTINCT 
+    hcs.household_id, 
+    hcs.category_code, 
+    hcs.category_code, 
+    false
+FROM public.household_category_settings hcs
+WHERE hcs.category_code IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM public.cost_control_codes c 
+      WHERE c.code = hcs.category_code 
+        AND (c.household_id IS NULL OR c.household_id = hcs.household_id)
+  )
+ON CONFLICT DO NOTHING;
+
+-- 3. Attach taxonomy validation triggers
 DROP TRIGGER IF EXISTS trg_validate_category_budgets ON public.budgets;
 CREATE TRIGGER trg_validate_category_budgets
 BEFORE INSERT OR UPDATE OF category_code, household_id ON public.budgets

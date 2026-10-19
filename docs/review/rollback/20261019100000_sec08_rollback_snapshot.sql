@@ -93,3 +93,7 @@ GRANT EXECUTE ON FUNCTION public.check_quota_status(UUID, TEXT, INT, INT) TO PUB
 GRANT EXECUTE ON FUNCTION public.check_last_admin_membership() TO PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.populate_transaction_cycle_key() TO PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.update_account_balance_on_transaction() TO PUBLIC, anon, authenticated;
+
+-- 7. Drop reconcile_account_balance RPC
+DROP FUNCTION IF EXISTS public.reconcile_account_balance(UUID, NUMERIC);
+

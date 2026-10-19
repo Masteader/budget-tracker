@@ -240,12 +240,15 @@ async def inspect_household_role_invite_endpoint(invite_code: str, request: Requ
 
     try:
         raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)
-        # Return minimal safe public metadata: omit household_id, target_member_id, created_by
+        # Return minimal safe public metadata: omit household_id, created_by
+        is_valid = raw.get("is_valid", False)
         return {
             "invite_code": raw.get("invite_code", invite_code.strip().upper()),
             "role": raw.get("role", "peer"),
-            "is_valid": raw.get("is_valid", False),
+            "is_valid": is_valid,
             "expires_at": raw.get("expires_at"),
+            "target_member_name": raw.get("target_member_name"),
+            "target_member_id": raw.get("target_member_id") if is_valid else None,
         }
     except HTTPException:
         raise

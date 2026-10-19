@@ -828,6 +828,14 @@ def inspect_household_role_invite(invite_code: str) -> dict:
                     except Exception:
                         pass
                 inv["is_valid"] = is_valid
+                target_member_id = inv.get("target_member_id")
+                if target_member_id:
+                    try:
+                        dep_res = client.table("household_dependents").select("name").eq("id", target_member_id).maybe_single().execute()
+                        if dep_res and hasattr(dep_res, "data") and dep_res.data:
+                            inv["target_member_name"] = dep_res.data.get("name")
+                    except Exception as dep_exc:
+                        logger.warning("Could not resolve target_member_name: %s", dep_exc)
                 return inv
         except Exception as exc:
             logger.warning("Supabase inspect invite query failed: %s", exc)
@@ -836,6 +844,7 @@ def inspect_household_role_invite(invite_code: str) -> dict:
             "household_id": None,
             "role": "peer",
             "target_member_id": None,
+            "target_member_name": None,
             "is_valid": False,
         }
 

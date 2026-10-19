@@ -58,7 +58,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   void _onJoinCodeChanged() {
     final code = _joinCodeCtrl.text.trim().toUpperCase();
-    if (code.length == 8) {
+    if (code.length >= 8 && code.length <= 16) {
       _inspectInvite(code);
     } else if (_inspectedInvite != null) {
       setState(() => _inspectedInvite = null);

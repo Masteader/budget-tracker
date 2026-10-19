@@ -279,6 +279,9 @@ END $$;
 \set ON_ERROR_STOP off
 DO $$
 BEGIN
+    SET LOCAL ROLE authenticated;
+    SET LOCAL "request.jwt.claims" = '{"sub": "33333333-0000-0000-0000-000000000003", "role": "authenticated"}';
+
     BEGIN
         INSERT INTO public.transactions (
             household_id, category_code, amount, merchant
@@ -317,3 +320,131 @@ BEGIN
         RAISE NOTICE 'PASSED: Non-admin member sees NULL for household invite_code.';
     END IF;
 END $$;
+
+
+-- ============================================================================
+-- TEST 9: Account Hijacking Prevention in claim_household_role_invite
+-- Authenticated caller passing a different p_user_id must be rejected with 42501.
+-- ============================================================================
+\set ON_ERROR_STOP off
+DO $$
+DECLARE
+    v_code text := 'HIJACKTESTCODE01';
+BEGIN
+    INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
+
+    -- Attacker attempts to claim invite on behalf of victim
+    SET LOCAL ROLE authenticated;
+    SET LOCAL "request.jwt.claims" = '{"sub": "33333333-0000-0000-0000-000000000003", "role": "authenticated"}';
+
+    BEGIN
+        PERFORM public.claim_household_role_invite(
+            p_invite_code := v_code,
+            p_user_id := '22222222-0000-0000-0000-000000000002' -- Target victim UID
+        );
+        RAISE EXCEPTION 'VULNERABILITY: Authenticated user was able to claim invite on behalf of another user!';
+    EXCEPTION WHEN insufficient_privilege THEN
+        RAISE NOTICE 'PASSED: claim_household_role_invite rejected foreign p_user_id with 42501.';
+    END;
+END $$;
+\set ON_ERROR_STOP on
+
+
+-- ============================================================================
+-- TEST 10: Targeted Invite Idempotency & Second-Claim Rejection
+-- Calling claim_household_role_invite followed by join_household_by_code as the
+-- same user succeeds; a second user calling join_household_by_code is rejected.
+-- ============================================================================
+\set ON_ERROR_STOP off
+DO $$
+DECLARE
+    v_code text := 'DOUBLECLAIMTEST1';
+    v_res jsonb;
+    v_user_a uuid := '22222222-0000-0000-0000-000000000002';
+    v_user_b uuid := '33333333-0000-0000-0000-000000000003';
+BEGIN
+    INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
+
+    -- 1. User A claims invite via claim_household_role_invite
+    SET LOCAL ROLE authenticated;
+    SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
+
+    v_res := public.claim_household_role_invite(v_code);
+    IF (v_res->>'success')::boolean IS NOT TRUE THEN
+        RAISE EXCEPTION 'claim_household_role_invite failed for User A: %', v_res;
+    END IF;
+
+    -- User A calls join_household_by_code (idempotent double-claim)
+    v_res := public.join_household_by_code(v_code);
+    IF v_res ? 'error' THEN
+        RAISE EXCEPTION 'Idempotent join_household_by_code failed for User A: %', v_res;
+    ELSE
+        RAISE NOTICE 'PASSED: Idempotent join_household_by_code succeeded for same user.';
+    END IF;
+
+    -- 2. User B attempts to call join_household_by_code with User A code
+    SET LOCAL "request.jwt.claims" = '{"sub": "33333333-0000-0000-0000-000000000003", "role": "authenticated"}';
+    v_res := public.join_household_by_code(v_code);
+    IF v_res->>'error' = 'Invite code has already been used' THEN
+        RAISE NOTICE 'PASSED: Second user calling join_household_by_code with used code rejected.';
+    ELSE
+        RAISE EXCEPTION 'VULNERABILITY: User B was able to use already-claimed invite code: %', v_res;
+    END IF;
+END $$;
+\set ON_ERROR_STOP on
+
+
+-- ============================================================================
+-- TEST 11: reconcile_account_balance Authorization
+-- Verifies reconcile_account_balance succeeds for authorized owner/admin and
+-- rejects unauthorized members with 42501.
+-- ============================================================================
+\set ON_ERROR_STOP off
+DO $$
+DECLARE
+    v_res jsonb;
+    v_victim_personal uuid := 'aaaa0000-0000-0000-0000-000000000001'; -- Admin checking
+    v_victim_shared uuid := 'aaaa0000-0000-0000-0000-000000000002'; -- Household Pool
+BEGIN
+    -- 1. Regular member attempts to reconcile Admin's personal account
+    SET LOCAL ROLE authenticated;
+    SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
+
+    BEGIN
+        PERFORM public.reconcile_account_balance(v_victim_personal, 12345.00);
+        RAISE EXCEPTION 'VULNERABILITY: Non-owner member was able to reconcile another personal account!';
+    EXCEPTION WHEN insufficient_privilege THEN
+        RAISE NOTICE 'PASSED: Non-owner member blocked from reconciling personal account with 42501.';
+    END;
+
+    -- 2. Regular member attempts to reconcile shared pool account
+    BEGIN
+        PERFORM public.reconcile_account_balance(v_victim_shared, 54321.00);
+        RAISE EXCEPTION 'VULNERABILITY: Non-admin member was able to reconcile shared pool account!';
+    EXCEPTION WHEN insufficient_privilege THEN
+        RAISE NOTICE 'PASSED: Non-admin member blocked from reconciling shared pool account with 42501.';
+    END;
+
+    -- 3. Admin successfully reconciles shared pool account
+    SET LOCAL "request.jwt.claims" = '{"sub": "11111111-0000-0000-0000-000000000001", "role": "authenticated"}';
+    v_res := public.reconcile_account_balance(v_victim_shared, 15000.00);
+    IF (v_res->>'success')::boolean IS TRUE THEN
+        RAISE NOTICE 'PASSED: Household admin successfully reconciled shared pool balance.';
+    ELSE
+        RAISE EXCEPTION 'Household admin failed to reconcile shared balance: %', v_res;
+    END IF;
+
+    -- 4. Admin successfully reconciles own personal account
+    v_res := public.reconcile_account_balance(v_victim_personal, 6000.00);
+    IF (v_res->>'success')::boolean IS TRUE THEN
+        RAISE NOTICE 'PASSED: Account owner successfully reconciled personal balance.';
+    ELSE
+        RAISE EXCEPTION 'Account owner failed to reconcile personal balance: %', v_res;
+    END IF;
+END $$;
+\set ON_ERROR_STOP on
+

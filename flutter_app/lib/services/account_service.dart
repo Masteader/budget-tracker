@@ -75,12 +75,12 @@ class AccountService {
     }).eq('id', account.id);
   }
 
-  /// Update or reconcile account balance.
+  /// Update or reconcile account balance via secure RPC.
   Future<void> updateBalance(String accountId, double newBalance) async {
-    await _client.from('accounts').update({
-      'balance': newBalance,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', accountId);
+    await _client.rpc('reconcile_account_balance', params: {
+      'p_account_id': accountId,
+      'p_new_balance': newBalance,
+    });
   }
 
   /// Archive an account (soft delete).

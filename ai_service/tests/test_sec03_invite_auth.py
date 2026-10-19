@@ -81,14 +81,15 @@ def test_claim_invite_uses_jwt_sub_not_body():
 
 
 def test_inspect_invite_returns_minimal_metadata():
-    """GET /households/invites/{code} must return minimal safe metadata."""
+    """GET /households/invites/{code} must return minimal safe metadata without household_id or created_by."""
     with patch("routes.households.inspect_household_role_invite") as mock_inspect:
         mock_inspect.return_value = {
             "invite_code": "SAFECODE",
             "household_id": HOUSEHOLD_ID,
             "household_name": "Al-Saud Family",
             "role": "spouse",
-            "target_member_id": "secret-target-id-12345",
+            "target_member_id": "target-dep-12345",
+            "target_member_name": "Fatima",
             "created_by": "secret-admin-id-99999",
             "used_by": None,
             "is_valid": True,
@@ -98,8 +99,9 @@ def test_inspect_invite_returns_minimal_metadata():
         data = resp.json()
         assert "invite_code" in data
         assert "is_valid" in data
+        assert data.get("target_member_name") == "Fatima"
+        assert data.get("target_member_id") == "target-dep-12345"
         # Sensitive internal identifiers must NOT leak to public callers
-        assert "target_member_id" not in data, "target_member_id leaked in public inspect!"
         assert "created_by" not in data, "created_by leaked in public inspect!"
         assert "household_id" not in data, "household_id leaked in public inspect!"
 
