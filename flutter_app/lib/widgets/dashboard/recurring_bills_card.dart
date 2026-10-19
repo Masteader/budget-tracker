@@ -653,6 +653,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),

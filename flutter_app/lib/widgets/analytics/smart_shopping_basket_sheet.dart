@@ -189,6 +189,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close, color: context.textSecondary),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
@@ -381,6 +382,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                             ),
                           ),
                           IconButton(
+                            tooltip: context.tr('a11y_remove_item'),
                             icon: Icon(Icons.remove_circle_outline, color: context.textSecondary, size: 18),
                             onPressed: () => _removeItem(index),
                           ),

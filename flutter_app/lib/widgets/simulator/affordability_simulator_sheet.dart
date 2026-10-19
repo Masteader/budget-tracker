@@ -278,7 +278,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
           // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+            padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 16, 12),
             child: Row(
               children: [
                 Container(
@@ -314,6 +314,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),

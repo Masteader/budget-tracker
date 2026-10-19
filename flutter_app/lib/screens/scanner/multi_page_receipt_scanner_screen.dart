@@ -295,9 +295,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ),
                           ),
                         ),
-                        Positioned(
+                        PositionedDirectional(
                           top: 12,
-                          left: 16,
+                          start: 16,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
@@ -340,9 +340,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                   fit: BoxFit.cover,
                                 ),
                               ),
-                              Positioned(
+                              PositionedDirectional(
                                 top: 2,
-                                left: 2,
+                                start: 2,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
@@ -355,9 +355,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                   ),
                                 ),
                               ),
-                              Positioned(
+                              PositionedDirectional(
                                 top: 2,
-                                right: 2,
+                                end: 2,
                                 child: GestureDetector(
                                   onTap: () => _removeShot(i),
                                   child: Container(
@@ -366,7 +366,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                       shape: BoxShape.circle,
                                       color: Colors.redAccent,
                                     ),
-                                    child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                    child: Icon(Icons.close, size: 12, color: Colors.white, semanticLabel: context.tr('a11y_remove_photo')),
                                   ),
                                 ),
                               ),

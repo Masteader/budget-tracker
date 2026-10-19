@@ -257,6 +257,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
 
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),

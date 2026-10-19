@@ -407,6 +407,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               hintStyle: TextStyle(color: context.textSecondary),
               prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
+                tooltip: context.tr('auth_toggle_password_visibility'),
                 icon: Icon(
                   _obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: context.textSecondary,
@@ -440,6 +441,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               hintStyle: TextStyle(color: context.textSecondary),
               prefixIcon: Icon(Icons.lock_outline, color: context.textSecondary),
               suffixIcon: IconButton(
+                tooltip: context.tr('auth_toggle_password_visibility'),
                 icon: Icon(
                   _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: context.textSecondary,

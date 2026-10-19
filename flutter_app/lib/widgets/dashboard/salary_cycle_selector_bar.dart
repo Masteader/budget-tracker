@@ -42,6 +42,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
+            tooltip: context.tr('a11y_previous'),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: Icon(Icons.chevron_left_rounded, color: hasPrevious ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),
@@ -97,6 +98,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: context.tr('a11y_next'),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: Icon(Icons.chevron_right_rounded, color: hasNext ? context.textPrimary : context.textSecondary.withValues(alpha: 0.3), size: 24),

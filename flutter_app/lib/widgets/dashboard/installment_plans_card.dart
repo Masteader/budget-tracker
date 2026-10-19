@@ -607,7 +607,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                 if (!plan.isCompleted) ...[
                                   const SizedBox(height: 8),
                                   Align(
-                                    alignment: Alignment.centerRight,
+                                    alignment: AlignmentDirectional.centerEnd,
                                     child: OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: context.textPrimary,

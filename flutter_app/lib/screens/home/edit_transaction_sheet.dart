@@ -1121,6 +1121,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       ),
                     ),
                     IconButton(
+                      tooltip: context.tr('close'),
                       icon: Icon(Icons.close, size: 18, color: context.textSecondary),
                       onPressed: () => _removeItem(idx),
                     ),

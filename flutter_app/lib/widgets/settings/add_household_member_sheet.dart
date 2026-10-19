@@ -203,6 +203,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: const Icon(Icons.close_rounded, size: 20),
                   color: context.textSecondary,
                   onPressed: () => Navigator.of(context).pop(),

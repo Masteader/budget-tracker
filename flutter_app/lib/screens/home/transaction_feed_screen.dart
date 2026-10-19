@@ -641,8 +641,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 onPressed: _showSortFilterModal,
               ),
               if (_activeFilterCount > 0)
-                Positioned(
-                  right: 8,
+                PositionedDirectional(
+                  end: 8,
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),

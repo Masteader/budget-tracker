@@ -1506,6 +1506,10 @@ class AppLocalizations {
       'brs_add_gallery': 'Add from Gallery',
       'brs_captured': 'Captured Receipts ({count})',
       'brs_ready': 'Ready to process',
+      'a11y_previous': 'Previous',
+      'a11y_next': 'Next',
+      'a11y_remove_item': 'Remove item',
+      'a11y_remove_photo': 'Remove photo',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2733,6 +2737,10 @@ class AppLocalizations {
       'brs_add_gallery': 'إضافة من المعرض',
       'brs_captured': 'الإيصالات الملتقطة ({count})',
       'brs_ready': 'جاهز للمعالجة',
+      'a11y_previous': 'السابق',
+      'a11y_next': 'التالي',
+      'a11y_remove_item': 'حذف الصنف',
+      'a11y_remove_photo': 'حذف الصورة',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3960,6 +3968,10 @@ class AppLocalizations {
       'brs_add_gallery': 'گیلری سے شامل کریں',
       'brs_captured': 'لی گئی رسیدیں ({count})',
       'brs_ready': 'پروسیس کے لیے تیار',
+      'a11y_previous': 'پچھلا',
+      'a11y_next': 'اگلا',
+      'a11y_remove_item': 'آئٹم ہٹائیں',
+      'a11y_remove_photo': 'تصویر ہٹائیں',
     },
   };
 

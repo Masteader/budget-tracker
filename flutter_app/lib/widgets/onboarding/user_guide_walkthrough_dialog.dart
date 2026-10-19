@@ -135,7 +135,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
           children: [
             // Header with Step count and Close button
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -157,6 +157,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded,
                         color: context.textSecondary, size: 20),
                     onPressed: _finish,

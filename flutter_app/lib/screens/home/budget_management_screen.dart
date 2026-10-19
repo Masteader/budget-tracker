@@ -773,6 +773,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
+                      tooltip: context.tr('a11y_previous'),
                       icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                           ? () => setState(() => _currentCycleIndex++)
@@ -792,6 +793,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       ],
                     ),
                     IconButton(
+                      tooltip: context.tr('a11y_next'),
                       icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                           ? () => setState(() => _currentCycleIndex--)

@@ -341,6 +341,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary),
                     onPressed: () => Navigator.pop(context),
                   ),

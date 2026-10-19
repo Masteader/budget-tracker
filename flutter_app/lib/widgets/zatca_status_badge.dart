@@ -52,6 +52,7 @@ class ZatcaStatusBadge extends StatelessWidget {
           ),
           if (onDismiss != null)
             IconButton(
+              tooltip: context.tr('close'),
               icon: Icon(Icons.close, size: 18, color: context.textSecondary),
               onPressed: onDismiss,
               padding: EdgeInsets.zero,

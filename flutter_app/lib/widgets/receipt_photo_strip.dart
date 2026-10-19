@@ -64,9 +64,9 @@ class ReceiptPhotoStrip extends StatelessWidget {
                       fit: BoxFit.cover,
                     ),
                   ),
-                  Positioned(
+                  PositionedDirectional(
                     top: 4,
-                    left: 4,
+                    start: 4,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -79,9 +79,9 @@ class ReceiptPhotoStrip extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Positioned(
+                  PositionedDirectional(
                     top: 4,
-                    right: 4,
+                    end: 4,
                     child: GestureDetector(
                       onTap: () => onRemovePhoto(i),
                       child: Container(
@@ -90,7 +90,7 @@ class ReceiptPhotoStrip extends StatelessWidget {
                           shape: BoxShape.circle,
                           color: Colors.redAccent,
                         ),
-                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        child: Icon(Icons.close, size: 14, color: Colors.white, semanticLabel: context.tr('a11y_remove_photo')),
                       ),
                     ),
                   ),

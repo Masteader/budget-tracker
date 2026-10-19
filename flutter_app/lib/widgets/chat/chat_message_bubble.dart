@@ -59,13 +59,17 @@ class ChatMessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     if (message.isUser) {
       return Align(
-        alignment: Alignment.centerRight,
+        alignment: AlignmentDirectional.centerEnd,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 12, left: 40),
+          margin: const EdgeInsetsDirectional.only(bottom: 12, start: 40),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1F6FEB),
-            borderRadius: BorderRadius.circular(16).copyWith(bottomRight: Radius.zero),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1F6FEB),
+            borderRadius: BorderRadiusDirectional.only(
+              topStart: Radius.circular(16),
+              topEnd: Radius.circular(16),
+              bottomStart: Radius.circular(16),
+            ),
           ),
           child: Text(
             message.text,
@@ -76,9 +80,9 @@ class ChatMessageBubble extends StatelessWidget {
     }
 
     return Align(
-      alignment: Alignment.centerLeft,
+      alignment: AlignmentDirectional.centerStart,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12, right: 30),
+        margin: const EdgeInsetsDirectional.only(bottom: 12, end: 30),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -86,7 +90,11 @@ class ChatMessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: context.cardBg,
-                borderRadius: BorderRadius.circular(16).copyWith(bottomLeft: Radius.zero),
+                borderRadius: const BorderRadiusDirectional.only(
+                  topStart: Radius.circular(16),
+                  topEnd: Radius.circular(16),
+                  bottomEnd: Radius.circular(16),
+                ),
                 border: Border.all(color: context.borderColor),
               ),
               child: Text(

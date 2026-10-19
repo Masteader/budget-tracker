@@ -721,6 +721,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     onPressed: () => Navigator.pop(context),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   ),

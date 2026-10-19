@@ -69,6 +69,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: context.tr('close'),
                 icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
                 onPressed: () => Navigator.pop(context),
               ),

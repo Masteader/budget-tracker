@@ -108,6 +108,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 prefixIcon: Icon(Icons.search, color: context.textSecondary, size: 20),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
+                      tooltip: context.tr('support_clear_search'),
                         icon: Icon(Icons.clear, color: context.textSecondary, size: 18),
                         onPressed: () {
                           _searchCtrl.clear();

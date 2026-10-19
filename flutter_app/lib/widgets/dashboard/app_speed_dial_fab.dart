@@ -217,7 +217,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
   @override
   Widget build(BuildContext context) {
     return Stack(
-      alignment: Alignment.bottomRight,
+      alignment: AlignmentDirectional.bottomEnd,
       clipBehavior: Clip.none,
       children: [
         if (_isOpen)

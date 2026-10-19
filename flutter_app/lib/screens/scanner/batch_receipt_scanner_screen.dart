@@ -176,6 +176,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
         backgroundColor: const Color(0xFF071C33),
         elevation: 0,
         leading: IconButton(
+          tooltip: context.tr('nav_back'),
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -519,9 +520,9 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                               ),
 
                               // Delete Badge
-                              Positioned(
+                              PositionedDirectional(
                                 top: -6,
-                                right: -6,
+                                end: -6,
                                 child: GestureDetector(
                                   key: Key('delete_queue_item_$index'),
                                   onTap: () => _removeAt(index),
@@ -533,10 +534,11 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                       shape: BoxShape.circle,
                                       border: Border.all(color: Colors.white, width: 1.5),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.close_rounded,
                                       size: 14,
                                       color: Colors.white,
+                                      semanticLabel: context.tr('a11y_remove_photo'),
                                     ),
                                   ),
                                 ),
