@@ -155,7 +155,12 @@ BEGIN
     PERFORM set_config('role', 'anon', true);
     PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
 
-    SELECT count(*) INTO v_cnt FROM public.household_invites;
+    -- anon has no table privilege at all since audit DB-01 (permission denied == 0 visible)
+    BEGIN
+        SELECT count(*) INTO v_cnt FROM public.household_invites;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_cnt := 0;
+    END;
     IF v_cnt > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY DETECTED: Anon user can see % household invites!', v_cnt;
     ELSE
