@@ -106,38 +106,98 @@ def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
     Tag 4: Total Amount (with VAT)
     Tag 5: VAT Amount
     """
-    if not b64_str or len(b64_str) < 10:
+    if not b64_str or len(b64_str) < 10 or len(b64_str) > 4096:
+        return None
+    raw = _decode_qr_base64(b64_str)
+    if raw is None:
+        return None
+    # Phase 1 encoders use a single length byte (0-255); some Phase 2 encoders emit BER
+    # long-form lengths (0x81 n / 0x82 hi lo) for values >= 128 bytes. Each interpretation
+    # must parse completely AND yield valid fields before it is accepted.
+    for ber_lengths in (False, True):
+        tags = _parse_tlv(raw, ber_lengths=ber_lengths)
+        result = _interpret_zatca_tags(tags) if tags else None
+        if result:
+            return result
+    logger.debug("ZATCA TLV decode failed: no valid interpretation")
+    return None
+
+
+def _interpret_zatca_tags(tags: Dict[int, bytes]) -> Optional[Dict[str, Any]]:
+    try:
+        seller = tags[1].decode("utf-8").strip() if 1 in tags else None
+        vat_no = tags[2].decode("utf-8").strip() if 2 in tags else None
+        ts = tags[3].decode("utf-8").strip() if 3 in tags else None
+    except UnicodeDecodeError:
+        return None
+    total = _parse_sar_amount(tags.get(4))
+    if not seller or not total:
+        return None
+    return {
+        "seller_name": seller,
+        "vat_number": vat_no,
+        "timestamp": ts,
+        "total_amount": total,
+        "vat_amount": _parse_sar_amount(tags.get(5)),
+    }
+
+
+_B64_STD_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+_B64_URL_RE = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+_SAR_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,6})?$")
+
+
+def _decode_qr_base64(value: str) -> Optional[bytes]:
+    """Strict base64 (standard or URL-safe, padding optional); invalid characters are an error
+    rather than being silently discarded (b64decode's default) and yielding garbage TLV."""
+    text = "".join(value.split())
+    padded = text + "=" * (-len(text) % 4)
+    try:
+        if _B64_STD_RE.match(text):
+            return base64.b64decode(padded, validate=True)
+        if _B64_URL_RE.match(text):
+            return base64.urlsafe_b64decode(padded)
+    except (binascii.Error, ValueError):
+        return None
+    return None
+
+
+def _parse_tlv(raw: bytes, ber_lengths: bool) -> Optional[Dict[int, bytes]]:
+    """Parse the whole buffer as TLV; None on any truncation (the old parser silently accepted
+    short values). The first occurrence of a tag wins."""
+    tags: Dict[int, bytes] = {}
+    idx, n = 0, len(raw)
+    while idx < n:
+        if idx + 2 > n:
+            return None
+        tag = raw[idx]
+        length = raw[idx + 1]
+        idx += 2
+        if ber_lengths and length & 0x80:
+            num = length & 0x7F
+            if num == 0 or num > 2 or idx + num > n:
+                return None
+            length = int.from_bytes(raw[idx: idx + num], "big")
+            idx += num
+        if idx + length > n:
+            return None
+        tags.setdefault(tag, raw[idx: idx + length])
+        idx += length
+    return tags
+
+
+def _parse_sar_amount(value: Optional[bytes]) -> Optional[float]:
+    """Decimal amount in SAR; None for anything non-numeric, negative, NaN/inf or exponent form."""
+    if not value:
         return None
     try:
-        raw = base64.b64decode(b64_str.strip())
-        tags: Dict[int, str] = {}
-        idx = 0
-        while idx < len(raw):
-            tag = raw[idx]
-            if idx + 1 >= len(raw):
-                break
-            length = raw[idx + 1]
-            val = raw[idx + 2 : idx + 2 + length].decode("utf-8", errors="replace")
-            tags[tag] = val
-            idx += 2 + length
-
-        seller = tags.get(1)
-        vat_no = tags.get(2)
-        ts = tags.get(3)
-        total = float(tags.get(4, 0)) if tags.get(4) else None
-        vat_amt = float(tags.get(5, 0)) if tags.get(5) else None
-
-        if seller and total:
-            return {
-                "seller_name": seller,
-                "vat_number": vat_no,
-                "timestamp": ts,
-                "total_amount": total,
-                "vat_amount": vat_amt,
-            }
-    except Exception as e:
-        logger.debug("ZATCA TLV decode failed: %s", e)
-    return None
+        text = value.decode("ascii").strip().replace(",", "")
+    except UnicodeDecodeError:
+        return None
+    if not _SAR_AMOUNT_RE.match(text):
+        return None
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def stitch_images_vertically(images_base64: List[str]) -> bytes:
