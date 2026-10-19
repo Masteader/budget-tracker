@@ -164,7 +164,7 @@ async def check_api_quota(
         except HTTPException:
             raise
         except Exception as exc:
-            logger.debug("Database quota check skipped/fallback: %s", exc)
+            logger.warning("Database quota check skipped/fallback: %s", exc)
 
     # Secondary / in-memory sliding window check by household or user key
     rate_key = f"{bucket}:{household_id or user_id or 'anon'}"

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from main import app
 from rate_limiter import SlidingWindowRateLimiter, check_api_quota, reset_rate_limiters
 from chat_parser import ParsedChatExpense, ChatLineItem
+from receipt_scanner import validate_ocr_receipt_payload
 
 client = TestClient(app)
 
@@ -85,3 +86,87 @@ def test_llm_output_validator_clamps_or_rejects_invalid_amounts():
         category_code="OPEX-GROCERY",
     )
     assert expense.total_amount == 150.50
+
+
+def test_ocr_validator_rejects_negative_total_amount():
+    """OCR receipts with negative total amount must be rejected."""
+    payload = {
+        "merchant": "Panda Supermarket",
+        "total_amount": -120.50,
+        "items": [{"name": "Milk", "price": 10.0, "quantity": 1}],
+    }
+    with pytest.raises(ValueError, match="negative"):
+        validate_ocr_receipt_payload(payload)
+
+
+def test_ocr_validator_rejects_astronomical_total_amount():
+    """OCR receipts with amounts exceeding 10,000,000 SAR must be rejected."""
+    payload = {
+        "merchant": "Luxury Jewelry",
+        "total_amount": 10_000_000.01,
+        "items": [{"name": "Gold Bar", "price": 10_000_000.01, "quantity": 1}],
+    }
+    with pytest.raises(ValueError, match="10,000,000"):
+        validate_ocr_receipt_payload(payload)
+
+
+def test_ocr_validator_rejects_invalid_item_quantities():
+    """OCR line items with quantity <= 0 or > 10,000 must be rejected."""
+    # Zero quantity
+    with pytest.raises(ValueError, match="quantity"):
+        validate_ocr_receipt_payload({
+            "merchant": "Tamimi",
+            "total_amount": 50.0,
+            "items": [{"name": "Apple", "price": 50.0, "quantity": 0}],
+        })
+
+    # Negative quantity
+    with pytest.raises(ValueError, match="quantity"):
+        validate_ocr_receipt_payload({
+            "merchant": "Tamimi",
+            "total_amount": 50.0,
+            "items": [{"name": "Apple", "price": 50.0, "quantity": -2}],
+        })
+
+    # Astronomical quantity > 10,000
+    with pytest.raises(ValueError, match="quantity"):
+        validate_ocr_receipt_payload({
+            "merchant": "Tamimi",
+            "total_amount": 50.0,
+            "items": [{"name": "Apple", "price": 50.0, "quantity": 10001}],
+        })
+
+
+def test_ocr_validator_rejects_negative_or_astronomical_item_price():
+    """OCR line items with price < 0 or > 10,000,000 must be rejected."""
+    with pytest.raises(ValueError, match="price"):
+        validate_ocr_receipt_payload({
+            "merchant": "Carrefour",
+            "total_amount": 50.0,
+            "items": [{"name": "Bread", "price": -5.0, "quantity": 1}],
+        })
+
+    with pytest.raises(ValueError, match="10,000,000"):
+        validate_ocr_receipt_payload({
+            "merchant": "Carrefour",
+            "total_amount": 50.0,
+            "items": [{"name": "Diamond", "price": 12000000.0, "quantity": 1}],
+        })
+
+
+def test_ocr_validator_sanitizes_merchant_and_item_control_characters():
+    """Control characters in merchant and item names must be stripped."""
+    payload = {
+        "merchant": "Panda\x00\x08Market\x1b",
+        "total_amount": 45.0,
+        "items": [
+            {"name": "Fresh\x07Milk\x00", "price": 15.0, "quantity": 1},
+            {"name": "White\x1fBread", "price": 30.0, "quantity": 2},
+        ],
+    }
+    validated = validate_ocr_receipt_payload(payload)
+    assert validated["merchant"] == "PandaMarket"
+    assert validated["items"][0]["name"] == "FreshMilk"
+    assert validated["items"][1]["name"] == "WhiteBread"
+    assert validated["total_amount"] == 45.0
+

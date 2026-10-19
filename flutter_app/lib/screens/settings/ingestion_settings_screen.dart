@@ -484,10 +484,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             TextField(
               controller: codeCtrl,
               textCapitalization: TextCapitalization.characters,
-              maxLength: 8,
+              maxLength: 16,
               style: GoogleFonts.jetBrainsMono(color: context.textPrimary, fontSize: 16, letterSpacing: 2),
               decoration: const InputDecoration(
-                hintText: 'e.g. A1B2C3D4',
+                hintText: '8-16 characters',
                 counterText: '',
               ),
             ),
@@ -506,7 +506,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final code = codeCtrl.text.trim().toUpperCase();
-              if (code.length != 8) return;
+              if (code.length < 8 || code.length > 16) return;
               Navigator.pop(ctx);
               try {
                 final res = await supabase.rpc('join_household_by_code', params: {'p_invite_code': code});

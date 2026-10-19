@@ -23,6 +23,58 @@ AUTH_TOKEN = jwt.encode(
 AUTH = {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 
+@pytest.fixture(autouse=True)
+def mock_supabase_for_invites(monkeypatch):
+    db_tables = {
+        "household_invites": [],
+        "household_reimbursements": [],
+    }
+
+    class MockQuery:
+        def __init__(self, table_name):
+            self.table_name = table_name
+            self.items = db_tables.setdefault(table_name, [])
+            self._filtered = list(self.items)
+
+        def select(self, *args, **kwargs):
+            return self
+
+        def eq(self, col, val):
+            self._filtered = [x for x in self._filtered if x.get(col) == val]
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def maybe_single(self):
+            return self
+
+        def insert(self, payload):
+            if isinstance(payload, list):
+                self.items.extend(payload)
+                self._res = payload
+            else:
+                self.items.append(payload)
+                self._res = [payload]
+            return self
+
+        def execute(self):
+            from unittest.mock import MagicMock
+            res = MagicMock()
+            if hasattr(self, "_res"):
+                res.data = self._res
+            else:
+                res.data = self._filtered[0] if (hasattr(self, "_is_single") or len(self._filtered) == 1) else self._filtered
+            return res
+
+    class MockClient:
+        def table(self, name):
+            return MockQuery(name)
+
+    mock_client = MockClient()
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_client)
+
+
 def test_create_and_inspect_role_invite():
     hid = HOUSEHOLD_ID
     with patch("auth._get_user_membership") as mock_mem:
@@ -36,7 +88,7 @@ def test_create_and_inspect_role_invite():
         assert res.status_code == 200
         data = res.json()
         code = data["invite_code"]
-        assert len(code) == 8
+        assert len(code) == 16
         assert data["role"] == "spouse"
 
         # Inspect invite code
@@ -44,7 +96,8 @@ def test_create_and_inspect_role_invite():
         assert inspect_res.status_code == 200
         inspect_data = inspect_res.json()
         assert inspect_data["role"] == "spouse"
-        assert inspect_data["household_id"] == hid
+        assert "household_id" not in inspect_data
+        assert inspect_data.get("is_valid") is True
 
 
 def test_create_peer_roommate_invite():

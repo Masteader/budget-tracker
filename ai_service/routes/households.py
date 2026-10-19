@@ -210,24 +210,45 @@ async def create_household_role_invite_endpoint(
         raise safe_error_response(exc, public_message="Failed to create invite.")
 
 
+from rate_limiter import default_rate_limiter
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP safely from rightmost X-Forwarded-For hop or client host."""
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
 @router.get(
     "/households/invites/{invite_code}",
     tags=["households"],
     summary="Inspect invite code metadata and assigned role.",
 )
-async def inspect_household_role_invite_endpoint(invite_code: str):
+async def inspect_household_role_invite_endpoint(invite_code: str, request: Request):
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
+
+    # Rate-limit invite inspection by client IP (rightmost X-Forwarded-For hop)
+    client_ip = get_client_ip(request)
+    await default_rate_limiter.check_rate_limit(f"inspect_invite:{client_ip}", max_requests=20, window_seconds=60)
+
     try:
         raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)
-        # Return minimal safe public metadata: never leak target_member_id or created_by
+        # Return minimal safe public metadata: omit household_id, target_member_id, created_by
         return {
             "invite_code": raw.get("invite_code", invite_code.strip().upper()),
-            "household_id": raw.get("household_id"),
             "role": raw.get("role", "peer"),
             "is_valid": raw.get("is_valid", False),
             "expires_at": raw.get("expires_at"),
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to inspect invite.")
 

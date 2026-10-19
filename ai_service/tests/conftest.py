@@ -42,9 +42,13 @@ def mock_auth(monkeypatch, request):
     async def fake_verify_admin(request: Request, household_id: str):
         return household_id
 
+    def fake_get_current_user_id(request: Request) -> str:
+        return "00000000-0000-0000-0000-000000000001"
+
     import auth
     orig_verify = auth.verify_household_access
     orig_verify_admin = auth.verify_household_admin_access
+    orig_get_user_id = getattr(auth, "get_current_user_id", None)
 
     from main import app
     app.dependency_overrides[orig_verify] = fake_verify
@@ -52,14 +56,18 @@ def mock_auth(monkeypatch, request):
 
     monkeypatch.setattr(auth, "verify_household_access", fake_verify)
     monkeypatch.setattr(auth, "verify_household_admin_access", fake_verify_admin)
+    monkeypatch.setattr(auth, "get_current_user_id", fake_get_current_user_id)
 
-    for mod_name in ["routes.budgets", "routes.households", "routes.analytics", "routes.receipts", "routes.chat", "routes.reports"]:
+    for mod_name in ["routes.budgets", "routes.households", "routes.analytics", "routes.receipts", "routes.chat", "routes.reports", "routes.support"]:
         try:
             import importlib
             mod = importlib.import_module(mod_name)
-            monkeypatch.setattr(mod, "verify_household_access", fake_verify)
+            if hasattr(mod, "verify_household_access"):
+                monkeypatch.setattr(mod, "verify_household_access", fake_verify)
             if hasattr(mod, "verify_household_admin_access"):
                 monkeypatch.setattr(mod, "verify_household_admin_access", fake_verify_admin)
+            if hasattr(mod, "get_current_user_id"):
+                monkeypatch.setattr(mod, "get_current_user_id", fake_get_current_user_id)
         except Exception:
             pass
 

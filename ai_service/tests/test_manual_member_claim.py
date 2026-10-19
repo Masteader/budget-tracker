@@ -34,8 +34,91 @@ FATIMA_TOKEN = jwt.encode(
 FATIMA_HEADERS = {"Authorization": f"Bearer {FATIMA_TOKEN}"}
 
 
-def test_create_manual_member_with_role_and_allowance():
+def test_create_manual_member_with_role_and_allowance(monkeypatch):
     hid = HOUSEHOLD_ID
+    db_tables = {
+        "household_dependents": [],
+        "household_invites": [],
+    }
+
+    class MockQuery:
+        def __init__(self, table_name):
+            self.table_name = table_name
+            self.items = db_tables.setdefault(table_name, [])
+            self._filtered = list(self.items)
+
+        def select(self, *args, **kwargs):
+            return self
+
+        def eq(self, col, val):
+            self._filtered = [x for x in self._filtered if x.get(col) == val]
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def maybe_single(self):
+            return self
+
+        def insert(self, payload):
+            if isinstance(payload, list):
+                self.items.extend(payload)
+                self._res = payload
+            else:
+                self.items.append(payload)
+                self._res = [payload]
+            return self
+
+        def update(self, payload):
+            for item in self._filtered:
+                item.update(payload)
+            self._res = list(self._filtered)
+            return self
+
+        def delete(self):
+            for item in list(self._filtered):
+                if item in self.items:
+                    self.items.remove(item)
+            self._res = []
+            return self
+
+        def execute(self):
+            from unittest.mock import MagicMock
+            res = MagicMock()
+            if hasattr(self, "_res"):
+                res.data = self._res
+            else:
+                res.data = self._filtered[0] if (hasattr(self, "_is_single") or len(self._filtered) == 1) else self._filtered
+            return res
+
+    class MockClient:
+        def table(self, name):
+            return MockQuery(name)
+
+        def rpc(self, fn_name, params):
+            from unittest.mock import MagicMock
+            res = MagicMock()
+            if fn_name == "claim_household_role_invite":
+                code = params.get("p_invite_code", "").upper().strip()
+                uid = params.get("p_user_id")
+                invites = db_tables.get("household_invites", [])
+                target = next((i for i in invites if i.get("invite_code", "").upper().strip() == code), None)
+                if target:
+                    target["used_by"] = uid
+                    res.data = {
+                        "success": True,
+                        "household_id": target.get("household_id"),
+                        "household_name": "Test Household",
+                        "role": target.get("role"),
+                        "target_member_id": target.get("target_member_id"),
+                    }
+                else:
+                    res.data = {"success": False, "error": "Invite not found"}
+            return MagicMock(execute=lambda: res)
+
+    mock_client = MockClient()
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_client)
+
     with patch("auth._get_user_membership") as mock_mem:
         mock_mem.return_value = {"role": "admin", "household_id": hid}
         

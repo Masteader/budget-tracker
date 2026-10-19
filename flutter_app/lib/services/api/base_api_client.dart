@@ -26,7 +26,7 @@ class BaseApiClient {
         _sessionRefresher = sessionRefresher;
 
   String? get _currentAccessToken {
-    if (_overriddenAccessToken != null) {
+    if (_sessionRefresher != null && _overriddenAccessToken != null) {
       return _overriddenAccessToken;
     }
     if (_authTokenProvider != null) {
@@ -47,11 +47,7 @@ class BaseApiClient {
     }
     try {
       final res = await Supabase.instance.client.auth.refreshSession();
-      final newToken = res.session?.accessToken;
-      if (newToken != null && newToken.isNotEmpty) {
-        _overriddenAccessToken = newToken;
-      }
-      return newToken;
+      return res.session?.accessToken;
     } catch (_) {
       return null;
     }

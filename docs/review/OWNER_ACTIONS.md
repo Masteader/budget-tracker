@@ -36,20 +36,22 @@ This document specifies mandatory security actions that require production admin
 
 ---
 
-## 3. Webhook Secret & App Token Rotation
+## 3. Webhook Secret & App Token Rotation (Server-Side Backend Only)
 
-### Procedure:
+> [!NOTE]
+> **Client APK Secret Deprecation:**
+> Client authentication now relies strictly on per-user verified Supabase JWTs (`Authorization: Bearer <user_jwt>`) rather than static shared secrets embedded in the client binary. Do NOT embed `WEBHOOK_SECRET` or `APP_AUTH_TOKEN` in client builds (`--dart-define`), as embedded APK secrets can be extracted by decompilation.
+> `WEBHOOK_SECRET` and `APP_AUTH_TOKEN` are reserved strictly for server-to-server and automated CI backend integrations.
+
+### Procedure (Server-Side Backend Only):
 1. Generate fresh cryptographically secure 256-bit secrets:
    ```bash
    python -c "import secrets; print('APP_AUTH_TOKEN=' + secrets.token_hex(16)); print('WEBHOOK_SECRET=' + secrets.token_hex(32))"
    ```
-2. Update Railway environment variables:
+2. Update Railway environment variables for `ai-service`:
    - `APP_AUTH_TOKEN`: `<new_token>`
    - `WEBHOOK_SECRET`: `<new_secret>`
-3. Build Flutter application with environment defines (or inject into CI build):
-   ```bash
-   flutter build apk --dart-define=APP_AUTH_TOKEN=<new_token> --dart-define=WEBHOOK_SECRET=<new_secret>
-   ```
+3. Restart `ai-service` deployment to activate the rotated backend tokens.
 
 ---
 
@@ -74,10 +76,20 @@ storeFile=../upload-keystore.jks
 
 ## 5. Domain Email Records (SPF, DKIM, DMARC for `fmsco.com.sa`)
 
+> [!WARNING]
+> **Do NOT overwrite or replace existing SPF/DMARC records.** Replacing existing records can immediately break your primary Microsoft 365 or Google Workspace corporate email delivery.
+> Always **append** transactional email mechanisms to your existing TXT record.
+
 For automated transactional and password reset emails sent from `budget.fmsco.com.sa`:
 - **SPF Record (TXT for `fmsco.com.sa`):**
-  `v=spf1 include:_spf.resend.com ~all` (or equivalent provider)
+  If you already have a Microsoft 365 SPF record such as:
+  `v=spf1 include:spf.protection.outlook.com -all`
+  **Append** the transactional email mechanism before the terminating `~all` or `-all`:
+  `v=spf1 include:spf.protection.outlook.com include:_spf.resend.com -all`
+  *(Ensure the record contains at most 10 DNS lookups to remain RFC 7208 compliant).*
 - **DKIM Record (CNAME):**
-  Configure DNS CNAME records provided by your email transport service (e.g. Resend / SendGrid / Postmark).
+  Configure DNS CNAME records provided by your transactional email transport service (e.g. Resend / SendGrid / Postmark). DKIM records operate on subdomains/selectors and do not conflict with existing office mail.
 - **DMARC Record (TXT for `_dmarc.fmsco.com.sa`):**
+  If `_dmarc.fmsco.com.sa` does not already exist, create:
   `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@fmsco.com.sa; pct=100; adkim=s; aspf=s`
+  If a corporate DMARC record already exists, leave it unchanged.

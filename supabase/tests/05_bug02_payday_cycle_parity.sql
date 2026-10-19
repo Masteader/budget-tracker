@@ -44,9 +44,14 @@ BEGIN
     END IF;
     RAISE NOTICE 'PASSED: Leap year clamping parity confirmed.';
 
-    -- 2. Test Transaction Trigger: Automatic cycle_key & Budget Sync
     INSERT INTO auth.users (id, email) VALUES (v_user_id, 'cycle_test@example.com') ON CONFLICT (id) DO NOTHING;
     INSERT INTO public.households (id, name, payday_day) VALUES (v_hh_id, 'Cycle Parity Household', 27) ON CONFLICT (id) DO NOTHING;
+
+    -- Ensure category exists in taxonomy
+    IF NOT EXISTS (SELECT 1 FROM public.cost_control_codes WHERE code = 'OPEX-DINING' AND household_id IS NULL) THEN
+        INSERT INTO public.cost_control_codes (code, category, household_id, is_system) VALUES
+            ('OPEX-DINING', 'Dining', NULL, true);
+    END IF;
 
     -- Create budget for cycle 2026-11
     INSERT INTO public.budgets (household_id, category_code, allocated_amount, spent_amount, month, cycle_key)

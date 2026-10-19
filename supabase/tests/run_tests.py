@@ -6,6 +6,11 @@ import sys
 import subprocess
 import glob
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 def run_sql_file(file_path, db_name="live_rebuilt_round5", host="localhost", port="54329", user="postgres"):
     print(f"\n--- Running: {os.path.basename(file_path)} ---")
     

@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from auth import verify_household_access
+from auth import verify_household_access, get_current_user_id
 from utils import safe_error_response, validate_uuid, verify_signature
 from rate_limiter import check_api_quota, check_receipt_scan_rate_limit
 from receipt_scanner import process_receipt_scan
@@ -51,13 +51,14 @@ async def scan_receipt(request: Request):
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
+    user_id = get_current_user_id(request)
 
     if not images_base64 and not qr_code_raw:
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
     # Strict rate limit & quota: 10 invoices per 10 minutes maximum per user/household
     await check_api_quota(
-        user_id=body.get("user_id"),
+        user_id=user_id,
         household_id=household_id,
         bucket="scan_receipt",
         max_requests=10,
@@ -70,7 +71,7 @@ async def scan_receipt(request: Request):
             household_id=household_id,
             images_base64=images_base64,
             qr_code_raw=qr_code_raw,
-            user_id=body.get("user_id"),
+            user_id=user_id,
             allow_duplicate=bool(body.get("allow_duplicate", False)),
             enrich_tx_id=body.get("enrich_tx_id"),
             preview_only=bool(body.get("preview_only", False)),

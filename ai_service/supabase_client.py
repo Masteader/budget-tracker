@@ -752,20 +752,27 @@ def get_household_savings_summary(household_id: str) -> dict:
 HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "household_invites.json")
 
 
+def is_supabase_configured() -> bool:
+    """Return True if Supabase credentials are configured in environment."""
+    url = (os.environ.get("SUPABASE_URL") or "").strip()
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    return bool(url and key)
+
+
 def create_household_role_invite(
     household_id: str,
     role: str,
     target_member_id: Optional[str] = None,
 ) -> dict:
     """
-    Creates an 8-character invite code for a specific role ('spouse', 'peer', 'family_member').
+    Creates a 16-character invite code for a specific role ('spouse', 'peer', 'family_member').
     Optionally binds the invite code to a pre-created manual member (target_member_id).
-    Persists to Supabase household_invites table and caches in household_invites.json.
+    Persists to Supabase household_invites table when configured, with JSON cache fallback only when offline.
     """
     import secrets
     from datetime import datetime, timezone, timedelta
 
-    code = secrets.token_hex(4).upper()
+    code = secrets.token_hex(8).upper()
     expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     norm_role = role if role in ("spouse", "peer", "family_member", "dependent") else "peer"
 
@@ -778,7 +785,12 @@ def create_household_role_invite(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # 1. Update local cache
+    if is_supabase_configured():
+        client = get_client()
+        client.table("household_invites").insert(invite_data).execute()
+        return invite_data
+
+    # Local file fallback ONLY when Supabase is not configured
     try:
         os.makedirs(os.path.dirname(HOUSEHOLD_INVITES_FILE), exist_ok=True)
         invites = {}
@@ -791,13 +803,6 @@ def create_household_role_invite(
     except Exception as e:
         logger.warning(f"Failed to persist household_invites.json: {e}")
 
-    # 2. Update Supabase
-    try:
-        client = get_client()
-        client.table("household_invites").insert(invite_data).execute()
-    except Exception as e:
-        logger.info(f"Supabase household_invites insert skipped: {e}")
-
     return invite_data
 
 
@@ -806,26 +811,35 @@ def inspect_household_role_invite(invite_code: str) -> dict:
     Retrieves metadata for an invite code: household_id, assigned role, target_member_id, expiry.
     """
     code = invite_code.strip().upper()
-    try:
-        client = get_client()
-        res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
-        if res and hasattr(res, "data") and res.data:
-            inv = res.data
-            is_valid = True
-            if inv.get("used_by"):
-                is_valid = False
-            if inv.get("expires_at"):
-                try:
-                    exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
-                    if exp < datetime.now(timezone.utc):
-                        is_valid = False
-                except Exception:
-                    pass
-            inv["is_valid"] = is_valid
-            return inv
-    except Exception as exc:
-        logger.warning("Supabase inspect invite query failed: %s", exc)
+    if is_supabase_configured():
+        try:
+            client = get_client()
+            res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
+            if res and hasattr(res, "data") and res.data:
+                inv = res.data
+                is_valid = True
+                if inv.get("used_by"):
+                    is_valid = False
+                if inv.get("expires_at"):
+                    try:
+                        exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
+                        if exp < datetime.now(timezone.utc):
+                            is_valid = False
+                    except Exception:
+                        pass
+                inv["is_valid"] = is_valid
+                return inv
+        except Exception as exc:
+            logger.warning("Supabase inspect invite query failed: %s", exc)
+        return {
+            "invite_code": code,
+            "household_id": None,
+            "role": "peer",
+            "target_member_id": None,
+            "is_valid": False,
+        }
 
+    # Fallback ONLY when Supabase is not configured
     try:
         if os.path.exists(HOUSEHOLD_INVITES_FILE):
             with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
@@ -848,79 +862,55 @@ def inspect_household_role_invite(invite_code: str) -> dict:
 
 def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
     """
-    Claims a household invite for a user:
-    1. Atomically consumes the invite (used_by = user_id WHERE used_by IS NULL and not expired)
-    2. Links target_member_id if present
-    3. Updates user's household_id, role='member', financial_role
-    4. Inserts household_memberships row
+    Claims a household invite for a user atomically:
+    1. If Supabase is configured: calls the atomic claim_household_role_invite RPC.
+    2. If Supabase is not configured: claims locally via file cache fallback.
     """
     code = invite_code.strip().upper()
-    client = get_client()
 
-    inv = inspect_household_role_invite(code)
-    if not inv or not inv.get("is_valid", True):
-        return {"status": "error", "error": "Invite code is invalid or expired."}
+    if is_supabase_configured():
+        try:
+            client = get_client()
+            res = client.rpc("claim_household_role_invite", {
+                "p_invite_code": code,
+                "p_user_id": user_id,
+            }).execute()
+            if res and hasattr(res, "data") and isinstance(res.data, dict):
+                data = res.data
+                if not data.get("success"):
+                    return {"status": "error", "error": data.get("error", "Invite code is invalid or expired.")}
+                return {
+                    "status": "success",
+                    "household_id": data.get("household_id"),
+                    "user_id": user_id,
+                    "linked_member_id": data.get("target_member_id"),
+                    "financial_role": data.get("role"),
+                }
+        except Exception as exc:
+            logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
+            return {"status": "error", "error": str(exc)}
 
-    hid = inv.get("household_id")
-    target_mid = inv.get("target_member_id")
-    role = inv.get("role", "peer")
-
+    # Fallback ONLY when Supabase is not configured
     try:
+        inv = inspect_household_role_invite(code)
+        if not inv or not inv.get("is_valid", True):
+            return {"status": "error", "error": "Invite code is invalid or expired."}
         if inv.get("used_by"):
             return {"status": "error", "error": "Invite code has already been used."}
 
-        # Attempt atomic database update
-        updated_db = False
-        try:
-            update_res = (
-                client.table("household_invites")
-                .update({"used_by": user_id})
-                .eq("invite_code", code)
-                .is_("used_by", "null")
-                .execute()
-            )
-            if update_res and hasattr(update_res, "data") and update_res.data:
-                updated_db = True
-        except Exception as db_err:
-            logger.info("Supabase atomic invite update skipped/failed: %s", db_err)
+        hid = inv.get("household_id")
+        target_mid = inv.get("target_member_id")
+        role = inv.get("role", "peer")
 
-        # Update JSON cache fallback if exists
-        updated_file = False
         if os.path.exists(HOUSEHOLD_INVITES_FILE):
-            try:
-                with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
-                    invites = json.load(f)
-                if code in invites and not invites[code].get("used_by"):
-                    invites[code]["used_by"] = user_id
-                    with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
-                        json.dump(invites, f, indent=2)
-                    updated_file = True
-            except Exception as file_err:
-                logger.warning("Failed to update household_invites.json: %s", file_err)
-
-        if not updated_db and not updated_file:
-            return {"status": "error", "error": "Invite code has already been used or expired."}
-
-        if target_mid and hid:
-            from dependents_service import link_dependent_user
-            link_dependent_user(hid, target_mid, user_id)
-
-        if hid:
-            try:
-                client.table("users").update({
-                    "household_id": hid,
-                    "role": "member",
-                    "financial_role": role,
-                }).eq("id", user_id).execute()
-
-                client.table("household_memberships").upsert({
-                    "household_id": hid,
-                    "user_id": user_id,
-                    "role": "member",
-                    "is_default": False,
-                }, on_conflict="household_id,user_id").execute()
-            except Exception as e:
-                logger.info("Supabase user/membership update fallback: %s", e)
+            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
+                invites = json.load(f)
+            if code in invites and not invites[code].get("used_by"):
+                invites[code]["used_by"] = user_id
+                with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
+                    json.dump(invites, f, indent=2)
+            else:
+                return {"status": "error", "error": "Invite code has already been used or expired."}
 
         return {
             "status": "success",
@@ -930,7 +920,7 @@ def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
             "financial_role": role,
         }
     except Exception as e:
-        logger.error("Failed to claim household invite: %s", e)
+        logger.error("Failed to claim household invite (fallback): %s", e)
         return {"status": "error", "error": str(e)}
 
 

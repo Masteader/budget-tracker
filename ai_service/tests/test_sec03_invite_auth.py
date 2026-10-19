@@ -101,6 +101,7 @@ def test_inspect_invite_returns_minimal_metadata():
         # Sensitive internal identifiers must NOT leak to public callers
         assert "target_member_id" not in data, "target_member_id leaked in public inspect!"
         assert "created_by" not in data, "created_by leaked in public inspect!"
+        assert "household_id" not in data, "household_id leaked in public inspect!"
 
 
 def test_non_admin_cannot_create_invite():

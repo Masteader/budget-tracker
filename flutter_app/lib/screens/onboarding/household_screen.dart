@@ -18,11 +18,13 @@ import '../home/dashboard_screen.dart';
 class HouseholdScreen extends StatefulWidget {
   final ApiService? apiService;
   final WidgetBuilder? destinationBuilder;
+  final Future<Map<String, dynamic>> Function(String code)? joinHandler;
 
   const HouseholdScreen({
     super.key,
     this.apiService,
     this.destinationBuilder,
+    this.joinHandler,
   });
 
   @override
@@ -120,8 +122,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   Future<void> _joinHousehold() async {
     final code = _joinCodeCtrl.text.trim().toUpperCase();
-    if (code.length != 8) {
-      _showError('Invite code must be 8 characters.');
+    if (code.length < 8 || code.length > 16) {
+      _showError('Invite code must be between 8 and 16 characters.');
       return;
     }
     setState(() => _loading = true);
@@ -137,8 +139,10 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         } catch (_) {}
       }
 
-      Map<String, dynamic> hh;
-      try {
+      final Map<String, dynamic> hh;
+      if (widget.joinHandler != null) {
+        hh = await widget.joinHandler!(code);
+      } else {
         final res = await supabase.rpc(
           'join_household_by_code',
           params: {'p_invite_code': code},
@@ -147,15 +151,6 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           throw Exception(res['error']);
         }
         hh = Map<String, dynamic>.from(res as Map);
-      } catch (e) {
-        if (invite.householdId.isNotEmpty) {
-          hh = {
-            'id': invite.householdId,
-            'name': 'Household',
-          };
-        } else {
-          rethrow;
-        }
       }
       final householdId = hh['id'] as String;
       if (mounted) {
@@ -322,9 +317,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                         TextField(
                           controller: _joinCodeCtrl,
                           textCapitalization: TextCapitalization.characters,
-                          maxLength: 8,
+                          maxLength: 16,
                           decoration: const InputDecoration(
-                            hintText: '8-character invite code',
+                            hintText: '8 to 16 character invite code',
                             prefixIcon: Icon(Icons.qr_code_outlined),
                           ),
                         ),

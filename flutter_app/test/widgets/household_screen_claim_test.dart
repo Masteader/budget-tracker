@@ -128,6 +128,7 @@ void main() {
             locale: const Locale('en'),
             home: HouseholdScreen(
               apiService: apiService,
+              joinHandler: (code) async => {'id': 'hh-123', 'name': 'Household'},
               destinationBuilder: (_) => const Scaffold(body: Text('Joined Dashboard Test')),
             ),
           ),

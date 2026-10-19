@@ -87,7 +87,12 @@ BEGIN
 
     -- 3. Test: Attacker cannot directly update victim's account balance
     PERFORM set_config('request.jwt.claims', json_build_object('sub', v_attacker::text)::text, true);
-    UPDATE public.accounts SET balance = 99999.00 WHERE id = v_acc1;
+    BEGIN
+        UPDATE public.accounts SET balance = 99999.00 WHERE id = v_acc1;
+    EXCEPTION WHEN insufficient_privilege THEN
+        -- Column-level privilege lock correctly blocks direct UPDATE
+        NULL;
+    END;
     -- Reset to postgres to verify balance did not change
     EXECUTE 'SET LOCAL ROLE postgres';
     SELECT balance INTO v_bal FROM public.accounts WHERE id = v_acc1;
@@ -155,7 +160,7 @@ BEGIN
 
     -- 8. Test: Transaction insert with account_id triggers automatic balance deduction
     INSERT INTO public.transactions (household_id, amount, merchant, category_code, account_id, timestamp)
-    VALUES (v_hh1, 195.00, 'Panda Supermarket', 'OPEX-GROCERIES', v_acc1, now())
+    VALUES (v_hh1, 195.00, 'Panda Supermarket', 'OPEX-GROCERY', v_acc1, now())
     RETURNING id INTO v_tx_id;
 
     SELECT balance INTO v_bal FROM public.accounts WHERE id = v_acc1;

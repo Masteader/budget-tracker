@@ -75,20 +75,53 @@ app.add_middleware(
 )
 
 # ─── Request Body Size Limit (OWASP A04: DoS Protection) ──────────────────────
-MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))  # 10MB default
-
-
 @app.middleware("http")
 async def request_size_limit_middleware(request: Request, call_next):
-    """Reject request bodies exceeding MAX_REQUEST_BODY_BYTES to prevent DoS."""
+    """
+    Reject request bodies exceeding limit (Cost Control & DoS prevention).
+    Checks Content-Length header and counts actual streamed bytes for chunked requests.
+    """
+    path = request.url.path
+    max_size = 25 * 1024 * 1024 if path.startswith("/agent/scan-receipt") else 1 * 1024 * 1024
+
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_REQUEST_BODY_BYTES:
-        from starlette.responses import JSONResponse
-        return JSONResponse(
-            status_code=413,
-            content={"detail": f"Request body too large. Maximum allowed: {MAX_REQUEST_BODY_BYTES // (1024 * 1024)}MB."},
-        )
-    return await call_next(request)
+    if content_length:
+        try:
+            if int(content_length) > max_size:
+                from starlette.responses import JSONResponse
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Payload too large. Maximum allowed request size exceeded."},
+                )
+        except ValueError:
+            pass
+
+    # Stream body byte counting for chunked / unheadered transfers
+    orig_receive = request._receive
+    bytes_received = 0
+
+    async def limited_receive():
+        nonlocal bytes_received
+        msg = await orig_receive()
+        if msg["type"] == "http.request":
+            body = msg.get("body", b"")
+            bytes_received += len(body)
+            if bytes_received > max_size:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=413,
+                    detail="Payload too large. Maximum allowed request size exceeded."
+                )
+        return msg
+
+    request._receive = limited_receive
+    try:
+        return await call_next(request)
+    except HTTPException as exc:
+        if exc.status_code == 413:
+            from starlette.responses import JSONResponse
+            return JSONResponse(status_code=413, content={"detail": exc.detail})
+        raise
 
 
 # ─── Auth Token & Firewall (OWASP A01 / A02) ───────────────────────────────────
@@ -106,22 +139,6 @@ if not APP_AUTH_TOKEN:
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     path = request.url.path
-
-    # Enforce payload size limits before processing (Cost Control / DoS prevention)
-    content_length_str = request.headers.get("content-length")
-    if content_length_str:
-        try:
-            content_length = int(content_length_str)
-            # Max 25MB for multimodal receipt scanning, 1MB for all standard JSON routes
-            max_size = 25 * 1024 * 1024 if path.startswith("/agent/scan-receipt") else 1 * 1024 * 1024
-            if content_length > max_size:
-                from starlette.responses import JSONResponse
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "Payload too large. Maximum allowed request size exceeded."}
-                )
-        except ValueError:
-            pass
 
     if (
         path in [
@@ -152,9 +169,22 @@ async def firewall_token_middleware(request: Request, call_next):
 
     # Constant-time comparison to prevent side-channel timing attacks (OWASP A02)
     provided_token = request.headers.get("X-App-Token", "")
-    has_bearer = bool(request.headers.get("Authorization", "").startswith("Bearer "))
     token_valid = bool(APP_AUTH_TOKEN and hmac.compare_digest(provided_token, APP_AUTH_TOKEN))
-    if is_tunnel_or_proxy and not (token_valid or has_bearer):
+
+    # Strict token validation for Bearer headers (reject fake/unverified tokens)
+    bearer_valid = False
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.startswith("Bearer "):
+        token_str = auth_header[7:].strip()
+        try:
+            from auth import _decode_token
+            decoded = _decode_token(token_str)
+            if decoded and decoded.get("sub"):
+                bearer_valid = True
+        except Exception:
+            bearer_valid = False
+
+    if is_tunnel_or_proxy and not (token_valid or bearer_valid):
         logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(

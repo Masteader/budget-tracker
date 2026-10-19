@@ -231,6 +231,66 @@ def parse_receipt_images(
             if zatca.get("timestamp"):
                 parsed["date"] = zatca["timestamp"]
 
+    return validate_ocr_receipt_payload(parsed)
+
+
+def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validates and sanitizes OCR-parsed receipt payload:
+    - total_amount: rejects negative values, rejects amounts > 10,000,000 SAR.
+    - line items: price must be >= 0 and <= 10,000,000; quantity must be > 0 and <= 10,000.
+    - merchant: strips ASCII and Unicode control characters.
+    """
+    import re
+
+    # Merchant sanitization: strip control characters (0x00-0x1F, 0x7F-0x9F)
+    merchant = parsed.get("merchant") or "Scanned Merchant"
+    merchant = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", str(merchant)).strip()
+    if not merchant:
+        merchant = "Scanned Merchant"
+    parsed["merchant"] = merchant
+
+    # Total amount validation
+    try:
+        raw_total = float(parsed.get("total_amount") or 0.0)
+    except (ValueError, TypeError):
+        raw_total = 0.0
+
+    if raw_total < 0:
+        raise ValueError(f"Invalid negative receipt total amount: {raw_total}")
+    if raw_total > 10_000_000:
+        raise ValueError(f"Astronomical receipt total amount exceeding 10,000,000 SAR: {raw_total}")
+    parsed["total_amount"] = round(raw_total, 2)
+
+    # Line items validation
+    raw_items = parsed.get("items") or []
+    valid_items: List[Dict[str, Any]] = []
+
+    for it in raw_items:
+        if not isinstance(it, dict):
+            continue
+        name = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", str(it.get("name", "Item"))).strip()
+        try:
+            qty = float(it.get("quantity", 1.0))
+        except (ValueError, TypeError):
+            qty = 1.0
+        try:
+            price = float(it.get("price", 0.0))
+        except (ValueError, TypeError):
+            price = 0.0
+
+        if qty <= 0 or qty > 10_000:
+            raise ValueError(f"Invalid receipt item quantity ({qty}). Must be between 0 and 10,000.")
+        if price < 0 or price > 10_000_000:
+            raise ValueError(f"Invalid receipt item price ({price}). Must be between 0 and 10,000,000 SAR.")
+
+        valid_items.append({
+            "name": name or "Item",
+            "quantity": round(qty, 2),
+            "price": round(price, 2),
+        })
+
+    parsed["items"] = valid_items
     return parsed
 
 
@@ -332,6 +392,15 @@ def process_receipt_scan(
         return {
             "status": "error",
             "message": "Please provide receipt image(s) or a ZATCA QR code.",
+        }
+
+    try:
+        parsed = validate_ocr_receipt_payload(parsed)
+    except ValueError as val_err:
+        return {
+            "status": "error",
+            "message": f"Invalid receipt content: {str(val_err)}",
+            "parsed_data": parsed,
         }
 
     resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")

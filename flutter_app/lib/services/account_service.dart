@@ -71,7 +71,6 @@ class AccountService {
       'currency': account.currency,
       'color_hex': account.colorHex,
       'icon_name': account.iconName,
-      'is_shared_pool': account.isSharedPool,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', account.id);
   }

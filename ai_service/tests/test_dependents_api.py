@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from main import app
@@ -13,6 +14,51 @@ def test_dependents_crud_endpoints(monkeypatch):
     household_id = "f860188e-23b5-4749-b180-868c956151a6"
     headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
     _memory_dependents.clear()
+
+    storage = []
+
+    class MockQuery:
+        def __init__(self, items):
+            self.items = items
+            self._filtered = list(items)
+
+        def select(self, *args, **kwargs):
+            return self
+
+        def eq(self, col, val):
+            self._filtered = [x for x in self._filtered if x.get(col) == val]
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def insert(self, payload):
+            if isinstance(payload, list):
+                self.items.extend(payload)
+                self._res = payload
+            else:
+                self.items.append(payload)
+                self._res = [payload]
+            return self
+
+        def delete(self):
+            for item in list(self._filtered):
+                if item in self.items:
+                    self.items.remove(item)
+            self._res = []
+            return self
+
+        def execute(self):
+            res = MagicMock()
+            res.data = getattr(self, "_res", self._filtered)
+            return res
+
+    class MockClient:
+        def table(self, name):
+            return MockQuery(storage)
+
+    mock_c = MockClient()
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_c)
 
     # 1. Create dependent
     post_res = client.post(
