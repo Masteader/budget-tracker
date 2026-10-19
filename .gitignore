@@ -28,3 +28,7 @@ Thumbs.db
 *.db
 *.bin
 *.apk
+
+# Review & Audit Artifacts
+docs/review/PR_AUDIT_BUNDLE.md
+docs/review/AUDIT_FEEDBACK.md

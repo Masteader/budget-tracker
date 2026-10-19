@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -10,25 +12,73 @@ import '../../theme/app_themes.dart';
 
 /// Dashboard summary card displaying total liquidity across all accounts
 /// and horizontal account pills. Tapping navigates to AccountsOverviewScreen.
-class AccountsSummaryCard extends StatelessWidget {
+class AccountsSummaryCard extends StatefulWidget {
   final String householdId;
 
   const AccountsSummaryCard({super.key, required this.householdId});
+
+  @override
+  State<AccountsSummaryCard> createState() => _AccountsSummaryCardState();
+}
+
+class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
+  StreamSubscription<List<Account>>? _accountsSub;
+  List<Account> _cachedAccounts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initStream();
+    _fetchDirectly();
+  }
+
+  void _initStream() {
+    _accountsSub?.cancel();
+    _accountsSub = AccountService.instance.streamAccounts(widget.householdId).listen(
+      (data) {
+        if (mounted) {
+          setState(() {
+            _cachedAccounts = data;
+          });
+        }
+      },
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _fetchDirectly() async {
+    try {
+      final list = await AccountService.instance.getAccounts(widget.householdId);
+      if (mounted) {
+        setState(() {
+          _cachedAccounts = list;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountsSummaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.householdId != widget.householdId) {
+      _initStream();
+      _fetchDirectly();
+    }
+  }
+
+  @override
+  void dispose() {
+    _accountsSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final isDark = context.isDark;
 
-    return StreamBuilder<List<Account>>(
-      stream: AccountService.instance.streamAccounts(householdId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final accounts = snapshot.data!.where((a) => !a.isArchived).toList();
-        if (accounts.isEmpty) return const SizedBox.shrink();
+    final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
+    if (accounts.isEmpty) return const SizedBox.shrink();
 
         final totalLiquidity =
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);
@@ -41,7 +91,7 @@ class AccountsSummaryCard extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => AccountsOverviewScreen(householdId: householdId),
+                builder: (_) => AccountsOverviewScreen(householdId: widget.householdId),
               ),
             );
           },
@@ -222,7 +272,5 @@ class AccountsSummaryCard extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }

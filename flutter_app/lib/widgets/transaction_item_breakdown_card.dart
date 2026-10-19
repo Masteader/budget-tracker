@@ -193,7 +193,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  merchant,
+                  context.trMerchant(merchant),
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
@@ -487,7 +487,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '1x $merchant ($currency ${amount.toStringAsFixed(2)})\n${context.tr('no_line_items_desc')}',
+                              '1x ${context.trMerchant(merchant)} ($currency ${amount.toStringAsFixed(2)})\n${context.tr('no_line_items_desc')}',
                               style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),
@@ -749,7 +749,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896), size: 24),
             const SizedBox(width: 8),
             Text(
-              'Saudi ZATCA QR',
+              context.tr('saudi_zatca_vat_qr'),
               style: GoogleFonts.outfit(
                 color: context.textPrimary,
                 fontSize: 18,

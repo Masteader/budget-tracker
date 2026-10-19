@@ -1,7 +1,7 @@
 name: budget_tracker
 description: Household budget tracker with AI-powered receipt scanning, voice entry, and expense chat.
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

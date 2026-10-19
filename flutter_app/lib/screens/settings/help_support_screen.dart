@@ -31,26 +31,39 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   String _faqQuery = '';
   bool _isSending = false;
-  String _selectedLanguage = 'ar';
+  String _selectedLanguage = 'en';
+  bool _languageInitialized = false;
 
   final List<_SupportMessage> _messages = [
     const _SupportMessage(
       isUser: false,
       text:
-          'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟',
+          'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?',
     ),
   ];
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_languageInitialized) {
+      _languageInitialized = true;
+      final code = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+      if (code == 'en' || code == 'ur' || code == 'ar') {
+        _selectedLanguage = code;
+        _onLanguageChanged(code);
+      }
+    }
+  }
+
   void _onLanguageChanged(String newLang) {
-    if (_selectedLanguage == newLang) return;
     setState(() {
       _selectedLanguage = newLang;
       if (_messages.length == 1 && !_messages.first.isUser) {
         String welcome =
-            'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟';
-        if (newLang == 'en') {
+            'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?';
+        if (newLang == 'ar') {
           welcome =
-              'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?';
+              'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟';
         } else if (newLang == 'ur') {
           welcome =
               'اسمارٹ ہیلپ اور سپورٹ سینٹر میں خوش آمدید! 👋\nمیں آپ کا اسسٹنٹ ہوں۔ آج میں بجٹ، تنخواہ کے سائیکل، یا رسیدوں کے انتظام میں آپ کی کیا مدد کر سکتا ہوں؟';
@@ -62,103 +75,330 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   static const String developerEmail = 'fmscoinfo@fmsco.com.sa';
 
-  final List<_FaqCategory> _faqCategories = const [
-    _FaqCategory(
-      title: 'Salary Cycle & Payday (27th)',
-      icon: Icons.calendar_month_rounded,
-      color: Color(0xFFF59E0B),
-      faqs: [
-        _FaqItem(
-          question: 'How does the salary cycle work in this app?',
-          answer:
-              'The budget cycle is automatically synced with the standard Saudi 27th payday. A monthly cycle starts on the 27th and concludes on the 26th of the following month, preventing mid-month budget misalignment.',
+  List<_FaqCategory> _getFaqCategories(String lang) {
+    if (lang == 'ar') {
+      return const [
+        _FaqCategory(
+          title: 'دورة الرواتب ويوم الصرف (27)',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFFF59E0B),
+          faqs: [
+            _FaqItem(
+              question: 'كيف تعمل دورة الرواتب في هذا التطبيق؟',
+              answer:
+                  'تتم مزامنة دورة الميزانية تلقائياً مع يوم الصرف الحكومي السعودي (27). تبدأ الدورة في 27 وتنتهي في 26 من الشهر التالي لتجنب تشتت المصاريف.',
+            ),
+            _FaqItem(
+              question: 'ماذا يحدث للأموال الفائضة في نهاية الدورة؟',
+              answer:
+                  'أي فائض غير مستهلك يرحّل تلقائياً إلى الدورة التالية كفائض مرحّل أو يضاف إلى مدخرات الأسرة.',
+            ),
+            _FaqItem(
+              question: 'كيف يُحسب معدل الصرف اليومي؟',
+              answer:
+                  'يُقسم رصيدك المتاح على عدد الأيام المتبقية حتى يوم 27، ليوفر حداً يومياً آمناً للإنفاق.',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'What happens to unspent funds at the end of the cycle?',
-          answer:
-              'Any unspent discretionary funds automatically roll over into the next cycle as surplus carryover or can be credited towards household savings reserves.',
+        _FaqCategory(
+          title: 'مسح الفواتير ورمز الزكاة (ZATCA)',
+          icon: Icons.qr_code_scanner_rounded,
+          color: Color(0xFF00C896),
+          faqs: [
+            _FaqItem(
+              question: 'كيف أمسح الفواتير الورقية والمطبوعة؟',
+              answer:
+                  'اضغط على زر الكاميرا لمسح الإيصالات. يمكنك التقاط صفحات متعددة للفواتير الطويلة أو اختيار صورة من المعرض. يستخرج الذكاء الاصطناعي البنود والضريبة تلقائياً.',
+            ),
+            _FaqItem(
+              question: 'كيف يعمل التحقق من رمز ZATCA QR؟',
+              answer:
+                  'يقوم الماسح بفك تشفير الباركود السعودي الرسمي Base64 TLV في الوقت الفعلي للتحقق من الرقم الضريبي وإجمالي الفاتورة مع الضريبة 15%.',
+            ),
+            _FaqItem(
+              question: 'ماذا يحدث عند مسح فاتورة مكررة؟',
+              answer:
+                  'إذا تطابقت الفاتورة مع معاملة موجودة، تظهر بطاقة حماية التكرار للاختيار بين إثراء المعاملة، أو تسجيلها كمصروف جديد، أو تجاهلها.',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'How is the daily allowance pacing calculated?',
-          answer:
-              'Your remaining discretionary budget is divided by the exact number of days remaining until the 27th, providing a safe daily spending limit.',
+        _FaqCategory(
+          title: 'الفواتير المتكررة واحتياطي الإقامة',
+          icon: Icons.receipt_long_rounded,
+          color: Color(0xFF3B82F6),
+          faqs: [
+            _FaqItem(
+              question: 'كيف أضيف الفواتير الدورية (إيجار، كهرباء، إنترنت)؟',
+              answer:
+                  'من بطاقة الفواتير المتكررة، اضغط على "إدارة الفواتير" لتعيين أي فئة كفاتورة دورية مع تحديد يوم الاستحقاق.',
+            ),
+            _FaqItem(
+              question: 'أين يتم تتبع رسوم الإقامة الشهرية 400 ريال؟',
+              answer:
+                  'يتم تتبع رسوم الإقامة 400 ريال شهرياً كاحتياطي مخصص تحت فئة الخدمات الحكومية (OPEX-GOV)، مما يحمي مصاريفك الأساسية.',
+            ),
+            _FaqItem(
+              question: 'كيف أسجل سداد فاتورة متكررة؟',
+              answer:
+                  'اضغط على زر السداد الأخضر مباشرة من بطاقة لوحة التحكم لتسجيل العملية وتحديث المخصص.',
+            ),
+          ],
         ),
-      ],
-    ),
-    _FaqCategory(
-      title: 'Receipt & ZATCA Scanning',
-      icon: Icons.qr_code_scanner_rounded,
-      color: Color(0xFF00C896),
-      faqs: [
-        _FaqItem(
-          question: 'How do I scan printed paper receipts?',
-          answer:
-              'Tap the green camera scanner button. You can capture multiple receipt pages or pick an invoice image from your photo gallery. Our Gemini Vision model automatically extracts line items, VAT, and merchant details.',
+        _FaqCategory(
+          title: 'خطط الأقساط (تابي وتمارا)',
+          icon: Icons.credit_card_rounded,
+          color: Color(0xFF8B5CF6),
+          faqs: [
+            _FaqItem(
+              question: 'كيف تعمل خطط الأقساط الشهرية (BNPL)؟',
+              answer:
+                  'عند تسجيل مشتروات بالأقساط، يمكنك تتبع الدفعات وتواريخ استحقاقها ونسبة السداد مباشرة من بطاقة لوحة التحكم.',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'How does Saudi ZATCA QR code verification work?',
-          answer:
-              'Our scanner decodes official Saudi ZATCA Base64 TLV barcodes in real time to verify seller tax identification, invoice timestamps, VAT amounts, and total values.',
+        _FaqCategory(
+          title: 'المصاريف المشتركة والشركاء',
+          icon: Icons.people_alt_rounded,
+          color: Color(0xFF10B981),
+          faqs: [
+            _FaqItem(
+              question: 'كيف يعمل التوزيع ثنائي الأبعاد للمصاريف؟',
+              answer:
+                  'لكل مصروف، حدد من دفع (أنا أو الشريك) ولمن كان المصروف (لي، للشريك، أو مشترك). يحسب التطبيق صافي التسوية بدقة في نهاية كل دورة.',
+            ),
+            _FaqItem(
+              question: 'كيف أدعو شريكي للانضمام للأسرة؟',
+              answer:
+                  'انتقل إلى الإعدادات ثم إدارة الأسرة وانسخ رمز الدعوة ليستخدمه شريكك عند إنشاء حسابه.',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'What happens when a duplicate invoice is scanned?',
-          answer:
-              'If an invoice matches an existing transaction, you will see a Duplicate Defense card allowing you to Enrich the existing transaction, Log as a separate expense, or Discard.',
+      ];
+    }
+
+    if (lang == 'ur') {
+      return const [
+        _FaqCategory(
+          title: 'تنخواہ کا سائیکل اور یوم ادائیگی (27)',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFFF59E0B),
+          faqs: [
+            _FaqItem(
+              question: 'ایپ میں تنخواہ کا سائیکل کیسے کام کرتا ہے؟',
+              answer:
+                  'بجٹ کا سائیکل خود بخود سعودی 27 تاریخ کی تنخواہ کے ساتھ ہم آہنگ ہوتا ہے۔ سائیکل 27 سے شروع ہو کر اگلے ماہ کی 26 تاریخ تک رہتا ہے۔',
+            ),
+            _FaqItem(
+              question: 'سائیکل کے اختتام پر بچ جانے والی رقم کا کیا ہوتا ہے؟',
+              answer:
+                  'غیر خرچ شدہ رقم خود بخود اگلے سائیکل میں سرپلس کے طور پر شامل ہو جاتی ہے یا گھریلو بچت میں جمع ہو جاتی ہے۔',
+            ),
+            _FaqItem(
+              question: 'روزانہ خرچ کی حد کا حساب کیسے لگایا جاتا ہے؟',
+              answer:
+                  'باقی رقم کو 27 تاریخ تک کے دنوں پر تقسیم کر کے روزانہ کی محفوظ حد بتائی جاتی ہے۔',
+            ),
+          ],
         ),
-      ],
-    ),
-    _FaqCategory(
-      title: 'Recurring Bills & Iqama Reserves',
-      icon: Icons.receipt_long_rounded,
-      color: Color(0xFF3B82F6),
-      faqs: [
-        _FaqItem(
-          question: 'How do I add recurring bills (Rent, Utilities, Fiber)?',
-          answer:
-              'In the Dashboard Recurring Bills card, tap "Manage Bills" to toggle any sub-budget as recurring and configure its monthly due day.',
+        _FaqCategory(
+          title: 'رسیدیں اور زکوٰۃ و ٹیکس اسکیننگ',
+          icon: Icons.qr_code_scanner_rounded,
+          color: Color(0xFF00C896),
+          faqs: [
+            _FaqItem(
+              question: 'کاغذی رسیدیں کیسے اسکین کی جاتی ہیں؟',
+              answer:
+                  'کیمرہ اسکینر کے بٹن پر ٹیپ کریں۔ آپ لمبی رسیدوں کے کئی صفحات کی تصاویر لے سکتے ہیں۔ اے آئی اشیاء، وی اے ٹی اور تاجر کی تفصیلات نکال لیتا ہے۔',
+            ),
+            _FaqItem(
+              question: 'سعودی زکوٰۃ و ٹیکس کیو آر کوڈ کی تصدیق کیسے ہوتی ہے؟',
+              answer:
+                  'اسکینر سرکاری ZATCA Base64 TLV بارکوڈ کو فوری ڈی کوڈ کر کے ٹیکس نمبر اور 15% وی اے ٹی کی تصدیق کرتا ہے۔',
+            ),
+            _FaqItem(
+              question: 'ڈپلیکیٹ رسید اسکین ہونے پر کیا ہوتا ہے؟',
+              answer:
+                  'اگر رسید پہلے سے موجود ٹرانزیکشن سے مماثل ہو تو ڈپلیکیٹ ڈیفنس کارڈ ظاہر ہوتا ہے جہاں آپ تفصیلات شامل کر سکتے ہیں یا نئی انٹری بنا سکتے ہیں۔',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'Where is the 400 SAR monthly Iqama fee tracked?',
-          answer:
-              'The 400 SAR Iqama fee is tracked under the Government (OPEX-GOV) category as a dedicated sub-budget reserve, protecting your essential funds from being spent on general shopping.',
+        _FaqCategory(
+          title: 'ماہانہ بلز اور اقامہ ریزرو',
+          icon: Icons.receipt_long_rounded,
+          color: Color(0xFF3B82F6),
+          faqs: [
+            _FaqItem(
+              question: 'ماہانہ بلز (کرایہ، بجلی، فائبر) کیسے شامل کریں؟',
+              answer:
+                  'ڈیش بورڈ پر بلز کارڈ میں "بلز کا انتظام" پر ٹیپ کریں اور ماہانہ تاریخ مقرر کریں۔',
+            ),
+            _FaqItem(
+              question: '400 ریال ماہانہ اقامہ فیس کہاں ٹریک ہوتی ہے؟',
+              answer:
+                  '400 ریال اقامہ فیس سرکاری کیٹیگری (OPEX-GOV) کے تحت ایک مخصوص ریزرو کے طور پر رکھی جاتی ہے۔',
+            ),
+            _FaqItem(
+              question: 'بل کی ادائیگی کیسے درج کریں؟',
+              answer:
+                  'ڈیش بورڈ پر کسی بھی بل کے سامنے سبز بٹن دبا کر ادائیگی ریکارڈ کریں۔',
+            ),
+          ],
         ),
-        _FaqItem(
-          question: 'How do I mark a recurring bill as paid?',
-          answer:
-              'Tap the green "Pay" button directly on any pending bill in the Dashboard card to record payment and adjust your reserved funds.',
+        _FaqCategory(
+          title: 'اقساط کے منصوبے (تابی اور تمارا)',
+          icon: Icons.credit_card_rounded,
+          color: Color(0xFF8B5CF6),
+          faqs: [
+            _FaqItem(
+              question: 'بی این پی ایل اقساط کیسے کام کرتی ہیں؟',
+              answer:
+                  'اقساط پر خریداری درج کرتے وقت آپ بقیہ اقساط، تاریخیں اور ادائیگی کی پیش رفت ڈیش بورڈ پر دیکھ سکتے ہیں۔',
+            ),
+          ],
         ),
-      ],
-    ),
-    _FaqCategory(
-      title: 'BNPL Installment Plans',
-      icon: Icons.credit_card_rounded,
-      color: Color(0xFF8B5CF6),
-      faqs: [
-        _FaqItem(
-          question: 'How do Tabby and Tamara installment plans work?',
-          answer:
-              'When you log a BNPL purchase, you can view remaining installment payments, due dates, and total payoff progress directly on your dashboard card.',
+        _FaqCategory(
+          title: 'گھریلو اخراجات کی تقسیم',
+          icon: Icons.people_alt_rounded,
+          color: Color(0xFF10B981),
+          faqs: [
+            _FaqItem(
+              question: 'اخراجات کی دو طرفہ تقسیم کیسے کام کرتی ہے؟',
+              answer:
+                  'ہر خرچ پر آپ درج کر سکتے ہیں کہ کس نے ادا کیا (میں یا پارٹنر) اور کس کے لیے تھا (میرے لیے، پارٹنر کے لیے، یا دونوں کے لیے)۔ ایپ خالص واجب الادا رقم کا حساب لگاتی ہے۔',
+            ),
+            _FaqItem(
+              question: 'اپنے پارٹنر کو گھرانے میں کیسے مدعو کریں؟',
+              answer:
+                  'سیٹنگز میں جائیں اور اپنا دعوتی کوڈ کاپی کر کے پارٹنر کو بھیجیں۔',
+            ),
+          ],
         ),
-      ],
-    ),
-    _FaqCategory(
-      title: 'Household & 2D Partner Split',
-      icon: Icons.people_alt_rounded,
-      color: Color(0xFF10B981),
-      faqs: [
-        _FaqItem(
-          question: 'How does 2-Dimensional expense attribution work?',
-          answer:
-              'For every expense, you can track who paid (paid_by: me or partner) and who it was for (beneficiary: me, partner, or both). The app calculates the exact net settlement owed at the end of each cycle.',
-        ),
-        _FaqItem(
-          question: 'How do I invite my partner to my household?',
-          answer:
-              'Go to Settings -> Household & Membership and copy your unique 6-character Household Invite Code. Your partner can enter it upon signing up.',
-        ),
-      ],
-    ),
-  ];
+      ];
+    }
+
+    return const [
+      _FaqCategory(
+        title: 'Salary Cycle & Payday (27th)',
+        icon: Icons.calendar_month_rounded,
+        color: Color(0xFFF59E0B),
+        faqs: [
+          _FaqItem(
+            question: 'How does the salary cycle work in this app?',
+            answer:
+                'The budget cycle is automatically synced with the standard Saudi 27th payday. A monthly cycle starts on the 27th and concludes on the 26th of the following month, preventing mid-month budget misalignment.',
+          ),
+          _FaqItem(
+            question: 'What happens to unspent funds at the end of the cycle?',
+            answer:
+                'Any unspent discretionary funds automatically roll over into the next cycle as surplus carryover or can be credited towards household savings reserves.',
+          ),
+          _FaqItem(
+            question: 'How is the daily allowance pacing calculated?',
+            answer:
+                'Your remaining discretionary budget is divided by the exact number of days remaining until the 27th, providing a safe daily spending limit.',
+          ),
+        ],
+      ),
+      _FaqCategory(
+        title: 'Receipt & ZATCA Scanning',
+        icon: Icons.qr_code_scanner_rounded,
+        color: Color(0xFF00C896),
+        faqs: [
+          _FaqItem(
+            question: 'How do I scan printed paper receipts?',
+            answer:
+                'Tap the green camera scanner button. You can capture multiple receipt pages or pick an invoice image from your photo gallery. Our Gemini Vision model automatically extracts line items, VAT, and merchant details.',
+          ),
+          _FaqItem(
+            question: 'How does Saudi ZATCA QR code verification work?',
+            answer:
+                'Our scanner decodes official Saudi ZATCA Base64 TLV barcodes in real time to verify seller tax identification, invoice timestamps, VAT amounts, and total values.',
+          ),
+          _FaqItem(
+            question: 'What happens when a duplicate invoice is scanned?',
+            answer:
+                'If an invoice matches an existing transaction, you will see a Duplicate Defense card allowing you to Enrich the existing transaction, Log as a separate expense, or Discard.',
+          ),
+        ],
+      ),
+      _FaqCategory(
+        title: 'Recurring Bills & Iqama Reserves',
+        icon: Icons.receipt_long_rounded,
+        color: Color(0xFF3B82F6),
+        faqs: [
+          _FaqItem(
+            question: 'How do I add recurring bills (Rent, Utilities, Fiber)?',
+            answer:
+                'In the Dashboard Recurring Bills card, tap "Manage Bills" to toggle any sub-budget as recurring and configure its monthly due day.',
+          ),
+          _FaqItem(
+            question: 'Where is the 400 SAR monthly Iqama fee tracked?',
+            answer:
+                'The 400 SAR Iqama fee is tracked under the Government (OPEX-GOV) category as a dedicated sub-budget reserve, protecting your essential funds from being spent on general shopping.',
+          ),
+          _FaqItem(
+            question: 'How do I mark a recurring bill as paid?',
+            answer:
+                'Tap the green "Pay" button directly on any pending bill in the Dashboard card to record payment and adjust your reserved funds.',
+          ),
+        ],
+      ),
+      _FaqCategory(
+        title: 'BNPL Installment Plans',
+        icon: Icons.credit_card_rounded,
+        color: Color(0xFF8B5CF6),
+        faqs: [
+          _FaqItem(
+            question: 'How do Tabby and Tamara installment plans work?',
+            answer:
+                'When you log a BNPL purchase, you can view remaining installment payments, due dates, and total payoff progress directly on your dashboard card.',
+          ),
+        ],
+      ),
+      _FaqCategory(
+        title: 'Household & 2D Partner Split',
+        icon: Icons.people_alt_rounded,
+        color: Color(0xFF10B981),
+        faqs: [
+          _FaqItem(
+            question: 'How does 2-Dimensional expense attribution work?',
+            answer:
+                'For every expense, you can track who paid (paid_by: me or partner) and who it was for (beneficiary: me, partner, or both). The app calculates the exact net settlement owed at the end of each cycle.',
+          ),
+          _FaqItem(
+            question: 'How do I invite my partner to my household?',
+            answer:
+                'Go to Settings -> Household & Membership and copy your unique 6-character Household Invite Code. Your partner can enter it upon signing up.',
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<String> _getQuickChips(String lang) {
+    if (lang == 'ar') {
+      return [
+        'كيف تعمل دورة الرواتب في 27؟',
+        'كيف أضيف رسوم الإقامة 400 ريال؟',
+        'كيف أمسح رمز الزكاة والضريبة؟',
+        'كيف أقسم المصاريف مع الشريك؟',
+      ];
+    }
+    if (lang == 'ur') {
+      return [
+        '27 تاریخ کا تنخواہ سائیکل کیسے کام کرتا ہے؟',
+        '400 ریال اقامہ فیس کیسے شامل کریں؟',
+        'زکوٰۃ و ٹیکس کیو آر کوڈ کیسے اسکین کریں؟',
+        'پارٹنر کے ساتھ اخراجات کیسے تقسیم کریں؟',
+      ];
+    }
+    return [
+      'How does the 27th salary cycle work?',
+      'How to add 400 SAR Iqama fee?',
+      'How to scan a ZATCA QR code?',
+      'How do I split expenses with my partner?',
+    ];
+  }
 
   @override
   void initState() {
@@ -445,7 +685,8 @@ User: ${widget.userEmail ?? "N/A"}
 
   Widget _buildFaqTab() {
     final query = _faqQuery.toLowerCase();
-    final filteredCategories = _faqCategories.map((cat) {
+    final categories = _getFaqCategories(_selectedLanguage);
+    final filteredCategories = categories.map((cat) {
       final matchingFaqs = cat.faqs.where((f) {
         return f.question.toLowerCase().contains(query) ||
             f.answer.toLowerCase().contains(query) ||
@@ -492,7 +733,7 @@ User: ${widget.userEmail ?? "N/A"}
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Interactive Feature Walkthrough',
+                      context.tr('interactive_walkthrough'),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontWeight: FontWeight.bold,
@@ -501,7 +742,7 @@ User: ${widget.userEmail ?? "N/A"}
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Replay the 5-step visual guide to learn about scanners, bills, and salary cycles.',
+                      context.tr('interactive_walkthrough_desc'),
                       style: GoogleFonts.outfit(
                         color: context.textSecondary,
                         fontSize: 12,
@@ -522,8 +763,8 @@ User: ${widget.userEmail ?? "N/A"}
                   ),
                 ),
                 onPressed: () => UserGuideWalkthroughDialog.show(context),
-                child: const Text('Replay',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(context.tr('replay'),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -536,7 +777,7 @@ User: ${widget.userEmail ?? "N/A"}
           onChanged: (v) => setState(() => _faqQuery = v),
           style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14),
           decoration: InputDecoration(
-            hintText: 'Search help topics and guides...',
+            hintText: context.tr('search_help_hint'),
             hintStyle:
                 GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
             prefixIcon:
@@ -646,7 +887,7 @@ User: ${widget.userEmail ?? "N/A"}
                       color: Color(0xFF00C896), size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Direct Developer Support',
+                    context.tr('contact_developer'),
                     style: GoogleFonts.outfit(
                       color: context.textPrimary,
                       fontWeight: FontWeight.bold,
@@ -657,7 +898,7 @@ User: ${widget.userEmail ?? "N/A"}
               ),
               const SizedBox(height: 6),
               Text(
-                'Have a custom question, feature request, or encountered a defect? Reach out to the developer directly.',
+                context.tr('contact_dev_subtitle'),
                 style: GoogleFonts.outfit(
                   color: context.textSecondary,
                   fontSize: 12,
@@ -688,12 +929,7 @@ User: ${widget.userEmail ?? "N/A"}
   }
 
   Widget _buildAiChatTab() {
-    final quickChips = [
-      'How does the 27th salary cycle work?',
-      'How to add 400 SAR Iqama fee?',
-      'How to scan a ZATCA QR code?',
-      'How do I split expenses with my partner?',
-    ];
+    final quickChips = _getQuickChips(_selectedLanguage);
 
     return Column(
       children: [

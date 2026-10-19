@@ -727,13 +727,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
           // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
-          _buildSectionHeader('HOUSEHOLD & MEMBERSHIP'),
+          _buildSectionHeader(context.tr('household_membership_section')),
           const SizedBox(height: 6),
           Text(
-            'Manage your shared budget group, invite others with your code, or switch households.',
+            context.tr('household_membership_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -884,116 +884,146 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           _buildSectionHeader(context.tr('appearance_language')),
           const SizedBox(height: 6),
           Text(
-            'Customize your app theme and system language.',
+            context.tr('appearance_language_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
           _buildAppearanceAndLanguageCard(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 1. HARDWARE & APP PERMISSIONS ──
           _buildSectionHeader(context.tr('hardware_permissions')),
           const SizedBox(height: 6),
           Text(
-            'Check and manage camera and microphone access for expense scanning and AI voice input.',
+            context.tr('hardware_permissions_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
-
-          // Camera Permission Card
-          _buildPermissionCard(
-            icon: Icons.camera_alt_outlined,
-            title: context.tr('camera_access'),
-            subtitle: context.tr('camera_access_desc'),
-            status: _cameraStatus,
-            onRequest: _requestCameraPermission,
-            onOpenSettings: openAppSettings,
-            testAction: _cameraStatus.isGranted
-                ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
-                    )
-                : null,
-            testLabel: context.tr('test_camera'),
-          ),
           const SizedBox(height: 10),
-
-          // Microphone Permission Card
-          _buildPermissionCard(
-            icon: Icons.mic_none_outlined,
-            title: context.tr('microphone_access'),
-            subtitle: context.tr('microphone_access_desc'),
-            status: _microphoneStatus,
-            onRequest: _requestMicrophonePermission,
-            onOpenSettings: openAppSettings,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildCompactPermissionRow(
+                  icon: Icons.camera_alt_outlined,
+                  title: context.tr('camera_access'),
+                  subtitle: context.tr('camera_access_desc'),
+                  status: _cameraStatus,
+                  onRequest: _requestCameraPermission,
+                  onOpenSettings: openAppSettings,
+                  testAction: _cameraStatus.isGranted
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
+                          )
+                      : null,
+                  testLabel: context.tr('test_camera'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildCompactPermissionRow(
+                  icon: Icons.mic_none_outlined,
+                  title: context.tr('microphone_access'),
+                  subtitle: context.tr('microphone_access_desc'),
+                  status: _microphoneStatus,
+                  onRequest: _requestMicrophonePermission,
+                  onOpenSettings: openAppSettings,
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildCompactPermissionRow(
+                  icon: Icons.notifications_active_outlined,
+                  title: context.tr('notifications'),
+                  subtitle: context.tr('notifications_desc'),
+                  status: _notificationStatus,
+                  onRequest: () async {
+                    final status = await Permission.notification.request();
+                    setState(() => _notificationStatus = status);
+                  },
+                  onOpenSettings: openAppSettings,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-
-          // Notification Permission Card
-          _buildPermissionCard(
-            icon: Icons.notifications_active_outlined,
-            title: context.tr('notifications'),
-            subtitle: context.tr('notifications_desc'),
-            status: _notificationStatus,
-            onRequest: () async {
-              final status = await Permission.notification.request();
-              setState(() => _notificationStatus = status);
-            },
-            onOpenSettings: openAppSettings,
-          ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 2. ACTIVE INPUT CHANNELS ──
           _buildSectionHeader(context.tr('expense_ingestion_channels')),
           const SizedBox(height: 10),
-          _buildChannelTile(
-            icon: Icons.chat_bubble_outline,
-            title: context.tr('ai_conversational_chat'),
-            subtitle: context.tr('ai_chat_desc'),
-            value: _chatEnabled,
-            onChanged: (val) {
-              setState(() => _chatEnabled = val);
-              _savePreference('channel_chat_enabled', val);
-            },
+          Container(
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildChannelTile(
+                  icon: Icons.chat_bubble_outline,
+                  title: context.tr('ai_conversational_chat'),
+                  subtitle: context.tr('ai_chat_desc'),
+                  value: _chatEnabled,
+                  onChanged: (val) {
+                    setState(() => _chatEnabled = val);
+                    _savePreference('channel_chat_enabled', val);
+                  },
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildChannelTile(
+                  icon: Icons.document_scanner_outlined,
+                  title: context.tr('camera_receipt_scanner'),
+                  subtitle: context.tr('camera_scanner_desc'),
+                  value: _scannerEnabled,
+                  onChanged: (val) {
+                    setState(() => _scannerEnabled = val);
+                    _savePreference('channel_scanner_enabled', val);
+                  },
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _buildChannelTile(
-            icon: Icons.document_scanner_outlined,
-            title: context.tr('camera_receipt_scanner'),
-            subtitle: context.tr('camera_scanner_desc'),
-            value: _scannerEnabled,
-            onChanged: (val) {
-              setState(() => _scannerEnabled = val);
-              _savePreference('channel_scanner_enabled', val);
-            },
-          ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 3. DUPLICATE RESOLUTION POLICY ──
           _buildSectionHeader(context.tr('duplicate_resolution')),
           const SizedBox(height: 6),
           Text(
-            'Choose how the system handles transactions when multiple methods are used.',
+            context.tr('duplicate_policy_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
-          _buildPolicyTile(
-            policy: 'auto_enrich',
-            title: context.tr('auto_enrich'),
-            description: context.tr('auto_enrich_desc'),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildPolicyTile(
+                  policy: 'auto_enrich',
+                  title: context.tr('auto_enrich'),
+                  description: context.tr('auto_enrich_desc'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildPolicyTile(
+                  policy: 'prompt',
+                  title: context.tr('prompt_on_conflict'),
+                  description: context.tr('prompt_desc'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildPolicyTile(
+                  policy: 'strict',
+                  title: context.tr('strict_isolation'),
+                  description: context.tr('strict_desc'),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          _buildPolicyTile(
-            policy: 'prompt',
-            title: context.tr('prompt_on_conflict'),
-            description: context.tr('prompt_desc'),
-          ),
-          const SizedBox(height: 8),
-          _buildPolicyTile(
-            policy: 'strict',
-            title: context.tr('strict_isolation'),
-            description: context.tr('strict_desc'),
-          ),
+          const SizedBox(height: 24),
+
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
           if (_householdId != null && _members.length > 1) ...[
             _buildSectionHeader(context.tr('partner_settlement')),
@@ -1013,7 +1043,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 );
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
           ],
 
           // ── DATA EXPORT & OFFLINE QUEUE ──
@@ -1023,7 +1053,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.cardBg,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.borderColor),
             ),
             child: Column(
@@ -1037,8 +1067,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Export Monthly Report', style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text('Generate standard CSV with Date, Merchant, Category, and Items', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                          Text(context.tr('export_monthly_report'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text(context.tr('export_csv_desc'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -1069,7 +1099,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           );
                         }
                       },
-                      child: const Text('Export CSV', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: Text(context.tr('export_csv_btn'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1081,22 +1111,30 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   builder: (ctx, count, _) {
                     return Row(
                       children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : const Color(0xFF00C896), size: 20),
+                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : context.electricTeal, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Offline SQLite Queue', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                              Text(count > 0 ? '$count transaction(s) pending sync' : 'All transactions synchronized', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                              Text(context.tr('offline_sqlite_queue'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(
+                                count > 0
+                                    ? context.tr('pending_sync_count').replaceAll('{count}', count.toString())
+                                    : context.tr('all_synced'),
+                                style: TextStyle(color: context.textSecondary, fontSize: 11),
+                              ),
                             ],
                           ),
                         ),
                         if (count > 0)
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: context.electricTeal,
+                              foregroundColor: context.isDark ? Colors.black : Colors.white,
+                            ),
                             onPressed: () => OfflineSyncService.instance.flushQueue(),
-                            child: const Text('Sync Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                       ],
                     );
@@ -1105,22 +1143,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── HELP & SUPPORT ──
-          _buildSectionHeader('HELP & SUPPORT'),
+          _buildSectionHeader(context.tr('help_support').toUpperCase()),
           const SizedBox(height: 6),
           Text(
-            'Explore user guides, interactive walkthroughs, ask our AI assistant, or email the developer.',
+            context.tr('help_support_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Card(
             color: context.cardBg,
             elevation: 0,
             margin: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               side: BorderSide(color: context.borderColor),
             ),
             child: Column(
@@ -1135,11 +1173,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     child: const Icon(Icons.menu_book_rounded, color: Color(0xFF00C896), size: 20),
                   ),
                   title: Text(
-                    'App Guide & Tutorial',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('app_guide_tutorial'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Replay the 5-step interactive feature walkthrough',
+                    context.tr('app_guide_desc'),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1156,11 +1194,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     child: const Icon(Icons.support_agent_rounded, color: Color(0xFF3B82F6), size: 20),
                   ),
                   title: Text(
-                    'Help Center & AI Support',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('help_center_ai'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Searchable FAQs, salary cycle guide & AI chatbot',
+                    context.tr('help_center_desc'),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1187,11 +1225,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     child: const Icon(Icons.mail_outline_rounded, color: Color(0xFFF59E0B), size: 20),
                   ),
                   title: Text(
-                    'Contact Developer',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    context.tr('contact_developer'),
+                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   subtitle: Text(
-                    'Email fmscoinfo@fmsco.com.sa for feedback or bug reports',
+                    context.tr('contact_dev_subtitle'),
                     style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
@@ -1199,8 +1237,8 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
                     AppSnackBar.showSuccess(
                       context,
-                      'Developer email copied: fmscoinfo@fmsco.com.sa',
-                      title: 'Copied',
+                      context.tr('developer_email_copied').replaceAll('{email}', 'fmscoinfo@fmsco.com.sa'),
+                      title: context.tr('copied'),
                       icon: Icons.copy_rounded,
                     );
                   },
@@ -1208,16 +1246,16 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 4. HOUSEHOLD & ACCOUNT ──
-          _buildSectionHeader('HOUSEHOLD & ACCOUNT'),
+          _buildSectionHeader(context.tr('household_account_section')),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.cardBg,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.borderColor),
             ),
             child: Column(
@@ -1231,7 +1269,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       Expanded(
                         child: Text(
                           _userEmail!,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ),
                     ],
@@ -1254,14 +1292,21 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                           Clipboard.setData(ClipboardData(text: _householdId!));
                           AppSnackBar.showSuccess(
                             context,
-                            'Household ID copied to clipboard',
-                            title: 'Copied',
+                            context.tr('household_id_copied'),
+                            title: context.tr('copied'),
                             icon: Icons.copy_rounded,
                           );
                         },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text('Copy', style: TextStyle(color: Color(0xFF00C896), fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Text(
+                            context.tr('copy_btn'),
+                            style: TextStyle(
+                              color: context.electricTeal,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -1278,14 +1323,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.logout, size: 18),
-                    label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: Text(context.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () => supabase.auth.signOut(),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -1395,10 +1440,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: context.electricTeal.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: Color(0xFF00C896), size: 20),
+                child: Icon(Icons.language_rounded, color: context.electricTeal, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1529,7 +1574,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     );
   }
 
-  Widget _buildPermissionCard({
+  Widget _buildCompactPermissionRow({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -1540,136 +1585,103 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     String? testLabel,
   }) {
     final isGranted = status.isGranted;
+    final activeColor = context.electricTeal;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.3) : context.borderColor,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  color: isGranted ? const Color(0xFF00C896) : Colors.orange,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isGranted ? activeColor.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: isGranted ? activeColor : Colors.orange,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary),
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 11, color: context.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isGranted ? const Color(0xFF00C896).withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isGranted ? const Color(0xFF00C896) : Colors.orange,
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isGranted ? Icons.check_circle : Icons.warning_amber_rounded,
-                      size: 12,
-                      color: isGranted ? const Color(0xFF00C896) : Colors.orange,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isGranted ? 'GRANTED' : 'NOT GRANTED',
-                      style: TextStyle(
-                        color: isGranted ? const Color(0xFF00C896) : Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isGranted ? activeColor.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        isGranted ? context.tr('permission_granted') : context.tr('permission_not_granted'),
+                        style: TextStyle(
+                          color: isGranted ? activeColor : Colors.orange,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (!isGranted) ...[
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: const Icon(Icons.lock_open, size: 15),
-                    label: const Text('Grant Access', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    onPressed: onRequest,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.isDarkMode ? const Color(0xFF58A6FF) : const Color(0xFF0969DA),
-                    side: BorderSide(
-                      color: context.isDarkMode
-                          ? const Color(0xFF1F6FEB).withValues(alpha: 0.5)
-                          : const Color(0xFF0969DA).withValues(alpha: 0.4),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.settings_outlined, size: 15),
-                  label: const Text('Open App Settings', style: TextStyle(fontSize: 12)),
-                  onPressed: onOpenSettings,
-                ),
-              ),
-              if (testAction != null) ...[
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.textPrimary,
-                    side: BorderSide(color: context.borderColor),
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.visibility, size: 14),
-                  label: Text(testLabel ?? 'Test', style: const TextStyle(fontSize: 11)),
-                  onPressed: testAction,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 11, color: context.textSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ],
+            ),
           ),
+          const SizedBox(width: 8),
+          if (!isGranted)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: activeColor,
+                foregroundColor: context.isDark ? Colors.black : Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onRequest,
+              child: Text(context.tr('grant_access'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            )
+          else if (testAction != null)
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.textPrimary,
+                side: BorderSide(color: context.borderColor),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: testAction,
+              child: Text(testLabel ?? 'Test', style: const TextStyle(fontSize: 11)),
+            )
+          else
+            IconButton(
+              icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
+              tooltip: context.tr('open_app_settings'),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: onOpenSettings,
+            ),
         ],
       ),
     );
@@ -1682,32 +1694,27 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.borderColor),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: value ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.chipBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: value ? const Color(0xFF00C896) : context.textSecondary, size: 20),
+            child: Icon(icon, color: value ? const Color(0xFF00C896) : context.textSecondary, size: 18),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: context.textSecondary)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: context.textSecondary)),
               ],
             ),
           ),
@@ -1732,26 +1739,17 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         setState(() => _dedupPolicy = policy);
         _savePreference('dedup_policy', policy);
       },
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.cardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
               color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1761,10 +1759,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      color: isSelected ? context.textPrimary : context.textSecondary,
+                      color: isSelected ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF0F766E)) : context.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     description,
                     style: TextStyle(fontSize: 11, color: context.textSecondary, height: 1.3),

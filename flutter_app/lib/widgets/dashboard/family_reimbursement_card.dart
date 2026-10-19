@@ -107,7 +107,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     final isSettled = owed <= 0.01;
 
     final badgeColor = isSettled ? const Color(0xFF00C896) : const Color(0xFFE5A93C);
-    final badgeText = isSettled ? 'All Settled' : 'Reimbursement Owed';
+    final badgeText = isSettled ? context.tr('all_settled') : context.tr('reimbursement_owed');
     final badgeIcon = isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded;
 
     return Container(
@@ -208,7 +208,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           // Main Balance Display
           if (!isSettled) ...[
             Text(
-              'Husband owes Wife:',
+              '${context.tr('husband_owes_wife')}:',
               style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 2),
@@ -217,7 +217,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Text(
-                  'SAR ${owed.toStringAsFixed(2)}',
+                  '${context.tr('sar')} ${owed.toStringAsFixed(2)}',
                   style: GoogleFonts.outfit(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
@@ -227,7 +227,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Wife advanced household expenses from personal funds',
+                    context.tr('wife_advanced_household_funds'),
                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
                 ),
@@ -241,7 +241,7 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'All Nafaqah expenses are settled! Wife has no pending household reimbursements.',
+                    context.tr('all_nafaqah_settled_desc'),
                     style: TextStyle(color: context.textPrimary, fontSize: 12),
                   ),
                 ),
@@ -258,19 +258,19 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
               _buildPill(
                 context,
                 icon: Icons.child_care_rounded,
-                label: 'Children: SAR ${summary.spentOnChildren.toStringAsFixed(2)}',
+                label: '${context.tr('nafaqah_children')}: ${context.tr('sar')} ${summary.spentOnChildren.toStringAsFixed(2)}',
                 color: const Color(0xFF38BDF8),
               ),
               _buildPill(
                 context,
                 icon: Icons.favorite_border_rounded,
-                label: 'Wife: SAR ${summary.spentOnWife.toStringAsFixed(2)}',
+                label: '${context.tr('nafaqah_wife')}: ${context.tr('sar')} ${summary.spentOnWife.toStringAsFixed(2)}',
                 color: const Color(0xFFEC4899),
               ),
               _buildPill(
                 context,
                 icon: Icons.home_outlined,
-                label: 'Household: SAR ${summary.familyGeneralTotal.toStringAsFixed(2)}',
+                label: '${context.tr('nafaqah_household')}: ${context.tr('sar')} ${summary.familyGeneralTotal.toStringAsFixed(2)}',
                 color: const Color(0xFF94A3B8),
               ),
             ],
@@ -289,9 +289,9 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text(
-                  'Reimburse Wife',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                label: Text(
+                  context.tr('reimburse_wife'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
@@ -438,7 +438,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Settle Wife Reimbursement',
+              context.tr('settle_wife_reimbursement'),
               style: GoogleFonts.outfit(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -447,7 +447,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Record full or partial reimbursement for advanced household expenses.',
+              context.tr('settle_wife_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 16),
@@ -457,7 +457,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               spacing: 8,
               children: [
                 ChoiceChip(
-                  label: Text('Full (SAR ${widget.totalOwed.toStringAsFixed(2)})'),
+                  label: Text('${context.tr('full')} (${context.tr('sar')} ${widget.totalOwed.toStringAsFixed(2)})'),
                   selected: _amountCtrl.text == widget.totalOwed.toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -468,7 +468,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                   },
                 ),
                 ChoiceChip(
-                  label: Text('Half (SAR ${(widget.totalOwed / 2).toStringAsFixed(2)})'),
+                  label: Text('${context.tr('half')} (${context.tr('sar')} ${(widget.totalOwed / 2).toStringAsFixed(2)})'),
                   selected: _amountCtrl.text == (widget.totalOwed / 2).toStringAsFixed(2),
                   onSelected: (val) {
                     if (val) {
@@ -487,7 +487,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Payment Amount (SAR)',
+                labelText: context.tr('payment_amount_sar'),
                 prefixIcon: const Icon(Icons.attach_money_rounded),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -496,17 +496,17 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
 
             // Payment Method Selector
             Text(
-              'Payment Method',
+              context.tr('payment_method'),
               style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildMethodChip('stc_pay', 'STC Pay', Icons.phone_android_rounded),
+                _buildMethodChip('stc_pay', context.tr('stc_pay_label'), Icons.phone_android_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('bank_transfer', 'Bank', Icons.account_balance_rounded),
+                _buildMethodChip('bank_transfer', context.tr('bank_label'), Icons.account_balance_rounded),
                 const SizedBox(width: 8),
-                _buildMethodChip('cash', 'Cash', Icons.payments_rounded),
+                _buildMethodChip('cash', context.tr('cash_label'), Icons.payments_rounded),
               ],
             ),
             const SizedBox(height: 16),
@@ -518,17 +518,16 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copy STC Pay Note', style: TextStyle(fontSize: 12)),
+              label: Text(context.tr('copy_stc_pay_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
                 final amt = _amountCtrl.text;
-                await Clipboard.setData(
-                  ClipboardData(text: 'Nafaqah Reimbursement - SAR $amt'),
-                );
+                final note = context.tr('nafaqah_reimbursement_note').replaceAll('{amount}', amt);
+                await Clipboard.setData(ClipboardData(text: note));
                 if (context.mounted) {
                   AppSnackBar.showSuccess(
                     context,
-                    'Copied: "Nafaqah Reimbursement - SAR $amt"',
-                    title: 'Copied Note',
+                    context.tr('copied_amount_note').replaceAll('{note}', note),
+                    title: context.tr('copied_note'),
                   );
                 }
               },
@@ -552,9 +551,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
-                label: const Text(
-                  'Record Settlement Payment',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                label: Text(
+                  context.tr('record_settlement_payment'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 onPressed: _isSubmitting ? null : _submitSettlement,
               ),
