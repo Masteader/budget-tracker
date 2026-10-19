@@ -205,6 +205,28 @@ if not WEBHOOK_SECRET:
     )
 
 
+def _log_security_configuration() -> None:
+    """Surface dangerous configuration at startup (never logs secret values)."""
+    from supabase_client import describe_supabase_key
+
+    key_info = describe_supabase_key()
+    for env_var, role in key_info["rejected"]:
+        logger.critical(
+            "%s holds a non-privileged Supabase key (role '%s') and is ignored. "
+            "The service needs a service_role JWT or an sb_secret_ key.", env_var, role,
+        )
+    if not key_info["key"]:
+        logger.critical("No privileged Supabase key configured: all database-backed API routes will fail closed.")
+    if not os.environ.get("SUPABASE_JWT_SECRET", "").strip():
+        logger.warning(
+            "SUPABASE_JWT_SECRET is empty: HS256 user tokens are rejected and only ES256 tokens "
+            "verifiable via the project's JWKS are accepted."
+        )
+
+
+_log_security_configuration()
+
+
 # ─── Public Landing & Health Routes ──────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
 async def root_landing_page():

@@ -20,20 +20,72 @@ logger = logging.getLogger(__name__)
 # ─── Singleton client ─────────────────────────────────────────────────────────
 _client: Optional[Client] = None
 
+_KEY_ENV_VARS = ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY")
+
+
+def _classify_supabase_key(key: str) -> str:
+    """
+    Classify a Supabase API key WITHOUT verifying or logging it.
+
+    Returns one of: 'secret' (opaque sb_secret_ key), 'service_role', 'anon',
+    'authenticated', 'publishable', 'unknown-jwt', 'unknown'. Only 'secret' and
+    'service_role' grant the privileges this server-side service is designed for.
+    """
+    key = (key or "").strip()
+    if key.startswith("sb_secret_"):
+        return "secret"
+    if key.startswith("sb_publishable_"):
+        return "publishable"
+    parts = key.split(".")
+    if len(parts) == 3 and parts[0].startswith("eyJ"):
+        try:
+            import base64
+            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")))
+            role = str(payload.get("role") or "")
+            return role if role in ("service_role", "anon", "authenticated") else "unknown-jwt"
+        except Exception:
+            return "unknown-jwt"
+    return "unknown"
+
+
+def describe_supabase_key() -> dict:
+    """
+    Pick the privileged key to use. SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SECRET_KEY are both
+    accepted, but a key is only used when it is verifiably privileged. Previously
+    SUPABASE_SECRET_KEY always won, so an anon JWT placed there silently downgraded every
+    query to the anon role (RLS denies → all household checks 403, quota RPC denied →
+    quota checks skipped, writes failed into local JSON fallbacks).
+
+    Returns {"env_var", "role", "key", "rejected": [(env_var, role), ...]}; never log "key".
+    """
+    rejected = []
+    for env_var in _KEY_ENV_VARS:
+        value = (os.environ.get(env_var) or "").strip()
+        if not value:
+            continue
+        role = _classify_supabase_key(value)
+        if role in ("secret", "service_role"):
+            return {"env_var": env_var, "role": role, "key": value, "rejected": rejected}
+        rejected.append((env_var, role))
+    return {"env_var": None, "role": None, "key": None, "rejected": rejected}
+
 
 def get_client() -> Client:
-    """Return (or lazily create) the Supabase service-role client."""
+    """Return (or lazily create) the Supabase service-role client. Fails closed on a non-privileged key."""
     global _client
     if _client is None:
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        if not url or not key:
+        url = (os.environ.get("SUPABASE_URL") or "").strip()
+        info = describe_supabase_key()
+        if not url or not info["key"]:
+            rejected = ", ".join(f"{var} has role '{role}'" for var, role in info["rejected"])
             raise RuntimeError(
-                "Missing SUPABASE_URL or SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in environment. "
-                "Please configure them in your server Environment Variables."
+                "Supabase is not configured with a privileged key. Set SUPABASE_URL and "
+                "SUPABASE_SERVICE_ROLE_KEY (service_role JWT) or SUPABASE_SECRET_KEY (sb_secret_...). "
+                + (f"Rejected: {rejected}." if rejected else "No key found.")
             )
-        _client = create_client(url, key)
-        logger.info("Supabase client initialised (secret/service role).")
+        _client = create_client(url, info["key"])
+        logger.info("Supabase client initialised with %s (%s).", info["env_var"], info["role"])
     return _client
 
 
@@ -755,8 +807,7 @@ HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "househ
 def is_supabase_configured() -> bool:
     """Return True if Supabase credentials are configured in environment."""
     url = (os.environ.get("SUPABASE_URL") or "").strip()
-    key = (os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-    return bool(url and key)
+    return bool(url and describe_supabase_key()["key"])
 
 
 def create_household_role_invite(
