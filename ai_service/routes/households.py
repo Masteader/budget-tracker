@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from auth import verify_household_access
+from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
 from models import (
     PaydayUpdateRequest,
@@ -78,7 +78,7 @@ async def get_household_payday_endpoint(
 async def update_household_payday_endpoint(
     household_id: str,
     payload: PaydayUpdateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -117,7 +117,7 @@ async def get_household_income_endpoint(
 async def update_household_income_endpoint(
     household_id: str,
     payload: HouseholdIncomeRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -156,7 +156,7 @@ async def get_household_rollover_rule_endpoint(
 async def update_household_rollover_rule_endpoint(
     household_id: str,
     payload: RolloverRuleUpdateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -194,7 +194,7 @@ async def get_household_savings_summary_endpoint(
 async def create_household_role_invite_endpoint(
     household_id: str,
     payload: HouseholdInviteCreateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -210,16 +210,48 @@ async def create_household_role_invite_endpoint(
         raise safe_error_response(exc, public_message="Failed to create invite.")
 
 
+from rate_limiter import default_rate_limiter
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP safely from rightmost X-Forwarded-For hop or client host."""
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
 @router.get(
     "/households/invites/{invite_code}",
     tags=["households"],
     summary="Inspect invite code metadata and assigned role.",
 )
-async def inspect_household_role_invite_endpoint(invite_code: str):
+async def inspect_household_role_invite_endpoint(invite_code: str, request: Request):
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
+
+    # Rate-limit invite inspection by client IP (rightmost X-Forwarded-For hop)
+    client_ip = get_client_ip(request)
+    await default_rate_limiter.check_rate_limit(f"inspect_invite:{client_ip}", max_requests=20, window_seconds=60)
+
     try:
-        return await asyncio.to_thread(inspect_household_role_invite, invite_code)
+        raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)
+        # Return minimal safe public metadata: omit household_id, created_by
+        is_valid = raw.get("is_valid", False)
+        return {
+            "invite_code": raw.get("invite_code", invite_code.strip().upper()),
+            "role": raw.get("role", "peer"),
+            "is_valid": is_valid,
+            "expires_at": raw.get("expires_at"),
+            "target_member_name": raw.get("target_member_name"),
+            "target_member_id": raw.get("target_member_id") if is_valid else None,
+        }
+    except HTTPException:
+        raise
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to inspect invite.")
 
@@ -231,14 +263,27 @@ async def inspect_household_role_invite_endpoint(invite_code: str):
 )
 async def claim_household_role_invite_endpoint(
     invite_code: str,
-    payload: HouseholdProfileClaimRequest,
+    request: Request,
+    payload: Optional[HouseholdProfileClaimRequest] = None,
 ):
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
+    
+    # Must be authenticated with Supabase JWT; user_id is extracted from token, never request body
+    user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(claim_household_role_invite, invite_code, payload.user_id)
+        res = await asyncio.to_thread(claim_household_role_invite, invite_code, user_id)
+        if res.get("status") != "success":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=res.get("error", "Failed to claim invite code."),
+            )
+        return res
+    except HTTPException:
+        raise
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to claim invite.")
+
 
 
 @router.post(
@@ -396,7 +441,7 @@ async def get_household_categories_endpoint(
 async def toggle_category_endpoint(
     household_id: str,
     req: CategoryToggleRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -420,7 +465,7 @@ async def toggle_category_endpoint(
 async def create_custom_category_endpoint(
     household_id: str,
     req: CustomCategoryCreateRequest,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")

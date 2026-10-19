@@ -18,11 +18,13 @@ import '../home/dashboard_screen.dart';
 class HouseholdScreen extends StatefulWidget {
   final ApiService? apiService;
   final WidgetBuilder? destinationBuilder;
+  final Future<Map<String, dynamic>> Function(String code)? joinHandler;
 
   const HouseholdScreen({
     super.key,
     this.apiService,
     this.destinationBuilder,
+    this.joinHandler,
   });
 
   @override
@@ -56,7 +58,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   void _onJoinCodeChanged() {
     final code = _joinCodeCtrl.text.trim().toUpperCase();
-    if (code.length == 8) {
+    if (code.length >= 8 && code.length <= 16) {
       _inspectInvite(code);
     } else if (_inspectedInvite != null) {
       setState(() => _inspectedInvite = null);
@@ -87,25 +89,14 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     setState(() => _loading = true);
     try {
       Map<String, dynamic> hh;
-      try {
-        final res = await supabase.rpc(
-          'create_household_and_claim',
-          params: {'p_name': name},
-        );
-        hh = Map<String, dynamic>.from(res as Map);
-      } catch (_) {
-        final uid = supabase.auth.currentUser!.id;
-        final res = await supabase
-            .from('households')
-            .insert({'name': name})
-            .select()
-            .single();
-        hh = res;
-        await supabase
-            .from('users')
-            .update({'household_id': hh['id'], 'role': 'admin'})
-            .eq('id', uid);
+      final res = await supabase.rpc(
+        'create_household_and_claim',
+        params: {'p_name': name},
+      );
+      if (res is Map && res['error'] != null) {
+        throw Exception(res['error']);
       }
+      hh = Map<String, dynamic>.from(res as Map);
       final householdId = hh['id'] as String;
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
@@ -131,14 +122,13 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   Future<void> _joinHousehold() async {
     final code = _joinCodeCtrl.text.trim().toUpperCase();
-    if (code.length != 8) {
-      _showError('Invite code must be 8 characters.');
+    if (code.length < 8 || code.length > 16) {
+      _showError('Invite code must be between 8 and 16 characters.');
       return;
     }
     setState(() => _loading = true);
     try {
       final invite = _inspectedInvite ?? await _api.inspectInviteCode(code);
-      final confirmedRole = invite.role;
       final targetMemberId = invite.targetMemberId;
       final targetMemberName = invite.targetMemberName;
       final uid = _currentUserId;
@@ -149,35 +139,18 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         } catch (_) {}
       }
 
-      Map<String, dynamic> hh;
-      try {
+      final Map<String, dynamic> hh;
+      if (widget.joinHandler != null) {
+        hh = await widget.joinHandler!(code);
+      } else {
         final res = await supabase.rpc(
           'join_household_by_code',
           params: {'p_invite_code': code},
         );
-        hh = Map<String, dynamic>.from(res as Map);
-      } catch (_) {
-        try {
-          final res = await supabase
-              .from('households')
-              .select()
-              .eq('invite_code', code)
-              .single();
-          hh = res;
-          await supabase
-              .from('users')
-              .update({
-                'household_id': hh['id'],
-                'role': 'member',
-                'financial_role': confirmedRole,
-              })
-              .eq('id', uid);
-        } catch (_) {
-          hh = {
-            'id': invite.householdId.isNotEmpty ? invite.householdId : 'hh_default',
-            'name': 'Household',
-          };
+        if (res is Map && res['error'] != null) {
+          throw Exception(res['error']);
         }
+        hh = Map<String, dynamic>.from(res as Map);
       }
       final householdId = hh['id'] as String;
       if (mounted) {
@@ -344,9 +317,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                         TextField(
                           controller: _joinCodeCtrl,
                           textCapitalization: TextCapitalization.characters,
-                          maxLength: 8,
+                          maxLength: 16,
                           decoration: const InputDecoration(
-                            hintText: '8-character invite code',
+                            hintText: '8 to 16 character invite code',
                             prefixIcon: Icon(Icons.qr_code_outlined),
                           ),
                         ),

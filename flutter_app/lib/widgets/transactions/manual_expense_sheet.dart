@@ -237,18 +237,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         ],
       });
 
-      if (_selectedAccountId != null && _selectedAccountId!.isNotEmpty) {
-        try {
-          final accRes = await supabase.from('accounts').select('balance').eq('id', _selectedAccountId!).maybeSingle();
-          if (accRes != null && accRes['balance'] != null) {
-            final curBal = (accRes['balance'] as num).toDouble();
-            await supabase.from('accounts').update({
-              'balance': curBal - amount,
-              'updated_at': DateTime.now().toIso8601String(),
-            }).eq('id', _selectedAccountId!);
-          }
-        } catch (_) {}
-      }
+
 
       if (mounted) {
         context.read<TransactionProvider>().fetchTransactions();

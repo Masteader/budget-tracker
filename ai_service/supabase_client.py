@@ -650,11 +650,29 @@ def set_household_rollover_rule(household_id: str, rollover_rule: str) -> str:
 def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: str) -> float:
     """
     Sweeps unspent positive cycle surplus into the household's accumulated savings pool.
+    Updates Supabase households table and syncs local cache.
     """
     if not household_id or surplus <= 0:
         return 0.0
 
     accumulated = 0.0
+    # 1. Update Supabase
+    try:
+        client = get_client()
+        res = client.table("households").select("accumulated_savings").eq("id", household_id).maybe_single().execute()
+        current_savings = 0.0
+        if res.data and res.data.get("accumulated_savings") is not None:
+            current_savings = float(res.data["accumulated_savings"])
+        accumulated = round(current_savings + float(surplus), 2)
+        client.table("households").update({
+            "accumulated_savings": accumulated,
+            "last_rollover_surplus": round(float(surplus), 2),
+            "last_rollover_cycle": cycle_key,
+        }).eq("id", household_id).execute()
+    except Exception as e:
+        logger.info(f"Supabase update of accumulated_savings skipped: {e}")
+
+    # 2. Update local fallback cache
     try:
         os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
         settings = {}
@@ -664,7 +682,8 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
         if household_id not in settings:
             settings[household_id] = {}
 
-        accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
+        if accumulated == 0.0:
+            accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
         settings[household_id]["accumulated_savings"] = round(accumulated, 2)
         settings[household_id]["last_rollover_surplus"] = round(surplus, 2)
         settings[household_id]["last_rollover_cycle"] = cycle_key
@@ -680,11 +699,31 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
 def get_household_savings_summary(household_id: str) -> dict:
     """
     Returns accumulated savings surplus and configured rollover rule.
+    Queries Supabase first, falls back to local cache.
     """
     rule = get_household_rollover_rule(household_id)
     accumulated = 0.0
     last_surplus = 0.0
     last_cycle = None
+
+    try:
+        client = get_client()
+        res = client.table("households").select("accumulated_savings, last_rollover_surplus, last_rollover_cycle").eq("id", household_id).maybe_single().execute()
+        if res.data:
+            if res.data.get("accumulated_savings") is not None:
+                accumulated = float(res.data["accumulated_savings"])
+            if res.data.get("last_rollover_surplus") is not None:
+                last_surplus = float(res.data["last_rollover_surplus"])
+            last_cycle = res.data.get("last_rollover_cycle")
+            return {
+                "household_id": household_id,
+                "rollover_rule": rule,
+                "accumulated_savings": round(accumulated, 2),
+                "last_rollover_surplus": round(last_surplus, 2),
+                "last_rollover_cycle": last_cycle,
+            }
+    except Exception:
+        pass
 
     try:
         if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
@@ -713,20 +752,27 @@ def get_household_savings_summary(household_id: str) -> dict:
 HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "household_invites.json")
 
 
+def is_supabase_configured() -> bool:
+    """Return True if Supabase credentials are configured in environment."""
+    url = (os.environ.get("SUPABASE_URL") or "").strip()
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    return bool(url and key)
+
+
 def create_household_role_invite(
     household_id: str,
     role: str,
     target_member_id: Optional[str] = None,
 ) -> dict:
     """
-    Creates an 8-character invite code for a specific role ('spouse', 'peer', 'family_member').
+    Creates a 16-character invite code for a specific role ('spouse', 'peer', 'family_member').
     Optionally binds the invite code to a pre-created manual member (target_member_id).
-    Persists to Supabase household_invites table and caches in household_invites.json.
+    Persists to Supabase household_invites table when configured, with JSON cache fallback only when offline.
     """
     import secrets
     from datetime import datetime, timezone, timedelta
 
-    code = secrets.token_hex(4).upper()
+    code = secrets.token_hex(8).upper()
     expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     norm_role = role if role in ("spouse", "peer", "family_member", "dependent") else "peer"
 
@@ -739,7 +785,12 @@ def create_household_role_invite(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # 1. Update local cache
+    if is_supabase_configured():
+        client = get_client()
+        client.table("household_invites").insert(invite_data).execute()
+        return invite_data
+
+    # Local file fallback ONLY when Supabase is not configured
     try:
         os.makedirs(os.path.dirname(HOUSEHOLD_INVITES_FILE), exist_ok=True)
         invites = {}
@@ -752,35 +803,60 @@ def create_household_role_invite(
     except Exception as e:
         logger.warning(f"Failed to persist household_invites.json: {e}")
 
-    # 2. Update Supabase
-    try:
-        client = get_client()
-        client.table("household_invites").insert(invite_data).execute()
-    except Exception as e:
-        logger.info(f"Supabase household_invites insert skipped: {e}")
-
     return invite_data
 
 
 def inspect_household_role_invite(invite_code: str) -> dict:
     """
-    Retrieves metadata for an invite code: household_id, assigned role, and target_member_id.
+    Retrieves metadata for an invite code: household_id, assigned role, target_member_id, expiry.
     """
     code = invite_code.strip().upper()
-    try:
-        client = get_client()
-        res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
-        if res.data:
-            return res.data
-    except Exception:
-        pass
+    if is_supabase_configured():
+        try:
+            client = get_client()
+            res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
+            if res and hasattr(res, "data") and res.data:
+                inv = res.data
+                is_valid = True
+                if inv.get("used_by"):
+                    is_valid = False
+                if inv.get("expires_at"):
+                    try:
+                        exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
+                        if exp < datetime.now(timezone.utc):
+                            is_valid = False
+                    except Exception:
+                        pass
+                inv["is_valid"] = is_valid
+                target_member_id = inv.get("target_member_id")
+                if target_member_id:
+                    try:
+                        dep_res = client.table("household_dependents").select("name").eq("id", target_member_id).maybe_single().execute()
+                        if dep_res and hasattr(dep_res, "data") and dep_res.data:
+                            inv["target_member_name"] = dep_res.data.get("name")
+                    except Exception as dep_exc:
+                        logger.warning("Could not resolve target_member_name: %s", dep_exc)
+                return inv
+        except Exception as exc:
+            logger.warning("Supabase inspect invite query failed: %s", exc)
+        return {
+            "invite_code": code,
+            "household_id": None,
+            "role": "peer",
+            "target_member_id": None,
+            "target_member_name": None,
+            "is_valid": False,
+        }
 
+    # Fallback ONLY when Supabase is not configured
     try:
         if os.path.exists(HOUSEHOLD_INVITES_FILE):
             with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
                 invites = json.load(f)
                 if code in invites:
-                    return invites[code]
+                    data = dict(invites[code])
+                    data["is_valid"] = not bool(data.get("used_by"))
+                    return data
     except Exception:
         pass
 
@@ -795,38 +871,68 @@ def inspect_household_role_invite(invite_code: str) -> dict:
 
 def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
     """
-    Claims a household invite for a user: links the pre-created member profile (if target_member_id is set)
-    and updates the user's household_id and financial_role.
+    Claims a household invite for a user atomically:
+    1. If Supabase is configured: calls the atomic claim_household_role_invite RPC.
+    2. If Supabase is not configured: claims locally via file cache fallback.
     """
-    from dependents_service import link_dependent_user
-    inv = inspect_household_role_invite(invite_code)
-    hid = inv.get("household_id")
-    target_mid = inv.get("target_member_id")
-    role = inv.get("role", "peer")
+    code = invite_code.strip().upper()
 
-    if target_mid and hid:
-        link_dependent_user(hid, target_mid, user_id)
+    if is_supabase_configured():
+        try:
+            client = get_client()
+            res = client.rpc("claim_household_role_invite", {
+                "p_invite_code": code,
+                "p_user_id": user_id,
+            }).execute()
+            if res and hasattr(res, "data") and isinstance(res.data, dict):
+                data = res.data
+                if not data.get("success"):
+                    return {"status": "error", "error": data.get("error", "Invite code is invalid or expired.")}
+                return {
+                    "status": "success",
+                    "household_id": data.get("household_id"),
+                    "user_id": user_id,
+                    "linked_member_id": data.get("target_member_id"),
+                    "financial_role": data.get("role"),
+                }
+        except Exception as exc:
+            logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
+            return {"status": "error", "error": str(exc)}
 
-    # Attempt Supabase updates
+    # Fallback ONLY when Supabase is not configured
     try:
-        client = get_client()
-        if hid:
-            client.table("users").update({
-                "household_id": hid,
-                "role": "member",
-                "financial_role": role,
-            }).eq("id", user_id).execute()
-        client.table("household_invites").update({"used_by": user_id}).eq("invite_code", invite_code.strip().upper()).execute()
-    except Exception as e:
-        logger.info(f"Supabase claim invite fallback: {e}")
+        inv = inspect_household_role_invite(code)
+        if not inv or not inv.get("is_valid", True):
+            return {"status": "error", "error": "Invite code is invalid or expired."}
+        if inv.get("used_by"):
+            return {"status": "error", "error": "Invite code has already been used."}
 
-    return {
-        "status": "success",
-        "household_id": hid,
-        "user_id": user_id,
-        "linked_member_id": target_mid,
-        "financial_role": role,
-    }
+        hid = inv.get("household_id")
+        target_mid = inv.get("target_member_id")
+        role = inv.get("role", "peer")
+
+        if os.path.exists(HOUSEHOLD_INVITES_FILE):
+            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
+                invites = json.load(f)
+            if code in invites and not invites[code].get("used_by"):
+                invites[code]["used_by"] = user_id
+                with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
+                    json.dump(invites, f, indent=2)
+            else:
+                return {"status": "error", "error": "Invite code has already been used or expired."}
+
+        return {
+            "status": "success",
+            "household_id": hid,
+            "user_id": user_id,
+            "linked_member_id": target_mid,
+            "financial_role": role,
+        }
+    except Exception as e:
+        logger.error("Failed to claim household invite (fallback): %s", e)
+        return {"status": "error", "error": str(e)}
+
+
 
 
 def record_household_reimbursement(

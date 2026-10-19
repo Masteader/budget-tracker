@@ -1,3 +1,4 @@
+import os
 import pytest
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
@@ -64,27 +65,32 @@ def test_create_household_custom_category(monkeypatch):
 def test_categories_api_endpoints(monkeypatch):
     from main import app
     client = TestClient(app)
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
+    headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
     
     mock_data = {
         "active": [{"code": "OPEX-DINING", "category": "Dining"}],
         "inactive": [{"code": "OPEX-FUEL", "category": "Fuel"}],
     }
     monkeypatch.setattr("salary_cycle.get_household_categories", lambda household_id: mock_data)
+    monkeypatch.setattr("routes.households.get_household_categories", lambda household_id: mock_data)
     monkeypatch.setattr("salary_cycle.toggle_category_status", lambda household_id, category_code, is_active: {"status": "success", "is_active": is_active})
+    monkeypatch.setattr("routes.households.toggle_category_status", lambda household_id, category_code, is_active: {"status": "success", "is_active": is_active})
     monkeypatch.setattr("salary_cycle.create_household_custom_category", lambda **kw: {"status": "success", "code": kw["code"]})
+    monkeypatch.setattr("routes.households.create_household_custom_category", lambda **kw: {"status": "success", "code": kw["code"]})
     
     # GET /households/{id}/categories
-    resp = client.get("/households/hh-123/categories")
+    resp = client.get(f"/households/{hid}/categories", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["active"][0]["code"] == "OPEX-DINING"
     
     # POST /households/{id}/categories/toggle
-    resp = client.post("/households/hh-123/categories/toggle", json={"category_code": "OPEX-FUEL", "is_active": True})
+    resp = client.post(f"/households/{hid}/categories/toggle", json={"category_code": "OPEX-FUEL", "is_active": True}, headers=headers)
     assert resp.status_code == 200
     assert resp.json()["is_active"] is True
     
     # POST /households/{id}/categories/custom
-    resp = client.post("/households/hh-123/categories/custom", json={"code": "FARM", "category": "Farm", "allocated_amount": 200.0})
+    resp = client.post(f"/households/{hid}/categories/custom", json={"code": "FARM", "category": "Farm", "allocated_amount": 200.0}, headers=headers)
     assert resp.status_code == 200
 
 

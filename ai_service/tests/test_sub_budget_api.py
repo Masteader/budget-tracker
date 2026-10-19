@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from main import app
 
 client = TestClient(app)
-AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "bt_sec_99a81f3d4c72e01b88e2")}
+AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 
 
@@ -23,7 +23,19 @@ def test_get_cycles_endpoint():
     assert len(data["cycles"]) >= 1
 
 
-def test_get_category_breakdown():
+def test_get_category_breakdown(monkeypatch):
+    mock_data = {
+        "cycle_key": "2026-10",
+        "categories": [
+            {
+                "category_code": "OPEX-UTILITIES",
+                "allocated_amount": 500.0,
+                "sub_categories": [],
+            }
+        ],
+    }
+    monkeypatch.setattr("routes.budgets.get_cycle_breakdown", lambda *args, **kw: mock_data)
+
     resp = client.get(f"/budgets/breakdown?household_id={HOUSEHOLD_ID}&cycle_key=2026-10", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
@@ -38,7 +50,10 @@ def test_get_category_breakdown():
     assert "sub_categories" in cat
 
 
-def test_add_and_archive_category():
+def test_add_and_archive_category(monkeypatch):
+    monkeypatch.setattr("routes.budgets.add_category_and_budget", lambda req: {"status": "success", "category_code": req.code})
+    monkeypatch.setattr("routes.budgets.archive_category_for_household", lambda hid, code: {"status": "success"})
+
     payload = {
         "household_id": HOUSEHOLD_ID,
         "code": "OPEX-TESTING",
@@ -57,7 +72,14 @@ def test_add_and_archive_category():
     assert del_resp.json()["status"] == "success"
 
 
-def test_add_sub_category_endpoint():
+def test_add_sub_category_endpoint(monkeypatch):
+    mock_res = {
+        "status": "success",
+        "category_code": "OPEX-UTILITIES",
+        "sub_allocations": {"sub-district-cooling": 120.0},
+    }
+    monkeypatch.setattr("routes.budgets.add_sub_category_for_household", lambda **kw: mock_res)
+
     payload = {
         "household_id": HOUSEHOLD_ID,
         "parent_code": "OPEX-UTILITIES",
@@ -75,7 +97,11 @@ def test_add_sub_category_endpoint():
     assert data["sub_allocations"]["sub-district-cooling"] == 120.0
 
 
-def test_rename_and_remove_sub_category():
+def test_rename_and_remove_sub_category(monkeypatch):
+    monkeypatch.setattr("routes.budgets.add_sub_category_for_household", lambda **kw: {"status": "success"})
+    monkeypatch.setattr("routes.budgets.rename_sub_category", lambda **kw: {"status": "success", "name_en": kw.get("name_en")})
+    monkeypatch.setattr("routes.budgets.remove_sub_category_for_household", lambda **kw: {"status": "success"})
+
     # 1. Add custom sub-category
     add_payload = {
         "household_id": HOUSEHOLD_ID,

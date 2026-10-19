@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
 
 class ReceiptPhotoViewerDialog extends StatelessWidget {
@@ -85,28 +86,55 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                   minScale: 0.8,
                   maxScale: 4.0,
                   child: Center(
-                    child: Image.network(
-                      receiptUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (ctx, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                    child: FutureBuilder<String?>(
+                      future: ReceiptStorageService().getSignedReceiptUrl(receiptUrl),
+                      builder: (ctx, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                          );
+                        }
+                        final resolvedUrl = snapshot.data;
+                        if (resolvedUrl == null ||
+                            (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://'))) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Unable to load receipt image',
+                                  style: GoogleFonts.outfit(color: context.textSecondary),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return Image.network(
+                          resolvedUrl,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(
+                              child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                            );
+                          },
+                          errorBuilder: (ctx, _, __) => Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Unable to load receipt image',
+                                  style: GoogleFonts.outfit(color: context.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
                         );
                       },
-                      errorBuilder: (ctx, _, __) => Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Unable to load receipt image',
-                              style: GoogleFonts.outfit(color: context.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
                 ),

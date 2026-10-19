@@ -52,5 +52,19 @@ void main() {
       expect(ReceiptStorageService.extractStoragePath(''), isNull);
       expect(ReceiptStorageService.extractStoragePath('https://example.com/avatar.jpg'), isNull);
     });
+
+    test('getSignedReceiptUrl handles null, empty, and already-signed URLs', () async {
+      final service = ReceiptStorageService();
+      expect(await service.getSignedReceiptUrl(null), isNull);
+      expect(await service.getSignedReceiptUrl(''), isNull);
+      expect(await service.getSignedReceiptUrl('   '), isNull);
+
+      const alreadySigned =
+          'https://qnhyiszgiymsypcwnntu.supabase.co/storage/v1/object/sign/receipts/hh-123/img.jpg?token=jwt.tok.sig';
+      expect(await service.getSignedReceiptUrl(alreadySigned), alreadySigned);
+
+      const externalUrl = 'https://example.com/some_receipt.jpg';
+      expect(await service.getSignedReceiptUrl(externalUrl), externalUrl);
+    });
   });
 }

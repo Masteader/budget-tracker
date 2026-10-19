@@ -64,77 +64,77 @@ def _get_jwk_for_kid(kid: str):
 
 
 def _decode_token(token: str) -> dict:
-    """Decode and validate a Supabase JWT (supports modern ES256 asymmetric keys and legacy HS256 secret)."""
+    """
+    Decode and validate a Supabase JWT.
+    Enforces:
+    1. Signature verification via ES256 (cached JWKS) or HS256 (SUPABASE_JWT_SECRET).
+    2. Audience check: aud must be 'authenticated'.
+    3. Issuer check: iss must be '{SUPABASE_URL}/auth/v1'.
+    4. Fail-closed: rejection on any failure, zero unverified fallback claims.
+    """
     secret = os.environ.get("SUPABASE_JWT_SECRET", "").strip() or SUPABASE_JWT_SECRET
-    is_prod = os.environ.get("ENV", "development").lower() == "production"
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    expected_issuer = f"{supabase_url}/auth/v1" if supabase_url else None
 
     try:
         header = jwt.get_unverified_header(token)
-    except Exception:
-        header = {}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Malformed JWT header: {exc}",
+        )
 
     alg = header.get("alg", "HS256")
     kid = header.get("kid")
 
+    # 1. Asymmetric ES256 verification via Supabase JWKS
     if alg == "ES256" and kid:
         key = _get_jwk_for_kid(kid)
-        if key:
-            try:
-                return jwt.decode(
-                    token,
-                    key,
-                    algorithms=["ES256"],
-                    options={"verify_aud": False},
-                )
-            except JWTError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Invalid or expired authentication token: {exc}",
-                )
-
-    if secret:
-        try:
-            return jwt.decode(
-                token,
-                secret,
-                algorithms=["HS256"],
-                options={"verify_aud": False},
+        if not key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unable to fetch or construct verification key for token.",
             )
+        try:
+            decode_kwargs = {
+                "algorithms": ["ES256"],
+                "audience": "authenticated",
+            }
+            if expected_issuer:
+                decode_kwargs["issuer"] = expected_issuer
+            return jwt.decode(token, key, **decode_kwargs)
         except JWTError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid or expired authentication token: {exc}",
             )
-    else:
-        # Development fallback: decode without signature verification if no secret set
-        if is_prod and alg != "ES256":
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Server configuration error: SUPABASE_JWT_SECRET not set.",
-            )
-        logger.warning("SUPABASE_JWT_SECRET not configured. Decoding JWT without signature verification (dev only).")
+
+    # 2. Symmetric HS256 verification via SUPABASE_JWT_SECRET
+    if secret and alg == "HS256":
         try:
-            return jwt.get_unverified_claims(token)
-        except Exception as exc:
+            decode_kwargs = {
+                "algorithms": ["HS256"],
+                "audience": "authenticated",
+            }
+            if expected_issuer:
+                decode_kwargs["issuer"] = expected_issuer
+            return jwt.decode(token, secret, **decode_kwargs)
+        except JWTError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid authentication token: {exc}",
+                detail=f"Invalid or expired authentication token: {exc}",
             )
 
+    # 3. Fail closed if no key or secret matches
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized: No valid cryptographic key or secret configured to verify token signature.",
+    )
 
-async def verify_household_access(request: Request, household_id: str) -> str:
-    """
-    FastAPI dependency that:
-    1. Validates household_id format
-    2. Extracts Bearer token from Authorization header
-    3. Decodes the Supabase JWT to get user_id (sub claim)
-    4. Queries users table to find user's household_id
-    5. Confirms user belongs to the requested household
-    6. Returns the validated household_id
-    """
-    if household_id:
-        validate_uuid(household_id)
 
+
+def get_current_user_id(request: Request) -> str:
+    """Extract and verify the current authenticated user's ID from Supabase JWT."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -151,23 +151,84 @@ async def verify_household_access(request: Request, household_id: str) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token does not contain a valid user ID.",
         )
+    return str(user_id)
 
-    # Look up the user's household from the database
+
+def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
+    """Retrieve the user's role and membership in the given household."""
     client = get_client()
-    response = await asyncio.to_thread(
-        lambda: client.table("users")
-        .select("household_id")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
+    try:
+        res = (
+            client.table("household_memberships")
+            .select("role, household_id")
+            .eq("user_id", user_id)
+            .eq("household_id", household_id)
+            .maybe_single()
+            .execute()
+        )
+        if res and res.data:
+            return res.data
+    except Exception as exc:
+        logger.warning("Error querying household_memberships: %s", exc)
 
-    user_data = response.data
-    if not user_data:
+    # Fallback to users table cache
+    try:
+        user_res = (
+            client.table("users")
+            .select("household_id, role")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if user_res and user_res.data and user_res.data.get("household_id") == household_id:
+            return {
+                "household_id": household_id,
+                "role": user_res.data.get("role", "member"),
+            }
+    except Exception as exc:
+        logger.warning("Error querying users fallback: %s", exc)
+
+    return None
+
+
+async def verify_household_access(request: Request, household_id: str) -> str:
+    """
+    FastAPI dependency that confirms caller belongs to the requested household.
+    """
+    if household_id:
+        validate_uuid(household_id)
+
+    user_id = get_current_user_id(request)
+    membership = await asyncio.to_thread(_get_user_membership, user_id, household_id)
+    if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User profile not found.",
+            detail="Forbidden: You do not have access to this household's data.",
         )
 
-    _check_household_membership(user_data.get("household_id"), household_id)
     return household_id
+
+
+async def verify_household_admin_access(request: Request, household_id: str) -> str:
+    """
+    FastAPI dependency that confirms caller is an admin of the requested household.
+    """
+    if household_id:
+        validate_uuid(household_id)
+
+    user_id = get_current_user_id(request)
+    membership = await asyncio.to_thread(_get_user_membership, user_id, household_id)
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You do not have access to this household's data.",
+        )
+
+    if membership.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required for this household.",
+        )
+
+    return household_id
+

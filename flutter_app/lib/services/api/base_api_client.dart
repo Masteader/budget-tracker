@@ -5,27 +5,49 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
 
 typedef AuthTokenProvider = String? Function();
+typedef SessionRefresher = Future<String?> Function();
 
 class BaseApiClient {
   static const String appAuthToken = String.fromEnvironment(
     'APP_AUTH_TOKEN',
-    defaultValue: 'bt_sec_0781379b6c621e7c89dee8dd981067f0',
+    defaultValue: '',
   );
   final http.Client _client;
   final AuthTokenProvider? _authTokenProvider;
+  final SessionRefresher? _sessionRefresher;
+  String? _overriddenAccessToken;
 
   BaseApiClient({
     http.Client? client,
     AuthTokenProvider? authTokenProvider,
+    SessionRefresher? sessionRefresher,
   })  : _client = client ?? http.Client(),
-        _authTokenProvider = authTokenProvider;
+        _authTokenProvider = authTokenProvider,
+        _sessionRefresher = sessionRefresher;
 
   String? get _currentAccessToken {
+    if (_sessionRefresher != null && _overriddenAccessToken != null) {
+      return _overriddenAccessToken;
+    }
     if (_authTokenProvider != null) {
       return _authTokenProvider();
     }
     try {
       return Supabase.instance.client.auth.currentSession?.accessToken;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _refreshAccessToken() async {
+    if (_sessionRefresher != null) {
+      final newToken = await _sessionRefresher();
+      _overriddenAccessToken = newToken;
+      return newToken;
+    }
+    try {
+      final res = await Supabase.instance.client.auth.refreshSession();
+      return res.session?.accessToken;
     } catch (_) {
       return null;
     }
@@ -71,9 +93,19 @@ class BaseApiClient {
     final url = path.startsWith('http') ? Uri.parse(path) : Uri.parse('$baseUrl$path');
 
     try {
-      final response = await _client
+      var response = await _client
           .post(url, headers: buildHeaders(signature: signature), body: payload)
           .timeout(timeout);
+
+      if (response.statusCode == 401) {
+        final refreshedToken = await _refreshAccessToken();
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          response = await _client
+              .post(url, headers: buildHeaders(signature: signature), body: payload)
+              .timeout(timeout);
+        }
+      }
+
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);
@@ -106,7 +138,15 @@ class BaseApiClient {
     }
 
     try {
-      final response = await _client.get(uri, headers: buildHeaders()).timeout(timeout);
+      var response = await _client.get(uri, headers: buildHeaders()).timeout(timeout);
+
+      if (response.statusCode == 401) {
+        final refreshedToken = await _refreshAccessToken();
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          response = await _client.get(uri, headers: buildHeaders()).timeout(timeout);
+        }
+      }
+
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);
@@ -137,13 +177,27 @@ class BaseApiClient {
     final encoded = jsonEncode(body ?? {});
     final signature = (shouldSign && webhookSecret.isNotEmpty) ? sign(encoded) : null;
     try {
-      final response = await _client
+      var response = await _client
           .put(
             Uri.parse(path.startsWith('http') ? path : '$baseUrl$path'),
             headers: buildHeaders(signature: signature),
             body: encoded,
           )
           .timeout(timeout);
+
+      if (response.statusCode == 401) {
+        final refreshedToken = await _refreshAccessToken();
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          response = await _client
+              .put(
+                Uri.parse(path.startsWith('http') ? path : '$baseUrl$path'),
+                headers: buildHeaders(signature: signature),
+                body: encoded,
+              )
+              .timeout(timeout);
+        }
+      }
+
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);
@@ -174,7 +228,15 @@ class BaseApiClient {
     }
 
     try {
-      final response = await _client.delete(uri, headers: buildHeaders()).timeout(timeout);
+      var response = await _client.delete(uri, headers: buildHeaders()).timeout(timeout);
+
+      if (response.statusCode == 401) {
+        final refreshedToken = await _refreshAccessToken();
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          response = await _client.delete(uri, headers: buildHeaders()).timeout(timeout);
+        }
+      }
+
       if (response.statusCode >= 400) {
         try {
           final decoded = jsonDecode(response.body);

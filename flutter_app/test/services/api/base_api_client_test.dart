@@ -28,4 +28,57 @@ void main() {
       expect(capturedAppToken, isNull);
     }
   });
+
+  test('BaseApiClient automatically refreshes token on 401 and retries successfully', () async {
+    int requestCount = 0;
+    final tokensUsed = <String?>[];
+
+    final mockClient = MockClient((request) async {
+      requestCount++;
+      tokensUsed.add(request.headers['Authorization']);
+      if (requestCount == 1) {
+        return http.Response('{"detail": "Token expired"}', 401);
+      }
+      return http.Response('{"status": "success", "data": "retried_ok"}', 200);
+    });
+
+    int refreshCalls = 0;
+    final client = BaseApiClient(
+      client: mockClient,
+      authTokenProvider: () => 'expired_token',
+      sessionRefresher: () async {
+        refreshCalls++;
+        return 'fresh_refreshed_token';
+      },
+    );
+
+    final res = await client.post('/agent/chat-transaction', {'message': 'Coffee 15'}, shouldSign: false);
+
+    expect(requestCount, equals(2));
+    expect(refreshCalls, equals(1));
+    expect(tokensUsed[0], equals('Bearer expired_token'));
+    expect(tokensUsed[1], equals('Bearer fresh_refreshed_token'));
+    expect(res['status'], equals('success'));
+    expect(res['data'], equals('retried_ok'));
+  });
+
+  test('BaseApiClient returns 401 when token refresh fails', () async {
+    int requestCount = 0;
+
+    final mockClient = MockClient((request) async {
+      requestCount++;
+      return http.Response('{"detail": "Token expired"}', 401);
+    });
+
+    final client = BaseApiClient(
+      client: mockClient,
+      authTokenProvider: () => 'expired_token',
+      sessionRefresher: () async => null,
+    );
+
+    final res = await client.post('/agent/chat-transaction', {'message': 'Coffee 15'}, shouldSign: false);
+
+    expect(requestCount, equals(1));
+    expect(res['detail'], equals('Token expired'));
+  });
 }

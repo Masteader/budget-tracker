@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from utils import safe_error_response
+from auth import get_current_user_id
 from models import SupportChatRequest, SupportChatResponse
+from rate_limiter import check_api_quota
 from support_agent import handle_support_query, SUPPORT_EMAIL
 
 logger = logging.getLogger(__name__)
@@ -16,17 +18,34 @@ router = APIRouter()
 
 
 @router.post(
+    "/agent/support-chat",
+    response_model=SupportChatResponse,
+    tags=["support"],
+    summary="AI Support Chatbot and Developer Escalation",
+)
+@router.post(
     "/support/chat",
     response_model=SupportChatResponse,
     tags=["support"],
     summary="AI Support Chatbot and Developer Escalation",
 )
-async def support_chat(payload: SupportChatRequest) -> SupportChatResponse:
+async def support_chat(payload: SupportChatRequest, request: Request) -> SupportChatResponse:
+    user_id = get_current_user_id(request)
+
+    # Cost control & rate limiting: 20 support messages per 10 minutes
+    await check_api_quota(
+        user_id=user_id,
+        household_id=payload.household_id,
+        bucket="support_chat",
+        max_requests=20,
+        window_seconds=600,
+    )
+
     try:
         reply, escalate, summary = await handle_support_query(
             message=payload.message,
             household_id=payload.household_id,
-            user_id=payload.user_id,
+            user_id=user_id,
             history=payload.history,
             language=payload.language or "ar",
         )

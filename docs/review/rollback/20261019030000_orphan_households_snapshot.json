@@ -1,0 +1,28 @@
+{
+  "description": "Orphan households snapshot prior to deletion. Both households have zero members, zero transactions, zero budgets, zero accounts, and zero invites.",
+  "deleted_at": "2026-10-19T03:00:00Z",
+  "households": [
+    {
+      "id": "77cf3324-93c7-46d1-8cf1-4b2c6b01c616",
+      "name": "main household",
+      "invite_code": "f0f7e59d",
+      "created_at": "2026-10-09 17:33:18.283652+00",
+      "members_count": 0,
+      "transactions_count": 0,
+      "budgets_count": 0,
+      "accounts_count": 0,
+      "invites_count": 0
+    },
+    {
+      "id": "f34d3f86-846a-49e6-ac42-49620f1c6dda",
+      "name": "main household",
+      "invite_code": "978e25b5",
+      "created_at": "2026-10-09 17:34:30.953461+00",
+      "members_count": 0,
+      "transactions_count": 0,
+      "budgets_count": 0,
+      "accounts_count": 0,
+      "invites_count": 0
+    }
+  ]
+}

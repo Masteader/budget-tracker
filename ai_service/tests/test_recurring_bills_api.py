@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from main import app
 
 client = TestClient(app)
-HOUSEHOLD_ID = "test-household-uuid"
+HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
+AUTH_HEADERS = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
 
 
 def test_recurring_bills_endpoint_missing_household():
@@ -15,9 +16,10 @@ def test_recurring_bills_endpoint_missing_household():
     assert resp.status_code == 422 or resp.status_code == 400
 
 
+@patch("routes.budgets.fetch_household_recurring_bills")
 @patch("recurring_detector.fetch_household_recurring_bills")
-def test_recurring_bills_endpoint_success(mock_fetch):
-    mock_fetch.return_value = {
+def test_recurring_bills_endpoint_success(mock_fetch, mock_routes_fetch):
+    mock_data = {
         "cycle_key": "2026-10",
         "cycle_label": "October 2026 Budget",
         "total_recurring_monthly": 450.0,
@@ -46,8 +48,10 @@ def test_recurring_bills_endpoint_success(mock_fetch):
             },
         ],
     }
+    mock_fetch.return_value = mock_data
+    mock_routes_fetch.return_value = mock_data
 
-    resp = client.get(f"/budgets/recurring-bills?household_id={HOUSEHOLD_ID}")
+    resp = client.get(f"/budgets/recurring-bills?household_id={HOUSEHOLD_ID}", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["cycle_key"] == "2026-10"
