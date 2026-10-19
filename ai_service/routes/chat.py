@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from auth import verify_household_access
 from utils import safe_error_response, validate_uuid, verify_signature
+from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,15 @@ async def chat_transaction(request: Request):
 
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
+
+    # Persistent DB quota & sliding window rate limit
+    await check_api_quota(
+        user_id=body.get("user_id"),
+        household_id=household_id,
+        bucket="chat_transaction",
+        max_requests=30,
+        window_seconds=600,
+    )
 
     try:
         result = await asyncio.to_thread(

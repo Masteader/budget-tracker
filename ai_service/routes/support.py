@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from utils import safe_error_response
 from models import SupportChatRequest, SupportChatResponse
+from rate_limiter import check_api_quota
 from support_agent import handle_support_query, SUPPORT_EMAIL
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,15 @@ router = APIRouter()
     summary="AI Support Chatbot and Developer Escalation",
 )
 async def support_chat(payload: SupportChatRequest) -> SupportChatResponse:
+    # Cost control & rate limiting: 20 support messages per 10 minutes
+    await check_api_quota(
+        user_id=payload.user_id,
+        household_id=payload.household_id,
+        bucket="support_chat",
+        max_requests=20,
+        window_seconds=600,
+    )
+
     try:
         reply, escalate, summary = await handle_support_query(
             message=payload.message,

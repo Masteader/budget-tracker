@@ -123,6 +123,54 @@ async def check_receipt_scan_rate_limit(key: str) -> None:
     await default_rate_limiter.check_rate_limit(key, max_requests=10, window_seconds=600)
 
 
+async def check_api_quota(
+    user_id: Optional[str] = None,
+    household_id: Optional[str] = None,
+    bucket: str = "general",
+    max_requests: int = 30,
+    window_seconds: int = 600,
+) -> None:
+    """
+    Unified rate-limiter and cost-control quota enforcer.
+    1. If user_id is provided, calls PostgreSQL consume_quota RPC to persist quotas across instances.
+    2. Enforces sliding window rate limit (Redis or local memory fallback).
+    """
+    if user_id:
+        try:
+            from supabase_client import get_client
+            client = get_client()
+            res = await asyncio.to_thread(
+                lambda: client.rpc(
+                    "consume_quota",
+                    {
+                        "p_user_id": user_id,
+                        "p_bucket": bucket,
+                        "p_limit": max_requests,
+                        "p_window_seconds": window_seconds,
+                    },
+                ).execute()
+            )
+            allowed = res.data if res else True
+            if allowed is False:
+                logger.warning(
+                    "Persistent database quota exceeded: user=%s bucket=%s limit=%d in %ds",
+                    user_id, bucket, max_requests, window_seconds,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Rate limit exceeded: Maximum {max_requests} requests per {window_seconds // 60} minutes allowed for {bucket}. Please try again later.",
+                    headers={"Retry-After": str(window_seconds)},
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.debug("Database quota check skipped/fallback: %s", exc)
+
+    # Secondary / in-memory sliding window check by household or user key
+    rate_key = f"{bucket}:{household_id or user_id or 'anon'}"
+    await default_rate_limiter.check_rate_limit(rate_key, max_requests=max_requests, window_seconds=window_seconds)
+
+
 def reset_rate_limiters() -> None:
     """Reset in-memory rate limiter histories for testing."""
     default_rate_limiter._memory_history.clear()

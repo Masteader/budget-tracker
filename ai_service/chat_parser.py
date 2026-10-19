@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import litellm
 from dotenv import load_dotenv
@@ -34,6 +34,22 @@ class ChatLineItem(BaseModel):
     price: float = Field(..., description="Total price for this item line in SAR")
     sub_category: Optional[str] = Field(None, description="Sub-category code for this specific item")
 
+    @field_validator("price")
+    @classmethod
+    def validate_price(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("Item price cannot be negative")
+        if v > 10_000_000:
+            raise ValueError("Item price exceeds maximum limit")
+        return round(float(v), 2)
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: float) -> float:
+        if v <= 0:
+            return 1.0
+        return min(float(v), 10_000.0)
+
 class ParsedChatExpense(BaseModel):
     is_transaction: bool = Field(True, description="Whether the text represents a financial expense to record")
     is_simulation: bool = Field(False, description="Whether the user is asking an affordability simulation question like 'Can I buy a 1200 SAR iPad?' or 'أقدر اشتري ايباد بـ 1200 ريال؟'")
@@ -49,6 +65,22 @@ class ParsedChatExpense(BaseModel):
     beneficiary: str = Field("both", description="For whom: 'me', 'partner', 'both', or dependent/child name")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
+
+    @field_validator("total_amount")
+    @classmethod
+    def validate_total_amount(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("Total expense amount cannot be negative")
+        if v > 10_000_000:
+            raise ValueError("Total expense amount exceeds maximum limit (10,000,000 SAR)")
+        return round(float(v), 2)
+
+    @field_validator("merchant")
+    @classmethod
+    def sanitize_merchant(cls, v: str) -> str:
+        clean = (v or "Unknown Merchant").strip()
+        clean = "".join(ch for ch in clean if ch.isprintable() and ch not in "\r\n\t")
+        return clean[:120] if clean else "Unknown Merchant"
 
 def normalize_arabic_numbers(text: str) -> str:
     """Converts Eastern Arabic numerals (٠-٩) and Persian numerals to Western digits (0-9)."""

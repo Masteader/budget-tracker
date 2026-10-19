@@ -106,6 +106,23 @@ if not APP_AUTH_TOKEN:
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     path = request.url.path
+
+    # Enforce payload size limits before processing (Cost Control / DoS prevention)
+    content_length_str = request.headers.get("content-length")
+    if content_length_str:
+        try:
+            content_length = int(content_length_str)
+            # Max 25MB for multimodal receipt scanning, 1MB for all standard JSON routes
+            max_size = 25 * 1024 * 1024 if path.startswith("/agent/scan-receipt") else 1 * 1024 * 1024
+            if content_length > max_size:
+                from starlette.responses import JSONResponse
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Payload too large. Maximum allowed request size exceeded."}
+                )
+        except ValueError:
+            pass
+
     if (
         path in [
             "/",

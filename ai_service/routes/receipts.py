@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from auth import verify_household_access
 from utils import safe_error_response, validate_uuid, verify_signature
-from rate_limiter import check_receipt_scan_rate_limit
+from rate_limiter import check_api_quota, check_receipt_scan_rate_limit
 from receipt_scanner import process_receipt_scan
 
 logger = logging.getLogger(__name__)
@@ -55,8 +55,14 @@ async def scan_receipt(request: Request):
     if not images_base64 and not qr_code_raw:
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
-    # Strict rate limit: 10 invoices per 10 minutes maximum per household
-    await check_receipt_scan_rate_limit(f"hh:{household_id}")
+    # Strict rate limit & quota: 10 invoices per 10 minutes maximum per user/household
+    await check_api_quota(
+        user_id=body.get("user_id"),
+        household_id=household_id,
+        bucket="scan_receipt",
+        max_requests=10,
+        window_seconds=600,
+    )
 
     try:
         result = await asyncio.to_thread(
