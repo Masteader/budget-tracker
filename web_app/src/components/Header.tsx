@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
         {/* Brand Entity Anchor */}
         <a href="#" className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-electric-teal via-primary-container to-primary flex items-center justify-center text-white shadow-lg shadow-electric-teal/20 group-hover:scale-105 transition-transform duration-300">
-            <span className="material-symbols-outlined fill-1 text-[24px]">account_balance</span>
+            <span aria-hidden="true" className="material-symbols-outlined fill-1 text-[24px]">account_balance</span>
           </div>
           <div className="flex flex-col text-start">
             <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
         </a>
 
         {/* Minimal Editorial Nav Links */}
-        <nav className="hidden xl:flex items-center gap-7 text-sm font-medium">
+        <nav aria-label={dict.a11y.mainNav} className="hidden xl:flex items-center gap-7 text-sm font-medium">
           <a
             href="#simulator"
             className="text-white hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
@@ -103,6 +103,10 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
           {/* Dual Language Toggle Pill */}
           <div className="inline-flex items-center bg-black/40 p-1 rounded-full border border-white/20 backdrop-blur-md shadow-inner relative">
             <button
+              type="button"
+              lang="en"
+              aria-pressed={lang === 'en'}
+              aria-label={dict.a11y.switchToEnglish}
               onClick={() => setLanguage('en')}
               className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
                 lang === 'en'
@@ -113,6 +117,10 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
               EN
             </button>
             <button
+              type="button"
+              lang="ar"
+              aria-pressed={lang === 'ar'}
+              aria-label={dict.a11y.switchToArabic}
               onClick={() => setLanguage('ar')}
               className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
                 lang === 'ar'
@@ -129,16 +137,20 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
             href="#early-access"
             className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary-container via-primary to-secondary text-white text-xs lg:text-sm font-bold shadow-lg shadow-primary/30 hover:shadow-electric-teal/30 hover:-translate-y-0.5 active:scale-95 transition-all border border-white/20"
           >
-            <span className="material-symbols-outlined text-[18px] text-electric-teal">bolt</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px] text-electric-teal">bolt</span>
             <span>{dict.nav.vipCta}</span>
           </a>
 
           {/* Mobile Menu Button */}
           <button
+            type="button"
+            aria-label={mobileMenuOpen ? dict.a11y.closeMenu : dict.a11y.openMenu}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-menu"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="xl:hidden p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
-            <span className="material-symbols-outlined text-[22px]">
+            <span aria-hidden="true" className="material-symbols-outlined text-[22px]">
               {mobileMenuOpen ? 'close' : 'menu'}
             </span>
           </button>
@@ -148,7 +160,9 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
       {/* Mobile Menu Drawer */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div
+          <motion.nav
+            id="mobile-menu"
+            aria-label={dict.a11y.mainNav}
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -199,10 +213,10 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
               onClick={() => setMobileMenuOpen(false)}
               className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-primary-container via-primary to-secondary text-white font-bold text-sm shadow-lg"
             >
-              <span className="material-symbols-outlined text-[18px]">bolt</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">bolt</span>
               <span>{dict.nav.vipCta}</span>
             </a>
-          </motion.div>
+          </motion.nav>
         )}
       </AnimatePresence>
     </header>

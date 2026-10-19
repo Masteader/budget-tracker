@@ -1,5 +1,13 @@
 export type Language = 'ar' | 'en';
 
+/** One illustrative row in the household / roommate split demo ledger. */
+export interface SplitRow {
+  name: string;
+  desc: string;
+  amount: number;
+  status: string;
+}
+
 export interface TranslationDictionary {
   brand: {
     name: string;
@@ -36,6 +44,10 @@ export interface TranslationDictionary {
     roommateStatus: string;
     roommateSub: string;
     roommateSettle: string;
+    settledVal: string;
+    settledStatus: string;
+    settledBtn: string;
+    heroImageAlt: string;
     ingestionTitle: string;
     ingestionVal: string;
     ingestionUnit: string;
@@ -114,6 +126,24 @@ export interface TranslationDictionary {
     splitResolutionTitle: string;
     splitResolutionDesc: string;
     splitSettleBtn: string;
+    splitSettleSent: string;
+    perDay: string;
+    payToday: string;
+    paydayToday: string;
+    availableRemaining: string;
+    currencyUnit: string;
+    incomeInputLabel: string;
+    zatcaStatusLabel: string;
+    aiDefaultInput: string;
+    aiCatGroceries: string;
+    aiCatUtilities: string;
+    aiCatDining: string;
+    aiCatInternet: string;
+    aiNoteRooms: string;
+    aiNoteOthers: string;
+    aiNoteExempt: string;
+    familyRows: SplitRow[];
+    roommateRows: SplitRow[];
   };
   metrics: {
     metric1Val: string;
@@ -167,6 +197,16 @@ export interface TranslationDictionary {
     partnerInfo: string;
     successMsg: string;
   };
+  a11y: {
+    pageTitle: string;
+    skipToContent: string;
+    openMenu: string;
+    closeMenu: string;
+    switchToEnglish: string;
+    switchToArabic: string;
+    emailLabel: string;
+    mainNav: string;
+  };
   footer: {
     rights: string;
     links: string[];
@@ -212,6 +252,10 @@ export const translations: Record<Language, TranslationDictionary> = {
       roommateStatus: 'دائن مستحق',
       roommateSub: 'تسوية حساب ماجد وسلمان',
       roommateSettle: 'تسوية بضغطة واحدة',
+      settledVal: '0.00 ر.س',
+      settledStatus: 'متطابق',
+      settledBtn: 'تمت التسوية ✓',
+      heroImageAlt: '',
       ingestionTitle: 'الاستيعاب الذكي الفوري',
       ingestionVal: '0.28 ث',
       ingestionUnit: 'زمن المعالجة',
@@ -299,6 +343,32 @@ export const translations: Record<Language, TranslationDictionary> = {
       splitResolutionTitle: 'تسوية المديونيات بنقرة زر واحدة:',
       splitResolutionDesc: 'يمكن للشركاء سداد المبالغ المعلقة مباشرة دون أي حسابات يدوية معقدة',
       splitSettleBtn: 'إرسال طلب تسوية واتساب',
+      splitSettleSent: 'تم إرسال الطلب بنجاح ✓',
+      perDay: '/ يومياً',
+      payToday: 'اليوم',
+      paydayToday: '(يوم الراتب!)',
+      availableRemaining: 'المتبقي المتاح: ',
+      currencyUnit: 'ر.س',
+      incomeInputLabel: 'أدخل راتبك / دخلك الشهري',
+      zatcaStatusLabel: 'حالة التحقق:',
+      aiDefaultInput: 'مقاضي سوبرماركت 350 ريال بالتساوي بيني وبين ماجد وسلمان',
+      aiCatGroceries: 'البقالة ومستلزمات المنزل',
+      aiCatUtilities: 'خدمات السكن (الكهرباء)',
+      aiCatDining: 'الضيافة والعزائم المشتركة',
+      aiCatInternet: 'الإنترنت عالي السرعة (اتصالات)',
+      aiNoteRooms: '(غرفتين)',
+      aiNoteOthers: '(الباقين)',
+      aiNoteExempt: '(معفى)',
+      familyRows: [
+        { name: 'أبو فهد (المصروف العام للأسرة)', desc: 'المدفوع: الإيجار السنوي، الفواتير، ومصاريف المدرسة', amount: 4800, status: 'مغطى بالكامل' },
+        { name: 'أم فهد (التموينات ومستلزمات البيت)', desc: 'المدفوع: مقاضي بنده، تموينات الأسبوع', amount: 1600, status: 'تكامل الميزانية 100%' },
+        { name: 'صندوق طوارئ واستثمار الأسرة', desc: 'الرصيد التراكمي المحمي للطوارئ الطبية والمدرسية', amount: 8500, status: 'حساب محمي' },
+      ],
+      roommateRows: [
+        { name: 'أحمد (أنت)', desc: 'دفع: كهرباء الشقة، فايبر الإنترنت، مقاضي الشهر', amount: 420, status: 'دائن مستحق' },
+        { name: 'ماجد العبدالله', desc: 'دفع: صيانة التكييف وفلاتر المياه', amount: -180, status: 'مدين' },
+        { name: 'سلمان الفهد', desc: 'دفع: تعبئة أسطوانة غاز المطبخ', amount: -240, status: 'مدين' },
+      ],
     },
     metrics: {
       metric1Val: '100%',
@@ -460,6 +530,16 @@ export const translations: Record<Language, TranslationDictionary> = {
       partnerInfo: 'للاستفسارات المؤسسية أو شراكات التوزيع:',
       successMsg: 'تم تسجيلك بنجاح في قائمة الوصول المبكر VIP! سنوافيك برابط التفعيل قريباً.',
     },
+    a11y: {
+      pageTitle: 'BUDGET Tracker | ميزانية وأكثر - الحوكمة المالية الذكية وإدارة المصاريف المشتركة',
+      skipToContent: 'تخطَّ إلى المحتوى الرئيسي',
+      openMenu: 'فتح القائمة',
+      closeMenu: 'إغلاق القائمة',
+      switchToEnglish: 'التبديل إلى الإنجليزية',
+      switchToArabic: 'التبديل إلى العربية',
+      emailLabel: 'البريد الإلكتروني',
+      mainNav: 'التنقل الرئيسي',
+    },
     footer: {
       rights: '© 2025 BUDGET Tracker | ميزانية وأكثر. الحوكمة المالية السيادية. جميع الحقوق محفوظة.',
       links: [
@@ -509,6 +589,10 @@ export const translations: Record<Language, TranslationDictionary> = {
       roommateStatus: 'Net Creditor',
       roommateSub: 'Majed & Salman balanced',
       roommateSettle: '1-Click Settle',
+      settledVal: 'SAR 0.00',
+      settledStatus: 'Balanced',
+      settledBtn: 'Settled ✓',
+      heroImageAlt: '',
       ingestionTitle: 'Autonomous Ingestion',
       ingestionVal: '0.28s',
       ingestionUnit: 'Inference',
@@ -596,6 +680,32 @@ export const translations: Record<Language, TranslationDictionary> = {
       splitResolutionTitle: 'One-Click Debt Resolution:',
       splitResolutionDesc: 'Majed & Salman can clear SAR 420.00 to your account seamlessly',
       splitSettleBtn: 'Send Settle Request',
+      splitSettleSent: 'Request sent successfully ✓',
+      perDay: '/ day',
+      payToday: 'Today!',
+      paydayToday: '(Payday!)',
+      availableRemaining: 'Available Remaining: ',
+      currencyUnit: 'SAR',
+      incomeInputLabel: 'Enter your monthly income',
+      zatcaStatusLabel: 'Verification status:',
+      aiDefaultInput: 'Supermarket groceries SAR 350 split equally between me, Majed, and Salman',
+      aiCatGroceries: 'Groceries & Household Essentials',
+      aiCatUtilities: 'Residential Utilities (Electricity)',
+      aiCatDining: 'Hospitality & Shared Dining',
+      aiCatInternet: 'High-Speed Internet (Telecom)',
+      aiNoteRooms: '(2 rooms)',
+      aiNoteOthers: '(Others)',
+      aiNoteExempt: '(Exempt)',
+      familyRows: [
+        { name: 'Abu Fahad (family general spending)', desc: 'Paid: annual rent, utility bills and school fees', amount: 4800, status: 'Fully covered' },
+        { name: 'Umm Fahad (groceries & home supplies)', desc: 'Paid: Panda groceries, weekly supplies', amount: 1600, status: 'Budget 100% reconciled' },
+        { name: 'Family emergency & investment fund', desc: 'Protected balance for medical and school emergencies', amount: 8500, status: 'Protected account' },
+      ],
+      roommateRows: [
+        { name: 'Ahmed (you)', desc: 'Paid: flat electricity, fiber internet, monthly groceries', amount: 420, status: 'Net creditor' },
+        { name: 'Majed Al-Abdullah', desc: 'Paid: AC maintenance and water filters', amount: -180, status: 'Debtor' },
+        { name: 'Salman Al-Fahad', desc: 'Paid: kitchen gas cylinder refill', amount: -240, status: 'Debtor' },
+      ],
     },
     metrics: {
       metric1Val: '100%',
@@ -756,6 +866,16 @@ export const translations: Record<Language, TranslationDictionary> = {
       button: 'Join VIP Waitlist',
       partnerInfo: 'For institutional partnerships or household group deployments:',
       successMsg: 'Thank you for requesting VIP Sovereign Access! Confirmation sent to your email.',
+    },
+    a11y: {
+      pageTitle: 'BUDGET Tracker | Smart financial governance & shared household expenses',
+      skipToContent: 'Skip to main content',
+      openMenu: 'Open menu',
+      closeMenu: 'Close menu',
+      switchToEnglish: 'Switch to English',
+      switchToArabic: 'Switch to Arabic',
+      emailLabel: 'Email address',
+      mainNav: 'Main navigation',
     },
     footer: {
       rights: '© 2025 BUDGET Tracker Sovereign Financial Architecture. All rights reserved. Built for clarity and equitable shared living.',

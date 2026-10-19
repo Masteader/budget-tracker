@@ -17,6 +17,7 @@ export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict }) => {
 
     setSubmitted(true);
     confetti({
+      disableForReducedMotion: true,
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 },
@@ -46,15 +47,22 @@ export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict }) => {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
+            role="status"
             className="max-w-md mx-auto p-5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-sm mb-6 flex items-center justify-center gap-2"
           >
-            <span className="material-symbols-outlined text-[20px]">check_circle</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[20px]">check_circle</span>
             <span>{dict.earlyAccess.successMsg}</span>
           </motion.div>
         ) : (
           <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-2 mb-6">
+            <label htmlFor="early-access-email" className="sr-only">
+              {dict.a11y.emailLabel}
+            </label>
             <input
+              id="early-access-email"
               type="email"
+              autoComplete="email"
+              dir="ltr"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={dict.earlyAccess.placeholder}

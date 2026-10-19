@@ -17,7 +17,7 @@ export const Faq: React.FC<FaqProps> = ({ dict }) => {
     <section className="py-20 px-5 lg:px-12 max-w-[1200px] mx-auto text-start" id="faq">
       <div className="text-center mb-16">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#dcf2f5] text-[#007a87] text-xs font-mono font-semibold border border-[#bce6ec] mb-3 uppercase tracking-wider">
-          <span className="material-symbols-outlined text-[16px]">help</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px]">help</span>
           <span>{dict.faq.badge}</span>
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0c2530]">
@@ -34,6 +34,10 @@ export const Faq: React.FC<FaqProps> = ({ dict }) => {
               className="rounded-2xl card-arctic overflow-hidden border border-[#d4ebf0] bg-white transition-all shadow-sm"
             >
               <button
+                type="button"
+                id={`faq-q-${idx}`}
+                aria-expanded={isOpen}
+                aria-controls={`faq-a-${idx}`}
                 onClick={() => toggleFaq(idx)}
                 className="w-full p-6 text-start flex justify-between items-center hover:text-[#00808c] transition-colors"
               >
@@ -42,6 +46,7 @@ export const Faq: React.FC<FaqProps> = ({ dict }) => {
                   <span className="text-xs text-slate-400 font-normal mt-0.5 block">{item.sub}</span>
                 </div>
                 <span
+                  aria-hidden="true"
                   className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${
                     isOpen ? 'rotate-180 text-[#00808c]' : ''
                   }`}
@@ -57,6 +62,9 @@ export const Faq: React.FC<FaqProps> = ({ dict }) => {
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.3 }}
                     className="overflow-hidden"
+                    id={`faq-a-${idx}`}
+                    role="region"
+                    aria-labelledby={`faq-q-${idx}`}
                   >
                     <div className="px-6 pb-6 text-sm text-slate-600 border-t border-slate-100 pt-4 leading-relaxed">
                       <p>{item.a}</p>

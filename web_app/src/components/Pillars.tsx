@@ -11,7 +11,7 @@ export const Pillars: React.FC<PillarsProps> = ({ dict }) => {
     <section className="py-20 px-5 lg:px-12 max-w-[1600px] mx-auto" id="pillars">
       <div className="text-center mb-16">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#dcf2f5] text-[#007a87] text-xs font-mono font-medium border border-[#bce6ec] mb-3 uppercase tracking-wider">
-          <span className="material-symbols-outlined text-[16px]">assured_workload</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px]">assured_workload</span>
           <span>{dict.pillars.badge}</span>
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0c2530]">
@@ -35,7 +35,7 @@ export const Pillars: React.FC<PillarsProps> = ({ dict }) => {
           >
             <div>
               <div className="w-10 h-10 rounded-xl bg-[#e3f7fa] flex items-center justify-center text-[#00808c] mb-4 group-hover:scale-110 group-hover:bg-[#00808c] group-hover:text-white transition-all shadow-sm">
-                <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[22px]">{item.icon}</span>
               </div>
               <h3 className="text-base font-bold text-[#0c2530] mb-2 group-hover:text-[#00808c] transition-colors">
                 {item.title}
@@ -44,7 +44,7 @@ export const Pillars: React.FC<PillarsProps> = ({ dict }) => {
             </div>
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono">
               <span>0{idx + 1} // ARCH</span>
-              <span className="material-symbols-outlined text-[14px] text-slate-300 group-hover:text-[#00808c] transition-colors rtl:rotate-180">
+              <span aria-hidden="true" className="material-symbols-outlined text-[14px] text-slate-300 group-hover:text-[#00808c] transition-colors rtl:rotate-180">
                 arrow_forward
               </span>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { translations, type Language } from './i18n/translations';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -18,10 +19,20 @@ export const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
-  }, [lang]);
+    document.title = dict.a11y.pageTitle;
+  }, [lang, dict]);
 
   return (
+    // reducedMotion="user": framer-motion skips transform/layout animations
+    // when the OS "reduce motion" setting is on.
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[#faf9ff] text-on-surface antialiased flex flex-col selection:bg-primary-container selection:text-white">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-white focus:text-[#0c2530] focus:shadow-lg"
+      >
+        {dict.a11y.skipToContent}
+      </a>
       {/* 1. Header with dynamic language switch & nav anchors */}
       <Header lang={lang} setLanguage={setLang} dict={dict} />
 
@@ -29,7 +40,7 @@ export const App: React.FC = () => {
       <Hero dict={dict} />
 
       {/* 3. Pristine Arctic Content Container */}
-      <main className="bg-[#eaf5f7] relative z-20 pt-8 pb-20 border-t border-[#d2ecf0]">
+      <main id="main-content" tabIndex={-1} className="bg-[#eaf5f7] relative z-20 pt-8 pb-20 border-t border-[#d2ecf0] focus:outline-none">
         {/* Interactive Simulator Cockpit */}
         <Simulator dict={dict} lang={lang} />
 
@@ -52,6 +63,7 @@ export const App: React.FC = () => {
       {/* 4. Executive Editorial Footer */}
       <Footer dict={dict} />
     </div>
+    </MotionConfig>
   );
 };
 

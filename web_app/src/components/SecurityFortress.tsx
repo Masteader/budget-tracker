@@ -23,7 +23,7 @@ export const SecurityFortress: React.FC<SecurityFortressProps> = ({ dict }) => {
         <div className="relative z-10 max-w-5xl">
           {/* Top Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-electric-teal/30 text-electric-teal text-xs font-medium backdrop-blur-md mb-6 shadow-sm">
-            <span className="material-symbols-outlined text-[16px]">shield</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">shield</span>
             <span className="text-white font-medium">{dict.security.badge}</span>
           </div>
 
@@ -50,7 +50,7 @@ export const SecurityFortress: React.FC<SecurityFortressProps> = ({ dict }) => {
               className="p-6 rounded-2xl bg-[#0c1f2e]/70 border border-white/15 backdrop-blur-md flex flex-col justify-start hover:border-electric-teal/60 hover:-translate-y-1 transition-all shadow-lg"
             >
               <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-electric-teal text-[22px]">
+                <span aria-hidden="true" className="material-symbols-outlined text-electric-teal text-[22px]">
                   check_circle
                 </span>
                 <h3 className="text-sm font-bold text-white">{card.title}</h3>

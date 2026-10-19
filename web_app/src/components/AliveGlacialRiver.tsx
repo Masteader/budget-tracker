@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 /**
  * AliveGlacialRiver
@@ -6,9 +6,29 @@ import React from 'react';
  * Uses preserveAspectRatio="xMidYMid slice" to perfectly align with the object-cover background image.
  */
 export const AliveGlacialRiver: React.FC = () => {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // SMIL <animate>/<animateMotion> ignore CSS, so pause them explicitly when
+  // the user asks the OS to reduce motion (CSS keyframes are handled globally
+  // in index.css).
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const apply = () => {
+      if (query.matches) svg.pauseAnimations();
+      else svg.unpauseAnimations();
+    };
+    apply();
+    query.addEventListener?.('change', apply);
+    return () => query.removeEventListener?.('change', apply);
+  }, []);
+
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]" aria-hidden="true">
       <svg
+        ref={svgRef}
+        focusable="false"
         className="w-full h-full object-cover"
         viewBox="0 0 1376 768"
         preserveAspectRatio="xMidYMid slice"

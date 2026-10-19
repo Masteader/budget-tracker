@@ -17,6 +17,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
   const handleQuickSettle = () => {
     setSettled(true);
     confetti({
+      disableForReducedMotion: true,
       particleCount: 70,
       spread: 60,
       origin: { y: 0.7 },
@@ -33,7 +34,11 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
       {/* Pristine Sharp Glacial Iceberg Photography (NO BLUR, SHARP & LUMINOUS) */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <img
-          alt="Glacial Iceberg Landscape Backdrop"
+          alt={dict.hero.heroImageAlt}
+          aria-hidden="true"
+          width={1376}
+          height={768}
+          fetchPriority="high"
           className="w-full h-full object-cover object-center transform scale-[1.01]"
           style={{
             filter: 'contrast(1.06) saturate(1.1) brightness(1.02)',
@@ -64,7 +69,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
           transition={{ duration: 0.6 }}
           className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-deep-navy/70 border border-electric-teal/40 backdrop-blur-md mb-6 text-ice-cyan text-xs font-semibold tracking-wider uppercase shadow-xl"
         >
-          <span className="material-symbols-outlined fill-1 text-[16px] text-electric-teal">
+          <span aria-hidden="true" className="material-symbols-outlined fill-1 text-[16px] text-electric-teal">
             ac_unit
           </span>
           <span className="text-white drop-shadow">{dict.hero.badge}</span>
@@ -92,7 +97,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
             href="#simulator"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-xl bg-gradient-to-r from-primary-container via-primary to-secondary text-white text-base font-bold shadow-xl shadow-primary-container/40 hover:shadow-electric-teal/40 hover:-translate-y-0.5 active:scale-95 transition-all border border-white/20"
           >
-            <span className="material-symbols-outlined text-[20px] text-electric-teal">bolt</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[20px] text-electric-teal">bolt</span>
             <span>{dict.hero.ctaPrimary}</span>
           </a>
           <a
@@ -100,7 +105,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-deep-navy/70 hover:bg-deep-navy/90 text-white text-base font-semibold border border-white/30 hover:border-ice-cyan backdrop-blur-xl transition-all shadow-lg hover:-translate-y-0.5"
           >
             <span>{dict.hero.ctaSecondary}</span>
-            <span className="material-symbols-outlined text-[18px] text-ice-cyan rtl:rotate-180">
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px] text-ice-cyan rtl:rotate-180">
               arrow_forward
             </span>
           </a>
@@ -120,7 +125,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
                 {dict.hero.spendGaugeTitle}
               </span>
               <span className="p-1.5 rounded-lg bg-white/10 text-electric-teal">
-                <span className="material-symbols-outlined text-[18px]">speed</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">speed</span>
               </span>
             </div>
             <div>
@@ -145,14 +150,14 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
                 {dict.hero.roommateTitle}
               </span>
               <span className="p-1.5 rounded-lg bg-white/10 text-electric-teal">
-                <span className="material-symbols-outlined text-[18px]">balance</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">balance</span>
               </span>
             </div>
             <div>
               <div className="text-3xl font-bold font-mono text-electric-teal mb-1 drop-shadow">
-                {settled ? '0.00 ر.س' : dict.hero.roommateVal}{' '}
+                {settled ? dict.hero.settledVal : dict.hero.roommateVal}{' '}
                 <span className="text-xs font-normal text-white/70">
-                  {settled ? 'متطابق' : dict.hero.roommateStatus}
+                  {settled ? dict.hero.settledStatus : dict.hero.roommateStatus}
                 </span>
               </div>
               <div className="text-xs text-white/85 flex justify-between items-center">
@@ -161,7 +166,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
                   onClick={handleQuickSettle}
                   className="text-electric-teal font-bold hover:underline cursor-pointer bg-white/10 px-2 py-0.5 rounded text-[11px] transition-all hover:bg-electric-teal hover:text-deep-navy"
                 >
-                  {settled ? 'تمت التسوية ✓' : dict.hero.roommateSettle}
+                  {settled ? dict.hero.settledBtn : dict.hero.roommateSettle}
                 </button>
               </div>
             </div>
@@ -182,7 +187,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
                 {dict.hero.ingestionTitle}
               </span>
               <span className="p-1.5 rounded-lg bg-white/10 text-electric-teal">
-                <span className="material-symbols-outlined text-[18px]">psychology</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">psychology</span>
               </span>
             </div>
             <div>
@@ -212,7 +217,7 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
             exit={{ opacity: 0 }}
             className="mb-4 px-4 py-2 rounded-full bg-emerald-500 text-deep-navy font-bold text-xs shadow-xl flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-[16px]">check_circle</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">check_circle</span>
             <span>{toastMsg}</span>
           </motion.div>
         )}
@@ -225,21 +230,21 @@ export const Hero: React.FC<HeroProps> = ({ dict }) => {
           className="w-full max-w-4xl py-3.5 px-6 rounded-2xl bg-deep-navy/80 border border-white/20 backdrop-blur-xl flex flex-wrap items-center justify-around gap-4 text-xs font-medium text-white/90 shadow-2xl"
         >
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-electric-teal text-[18px]">
+            <span aria-hidden="true" className="material-symbols-outlined text-electric-teal text-[18px]">
               verified_user
             </span>
             <span>{dict.hero.guarantee1}</span>
           </div>
           <span className="hidden md:inline text-white/30">•</span>
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-ice-cyan text-[18px]">
+            <span aria-hidden="true" className="material-symbols-outlined text-ice-cyan text-[18px]">
               qr_code_scanner
             </span>
             <span>{dict.hero.guarantee2}</span>
           </div>
           <span className="hidden md:inline text-white/30">•</span>
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-electric-teal text-[18px]">
+            <span aria-hidden="true" className="material-symbols-outlined text-electric-teal text-[18px]">
               phone_iphone
             </span>
             <span>{dict.hero.guarantee3}</span>

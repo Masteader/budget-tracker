@@ -16,8 +16,8 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
   const [payday, setPayday] = useState<number>(28);
   const [income, setIncome] = useState<number>(15000);
 
-  // Dynamic date calculations based on today
-  const today = new Date();
+  // Dynamic date calculations based on today (captured once per mount so render stays pure)
+  const [today] = useState(() => new Date());
   const currentDay = today.getDate(); // e.g. 16 on Oct 16
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
@@ -47,45 +47,47 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    return isRTL ? `${formatted} ر.س` : `SAR ${formatted}`;
+    const unit = dict.simulator.currencyUnit;
+    return isRTL ? `${formatted} ${unit}` : `${unit} ${formatted}`;
   };
 
-  // Tab 2: AI mock state
-  const [aiInput, setAiInput] = useState(
-    'Supermarket groceries SAR 350 split equally between me, Majed, and Salman'
-  );
-  const [aiCat, setAiCat] = useState('Groceries & Household Essentials');
-  const [aiTotal, setAiTotal] = useState('350.00');
-  const [splitA, setSplitA] = useState('116.66');
-  const [splitB, setSplitB] = useState('116.66');
-  const [splitC, setSplitC] = useState('116.66');
+  // Tab 2: AI mock state. Category and split notes are stored as translation
+  // keys so the demo follows the selected language.
+  type AiCatKey = 'aiCatGroceries' | 'aiCatUtilities' | 'aiCatDining' | 'aiCatInternet';
+  type AiNoteKey = 'aiNoteRooms' | 'aiNoteOthers' | 'aiNoteExempt';
+  const [aiInput, setAiInput] = useState(dict.simulator.aiDefaultInput);
+  const [aiCat, setAiCat] = useState<AiCatKey>('aiCatGroceries');
+  const [aiTotal, setAiTotal] = useState(350);
+  const [splitA, setSplitA] = useState(116.66);
+  const [splitB, setSplitB] = useState(116.66);
+  const [splitC, setSplitC] = useState<{ value: number; note?: AiNoteKey }>({ value: 116.66 });
 
   const handleAiRun = (textToProcess: string) => {
     const text = textToProcess.toLowerCase();
     if (text.includes('electricity') || text.includes('كهرباء')) {
-      setAiCat('Residential Utilities (Electricity)');
-      setAiTotal('420.00');
-      setSplitA('105.00');
-      setSplitB('105.00');
-      setSplitC('210.00 (2 rooms)');
+      setAiCat('aiCatUtilities');
+      setAiTotal(420);
+      setSplitA(105);
+      setSplitB(105);
+      setSplitC({ value: 210, note: 'aiNoteRooms' });
     } else if (text.includes('barbecue') || text.includes('dinner') || text.includes('مشاوي')) {
-      setAiCat('Hospitality & Shared Dining');
-      setAiTotal('1,800.00');
-      setSplitA('300.00');
-      setSplitB('300.00');
-      setSplitC('1,200.00 (Others)');
+      setAiCat('aiCatDining');
+      setAiTotal(1800);
+      setSplitA(300);
+      setSplitB(300);
+      setSplitC({ value: 1200, note: 'aiNoteOthers' });
     } else if (text.includes('internet') || text.includes('fiber') || text.includes('إنترنت')) {
-      setAiCat('High-Speed Internet (Telecom)');
-      setAiTotal('280.00');
-      setSplitA('140.00');
-      setSplitB('140.00');
-      setSplitC('0.00 (Exempt)');
+      setAiCat('aiCatInternet');
+      setAiTotal(280);
+      setSplitA(140);
+      setSplitB(140);
+      setSplitC({ value: 0, note: 'aiNoteExempt' });
     } else {
-      setAiCat('Groceries & Household Essentials');
-      setAiTotal('350.00');
-      setSplitA('116.66');
-      setSplitB('116.66');
-      setSplitC('116.66');
+      setAiCat('aiCatGroceries');
+      setAiTotal(350);
+      setSplitA(116.66);
+      setSplitB(116.66);
+      setSplitC({ value: 116.66 });
     }
   };
 
@@ -134,6 +136,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
   const handleSettleRequest = () => {
     setSettleSuccess(true);
     confetti({
+      disableForReducedMotion: true,
       particleCount: 50,
       spread: 50,
       origin: { y: 0.8 },
@@ -147,7 +150,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
       {/* Section Header */}
       <div className="text-center mb-14">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#dcf2f5] text-[#007a87] text-xs font-mono font-semibold border border-[#bce6ec] mb-3 uppercase tracking-wider">
-          <span className="material-symbols-outlined text-[16px]">tune</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px]">tune</span>
           <span>{dict.simulator.badge}</span>
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0c2530]">
@@ -170,7 +173,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                 : 'text-on-surface-variant hover:text-primary hover:bg-[#eaf5f7]'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px]">calendar_month</span>
             <span>{dict.simulator.tabSalary}</span>
           </button>
           <button
@@ -181,7 +184,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                 : 'text-on-surface-variant hover:text-primary hover:bg-[#eaf5f7]'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">smart_toy</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px]">smart_toy</span>
             <span>{dict.simulator.tabAi}</span>
           </button>
           <button
@@ -192,7 +195,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                 : 'text-on-surface-variant hover:text-primary hover:bg-[#eaf5f7]'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
             <span>{dict.simulator.tabZatca}</span>
           </button>
           <button
@@ -203,7 +206,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                 : 'text-on-surface-variant hover:text-primary hover:bg-[#eaf5f7]'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">group_work</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px]">group_work</span>
             <span>{dict.simulator.tabSplit}</span>
           </button>
         </div>
@@ -223,7 +226,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
               >
                 <div className="lg:col-span-5 space-y-5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e3f7fa] text-[#00808c] text-xs font-mono font-medium border border-[#bce6ec] uppercase tracking-wider">
-                    <span className="material-symbols-outlined text-[14px]">tune</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[14px]">tune</span>
                     <span>{dict.simulator.salaryPill}</span>
                   </div>
                   <h3 className="text-2xl font-bold text-[#0c2530] tracking-tight">
@@ -236,7 +239,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                   {/* Interactive Slider */}
                   <div className="p-5 rounded-2xl bg-white border border-[#d4ebf0] space-y-3 shadow-sm">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-semibold text-slate-700 uppercase font-mono tracking-wider">
+                      <label htmlFor="sim-payday" className="text-xs font-semibold text-slate-700 uppercase font-mono tracking-wider">
                         {dict.simulator.disbursementLabel}
                       </label>
                       <span className="text-base font-mono font-bold text-[#00808c]">
@@ -244,7 +247,9 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       </span>
                     </div>
                     <input
+                      id="sim-payday"
                       type="range"
+                      aria-valuetext={dict.simulator.disbursementDay.replace('{val}', payday.toString())}
                       min="1"
                       max="31"
                       value={payday}
@@ -252,10 +257,10 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       className="w-full accent-[#00808c] cursor-pointer h-2 bg-slate-200 rounded-lg"
                     />
                     <div className="flex justify-between text-[10px] font-mono text-slate-500">
-                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(1)}>{dict.simulator.day1Label}</span>
-                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(15)}>{dict.simulator.day15Label}</span>
-                      <span className={`cursor-pointer transition-colors ${payday === 27 ? 'text-[#00808c] font-bold underline' : 'hover:text-[#00808c]'}`} onClick={() => setPayday(27)}>{dict.simulator.day27Label}</span>
-                      <span className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(31)}>{dict.simulator.day31Label}</span>
+                      <button type="button" className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(1)}>{dict.simulator.day1Label}</button>
+                      <button type="button" className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(15)}>{dict.simulator.day15Label}</button>
+                      <button type="button" aria-pressed={payday === 27} className={`cursor-pointer transition-colors ${payday === 27 ? 'text-[#00808c] font-bold underline' : 'hover:text-[#00808c]'}`} onClick={() => setPayday(27)}>{dict.simulator.day27Label}</button>
+                      <button type="button" className="cursor-pointer hover:text-[#00808c] transition-colors" onClick={() => setPayday(31)}>{dict.simulator.day31Label}</button>
                     </div>
                   </div>
 
@@ -272,7 +277,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         </span>
                       </div>
                     </div>
-                    <span className="material-symbols-outlined text-emerald-600 text-[28px]">
+                    <span aria-hidden="true" className="material-symbols-outlined text-emerald-600 text-[28px]">
                       savings
                     </span>
                   </div>
@@ -292,17 +297,17 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         </span>
                       </div>
                       <span className="p-2 rounded-lg bg-[#eaf5f7] text-[#00808c]">
-                        <span className="material-symbols-outlined text-[20px]">speed</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[20px]">speed</span>
                       </span>
                     </div>
                     <div className="text-3xl font-bold font-mono text-[#00808c] mb-1">
-                      {isRTL ? `${safeDaily} ر.س` : `SAR ${safeDaily}`}{' '}
+                      {formatCurrency(parseFloat(safeDaily))}{' '}
                       <span className="text-xs font-normal text-slate-400">
-                        {isRTL ? '/ يومياً' : '/ day'}
+                        {dict.simulator.perDay}
                       </span>
                     </div>
                     <p className="text-xs text-emerald-700 flex items-center gap-1.5 mt-2">
-                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-[14px]">check_circle</span>
                       <span>{dict.simulator.burnRateOptimal}</span>
                     </p>
                     <div className="w-full bg-slate-100 h-2 rounded-full mt-4 overflow-hidden">
@@ -325,19 +330,19 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         </span>
                       </div>
                       <span className="p-2 rounded-lg bg-[#eaf5f7] text-emerald-700">
-                        <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[20px]">hourglass_top</span>
                       </span>
                     </div>
                     <div className="text-3xl font-bold font-mono text-[#0c2530] mb-1">
-                      {remainingDays === 0 ? (isRTL ? 'اليوم' : 'Today!') : remainingDays}{' '}
+                      {remainingDays === 0 ? dict.simulator.payToday : remainingDays}{' '}
                       <span className="text-sm font-normal text-slate-400">
                         {remainingDays === 0
-                          ? (isRTL ? '(يوم الراتب!)' : '(Payday!)')
+                          ? dict.simulator.paydayToday
                           : dict.simulator.countdownDays.replace('{val}', '').trim()}
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 mt-2">
-                      {isRTL ? 'المتبقي المتاح: ' : 'Available Remaining: '}
+                      {dict.simulator.availableRemaining}
                       <strong className="text-[#00808c] font-mono font-semibold">
                         {formatCurrency(availableRemaining)}
                       </strong>
@@ -354,7 +359,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                   <div className="sm:col-span-2 p-5 rounded-2xl bg-white border border-[#d4ebf0] flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-[#eaf5f7] flex items-center justify-center text-[#00808c] shadow-sm">
-                        <span className="material-symbols-outlined text-[22px]">
+                        <span aria-hidden="true" className="material-symbols-outlined text-[22px]">
                           account_balance_wallet
                         </span>
                       </div>
@@ -364,8 +369,8 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                             {dict.simulator.poolLabel}
                           </span>
                           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#f0f9fa] border border-[#bce6ec] hover:border-[#00808c] focus-within:border-[#00808c] focus-within:ring-2 focus-within:ring-[#00808c]/20 transition-all shadow-inner">
-                            <span className="text-xs font-mono font-bold text-[#00808c]">
-                              {isRTL ? 'ر.س' : 'SAR'}
+                            <span className="text-xs font-mono font-bold text-[#00808c]" aria-hidden="true">
+                              {dict.simulator.currencyUnit}
                             </span>
                             <input
                               type="number"
@@ -379,9 +384,10 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                               }}
                               placeholder="15000"
                               className="w-24 sm:w-28 text-sm font-mono font-bold text-[#00808c] bg-transparent outline-none border-none p-0 text-start"
-                              title={isRTL ? 'أدخل راتبك / دخلك الشهري المخصص' : 'Enter custom monthly income'}
+                              title={dict.simulator.incomeInputLabel}
+                              aria-label={`${dict.simulator.incomeInputLabel} (${dict.simulator.currencyUnit})`}
                             />
-                            <span className="material-symbols-outlined text-[15px] text-[#00808c]/60 cursor-pointer" title={isRTL ? 'تعديل الدخل' : 'Edit income'}>
+                            <span className="material-symbols-outlined text-[15px] text-[#00808c]/60" aria-hidden="true">
                               edit
                             </span>
                           </div>
@@ -409,7 +415,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
               >
                 <div className="lg:col-span-6 space-y-5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-mono font-medium border border-emerald-300 uppercase tracking-wider">
-                    <span className="material-symbols-outlined text-[14px]">mic</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[14px]">mic</span>
                     <span>{dict.simulator.aiPill}</span>
                   </div>
                   <h3 className="text-2xl font-bold text-[#0c2530] tracking-tight">
@@ -421,12 +427,13 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
 
                   {/* Interactive Prompt Box */}
                   <div className="p-5 rounded-2xl bg-white border border-[#d4ebf0] space-y-3 shadow-sm">
-                    <label className="text-xs font-semibold text-[#00808c] uppercase font-mono tracking-wider flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[16px]">chat</span>
+                    <label htmlFor="sim-ai-input" className="text-xs font-semibold text-[#00808c] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                      <span aria-hidden="true" className="material-symbols-outlined text-[16px]">chat</span>
                       <span>{dict.simulator.aiPromptLabel}</span>
                     </label>
                     <div className="flex gap-2">
                       <input
+                        id="sim-ai-input"
                         type="text"
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
@@ -437,7 +444,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         onClick={() => handleAiRun(aiInput)}
                         className="px-5 py-3 bg-gradient-to-r from-[#00808c] to-[#006575] text-white rounded-xl font-bold hover:brightness-110 active:scale-95 transition-all flex items-center justify-center shadow"
                       >
-                        <span className="material-symbols-outlined text-[18px]">send</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[18px]">send</span>
                       </button>
                     </div>
                     {/* Fast Presets */}
@@ -479,7 +486,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                           {dict.simulator.aiCatLabel}
                         </span>
                         <span className="text-sm font-semibold text-[#0c2530] mt-1 block">
-                          {aiCat}
+                          {dict.simulator[aiCat]}
                         </span>
                       </div>
                       <div className="p-3.5 rounded-xl bg-[#f8fdff] border border-slate-200">
@@ -487,7 +494,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                           {dict.simulator.aiTotalLabel}
                         </span>
                         <span className="text-base font-bold font-mono text-[#00808c] mt-1 block">
-                          {aiTotal} ر.س
+                          {formatCurrency(aiTotal)}
                         </span>
                       </div>
                     </div>
@@ -503,7 +510,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                             {dict.simulator.aiPayer}
                           </span>
                           <span className="text-[#00808c] font-bold font-mono text-sm block mt-0.5">
-                            {splitA} ر.س
+                            {formatCurrency(splitA)}
                           </span>
                         </div>
                         <div className="p-2.5 rounded-xl bg-white border border-slate-100">
@@ -511,7 +518,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                             {dict.simulator.aiDebtor1}
                           </span>
                           <span className="text-emerald-700 font-bold font-mono text-sm block mt-0.5">
-                            {splitB} ر.س
+                            {formatCurrency(splitB)}
                           </span>
                         </div>
                         <div className="p-2.5 rounded-xl bg-white border border-slate-100">
@@ -519,7 +526,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                             {dict.simulator.aiDebtor2}
                           </span>
                           <span className="text-emerald-700 font-bold font-mono text-sm block mt-0.5">
-                            {splitC} ر.س
+                            {formatCurrency(splitC.value)}{splitC.note ? ` ${dict.simulator[splitC.note]}` : ''}
                           </span>
                         </div>
                       </div>
@@ -528,7 +535,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                     {/* Category Health Impact */}
                     <div className="p-3 rounded-xl bg-[#eaf5f7] border border-[#d4ebf0] flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2 text-slate-600">
-                        <span className="material-symbols-outlined text-[#00808c] text-[18px]">
+                        <span aria-hidden="true" className="material-symbols-outlined text-[#00808c] text-[18px]">
                           info
                         </span>
                         <span>{dict.simulator.aiImpactLabel}</span>
@@ -554,7 +561,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
               >
                 <div className="lg:col-span-5 space-y-5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e3f7fa] text-[#00808c] text-xs font-mono font-medium border border-[#bce6ec] uppercase tracking-wider">
-                    <span className="material-symbols-outlined text-[14px]">document_scanner</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[14px]">document_scanner</span>
                     <span>{dict.simulator.zatcaPill}</span>
                   </div>
                   <h3 className="text-2xl font-bold text-[#0c2530] tracking-tight">
@@ -568,7 +575,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       onClick={handleNextZatcaScan}
                       className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-[#00808c] via-[#006575] to-emerald-700 text-white font-bold text-sm flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-md"
                     >
-                      <span className="material-symbols-outlined text-[20px]">
+                      <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
                         center_focus_strong
                       </span>
                       <span>{dict.simulator.zatcaBtn}</span>
@@ -592,7 +599,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         </p>
                       </div>
                       <div className="w-14 h-14 bg-[#eaf5f7] p-1 rounded-xl flex items-center justify-center text-[#00808c] shadow border border-[#d4ebf0]">
-                        <span className="material-symbols-outlined text-[42px]">qr_code_2</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[42px]">qr_code_2</span>
                       </div>
                     </div>
 
@@ -600,13 +607,13 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       <div className="flex justify-between py-1.5 border-b border-slate-100">
                         <span className="text-slate-500">{dict.simulator.zatcaNet}</span>
                         <span className="font-bold font-mono text-[#0c2530]">
-                          {currentInvoice.sub} ر.س
+                          {formatCurrency(parseFloat(currentInvoice.sub))}
                         </span>
                       </div>
                       <div className="flex justify-between py-1.5 border-b border-slate-100">
                         <span className="text-slate-500">{dict.simulator.zatcaTax}</span>
                         <span className="font-bold font-mono text-[#00808c]">
-                          {currentInvoice.tax} ر.س
+                          {formatCurrency(parseFloat(currentInvoice.tax))}
                         </span>
                       </div>
                       <div className="flex justify-between py-2 text-sm bg-[#f8fdff] px-3 rounded-lg">
@@ -614,15 +621,15 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                           {dict.simulator.zatcaGrand}
                         </span>
                         <span className="font-bold font-mono text-emerald-700">
-                          {currentInvoice.total} ر.س
+                          {formatCurrency(parseFloat(currentInvoice.total))}
                         </span>
                       </div>
                     </div>
 
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
-                      <span className="text-slate-600">حالة التحقق:</span>
+                      <span className="text-slate-600">{dict.simulator.zatcaStatusLabel}</span>
                       <span className="inline-flex items-center gap-1.5 text-emerald-800 font-semibold font-mono">
-                        <span className="material-symbols-outlined text-[16px]">verified</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[16px]">verified</span>
                         <span>{dict.simulator.zatcaVerified}</span>
                       </span>
                     </div>
@@ -643,7 +650,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
               >
                 <div className="lg:col-span-5 space-y-5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-mono font-medium border border-emerald-300 uppercase tracking-wider">
-                    <span className="material-symbols-outlined text-[14px]">balance</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[14px]">balance</span>
                     <span>{dict.simulator.splitPill}</span>
                   </div>
                   <h3 className="text-2xl font-bold text-[#0c2530] tracking-tight">
@@ -692,119 +699,45 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       </span>
                     </div>
 
-                    {splitMode === 'family' ? (
-                      <div className="space-y-2.5 text-xs">
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-[#00808c] shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">
-                              أبو فهد (المصروف العام للأسرة)
-                            </span>
-                            <span className="text-slate-500 text-[11px]">
-                              المدفوع: الإيجار السنوي، الفواتير، ومصاريف المدرسة
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-[#00808c] font-bold font-mono text-sm block">
-                              4,800.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-emerald-700 font-semibold">
-                              مغطى بالكامل
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-emerald-500 shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">
-                              أم فهد (التموينات ومستلزمات البيت)
-                            </span>
-                            <span className="text-slate-500 text-[11px]">
-                              المدفوع: مقاضي بنده، تموينات الأسبوع
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-emerald-700 font-bold font-mono text-sm block">
-                              1,600.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-emerald-700 font-semibold">
-                              تكامل الميزانية 100%
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-amber-500 shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">
-                              صندوق طوارئ واستثمار الأسرة
-                            </span>
-                            <span className="text-slate-500 text-[11px]">
-                              الرصيد التراكمي المحمي للطوارئ الطبية والمدرسية
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-amber-700 font-bold font-mono text-sm block">
-                              8,500.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-amber-700 font-semibold">
-                              حساب محمي
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5 text-xs">
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-[#00808c] shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">أحمد (أنت)</span>
-                            <span className="text-slate-500 text-[11px]">
-                              دفع: كهرباء الشقة، فايبر الإنترنت، مقاضي الشهر
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-emerald-700 font-bold font-mono text-sm block">
-                              +420.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-emerald-700 uppercase font-mono font-bold">
-                              دائن مستحق
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-rose-400 shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">ماجد العبدالله</span>
-                            <span className="text-slate-500 text-[11px]">
-                              دفع: صيانة التكييف وفلاتر المياه
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-rose-600 font-bold font-mono text-sm block">
-                              -180.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-rose-600 uppercase font-mono font-bold">
-                              مدين
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between border-s-4 border-rose-400 shadow-sm">
-                          <div>
-                            <span className="font-bold text-[#0c2530] block">سلمان الفهد</span>
-                            <span className="text-slate-500 text-[11px]">
-                              دفع: تعبئة أسطوانة غاز المطبخ
-                            </span>
-                          </div>
-                          <div className="text-end">
-                            <span className="text-rose-600 font-bold font-mono text-sm block">
-                              -240.00 ر.س
-                            </span>
-                            <span className="text-[10px] text-rose-600 uppercase font-mono font-bold">
-                              مدين
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <ul className="space-y-2.5 text-xs">
+                      {(splitMode === 'family' ? dict.simulator.familyRows : dict.simulator.roommateRows).map((row, idx) => {
+                        const tone =
+                          splitMode === 'family'
+                            ? ['text-[#00808c]', 'text-emerald-700', 'text-amber-700'][idx % 3]
+                            : row.amount >= 0
+                              ? 'text-emerald-700'
+                              : 'text-rose-600';
+                        const border =
+                          splitMode === 'family'
+                            ? ['border-[#00808c]', 'border-emerald-500', 'border-amber-500'][idx % 3]
+                            : row.amount >= 0
+                              ? 'border-[#00808c]'
+                              : 'border-rose-400';
+                        const signed =
+                          splitMode === 'roommates' && row.amount > 0
+                            ? `+${formatCurrency(row.amount)}`
+                            : row.amount < 0
+                              ? `-${formatCurrency(Math.abs(row.amount))}`
+                              : formatCurrency(row.amount);
+                        return (
+                          <li
+                            key={row.name}
+                            className={`p-3.5 rounded-xl bg-[#f8fdff] flex items-center justify-between gap-3 border-s-4 ${border} shadow-sm`}
+                          >
+                            <div className="min-w-0">
+                              <span className="font-bold text-[#0c2530] block">{row.name}</span>
+                              <span className="text-slate-500 text-[11px]">{row.desc}</span>
+                            </div>
+                            <div className="text-end shrink-0">
+                              <span className={`${tone} font-bold font-mono text-sm block`} dir="ltr">
+                                {signed}
+                              </span>
+                              <span className={`text-[10px] ${tone} font-semibold`}>{row.status}</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
 
                     <div className="p-4 rounded-xl bg-[#f8fdff] border border-[#d4ebf0] flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm">
                       <div>
@@ -819,7 +752,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                         onClick={handleSettleRequest}
                         className="px-4 py-2.5 rounded-lg bg-[#00808c] text-white text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-sm whitespace-nowrap"
                       >
-                        {settleSuccess ? 'تم إرسال الطلب بنجاح ✓' : dict.simulator.splitSettleBtn}
+                        {settleSuccess ? dict.simulator.splitSettleSent : dict.simulator.splitSettleBtn}
                       </button>
                     </div>
                   </div>

@@ -13,7 +13,7 @@ export const Footer: React.FC<FooterProps> = ({ dict }) => {
         <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-start">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary-container text-white flex items-center justify-center shadow">
-              <span className="material-symbols-outlined fill-1 text-[20px]">account_balance</span>
+              <span aria-hidden="true" className="material-symbols-outlined fill-1 text-[20px]">account_balance</span>
             </div>
             <div>
               <span className="text-base font-bold text-[#0c2530] block">{dict.brand.name}</span>
