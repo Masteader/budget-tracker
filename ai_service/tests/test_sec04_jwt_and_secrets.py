@@ -108,35 +108,44 @@ def test_no_unverified_claims_fallback_when_secret_unset(monkeypatch):
 
 
 def test_working_tree_secret_scanner():
-    """Scan source files for known leaked secret patterns and hardcoded default tokens."""
+    """Scan the working tree for known-leaked secrets (by SHA-256 digest) and hardcoded credentials.
+
+    Covers Python, Dart, TS/TSX/JS, Markdown, JSON and YAML across the client, the AI
+    service (including tests and dev scripts) and the docs. Raw leaked values are never
+    stored in the repo; see tests/secret_scan.py for the digest inventory.
+    """
+    from secret_scan import scan_paths
+
     repo_root = Path(__file__).resolve().parent.parent.parent
-    
-    # Patterns of known leaked tokens and secrets
-    secret_patterns = [
-        re.compile(r"bt_sec_[a-f0-9]{16,}"),
-        re.compile(r"239e6a9141efe77bd8193faba777496f2e5bf1c072edf65a20b07082b00b4cc7"),
-        re.compile(r"dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"),
-    ]
-
-    source_dirs = [
+    roots = [
         repo_root / "flutter_app" / "lib",
-        repo_root / "ai_service" / "routes",
+        repo_root / "ai_service",
+        repo_root / "web_app" / "src",
+        repo_root / "docs",
+        repo_root / "README.md",
+        repo_root / "AGENTS.md",
     ]
+    findings = scan_paths(roots, repo_root)
+    assert not findings, "Hardcoded or known-leaked secrets detected:\n" + "\n".join(findings)
 
-    findings = []
-    for sdir in source_dirs:
-        if not sdir.exists():
-            continue
-        for fpath in sdir.rglob("*.dart"):
-            content = fpath.read_text(encoding="utf-8", errors="ignore")
-            for pat in secret_patterns:
-                if pat.search(content):
-                    findings.append(f"{fpath.relative_to(repo_root)} matched {pat.pattern}")
 
-        for fpath in sdir.rglob("*.py"):
-            content = fpath.read_text(encoding="utf-8", errors="ignore")
-            for pat in secret_patterns:
-                if pat.search(content):
-                    findings.append(f"{fpath.relative_to(repo_root)} matched {pat.pattern}")
+def test_secret_scanner_detects_leaked_digest_and_structural_patterns():
+    """The scanner must flag a known-leaked value (matched by digest) and real-looking credentials."""
+    import hashlib
+    import secret_scan
 
-    assert not findings, f"Hardcoded secrets detected in source code: {findings}"
+    fresh = "ab" * 32
+    digest = hashlib.sha256(fresh.encode()).hexdigest()
+    original = secret_scan.LEAKED_SECRET_SHA256
+    try:
+        secret_scan.LEAKED_SECRET_SHA256 = frozenset(set(original) | {digest})
+        hits = secret_scan.scan_text(f'WEBHOOK_SECRET = "{fresh}"')
+    finally:
+        secret_scan.LEAKED_SECRET_SHA256 = original
+    assert hits and "known-leaked hex64" in hits[0]
+    assert fresh not in hits[0], "scanner output must never echo the secret value"
+
+    assert secret_scan.scan_text("token = 'bt_sec_" + "9f" * 10 + "'")
+    assert secret_scan.scan_text("key = 'sb_secret_" + "Zq81" * 6 + "'")
+    assert not secret_scan.scan_text("key = 'sb_secret_mock_service_role_key_for_testing'")
+    assert not secret_scan.scan_text("sha = '" + "0" * 64 + "'")

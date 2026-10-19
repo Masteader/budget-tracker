@@ -3,8 +3,9 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-OLD_LEAKED_SECRET = "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400"
-OLD_LEAKED_TOKEN = "bt_sec_99a81f3d4c72e01b88e2"
+# Leaked values are never stored raw; any stale/unknown token must be rejected.
+OLD_LEAKED_SECRET = "stale-webhook-secret-value-not-configured"
+OLD_LEAKED_TOKEN = "stale-app-token-value-not-configured"
 
 @pytest.fixture(autouse=True, scope="module")
 def setup_security_posture_env():

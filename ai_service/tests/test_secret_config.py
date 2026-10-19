@@ -17,7 +17,8 @@ def test_webhook_secret_requires_env_var():
     """WEBHOOK_SECRET must come from environment, no fallback."""
     src = inspect.getsource(main)
     assert 'WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()' in src
-    assert "dc48149f54288779f92f8da4963ef08c2ba58e15a62dc78eea2b6e98c7d0c400" not in src
+    from secret_scan import scan_text
+    assert not scan_text(src), "main.py must not embed known-leaked secret values"
 
 
 def test_runtime_secret_loading_in_isolated_process():
