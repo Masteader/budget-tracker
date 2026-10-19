@@ -54,12 +54,12 @@ BEGIN
 
     -- Setup cost control codes
     IF NOT EXISTS (SELECT 1 FROM public.cost_control_codes WHERE code = 'OPEX-GROCERY' AND household_id IS NULL) THEN
-        INSERT INTO public.cost_control_codes (code, category, household_id, is_system) VALUES
-            ('OPEX-GROCERY', 'Grocery', NULL, true);
+        INSERT INTO public.cost_control_codes (code, category, keywords, household_id, is_system) VALUES
+            ('OPEX-GROCERY', 'Grocery', '{}', NULL, true);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.cost_control_codes WHERE code = 'OPEX-CUSTOM-VICTIM' AND household_id = v_victim_hh) THEN
-        INSERT INTO public.cost_control_codes (code, category, household_id, is_system) VALUES
-            ('OPEX-CUSTOM-VICTIM', 'Custom Victim', v_victim_hh, false);
+        INSERT INTO public.cost_control_codes (code, category, keywords, household_id, is_system) VALUES
+            ('OPEX-CUSTOM-VICTIM', 'Custom Victim', '{}', v_victim_hh, false);
     END IF;
 
     RAISE NOTICE 'Round 6 test fixtures initialized successfully.';
@@ -71,7 +71,6 @@ END $$;
 -- Authenticated users must NOT be able to directly UPDATE balance, household_id,
 -- owner_user_id, or is_shared_pool.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_err text;
@@ -96,7 +95,6 @@ END $$;
 -- TEST 2: Account Transfers Ledger Immutability
 -- Direct client INSERT on public.account_transfers must be blocked.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 BEGIN
     SET LOCAL ROLE authenticated;
@@ -124,7 +122,6 @@ END $$;
 -- TEST 3: Income Records Ledger Immutability
 -- Direct client UPDATE and DELETE on public.income_records must be blocked.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_inc_id UUID;
@@ -132,12 +129,14 @@ DECLARE
 BEGIN
     -- Seed an income record via postgres
     INSERT INTO public.income_records (
-        id, household_id, user_id, account_id, title, base_amount, net_amount
+        id, household_id, user_id, account_id, cycle_key, source_type, title, base_amount, net_amount
     ) VALUES (
         gen_random_uuid(),
         '6086befc-0000-0000-0000-000000000001',
         '22222222-0000-0000-0000-000000000002',
         'aaaa0000-0000-0000-0000-000000000002',
+        '2026-11',
+        'salary',
         'Test Salary',
         5000.00,
         5000.00
@@ -171,8 +170,9 @@ END $$;
 -- Transactions referencing an account owned by another user (not shared) or
 -- belonging to another household must be rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_vulnerable boolean := false;
 BEGIN
     -- Member attempts transaction debiting Admin's personal account
     SET LOCAL ROLE authenticated;
@@ -188,10 +188,14 @@ BEGIN
             'aaaa0000-0000-0000-0000-000000000001', -- Admin personal account
             'Unauthorized Debit'
         );
-        RAISE EXCEPTION 'VULNERABILITY: Member debited personal account owned by admin!';
-    EXCEPTION WHEN insufficient_privilege OR check_violation OR integrity_constraint_violation OR raise_exception THEN
+        v_vulnerable := true;
+    EXCEPTION WHEN insufficient_privilege OR check_violation OR integrity_constraint_violation THEN
         RAISE NOTICE 'PASSED: Member blocked from using another user personal account in transaction.';
     END;
+
+    IF v_vulnerable THEN
+        RAISE EXCEPTION 'VULNERABILITY: Member debited personal account owned by admin!';
+    END IF;
 END $$;
 \set ON_ERROR_STOP on
 
@@ -200,12 +204,14 @@ END $$;
 -- TEST 5: NULL Comparison Bug in Financial RPCs
 -- transfer_between_accounts & record_income with NULL household_id
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_state text;
 BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "11111111-0000-0000-0000-000000000001", "role": "authenticated"}';
 
+    v_state := 'accepted';
     BEGIN
         PERFORM public.transfer_between_accounts(
             NULL,
@@ -213,15 +219,15 @@ BEGIN
             'aaaa0000-0000-0000-0000-000000000002',
             100.00
         );
-        RAISE EXCEPTION 'VULNERABILITY: transfer_between_accounts accepted NULL household_id!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLSTATE = '42501' THEN
-            RAISE NOTICE 'PASSED: transfer_between_accounts rejected NULL household_id with 42501.';
-        ELSE
-            RAISE NOTICE 'PASSED (exception %: %)', SQLSTATE, SQLERRM;
-        END IF;
+        v_state := SQLSTATE;
     END;
+    IF v_state IS DISTINCT FROM '42501' THEN
+        RAISE EXCEPTION 'VULNERABILITY: transfer_between_accounts with NULL household_id was not rejected with 42501 (got %)', v_state;
+    END IF;
+    RAISE NOTICE 'PASSED: transfer_between_accounts rejected NULL household_id with 42501.';
 
+    v_state := 'accepted';
     BEGIN
         PERFORM public.record_income(
             NULL,
@@ -231,14 +237,13 @@ BEGIN
             'Test',
             1000.00
         );
-        RAISE EXCEPTION 'VULNERABILITY: record_income accepted NULL household_id!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLSTATE = '42501' THEN
-            RAISE NOTICE 'PASSED: record_income rejected NULL household_id with 42501.';
-        ELSE
-            RAISE NOTICE 'PASSED (exception %: %)', SQLSTATE, SQLERRM;
-        END IF;
+        v_state := SQLSTATE;
     END;
+    IF v_state IS DISTINCT FROM '42501' THEN
+        RAISE EXCEPTION 'VULNERABILITY: record_income with NULL household_id was not rejected with 42501 (got %)', v_state;
+    END IF;
+    RAISE NOTICE 'PASSED: record_income rejected NULL household_id with 42501.';
 END $$;
 \set ON_ERROR_STOP on
 
@@ -248,7 +253,6 @@ END $$;
 -- consume_quota, check_quota_status, and trigger functions must NOT be callable
 -- by authenticated or anon.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 BEGIN
     SET LOCAL ROLE authenticated;
@@ -276,8 +280,9 @@ END $$;
 -- Inserting a transaction or budget with a category code not belonging to the
 -- household or global taxonomy must be rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_vulnerable boolean := false;
 BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "33333333-0000-0000-0000-000000000003", "role": "authenticated"}';
@@ -291,10 +296,14 @@ BEGIN
             50.00,
             'Cross-Household Category Test'
         );
-        RAISE EXCEPTION 'VULNERABILITY: Transaction accepted category code belonging to another household!';
-    EXCEPTION WHEN foreign_key_violation OR integrity_constraint_violation OR check_violation OR raise_exception THEN
+        v_vulnerable := true;
+    EXCEPTION WHEN foreign_key_violation OR integrity_constraint_violation OR check_violation THEN
         RAISE NOTICE 'PASSED: Cross-household custom category code rejected by validation trigger.';
     END;
+
+    IF v_vulnerable THEN
+        RAISE EXCEPTION 'VULNERABILITY: Transaction accepted category code belonging to another household!';
+    END IF;
 END $$;
 \set ON_ERROR_STOP on
 
@@ -326,7 +335,6 @@ END $$;
 -- TEST 9: Account Hijacking Prevention in claim_household_role_invite
 -- Authenticated caller passing a different p_user_id must be rejected with 42501.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_code text := 'HIJACKTESTCODE01';
@@ -357,7 +365,6 @@ END $$;
 -- Calling claim_household_role_invite followed by join_household_by_code as the
 -- same user succeeds; a second user calling join_household_by_code is rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_code text := 'DOUBLECLAIMTEST1';
@@ -403,7 +410,6 @@ END $$;
 -- Verifies reconcile_account_balance succeeds for authorized owner/admin and
 -- rejects unauthorized members with 42501.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_res jsonb;

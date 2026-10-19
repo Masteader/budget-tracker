@@ -15,6 +15,13 @@ DECLARE
     v_cnt int;
     v_err text;
 BEGIN
+    -- 0. Auth identities (public.users.id references auth.users.id)
+    INSERT INTO auth.users (id, email) VALUES
+        (v_admin_id, 'sec01-admin@test.local'),
+        (v_member_id, 'sec01-member@test.local'),
+        (v_attacker_id, 'sec01-attacker@test.local')
+    ON CONFLICT (id) DO NOTHING;
+
     -- 1. Create clean test households
     DELETE FROM public.household_memberships WHERE household_id IN (v_victim_hh, v_attacker_hh);
     DELETE FROM public.household_invites WHERE household_id IN (v_victim_hh, v_attacker_hh) OR invite_code = 'SECRETINVITE99';

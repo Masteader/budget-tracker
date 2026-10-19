@@ -12,6 +12,12 @@ DECLARE
     v_blocked boolean := false;
     i int;
 BEGIN
+    -- Auth identities (public.users.id references auth.users.id)
+    INSERT INTO auth.users (id, email) VALUES
+        (v_admin_id, 'sec02-admin@test.local'),
+        (v_member_id, 'sec02-member@test.local')
+    ON CONFLICT (id) DO NOTHING;
+
     -- Setup clean fixtures
     DELETE FROM public.household_memberships WHERE household_id = v_hh_id;
     DELETE FROM public.household_invites WHERE household_id = v_hh_id;
