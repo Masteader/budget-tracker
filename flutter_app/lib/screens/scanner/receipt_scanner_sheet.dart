@@ -68,6 +68,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     _merchantController = TextEditingController();
   }
 
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
   @override
   void dispose() {
     _merchantController.dispose();
@@ -90,10 +95,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       if (!status.isGranted) {
         final requested = await Permission.camera.request();
         if (!requested.isGranted) {
-          setState(() {
+          _safeSetState(() {
             _errorMessage = requested.isPermanentlyDenied
-                ? 'Camera permission is permanently denied. Please allow it in Settings to take receipt photos.'
-                : 'Camera permission is needed to take receipt photos.';
+                ? context.tr('scan_cam_perm_permanent')
+                : context.tr('scan_cam_perm_needed');
           });
           return;
         }
@@ -109,7 +114,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       );
       if (picked == null) return;
 
-      setState(() {
+      _safeSetState(() {
         _imageFiles.add(File(picked.path));
         _errorMessage = null;
         _scanResult = null;
@@ -117,15 +122,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     } on PlatformException catch (pe) {
       if (pe.code.toLowerCase().contains('camera_access_denied') ||
           (pe.message?.toLowerCase().contains('camera') ?? false)) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage =
-              'Camera access was denied by the system. Please grant Camera permission in Settings.';
+              context.tr('scan_cam_denied_by_system');
         });
       } else {
-        setState(() => _errorMessage = 'Camera error: ${pe.message ?? pe.code}');
+        _safeSetState(() => _errorMessage = context.trArgs('scan_camera_error', {'error': pe.message ?? pe.code}));
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error capturing photo: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
     }
   }
 
@@ -154,7 +159,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paste or scan the Base64 QR code from your tax invoice. It automatically verifies merchant, total, and 15% VAT.',
+              context.tr('scan_paste_qr_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -163,7 +168,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               maxLines: 3,
               style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: context.textPrimary),
               decoration: InputDecoration(
-                hintText: 'e.g. AQ5UYW1pbWkgTWFya2V0cwIPMzAwMDAwMDAwMDAwMDAz...',
+                hintText: '${context.tr('example_prefix')} AQ5UYW1pbWkgTWFya2V0cwIPMzAwMDAwMDAwMDAwMDAz...',
                 hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6), fontSize: 11),
                 filled: true,
                 fillColor: context.inputBg,
@@ -180,7 +185,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.paste, size: 14, color: Color(0xFF58A6FF)),
-                  label: const Text('From Clipboard', style: TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
+                  label: Text(context.tr('from_clipboard'), style: const TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
                   onPressed: () async {
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
                     if (data?.text != null) {
@@ -195,7 +200,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.receipt_long_outlined, size: 14, color: Color(0xFF00C896)),
-                  label: const Text('Sample eXtra', style: TextStyle(fontSize: 11, color: Color(0xFF00C896))),
+                  label: Text(context.tr('sample_extra'), style: const TextStyle(fontSize: 11, color: Color(0xFF00C896))),
                   onPressed: () {
                     ctrl.text = 'ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=';
                   },
@@ -207,7 +212,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
@@ -251,13 +256,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ],
               ),
               content: Text(
-                'Camera permission is required to scan invoice QR codes.\n\nPlease tap "Open Settings" to enable Camera for Budget Tracker.',
+                context.tr('scan_qr_cam_perm_required'),
                 style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                  child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -269,7 +274,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     openAppSettings();
                   },
                   icon: const Icon(Icons.settings, size: 16),
-                  label: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -288,7 +293,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final decoded = ZatcaDecoder.decodeTlv(scannedCode);
       final sellerName = decoded?['seller'] as String? ?? 'Store Name';
 
-      setState(() {
+      _safeSetState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
         if (sellerName.isNotEmpty && sellerName != 'Store Name') {
@@ -301,7 +306,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _analyzeReceipt() async {
     if (_imageFiles.isEmpty && _zatcaQrRaw == null) {
-      setState(() => _errorMessage = 'Please take at least one photo or provide a ZATCA QR code.');
+      setState(() => _errorMessage = context.tr('photo_or_qr_required'));
       return;
     }
 
@@ -327,10 +332,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         previewOnly: true,
       );
 
-      setState(() {
+      _safeSetState(() {
         _isAnalyzing = false;
         if (res['status'] == 'error') {
-          _errorMessage = res['message'] ?? 'Failed to analyze receipt.';
+          _errorMessage = res['message'] ?? context.tr('scan_analyze_failed');
         } else {
           _scanResult = res;
           final detectedMerchant = _zatcaDecoded?['seller'] as String? ??
@@ -363,7 +368,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               'spent_by': _selectedSpentBy,
               'items': [
                 {
-                  'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                  'name': context.trArgs('scan_invoice_total_item', {'vat': context.sar(vat)}),
                   'quantity': 1.0,
                   'price': total,
                 }
@@ -395,9 +400,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             }
           } catch (_) {}
         }
-        setState(() {
+        _safeSetState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Scan failed: $e';
+          _errorMessage = context.trArgs('scan_failed_msg', {'error': e});
         });
       }
     }
@@ -444,14 +449,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         receiptUrl: uploadedReceiptUrl,
       );
 
-      setState(() => _isAnalyzing = false);
+      _safeSetState(() => _isAnalyzing = false);
 
       if (mounted) {
         if (res['status'] == 'success' || res['status'] == 'enriched') {
           AppSnackBar.showSuccess(
             context,
-            res['message'] ?? 'Invoice transaction saved successfully!',
-            title: 'Invoice Saved',
+            res['message'] ?? context.tr('scan_invoice_saved_msg'),
+            title: context.tr('scan_invoice_saved'),
           );
           _notifyGlobalProviders();
           Navigator.pop(context);
@@ -497,7 +502,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   'amount': total,
                   'items': _scanResult?['items'],
                   'message':
-                      "A transaction of SAR ${rowAmt.toStringAsFixed(2)} at '$merchant' was already recorded. Attach items or log as separate?",
+                      context.trArgs('scan_duplicate_found_msg', {'amount': context.sar(rowAmt), 'merchant': merchant}),
                 };
               });
             }
@@ -519,12 +524,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           );
         } catch (_) {}
       }
+      if (!mounted) return;
 
       final merchant = _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
           : (_zatcaDecoded?['seller'] as String? ??
               _scanResult?['merchant'] as String? ??
-              'VAT Tax Invoice');
+              context.tr('scan_vat_tax_invoice'));
       final total = (_zatcaDecoded?['total'] as num?)?.toDouble() ??
           (_scanResult?['amount'] as num?)?.toDouble() ??
           0.0;
@@ -534,7 +540,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       if (!allowDuplicate && total > 0) {
         final isDup = await _checkFallbackDuplicateCandidate(merchant, total, vat);
-        if (isDup) return;
+        if (isDup || !mounted) return;
       }
 
       final dynamic rawItems = _scanResult?['items'];
@@ -542,7 +548,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
           : [
               {
-                'name': 'Tax Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                'name': context.trArgs('scan_tax_invoice_total_item', {'vat': context.sar(vat)}),
                 'quantity': 1.0,
                 'price': total,
               }
@@ -600,13 +606,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         }
       }
 
-      setState(() => _isAnalyzing = false);
+      _safeSetState(() => _isAnalyzing = false);
 
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          'Saved SAR ${total.toStringAsFixed(2)} at $merchant!',
-          title: 'Invoice Recorded',
+          context.trArgs('scan_saved_amount_at', {'amount': context.sar(total), 'merchant': merchant}),
+          title: context.tr('scan_invoice_recorded'),
         );
         _notifyGlobalProviders();
         Navigator.pop(context);
@@ -634,7 +640,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             'needs_cloud_enrichment': true,
           },
         );
-        setState(() => _isAnalyzing = false);
+        _safeSetState(() => _isAnalyzing = false);
         if (mounted) {
           AppSnackBar.showSuccess(
             context,
@@ -647,9 +653,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         return;
       } catch (_) {}
 
-      setState(() {
+      _safeSetState(() {
         _isAnalyzing = false;
-        _errorMessage = 'Could not save invoice: $e';
+        _errorMessage = context.trArgs('scan_save_failed_msg', {'error': e});
       });
     }
   }
@@ -685,7 +691,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Scan Invoice & Long Receipts',
+                    context.tr('scan_invoice_title'),
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -697,7 +703,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'For long 60+ item receipts, snap multiple photos (top, middle, bottom). You can also scan the ZATCA VAT QR code.',
+              context.tr('scan_invoice_desc'),
               style: GoogleFonts.outfit(fontSize: 13, color: context.textSecondary),
             ),
             const SizedBox(height: 16),
@@ -705,7 +711,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             // ── ZATCA QR Status Badge ──
             if (_zatcaDecoded != null)
               ZatcaStatusBadge(
-                seller: _zatcaDecoded!['seller'] ?? 'Merchant',
+                seller: _zatcaDecoded!['seller'] ?? context.tr('merchant_generic'),
                 total: (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0,
                 vat: (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0,
                 onDismiss: () => setState(() {
@@ -848,9 +854,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                    label: const Text(
-                      '📸 Snap Receipt Photo to Extract Items',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    label: Text(
+                      context.tr('scan_snap_to_extract'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     onPressed: _isAnalyzing ? null : () async {
                       await _addPhoto(ImageSource.camera);
@@ -867,7 +873,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     ),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
                     label: Text(
-                      'Save Total Only (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}) without items',
+                      context.trArgs('scan_save_total_only', {'amount': context.sar((_zatcaDecoded!['total'] as num?) ?? 0)}),
                       style: const TextStyle(fontSize: 12),
                     ),
                     onPressed: _isAnalyzing ? null : () => _confirmSave(allowDuplicate: false),
@@ -882,7 +888,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     ),
                     icon: const Icon(Icons.auto_awesome, size: 20),
                     label: Text(
-                      'Extract Items with AI & Verify (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'})',
+                      context.trArgs('scan_extract_and_verify', {'amount': context.sar((_zatcaDecoded!['total'] as num?) ?? 0)}),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     onPressed: _isAnalyzing ? null : _analyzeReceipt,
@@ -899,7 +905,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   ),
                   icon: const Icon(Icons.auto_awesome),
                   label: Text(
-                    'Extract Items from ${_imageFiles.length} Photo(s) with AI',
+                    context.trArgs('scan_extract_from_photos', {'count': _imageFiles.length}),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   onPressed: _analyzeReceipt,
@@ -918,12 +924,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     const CircularProgressIndicator(color: Color(0xFF00C896)),
                     const SizedBox(height: 16),
                     Text(
-                      'AI Scanning Long Receipt...',
+                      context.tr('scan_ai_scanning'),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: context.textPrimary, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Reading all line items item-by-item across ${_imageFiles.length} photo(s)',
+                      context.trArgs('scan_reading_items', {'count': _imageFiles.length}),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
@@ -971,7 +977,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               icon: const Icon(Icons.settings, size: 16),
-                              label: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               onPressed: () => openAppSettings(),
                             ),
                           ),
@@ -985,7 +991,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Try Again', style: TextStyle(fontSize: 12)),
+                              label: Text(context.tr('try_again'), style: const TextStyle(fontSize: 12)),
                               onPressed: () => _addPhoto(ImageSource.camera),
                             ),
                           ),
@@ -1025,7 +1031,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final merchant = _zatcaDecoded?['seller'] as String? ??
         _scanResult!['merchant'] ??
         _scanResult!['parsed_data']?['merchant'] ??
-        'Merchant';
+        context.tr('merchant_generic');
 
     final num amountNum = (_zatcaDecoded?['total'] as num?) ??
         (_scanResult!['amount'] ??
@@ -1063,12 +1069,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Invoice Saved Successfully!',
+                        context.tr('scan_saved_success_title'),
                         style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${items.length} items logged under $merchant (SAR ${amount.toStringAsFixed(2)})${isZatcaVerified ? ' • ZATCA Verified' : ''}',
+                        '${context.trArgs('scan_items_logged', {'count': items.length, 'merchant': merchant, 'amount': context.sar(amount)})}${isZatcaVerified ? ' • ${context.tr('scan_zatca_verified')}' : ''}',
                         style: const TextStyle(color: Color(0xFF00C896), fontSize: 12),
                       ),
                     ],
@@ -1082,7 +1088,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
         if (isCandidate) ...[
           DuplicateCandidateCard(
-            message: _scanResult!['message'] ?? 'An identical amount was recorded recently.',
+            message: _scanResult!['message'] ?? context.tr('scan_identical_recent'),
             itemCount: items.length,
             onEnrich: () {
               final cId = _scanResult!['candidate_transaction_id'];
@@ -1093,8 +1099,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               Navigator.of(context).pop();
               AppSnackBar.showInfo(
                 context,
-                'Duplicate receipt scan discarded.',
-                title: 'Scan Discarded',
+                context.tr('scan_duplicate_discarded'),
+                title: context.tr('scan_discarded'),
                 icon: Icons.delete_sweep_outlined,
               );
             },
@@ -1106,7 +1112,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             seller: merchant,
             total: amount,
             vat: (_zatcaDecoded?['vat'] as num?)?.toDouble() ?? (amount * 0.15 / 1.15),
-            customSubtitle: 'Total: SAR ${amount.toStringAsFixed(2)}  •  ${items.length} items extracted with AI',
+            customSubtitle: context.trArgs('scan_total_items_extracted', {'amount': context.sar(amount), 'count': items.length}),
           ),
         ],
 
@@ -1125,9 +1131,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: const Icon(Icons.camera_alt_rounded, size: 18),
-              label: const Text(
-                '📸 Snap Receipt Photo to Extract Items with AI',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              label: Text(
+                context.tr('scan_snap_to_extract_ai'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               onPressed: () async {
                 await _addPhoto(ImageSource.camera);
@@ -1162,9 +1168,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: const Icon(Icons.check_circle_outline, size: 20),
-            label: const Text(
-              'Done / View in Dashboard',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            label: Text(
+              context.tr('scan_done_view_dashboard'),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => Navigator.pop(context, true),
           ),
@@ -1179,7 +1185,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ),
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
             label: Text(
-              'Confirm & Save ${items.length} Items (SAR ${amount.toStringAsFixed(2)})',
+              context.trArgs('scan_confirm_save_items', {'count': items.length, 'amount': context.sar(amount)}),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => _confirmSave(allowDuplicate: false),
@@ -1196,7 +1202,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _zatcaDecoded = null;
             _scanResult = null;
           }),
-          label: Text('Scan Another Receipt', style: TextStyle(color: context.textSecondary)),
+          label: Text(context.tr('scan_another_receipt'), style: TextStyle(color: context.textSecondary)),
         ),
         const SizedBox(height: 16),
       ],
