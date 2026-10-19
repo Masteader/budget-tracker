@@ -14,6 +14,7 @@ import '../../services/ocr/local_ocr_service.dart';
 import '../../services/offline_queue_manager.dart';
 import '../../theme/app_themes.dart';
 import '../receipt_photo_viewer_dialog.dart';
+import '../../models/money.dart';
 
 /// Sequential review modal for processing a batch of captured receipts step by step.
 class BatchItemReviewSheet extends StatefulWidget {
@@ -184,8 +185,8 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   Future<void> _saveAndNext() async {
     if (_isSaving || _isAnalyzing) return;
 
-    final parsedAmount = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
-    final parsedVat = double.tryParse(_vatCtrl.text.trim()) ?? 0.0;
+    final parsedAmount = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
+    final parsedVat = parseMoneyInput(_vatCtrl.text.trim()) ?? 0.0;
     final merchant = _merchantCtrl.text.trim().isNotEmpty
         ? _merchantCtrl.text.trim()
         : 'Store';
@@ -538,7 +539,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               context,
               receiptUrl: file.path,
               merchant: _merchantCtrl.text,
-              amount: double.tryParse(_amountCtrl.text),
+              amount: parseMoneyInput(_amountCtrl.text),
             );
           }
         },

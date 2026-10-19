@@ -6,6 +6,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Dialog to create or edit an account.
 class AddEditAccountDialog extends StatefulWidget {
@@ -79,7 +80,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
       return;
     }
 
-    final balance = double.tryParse(_balanceCtrl.text) ?? 0.0;
+    final balance = parseMoneyInput(_balanceCtrl.text) ?? 0.0;
     setState(() => _isSubmitting = true);
 
     try {

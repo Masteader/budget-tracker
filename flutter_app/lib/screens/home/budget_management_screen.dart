@@ -20,6 +20,7 @@ import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../models/money.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -458,7 +459,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   : () async {
                       if (activeTab == 0) {
                         final name = catNameCtrl.text.trim();
-                        final amount = double.tryParse(catAmountCtrl.text) ?? 0.0;
+                        final amount = parseMoneyInput(catAmountCtrl.text) ?? 0.0;
                         if (name.isEmpty) return;
 
                         setDialogState(() => isSubmitting = true);
@@ -501,7 +502,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         }
                       } else {
                         final subName = subNameCtrl.text.trim();
-                        final subAmount = double.tryParse(subAmountCtrl.text) ?? 0.0;
+                        final subAmount = parseMoneyInput(subAmountCtrl.text) ?? 0.0;
                         if (subName.isEmpty || selectedParentCode.isEmpty) return;
 
                         setDialogState(() => isSubmitting = true);

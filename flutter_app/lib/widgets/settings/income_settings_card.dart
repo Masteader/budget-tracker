@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/money.dart';
 
 /// Card for setting and updating household monthly salary/income (SAR).
 class IncomeSettingsCard extends StatefulWidget {
@@ -48,7 +49,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
   }
 
   Future<void> _handleSave() async {
-    final parsed = double.tryParse(_incomeCtrl.text.trim()) ?? 0.0;
+    final parsed = parseMoneyInput(_incomeCtrl.text.trim()) ?? 0.0;
     if (parsed < 0) {
       AppSnackBar.showError(context, 'Income cannot be negative');
       return;
@@ -80,7 +81,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
 
-    final currentIncome = double.tryParse(_incomeCtrl.text) ?? widget.initialIncome;
+    final currentIncome = parseMoneyInput(_incomeCtrl.text) ?? widget.initialIncome;
     final formattedIncome = NumberFormat('#,##0.00').format(currentIncome);
 
     return Container(

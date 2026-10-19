@@ -14,6 +14,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
 class ManualExpenseSheet extends StatefulWidget {
@@ -175,7 +176,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   }
 
   Future<void> _saveExpense() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final amount = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {

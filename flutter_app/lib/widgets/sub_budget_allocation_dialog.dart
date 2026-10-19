@@ -11,6 +11,7 @@ import '../providers/budget_provider.dart';
 import '../providers/recurring_bills_provider.dart';
 import '../services/api_service.dart';
 import 'app_snackbar.dart';
+import '../models/money.dart';
 
 class SubBudgetAllocationDialog extends StatefulWidget {
   final String householdId;
@@ -110,11 +111,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     double sum = 0.0;
     if (_subItems.isNotEmpty) {
       for (final item in _subItems) {
-        final val = double.tryParse(item.controller.text.trim()) ?? 0.0;
+        final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
         sum += val;
       }
     } else {
-      sum = double.tryParse(_fallbackParentController.text.trim()) ?? 0.0;
+      sum = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
     }
     setState(() {
       _totalSum = sum;
@@ -359,7 +360,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     if (res != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    final amount = double.tryParse(amountCtrl.text) ?? 0.0;
+    final amount = parseMoneyInput(amountCtrl.text) ?? 0.0;
     final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-').toLowerCase();
     final subCode = 'sub-$slug';
 
@@ -583,7 +584,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (_subItems.isNotEmpty) {
         final allocMap = <String, double>{};
         for (final item in _subItems) {
-          final val = double.tryParse(item.controller.text.trim()) ?? 0.0;
+          final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
           allocMap[item.subCode] = val;
         }
 
@@ -599,7 +600,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         }
       } else {
         // Fallback for single category without sub-categories
-        final amount = double.tryParse(_fallbackParentController.text.trim()) ?? 0.0;
+        final amount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
         final cycleKey = widget.cycleKey ?? DateFormat('yyyy-MM').format(DateTime.now());
         final monthStr = '$cycleKey-01';
 

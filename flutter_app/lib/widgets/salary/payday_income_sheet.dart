@@ -9,6 +9,7 @@ import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import 'salary_distribution_assistant_sheet.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet prompted on or around Payday (e.g. 27th) to log itemized salary
 /// (Base + Overtime + Bonus + Side - Deductions) into a designated bank account,
@@ -90,11 +91,11 @@ class _PaydayIncomeSheetState extends State<PaydayIncomeSheet> {
     }
   }
 
-  double get _base => double.tryParse(_baseController.text.trim()) ?? 0.0;
-  double get _overtime => double.tryParse(_overtimeController.text.trim()) ?? 0.0;
-  double get _bonus => double.tryParse(_bonusController.text.trim()) ?? 0.0;
-  double get _sideGig => double.tryParse(_sideGigController.text.trim()) ?? 0.0;
-  double get _deductions => double.tryParse(_deductionsController.text.trim()) ?? 0.0;
+  double get _base => parseMoneyInput(_baseController.text.trim()) ?? 0.0;
+  double get _overtime => parseMoneyInput(_overtimeController.text.trim()) ?? 0.0;
+  double get _bonus => parseMoneyInput(_bonusController.text.trim()) ?? 0.0;
+  double get _sideGig => parseMoneyInput(_sideGigController.text.trim()) ?? 0.0;
+  double get _deductions => parseMoneyInput(_deductionsController.text.trim()) ?? 0.0;
 
   double get _grossPay => _base + _overtime + _bonus + _sideGig;
   double get _netTakeHome => _grossPay - _deductions;

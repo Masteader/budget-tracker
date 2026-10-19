@@ -9,6 +9,7 @@ import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet to record received income (Salary, Overtime, Bonus, Side Gig, Roommate Share).
 class RecordIncomeSheet extends StatefulWidget {
@@ -101,10 +102,10 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
     }
   }
 
-  double get _base => double.tryParse(_baseAmountCtrl.text) ?? 0.0;
-  double get _overtime => double.tryParse(_overtimeCtrl.text) ?? 0.0;
-  double get _bonus => double.tryParse(_bonusCtrl.text) ?? 0.0;
-  double get _deductions => double.tryParse(_deductionsCtrl.text) ?? 0.0;
+  double get _base => parseMoneyInput(_baseAmountCtrl.text) ?? 0.0;
+  double get _overtime => parseMoneyInput(_overtimeCtrl.text) ?? 0.0;
+  double get _bonus => parseMoneyInput(_bonusCtrl.text) ?? 0.0;
+  double get _deductions => parseMoneyInput(_deductionsCtrl.text) ?? 0.0;
   double get _netTotal => (_base + _overtime + _bonus - _deductions).clamp(0.0, double.infinity);
 
   String get _currentCycleKey {

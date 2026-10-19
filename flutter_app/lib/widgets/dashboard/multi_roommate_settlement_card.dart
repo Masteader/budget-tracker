@@ -7,6 +7,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 class MultiRoommateSettlementCard extends StatefulWidget {
   final String householdId;
@@ -461,7 +462,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
   }
 
   Future<void> _submitSettlement() async {
-    final amt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+    final amt = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
     if (amt <= 0) {
       AppSnackBar.showError(context, 'Please enter a valid amount');
       return;

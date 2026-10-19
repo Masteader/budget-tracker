@@ -14,6 +14,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../models/money.dart';
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
@@ -155,7 +156,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   }
 
   Future<void> _saveChanges() async {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseMoneyInput(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackBar.showError(context, 'Please enter a valid amount greater than zero.', title: 'Invalid Amount');
       return;
@@ -396,7 +397,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   }
 
   Future<void> _convertToInstallmentPlan() async {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseMoneyInput(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackBar.showError(context, 'Please enter a valid amount first.', title: 'Amount Required');
       return;
@@ -1042,7 +1043,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             const SizedBox(height: 10),
 
             // Live Settlement Preview
-            _buildSettlementPreviewBanner(double.tryParse(_amountCtrl.text) ?? 0.0),
+            _buildSettlementPreviewBanner(parseMoneyInput(_amountCtrl.text) ?? 0.0),
             const SizedBox(height: 20),
 
             // Line items header
@@ -1116,7 +1117,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           isDense: true,
                         ),
                         onChanged: (val) {
-                          it['price'] = double.tryParse(val) ?? 0.0;
+                          it['price'] = parseMoneyInput(val) ?? 0.0;
                         },
                       ),
                     ),
