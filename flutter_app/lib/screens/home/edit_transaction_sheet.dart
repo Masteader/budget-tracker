@@ -144,7 +144,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
   void _addItem() {
     setState(() {
-      _items.add({'name': 'New Item', 'quantity': 1.0, 'price': 0.0});
+      _items.add({'name': context.tr('new_item'), 'quantity': 1.0, 'price': 0.0});
     });
   }
 
@@ -157,7 +157,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   Future<void> _saveChanges() async {
     final amount = double.tryParse(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount greater than zero.', title: 'Invalid Amount');
+      AppSnackBar.showError(context, context.tr('invalid_amount_msg'), title: context.tr('invalid_amount'));
       return;
     }
 
@@ -211,14 +211,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         Navigator.pop(context, 'updated');
         AppSnackBar.showSuccess(
           context,
-          'Transaction updated and budget recomputed.',
-          title: 'Changes Saved',
+          context.tr('tx_updated_msg'),
+          title: context.tr('changes_saved'),
         );
       }
     } catch (e) {
-      setState(() => _isSaving = false);
       if (mounted) {
-        AppSnackBar.showError(context, 'Failed to update transaction: $e', title: 'Update Error');
+        setState(() => _isSaving = false);
+        AppSnackBar.showError(context, context.trArgs('tx_update_failed_msg', {'error': e}), title: context.tr('update_error'));
       }
     }
   }
@@ -228,26 +228,26 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
-        title: const Text('Delete Transaction', style: TextStyle(color: Colors.white)),
+        title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
         content: Text(
-          'Are you sure you want to delete this SAR ${widget.transaction.amount.toStringAsFixed(2)} transaction at ${widget.transaction.merchant ?? "Unknown"}?\nThis will adjust your budget spent amount automatically.',
+          context.trArgs('tx_delete_confirm_long', {'amount': context.sar(widget.transaction.amount), 'merchant': widget.transaction.merchant ?? context.tr('unknown')}),
           style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(context.tr('delete')),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     setState(() => _isSaving = true);
 
@@ -260,14 +260,14 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         Navigator.pop(context, 'deleted');
         AppSnackBar.showDelete(
           context,
-          'SAR ${widget.transaction.amount.toStringAsFixed(2)} at ${widget.transaction.merchant ?? "merchant"} removed.',
-          title: 'Transaction Deleted',
+          context.trArgs('tx_removed_msg', {'amount': context.sar(widget.transaction.amount), 'merchant': widget.transaction.merchant ?? context.tr('merchant_generic')}),
+          title: context.tr('tx_deleted'),
         );
       }
     } catch (e) {
-      setState(() => _isSaving = false);
       if (mounted) {
-        AppSnackBar.showError(context, 'Failed to delete transaction: $e', title: 'Delete Error');
+        setState(() => _isSaving = false);
+        AppSnackBar.showError(context, context.trArgs('tx_delete_failed_err', {'error': e}), title: context.tr('delete_error'));
       }
     }
   }
@@ -320,28 +320,28 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
     if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
-      text = 'Shared 50/50: Partner will owe you SAR ${half.toStringAsFixed(2)}';
+      text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
       color = const Color(0xFF00C896);
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'partner') {
-      text = 'Paid for Partner: Partner will owe you full SAR ${amount.toStringAsFixed(2)}';
+      text = context.trArgs('settle_paid_for_partner', {'amount': context.sar(amount)});
       icon = Icons.volunteer_activism_outlined;
       color = const Color(0xFFBC8CFF);
     } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
-      text = 'Shared 50/50: You will owe partner SAR ${half.toStringAsFixed(2)}';
+      text = context.trArgs('settle_shared_you_owe', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
       color = const Color(0xFFFF9E79);
     } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'me') {
-      text = 'Partner paid for you: You will owe partner full SAR ${amount.toStringAsFixed(2)}';
+      text = context.trArgs('settle_partner_paid_for_you', {'amount': context.sar(amount)});
       icon = Icons.card_giftcard_rounded;
       color = const Color(0xFFFF6B6B);
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'me') {
-      text = 'Personal purchase: No shared debt or settlement impact';
+      text = context.tr('settle_personal_me');
       icon = Icons.person_outline;
       color = const Color(0xFF58A6FF);
     } else {
-      text = "Partner's personal purchase: No shared debt or settlement impact";
+      text = context.tr('settle_personal_partner');
       icon = Icons.favorite_outline;
       color = const Color(0xFFBC8CFF);
     }
@@ -382,7 +382,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            provider,
+            provider == 'Bank / Other' ? context.tr('bnpl_provider_bank_other') : provider,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isSelected ? color : context.textPrimary,
@@ -398,7 +398,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   Future<void> _convertToInstallmentPlan() async {
     final amount = double.tryParse(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount first.', title: 'Amount Required');
+      AppSnackBar.showError(context, context.tr('enter_valid_amount_first'), title: context.tr('amount_required'));
       return;
     }
 
@@ -442,7 +442,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Convert to BNPL Installment Plan',
+                    context.tr('bnpl_convert_title'),
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -451,13 +451,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Amortize this purchase across monthly installments to prevent budget blowouts.',
+                    context.tr('bnpl_convert_desc'),
                     style: TextStyle(fontSize: 12, color: context.textSecondary),
                   ),
                   const SizedBox(height: 16),
 
                   // Provider Selector
-                  Text('PROVIDER', style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
+                  Text(context.tr('provider_caps'), style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -477,7 +477,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   const SizedBox(height: 16),
 
                   // Duration selector
-                  Text('INSTALLMENT DURATION', style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
+                  Text(context.tr('installment_duration_caps'), style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
                   const SizedBox(height: 8),
                   Row(
                     children: [3, 4, 6].map((count) {
@@ -498,7 +498,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                '$count Months',
+                                context.trArgs('n_months', {'count': count}),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
@@ -527,24 +527,24 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('First Month (This Cycle):', style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                            Text('SAR ${monthly.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text(context.tr('first_month_this_cycle'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                            Text(context.sar(monthly), style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                         const SizedBox(height: 6),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Deferred to Next Cycles (${selectedCount - 1} mo):', style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                            Text('SAR ${remainingBalance.toStringAsFixed(2)}', style: TextStyle(color: context.textPrimary, fontSize: 13)),
+                            Text(context.trArgs('deferred_next_cycles', {'count': selectedCount - 1}), style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                            Text(context.sar(remainingBalance), style: TextStyle(color: context.textPrimary, fontSize: 13)),
                           ],
                         ),
                         Divider(color: context.borderColor, height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Immediate Budget Headroom:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                            Text('+SAR ${remainingBalance.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text(context.tr('immediate_headroom'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
+                            Text('+${context.sar(remainingBalance)}', style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                       ],
@@ -596,20 +596,20 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                           Navigator.pop(context, 'updated');
                           AppSnackBar.showSuccess(
                             context,
-                            'Converted to $selectedProvider $selectedCount-month installment plan!',
-                            title: 'Plan Active',
+                            context.trArgs('bnpl_converted_msg', {'provider': selectedProvider == 'Bank / Other' ? context.tr('bnpl_provider_bank_other') : selectedProvider, 'count': selectedCount}),
+                            title: context.tr('plan_active_title'),
                           );
                         }
                       } catch (e) {
-                        setModalState(() => isProcessing = false);
                         if (sheetCtx.mounted) {
-                          AppSnackBar.showError(sheetCtx, 'Failed to convert plan: $e', title: 'Conversion Failed');
+                          setModalState(() => isProcessing = false);
+                          AppSnackBar.showError(sheetCtx, sheetCtx.trArgs('bnpl_convert_failed_msg', {'error': e}), title: sheetCtx.tr('conversion_failed'));
                         }
                       }
                     },
                     child: isProcessing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                        : const Text('Confirm Installment Plan', style: TextStyle(fontWeight: FontWeight.bold)),
+                        : Text(context.tr('confirm_installment_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -632,7 +632,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             const Icon(Icons.child_care_rounded, color: Color(0xFF00C896)),
             const SizedBox(width: 8),
             Text(
-              'Add Child / Dependent',
+              context.tr('add_child_dependent'),
               style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary),
             ),
           ],
@@ -642,9 +642,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           autofocus: true,
           style: TextStyle(color: context.textPrimary),
           decoration: InputDecoration(
-            labelText: "Child's Name",
+            labelText: context.tr('child_name_label'),
             labelStyle: TextStyle(color: context.textSecondary),
-            hintText: 'e.g. Sarah, Omar',
+            hintText: context.tr('child_name_hint'),
             hintStyle: const TextStyle(color: Color(0xFF484F58)),
             filled: true,
             fillColor: context.inputBg,
@@ -654,7 +654,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
@@ -662,7 +662,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               final n = nameCtrl.text.trim();
               if (n.isNotEmpty) Navigator.pop(dCtx, n);
             },
-            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('add'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -724,7 +724,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  tooltip: 'Delete transaction',
+                  tooltip: context.tr('delete_transaction'),
                   onPressed: _deleteTransaction,
                 ),
               ],
@@ -752,7 +752,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 labelText: context.tr('amount_sar'),
-                prefixText: 'SAR ',
+                prefixText: '${context.tr('sar')} ',
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -1110,8 +1110,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         initialValue: ((it['price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         style: const TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.w600),
-                        decoration: const InputDecoration(
-                          prefixText: 'SAR ',
+                        decoration: InputDecoration(
+                          prefixText: '${context.tr('sar')} ',
                           border: InputBorder.none,
                           isDense: true,
                         ),
