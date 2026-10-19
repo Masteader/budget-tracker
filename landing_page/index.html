@@ -4,6 +4,8 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <meta name="description" content="BUDGET Tracker • ميزانية الأسرة: منصة الحوكمة المالية الذكية وإدارة ميزانية الأسرة والسكن المشترك في السعودية — دورة الراتب المرنة، الذكاء الاصطناعي، ومسح فواتير ZATCA." />
+  <meta name="theme-color" content="#0b1528" />
   <title>BUDGET Tracker | ميزانية وأكثر - انسيابية وصفاء مالي</title>
 
   <!-- Typography: IBM Plex Sans Arabic & Tajawal -->
@@ -88,6 +90,19 @@
     .pulse-glow {
       box-shadow: 0 0 35px rgba(0, 245, 160, 0.45);
     }
+
+    /* Respect the OS "reduce motion" setting (flow glows, pulses, smooth scroll). */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto !important; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Visible keyboard focus. */
+    :focus-visible { outline: 3px solid #00808c; outline-offset: 2px; }
   </style>
 
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -1225,7 +1240,7 @@
 
       if (daysLeftVal) daysLeftVal.textContent = calculatedDaysLeft + ' يوماً';
       if (safeSpendVal) safeSpendVal.textContent = dailySafe + ' ر.س';
-      if (reserveVal) reserveVal.textContent = reserve.toLocaleString('ar-SA') + ' ر.س';
+      if (reserveVal) reserveVal.textContent = reserve.toLocaleString('en-US') + ' ر.س';
     }
 
     // Switch between Family and Roommates split mode
