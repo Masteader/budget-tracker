@@ -263,6 +263,11 @@ def process_receipt_scan(
     """
     images_base64 = images_base64 or []
 
+    # Normalize legacy public or signed URLs to relative storage paths
+    if receipt_url and ("/storage/v1/object/public/receipts/" in receipt_url or "/storage/v1/object/sign/receipts/" in receipt_url):
+        import re
+        receipt_url = re.sub(r'^https?://[^/]+/storage/v1/object/(?:public|sign)/receipts/([^?]+).*$', r'\1', receipt_url)
+
     # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
     # IMPORTANT: Only upload when committing/saving (not during preview) and if client hasn't already uploaded
     if not preview_only and not receipt_url and images_base64:
@@ -278,8 +283,8 @@ def process_receipt_scan(
                 raw_bytes,
                 file_options={"content-type": "image/jpeg", "upsert": "true"},
             )
-            receipt_url = client.storage.from_("receipts").get_public_url(storage_path)
-            logger.info("Auto-uploaded receipt photo (stitched %d shots) to storage: %s", len(images_base64), receipt_url)
+            receipt_url = storage_path
+            logger.info("Auto-uploaded receipt photo (stitched %d shots) to storage path: %s", len(images_base64), receipt_url)
         except Exception as upload_err:
             logger.warning("Could not auto-upload receipt image: %s", upload_err)
 

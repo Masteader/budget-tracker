@@ -13,11 +13,6 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from jose import jwt
 
-# Configure test environment
-os.environ["ENV"] = "production"
-os.environ["SUPABASE_URL"] = "https://mockproject.supabase.co"
-os.environ["SUPABASE_JWT_SECRET"] = "super-secret-test-jwt-key-32bytes-long!"
-
 from main import app
 import auth
 
@@ -28,6 +23,17 @@ HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000001"
 MEMBER_USER_ID = "00000000-0000-0000-0000-000000000002"
 ATTACKER_USER_ID = "00000000-0000-0000-0000-000000000003"
+
+
+@pytest.fixture(autouse=True, scope="module")
+def setup_sec03_env():
+    orig_env = dict(os.environ)
+    os.environ["ENV"] = "production"
+    os.environ["SUPABASE_URL"] = "https://mockproject.supabase.co"
+    os.environ["SUPABASE_JWT_SECRET"] = TEST_SECRET
+    yield
+    os.environ.clear()
+    os.environ.update(orig_env)
 
 
 def create_test_token(user_id: str) -> str:

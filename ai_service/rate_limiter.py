@@ -121,3 +121,8 @@ default_rate_limiter = SlidingWindowRateLimiter()
 async def check_receipt_scan_rate_limit(key: str) -> None:
     """Convenience dependency for receipt scan rate limiting."""
     await default_rate_limiter.check_rate_limit(key, max_requests=10, window_seconds=600)
+
+
+def reset_rate_limiters() -> None:
+    """Reset in-memory rate limiter histories for testing."""
+    default_rate_limiter._memory_history.clear()

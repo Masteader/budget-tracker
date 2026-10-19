@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/zatca_decoder.dart';
+import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
 import '../l10n/app_localizations.dart';
 import 'app_snackbar.dart';
@@ -539,12 +540,24 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.network(
-                                receiptUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (ctx, _, __) => Center(
-                                  child: Icon(Icons.broken_image_outlined, color: context.textSecondary, size: 32),
-                                ),
+                              FutureBuilder<String?>(
+                                future: ReceiptStorageService().getSignedReceiptUrl(receiptUrl!),
+                                builder: (ctx, snapshot) {
+                                  final resolvedUrl = snapshot.data;
+                                  if (resolvedUrl == null ||
+                                      (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://'))) {
+                                    return Center(
+                                      child: Icon(Icons.receipt_long_rounded, color: context.textSecondary, size: 32),
+                                    );
+                                  }
+                                  return Image.network(
+                                    resolvedUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (ctx, _, __) => Center(
+                                      child: Icon(Icons.broken_image_outlined, color: context.textSecondary, size: 32),
+                                    ),
+                                  );
+                                },
                               ),
                               Container(
                                 color: Colors.black.withValues(alpha: 0.25),

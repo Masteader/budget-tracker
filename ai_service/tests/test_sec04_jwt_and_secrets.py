@@ -19,10 +19,6 @@ from jose import jwt
 TEST_SECRET = "super-secret-test-jwt-key-32bytes-long!"
 SUPABASE_URL = "https://mockproject.supabase.co"
 
-os.environ["ENV"] = "production"
-os.environ["SUPABASE_URL"] = SUPABASE_URL
-os.environ["SUPABASE_JWT_SECRET"] = TEST_SECRET
-
 from main import app
 import auth
 
@@ -30,6 +26,17 @@ client = TestClient(app)
 
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
 USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.fixture(autouse=True, scope="module")
+def setup_sec04_env():
+    orig_env = dict(os.environ)
+    os.environ["ENV"] = "production"
+    os.environ["SUPABASE_URL"] = SUPABASE_URL
+    os.environ["SUPABASE_JWT_SECRET"] = TEST_SECRET
+    yield
+    os.environ.clear()
+    os.environ.update(orig_env)
 
 
 def test_jwt_with_invalid_audience_rejected():

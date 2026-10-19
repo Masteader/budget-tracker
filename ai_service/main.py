@@ -230,6 +230,9 @@ app.include_router(chat_router)
 app.include_router(reports_router)
 app.include_router(support_router)
 
+# Test helper alias
+from rate_limiter import reset_rate_limiters as _reset_receipt_scan_rate_limits
+
 
 # ─── Entry Point ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":

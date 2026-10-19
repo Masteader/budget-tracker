@@ -7,9 +7,19 @@ class ReceiptStorageService {
   final SupabaseClient? _client;
   static const String bucketName = 'receipts';
 
+  // In-memory cache for signed URLs to minimize Supabase Storage API requests
+  static final Map<String, ({String url, DateTime expiresAt})> _signedUrlCache = {};
+
   ReceiptStorageService({SupabaseClient? client}) : _client = client;
 
-  SupabaseClient get _supabase => _client ?? Supabase.instance.client;
+  SupabaseClient? get _supabase {
+    if (_client != null) return _client;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static String generateStoragePath(String householdId, String originalFileName) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -18,7 +28,7 @@ class ReceiptStorageService {
     return '$householdId/${timestamp}_$uuid.$ext';
   }
 
-  /// Uploads a receipt image to Supabase Storage and returns its public URL.
+  /// Uploads a receipt image to Supabase Storage and returns its relative storage path.
   /// Gracefully catches exceptions and returns null so financial saves are never blocked.
   Future<String?> uploadReceipt({
     required File imageFile,
@@ -33,9 +43,15 @@ class ReceiptStorageService {
       final Uint8List bytes = await imageFile.readAsBytes();
       if (bytes.isEmpty) return null;
 
+      final client = _supabase;
+      if (client == null) {
+        debugPrint('[ReceiptStorageService] Supabase client unavailable for upload.');
+        return null;
+      }
+
       final path = generateStoragePath(householdId, imageFile.path);
 
-      await _supabase.storage.from(bucketName).uploadBinary(
+      await client.storage.from(bucketName).uploadBinary(
         path,
         bytes,
         fileOptions: const FileOptions(
@@ -44,18 +60,18 @@ class ReceiptStorageService {
         ),
       );
 
-      final publicUrl = _supabase.storage.from(bucketName).getPublicUrl(path);
-      debugPrint('[ReceiptStorageService] Uploaded receipt to: $publicUrl');
-      return publicUrl;
+      debugPrint('[ReceiptStorageService] Uploaded receipt to storage path: $path');
+      return path;
     } catch (e) {
       debugPrint('[ReceiptStorageService] Failed to upload receipt image: $e');
       return null;
     }
   }
 
-  /// Extracts relative storage path inside the bucket from a public URL or raw path.
+  /// Extracts relative storage path inside the bucket from a public URL, signed URL, or raw path.
   /// Handles:
   /// - https://.../storage/v1/object/public/receipts/hh-123/img.jpg -> hh-123/img.jpg
+  /// - https://.../storage/v1/object/sign/receipts/hh-123/img.jpg?token=... -> hh-123/img.jpg
   /// - hh-123/img.jpg -> hh-123/img.jpg
   static String? extractStoragePath(String receiptUrl) {
     final trimmed = receiptUrl.trim();
@@ -76,14 +92,71 @@ class ReceiptStorageService {
     return null;
   }
 
-  /// Deletes a receipt image from Supabase Storage by its public URL or storage path.
+  /// Obtains a short-lived signed URL for viewing a receipt image.
+  /// Works with storage paths (`hh-123/file.jpg`) and legacy URLs.
+  /// Uses an in-memory TTL cache to minimize network calls.
+  Future<String?> getSignedReceiptUrl(
+    String? receiptPathOrUrl, {
+    int expiresInSeconds = 3600,
+  }) async {
+    if (receiptPathOrUrl == null) return null;
+    final trimmed = receiptPathOrUrl.trim();
+    if (trimmed.isEmpty) return null;
+
+    // If it's already an active signed URL with a token query param, return as-is
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (trimmed.contains('token=')) {
+        return trimmed;
+      }
+    }
+
+    final path = extractStoragePath(trimmed);
+    // If not a path belonging to our receipts bucket, return the original URL
+    if (path == null) {
+      return trimmed.startsWith('http') ? trimmed : null;
+    }
+
+    // Check memory cache
+    final cached = _signedUrlCache[path];
+    final now = DateTime.now();
+    if (cached != null && cached.expiresAt.isAfter(now.add(const Duration(minutes: 5)))) {
+      return cached.url;
+    }
+
+    final client = _supabase;
+    if (client == null) {
+      // Offline or mock mode: return original if it is a full URL, or null
+      return trimmed.startsWith('http') ? trimmed : null;
+    }
+
+    try {
+      final signedUrl = await client.storage.from(bucketName).createSignedUrl(
+        path,
+        expiresInSeconds,
+      );
+      _signedUrlCache[path] = (
+        url: signedUrl,
+        expiresAt: now.add(Duration(seconds: expiresInSeconds)),
+      );
+      return signedUrl;
+    } catch (e) {
+      debugPrint('[ReceiptStorageService] Failed to create signed URL for $path: $e');
+      return trimmed.startsWith('http') ? trimmed : null;
+    }
+  }
+
+  /// Deletes a receipt image from Supabase Storage by its public URL, signed URL, or storage path.
   /// Gracefully catches exceptions and returns false if removal fails so app workflow continues.
   Future<bool> deleteReceiptByUrl(String receiptUrl) async {
     try {
       final path = extractStoragePath(receiptUrl);
       if (path == null) return false;
 
-      await _supabase.storage.from(bucketName).remove([path]);
+      final client = _supabase;
+      if (client == null) return false;
+
+      await client.storage.from(bucketName).remove([path]);
+      _signedUrlCache.remove(path);
       debugPrint('[ReceiptStorageService] Deleted receipt from storage: $path');
       return true;
     } catch (e) {

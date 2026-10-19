@@ -12,6 +12,7 @@ import json
 import os
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+from jose import jwt
 from main import app, WEBHOOK_SECRET
 
 client = TestClient(app)
@@ -161,29 +162,48 @@ def test_scan_receipt_success(mock_dedup, mock_insert, mock_parse):
 
 
 def test_get_and_update_household_payday():
-    # 1. Update payday to 1st of month
-    put_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 1})
-    assert put_res.status_code == 200
-    assert put_res.json()["payday_day"] == 1
-    assert put_res.json()["status"] == "success"
+    token = jwt.encode(
+        {
+            "sub": "00000000-0000-0000-0000-000000000001",
+            "aud": "authenticated",
+            "iss": f"{os.environ.get('SUPABASE_URL', 'https://mockproject.supabase.co')}/auth/v1",
+            "role": "authenticated",
+        },
+        os.environ.get("SUPABASE_JWT_SECRET", "super-secret-test-jwt-key-32bytes-long!"),
+        algorithm="HS256",
+    )
+    admin_headers = {"Authorization": f"Bearer {token}"}
 
-    # 2. Get payday
-    get_res = client.get(f"/households/{HOUSEHOLD_ID}/payday")
-    assert get_res.status_code == 200
-    assert get_res.json()["payday_day"] == 1
+    with patch("auth._get_user_membership") as mock_mem, \
+         patch("routes.households.set_household_payday") as mock_set_payday, \
+         patch("routes.households.get_household_payday") as mock_get_payday:
+        mock_mem.return_value = {"role": "admin", "household_id": HOUSEHOLD_ID}
+        mock_set_payday.side_effect = lambda hh, day: day
+        mock_get_payday.return_value = 1
 
-    # 3. Restore to default 27
-    restore_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 27})
-    assert restore_res.status_code == 200
-    assert restore_res.json()["payday_day"] == 27
+        # 1. Update payday to 1st of month
+        put_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 1}, headers=admin_headers)
+        assert put_res.status_code == 200
+        assert put_res.json()["payday_day"] == 1
+        assert put_res.json()["status"] == "success"
+
+        # 2. Get payday
+        get_res = client.get(f"/households/{HOUSEHOLD_ID}/payday", headers=admin_headers)
+        assert get_res.status_code == 200
+        assert get_res.json()["payday_day"] == 1
+
+        # 3. Restore to default 27
+        restore_res = client.put(f"/households/{HOUSEHOLD_ID}/payday", json={"payday_day": 27}, headers=admin_headers)
+        assert restore_res.status_code == 200
+        assert restore_res.json()["payday_day"] == 27
 
 
 def test_scan_receipt_with_receipt_url():
-    """Verify /agent/scan-receipt accepts receipt_url and returns it."""
+    """Verify /agent/scan-receipt accepts receipt_url and normalizes it to relative storage path."""
     payload = {
         "household_id": HOUSEHOLD_ID,
         "qr_code_raw": "ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=",
-        "receipt_url": "https://example.supabase.co/storage/v1/object/public/receipts/test.jpg",
+        "receipt_url": "https://example.supabase.co/storage/v1/object/public/receipts/hh-123/test.jpg",
         "preview_only": True,
     }
     headers = _make_signed_headers(payload)
@@ -191,7 +211,7 @@ def test_scan_receipt_with_receipt_url():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ("preview", "success")
-    assert data.get("receipt_url") == "https://example.supabase.co/storage/v1/object/public/receipts/test.jpg"
+    assert data.get("receipt_url") == "hh-123/test.jpg"
     assert data["merchant"] == "United Electronics Co. eXtra"
 
 
@@ -228,7 +248,7 @@ def test_shopping_basket_optimize_endpoint():
     assert "store_totals" in data
     assert "split_optimization" in data
 
-@patch("receipt_scanner.process_receipt_scan")
+@patch("routes.receipts.process_receipt_scan")
 def test_scan_receipt_rate_limiting_strict(mock_process):
     from main import _reset_receipt_scan_rate_limits
     _reset_receipt_scan_rate_limits()
@@ -240,7 +260,7 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
         "category_code": "OPEX-GROCERY",
     }
 
-    target_hh = "rate-limit-test-hh-1"
+    target_hh = "a0000000-0000-0000-0000-000000000001"
     payload = {
         "image_base64": "fake_base64_data",
         "household_id": target_hh,
@@ -262,7 +282,7 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
     # Another household should NOT be blocked
     other_payload = {
         "image_base64": "fake_base64_data",
-        "household_id": "different-hh-2",
+        "household_id": "b0000000-0000-0000-0000-000000000002",
         "allow_duplicate": True,
     }
     other_headers = _make_signed_headers(other_payload)
