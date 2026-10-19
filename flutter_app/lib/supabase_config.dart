@@ -36,5 +36,5 @@ const authRedirectUrl = String.fromEnvironment(
 
 const webhookSecret = String.fromEnvironment(
   'WEBHOOK_SECRET',
-  defaultValue: '239e6a9141efe77bd8193faba777496f2e5bf1c072edf65a20b07082b00b4cc7',
+  defaultValue: '',
 );

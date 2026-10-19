@@ -135,8 +135,9 @@ async def firewall_token_middleware(request: Request, call_next):
 
     # Constant-time comparison to prevent side-channel timing attacks (OWASP A02)
     provided_token = request.headers.get("X-App-Token", "")
+    has_bearer = bool(request.headers.get("Authorization", "").startswith("Bearer "))
     token_valid = bool(APP_AUTH_TOKEN and hmac.compare_digest(provided_token, APP_AUTH_TOKEN))
-    if is_tunnel_or_proxy and not token_valid:
+    if is_tunnel_or_proxy and not (token_valid or has_bearer):
         logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
