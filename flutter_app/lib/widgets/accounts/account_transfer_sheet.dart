@@ -123,17 +123,17 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
 
   Future<void> _executeTransfer() async {
     if (_fromAccountId == null || _toAccountId == null) {
-      AppSnackBar.showError(context, 'Please select both source and destination accounts.');
+      AppSnackBar.showError(context, context.tr('ats_select_both'));
       return;
     }
 
     if (_fromAccountId == _toAccountId) {
-      AppSnackBar.showError(context, 'Source and destination cannot be the same account.');
+      AppSnackBar.showError(context, context.tr('ats_same_account'));
       return;
     }
 
     if (_amount <= 0.0) {
-      AppSnackBar.showError(context, 'Please enter a valid transfer amount.');
+      AppSnackBar.showError(context, context.tr('ats_invalid_amount'));
       return;
     }
 
@@ -141,7 +141,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     if (from != null && from.balance < _totalDeduction) {
       AppSnackBar.showError(
         context,
-        'Insufficient balance in ${from.name}. Available: ${from.currency} ${from.balance.toStringAsFixed(2)}',
+        context.trArgs('ats_insufficient', {'account': from.name, 'amount': from.currency == 'SAR' ? context.sar(from.balance) : '${from.currency} ${from.balance.toStringAsFixed(2)}'}),
       );
       return;
     }
@@ -164,15 +164,15 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
         widget.onTransferSuccess?.call();
         AppSnackBar.showSuccess(
           context,
-          'Transferred SAR ${_amount.toStringAsFixed(2)} from ${from?.name} to ${_toAccount?.name}!',
-          title: 'Transfer Completed',
+          context.trArgs('ats_done_msg', {'amount': context.sar(_amount), 'from': from?.name, 'to': _toAccount?.name}),
+          title: context.tr('ats_done_title'),
           icon: Icons.swap_horiz_rounded,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isTransferring = false);
-        AppSnackBar.showError(context, 'Transfer failed: $e');
+        AppSnackBar.showError(context, context.trArgs('ats_failed', {'error': e}));
       }
     }
   }
@@ -331,7 +331,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 decoration: InputDecoration(
                   labelText: context.tr('transfer_amount'),
-                  prefixText: 'SAR ',
+                  prefixText: '${context.tr('sar')} ',
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
                   fillColor: context.inputBg,
@@ -352,7 +352,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: context.tr('transfer_fee'),
-                        prefixText: 'SAR ',
+                        prefixText: '${context.tr('sar')} ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
                         fillColor: context.inputBg,
@@ -393,7 +393,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(context.tr('total_deducted_source'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                    Text('SAR ${fmt.format(_totalDeduction)}', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(context.sar(_totalDeduction), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                   ],
                 ),
               ),

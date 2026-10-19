@@ -85,14 +85,14 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
         final acc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
         AppSnackBar.showSuccess(
           context,
-          '${widget.categoryName} linked to ${acc?.name ?? "No Account"}!',
-          title: 'Account Mapped',
+          context.trArgs('las_linked_msg', {'category': widget.categoryName, 'account': acc?.name ?? context.tr('no_account')}),
+          title: context.tr('las_mapped_title'),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, 'Failed to link account: $e');
+        AppSnackBar.showError(context, context.trArgs('las_failed', {'error': e}));
       }
     }
   }
@@ -152,7 +152,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                           ),
                         ),
                         Text(
-                          '${widget.categoryName} (${context.tr('allocated')}: SAR ${fmt.format(widget.budget.allocatedAmount)})',
+                          '${widget.categoryName} (${context.tr('allocated')}: ${context.sar(widget.budget.allocatedAmount)})',
                           style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                       ],

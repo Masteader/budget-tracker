@@ -708,7 +708,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final cycle = _selectedCycle;
-    final headerTitle = cycle?.monthName ?? context.fmtDate(_selectedDate, 'MMMM yyyy');
+    final headerTitle = cycle != null
+        ? context.cycleMonth(cycle.cycleKey, fallback: cycle.monthName)
+        : context.fmtDate(_selectedDate, 'MMMM yyyy');
     final headerSub = cycle != null
         ? '${cycle.cycleStart.substring(5)} - ${cycle.cycleEnd.substring(5)}'
         : context.tr('active_salary_cycle');

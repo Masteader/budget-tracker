@@ -5,6 +5,7 @@ import '../transaction_item_breakdown_card.dart';
 import 'duplicate_resolution_card.dart';
 import 'pending_expense_confirmation_card.dart';
 import 'purchase_simulation_card.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Model representing a single message within the AI Transaction Chat.
 class ChatMessage {
@@ -108,7 +109,7 @@ class ChatMessageBubble extends StatelessWidget {
             if (message.transactionData != null) ...[
               const SizedBox(height: 6),
               TransactionItemBreakdownCard(
-                merchant: message.transactionData!['merchant'] as String? ?? 'Merchant',
+                merchant: message.transactionData!['merchant'] as String? ?? context.tr('merchant_generic'),
                 amount: (message.transactionData!['amount'] as num?)?.toDouble() ?? 0.0,
                 categoryCode: message.transactionData!['category_code'] as String?,
                 source: 'chat',

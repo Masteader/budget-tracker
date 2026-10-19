@@ -120,9 +120,9 @@ class AccountCard extends StatelessWidget {
                                 color: const Color(0xFF00E5BF).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'Shared Pool',
-                                style: TextStyle(color: Color(0xFF00E5BF), fontSize: 10, fontWeight: FontWeight.bold),
+                              child: Text(
+                                context.tr('acc_shared_pool'),
+                                style: const TextStyle(color: Color(0xFF00E5BF), fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
@@ -139,7 +139,7 @@ class AccountCard extends StatelessWidget {
                 IconButton(
                   icon: Icon(Icons.more_horiz_rounded, color: context.textSecondary, size: 20),
                   onPressed: onEdit,
-                  tooltip: 'Account Options',
+                  tooltip: context.tr('acc_options'),
                 ),
               ],
             ),

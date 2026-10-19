@@ -194,7 +194,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
   }
 
   Widget _buildPriceCard(Map<String, dynamic> item) {
-    final name = item['item_name'] as String? ?? 'Item';
+    final name = item['item_name'] as String? ?? context.tr('sim_item');
     final count = item['purchase_count'] as int? ?? 1;
     final latestPrice = (item['latest_price'] as num?)?.toDouble() ?? 0.0;
     final minPrice = (item['min_price'] as num?)?.toDouble() ?? latestPrice;

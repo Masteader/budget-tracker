@@ -359,7 +359,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 filled: true,
                 fillColor: context.inputBg,
                 prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
-                suffixText: 'SAR',
+                suffixText: context.tr('sar'),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: context.borderColor),

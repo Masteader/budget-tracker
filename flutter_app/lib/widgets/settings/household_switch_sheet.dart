@@ -104,7 +104,7 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
       }
     } catch (e) {
       if (mounted) {
-        AppSnackBar.showError(context, e.toString(), title: 'Switch Failed');
+        AppSnackBar.showError(context, e.toString(), title: context.tr('hss_failed'));
       }
     } finally {
       if (mounted) setState(() => _switchingToId = null);
@@ -281,7 +281,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                         ),
                                       ),
                                       child: Text(
-                                        m.isAdmin ? 'Admin' : 'Member',
+                                        m.isAdmin ? context.tr('admin') : context.tr('member'),
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
@@ -293,7 +293,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                 ),
                                 if (m.inviteCode.isNotEmpty)
                                   Text(
-                                    'Code: ${m.inviteCode}',
+                                    context.trArgs('sba_code', {'code': m.inviteCode}),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.textSecondary,

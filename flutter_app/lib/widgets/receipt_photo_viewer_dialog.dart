@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 
 class ReceiptPhotoViewerDialog extends StatelessWidget {
   final String receiptUrl;
@@ -57,7 +58,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                     ),
                     if (amount != null)
                       Text(
-                        'SAR ${amount!.toStringAsFixed(2)}',
+                        context.sar(amount!),
                         style: GoogleFonts.outfit(
                           color: const Color(0xFF00C896),
                           fontSize: 14,
@@ -104,7 +105,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                                 Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Unable to load receipt image',
+                                  context.tr('rpv_load_failed'),
                                   style: GoogleFonts.outfit(color: context.textSecondary),
                                 ),
                               ],
@@ -127,7 +128,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                                 Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Unable to load receipt image',
+                                  context.tr('rpv_load_failed'),
                                   style: GoogleFonts.outfit(color: context.textSecondary),
                                 ),
                               ],

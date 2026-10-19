@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
@@ -64,7 +63,6 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final hasChanges = _selectedRule != widget.initialRule;
 
     return Container(
@@ -129,10 +127,10 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                 ),
                 child: Text(
                   _selectedRule == 'send_to_savings'
-                      ? 'Savings'
+                      ? context.tr('rsc_badge_savings')
                       : _selectedRule == 'rollover_to_categories'
-                          ? 'Carryover'
-                          : 'Fresh Start',
+                          ? context.tr('rsc_badge_carryover')
+                          : context.tr('rsc_badge_fresh'),
                   style: const TextStyle(
                     color: Color(0xFF00C896),
                     fontSize: 11,
@@ -168,7 +166,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                     ),
                   ),
                   Text(
-                    'SAR ${fmt.format(widget.accumulatedSavings)}',
+                    context.sar(widget.accumulatedSavings),
                     style: GoogleFonts.outfit(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,

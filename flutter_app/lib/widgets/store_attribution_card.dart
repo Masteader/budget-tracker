@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_localizations.dart';
 
 /// Reusable store name input & 'Spent by who?' selector card.
 /// Ensures consistent UX across receipt scanner, chat confirmation, and manual entry.
@@ -9,7 +10,8 @@ class StoreAttributionCard extends StatelessWidget {
   final String selectedSpentBy;
   final ValueChanged<String> onSpentByChanged;
   final ValueChanged<String>? onMerchantChanged;
-  final String title;
+  /// Card title; defaults to the localized "Store & Attribution Details".
+  final String? title;
   final bool compact;
 
   const StoreAttributionCard({
@@ -18,7 +20,7 @@ class StoreAttributionCard extends StatelessWidget {
     required this.selectedSpentBy,
     required this.onSpentByChanged,
     this.onMerchantChanged,
-    this.title = 'Store & Attribution Details',
+    this.title,
     this.compact = false,
   });
 
@@ -82,7 +84,7 @@ class StoreAttributionCard extends StatelessWidget {
               const Icon(Icons.storefront_outlined, color: Color(0xFF00C896), size: 18),
               const SizedBox(width: 8),
               Text(
-                title,
+                title ?? context.tr('sac_title'),
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: compact ? 12 : 13,
@@ -97,7 +99,7 @@ class StoreAttributionCard extends StatelessWidget {
             style: TextStyle(color: context.textPrimary, fontSize: 13),
             onChanged: onMerchantChanged,
             decoration: InputDecoration(
-              labelText: 'Store Name / Merchant',
+              labelText: context.tr('sac_store_label'),
               labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
               prefixIcon: const Icon(Icons.store_outlined, color: Color(0xFF00C896), size: 18),
               filled: true,
@@ -122,7 +124,7 @@ class StoreAttributionCard extends StatelessWidget {
           ),
           SizedBox(height: compact ? 10 : 14),
           Text(
-            'SPENT BY WHO?',
+            context.tr('sac_spent_by_caps'),
             style: GoogleFonts.outfit(
               fontSize: 10,
               letterSpacing: 0.8,
@@ -135,21 +137,21 @@ class StoreAttributionCard extends StatelessWidget {
             children: [
               _buildSpentByOption(context,
                 key: 'me',
-                label: 'Me',
+                label: context.tr('me'),
                 icon: Icons.person_outline,
                 activeColor: const Color(0xFF58A6FF),
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'partner',
-                label: 'Partner',
+                label: context.tr('partner'),
                 icon: Icons.favorite_outline,
                 activeColor: const Color(0xFFBC8CFF),
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'both',
-                label: 'Both (Shared)',
+                label: context.tr('both_shared'),
                 icon: Icons.group_outlined,
                 activeColor: const Color(0xFF00C896),
               ),

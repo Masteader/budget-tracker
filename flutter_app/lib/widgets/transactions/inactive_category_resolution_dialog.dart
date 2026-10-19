@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Modal dialog shown when a new transaction is parsed or logged
 /// against a category that is currently marked inactive for the household.
@@ -62,10 +63,10 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
             child: const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Inactive Category Detected',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              context.tr('icr_title'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -75,7 +76,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'This expense of SAR ${amount.toStringAsFixed(2)} at "$merchant" matches the category "$categoryName", which is currently inactive for your household.',
+            context.trArgs('icr_desc', {'amount': context.sar(amount), 'merchant': merchant, 'category': categoryName}),
             style: TextStyle(
               fontSize: 14,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
@@ -89,7 +90,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              'Would you like to reactivate "$categoryName" to track its budget, or file this transaction under another category?',
+              context.trArgs('icr_question', {'category': categoryName}),
               style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
             ),
           ),
@@ -102,7 +103,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(40),
           ),
-          child: const Text('File Under Other Category'),
+          child: Text(context.tr('icr_other_category')),
         ),
         const SizedBox(height: 8),
         FilledButton(
@@ -111,7 +112,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
             backgroundColor: const Color(0xFF00C896),
             minimumSize: const Size.fromHeight(40),
           ),
-          child: const Text('Reactivate Category'),
+          child: Text(context.tr('icr_reactivate')),
         ),
       ],
     );

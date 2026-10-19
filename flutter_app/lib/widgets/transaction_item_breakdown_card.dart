@@ -403,7 +403,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           ...items.asMap().entries.map((entry) {
                             final idx = entry.key;
                             final it = entry.value;
-                            final name = it['name'] ?? 'Item';
+                            final name = it['name'] ?? context.tr('sim_item');
                             final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
                             final price = (it['price'] as num?)?.toDouble() ?? 0.0;
                             return Padding(

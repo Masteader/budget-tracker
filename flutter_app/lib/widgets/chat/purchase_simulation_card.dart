@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card showing real-time affordability analysis before purchasing an item.
 class PurchaseSimulationCard extends StatelessWidget {
@@ -15,23 +16,23 @@ class PurchaseSimulationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final verdict = simulationData['verdict'] as String? ?? 'comfortable';
     final targetAmt = (simulationData['amount'] as num?)?.toDouble() ?? 0.0;
-    final item = simulationData['merchant'] as String? ?? 'Item';
+    final item = simulationData['merchant'] as String? ?? context.tr('sim_item');
     final daysToPayday = simulationData['days_to_payday'] as int? ?? 0;
     final dailyCurrent = (simulationData['current_daily_allowance'] as num?)?.toDouble() ?? 0.0;
     final dailyPost = (simulationData['post_purchase_daily_allowance'] as num?)?.toDouble() ?? 0.0;
 
     Color badgeColor = const Color(0xFF00C896);
     IconData badgeIcon = Icons.check_circle_outline_rounded;
-    String verdictLabel = "Comfortably Affordable";
+    String verdictLabel = context.tr('comfortably_affordable');
 
     if (verdict == 'caution') {
       badgeColor = Colors.orange;
       badgeIcon = Icons.warning_amber_rounded;
-      verdictLabel = "Caution (Reallocation Needed)";
+      verdictLabel = context.tr('caution_reallocation');
     } else if (verdict == 'unaffordable' || verdict == 'not_recommended') {
       badgeColor = Colors.redAccent;
       badgeIcon = Icons.cancel_outlined;
-      verdictLabel = "Unaffordable / Exceeds Budget";
+      verdictLabel = context.tr('unaffordable_exceeds');
     }
 
     return Container(
@@ -50,7 +51,7 @@ class PurchaseSimulationCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Purchase Simulator',
+                  context.tr('wt2_tag2'),
                   style: GoogleFonts.outfit(
                     color: context.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -79,12 +80,12 @@ class PurchaseSimulationCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '$item • SAR ${targetAmt.toStringAsFixed(2)}',
+            '$item • ${context.sar(targetAmt)}',
             style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
-            'Days to Payday: $daysToPayday days away',
+            context.trArgs('psim_days_to_payday', {'days': daysToPayday}),
             style: TextStyle(color: context.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 10),
@@ -101,13 +102,13 @@ class PurchaseSimulationCard extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Daily Allowance Now',
+                        context.tr('psim_daily_now'),
                         style: TextStyle(color: context.textSecondary, fontSize: 10),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'SAR ${dailyCurrent.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyCurrent, decimals: 1)}),
                         style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
@@ -122,13 +123,13 @@ class PurchaseSimulationCard extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'After Purchase',
+                        context.tr('after_purchase'),
                         style: TextStyle(color: context.textSecondary, fontSize: 10),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'SAR ${dailyPost.toStringAsFixed(1)}/d',
+                        context.trArgs('per_day_suffix', {'amount': context.sar(dailyPost, decimals: 1)}),
                         style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),

@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
@@ -325,7 +324,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildFilterChip(
                           label: _customDateRange != null
-                              ? '${DateFormat('d MMM').format(_customDateRange!.start)} - ${DateFormat('d MMM').format(_customDateRange!.end)}'
+                              ? '${context.fmtDate(_customDateRange!.start, 'd MMM')} - ${context.fmtDate(_customDateRange!.end, 'd MMM')}'
                               : context.tr('custom_range'),
                           selected: _selectedDatePeriod == 'CUSTOM',
                           icon: Icons.calendar_today,

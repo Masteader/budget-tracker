@@ -176,7 +176,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
                 prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896)),
-                suffixText: 'SAR',
+                suffixText: context.tr('sar'),
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
                 filled: true,
                 fillColor: context.inputBg,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card for resolving potential duplicate transactions detected by the AI.
 class DuplicateResolutionCard extends StatelessWidget {
@@ -37,7 +38,7 @@ class DuplicateResolutionCard extends StatelessWidget {
               const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Duplicate Prevention Check',
+                context.tr('drc_title'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.orange, fontSize: 13),
               ),
             ],
@@ -53,7 +54,7 @@ class DuplicateResolutionCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.attach_file, size: 16),
-                  label: const Text('Enrich Existing Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: Text(context.tr('drc_enrich'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () {
                     if (candidateId != null) {
                       onEnrich(candidateId);
@@ -69,7 +70,7 @@ class DuplicateResolutionCard extends StatelessWidget {
                     side: BorderSide(color: context.borderColor),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
-                  child: const Text('Log as New', style: TextStyle(fontSize: 12)),
+                  child: Text(context.tr('drc_log_new'), style: const TextStyle(fontSize: 12)),
                   onPressed: () {
                     final originalMsg = parsed != null
                         ? "${parsed['merchant']} ${parsed['amount']} SAR"
@@ -91,7 +92,7 @@ class DuplicateResolutionCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 6),
                 ),
                 icon: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('Discard', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                label: Text(context.tr('drc_discard'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                 onPressed: onDiscard,
               ),
             ),

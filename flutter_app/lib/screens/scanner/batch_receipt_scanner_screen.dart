@@ -35,6 +35,11 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
   bool _isCapturing = false;
   String? _errorMessage;
 
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,10 +65,10 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
     if (!status.isGranted) {
       final req = await Permission.camera.request();
       if (!req.isGranted) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = req.isPermanentlyDenied
-              ? 'Camera permission permanently denied. Enable in Settings.'
-              : 'Camera permission required to capture receipts.';
+              ? context.tr('scan_cam_perm_permanent')
+              : context.tr('scan_cam_perm_needed');
         });
         return;
       }
@@ -87,7 +92,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
         HapticFeedback.lightImpact();
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to capture photo: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
     } finally {
       if (mounted) setState(() => _isCapturing = false);
     }
@@ -120,7 +125,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
         HapticFeedback.lightImpact();
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to pick from gallery: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_gallery_error', {'error': e}));
     }
   }
 
@@ -347,7 +352,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                'Align Receipt Within Frame',
+                                context.tr('brs_align'),
                                 style: GoogleFonts.outfit(
                                   color: Colors.white70,
                                   fontSize: 13,
@@ -393,7 +398,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                 onPressed: _pickFromGallery,
                                 icon: Icon(Icons.photo_library_rounded, size: 16, color: context.iceCyan),
                                 label: Text(
-                                  'Add from Gallery',
+                                  context.tr('brs_add_gallery'),
                                   style: GoogleFonts.outfit(
                                     color: context.iceCyan,
                                     fontWeight: FontWeight.w600,
@@ -428,7 +433,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Captured Receipts (${_queuedImages.length})',
+                        context.trArgs('brs_captured', {'count': _queuedImages.length}),
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -437,7 +442,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                       ),
                       if (_queuedImages.isNotEmpty)
                         Text(
-                          'Ready to process',
+                          context.tr('brs_ready'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             color: context.electricTeal,

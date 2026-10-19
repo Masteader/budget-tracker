@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -24,7 +23,9 @@ class SalaryCycleSelectorBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleText = currentCycle?.monthName ?? DateFormat('MMMM yyyy').format(DateTime.now());
+    final titleText = currentCycle != null
+        ? context.cycleMonth(currentCycle!.cycleKey, fallback: currentCycle!.monthName)
+        : context.fmtDate(DateTime.now(), 'MMMM yyyy');
     final subText = currentCycle != null
         ? '${currentCycle!.cycleStart.substring(5)} - ${currentCycle!.cycleEnd.substring(5)}'
         : context.tr('active_salary_cycle');
