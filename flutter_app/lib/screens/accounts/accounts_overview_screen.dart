@@ -27,11 +27,28 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
+  late Stream<List<Account>> _accountsStream;
+  List<Account> _cachedAccounts = [];
+  bool _isLoadingAccounts = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCommittedBudgets();
+    _initStream();
+    _refreshAll();
+  }
+
+  void _initStream() {
+    _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountsOverviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.householdId != widget.householdId) {
+      _initStream();
+      _refreshAll();
+    }
   }
 
   String get _currentCycleKey {
@@ -57,6 +74,31 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
     } catch (_) {}
   }
 
+  Future<void> _fetchAccountsDirectly() async {
+    try {
+      final list = await AccountService.instance.getAccounts(widget.householdId);
+      if (mounted) {
+        setState(() {
+          _cachedAccounts = list;
+          _isLoadingAccounts = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && _cachedAccounts.isEmpty) {
+        setState(() {
+          _isLoadingAccounts = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadCommittedBudgets(),
+      _fetchAccountsDirectly(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
@@ -78,26 +120,37 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
-            icon: const Icon(Icons.add_rounded, color: Color(0xFF00E5BF)),
+            icon: Icon(Icons.add_rounded, color: context.electricTeal),
             tooltip: context.tr('add_account'),
             onPressed: () {
               AddEditAccountDialog.show(
                 context,
                 householdId: widget.householdId,
-                onSuccess: () => setState(() {}),
+                onSuccess: _refreshAll,
               );
             },
           ),
         ],
       ),
       body: StreamBuilder<List<Account>>(
-        stream: AccountService.instance.streamAccounts(widget.householdId),
+        stream: _accountsStream,
+        initialData: _cachedAccounts.isNotEmpty ? _cachedAccounts : null,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5BF)));
+          if (snapshot.hasData && snapshot.data != null) {
+            _cachedAccounts = snapshot.data!;
+            _isLoadingAccounts = false;
           }
 
-          final accounts = snapshot.data ?? [];
+          if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
+            return Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: context.electricTeal,
+              ),
+            );
+          }
+
+          final accounts = _cachedAccounts;
 
           if (accounts.isEmpty) {
             return Center(
@@ -109,10 +162,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00E5BF).withValues(alpha: 0.1),
+                        color: context.electricTeal.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.account_balance_wallet_outlined, size: 48, color: Color(0xFF00E5BF)),
+                      child: Icon(Icons.account_balance_wallet_outlined, size: 48, color: context.electricTeal),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -131,14 +184,14 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                         AddEditAccountDialog.show(
                           context,
                           householdId: widget.householdId,
-                          onSuccess: () => setState(() {}),
+                          onSuccess: _refreshAll,
                         );
                       },
                       icon: const Icon(Icons.add_rounded),
                       label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00E5BF),
-                        foregroundColor: const Color(0xFF051424),
+                        backgroundColor: context.electricTeal,
+                        foregroundColor: context.scaffoldBg,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -172,8 +225,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           final sharedPools = accounts.where((a) => a.isSharedPool || a.accountType == AccountType.sharedPool).toList();
 
           return RefreshIndicator(
-            onRefresh: _loadCommittedBudgets,
-            color: const Color(0xFF00E5BF),
+            onRefresh: _refreshAll,
+            color: context.electricTeal,
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [

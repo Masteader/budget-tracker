@@ -10,10 +10,32 @@ import '../../theme/app_themes.dart';
 
 /// Dashboard summary card displaying total liquidity across all accounts
 /// and horizontal account pills. Tapping navigates to AccountsOverviewScreen.
-class AccountsSummaryCard extends StatelessWidget {
+class AccountsSummaryCard extends StatefulWidget {
   final String householdId;
 
   const AccountsSummaryCard({super.key, required this.householdId});
+
+  @override
+  State<AccountsSummaryCard> createState() => _AccountsSummaryCardState();
+}
+
+class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
+  late Stream<List<Account>> _accountsStream;
+  List<Account> _cachedAccounts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountsSummaryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.householdId != widget.householdId) {
+      _accountsStream = AccountService.instance.streamAccounts(widget.householdId);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,13 +43,14 @@ class AccountsSummaryCard extends StatelessWidget {
     final isDark = context.isDark;
 
     return StreamBuilder<List<Account>>(
-      stream: AccountService.instance.streamAccounts(householdId),
+      stream: _accountsStream,
+      initialData: _cachedAccounts.isNotEmpty ? _cachedAccounts : null,
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
+        if (snapshot.hasData && snapshot.data != null) {
+          _cachedAccounts = snapshot.data!;
         }
 
-        final accounts = snapshot.data!.where((a) => !a.isArchived).toList();
+        final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
         if (accounts.isEmpty) return const SizedBox.shrink();
 
         final totalLiquidity =
@@ -41,7 +64,7 @@ class AccountsSummaryCard extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => AccountsOverviewScreen(householdId: householdId),
+                builder: (_) => AccountsOverviewScreen(householdId: widget.householdId),
               ),
             );
           },

@@ -196,7 +196,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: context.textPrimary,
                           ),
                         ),
                         TextButton(
@@ -545,7 +545,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           backgroundColor: context.cardBg,
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
-            'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated automatically.',
+            '${context.tr('delete_confirm_prefix')} ${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}?\n${context.tr('budget_will_be_updated')}',
             style: TextStyle(color: context.textSecondary),
           ),
           actions: [
@@ -573,8 +573,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          'Could not delete transaction. Please check your network connection.',
-          title: 'Delete Failed',
+          context.tr('delete_failed'),
+          title: context.tr('delete_transaction'),
         );
       }
       return;
@@ -592,8 +592,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     if (context.mounted) {
       AppSnackBar.showDelete(
         context,
-        'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"}',
-        title: 'Transaction Removed',
+        '${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}',
+        title: context.tr('transaction_removed'),
         onUndo: () async {
           await supabase.from('transactions').insert({
             'household_id': tx.householdId,
@@ -615,8 +615,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
-              'SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "merchant"} has been restored.',
-              title: 'Transaction Restored',
+              '${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}',
+              title: context.tr('transaction_restored'),
             );
           }
         },
@@ -843,7 +843,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Executive monthly statement with partner attribution split, 15% VAT, and category budgets.',
+                                              context.tr('pdf_desc'),
                                               style: TextStyle(color: context.textSecondary, fontSize: 13),
                                             ),
                                             const SizedBox(height: 14),
@@ -874,7 +874,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
-                                            child: Text('Close', style: TextStyle(color: context.textSecondary)),
+                                            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
                                           ),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
@@ -889,8 +889,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                                 Navigator.pop(ctx);
                                                 AppSnackBar.showSuccess(
                                                   context,
-                                                  'PDF Statement link copied to clipboard. Paste into browser to download.',
-                                                  title: 'Link Copied',
+                                                  context.tr('pdf_copied_desc'),
+                                                  title: context.tr('link_copied'),
                                                   icon: Icons.picture_as_pdf_rounded,
                                                 );
                                               }
@@ -989,15 +989,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                             context: context,
                                             builder: (dCtx) => AlertDialog(
                                               backgroundColor: context.cardBg,
-                                              title: Text('Delete Transaction', style: TextStyle(color: context.textPrimary)),
+                                              title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
                                               content: Text(
-                                                'Delete SAR ${tx.amount.toStringAsFixed(2)} at ${tx.merchant ?? "Unknown"}?\nYour budget will be updated.',
+                                                '${context.tr('delete_confirm_prefix')} ${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}?\n${context.tr('budget_will_be_updated')}',
                                                 style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [
                                                 TextButton(
                                                   onPressed: () => Navigator.pop(dCtx, false),
-                                                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                                                  child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                                                 ),
                                                 ElevatedButton(
                                                   style: ElevatedButton.styleFrom(
