@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
@@ -28,7 +27,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +434,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 def parse_chat_expense(text: str) -> ParsedChatExpense:
     """Call Gemini to extract structured expense information from user chat text, with graceful fallback."""
     text = normalize_arabic_numbers(text)
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
+    model = litellm_model()
     
     try:
         response = litellm.completion(

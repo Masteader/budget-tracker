@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Database test runner for Supabase local Docker / CI / plain local Postgres.
+"""Database test runner for a local Docker Postgres or a plain local Postgres (run by hand before each release; the project has no CI).
 
 Default behaviour (unchanged): run every ``NN_*.sql`` test file through
 ``docker exec -i budget_tracker_review_pg psql`` against ``$DB_NAME``

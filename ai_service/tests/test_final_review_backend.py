@@ -237,6 +237,31 @@ def test_admins_can_write_budgets(db, index):
     work.assert_called_once()
 
 
+# ─── FR-B-09: one LiteLLM model default for every module ─────────────────────
+
+def test_every_llm_call_uses_the_same_default_model(monkeypatch):
+    import re
+    from pathlib import Path
+
+    import utils
+
+    root = Path(__file__).resolve().parent.parent
+    env_example = (root / ".env.example").read_text(encoding="utf-8")
+    assert f"LITELLM_MODEL={utils.DEFAULT_LITELLM_MODEL}" in env_example
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    assert f"LITELLM_MODEL:-{utils.DEFAULT_LITELLM_MODEL}" in compose
+    for name in ("chat_parser.py", "receipt_scanner.py", "support_agent.py"):
+        source = (root / name).read_text(encoding="utf-8")
+        # No module carries its own fallback model string any more.
+        assert not re.search(r"LITELLM_MODEL\"\s*,\s*\"", source), name
+        assert "litellm_model()" in source, name
+
+    monkeypatch.delenv("LITELLM_MODEL", raising=False)
+    assert utils.litellm_model() == utils.DEFAULT_LITELLM_MODEL
+    monkeypatch.setenv("LITELLM_MODEL", "  gemini/override  ")
+    assert utils.litellm_model() == "gemini/override"
+
+
 def test_partner_settlement_tags_are_relative_to_the_creator(db):
     """'PaidBy: me' written by A means A paid: B must see that they owe, not that A owes them."""
     from settlement_engine import calculate_partner_settlement

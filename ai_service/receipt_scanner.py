@@ -12,7 +12,6 @@ import binascii
 import json
 import logging
 import math
-import os
 import re
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -34,7 +33,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +308,7 @@ def parse_receipt_images(
     qr_code_raw: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Call Gemini multimodal vision API with 1 or more receipt images."""
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.5-flash-lite")
+    model = litellm_model()
     
     prompt_text = RECEIPT_PROMPT
     if qr_code_raw:
