@@ -11,6 +11,7 @@ import '../providers/budget_provider.dart';
 import '../providers/recurring_bills_provider.dart';
 import '../services/api_service.dart';
 import 'app_snackbar.dart';
+import 'dispose_on_unmount.dart';
 import '../models/money.dart';
 
 class SubBudgetAllocationDialog extends StatefulWidget {
@@ -265,14 +266,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         );
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _subItems.clear();
-          _subItems.addAll(list);
-          _isLoading = false;
-        });
-        _recomputeTotal();
-      }
+      _replaceSubItems(list);
     } catch (e) {
       final defaultList = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
@@ -295,15 +289,35 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         );
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _subItems.clear();
-          _subItems.addAll(list);
-          _isLoading = false;
-        });
-        _recomputeTotal();
-      }
+      _replaceSubItems(list);
     }
+  }
+
+  /// Swaps in a freshly loaded list (UI-20). The replaced controllers are
+  /// disposed after the next frame, once their TextFields use the new ones;
+  /// if the dialog is already gone, the new controllers are disposed instead.
+  void _replaceSubItems(List<_SubCategoryItemDef> list) {
+    if (!mounted) {
+      for (final item in list) {
+        item.controller.dispose();
+      }
+      return;
+    }
+    final replaced = List<_SubCategoryItemDef>.of(_subItems);
+    setState(() {
+      _subItems
+        ..clear()
+        ..addAll(list);
+      _isLoading = false;
+    });
+    _recomputeTotal();
+    if (replaced.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final item in replaced) {
+        item.controller.removeListener(_recomputeTotal);
+        item.controller.dispose();
+      }
+    });
   }
 
   Future<void> _promptAddSubCategory() async {
@@ -312,7 +326,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
     final res = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl, amountCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
@@ -354,8 +370,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           ),
         ],
       ),
+      ),
     );
 
+    // Read synchronously after the pop; the controllers are disposed only
+    // when the dialog's exit animation has finished.
     if (res != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
@@ -396,7 +415,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     final res = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
@@ -448,6 +469,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             child: Text(context.tr('sba_rename'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
 

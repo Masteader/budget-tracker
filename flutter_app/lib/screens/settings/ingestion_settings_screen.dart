@@ -22,6 +22,7 @@ import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../theme/app_themes.dart';
@@ -495,7 +496,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final codeCtrl = TextEditingController();
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [codeCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Text(context.tr('join_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
@@ -557,6 +560,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -564,7 +568,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final nameCtrl = TextEditingController();
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Text(context.tr('new_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
@@ -621,6 +627,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             },
           ),
         ],
+      ),
       ),
     );
   }

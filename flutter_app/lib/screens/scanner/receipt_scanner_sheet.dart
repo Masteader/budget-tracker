@@ -22,6 +22,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
@@ -145,7 +146,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final ctrl = TextEditingController(text: _zatcaQrRaw ?? '');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [ctrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Row(
           children: [
@@ -188,7 +191,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   label: Text(context.tr('from_clipboard'), style: const TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
                   onPressed: () async {
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    if (data?.text != null) {
+                    // The dialog (and its controller) may be gone by now.
+                    if (data?.text != null && ctx.mounted) {
                       ctrl.text = data!.text!.trim();
                     }
                   },
@@ -234,6 +238,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             child: Text(context.tr('apply_qr_code'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
   }
