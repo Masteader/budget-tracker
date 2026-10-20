@@ -51,6 +51,12 @@ def test_no_sms_or_simulator_modules_in_service():
     assert offenders == []
 
 
+def test_no_manual_dev_scripts_at_service_root():
+    """Root-level test_*.py dev scripts (live server / real LLM callers) were removed (API-25)."""
+    offenders = sorted(p.name for p in SERVICE_DIR.glob("test_*.py"))
+    assert offenders == []
+
+
 def test_service_code_has_no_sms_ingestion_identifiers():
     offenders = []
     for path in _service_python_files():
@@ -67,7 +73,7 @@ def test_requirements_have_no_sms_pipeline_dependency():
 
 def test_dockerignore_does_not_reference_deleted_sms_scripts():
     dockerignore = (SERVICE_DIR / ".dockerignore").read_text(encoding="utf-8")
-    for name in ("send_simulated_sms.py", "batch_simulate.py", "graph.py"):
+    for name in ("send_simulated_sms.py", "batch_simulate.py", "graph.py", "test_chat_endpoint.py"):
         assert name not in dockerignore
 
 

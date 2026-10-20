@@ -8,10 +8,6 @@
 .pytest_cache/
 tests/
 data/*.json
-# Manual dev scripts (they call a running server or a real LLM)
-test_chat.py
-test_chat_endpoint.py
-test_zatca.py
 _build_landing.py
 docker-compose.yml
 Dockerfile
