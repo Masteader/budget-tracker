@@ -1,0 +1,3114 @@
+[
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "monthly_allowance_masroof",
+    "locale": "ar",
+    "current": "المصروف الشهري / النفقة (اختياري)",
+    "suggested": "المصروف الشهري (اختياري)",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowable_daily",
+    "locale": "ur",
+    "current": "روزانہ کی اجازت",
+    "suggested": "روزانہ قابلِ خرچ رقم",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_allocated",
+    "locale": "ur",
+    "current": "المخصص",
+    "suggested": "مختص شدہ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_amount_label",
+    "locale": "ur",
+    "current": "المبلغ لكل دورة",
+    "suggested": "فی سائیکل رقم",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_edit",
+    "locale": "ur",
+    "current": "تعديل المصروف",
+    "suggested": "جیب خرچ تبدیل کریں",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_not_set",
+    "locale": "ur",
+    "current": "لم يُحدَّد مصروف لهذه الدورة بعد.",
+    "suggested": "اس سائیکل کے لیے ابھی جیب خرچ مقرر نہیں ہوا۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_overspent",
+    "locale": "ur",
+    "current": "تجاوز المصروف بمبلغ {amount}",
+    "suggested": "جیب خرچ سے {amount} زیادہ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_remaining",
+    "locale": "ur",
+    "current": "المتبقي",
+    "suggested": "باقی",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_save",
+    "locale": "ur",
+    "current": "حفظ",
+    "suggested": "محفوظ کریں",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_save_failed",
+    "locale": "ur",
+    "current": "تعذّر حفظ المصروف",
+    "suggested": "جیب خرچ محفوظ نہیں ہو سکا",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_saved",
+    "locale": "ur",
+    "current": "تم حفظ المصروف",
+    "suggested": "جیب خرچ محفوظ ہو گیا",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_set",
+    "locale": "ur",
+    "current": "تحديد المصروف",
+    "suggested": "جیب خرچ مقرر کریں",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_set_by_husband",
+    "locale": "ur",
+    "current": "يحدده الزوج أو مشرف الأسرة.",
+    "suggested": "شوہر یا گھرانے کا ایڈمن مقرر کرتا ہے۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_set_title",
+    "locale": "ur",
+    "current": "المصروف الشخصي لدورة {cycle}",
+    "suggested": "{cycle} کے لیے ذاتی جیب خرچ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_spent",
+    "locale": "ur",
+    "current": "المصروف",
+    "suggested": "خرچ شدہ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_subtitle",
+    "locale": "ur",
+    "current": "المشتريات الشخصية في دورة الراتب {cycle}",
+    "suggested": "تنخواہ کے سائیکل {cycle} میں ذاتی خریداری",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_title",
+    "locale": "ur",
+    "current": "مصروف الزوجة الشخصي",
+    "suggested": "اہلیہ کا ذاتی جیب خرچ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_title_mine",
+    "locale": "ur",
+    "current": "مصروفي الشخصي",
+    "suggested": "میرا ذاتی جیب خرچ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "leave_household",
+    "locale": "ur",
+    "current": "خاندان چھوڑیں",
+    "suggested": "گھرانہ چھوڑیں",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "leave_household_confirm",
+    "locale": "ur",
+    "current": "کیا آپ واقعی اس خاندان کو چھوڑنا چاہتے ہیں؟ آپ مشترکہ بجٹ تک رسائی کھو دیں گے۔",
+    "suggested": "کیا آپ واقعی یہ گھرانہ چھوڑنا چاہتے ہیں؟ دوبارہ مدعو کیے جانے تک آپ اس کے مشترکہ بجٹ اور لین دین تک رسائی کھو دیں گے۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_advanced_total",
+    "locale": "ur",
+    "current": "دفعته الزوجة: {amount}",
+    "suggested": "پیشگی ادا کیا: {amount}",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_banner_husband",
+    "locale": "ur",
+    "current": "مصروف البيت: من نفقة الزوج، ولا دين على أحد.",
+    "suggested": "گھریلو خرچ: شوہر کا نفقہ، کسی پر کوئی قرض نہیں۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_banner_personal",
+    "locale": "ur",
+    "current": "شخصي: يُحتسب {amount} من مصروف الزوجة.",
+    "suggested": "ذاتی: {amount} اہلیہ کے جیب خرچ میں شمار ہوں گے۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_banner_shared",
+    "locale": "ur",
+    "current": "مشترك للأسرة: يستحق للزوجة على زوجها {amount}.",
+    "suggested": "خاندان کے لیے مشترکہ: شوہر کے ذمے اہلیہ کے {amount} ہیں۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_choice_title",
+    "locale": "ur",
+    "current": "من دفع ولأي غرض؟",
+    "suggested": "ادائیگی کس نے کی، اور کس مقصد کے لیے؟",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_confirm_received",
+    "locale": "ur",
+    "current": "تسجيل مبلغ مستلم",
+    "suggested": "وصول شدہ رقم درج کریں",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_err_forbidden",
+    "locale": "ur",
+    "current": "هذا الإجراء للزوج أو الزوجة أو مشرف الأسرة فقط.",
+    "suggested": "یہ کام صرف شوہر، اہلیہ یا گھرانے کا ایڈمن کر سکتا ہے۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_err_overpayment",
+    "locale": "ur",
+    "current": "المبلغ أكبر من الرصيد المستحق ({amount}).",
+    "suggested": "یہ رقم واجب الادا بقایا ({amount}) سے زیادہ ہے۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_history",
+    "locale": "ur",
+    "current": "السجل",
+    "suggested": "ریکارڈ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_history_advance",
+    "locale": "ur",
+    "current": "دفعت الزوجة: {merchant}",
+    "suggested": "اہلیہ نے ادا کیا: {merchant}",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_history_empty",
+    "locale": "ur",
+    "current": "لا توجد مبالغ مدفوعة أو مسددة بعد.",
+    "suggested": "ابھی تک کوئی پیشگی ادائیگی یا واپسی نہیں ہوئی۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_history_reimbursement",
+    "locale": "ur",
+    "current": "سداد عبر {method}",
+    "suggested": "{method} کے ذریعے واپس ادا کیا گیا",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_history_title",
+    "locale": "ur",
+    "current": "سجل المستحقات والسداد",
+    "suggested": "واپسی کی ادائیگیوں کا ریکارڈ",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_opt_husband",
+    "locale": "ur",
+    "current": "دفعه الزوج (مصروف البيت)",
+    "suggested": "شوہر نے ادا کیا (گھریلو خرچ)",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_opt_personal_hers",
+    "locale": "ur",
+    "current": "شخصي (من مصروفها)",
+    "suggested": "ذاتی (اس کے جیب خرچ سے)",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_opt_personal_mine",
+    "locale": "ur",
+    "current": "شخصي (من مصروفي)",
+    "suggested": "ذاتی (میرے جیب خرچ سے)",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_opt_shared",
+    "locale": "ur",
+    "current": "مشترك للأسرة (يسدده الزوج)",
+    "suggested": "خاندان کے لیے مشترکہ (شوہر واپس ادا کرے گا)",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_owed_to_you",
+    "locale": "ur",
+    "current": "المستحق لكِ على زوجك",
+    "suggested": "آپ کے شوہر کے ذمے واجب الادا رقم",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_reimbursed_total",
+    "locale": "ur",
+    "current": "تم سداده: {amount}",
+    "suggested": "واپس ادا ہوا: {amount}",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_wife_personal_hint",
+    "locale": "ur",
+    "current": "ليس ديناً: يُخصم من مصروف الزوجة الشخصي لهذه الدورة.",
+    "suggested": "قرض نہیں: اس تنخواہ کے سائیکل میں اہلیہ کے ذاتی جیب خرچ سے منہا ہوگا۔",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "overdue",
+    "locale": "ur",
+    "current": "واجب الادا",
+    "suggested": "تاریخ گزر چکی",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pay_method_other",
+    "locale": "ur",
+    "current": "أخرى",
+    "suggested": "دیگر",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "psc_family_household",
+    "locale": "ur",
+    "current": "مصروف البيت (نفقة الزوج): {amount}",
+    "suggested": "گھریلو خرچ (شوہر کا نفقہ): {amount}",
+    "severity": "High"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.lp2p",
+    "locale": "ar",
+    "current": "تُعالج الرسائل النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط ولا تُستخدم لتدريب نماذج عامة دون موافقة.",
+    "suggested": "تُعالج المدخلات النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط، ولا يُحتفظ بها لتدريب نماذج عامة.",
+    "severity": "High"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.spt",
+    "locale": "ar",
+    "current": "محاكاة توزيع المصاريف بين الشركاء والأبناء",
+    "suggested": "محاكاة توزيع المصاريف بين شركاء السكن",
+    "severity": "High"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.t4",
+    "locale": "ar",
+    "current": "توزيع الأسرة",
+    "suggested": "توزيع السكن المشترك",
+    "severity": "High"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:faq-5-answer",
+    "locale": "ar",
+    "current": "ولا يستطيع حتى مسؤولو النظام فك تشفير ميزانياتك الشخصية.",
+    "suggested": "ولا يطّلع عليها إلا أعضاء منزلك المصرّح لهم.",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.brand.sovereignBadge",
+    "locale": "ar",
+    "current": "نظام سيادي مستقل",
+    "suggested": "نظام مالي مستقل",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.faq.items[3].a",
+    "locale": "ar",
+    "current": "وضع الأسرة يركز على تكامل ميزانية الأب والأم، والمصروفات التضامنية والادخار المشترك. أما وضع الزملاء فيتعامل مع كل فرد كشريك مستقل، مع احتساب دقيق للمبالغ المدفوعة وصافي المديونيات وتسويتها بضغطة زر.",
+    "suggested": "وضع الأسرة يتبع مبدأ النفقة الشرعية: الزوج يتكفل بمصاريف البيت، وما تدفعه الزوجة من مالها للبيت يُسجَّل لها مستحقاً على الزوج، مع ادخار مشترك للأسرة. أما وضع الزملاء فيتعامل مع كل فرد كشريك مستقل، مع احتساب دقيق للمبالغ المدفوعة وصافي المديونيات وتسويتها بضغطة زر.",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.hero.badge",
+    "locale": "ar",
+    "current": "الحوكمة المالية السيادية • للأسر الحديثة وشركاء السكن",
+    "suggested": "الإدارة المالية الذكية • للأسر الحديثة وشركاء السكن",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.simulator.zatcaGrand",
+    "locale": "ar",
+    "current": "الإجمالي الصافي للفاتورة:",
+    "suggested": "إجمالي الفاتورة (شامل الضريبة):",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.faq.items[3].a",
+    "locale": "en",
+    "current": "Family Mode focuses on proportional income allocation, household reserve buffers, and collective child allocations. Roommates Mode treats each person as an autonomous counterparty, keeping clean peer-to-peer debit/credit records with instant 1-click settlements.",
+    "suggested": "Family Mode follows the Islamic Nafaqah principle: the husband covers household expenses, and anything the wife pays for the household from her own money is tracked as owed back to her. Roommates Mode treats each person as an autonomous counterparty, keeping clean peer-to-peer debit/credit records with instant 1-click settlements.",
+    "severity": "High"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.simulator.splitDesc",
+    "locale": "en",
+    "current": "Eliminate awkward financial discussions. Switch smoothly between proportional household budgeting (fair salary-weighted contributions) and roommate mode with zero-friction one-click settlements.",
+    "suggested": "Eliminate awkward financial discussions. Switch smoothly between Nafaqah-based family budgeting (the husband provides; the wife's household payments are tracked as owed back to her) and roommate mode with zero-friction one-click settlements.",
+    "severity": "High"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "_subCategoryValues.ride_hailing",
+    "locale": "ar",
+    "current": "تطبيقات النقل والتوصيل",
+    "suggested": "تطبيقات النقل (أوبر/بولت)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "across_accounts",
+    "locale": "ar",
+    "current": "عبر {count} حسابات",
+    "suggested": "عدد الحسابات: {count}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "adjustment",
+    "locale": "ar",
+    "current": "التسوية",
+    "suggested": "فرق المطابقة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "admin",
+    "locale": "ar",
+    "current": "مسؤول",
+    "suggested": "مشرف",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ahm_spouse_desc",
+    "locale": "ar",
+    "current": "تقدر تدفع مصاريف المنزل مقدماً وتسترد النفقة.",
+    "suggested": "تقدر تدفع مصاريف المنزل مقدماً وتستردها من الزوج.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "all_nafaqah_settled",
+    "locale": "ar",
+    "current": "جميع نفقات الأسرة مسواة بالكامل",
+    "suggested": "تمت تسوية جميع مستحقات النفقة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "all_roommates_settled",
+    "locale": "ar",
+    "current": "لا توجد مستحقات معلقة بين شركاء السكن. الجميع متساوون!",
+    "suggested": "لا توجد مستحقات معلقة بين شركاء السكن. كل الحسابات مسوّاة!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_parse_failed",
+    "locale": "ar",
+    "current": "تعذر فهم تفاصيل العملية.",
+    "suggested": "تعذر فهم تفاصيل المعاملة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_recent_match",
+    "locale": "ar",
+    "current": "لقينا عملية مطابقة حديثة.",
+    "suggested": "وجدنا معاملة مطابقة حديثة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_save_failed",
+    "locale": "ar",
+    "current": "تعذر حفظ العملية.",
+    "suggested": "تعذر حفظ المعاملة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_title",
+    "locale": "ar",
+    "current": "محادثة العمليات الذكية",
+    "suggested": "محادثة المعاملات الذكية",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_tx_recorded",
+    "locale": "ar",
+    "current": "تم تسجيل العملية بنجاح!",
+    "suggested": "تم تسجيل المعاملة بنجاح!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "days_to_payday_badge",
+    "locale": "ar",
+    "current": "{days} يوم على الراتب",
+    "suggested": "الأيام المتبقية للراتب: {days}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "dcc_attach",
+    "locale": "ar",
+    "current": "إرفاق {count} بند بالعملية",
+    "suggested": "إرفاق البنود ({count}) بالمعاملة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "dcc_title",
+    "locale": "ar",
+    "current": "لقينا عملية مطابقة",
+    "suggested": "وجدنا معاملة مطابقة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "drc_enrich",
+    "locale": "ar",
+    "current": "إكمال العملية الحالية",
+    "suggested": "إكمال المعاملة الحالية",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "drc_log_new",
+    "locale": "ar",
+    "current": "تسجيل كعملية جديدة",
+    "suggested": "تسجيل كمعاملة جديدة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "enter_amount",
+    "locale": "ar",
+    "current": "السعر التقديري (ريال)",
+    "suggested": "أدخل السعر (ر.س)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_a2",
+    "locale": "ar",
+    "current": "رسوم الإقامة 400 ريال تُتابع ضمن تصنيف الخدمات الحكومية كبند احتياطي مستقل، عشان تحمي المبالغ الأساسية من الصرف على التسوق العام.",
+    "suggested": "رسوم المرافقين (400 ريال شهرياً) تُتابع ضمن تصنيف الخدمات الحكومية كبند احتياطي مستقل، عشان تحمي المبالغ الأساسية من الصرف على التسوق العام.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_q2",
+    "locale": "ar",
+    "current": "وين تُتابع رسوم الإقامة الشهرية 400 ريال؟",
+    "suggested": "وين تُتابع رسوم المرافقين الشهرية (400 ريال)؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "hmc_active_members",
+    "locale": "ar",
+    "current": "{count} أعضاء نشطين",
+    "suggested": "الأعضاء النشطون: {count}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_question",
+    "locale": "ar",
+    "current": "تبي تعيد تفعيل \"{category}\" لمتابعة ميزانيته، أو تسجل العملية تحت تصنيف آخر؟",
+    "suggested": "هل تريد إعادة تفعيل \"{category}\" لمتابعة ميزانيته، أم تسجيل المعاملة تحت تصنيف آخر؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "join_household",
+    "locale": "ar",
+    "current": "الانضمام لأسرة",
+    "suggested": "الانضمام لمنزل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "leave_household",
+    "locale": "ar",
+    "current": "مغادرة الأسرة",
+    "suggested": "مغادرة المنزل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "leave_household_confirm",
+    "locale": "ar",
+    "current": "هل أنت متأكد من مغادرة هذه الأسرة؟ ستفقد الوصول للميزانيات والمعاملات المشتركة حتى تتم دعوتك مجدداً.",
+    "suggested": "هل أنت متأكد من مغادرة هذا المنزل؟ ستفقد الوصول للميزانيات والمعاملات المشتركة حتى تتم دعوتك مجدداً.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pds_title",
+    "locale": "ar",
+    "current": "الراتب ودورة الصرف",
+    "suggested": "يوم الراتب ودورة الراتب",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pec_both_family",
+    "locale": "ar",
+    "current": "الاثنين / العائلة",
+    "suggested": "كلانا / العائلة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_pool_admin_only",
+    "locale": "ar",
+    "current": "سحب الأموال من الصندوق المشترك متاح لمسؤولي المنزل فقط.",
+    "suggested": "سحب الأموال من الصندوق المشترك متاح لمشرفي المنزل فقط.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_pool_hidden_hint",
+    "locale": "ar",
+    "current": "الصناديق المشتركة مخفية: السحب منها للمسؤولين فقط.",
+    "suggested": "الصناديق المشتركة مخفية: السحب منها للمشرفين فقط.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_tx_admin_only",
+    "locale": "ar",
+    "current": "تعديل أو حذف مصاريف الأعضاء الآخرين متاح لمسؤولي المنزل فقط.",
+    "suggested": "تعديل أو حذف مصاريف الأعضاء الآخرين متاح لمشرفي المنزل فقط.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_tx_locked_note",
+    "locale": "ar",
+    "current": "أضافها عضو آخر · التعديل للمسؤولين فقط",
+    "suggested": "أضافها عضو آخر · التعديل للمشرفين فقط",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "photo_or_qr_required",
+    "locale": "ar",
+    "current": "يرجى التقاط صورة واحدة على الأقل أو مسح الرمز المربع لفاتورة هيئة الزكاة والضريبة.",
+    "suggested": "يرجى التقاط صورة واحدة على الأقل أو مسح رمز QR الضريبي (زاتكا).",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "psim_days_to_payday",
+    "locale": "ar",
+    "current": "باقي على الراتب: {days} يوم",
+    "suggested": "الأيام المتبقية للراتب: {days}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "reimburse_wife",
+    "locale": "ar",
+    "current": "تعويض الزوجة",
+    "suggested": "سداد مستحقات الزوجة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rid_spouse_desc",
+    "locale": "ar",
+    "current": "منزل النفقة الشرعية: الزوج ينفق ويعوّض الزوجة عن أي مصاريف منزلية دفعتها.",
+    "suggested": "أسرة بنظام النفقة الشرعية: الزوج ينفق ويردّ للزوجة ما دفعته من مصاريف المنزل.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_last_admin",
+    "locale": "ar",
+    "current": "يجب أن يبقى للمنزل مسؤول واحد على الأقل.",
+    "suggested": "يجب أن يبقى للمنزل مشرف واحد على الأقل.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_make_admin",
+    "locale": "ar",
+    "current": "تعيين كمسؤول",
+    "suggested": "تعيين كمشرف",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_make_primary",
+    "locale": "ar",
+    "current": "تعيين كمسؤول رئيسي",
+    "suggested": "تعيين كمشرف رئيسي",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_primary_admin",
+    "locale": "ar",
+    "current": "المسؤول الرئيسي",
+    "suggested": "المشرف الرئيسي",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_remove_admin",
+    "locale": "ar",
+    "current": "إلغاء صلاحية المسؤول",
+    "suggested": "إلغاء صلاحية المشرف",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_subtitle",
+    "locale": "ar",
+    "current": "المسؤولون يعدّلون مصاريف الجميع ويحوّلون من الصندوق المشترك. لا يستطيع مسؤول آخر إلغاء صلاحية المسؤول الرئيسي.",
+    "suggested": "المشرفون يعدّلون مصاريف الجميع ويحوّلون من الصندوق المشترك. لا يستطيع مشرف آخر إلغاء صلاحية المشرف الرئيسي.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_title",
+    "locale": "ar",
+    "current": "الأعضاء والمسؤولون",
+    "suggested": "الأعضاء والمشرفون",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_transfer_msg",
+    "locale": "ar",
+    "current": "سيصبح {name} المسؤول الرئيسي. ستبقى مسؤولاً لكن لن تستطيع إلغاء صلاحيته.",
+    "suggested": "سيصبح {name} المشرف الرئيسي. ستبقى مشرفاً لكن لن تستطيع إلغاء صلاحيته.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_transfer_title",
+    "locale": "ar",
+    "current": "نقل صلاحية المسؤول الرئيسي؟",
+    "suggested": "نقل صلاحية المشرف الرئيسي؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roommate_partner_desc",
+    "locale": "ar",
+    "current": "مشاركة الفواتير والمعيشة والتسوية البينية التبسيطية.",
+    "suggested": "يتقاسم مصاريف السكن ويشارك في تبسيط الديون.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "saudi_zatca_vat_qr",
+    "locale": "ar",
+    "current": "رمز QR الضريبي لهيئة الزكاة والدخل",
+    "suggested": "رمز QR الضريبي (زاتكا)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_duplicate_found_msg",
+    "locale": "ar",
+    "current": "فيه عملية بمبلغ {amount} في '{merchant}' مسجلة من قبل. تبي ترفق البنود فيها أو تسجلها كعملية منفصلة؟",
+    "suggested": "توجد معاملة بمبلغ {amount} لدى '{merchant}' مسجلة مسبقاً. هل تريد إرفاق البنود بها أم تسجيلها كمعاملة منفصلة؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_instructions",
+    "locale": "ar",
+    "current": "وجّه الكاميرا نحو الرمز المربع لفاتورة هيئة الزكاة والضريبة",
+    "suggested": "ضع رمز QR الخاص بفاتورة هيئة الزكاة والضريبة والجمارك داخل الإطار",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_invoice_desc",
+    "locale": "ar",
+    "current": "للإيصالات الطويلة، التقط صوراً متعددة أو امسح الرمز المربع لهيئة الزكاة والضريبة.",
+    "suggested": "للإيصالات الطويلة، التقط عدة صور (أعلى ووسط وأسفل)، أو امسح رمز QR الضريبي (زاتكا).",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_invoice_saved_msg",
+    "locale": "ar",
+    "current": "تم حفظ عملية الفاتورة بنجاح!",
+    "suggested": "تم حفظ معاملة الفاتورة بنجاح!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_all_transactions_synchronized",
+    "locale": "ar",
+    "current": "تمت مزامنة جميع العمليات",
+    "suggested": "تمت مزامنة جميع المعاملات",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_transaction_s_pending_sync",
+    "locale": "ar",
+    "current": "{count} عملية بانتظار المزامنة",
+    "suggested": "بانتظار المزامنة: {count}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_nafaqah_note",
+    "locale": "ar",
+    "current": "تعويض نفقة - {amount} ريال",
+    "suggested": "استرداد نفقة - {amount} ريال",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_reimbursement_owed",
+    "locale": "ar",
+    "current": "مستحق للتعويض",
+    "suggested": "مبلغ مستحق السداد",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_wife_desc",
+    "locale": "ar",
+    "current": "سجّل تعويضاً كاملاً أو جزئياً عن مصاريف المنزل المدفوعة مقدماً.",
+    "suggested": "سجّل سداداً كاملاً أو جزئياً لمصاريف المنزل التي دفعتها الزوجة مقدماً.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "support_chip_iqama",
+    "locale": "ar",
+    "current": "كيف أضيف رسوم الإقامة 400 ريال؟",
+    "suggested": "كيف أضيف رسوم المرافقين (400 ريال)؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "transfer_out",
+    "locale": "ar",
+    "current": "تحويل منه",
+    "suggested": "تحويل صادر",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_confirm_long",
+    "locale": "ar",
+    "current": "متأكد إنك تبي تحذف عملية {amount} في {merchant}؟\nبيتم تعديل المصروف من ميزانيتك تلقائياً.",
+    "suggested": "هل أنت متأكد من حذف معاملة {amount} في {merchant}؟\nسيتم تعديل المصروف من ميزانيتك تلقائياً.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_failed_err",
+    "locale": "ar",
+    "current": "تعذر حذف العملية: {error}",
+    "suggested": "تعذر حذف المعاملة: {error}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_failed_msg",
+    "locale": "ar",
+    "current": "تعذر حذف العملية. تأكد من اتصالك بالإنترنت.",
+    "suggested": "تعذر حذف المعاملة. تأكد من اتصالك بالإنترنت.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_deleted",
+    "locale": "ar",
+    "current": "تم حذف العملية",
+    "suggested": "تم حذف المعاملة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_removed",
+    "locale": "ar",
+    "current": "تم حذف العملية",
+    "suggested": "تم حذف المعاملة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_restore_failed_msg",
+    "locale": "ar",
+    "current": "تعذرت استعادة العملية. يرجى إضافتها مرة أخرى.",
+    "suggested": "تعذرت استعادة المعاملة. يرجى إضافتها مرة أخرى.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_restored",
+    "locale": "ar",
+    "current": "تمت استعادة العملية",
+    "suggested": "تمت استعادة المعاملة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_update_failed_msg",
+    "locale": "ar",
+    "current": "تعذر تحديث العملية: {error}",
+    "suggested": "تعذر تحديث المعاملة: {error}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_updated_msg",
+    "locale": "ar",
+    "current": "تم تحديث العملية وإعادة حساب الميزانية.",
+    "suggested": "تم تحديث المعاملة وإعادة حساب الميزانية.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "wife_spouse_title",
+    "locale": "ar",
+    "current": "الزوجة / الشريك",
+    "suggested": "الزوجة",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "zatca_qr_code_data",
+    "locale": "ar",
+    "current": "بيانات الرمز المربع لهيئة الزكاة والضريبة",
+    "suggested": "بيانات رمز QR (زاتكا)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_a2",
+    "locale": "en",
+    "current": "The 400 SAR Iqama fee is tracked under the Government (OPEX-GOV) category as a dedicated sub-budget reserve, protecting your essential funds from being spent on general shopping.",
+    "suggested": "The 400 SAR monthly dependant fee is tracked under the Government (OPEX-GOV) category as a dedicated sub-budget reserve, protecting your essential funds from being spent on general shopping.",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_q2",
+    "locale": "en",
+    "current": "Where is the 400 SAR monthly Iqama fee tracked?",
+    "suggested": "Where is the 400 SAR monthly dependant fee tracked?",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "support_chip_iqama",
+    "locale": "en",
+    "current": "How to add 400 SAR Iqama fee?",
+    "suggested": "How to add the 400 SAR dependant fee?",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "active_salary_cycle",
+    "locale": "ur",
+    "current": "فعال تنخواہ کا چکر",
+    "suggested": "فعال تنخواہ کا سائیکل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "affordability_simulator",
+    "locale": "ur",
+    "current": "کیا میں یہ خرید سکتا ہوں؟",
+    "suggested": "کیا یہ خریداری میرے بجٹ میں ہے؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ahm_allowance_caps",
+    "locale": "ur",
+    "current": "ماہانہ الاؤنس / مصروف (اختیاری)",
+    "suggested": "ماہانہ جیب خرچ (اختیاری)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allocations_exceed_salary",
+    "locale": "ur",
+    "current": "تخصیصات آپ کی ماہانہ تنخواہ سے زیادہ ہیں",
+    "suggested": "تخصیصات آپ کی اس ماہانہ تنخواہ سے زیادہ ہیں (ریال):",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "amount",
+    "locale": "ur",
+    "current": "رقم (ر.س)",
+    "suggested": "رقم (ریال)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "budgets_auto_rollover_desc",
+    "locale": "ur",
+    "current": "تنخواہ کے دن بجٹ خودکار طور پر اگلے چکر میں منتقل ہو جاتا ہے۔ آپ پچھلے مہینے کی تخصیصات نقل کر سکتے ہیں۔",
+    "suggested": "تنخواہ کے دن بجٹ خودکار طور پر اگلے سائیکل میں منتقل ہو جاتا ہے۔ آپ پچھلے سائیکل کی تخصیصات نقل کر سکتے ہیں یا نیچے نئی کیٹیگریز شامل کر سکتے ہیں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "camera_access_desc",
+    "locale": "ur",
+    "current": "کاغذی رسیدیں اور زکوٰۃ کیو آر کوڈ اسکین کرنے کے لیے درکار ہے۔",
+    "suggested": "کاغذی رسیدیں اور سعودی زاتکا کیو آر کوڈ اسکین کرنے کے لیے درکار ہے۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "can_i_afford_this",
+    "locale": "ur",
+    "current": "کیا میں یہ خرید سکتا ہوں؟",
+    "suggested": "کیا یہ خریداری میرے بجٹ میں ہے؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_parse_failed",
+    "locale": "ur",
+    "current": "ٹرانزیکشن کی تفصیلات سمجھ نہیں آ سکیں۔",
+    "suggested": "لین دین کی تفصیلات سمجھ نہیں آ سکیں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_recent_match",
+    "locale": "ur",
+    "current": "حال ہی کی ملتی جلتی ٹرانزیکشن ملی ہے۔",
+    "suggested": "حال ہی کا ملتا جلتا لین دین ملا ہے۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_save_failed",
+    "locale": "ur",
+    "current": "ٹرانزیکشن محفوظ نہیں ہو سکی۔",
+    "suggested": "لین دین محفوظ نہیں ہو سکا۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_title",
+    "locale": "ur",
+    "current": "اے آئی ٹرانزیکشن چیٹ",
+    "suggested": "اے آئی لین دین چیٹ",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_tx_recorded",
+    "locale": "ur",
+    "current": "ٹرانزیکشن کامیابی سے درج ہو گئی!",
+    "suggested": "لین دین کامیابی سے درج ہو گیا!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "child_dependent_desc_long",
+    "locale": "ur",
+    "current": "بغیر قرض یا تسویہ کے ذاتی اخراجات اور جیب خرچ کا انتظام۔",
+    "suggested": "قرض یا تصفیے کے بغیر ذاتی اخراجات اور جیب خرچ کا ریکارڈ۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "copy_previous",
+    "locale": "ur",
+    "current": "پچھلے چکر کی تخصیصات نقل کریں",
+    "suggested": "پچھلے سائیکل کی تخصیصات نقل کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "create_new_household",
+    "locale": "ur",
+    "current": "نیا گھر بنائیں",
+    "suggested": "نیا گھرانہ بنائیں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cycle",
+    "locale": "ur",
+    "current": "چکر",
+    "suggested": "سائیکل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "dcc_attach",
+    "locale": "ur",
+    "current": "{count} آئٹمز ٹرانزیکشن سے منسلک کریں",
+    "suggested": "{count} آئٹمز لین دین سے منسلک کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "dcc_title",
+    "locale": "ur",
+    "current": "ملتی جلتی ٹرانزیکشن ملی",
+    "suggested": "ملتا جلتا لین دین ملا",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "deductions_gosi",
+    "locale": "ur",
+    "current": "کٹوتیاں (انشورنس / ٹیکس)",
+    "suggested": "کٹوتیاں (گوسی / ٹیکس)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "drc_enrich",
+    "locale": "ur",
+    "current": "موجودہ ٹرانزیکشن مکمل کریں",
+    "suggested": "موجودہ لین دین مکمل کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "drc_log_new",
+    "locale": "ur",
+    "current": "نئی کے طور پر درج کریں",
+    "suggested": "نئے لین دین کے طور پر درج کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "family_nafaqah_subtitle",
+    "locale": "ur",
+    "current": "اسلامی نفقہ کے تحت خاندانی ذمہ داری",
+    "suggested": "اسلامی نفقہ کے تحت شوہر کی کفالت کی ذمہ داری",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_a2",
+    "locale": "ur",
+    "current": "400 ریال اقامہ فیس سرکاری خدمات کے زمرے میں ایک الگ ذیلی بجٹ ریزرو کے طور پر ٹریک ہوتی ہے، تاکہ ضروری رقم عام خریداری میں خرچ نہ ہو۔",
+    "suggested": "400 ریال ماہانہ مرافقین فیس سرکاری خدمات کی کیٹیگری میں ایک الگ ذیلی بجٹ ریزرو کے طور پر ٹریک ہوتی ہے، تاکہ ضروری رقم عام خریداری میں خرچ نہ ہو۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_q2",
+    "locale": "ur",
+    "current": "400 ریال ماہانہ اقامہ فیس کہاں ٹریک ہوتی ہے؟",
+    "suggested": "400 ریال ماہانہ مرافقین فیس کہاں ٹریک ہوتی ہے؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "hero_tag",
+    "locale": "ur",
+    "current": "سوورن HUD",
+    "suggested": "ڈیش بورڈ",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "household_switched_success",
+    "locale": "ur",
+    "current": "فعال گھر کامیابی کے ساتھ تبدیل کر دیا گیا!",
+    "suggested": "فعال گھرانہ کامیابی سے تبدیل ہو گیا!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_question",
+    "locale": "ur",
+    "current": "کیا آپ \"{category}\" کو دوبارہ فعال کر کے اس کا بجٹ ٹریک کرنا چاہتے ہیں، یا اس ٹرانزیکشن کو کسی اور زمرے میں درج کرنا چاہتے ہیں؟",
+    "suggested": "کیا آپ \"{category}\" کو دوبارہ فعال کر کے اس کا بجٹ ٹریک کرنا چاہتے ہیں، یا اس لین دین کو کسی اور کیٹیگری میں درج کرنا چاہتے ہیں؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "initial_allocation",
+    "locale": "ur",
+    "current": "مختص رقم (ر.س)",
+    "suggested": "ابتدائی مختص رقم (ریال)",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "join_another_household",
+    "locale": "ur",
+    "current": "کسی دوسرے گھر میں شامل ہوں",
+    "suggested": "کسی دوسرے گھرانے میں شامل ہوں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "join_household",
+    "locale": "ur",
+    "current": "خاندان میں شامل ہوں",
+    "suggested": "گھرانے میں شامل ہوں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "join_household_desc",
+    "locale": "ur",
+    "current": "8 ہندسوں کا دعوتی کوڈ درج کریں:",
+    "suggested": "8 حروف کا دعوتی کوڈ درج کریں:",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "member",
+    "locale": "ur",
+    "current": "ممبر",
+    "suggested": "رکن",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "no_allocations_for_cycle",
+    "locale": "ur",
+    "current": "اس چکر کے لیے کوئی تخصیص نہیں",
+    "suggested": "کوئی تخصیص نہیں، سائیکل:",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "no_allocations_set",
+    "locale": "ur",
+    "current": "اس چکر کے لیے کوئی تخصیص مقرر نہیں کی گئی",
+    "suggested": "اس سائیکل کے لیے کوئی تخصیص مقرر نہیں کی گئی",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "open_settings",
+    "locale": "ur",
+    "current": "سیٹنگز کھولیں",
+    "suggested": "ترتیبات کھولیں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pay_method_iban",
+    "locale": "ur",
+    "current": "آيبان",
+    "suggested": "آئی بین",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pay_method_urpay",
+    "locale": "ur",
+    "current": "يور باي",
+    "suggested": "یور پے",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "payday_banner_title",
+    "locale": "ur",
+    "current": "تنخواہ کا چکر شروع ہو گیا! 🎉",
+    "suggested": "تنخواہ کا نیا سائیکل شروع ہو گیا! 🎉",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rb_manage_empty",
+    "locale": "ur",
+    "current": "بجٹ والی کوئی ذیلی زمرہ نہیں ملی۔ پہلے بجٹ مینجمنٹ میں رقم مختص کریں۔",
+    "suggested": "بجٹ والی کوئی ذیلی کیٹیگری نہیں ملی۔ پہلے بجٹ مینجمنٹ میں رقم مختص کریں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rid_spouse_desc",
+    "locale": "ur",
+    "current": "اسلامی نفقہ والا گھرانہ: شوہر خرچ اٹھاتا ہے اور بیوی کو گھریلو اخراجات کی پیشگی ادائیگی واپس کرتا ہے۔",
+    "suggested": "اسلامی نفقہ والا گھرانہ: شوہر خرچ اٹھاتا ہے اور اہلیہ کو گھریلو اخراجات کی پیشگی ادائیگی واپس کرتا ہے۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rolled_over_overspend",
+    "locale": "ur",
+    "current": "پچھلے چکر کا اضافی خرچ",
+    "suggested": "پچھلے سائیکل کا اضافی خرچ",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rolled_over_surplus",
+    "locale": "ur",
+    "current": "پچھلے چکر کا بچا ہوا فاضل",
+    "suggested": "پچھلے سائیکل کا بچا ہوا فاضل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roommate_partner_desc",
+    "locale": "ur",
+    "current": "مشترکہ اخراجات تقسیم اور بقایا جات کی آسان تسویہ۔",
+    "suggested": "رہائش کے اخراجات بانٹتا ہے اور قرضوں کو آسان بنانے میں شامل ہوتا ہے۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roommate_split_personal_hint",
+    "locale": "ur",
+    "current": "ادائیگی کرنے والے کا ذاتی خرچ۔",
+    "suggested": "صرف ادائیگی کرنے والے کا ذاتی خرچ۔ کوئی قرض نہیں بنے گا۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "salary_cycle",
+    "locale": "ur",
+    "current": "تنخواہ کا چکر",
+    "suggested": "تنخواہ کا سائیکل",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "saudi_zatca_vat_qr",
+    "locale": "ur",
+    "current": "سعودی زکوٰۃ و ٹیکس کیو آر کوڈ",
+    "suggested": "سعودی زاتکا VAT کیو آر کوڈ",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_duplicate_found_msg",
+    "locale": "ur",
+    "current": "'{merchant}' پر {amount} کی ٹرانزیکشن پہلے سے درج ہے۔ آئٹمز اس کے ساتھ منسلک کریں یا الگ درج کریں؟",
+    "suggested": "'{merchant}' پر {amount} کا لین دین پہلے سے درج ہے۔ آئٹمز اس کے ساتھ منسلک کریں یا الگ درج کریں؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_instructions",
+    "locale": "ur",
+    "current": "کیمرہ کو زکوٰۃ و ٹیکس انوائس کے کیو آر کوڈ پر سیدھا رکھیں",
+    "suggested": "اسکین کرنے کے لیے زاتکا کیو آر کوڈ کو فریم کے اندر رکھیں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_invoice_desc",
+    "locale": "ur",
+    "current": "طویل رسیدوں کے لیے متعدد تصاویر لیں یا زکوٰۃ و ٹیکس کا کیو آر کوڈ اسکین کریں۔",
+    "suggested": "طویل رسیدوں کے لیے کئی تصاویر لیں (اوپر، درمیان، نیچے) یا زاتکا VAT کیو آر کوڈ اسکین کریں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_invoice_saved_msg",
+    "locale": "ur",
+    "current": "انوائس کی ٹرانزیکشن کامیابی سے محفوظ ہو گئی!",
+    "suggested": "انوائس کا لین دین کامیابی سے محفوظ ہو گیا!",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_all_transactions_synchronized",
+    "locale": "ur",
+    "current": "تمام ٹرانزیکشنز ہم آہنگ ہیں",
+    "suggested": "تمام لین دین سنک ہو چکے ہیں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_transaction_s_pending_sync",
+    "locale": "ur",
+    "current": "{count} ٹرانزیکشنز ہم آہنگی کی منتظر",
+    "suggested": "سنک کے منتظر لین دین: {count}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_nafaqah_all_settled",
+    "locale": "ur",
+    "current": "نفقہ کے تمام اخراجات ادا ہو چکے ہیں! بیوی کی کوئی رقم واجب الادا نہیں۔",
+    "suggested": "نفقہ کے تمام اخراجات ادا ہو چکے ہیں! اہلیہ کی کوئی رقم واجب الادا نہیں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_wife_advanced",
+    "locale": "ur",
+    "current": "بیوی نے گھر کے اخراجات اپنی ذاتی رقم سے ادا کیے",
+    "suggested": "اہلیہ نے گھر کے اخراجات اپنی ذاتی رقم سے ادا کیے",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_wife_amount",
+    "locale": "ur",
+    "current": "بیوی: {amount}",
+    "suggested": "اہلیہ: {amount}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_wife_title",
+    "locale": "ur",
+    "current": "بیوی کی واجب الادا رقم ادا کریں",
+    "suggested": "اہلیہ کی واجب الادا رقم ادا کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "split_with_bnpl",
+    "locale": "ur",
+    "current": "یا 4 اقساط میں تقسیم کریں (تابی / تمارا)",
+    "suggested": "یا تابی / تمارا کے ذریعے بغیر سود کی 4 اقساط میں تقسیم کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "strict_isolation",
+    "locale": "ur",
+    "current": "سخت چینل تنہائی",
+    "suggested": "چینلز کی مکمل علیحدگی",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "support_chip_iqama",
+    "locale": "ur",
+    "current": "400 ریال اقامہ فیس کیسے شامل کریں؟",
+    "suggested": "400 ریال مرافقین فیس کیسے شامل کریں؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "switch_household",
+    "locale": "ur",
+    "current": "گھر تبدیل کریں",
+    "suggested": "گھرانہ تبدیل کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "switch_household_desc",
+    "locale": "ur",
+    "current": "وہ گھر منتخب کریں جس کا آپ انتظام یا جائزہ لینا چاہتے ہیں۔",
+    "suggested": "وہ گھرانہ منتخب کریں جس کا آپ انتظام یا جائزہ لینا چاہتے ہیں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sync_complete_msg",
+    "locale": "ur",
+    "current": "{count} آف لائن قطار والی ٹرانزیکشنز کلاؤڈ کے ساتھ ہم آہنگ ہو گئیں۔",
+    "suggested": "{count} آف لائن محفوظ لین دین کلاؤڈ کے ساتھ سنک ہو گئے۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sync_now",
+    "locale": "ur",
+    "current": "ابھی ہم آہنگ کریں",
+    "suggested": "ابھی سنک کریں",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "take_shot_n",
+    "locale": "ur",
+    "current": "تصویر نمبر لیں",
+    "suggested": "تصویر لیں #",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "total_net_worth",
+    "locale": "ur",
+    "current": "کل مالیاتی حجم اور لیکویڈیٹی",
+    "suggested": "کل خالص مالیت اور نقدی",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_confirm_long",
+    "locale": "ur",
+    "current": "کیا آپ واقعی {merchant} پر {amount} کی یہ ٹرانزیکشن حذف کرنا چاہتے ہیں؟\nآپ کے بجٹ کی خرچ شدہ رقم خود بخود ایڈجسٹ ہو جائے گی۔",
+    "suggested": "کیا آپ واقعی {merchant} پر {amount} کا یہ لین دین حذف کرنا چاہتے ہیں؟\nآپ کے بجٹ کی خرچ شدہ رقم خود بخود ایڈجسٹ ہو جائے گی۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_failed_err",
+    "locale": "ur",
+    "current": "ٹرانزیکشن حذف نہیں ہو سکی: {error}",
+    "suggested": "لین دین حذف نہیں ہو سکا: {error}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_delete_failed_msg",
+    "locale": "ur",
+    "current": "ٹرانزیکشن حذف نہیں ہو سکی۔ براہ کرم اپنا نیٹ ورک کنکشن چیک کریں۔",
+    "suggested": "لین دین حذف نہیں ہو سکا۔ براہ کرم اپنا نیٹ ورک کنکشن چیک کریں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_deleted",
+    "locale": "ur",
+    "current": "ٹرانزیکشن حذف ہو گئی",
+    "suggested": "لین دین حذف ہو گیا",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_removed",
+    "locale": "ur",
+    "current": "ٹرانزیکشن حذف ہو گئی",
+    "suggested": "لین دین حذف ہو گیا",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_restore_failed_msg",
+    "locale": "ur",
+    "current": "ٹرانزیکشن بحال نہیں ہو سکی۔ براہ کرم اسے دوبارہ شامل کریں۔",
+    "suggested": "لین دین بحال نہیں ہو سکا۔ براہ کرم اسے دوبارہ شامل کریں۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_restored",
+    "locale": "ur",
+    "current": "ٹرانزیکشن بحال ہو گئی",
+    "suggested": "لین دین بحال ہو گیا",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_update_failed_msg",
+    "locale": "ur",
+    "current": "ٹرانزیکشن اپ ڈیٹ نہیں ہو سکی: {error}",
+    "suggested": "لین دین اپ ڈیٹ نہیں ہو سکا: {error}",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "tx_updated_msg",
+    "locale": "ur",
+    "current": "ٹرانزیکشن اپ ڈیٹ ہو گئی اور بجٹ دوبارہ شمار کر لیا گیا۔",
+    "suggested": "لین دین اپ ڈیٹ ہو گیا اور بجٹ دوبارہ شمار کر لیا گیا۔",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "zatca_qr_code_data",
+    "locale": "ur",
+    "current": "زکوٰۃ و ٹیکس کیو آر کوڈ ڈیٹا",
+    "suggested": "زاتکا کیو آر کوڈ ڈیٹا",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.b10c1",
+    "locale": "ar",
+    "current": "الشريك",
+    "suggested": "الزوجة",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.b4c3",
+    "locale": "ar",
+    "current": "توزيع نسبي",
+    "suggested": "من دفع ولمن",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.b4d",
+    "locale": "ar",
+    "current": "حدد من دفع ولمن — الشريك أو الأبناء المسجلون. توزيع عادل وشفاف يمنحك ووضوحاً كاملاً حول حصة كل فرد في ميزانية الأسرة.",
+    "suggested": "حدد من دفع ولمن — الزوجة أو الأبناء المسجلون. توزيع عادل وشفاف يمنحك وضوحاً كاملاً حول حصة كل فرد في ميزانية الأسرة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.fa3",
+    "locale": "ar",
+    "current": "من إعدادات التطبيق تحت \"هوية المنزل\"، أضف أسماء الشريك والأبناء. عند تسجيل أي مصروف تختار بضغطة زر \"لصالح من\" لتقسيم النفقات بدقة وشفافية.",
+    "suggested": "من إعدادات التطبيق تحت \"المنزل والعضوية\"، أضف الزوجة والأبناء. عند تسجيل أي مصروف تختار بضغطة زر \"لصالح من\" لتوزيع المصاريف بدقة وشفافية.",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.fq3",
+    "locale": "ar",
+    "current": "كيف أُضيف أسماء أبنائي وشريكي لتوزيع المصاريف؟",
+    "suggested": "كيف أُضيف زوجتي وأبنائي لتوزيع المصاريف؟",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.lt3p",
+    "locale": "ar",
+    "current": "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.",
+    "suggested": "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين مسبقاً.",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.spp",
+    "locale": "ar",
+    "current": "حصة الشريك الثاني",
+    "suggested": "حصة شريك السكن الثاني",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.spy",
+    "locale": "ar",
+    "current": "حصة الشريك الأول (أنت)",
+    "suggested": "حصة شريك السكن الأول (أنت)",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.b8d",
+    "locale": "en",
+    "current": "No SMS reading permissions requested and no bank scraping required. All data is end-to-end encrypted in your dedicated Supabase instance.",
+    "suggested": "No SMS reading permissions requested and no bank scraping required. All data is encrypted in transit and at rest in Supabase.",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.lp3p",
+    "locale": "en",
+    "current": "Users may request instantaneous permanent deletion of their account and all associated ledgers directly from settings.",
+    "suggested": "Users may request full deletion of their account and records at any time from the app settings or by contacting support.",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.p3h",
+    "locale": "en",
+    "current": "End-to-End Encrypted Storage",
+    "suggested": "Encrypted Storage",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.spp",
+    "locale": "en",
+    "current": "Partner 2 Share",
+    "suggested": "Roommate 2 Share",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.spt",
+    "locale": "en",
+    "current": "Simulated Expense Allocation Across Household",
+    "suggested": "Simulated Expense Split Between Roommates",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.spy",
+    "locale": "en",
+    "current": "Partner 1 Share (You)",
+    "suggested": "Roommate 1 Share (You)",
+    "severity": "Medium"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.en.t4",
+    "locale": "en",
+    "current": "Household Split",
+    "suggested": "Roommate Split",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:ai-demo-sentence",
+    "locale": "ar",
+    "current": "مناصفة، ودفعت",
+    "suggested": "بالتساوي، ودفعت",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:family-demo-status",
+    "locale": "ar",
+    "current": "تكامل الميزانية: 100%",
+    "suggested": "مستحق لها على الزوج: 1,600 ر.س",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:faq-2-answer",
+    "locale": "ar",
+    "current": "يوم 27 المعتمد للقطاع الحكومي والخاص في السعودية بسهولة.",
+    "suggested": "يوم 27 المعتمد لرواتب القطاع الحكومي في السعودية بسهولة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:pillar-4-desc",
+    "locale": "ar",
+    "current": "والمستلزمات بنسب مئوية عادلة دون نزاع.",
+    "suggested": "والمستلزمات بين شركاء السكن، ومتابعة النفقة الشرعية للأسرة دون نزاع.",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:pillar-4-title",
+    "locale": "ar",
+    "current": "4. التوزيع التكافلي للأسرة والسكن",
+    "suggested": "4. توزيع مصاريف الأسرة والسكن",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:privacy-aes-card",
+    "locale": "ar",
+    "current": "تشفير كامل لكافة المدخلات الحسابية محلياً وسحابياً عبر أرقى",
+    "suggested": "تشفير بياناتك أثناء النقل وفي التخزين السحابي وفق أرقى",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:privacy-sms-card",
+    "locale": "ar",
+    "current": "تظل مشفرة في جهازك دون مساس",
+    "suggested": "تبقى في جهازك ولا يطّلع عليها التطبيق",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:split-title",
+    "locale": "ar",
+    "current": "التوزيع التكافلي العادل للمصاريف",
+    "suggested": "التوزيع العادل للمصاريف",
+    "severity": "Medium"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:vip-blurb",
+    "locale": "ar",
+    "current": "واحصل على وصول مجاني دائم للخصائص",
+    "suggested": "واحصل على وصول مبكر للخصائص",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.earlyAccess.headline",
+    "locale": "ar",
+    "current": "اختبر الحوكمة المالية السيادية والصفاء المعيشي",
+    "suggested": "اختبر الإدارة المالية الذكية وراحة البال",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.faq.items[5].a",
+    "locale": "ar",
+    "current": "النسخة الحالية متاحة كتطبيق ويب فوري PWA، ونعمل حالياً على إتاحة النسخ الرسمية للمسجلين في قائمة الوصول المبكر VIP لأجهزة iPhone و Android و Huawei قريباً.",
+    "suggested": "نحن حالياً في مرحلة تجريبية مغلقة (VIP)، وسيحصل المسجلون في قائمة الانتظار على أولوية الدعوة لتطبيقات iPhone و Android و Huawei AppGallery.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.footer.links[0]",
+    "locale": "ar",
+    "current": "سياسة الخصوصية السيادية",
+    "suggested": "سياسة الخصوصية",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.footer.rights",
+    "locale": "ar",
+    "current": "© 2025 BUDGET Tracker | ميزانية وأكثر. الحوكمة المالية السيادية. جميع الحقوق محفوظة.",
+    "suggested": "© 2026 BUDGET Tracker | ميزانية وأكثر. جميع الحقوق محفوظة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.footer.status",
+    "locale": "ar",
+    "current": "النظام متصل ويعمل بكفاءة • تشفير RLS 256-BIT",
+    "suggested": "النظام متصل ويعمل بكفاءة • تشفير AES-256",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.metrics.metric1Title",
+    "locale": "ar",
+    "current": "خصوصية سيادية تامة",
+    "suggested": "خصوصية تامة",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.nav.security",
+    "locale": "ar",
+    "current": "الخصوصية السيادية",
+    "suggested": "الخصوصية التامة",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.pillars.items[7].desc",
+    "locale": "ar",
+    "current": "سياسات تشفير صارمة تضمن عدم اطلاع أي طرف إلا على السجلات المصرح له بها.",
+    "suggested": "سياسات وصول صارمة على مستوى الصف تضمن عدم اطلاع أي طرف إلا على السجلات المصرح له بها.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.security.title",
+    "locale": "ar",
+    "current": "بياناتك ملكك وحدك. سيادة رقمية بمستويات بنكية.",
+    "suggested": "بياناتك ملكك وحدك. تحكم كامل وحماية متقدمة.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.simulator.countdownDays",
+    "locale": "ar",
+    "current": "{val} يوماً متبقية",
+    "suggested": "الأيام المتبقية: {val}",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.simulator.familyRows[1].status",
+    "locale": "ar",
+    "current": "تكامل الميزانية 100%",
+    "suggested": "مستحق لها على الزوج",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.footer.status",
+    "locale": "en",
+    "current": "SYSTEM ONLINE • 256-BIT RLS",
+    "suggested": "SYSTEM ONLINE • AES-256 ENCRYPTION",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.pillars.items[7].desc",
+    "locale": "en",
+    "current": "Strict cryptographic row-level security policies ensure only authorized participants view each specific record.",
+    "suggested": "Strict row-level access policies ensure only authorized participants view each specific record.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.security.cards[2].desc",
+    "locale": "en",
+    "current": "End-to-end encryption in transit and at rest with isolated row-level tenant access controls.",
+    "suggested": "Encryption in transit and at rest with isolated row-level tenant access controls.",
+    "severity": "Medium"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.simulator.familyRows[1].status",
+    "locale": "en",
+    "current": "Budget 100% reconciled",
+    "suggested": "Owed back by husband",
+    "severity": "Medium"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "_subCategoryValues.sub-district-cooling",
+    "locale": "ar",
+    "current": "تبريد المناطق",
+    "suggested": "التبريد المركزي",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ahm_creating",
+    "locale": "ar",
+    "current": "جارِ إنشاء الملف...",
+    "suggested": "جارٍ إنشاء الملف...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance_set_by_husband",
+    "locale": "ar",
+    "current": "يحدده الزوج أو مشرف الأسرة.",
+    "suggested": "يحدده الزوج أو مشرف المنزل.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "apply_qr_code",
+    "locale": "ar",
+    "current": "تطبيق الرمز المربع",
+    "suggested": "تطبيق رمز QR",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ats_same_account",
+    "locale": "ar",
+    "current": "ما يصير حساب المصدر والوجهة نفس الحساب.",
+    "suggested": "لا يمكن أن يكون حساب المصدر والوجهة نفس الحساب.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "basket_optimizing",
+    "locale": "ar",
+    "current": "جارِ تحسين أسعار السلة...",
+    "suggested": "جارٍ تحسين أسعار السلة...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bir_analyzing",
+    "locale": "ar",
+    "current": "جارِ تحليل الإيصال...",
+    "suggested": "جارٍ تحليل الإيصال...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_copying",
+    "locale": "ar",
+    "current": "جارِ النسخ...",
+    "suggested": "جارٍ النسخ...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bnpl_convert_desc",
+    "locale": "ar",
+    "current": "وزّع قيمة هذه المشتريات على أقساط شهرية عشان ما تنضرب ميزانيتك.",
+    "suggested": "وزّع قيمة هذه المشتريات على أقساط شهرية حتى لا تتجاوز ميزانيتك.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bnpl_convert_title",
+    "locale": "ar",
+    "current": "تحويل إلى خطة تقسيط (اشترِ الآن وادفع لاحقاً)",
+    "suggested": "تحويل إلى خطة تقسيط",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "both_shared",
+    "locale": "ar",
+    "current": "كلينا (مشترك)",
+    "suggested": "كلانا (مشترك)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "budgeted",
+    "locale": "ar",
+    "current": "محدد بالميزانية",
+    "suggested": "المُخطط",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "camera_permission_msg",
+    "locale": "ar",
+    "current": "صلاحية الكاميرا مطلوبة لمسح الرمز المربع للفواتير الضريبية.\n\nيرجى النقر على \"فتح الإعدادات\" لتفعيل الكاميرا لتطبيق ميزانية الأسرة.",
+    "suggested": "صلاحية الكاميرا مطلوبة لمسح رمز QR في الفواتير الضريبية.\n\nيرجى الضغط على \"فتح الإعدادات\" لتفعيل الكاميرا لتطبيق ميزانية الأسرة.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_thinking",
+    "locale": "ar",
+    "current": "جارِ التحليل...",
+    "suggested": "جارٍ التحليل...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "child_dependent",
+    "locale": "ar",
+    "current": "ابن / معال",
+    "suggested": "طفل / مُعال",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cls_deactivate_desc",
+    "locale": "ar",
+    "current": "إيقاف هذا التصنيف يحذفه من ميزانيتك الشهرية النشطة ويرجع المبالغ غير المصروفة إلى احتياطي المدخرات.\n\nسجل العمليات السابقة يبقى محفوظاً بالكامل.",
+    "suggested": "إيقاف هذا التصنيف يحذفه من ميزانيتك الشهرية النشطة ويرجع المبالغ غير المصروفة إلى احتياطي المدخرات.\n\nسجل المعاملات السابقة يبقى محفوظاً بالكامل.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "daily_allowance_impact",
+    "locale": "ar",
+    "current": "التأثير على المصروف اليومي حتى الراتب",
+    "suggested": "الأثر على المصروف اليومي",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_receipts_a3",
+    "locale": "ar",
+    "current": "إذا طابقت الفاتورة عملية مسجلة، بتظهر لك بطاقة حماية من التكرار تقدر منها تكمّل بيانات العملية الحالية، أو تسجلها كمصروف منفصل، أو تتجاهلها.",
+    "suggested": "إذا طابقت الفاتورة معاملة مسجلة، بتظهر لك بطاقة حماية من التكرار تقدر منها تكمّل بيانات المعاملة الحالية، أو تسجلها كمصروف منفصل، أو تتجاهلها.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "hmc_allowance_per_month",
+    "locale": "ar",
+    "current": "•  {amount} ر.س/شهرياً",
+    "suggested": "•  {amount} ر.س/شهر",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "inst_x_of_y_paid",
+    "locale": "ar",
+    "current": "تم سداد {paid} من {count}",
+    "suggested": "تم سداد القسط {paid} من {count}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "invite_role_spouse",
+    "locale": "ar",
+    "current": "الزوجة / شريكة الأسرة",
+    "suggested": "الزوجة",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "isc_negative",
+    "locale": "ar",
+    "current": "الدخل ما يكون بالسالب",
+    "suggested": "لا يمكن أن يكون الدخل بالسالب",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "language_ur",
+    "locale": "ar",
+    "current": "اردو (Urdu)",
+    "suggested": "اردو (الأوردية)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "map_budget_account_desc",
+    "locale": "ar",
+    "current": "اختر الحساب البنكي أو المحفظة أو الصندوق المشترك لتمويل هذا التصنيف. ستخصم العمليات من هذا الرصيد تلقائياً.",
+    "suggested": "اختر الحساب البنكي أو المحفظة أو الصندوق المشترك لتمويل هذا التصنيف. ستُخصم المعاملات من هذا الرصيد تلقائياً.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "n_months",
+    "locale": "ar",
+    "current": "{count} أشهر",
+    "suggested": "المدة: {count} أشهر",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_err_forbidden",
+    "locale": "ar",
+    "current": "هذا الإجراء للزوج أو الزوجة أو مشرف الأسرة فقط.",
+    "suggested": "هذا الإجراء للزوج أو الزوجة أو مشرف المنزل فقط.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "nafaqah_wife_reimbursable_hint",
+    "locale": "ar",
+    "current": "دفعت الزوجة لمصروفات الأسرة. يسترد لها بالكامل 100% من الزوج.",
+    "suggested": "دفعت الزوجة لمصروفات البيت، ويستردها كاملة من الزوج.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "paid_by_partner",
+    "locale": "ar",
+    "current": "دفع بواسطة الشريك",
+    "suggested": "دفعه الشريك",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pay_method_cash",
+    "locale": "ar",
+    "current": "نقداً",
+    "suggested": "نقد",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pdf_desc",
+    "locale": "ar",
+    "current": "كشف حساب شهري متكامل شامل توزيع الشريك، وضريبة القيمة المضافة 15%، والميزانيات.",
+    "suggested": "كشف حساب شهري متكامل يشمل توزيع الشريك، وضريبة القيمة المضافة 15%، والميزانيات.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pds_saving",
+    "locale": "ar",
+    "current": "جارِ الحفظ...",
+    "suggested": "جارٍ الحفظ...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "reports_offline_queue",
+    "locale": "ar",
+    "current": "التقارير وطابور العمل دون اتصال",
+    "suggested": "التقارير وقائمة الانتظار دون اتصال",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_ai_scanning",
+    "locale": "ar",
+    "current": "جارِ مسح الإيصال الطويل بالذكاء الاصطناعي...",
+    "suggested": "جارٍ مسح الإيصال الطويل بالذكاء الاصطناعي...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_confirm_save_items",
+    "locale": "ar",
+    "current": "تأكيد وحفظ {count} بند ({amount})",
+    "suggested": "تأكيد وحفظ البنود ({count}) ({amount})",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_items_logged",
+    "locale": "ar",
+    "current": "تم تسجيل {count} بند باسم {merchant} ({amount})",
+    "suggested": "تم تسجيل البنود ({count}) لدى {merchant} ({amount})",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "scan_reading_items",
+    "locale": "ar",
+    "current": "جارِ قراءة جميع البنود واحداً واحداً من {count} صورة",
+    "suggested": "جارٍ قراءة جميع البنود واحداً واحداً من {count} صورة",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_owes",
+    "locale": "ar",
+    "current": "{from} عليه لـ {to}",
+    "suggested": "{from} مدين لـ {to}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "support_thinking",
+    "locale": "ar",
+    "current": "جارِ التفكير...",
+    "suggested": "جارٍ التفكير...",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "support_welcome",
+    "locale": "ar",
+    "current": "مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟",
+    "suggested": "مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، أو دورة الراتب، أو مسح الفواتير؟",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sync_complete_msg",
+    "locale": "ar",
+    "current": "تمت مزامنة {count} من العمليات المحفوظة دون اتصال مع السحابة.",
+    "suggested": "تمت مزامنة {count} من المعاملات المحفوظة دون اتصال مع السحابة.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "total_breakdown",
+    "locale": "ar",
+    "current": "إجمالي التفصيل",
+    "suggested": "تفصيل الإجمالي",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "vlb_listening",
+    "locale": "ar",
+    "current": "🎙️ جاري الاستماع باللغة العربية... تحدث الآن",
+    "suggested": "🎙️ جارٍ الاستماع باللغة العربية... تحدث الآن",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cls_deactivate_desc",
+    "locale": "en",
+    "current": "Inactivating this category removes it from your active monthly budget and returns unspent funds to your Savings Reserve.\n\nAll past transaction history remains safe and intact.",
+    "suggested": "Deactivating this category removes it from your active monthly budget and returns unspent funds to your Savings Reserve.\n\nAll past transaction history remains safe and intact.",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "psim_days_to_payday",
+    "locale": "en",
+    "current": "Days to Payday: {days} days away",
+    "suggested": "Days to payday: {days}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sac_spent_by_caps",
+    "locale": "en",
+    "current": "SPENT BY WHO?",
+    "suggested": "SPENT BY WHOM?",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "wife_personal_budget",
+    "locale": "en",
+    "current": "Wife Monthly Allowance",
+    "suggested": "Wife's Monthly Allowance",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "add_household_member",
+    "locale": "ur",
+    "current": "گھر یا رہائشی گروپ کا رکن شامل کریں",
+    "suggested": "گھرانے کا رکن شامل کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ahm_child_desc",
+    "locale": "ur",
+    "current": "ذاتی اخراجات اور الاؤنس کی نگرانی، تصفیے کے بیلنس کے بغیر۔",
+    "suggested": "ذاتی اخراجات اور جیب خرچ کا ریکارڈ، تصفیے کے بیلنس کے بغیر۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "ahm_peer_desc",
+    "locale": "ur",
+    "current": "رہائشی اخراجات میں شریک ہوتا ہے اور قرضوں کی سادہ تقسیم میں حصہ لیتا ہے۔",
+    "suggested": "رہائشی اخراجات میں شریک ہوتا ہے اور قرضوں کو آسان بنانے میں حصہ لیتا ہے۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "all_cycles",
+    "locale": "ur",
+    "current": "تمام ادوار",
+    "suggested": "تمام سائیکلز",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "allowance",
+    "locale": "ur",
+    "current": "یومیہ الاؤنس",
+    "suggested": "یومیہ قابلِ خرچ",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "appearance",
+    "locale": "ur",
+    "current": "ایپ کا منظر",
+    "suggested": "ظاہری شکل",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "appearance_language",
+    "locale": "ur",
+    "current": "منظر اور زبان",
+    "suggested": "ظاہری شکل اور زبان",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "attributed_to",
+    "locale": "ur",
+    "current": "کی طرف منسوب:",
+    "suggested": "کس کے لیے:",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "batch_scan_desc",
+    "locale": "ur",
+    "current": "مسلسل کئی رسیدیں محفوظ کریں اور ایک ایک کر کے جائزہ لیں۔",
+    "suggested": "کئی رسیدوں کی تصاویر ترتیب سے لیں اور ایک ایک کر کے جائزہ لیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_add_category_failed_msg",
+    "locale": "ur",
+    "current": "زمرہ شامل نہیں ہو سکا: {error}",
+    "suggested": "کیٹیگری شامل نہیں ہو سکی: {error}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_add_sub_failed_msg",
+    "locale": "ur",
+    "current": "ذیلی زمرہ شامل نہیں ہو سکا: {error}",
+    "suggested": "ذیلی کیٹیگری شامل نہیں ہو سکی: {error}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_add_tooltip",
+    "locale": "ur",
+    "current": "زمرہ یا ذیلی زمرہ شامل کریں",
+    "suggested": "کیٹیگری یا ذیلی کیٹیگری شامل کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_cat_activated",
+    "locale": "ur",
+    "current": "زمرہ \"{name}\" فعال ہو گیا۔",
+    "suggested": "کیٹیگری \"{name}\" فعال ہو گئی۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_cat_deactivated",
+    "locale": "ur",
+    "current": "زمرہ \"{name}\" غیر فعال ہو گیا۔",
+    "suggested": "کیٹیگری \"{name}\" غیر فعال ہو گئی۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_category_added_msg",
+    "locale": "ur",
+    "current": "زمرہ \"{name}\" شامل ہو گیا ({amount})!",
+    "suggested": "کیٹیگری \"{name}\" شامل ہو گئی ({amount})!",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_category_created",
+    "locale": "ur",
+    "current": "زمرہ بن گیا",
+    "suggested": "کیٹیگری بن گئی",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_create_category",
+    "locale": "ur",
+    "current": "زمرہ بنائیں",
+    "suggested": "کیٹیگری بنائیں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_deactivate_desc",
+    "locale": "ur",
+    "current": "اس سے {category} غیر فعال ہو کر زمروں کی لائبریری میں چلا جائے گا۔ زمرے کبھی حذف نہیں ہوتے، اس لیے آپ کی مالی تاریخ محفوظ رہتی ہے اور آپ اسے کسی بھی وقت دوبارہ فعال کر سکتے ہیں۔",
+    "suggested": "اس سے {category} غیر فعال ہو کر کیٹیگری لائبریری میں چلی جائے گی۔ کیٹیگریز کبھی حذف نہیں ہوتیں، اس لیے آپ کی مالی تاریخ محفوظ رہتی ہے اور آپ اسے کسی بھی وقت دوبارہ فعال کر سکتے ہیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_deactivate_failed_msg",
+    "locale": "ur",
+    "current": "زمرہ غیر فعال نہیں ہو سکا: {error}",
+    "suggested": "کیٹیگری غیر فعال نہیں ہو سکی: {error}",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_deactivated_msg",
+    "locale": "ur",
+    "current": "زمرہ \"{name}\" زمروں کی لائبریری میں منتقل ہو گیا (غیر فعال)۔",
+    "suggested": "کیٹیگری \"{name}\" کیٹیگری لائبریری میں منتقل ہو گئی (غیر فعال)۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_deactivated_title",
+    "locale": "ur",
+    "current": "زمرہ غیر فعال ہو گیا",
+    "suggested": "کیٹیگری غیر فعال ہو گئی",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_option_rollover",
+    "locale": "ur",
+    "current": "آپشن A: اضافی گنجائش کے طور پر منتقل کریں",
+    "suggested": "آپشن A: گنجائش میں منتقل کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_sub_added_msg",
+    "locale": "ur",
+    "current": "ذیلی زمرہ \"{name}\" بجٹ میں شامل ہو گیا!",
+    "suggested": "ذیلی کیٹیگری \"{name}\" بجٹ میں شامل ہو گئی!",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_sub_added_title",
+    "locale": "ur",
+    "current": "ذیلی زمرہ شامل ہو گیا",
+    "suggested": "ذیلی کیٹیگری شامل ہو گئی",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "bm_unspent_desc",
+    "locale": "ur",
+    "current": "پچھلے سائیکل سے آپ کے پاس {amount} بچے ہیں۔\n\n• آپشن A: غیر خرچ شدہ رقم کو اس سائیکل کے زمروں میں اضافی گنجائش کے طور پر منتقل کریں۔\n• آپشن C: بچی ہوئی رقم بچت میں ڈالیں اور نئے ہدف بجٹ سے شروع کریں۔",
+    "suggested": "پچھلے سائیکل سے آپ کے پاس {amount} بچے ہیں۔\n\n• آپشن A: غیر خرچ شدہ رقم کو اس سائیکل کی کیٹیگریز میں اضافی گنجائش کے طور پر منتقل کریں۔\n• آپشن C: بچی ہوئی رقم بچت میں ڈالیں اور نئے ہدف بجٹ سے شروع کریں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "camera_permission_msg",
+    "locale": "ur",
+    "current": "انوائس کیو آر کوڈ اسکین کرنے کے لیے کیمرہ کی اجازت درکار ہے۔\n\nبراہ کرم سیٹنگز میں کیمرہ فعال کریں۔",
+    "suggested": "انوائس کے کیو آر کوڈ اسکین کرنے کے لیے کیمرے کی اجازت درکار ہے۔\n\nبجٹ ٹریکر کے لیے کیمرہ فعال کرنے کے لیے براہِ کرم \"ترتیبات کھولیں\" دبائیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "caution_reallocation",
+    "locale": "ur",
+    "current": "احتیاط (دوسری مد سے رقم منتقل کرنی ہوگی)",
+    "suggested": "احتیاط (رقم منتقل کرنی ہوگی)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "chat_offline_queued",
+    "locale": "ur",
+    "current": "📶 آف لائن: مقامی قطار میں محفوظ کر لیا گیا۔ نیٹ ورک بحال ہوتے ہی خود بخود ہم آہنگ ہو جائے گا۔",
+    "suggested": "📶 آف لائن: مقامی قطار میں محفوظ کر لیا گیا۔ نیٹ ورک بحال ہوتے ہی خود بخود سنک ہو جائے گا۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "child_dependent_desc",
+    "locale": "ur",
+    "current": "چیٹ اور لین دین میں انفرادی اخراجات کو منسوب کرنے کے لیے بچہ یا فیملی ممبر شامل کریں۔",
+    "suggested": "چیٹ اور لین دین میں انفرادی اخراجات منسوب کرنے کے لیے بچہ یا خاندان کا زیرِ کفالت فرد شامل کریں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cls_all_active",
+    "locale": "ur",
+    "current": "تمام زمرے اس وقت فعال ہیں",
+    "suggested": "تمام کیٹیگریز اس وقت فعال ہیں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cls_deactivate_desc",
+    "locale": "ur",
+    "current": "اس زمرے کو غیر فعال کرنے سے یہ ماہانہ بجٹ سے ہٹ جائے گا اور غیر خرچ شدہ رقم بچت ریزرو میں واپس چلی جائے گی۔\n\nپچھلی تمام ٹرانزیکشنز محفوظ رہیں گی۔",
+    "suggested": "اس کیٹیگری کو غیر فعال کرنے سے یہ ماہانہ بجٹ سے ہٹ جائے گی اور غیر خرچ شدہ رقم بچت کے ذخیرے میں واپس چلی جائے گی۔\n\nپچھلا تمام لین دین محفوظ رہے گا۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "cls_no_active",
+    "locale": "ur",
+    "current": "کوئی فعال زمرہ نہیں",
+    "suggested": "کوئی فعال کیٹیگری نہیں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "dismiss",
+    "locale": "ur",
+    "current": "خارج کریں",
+    "suggested": "نظر انداز کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_a1",
+    "locale": "ur",
+    "current": "ڈیش بورڈ کے بار بار آنے والے بلوں کے کارڈ میں \"بل منظم کریں\" پر ٹیپ کریں، کسی بھی ذیلی بجٹ کو بار بار آنے والا بنائیں اور اس کی ماہانہ تاریخ مقرر کریں۔",
+    "suggested": "ڈیش بورڈ کے باقاعدہ بلوں والے کارڈ میں \"ترتیب دیں\" پر ٹیپ کریں، کسی بھی ذیلی بجٹ کو باقاعدہ بل بنائیں اور اس کی ماہانہ تاریخ مقرر کریں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_q1",
+    "locale": "ur",
+    "current": "بار بار آنے والے بل (کرایہ، یوٹیلیٹیز، فائبر) کیسے شامل کروں؟",
+    "suggested": "باقاعدہ بل (کرایہ، یوٹیلیٹیز، فائبر) کیسے شامل کروں؟",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_bills_q3",
+    "locale": "ur",
+    "current": "بار بار آنے والے بل کو ادا شدہ کیسے نشان زد کروں؟",
+    "suggested": "باقاعدہ بل کو ادا شدہ کیسے نشان زد کروں؟",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_cat_bills",
+    "locale": "ur",
+    "current": "بار بار آنے والے بل اور اقامہ ریزرو",
+    "suggested": "باقاعدہ بل اور اقامہ ریزرو",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_receipts_a3",
+    "locale": "ur",
+    "current": "اگر انوائس کسی موجودہ ٹرانزیکشن سے ملتی ہے تو ڈپلیکیٹ تحفظ کارڈ ظاہر ہوگا جس سے آپ موجودہ ٹرانزیکشن مکمل کر سکتے ہیں، الگ خرچ کے طور پر درج کر سکتے ہیں یا اسے مسترد کر سکتے ہیں۔",
+    "suggested": "اگر انوائس کسی موجودہ لین دین سے ملتی ہے تو ڈپلیکیٹ تحفظ کارڈ ظاہر ہوگا جس سے آپ موجودہ لین دین مکمل کر سکتے ہیں، الگ خرچ کے طور پر درج کر سکتے ہیں یا اسے مسترد کر سکتے ہیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "faq_salary_q3",
+    "locale": "ur",
+    "current": "یومیہ الاؤنس کیسے شمار کیا جاتا ہے؟",
+    "suggested": "یومیہ خرچ کی حد کیسے شمار کی جاتی ہے؟",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "grocery_touch",
+    "locale": "ur",
+    "current": "تفصیل کے لیے ٹچ کریں",
+    "suggested": "تفصیل کے لیے ٹیپ کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "hmc_one_active_member",
+    "locale": "ur",
+    "current": "1 فعال رکن",
+    "suggested": "ایک فعال رکن",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_desc",
+    "locale": "ur",
+    "current": "\"{merchant}\" پر {amount} کا یہ خرچ زمرہ \"{category}\" سے متعلق ہے، جو اس وقت آپ کے گھرانے کے لیے غیر فعال ہے۔",
+    "suggested": "\"{merchant}\" پر {amount} کا یہ خرچ کیٹیگری \"{category}\" سے متعلق ہے، جو اس وقت آپ کے گھرانے کے لیے غیر فعال ہے۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_other_category",
+    "locale": "ur",
+    "current": "کسی اور زمرے میں درج کریں",
+    "suggested": "کسی اور کیٹیگری میں درج کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_reactivate",
+    "locale": "ur",
+    "current": "زمرہ دوبارہ فعال کریں",
+    "suggested": "کیٹیگری دوبارہ فعال کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "icr_title",
+    "locale": "ur",
+    "current": "غیر فعال زمرہ",
+    "suggested": "غیر فعال کیٹیگری",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "invite_linked_profile",
+    "locale": "ur",
+    "current": "منسلک پروفائل کے ساتھ دعوت نامہ",
+    "suggested": "پروفائل کے ساتھ مدعو کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "language_en",
+    "locale": "ur",
+    "current": "English",
+    "suggested": "English (انگریزی)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "manage",
+    "locale": "ur",
+    "current": "انتظام",
+    "suggested": "انتظام کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "mes_saved_offline",
+    "locale": "ur",
+    "current": "آف لائن محفوظ: {merchant} پر {amount}۔ خود بخود ہم آہنگ ہو جائے گا۔",
+    "suggested": "آف لائن محفوظ: {merchant} پر {amount}۔ خود بخود سنک ہو جائے گا۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "monthly_allowance_masroof",
+    "locale": "ur",
+    "current": "ماہانہ جیب خرچ / خرچہ (اختیاری)",
+    "suggested": "ماہانہ جیب خرچ (اختیاری)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "mp_queued_offline_msg",
+    "locale": "ur",
+    "current": "رسید کی تصاویر مقامی آف لائن قطار میں محفوظ ہو گئیں۔ کنکشن بحال ہوتے ہی خود بخود ہم آہنگ ہو جائیں گی۔",
+    "suggested": "رسید کی تصاویر مقامی آف لائن قطار میں محفوظ ہو گئیں۔ کنکشن بحال ہوتے ہی خود بخود سنک ہو جائیں گی۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "new_item",
+    "locale": "ur",
+    "current": "نئی آئٹم",
+    "suggested": "نیا آئٹم",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "no_matching_tx_desc",
+    "locale": "ur",
+    "current": "مطلوبہ نتیجہ تلاش کرنے کے لیے فلٹرز، تاریخ کی حد یا زمرہ تبدیل کر کے دیکھیں۔",
+    "suggested": "مطلوبہ نتیجہ تلاش کرنے کے لیے فلٹرز، تاریخ کی حد یا کیٹیگری تبدیل کر کے دیکھیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pdf_statement_desc",
+    "locale": "ur",
+    "current": "ماہانہ ایگزیکٹو اسٹیٹمنٹ جس میں شراکت داروں کی تقسیم، 15% VAT اور زمرہ وار بجٹ شامل ہیں۔",
+    "suggested": "ماہانہ ایگزیکٹو اسٹیٹمنٹ جس میں شراکت داروں کی تقسیم، 15% VAT اور کیٹیگری وار بجٹ شامل ہیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "pds_title",
+    "locale": "ur",
+    "current": "تنخواہ اور تنخواہ کا سائیکل",
+    "suggested": "تنخواہ کا دن اور سائیکل",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_pool_admin_only",
+    "locale": "ur",
+    "current": "مشترکہ پول سے رقم نکالنا صرف گھر کے ایڈمن کر سکتے ہیں۔",
+    "suggested": "مشترکہ پول سے رقم نکالنا صرف گھرانے کے ایڈمن کر سکتے ہیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "perm_tx_admin_only",
+    "locale": "ur",
+    "current": "دوسرے ارکان کے اخراجات میں ترمیم یا حذف صرف گھر کے ایڈمن کر سکتے ہیں۔",
+    "suggested": "دوسرے ارکان کے اخراجات میں ترمیم یا حذف صرف گھرانے کے ایڈمن کر سکتے ہیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "process",
+    "locale": "ur",
+    "current": "پروسیس",
+    "suggested": "پروسیس کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "prompt_on_conflict",
+    "locale": "ur",
+    "current": "تنازع پر پوچھیں",
+    "suggested": "ٹکراؤ کی صورت میں پوچھیں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "psim_daily_now",
+    "locale": "ur",
+    "current": "موجودہ یومیہ الاؤنس",
+    "suggested": "موجودہ یومیہ قابلِ خرچ رقم",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rb_all_paid",
+    "locale": "ur",
+    "current": "اس سائیکل کے تمام بار بار آنے والے بل ادا ہو چکے ہیں!",
+    "suggested": "اس سائیکل کے تمام باقاعدہ بل ادا ہو چکے ہیں!",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rb_manage_desc",
+    "locale": "ur",
+    "current": "منتخب کریں کہ کون سی ذیلی آئٹمز (یوٹیلیٹیز، اقامہ فیس، کرایہ، سبسکرپشنز) ماہانہ بار بار آنے والی ذمہ داریوں کے طور پر ٹریک ہوں اور تنخواہ سے مختص کی جائیں۔",
+    "suggested": "منتخب کریں کہ کون سی ذیلی آئٹمز (یوٹیلیٹیز، اقامہ فیس، کرایہ، سبسکرپشنز) ماہانہ باقاعدہ ادائیگیوں کے طور پر ٹریک ہوں اور ان کی رقم تنخواہ سے مختص کی جائے۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rb_manage_title",
+    "locale": "ur",
+    "current": "بار بار آنے والے بلوں کا انتظام",
+    "suggested": "باقاعدہ بلوں کا انتظام",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "receipt_n_of_m",
+    "locale": "ur",
+    "current": "رسید {current} از {total}",
+    "suggested": "رسید {current} (کل {total})",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "recurring_bills",
+    "locale": "ur",
+    "current": "ماہانہ بلز اور ریزرو",
+    "suggested": "باقاعدہ بلز اور ریزرو",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rid_family_desc",
+    "locale": "ur",
+    "current": "زیرِ کفالت فرد: ذاتی الاؤنس کی نگرانی اور انفرادی اخراجات کی رپورٹ۔",
+    "suggested": "زیرِ کفالت فرد: ذاتی جیب خرچ کی نگرانی اور انفرادی اخراجات کی رپورٹ۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rid_peer_desc",
+    "locale": "ur",
+    "current": "مشترکہ رہائش کا کھاتہ: متعدد روم میٹس کے درمیان تصفیہ اور قرضوں کی سادہ تقسیم۔",
+    "suggested": "مشترکہ رہائش کا کھاتہ: متعدد روم میٹس کے درمیان تصفیہ اور قرضوں کو آسان بنانا۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "roles_last_admin",
+    "locale": "ur",
+    "current": "گھر میں کم از کم ایک ایڈمن ہونا ضروری ہے۔",
+    "suggested": "گھرانے میں کم از کم ایک ایڈمن ہونا ضروری ہے۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rollover_recommended",
+    "locale": "ur",
+    "current": "تجویز کردہ پہلے سے طے شدہ",
+    "suggested": "تجویز کردہ (ڈیفالٹ)",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "rollover_send_to_savings_title",
+    "locale": "ur",
+    "current": "تمام رقم بچت کے ذخیرے میں منتقل کریں",
+    "suggested": "سب بچت میں منتقل کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "save_and_next",
+    "locale": "ur",
+    "current": "محفوظ کریں اور آگے →",
+    "suggested": "محفوظ کریں اور آگے ←",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sba_add_sub_for",
+    "locale": "ur",
+    "current": "{category} کے لیے ذیلی زمرہ شامل کریں",
+    "suggested": "{category} کے لیے ذیلی کیٹیگری شامل کریں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sba_remove_title",
+    "locale": "ur",
+    "current": "ذیلی زمرہ ہٹائیں؟",
+    "suggested": "ذیلی کیٹیگری ہٹائیں؟",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sba_removed_title",
+    "locale": "ur",
+    "current": "ذیلی زمرہ ہٹا دیا گیا",
+    "suggested": "ذیلی کیٹیگری ہٹا دی گئی",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sba_renamed_to",
+    "locale": "ur",
+    "current": "ذیلی زمرے کا نام \"{name}\" کر دیا گیا۔",
+    "suggested": "ذیلی کیٹیگری کا نام \"{name}\" کر دیا گیا۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sbb_pct_of_category",
+    "locale": "ur",
+    "current": "زمرے کا {percent}%",
+    "suggested": "کیٹیگری کا {percent}%",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_generate_standard_csv_date_merchant",
+    "locale": "ur",
+    "current": "تاریخ، دکان، زمرہ اور آئٹمز کے ساتھ معیاری CSV بنائیں",
+    "suggested": "تاریخ، دکان، کیٹیگری اور آئٹمز کے ساتھ معیاری CSV بنائیں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "set_join_create_household",
+    "locale": "ur",
+    "current": "گھرانے میں شامل ہوں یا نیا بنائیں",
+    "suggested": "گھرانہ بنائیں یا شامل ہوں",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "settle_pays",
+    "locale": "ur",
+    "current": "{from} {to} کو ادا کرے گا",
+    "suggested": "{from}، {to} کو ادا کرے گا",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "shared_pool_desc",
+    "locale": "ur",
+    "current": "مشترکہ اخراجات کے لیے گھر کے تمام افراد کو نظر آئے گا",
+    "suggested": "مشترکہ اخراجات کے لیے گھرانے کے تمام ارکان کو نظر آئے گا",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sim_advice_caution",
+    "locale": "ur",
+    "current": "لچکدار بجٹ سے رقم منتقل کر کے ہی ممکن ہے؛ آپ کا یومیہ الاؤنس کم ہو جائے گا۔",
+    "suggested": "لچکدار بجٹ سے رقم منتقل کر کے ہی ممکن ہے؛ آپ کی یومیہ خرچ کی حد کم ہو جائے گی۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sim_advice_comfortable",
+    "locale": "ur",
+    "current": "یہ اس زمرے کے بجٹ میں آسانی سے پورا ہو جاتا ہے۔",
+    "suggested": "یہ اس کیٹیگری کے بجٹ میں آسانی سے پورا ہو جاتا ہے۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "single_expense",
+    "locale": "ur",
+    "current": "واحد خرچ",
+    "suggested": "ایک خرچ",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "strict_desc",
+    "locale": "ur",
+    "current": "رسید اسکین اور چیٹ کے درمیان یکساں رقم اور دکان کے اندراج کو فلیگ کریں۔",
+    "suggested": "رسید اسکین اور اے آئی چیٹ کے درمیان ایک ہی دکان اور رقم کے دہرے اندراج کو نشان زد کریں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "sync_complete",
+    "locale": "ur",
+    "current": "ہم آہنگی مکمل",
+    "suggested": "سنک مکمل",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "theme_system",
+    "locale": "ur",
+    "current": "سسٹم کا پہلے سے طے شدہ",
+    "suggested": "سسٹم کے مطابق",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "wt3_desc",
+    "locale": "ur",
+    "current": "27 تاریخ کی تنخواہ سے ہم آہنگ خودکار سائیکلز، یومیہ الاؤنس اور سائیکل رول اوور کے ساتھ اپنی مالی صحت پر نظر رکھیں۔",
+    "suggested": "27 تاریخ کی تنخواہ سے ہم آہنگ خودکار سائیکلز، یومیہ خرچ کی حد اور سائیکل رول اوور کے ساتھ اپنی مالی صحت پر نظر رکھیں۔",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "wt4_title",
+    "locale": "ur",
+    "current": "بار بار آنے والے بل اور اقساط",
+    "suggested": "باقاعدہ بل اور اقساط",
+    "severity": "Low"
+  },
+  {
+    "file": "flutter_app/lib/l10n/app_localizations.dart",
+    "key": "wt_feature_x_of_y",
+    "locale": "ur",
+    "current": "خصوصیت {current} از {total}",
+    "suggested": "{total} میں سے {current} خصوصیت",
+    "severity": "Low"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.cu",
+    "locale": "ar",
+    "current": "\"عشاء عائلي في البيك بـ 68 ريال، دفعتها أنا للأسرة\"",
+    "suggested": "\"عشاء عائلي في البيك بـ 68 ريال، دفعته أنا للأسرة\"",
+    "severity": "Low"
+  },
+  {
+    "file": "ai_service/_build_landing.py",
+    "key": "T.ar.simB",
+    "locale": "ar",
+    "current": "✓ موازنة العطلات تلقائياً",
+    "suggested": "✓ تعديل تلقائي عند العطلات",
+    "severity": "Low"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:ai-demo-result",
+    "locale": "ar",
+    "current": "تم التفكيك بنجاح إلى بندين ومشاركين 2",
+    "suggested": "تم التفكيك بنجاح إلى بندين ومشاركَين اثنين",
+    "severity": "Low"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:footer-rights",
+    "locale": "ar",
+    "current": "© 2025 BUDGET Tracker",
+    "suggested": "© 2026 BUDGET Tracker",
+    "severity": "Low"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:footer-status",
+    "locale": "ar",
+    "current": "النظام يعمل بكفاءة 100% • مشفر محلياً",
+    "suggested": "النظام يعمل بكفاءة",
+    "severity": "Low"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:privacy-local-card",
+    "locale": "ar",
+    "current": "دون إرسال لهيئات",
+    "suggested": "دون إرسالها لجهات",
+    "severity": "Low"
+  },
+  {
+    "file": "landing_page/index.html",
+    "key": "html:zatca-demo-seller",
+    "locale": "ar",
+    "current": "شركة بندة للتجزئة ش.م.م",
+    "suggested": "شركة بنده للتجزئة",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.metrics.metric1Desc",
+    "locale": "ar",
+    "current": "صفر قراءة للرسائل النصية، صفر ربط بنكي إجباري. بياناتك تظل ملكك وحدك.",
+    "suggested": "لا نقرأ رسائلك النصية ولا نشترط أي ربط بنكي. بياناتك تظل ملكك وحدك.",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.nav.securitySub",
+    "locale": "ar",
+    "current": "صفر ربط بنكي",
+    "suggested": "بدون ربط بنكي",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.security.cards[1].title",
+    "locale": "ar",
+    "current": "صفر قراءة للرسائل النصية والـ OTP",
+    "suggested": "لا نقرأ رسائلك النصية ولا رموز التحقق",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.simulator.aiImpactVal",
+    "locale": "ar",
+    "current": "42% متبقي • في النطاق الآمن",
+    "suggested": "متبقٍ 42% • في النطاق الآمن",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "ar.simulator.aiNoteRooms",
+    "locale": "ar",
+    "current": "(غرفتين)",
+    "suggested": "(غرفتان)",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.faq.items[0].a",
+    "locale": "en",
+    "current": "We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card pins, or personal SMS text records to any cloud aggregator.",
+    "suggested": "We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card PINs, or personal SMS text records to any cloud aggregator.",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.footer.rights",
+    "locale": "en",
+    "current": "© 2025 BUDGET Tracker Sovereign Financial Architecture. All rights reserved. Built for clarity and equitable shared living.",
+    "suggested": "© 2026 BUDGET Tracker. All rights reserved. Built for clarity and equitable shared living.",
+    "severity": "Low"
+  },
+  {
+    "file": "web_app/src/i18n/translations.ts",
+    "key": "en.simulator.day27Label",
+    "locale": "en",
+    "current": "Day 27 (GCC Public)",
+    "suggested": "Day 27 (Saudi Public Sector)",
+    "severity": "Low"
+  }
+]
