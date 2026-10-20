@@ -73,8 +73,18 @@ def test_child_attribution_in_chat_expense(monkeypatch, fake_supabase):
     assert "Sarah" in res["dependents"]
 
 
-def test_confirm_chat_transaction_preserves_category_sub_category_and_attribution(monkeypatch):
+def _seed_global_codes(fake_supabase, *codes):
+    # A client-chosen category_code must exist in the taxonomy (E2E-03), as it does in the DB.
+    fake_supabase.seed("cost_control_codes", [
+        {"id": f"cc-{c}", "code": c, "category": c, "keywords": [], "is_flexible": False,
+         "household_id": None, "is_system": True}
+        for c in codes
+    ])
+
+
+def test_confirm_chat_transaction_preserves_category_sub_category_and_attribution(monkeypatch, fake_supabase):
     """Verify confirming pending expense persists category_code and sub_category rather than falling back to OPEX-MISC."""
+    _seed_global_codes(fake_supabase, "OPEX-DINING")
     mock_insert = MagicMock(return_value="tx-uuid-1234")
     monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
     monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items, **kw: True)
@@ -121,8 +131,9 @@ def test_confirm_chat_transaction_preserves_category_sub_category_and_attributio
     assert kwargs["items"][0]["sub_category"] == "restaurants_dinners"
 
 
-def test_chat_confirmation_overrides_items_stale_sub_category(monkeypatch):
+def test_chat_confirmation_overrides_items_stale_sub_category(monkeypatch, fake_supabase):
     """Verify that user override_sub_category replaces initial parsed sub_category on line items."""
+    _seed_global_codes(fake_supabase, "OPEX-UTILITIES")
     mock_insert = MagicMock(return_value="tx-zain-001")
     monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
     monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)
