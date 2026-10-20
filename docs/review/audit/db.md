@@ -411,6 +411,17 @@ multi-roommate settlement this allowed attribution spoofing.
 
 ## Owner actions
 
+> **2026-10-20 update:** the live catalog and data have been compared read-only with the repo, and the batch
+> was proven on a faithful local replica. Results:
+> - `household_invites` RLS is already on;
+> - `memberships_admin_manage` and the `cost_control_codes` write policies are absent;
+> - `reallocate_budget` is missing on live;
+> - `claimed_user_id` does not exist (so DB-05 is real).
+>
+> The ordered apply plan, the pre-flight migration `20261020005000_preflight_live_alignment.sql`, the
+> check queries and the rollback snapshot are in [`live_db_preflight.md`](live_db_preflight.md); it replaces
+> steps 1–2 below. DB-08 detection on live found 0 mismatching rows.
+
 1. **Before applying, check the live catalog** (read-only, SQL editor):
    ```sql
    SELECT relname, relrowsecurity FROM pg_class WHERE oid = 'public.household_invites'::regclass;          -- DB-01
