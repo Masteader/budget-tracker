@@ -5,10 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
-import '../nafaqah/nafaqah_class_selector.dart';
+import '../nafaqah/nafaqah_review_section.dart';
 
-/// Confirmed values of a chat expense. [nafaqahClass] is set in family mode
-/// only: 'wife_reimbursable', 'wife_personal' or 'none' (husband paid).
+/// Confirmed values of a chat expense. [confirmedNafaqahClass] is set in
+/// family mode only: 'wife_reimbursable', 'wife_personal' or 'none' (husband
+/// paid), always derived from the confirmed payer / beneficiary so it never
+/// contradicts them. [confirmedNafaqahSpouseId] names the wife when a husband
+/// with several wives records what one of them paid.
 typedef PendingExpenseConfirmCallback = void Function(
   String confirmedMerchant,
   String confirmedCategoryCode,
@@ -16,6 +19,7 @@ typedef PendingExpenseConfirmCallback = void Function(
   String confirmedPaidBy,
   String confirmedBeneficiary,
   String? confirmedNafaqahClass,
+  String? confirmedNafaqahSpouseId,
 );
 
 /// Interactive confirmation card embedded within chat bubbles that allows
@@ -46,6 +50,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   late List<Map<String, dynamic>> _availableSubCategories;
   bool _loadingSubs = false;
   String? _nafaqahChoice;
+  late final NafaqahPreview _nafaqahPreview;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
 
   /// 'wife' | 'husband' when the recorder is a spouse in a family household.
   String? get _spouseRole {
@@ -121,6 +128,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     _selectedBeneficiary = (widget.pendingData['beneficiary'] as String? ?? 'both').toLowerCase();
 
     // Family (Nafaqah): the server's suggestion, else derived from the chips.
+    _nafaqahPreview = NafaqahPreview.fromPreview(widget.pendingData);
+    _nafaqahWifeId = _nafaqahPreview.defaultSpouseId;
     final suggested = widget.pendingData['nafaqah_class'] as String?;
     _nafaqahChoice = (suggested == kWifeReimbursable || suggested == kWifePersonal)
         ? suggested
@@ -429,11 +438,14 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           // reimburses or a personal purchase from her allowance (never split).
           if (_spouseRole != null &&
               classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null) ...[
-            NafaqahClassSelector(
+            NafaqahReviewSection(
+              preview: _nafaqahPreview,
               value: _nafaqahChoice,
-              viewerIsWife: _spouseRole == 'wife',
+              wifeId: _nafaqahWifeId,
               showHusbandOption: false,
+              showWifeRequired: _showWifeRequired,
               onChanged: _chooseNafaqah,
+              onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
             ),
             const SizedBox(height: 12),
           ],
@@ -517,6 +529,15 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   onPressed: () {
+                    // The class follows the confirmed chips (the selector keeps
+                    // them in sync), so a stale suggestion is never sent.
+                    final derived = _spouseRole == null
+                        ? null
+                        : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+                    if (!NafaqahReviewSection.hasRequiredWife(_nafaqahPreview, derived, _nafaqahWifeId)) {
+                      setState(() => _showWifeRequired = true);
+                      return;
+                    }
                     final store = _merchantController.text.trim();
                     final resolvedSub = _selectedSubCategory ??
                         (_availableSubCategories.isNotEmpty
@@ -528,12 +549,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                       resolvedSub,
                       _selectedPaidBy,
                       _selectedBeneficiary,
-                      !_isFamily
-                          ? null
-                          : (_spouseRole != null &&
-                                  classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null
-                              ? (_nafaqahChoice ?? kWifeReimbursable)
-                              : 'none'),
+                      !_isFamily ? null : (derived ?? kNafaqahNone),
+                      _isFamily && derived != null && _spouseRole == 'husband' ? _nafaqahWifeId : null,
                     );
                   },
                 ),

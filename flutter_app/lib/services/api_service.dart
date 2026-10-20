@@ -71,6 +71,7 @@ class ApiService {
     String? paidBy,
     String? beneficiary,
     String? nafaqahClass,
+    String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
   }) =>
@@ -88,6 +89,7 @@ class ApiService {
         paidBy: paidBy,
         beneficiary: beneficiary,
         nafaqahClass: nafaqahClass,
+        nafaqahSpouseId: nafaqahSpouseId,
         idempotencyKey: idempotencyKey,
         occurredAt: occurredAt,
       );
@@ -119,6 +121,10 @@ class ApiService {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? paidBy,
+    String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
   }) {
@@ -134,6 +140,10 @@ class ApiService {
       merchant: merchant,
       spentBy: spentBy,
       receiptUrl: receiptUrl,
+      paidBy: paidBy,
+      beneficiary: beneficiary,
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahSpouseId,
       idempotencyKey: idempotencyKey,
       occurredAt: occurredAt,
     );

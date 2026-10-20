@@ -39,6 +39,114 @@ String? classifyNafaqah(String? recorderRole, String paidBy, String beneficiary)
   return forWife ? kWifePersonal : kWifeReimbursable;
 }
 
+/// What the expense endpoints take for "no class": the husband paid (rule 4).
+const String kNafaqahNone = 'none';
+
+/// Recorder-relative `paid_by` / `beneficiary` that express a Nafaqah choice
+/// (mirrors `nafaqah_service.attribution_for_class`), so the server never sees
+/// a class that contradicts who paid for whom. `null` = the husband paid.
+({String paidBy, String beneficiary}) nafaqahAttribution(String? recorderRole, String? nafaqahClass) {
+  final isWife = (recorderRole ?? '').toLowerCase() == 'wife';
+  final wifeSide = isWife ? 'me' : 'partner';
+  final husbandSide = isWife ? 'partner' : 'me';
+  switch (nafaqahClass) {
+    case kWifePersonal:
+      return (paidBy: wifeSide, beneficiary: wifeSide);
+    case kWifeReimbursable:
+      return (paidBy: wifeSide, beneficiary: 'both');
+    default:
+      return (paidBy: husbandSide, beneficiary: 'both');
+  }
+}
+
+/// Family-mode context of an expense preview from `/agent/chat-transaction`
+/// or `/agent/scan-receipt` (`household_mode`, `recorder_role`,
+/// `nafaqah_class`, `nafaqah_spouse_id`, `wives`).
+class NafaqahPreview {
+  final bool isFamily;
+  final String? recorderRole; // 'wife' | 'husband' | 'member'
+  final String? suggestedClass;
+  final String? suggestedSpouseId;
+  final List<NafaqahWife> wives;
+
+  const NafaqahPreview({
+    this.isFamily = false,
+    this.recorderRole,
+    this.suggestedClass,
+    this.suggestedSpouseId,
+    this.wives = const [],
+  });
+
+  /// Only the husband or a wife records a Nafaqah class.
+  bool get canClassify => isFamily && (recorderRole == 'wife' || recorderRole == 'husband');
+
+  bool get viewerIsWife => recorderRole == 'wife';
+
+  /// The husband of several wives says which wife paid.
+  bool get needsWifeChoice => canClassify && recorderRole == 'husband' && wives.length > 1;
+
+  /// The wife preselected for the husband (the only one, or the server's pick).
+  String? get defaultSpouseId {
+    if (recorderRole != 'husband') return null;
+    if (wives.length == 1) return wives.first.id;
+    return suggestedSpouseId;
+  }
+
+  /// Fields for `/agent/scan-receipt` or `/agent/chat-transaction`: who paid
+  /// for whom and the confirmed class, consistent with each other (empty
+  /// outside family mode). A wife never names a spouse: she is the spouse.
+  Map<String, String> requestFields(String? nafaqahClass, {String? chosenWifeId}) {
+    if (!canClassify) return const {};
+    final attribution = nafaqahAttribution(recorderRole, nafaqahClass);
+    final spouse = viewerIsWife || nafaqahClass == null ? null : chosenWifeId;
+    return {
+      'paid_by': attribution.paidBy,
+      'beneficiary': attribution.beneficiary,
+      'nafaqah_class': nafaqahClass ?? kNafaqahNone,
+      if (spouse != null && spouse.isNotEmpty) 'nafaqah_spouse_id': spouse,
+    };
+  }
+
+  /// `nafaqah_class` / `nafaqah_spouse_id` for a direct `transactions` insert
+  /// (the database requires both together; empty when there is no class).
+  Map<String, String> transactionColumns(String? nafaqahClass, {String? chosenWifeId, String? currentUserId}) {
+    if (!canClassify || nafaqahClass == null) return const {};
+    final spouse = viewerIsWife ? currentUserId : chosenWifeId;
+    if (spouse == null || spouse.isEmpty) return const {};
+    return {'nafaqah_class': nafaqahClass, 'nafaqah_spouse_id': spouse};
+  }
+
+  /// Where nothing is previewed (the multi-page scanner saves directly): the
+  /// caller's role from `GET /households/{id}/nafaqah`. The suggestion mirrors
+  /// the server default (the recorder paid for the household).
+  factory NafaqahPreview.fromSummary(NafaqahSummary summary) {
+    if (!summary.isFamily) return const NafaqahPreview();
+    final role = summary.callerRole;
+    return NafaqahPreview(
+      isFamily: true,
+      recorderRole: role,
+      suggestedClass: role == 'wife' ? kWifeReimbursable : null,
+      wives: summary.wives,
+    );
+  }
+
+  factory NafaqahPreview.fromPreview(Map<String, dynamic>? data) {
+    if (data == null || data['household_mode'] != 'family_nafaqah') return const NafaqahPreview();
+    final cls = data['nafaqah_class'] as String?;
+    return NafaqahPreview(
+      isFamily: true,
+      recorderRole: data['recorder_role'] as String?,
+      suggestedClass: (cls == kWifeReimbursable || cls == kWifePersonal) ? cls : null,
+      suggestedSpouseId: data['nafaqah_spouse_id'] as String?,
+      wives: (data['wives'] as List? ?? const [])
+          .whereType<Map>()
+          .map((w) => NafaqahWife.fromMap(Map<String, dynamic>.from(w)))
+          .where((w) => w.id.isNotEmpty)
+          .toList(),
+    );
+  }
+}
+
 /// What the husband owes his wife for her advances (rule 2).
 class ReimbursementBalance {
   final double grossAdvanced;

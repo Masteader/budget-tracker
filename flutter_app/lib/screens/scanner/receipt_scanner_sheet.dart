@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -23,6 +24,7 @@ import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
+import '../../widgets/nafaqah/nafaqah_review_section.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
@@ -62,6 +64,25 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   late final TextEditingController _merchantController;
   String _selectedSpentBy = 'both';
+
+  // Family (Islamic Nafaqah): the server's suggestion from the preview and the
+  // user's choice. A wife's receipt is her shared advance (the husband owes
+  // it) or a personal purchase from her allowance; never split.
+  NafaqahPreview _nafaqah = const NafaqahPreview();
+  String? _nafaqahClass;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
+
+  void _applyNafaqahPreview(Map<String, dynamic>? res) {
+    _nafaqah = NafaqahPreview.fromPreview(res);
+    _nafaqahClass = _nafaqah.suggestedClass;
+    _nafaqahWifeId = _nafaqah.defaultSpouseId;
+    _showWifeRequired = false;
+  }
+
+  /// `paid_by` / `beneficiary` / `nafaqah_class` / `nafaqah_spouse_id` for the
+  /// commit, consistent with each other (empty outside family mode).
+  Map<String, String> get _nafaqahFields => _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
 
   @override
   void initState() {
@@ -343,6 +364,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           _errorMessage = res['message'] ?? context.tr('scan_analyze_failed');
         } else {
           _scanResult = res;
+          _applyNafaqahPreview(res);
           final detectedMerchant = _zatcaDecoded?['seller'] as String? ??
               res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
@@ -415,6 +437,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _confirmSave({bool allowDuplicate = false, String? enrichTxId}) async {
     if (_isAnalyzing) return;
+    if (enrichTxId == null && !NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
     setState(() {
       _isAnalyzing = true;
       _errorMessage = null;
@@ -440,6 +466,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       }
       final user = supabase.auth.currentUser;
       final confirmedMerchant = _merchantController.text.trim();
+      final nafaqah = _nafaqahFields;
 
       final res = await ApiService.instance.scanReceipt(
         imagesBase64: base64List,
@@ -452,6 +479,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         spentBy: _selectedSpentBy,
         previewOnly: false,
         receiptUrl: uploadedReceiptUrl,
+        paidBy: nafaqah['paid_by'],
+        beneficiary: nafaqah['beneficiary'],
+        nafaqahClass: nafaqah['nafaqah_class'],
+        nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
       );
 
       _safeSetState(() => _isAnalyzing = false);
@@ -469,6 +500,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           setState(() {
             _scanResult = res;
           });
+        } else if (res['status_code'] == 422) {
+          // The server refused the request itself (e.g. the Nafaqah choice):
+          // saving it directly would only bypass that check.
+          setState(() => _errorMessage = res['message'] as String? ?? context.tr('scan_analyze_failed'));
         } else {
           await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
         }
@@ -575,6 +610,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'raw_sms': auditText,
         if (receiptUrl != null && receiptUrl.isNotEmpty) 'receipt_url': receiptUrl,
         if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) 'qr_code_raw': _zatcaQrRaw,
+        // Never dropped by the fallbacks below: losing it would erase the
+        // wife's reimbursement debt or her allowance spending.
+        ..._nafaqah.transactionColumns(
+          _nafaqahClass,
+          chosenWifeId: _nafaqahWifeId,
+          currentUserId: supabase.auth.currentUser?.id,
+        ),
       };
 
       Map<String, dynamic> res;
@@ -645,6 +687,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             'qr_code_raw': _zatcaQrRaw,
             'user_id': supabase.auth.currentUser?.id,
             'needs_cloud_enrichment': true,
+            ..._nafaqahFields,
           },
         );
         _safeSetState(() => _isAnalyzing = false);
@@ -1136,6 +1179,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             selectedSpentBy: _selectedSpentBy,
             onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
           ),
+          if (_nafaqah.canClassify) ...[
+            NafaqahReviewSection(
+              key: const ValueKey('receipt_nafaqah_review'),
+              preview: _nafaqah,
+              value: _nafaqahClass,
+              wifeId: _nafaqahWifeId,
+              showWifeRequired: _showWifeRequired,
+              onChanged: (cls) => setState(() => _nafaqahClass = cls),
+              onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (!isCandidate && isZatcaVerified && _imageFiles.isEmpty) ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -1215,6 +1270,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _zatcaQrRaw = null;
             _zatcaDecoded = null;
             _scanResult = null;
+            _applyNafaqahPreview(null);
           }),
           label: Text(context.tr('scan_another_receipt'), style: TextStyle(color: context.textSecondary)),
         ),

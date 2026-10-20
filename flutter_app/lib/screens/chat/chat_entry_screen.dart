@@ -451,6 +451,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     String paidBy,
     String beneficiary,
     String? nafaqahClass,
+    String? nafaqahSpouseId,
   ) async {
     final pending = originalMsg.pendingData;
     if (pending == null || _householdId == null) return;
@@ -474,6 +475,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       paidBy: paidBy,
       beneficiary: beneficiary,
       nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahSpouseId,
     );
 
     if (!mounted) return;
@@ -627,8 +629,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
-                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) {
-                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass);
+                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId);
                     },
                     onCancelPending: () {
                       setState(() {

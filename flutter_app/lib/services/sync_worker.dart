@@ -298,6 +298,8 @@ class SyncWorker {
           subCategory: _nonEmpty(payload['sub_category']),
           paidBy: _chatPaidBy(payload['paid_by']),
           beneficiary: _nonEmpty(payload['beneficiary']),
+          nafaqahClass: _nonEmpty(payload['nafaqah_class']),
+          nafaqahSpouseId: _nonEmpty(payload['nafaqah_spouse_id']),
           idempotencyKey: key,
           occurredAt: item.createdAt,
         );
@@ -316,6 +318,11 @@ class SyncWorker {
             allowDuplicate: true,
             merchant: _nonEmpty(payload['merchant']),
             spentBy: _nonEmpty(payload['spent_by']),
+            // Family Nafaqah choice made when the receipt was reviewed.
+            paidBy: _chatPaidBy(payload['paid_by']),
+            beneficiary: _nonEmpty(payload['beneficiary']),
+            nafaqahClass: _nonEmpty(payload['nafaqah_class']),
+            nafaqahSpouseId: _nonEmpty(payload['nafaqah_spouse_id']),
             idempotencyKey: key,
             occurredAt: item.createdAt,
           );
@@ -333,6 +340,10 @@ class SyncWorker {
             merchant: merchant,
             spentBy: _nonEmpty(payload['spent_by']),
             categoryCode: _nonEmpty(payload['category_code']),
+            paidBy: _chatPaidBy(payload['paid_by']),
+            beneficiary: _nonEmpty(payload['beneficiary']),
+            nafaqahClass: _nonEmpty(payload['nafaqah_class']),
+            nafaqahSpouseId: _nonEmpty(payload['nafaqah_spouse_id']),
             idempotencyKey: key,
             occurredAt: item.createdAt,
           );
