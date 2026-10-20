@@ -165,7 +165,13 @@ class FakeQuery:
                 raise RuntimeError(f"single() expected exactly one row from {self._table}, got {len(result)}")
             return FakeResponse(result[0])
         if self._maybe_single:
-            return FakeResponse(result[0] if result else None)
+            # postgrest-py (all versions this service supports) returns None, not a response,
+            # when maybe_single() matches zero rows; more than one row is an error.
+            if not result:
+                return None  # type: ignore[return-value]
+            if len(result) > 1:
+                raise RuntimeError(f"maybe_single() matched {len(result)} rows from {self._table}")
+            return FakeResponse(result[0])
         return FakeResponse(result)
 
 

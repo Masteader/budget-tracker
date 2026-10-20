@@ -126,6 +126,22 @@ def get_client() -> Client:
 
 
 
+def first_row(query) -> Optional[dict]:
+    """
+    Run ``query`` with ``limit(1)`` and return its first row, or None when nothing matched.
+
+    Use this instead of ``maybe_single()`` for "zero or one row" lookups: postgrest-py 2.x returns
+    None (not a response) for zero rows, so ``res.data`` raises AttributeError, and postgrest-py
+    0.19-1.1 (allowed by supabase 2.16.0) raises APIError for zero rows unless the server's error
+    text matches what it expects. A plain filtered select behaves the same on every version.
+    """
+    res = query.limit(1).execute()
+    rows = getattr(res, "data", None) if res is not None else None
+    if isinstance(rows, list):
+        return rows[0] if rows and isinstance(rows[0], dict) else None
+    return rows if isinstance(rows, dict) else None
+
+
 # =============================================================================
 # COST CONTROL CODES
 # =============================================================================
@@ -598,9 +614,9 @@ def get_household_payday(household_id: str) -> int:
         return 27
     try:
         client = get_client()
-        res = client.table("households").select("payday_day").eq("id", household_id).maybe_single().execute()
-        if res.data and res.data.get("payday_day") is not None:
-            return int(res.data["payday_day"])
+        row = first_row(client.table("households").select("payday_day").eq("id", household_id))
+        if row and row.get("payday_day") is not None:
+            return int(row["payday_day"])
     except Exception:
         pass
 
@@ -659,9 +675,9 @@ def get_household_income(household_id: str) -> float:
         return 0.0
     try:
         client = get_client()
-        res = client.table("households").select("monthly_income").eq("id", household_id).maybe_single().execute()
-        if res.data and res.data.get("monthly_income") is not None:
-            return float(res.data["monthly_income"])
+        row = first_row(client.table("households").select("monthly_income").eq("id", household_id))
+        if row and row.get("monthly_income") is not None:
+            return float(row["monthly_income"])
     except Exception:
         pass
 
@@ -728,9 +744,9 @@ def get_household_rollover_rule(household_id: str) -> str:
         return DEFAULT_ROLLOVER_RULE
     try:
         client = get_client()
-        res = client.table("households").select("rollover_rule").eq("id", household_id).maybe_single().execute()
-        if res.data and res.data.get("rollover_rule") in VALID_ROLLOVER_RULES:
-            return str(res.data["rollover_rule"])
+        row = first_row(client.table("households").select("rollover_rule").eq("id", household_id))
+        if row and row.get("rollover_rule") in VALID_ROLLOVER_RULES:
+            return str(row["rollover_rule"])
     except Exception:
         pass
 
@@ -794,9 +810,9 @@ def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: 
     #    otherwise computing from 0 would overwrite the running total kept in the local cache.
     try:
         client = get_client()
-        res = client.table("households").select("accumulated_savings").eq("id", household_id).maybe_single().execute()
-        if res is not None and res.data:
-            current_savings = float(res.data.get("accumulated_savings") or 0.0)
+        row = first_row(client.table("households").select("accumulated_savings").eq("id", household_id))
+        if row:
+            current_savings = float(row.get("accumulated_savings") or 0.0)
             accumulated = round(current_savings + float(surplus), 2)
             client.table("households").update({
                 "accumulated_savings": accumulated,
@@ -842,13 +858,17 @@ def get_household_savings_summary(household_id: str) -> dict:
 
     try:
         client = get_client()
-        res = client.table("households").select("accumulated_savings, last_rollover_surplus, last_rollover_cycle").eq("id", household_id).maybe_single().execute()
-        if res.data:
-            if res.data.get("accumulated_savings") is not None:
-                accumulated = float(res.data["accumulated_savings"])
-            if res.data.get("last_rollover_surplus") is not None:
-                last_surplus = float(res.data["last_rollover_surplus"])
-            last_cycle = res.data.get("last_rollover_cycle")
+        row = first_row(
+            client.table("households")
+            .select("accumulated_savings, last_rollover_surplus, last_rollover_cycle")
+            .eq("id", household_id)
+        )
+        if row:
+            if row.get("accumulated_savings") is not None:
+                accumulated = float(row["accumulated_savings"])
+            if row.get("last_rollover_surplus") is not None:
+                last_surplus = float(row["last_rollover_surplus"])
+            last_cycle = row.get("last_rollover_cycle")
             return {
                 "household_id": household_id,
                 "rollover_rule": rule,

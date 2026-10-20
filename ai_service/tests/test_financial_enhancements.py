@@ -54,9 +54,9 @@ def test_simulate_affordability(mock_client, mock_flexible, mock_forecast):
     mock_flexible.return_value = []
     mock_table = MagicMock()
     mock_client.return_value.table.return_value = mock_table
-    mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+    mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{
         "remaining_amount": 2000.0
-    }
+    }]
 
     # Within category budget
     res = simulate_affordability(HOUSEHOLD_ID, target_amount=1200.0, item_name="iPad", category_code="OPEX-SHOPPING")

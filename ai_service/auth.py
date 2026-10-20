@@ -16,7 +16,7 @@ from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
 
 from utils import validate_uuid, verify_signature
-from supabase_client import get_client
+from supabase_client import first_row, get_client
 
 logger = logging.getLogger(__name__)
 
@@ -332,33 +332,24 @@ def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
     """
     client = get_client()
     try:
-        res = (
+        # limit(1), not maybe_single(): on postgrest-py <= 1.1 a zero-row maybe_single() can raise,
+        # which used to send a non-member down the users.household_id fallback below (API-13).
+        return first_row(
             client.table("household_memberships")
             .select("role, household_id")
             .eq("user_id", user_id)
             .eq("household_id", household_id)
-            .maybe_single()
-            .execute()
         )
-        if res and res.data:
-            return res.data
-        return None
     except Exception as exc:
         logger.warning("Error querying household_memberships: %s", exc)
 
     # Fallback to users table cache (memberships table unavailable)
     try:
-        user_res = (
-            client.table("users")
-            .select("household_id, role")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        if user_res and user_res.data and user_res.data.get("household_id") == household_id:
+        user_row = first_row(client.table("users").select("household_id, role").eq("id", user_id))
+        if user_row and user_row.get("household_id") == household_id:
             return {
                 "household_id": household_id,
-                "role": user_res.data.get("role", "member"),
+                "role": user_row.get("role", "member"),
             }
     except Exception as exc:
         logger.warning("Error querying users fallback: %s", exc)

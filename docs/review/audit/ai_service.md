@@ -347,9 +347,40 @@ with `python -I` against mocked HTTP (`respx`), never against a live service.
   writes in `dedup_engine.py:177-184` and `installment_service.py:238-248` use it as that note. No
   code change; the column is not renamed.
 
-### Test results (after `d857855`)
-- `ai_service`: 530 passed (`/opt/venv`, supabase-py 2.33.0) and 530 passed in a scratch venv with
-  supabase-py 2.16.0.
+### Follow-up — zero-row `maybe_single()` lookups (reported by the Nafaqah stream)
+- **Library facts.** postgrest-py 2.x (installed 2.33) returns `None` instead of a response when
+  `maybe_single()` matches no row (`SyncMaybeSingleRequestBuilder.execute`), so `resp.data` raises
+  AttributeError. `supabase>=2.16.0` still allows postgrest-py **0.19.1–1.1.x** (supabase 2.16.0 pins
+  `postgrest>0.19,<1.2`; 2.17–2.18 pin 1.1.1; 2.19+ pin the matching 2.x). Those versions request a
+  single object and map the server's error to `None` only when its details text contains
+  "The result contains 0 rows"; otherwise they raise `APIError("Missing response")`.
+- **`salary_cycle.simulate_affordability` — confirmed live bug.** It read `resp.data` straight from
+  `maybe_single()`, so "Can I afford this?" for a category without a budget row returned 500 with
+  2.33 (reproduced with the real client against a mocked PostgREST). It also looked the budget up by
+  calendar month. Now `first_row` (a `limit(1)` select) on the household's current `cycle_key`, with a
+  legacy by-month fallback.
+- **`auth._get_user_membership` — confirmed for old postgrest.** On postgrest-py ≤ 1.1 a zero-row
+  membership lookup could raise, and the `except` branch then consulted the stale
+  `users.household_id` (the API-13 path), granting access to a removed member. Both lookups now use
+  `first_row`, so "no row" is a definitive no-access on every version. The helper lives in
+  `supabase_client.first_row` (imported by `auth.py`, `salary_cycle.py`); no `postgrest_compat.py` was
+  created, to avoid a file conflict with the other stream.
+- **`supabase_client` household getters** (`get_household_payday`, `get_household_income`,
+  `get_household_rollover_rule`, `add_household_savings_surplus`, `get_household_savings_summary`):
+  a missing row reached the fallback only through a caught AttributeError (behaviour was right, by
+  accident); they now use `first_row` explicitly. `inspect_household_role_invite` already guarded `res`.
+- **Not changed (other stream's files):** `household_permissions.py:193` and `:215` and
+  `nafaqah_service.py:481` guard `res is None` (fine on 2.x) but can still raise on postgrest ≤ 1.1;
+  `household_permissions.py:112` catches it.
+- **Tests:** `tests/test_postgrest_zero_rows.py` (real client + `respx`: library behaviour, `first_row`
+  sends `limit=1`, affordability with and without a budget row and by `cycle_key`, membership with the
+  real client, the old-client raise no longer reaching the stale fallback, getters with and without
+  the row). `tests/fakes.py` now mirrors postgrest-py: `maybe_single()` returns None for zero rows and
+  errors on more than one. Green with supabase 2.33/postgrest 2.33 and with supabase 2.16.0/postgrest 1.1.1.
+
+### Test results (after the zero-row follow-up)
+- `ai_service`: 544 passed (`/opt/venv`, supabase-py 2.33.0) and 544 passed in a scratch venv with
+  supabase-py 2.16.0 / postgrest 1.1.1.
 - `flutter analyze`: no issues; `flutter test`: 497 passed.
 - DB suite (local Postgres 16, rebuilt): 20/20 passed (no SQL changed).
 

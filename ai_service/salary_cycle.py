@@ -14,7 +14,7 @@ from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
 
 logger = logging.getLogger(__name__)
 
-from supabase_client import get_client, fetch_flexible_budgets, get_household_payday
+from supabase_client import get_client, fetch_flexible_budgets, first_row, get_household_payday
 
 
 def current_household_cycle(household_id: str) -> Dict[str, Any]:
@@ -269,19 +269,28 @@ def simulate_affordability(
     today = riyadh_today()
     month_start = today.replace(day=1).isoformat()
 
-    # Category budget details
+    # Category budget of the household's current cycle (legacy rows without cycle_key: by month).
+    # first_row, not maybe_single(): with postgrest-py 2.x a category without a budget row made
+    # maybe_single() return None and ``resp.data`` raised AttributeError (500).
     cat_budget = None
     if category_code:
-        resp = (
-            client.table("budgets")
-            .select("*")
-            .eq("household_id", household_id)
-            .eq("category_code", category_code)
-            .eq("month", month_start)
-            .maybe_single()
-            .execute()
-        )
-        cat_budget = resp.data
+        cycle_key = forecast["cycle"].get("cycle_key")
+        if cycle_key:
+            cat_budget = first_row(
+                client.table("budgets")
+                .select("*")
+                .eq("household_id", household_id)
+                .eq("category_code", category_code)
+                .eq("cycle_key", cycle_key)
+            )
+        if cat_budget is None:
+            cat_budget = first_row(
+                client.table("budgets")
+                .select("*")
+                .eq("household_id", household_id)
+                .eq("category_code", category_code)
+                .eq("month", month_start)
+            )
 
     cat_remaining = float(cat_budget.get("remaining_amount", 0.0)) if cat_budget else 0.0
 
