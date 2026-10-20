@@ -202,6 +202,41 @@ def test_recalculate_budgets_ignores_settlements(db):
     assert db.tables["budgets"][0]["spent_amount"] == 0.0
 
 
+# ─── FR-B-05: budget and category writes are admin-only, as in RLS ──────────
+
+def _budget_writes(household_id):
+    return [
+        ("post", "/budgets/categories", "add_category_and_budget",
+         {"json": {"household_id": household_id, "code": "OPEX-REVIEW", "category": "Review", "allocated_amount": 100}}),
+        ("post", "/budgets/sub-allocations", "save_sub_allocations",
+         {"json": {"household_id": household_id, "category_code": "OPEX-GROCERY", "sub_allocations": {"sub-veg": 50}}}),
+        ("post", "/budgets/sub-categories", "add_sub_category_for_household",
+         {"json": {"household_id": household_id, "parent_code": "OPEX-GROCERY", "name_en": "Veg", "allocated_amount": 20}}),
+        ("delete", "/budgets/sub-categories", "remove_sub_category_for_household",
+         {"params": {"household_id": household_id, "parent_code": "OPEX-GROCERY", "sub_code": "sub-veg"}}),
+        ("delete", "/budgets/categories/OPEX-GROCERY", "archive_category_for_household",
+         {"params": {"household_id": household_id}}),
+    ]
+
+
+@pytest.mark.parametrize("index", range(5))
+def test_members_cannot_write_budgets(db, index):
+    method, path, worker, kwargs = _budget_writes(ROOM)[index]
+    with patch(f"routes.budgets.{worker}", return_value={"status": "success"}) as work:
+        res = getattr(client, method)(path, headers=bearer(B), **kwargs)
+    assert res.status_code == 403, res.text
+    work.assert_not_called()
+
+
+@pytest.mark.parametrize("index", range(5))
+def test_admins_can_write_budgets(db, index):
+    method, path, worker, kwargs = _budget_writes(ROOM)[index]
+    with patch(f"routes.budgets.{worker}", return_value={"status": "success"}) as work:
+        res = getattr(client, method)(path, headers=bearer(A), **kwargs)
+    assert res.status_code == 200, res.text
+    work.assert_called_once()
+
+
 def test_partner_settlement_tags_are_relative_to_the_creator(db):
     """'PaidBy: me' written by A means A paid: B must see that they owe, not that A owes them."""
     from settlement_engine import calculate_partner_settlement

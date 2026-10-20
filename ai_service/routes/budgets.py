@@ -291,7 +291,9 @@ async def add_budget_category(
     request: Request,
     req: CategoryCreateRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    # Budgets and household categories are admin-only, as RLS enforces for direct writes
+    # (budgets_insert_admin / budgets_update_admin, cost_control_codes_insert/update; FR-B-05).
+    await verify_household_admin_access(request, req.household_id)
     try:
         return await asyncio.to_thread(add_category_and_budget, req)
     except Exception as exc:
@@ -307,7 +309,7 @@ async def set_sub_allocations(
     request: Request,
     req: SubAllocationsRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    await verify_household_admin_access(request, req.household_id)
     try:
         return await asyncio.to_thread(
             save_sub_allocations,
@@ -329,7 +331,7 @@ async def add_sub_category(
     request: Request,
     req: SubCategoryCreateRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    await verify_household_admin_access(request, req.household_id)
     try:
         return await asyncio.to_thread(
             add_sub_category_for_household,
@@ -415,7 +417,7 @@ async def remove_sub_category_endpoint(
     parent_code: str,
     sub_code: str,
     cycle_key: Optional[str] = None,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id or not parent_code or not sub_code:
         raise HTTPException(status_code=400, detail="household_id, parent_code, and sub_code are required.")
@@ -440,7 +442,7 @@ async def remove_sub_category_endpoint(
 async def delete_budget_category(
     category_code: str,
     household_id: str,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
