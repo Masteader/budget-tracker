@@ -267,17 +267,30 @@ def test_public_endpoint_is_reachable_through_the_proxy_without_app_token(client
     assert res.status_code == 200, res.text
 
 
-def test_cors_preflight_allows_live_origin(client):
+@pytest.mark.parametrize("origin", ["https://budget.fmsco.com.sa", "https://www.budget.fmsco.com.sa"])
+def test_cors_preflight_allows_live_origin(client, origin):
     res = client.options(
         PUBLIC_URL,
         headers={
-            "Origin": "https://budget.fmsco.com.sa",
+            "Origin": origin,
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "content-type",
         },
     )
     assert res.status_code == 200
-    assert res.headers.get("access-control-allow-origin") == "https://budget.fmsco.com.sa"
+    assert res.headers.get("access-control-allow-origin") == origin
+
+
+def test_cors_preflight_rejects_unknown_origin(client):
+    res = client.options(
+        PUBLIC_URL,
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert res.headers.get("access-control-allow-origin") is None
 
 
 # ── Authenticated in-app variant ────────────────────────────────────────────

@@ -22,7 +22,7 @@ MESSAGE = OutboundEmail(
 def clean_env(monkeypatch):
     for key in (
         "RESEND_API_KEY", "RESEND_FROM", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME",
-        "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SECURITY", "CONTACT_RECIPIENT_EMAIL",
+        "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SECURITY", "CONTACT_RECIPIENT_EMAIL", "MAIL_FROM",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -65,7 +65,28 @@ async def test_resend_request_shape(monkeypatch):
     assert payload["subject"] == MESSAGE.subject
     assert payload["text"] == MESSAGE.body
     assert payload["reply_to"] == "fan@example.com"
-    assert payload["from"]
+    assert payload["from"] == "Budget Tracker <fmscoinfo@fmsco.com.sa>"
+
+
+def test_default_sender_is_company_mailbox():
+    assert mail_service.DEFAULT_SENDER == "Budget Tracker <fmscoinfo@fmsco.com.sa>"
+    assert mail_service.sender("SMTP_FROM") == "Budget Tracker <fmscoinfo@fmsco.com.sa>"
+    assert mail_service.sender("RESEND_FROM") == "Budget Tracker <fmscoinfo@fmsco.com.sa>"
+
+
+def test_mail_from_overrides_default_and_provider_var_overrides_mail_from(monkeypatch):
+    monkeypatch.setenv("MAIL_FROM", "Budget <hello@fmsco.com.sa>")
+    assert mail_service.sender("SMTP_FROM") == "Budget <hello@fmsco.com.sa>"
+    monkeypatch.setenv("RESEND_FROM", "Budget <noreply@fmsco.com.sa>")
+    assert mail_service.sender("RESEND_FROM") == "Budget <noreply@fmsco.com.sa>"
+    assert mail_service.sender("SMTP_FROM") == "Budget <hello@fmsco.com.sa>"
+
+
+@pytest.mark.parametrize("bad", ["not-an-address", "Budget <a@fmsco.com.sa>\r\nBcc: x@evil.test"])
+def test_invalid_sender_config_is_not_configured(monkeypatch, bad):
+    monkeypatch.setenv("MAIL_FROM", bad)
+    with pytest.raises(MailNotConfiguredError):
+        mail_service.sender("SMTP_FROM")
 
 
 @pytest.mark.asyncio
@@ -127,16 +148,18 @@ def fake_smtp(monkeypatch):
 async def test_smtp_starttls_delivery(monkeypatch, fake_smtp):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_PORT", "587")
-    monkeypatch.setenv("SMTP_USERNAME", "mailer@example.com")
+    monkeypatch.setenv("SMTP_USERNAME", "fmscoinfo@fmsco.com.sa")
     monkeypatch.setenv("SMTP_PASSWORD", "app-password")
     assert await mail_service.send_email(MESSAGE) == "smtp"
     smtp = fake_smtp.instances[-1]
     assert (smtp.host, smtp.port) == ("smtp.example.com", 587)
     assert "starttls" in smtp.calls
-    assert ("login", "mailer@example.com") in smtp.calls
+    assert ("login", "fmscoinfo@fmsco.com.sa") in smtp.calls
     sent = smtp.sent[0]
     assert sent["To"] == "abedmowafaq@gmail.com"
-    assert sent["From"] == "mailer@example.com"
+    # No SMTP_FROM / MAIL_FROM set: the company mailbox is the default sender.
+    assert sent["From"] == "Budget Tracker <fmscoinfo@fmsco.com.sa>"
+    assert sent["Message-ID"].endswith("@fmsco.com.sa>")
     assert sent["Reply-To"] == "fan@example.com"
     assert sent["Subject"] == MESSAGE.subject
     assert "fan@example.com" in sent.get_content()
@@ -170,8 +193,9 @@ async def test_smtp_failure_raises_delivery_error(monkeypatch, fake_smtp):
 
 
 @pytest.mark.asyncio
-async def test_smtp_without_sender_is_not_configured(monkeypatch, fake_smtp):
+async def test_smtp_with_invalid_sender_is_not_configured(monkeypatch, fake_smtp):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_FROM", "Budget Tracker")
     with pytest.raises(MailNotConfiguredError):
         await mail_service.send_email(MESSAGE)
 

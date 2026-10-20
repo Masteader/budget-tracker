@@ -80,6 +80,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://127.0.0.1:5173",
     "https://budget.fmsco.com.sa",
+    "https://www.budget.fmsco.com.sa",
 ]
 env_origins = os.environ.get("ALLOWED_ORIGINS")
 if env_origins:

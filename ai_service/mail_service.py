@@ -2,10 +2,14 @@
 Outbound email for contact, support and VIP early-access inquiries.
 
 Providers (picked from the environment at send time; Resend wins when both are set):
-- Resend HTTP API: RESEND_API_KEY (+ optional RESEND_FROM). Works on hosts that block
-  outbound SMTP ports, such as Railway's non-Pro plans.
-- SMTP: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, SMTP_SECURITY
-  ("starttls" or "ssl"; defaults to "ssl" on port 465, otherwise "starttls"). TLS is mandatory.
+- Resend HTTP API: RESEND_API_KEY. Works on hosts that block outbound SMTP ports, such as
+  Railway's non-Pro plans. The sender domain (fmsco.com.sa) must be verified in Resend.
+- SMTP: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_SECURITY ("starttls" or
+  "ssl"; defaults to "ssl" on port 465, otherwise "starttls"). TLS is mandatory. The login must
+  be the mailbox of the sender address (fmscoinfo@fmsco.com.sa by default).
+
+Sender: MAIL_FROM, default "Budget Tracker <fmscoinfo@fmsco.com.sa>". SMTP_FROM / RESEND_FROM
+override it for one provider only.
 
 Every message goes to CONTACT_RECIPIENT_EMAIL (default abedmowafaq@gmail.com) with Reply-To
 set to the submitter. Nothing here ever reports success unless the provider accepted the
@@ -32,9 +36,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RECIPIENT = "abedmowafaq@gmail.com"
 RESEND_ENDPOINT = "https://api.resend.com/emails"
-# Resend's shared test sender; it can deliver only to the Resend account owner's address,
-# so set RESEND_FROM to an address on a verified domain to send to any recipient.
-DEFAULT_RESEND_FROM = "Budget Tracker <onboarding@resend.dev>"
+# Every inquiry email is sent from the company mailbox unless MAIL_FROM (or the
+# provider-specific SMTP_FROM / RESEND_FROM) says otherwise.
+DEFAULT_SENDER = "Budget Tracker <fmscoinfo@fmsco.com.sa>"
 SEND_TIMEOUT_SECONDS = 15.0
 
 _SIMPLE_EMAIL_RE = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
@@ -64,6 +68,14 @@ def recipient() -> str:
     value = _env("CONTACT_RECIPIENT_EMAIL") or DEFAULT_RECIPIENT
     if not _SIMPLE_EMAIL_RE.match(value):
         raise MailNotConfiguredError("CONTACT_RECIPIENT_EMAIL is not a valid email address.")
+    return value
+
+
+def sender(provider_override_var: str) -> str:
+    """The From header: provider override, then MAIL_FROM, then DEFAULT_SENDER."""
+    value = _env(provider_override_var) or _env("MAIL_FROM") or DEFAULT_SENDER
+    if _HEADER_UNSAFE_RE.search(value) or not _SIMPLE_EMAIL_RE.match(parseaddr(value)[1] or ""):
+        raise MailNotConfiguredError("MAIL_FROM (or SMTP_FROM / RESEND_FROM) must be a valid sender address.")
     return value
 
 
@@ -100,10 +112,8 @@ async def send_email(message: OutboundEmail) -> str:
 
 
 async def _send_via_resend(message: OutboundEmail, to_address: str) -> None:
-    sender = _env("RESEND_FROM") or DEFAULT_RESEND_FROM
-    _assert_header_safe("RESEND_FROM", sender)
     payload = {
-        "from": sender,
+        "from": sender("RESEND_FROM"),
         "to": [to_address],
         "subject": message.subject,
         "text": message.body,
@@ -137,24 +147,20 @@ def _smtp_settings() -> tuple[str, int, str, str, str, str]:
         raise MailNotConfiguredError("SMTP_SECURITY must be 'starttls' or 'ssl'.")
     username = _env("SMTP_USERNAME")
     password = os.environ.get("SMTP_PASSWORD", "")
-    sender = _env("SMTP_FROM") or username
-    if not sender or not _SIMPLE_EMAIL_RE.match(parseaddr(sender)[1] or ""):
-        raise MailNotConfiguredError("SMTP_FROM (or SMTP_USERNAME) must be a valid sender address.")
-    _assert_header_safe("SMTP_FROM", sender)
-    return host, port, security, username, password, sender
+    return host, port, security, username, password, sender("SMTP_FROM")
 
 
 def _send_via_smtp(message: OutboundEmail, to_address: str) -> None:
-    host, port, security, username, password, sender = _smtp_settings()
+    host, port, security, username, password, from_header = _smtp_settings()
 
     email = EmailMessage()
-    email["From"] = sender
+    email["From"] = from_header
     email["To"] = to_address
     email["Subject"] = message.subject
     if message.reply_to:
         email["Reply-To"] = message.reply_to
     email["Date"] = formatdate(usegmt=True)
-    email["Message-ID"] = make_msgid(domain=parseaddr(sender)[1].rsplit("@", 1)[-1])
+    email["Message-ID"] = make_msgid(domain=parseaddr(from_header)[1].rsplit("@", 1)[-1])
     email.set_content(message.body)
 
     context = ssl.create_default_context()
