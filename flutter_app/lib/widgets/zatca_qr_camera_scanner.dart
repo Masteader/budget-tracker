@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'app_snackbar.dart';
+import 'dispose_on_unmount.dart';
 import '../theme/app_themes.dart';
 import '../l10n/app_localizations.dart';
 
@@ -98,7 +99,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
     final textCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [textCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Row(
           children: [
@@ -154,6 +157,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Text(context.tr('zq_apply'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
   }

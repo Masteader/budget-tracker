@@ -4,13 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'offline_queue_manager.dart';
 import 'sync_worker.dart';
 
+export 'offline_queue_manager.dart' show OfflineQueueWriteException;
+
 /// Offline-First SQLite Synchronization Service.
 /// Acts as a unified facade coordinating the OfflineQueueManager and SyncWorker.
 class OfflineSyncService {
-  OfflineSyncService._();
+  OfflineSyncService._() : queueManager = OfflineQueueManager();
   static final OfflineSyncService instance = OfflineSyncService._();
 
-  final OfflineQueueManager queueManager = OfflineQueueManager();
+  @visibleForTesting
+  OfflineSyncService.withQueue(this.queueManager);
+
+  final OfflineQueueManager queueManager;
   late final SyncWorker syncWorker = SyncWorker(queueManager: queueManager);
 
   ValueNotifier<int> get pendingCountNotifier => syncWorker.pendingCountNotifier;
@@ -23,14 +28,18 @@ class OfflineSyncService {
   }
 
   /// Adds a failed or offline operation to the local SQLite queue.
-  Future<String?> enqueue({
+  ///
+  /// Returns the queue item id. Throws [OfflineQueueWriteException] when the
+  /// item could not be stored, so callers never show "saved offline" for
+  /// data that was lost (MOB-28).
+  Future<String> enqueue({
     required String endpoint,
     required Map<String, dynamic> payload,
     required String householdId,
     String? customId,
     String? idempotencyKey,
   }) async {
-    final id = await queueManager.enqueue(
+    final id = await queueManager.enqueueOrThrow(
       operationType: endpoint,
       payload: payload,
       householdId: householdId,

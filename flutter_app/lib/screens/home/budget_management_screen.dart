@@ -11,6 +11,7 @@ import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
 import '../../widgets/categories/category_library_sheet.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -292,7 +293,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     await showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [catNameCtrl, catAmountCtrl, subNameCtrl, subAmountCtrl],
+        child: StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: context.cardBg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -551,6 +554,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

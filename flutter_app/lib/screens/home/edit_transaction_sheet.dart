@@ -16,6 +16,7 @@ import '../../services/api_service.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_class_selector.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../models/money.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
@@ -732,7 +733,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final nameCtrl = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (dCtx) => AlertDialog(
+      builder: (dCtx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
@@ -773,6 +776,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             child: Text(context.tr('add'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
 

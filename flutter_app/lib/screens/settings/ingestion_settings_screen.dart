@@ -22,6 +22,7 @@ import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../theme/app_themes.dart';
@@ -29,6 +30,7 @@ import '../../l10n/app_localizations.dart';
 import '../accounts/accounts_overview_screen.dart';
 import 'help_support_screen.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../services/household_setting_saver.dart';
 
 class IngestionSettingsScreen extends StatefulWidget {
   const IngestionSettingsScreen({super.key});
@@ -213,25 +215,44 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     } catch (_) {}
   }
 
+  /// Awaits the API save and, only when it succeeded, mirrors the column on
+  /// `households` directly (best effort, as before) for DB parity.
+  Future<bool> _confirmAndMirror(Future<bool> apiSave, String householdId, Map<String, dynamic> column) async {
+    final confirmed = await apiSave;
+    if (confirmed) {
+      try {
+        await supabase.from('households').update(column).eq('id', householdId);
+      } catch (_) {}
+    }
+    return confirmed;
+  }
+
+  /// Error text for a failed household-setting save (MOB-27).
+  String _settingSaveError(Object e) =>
+      e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : e.toString();
+
+  // MOB-27: payday, income and rollover are saved server-first; the local
+  // cache and on-screen value change only after the server confirmed, so a
+  // rejected save keeps the previous value and shows an error.
   Future<bool> _savePayday(int newDay) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('payday_day', newDay);
-      SalaryCycleService.paydayDay = newDay;
+      await saveHouseholdSetting<int>(
+        householdId: _householdId,
+        value: newDay,
+        saveRemote: (hid, day) => _confirmAndMirror(ApiService.instance.setHouseholdPayday(hid, day), hid, {'payday_day': day}),
+        applyLocal: (day) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('payday_day', day);
+          SalaryCycleService.paydayDay = day;
+        },
+      );
       if (mounted) setState(() => _paydayDay = newDay);
-
-      if (_householdId != null) {
-        await ApiService.instance.setHouseholdPayday(_householdId!, newDay);
-        try {
-          await supabase.from('households').update({'payday_day': newDay}).eq('id', _householdId!);
-        } catch (_) {}
-      }
       return true;
     } catch (e) {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          context.trArgs('set_failed_save_payday', {'error': e}),
+          context.trArgs('set_failed_save_payday', {'error': _settingSaveError(e)}),
           title: context.tr('set_payday_error'),
         );
       }
@@ -241,22 +262,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   Future<bool> _saveIncome(double newIncome) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble('household_monthly_income', newIncome);
+      await saveHouseholdSetting<double>(
+        householdId: _householdId,
+        value: newIncome,
+        saveRemote: (hid, income) => _confirmAndMirror(ApiService.instance.setHouseholdIncome(hid, income), hid, {'monthly_income': income}),
+        applyLocal: (income) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setDouble('household_monthly_income', income);
+        },
+      );
       if (mounted) setState(() => _monthlyIncome = newIncome);
-
-      if (_householdId != null) {
-        await ApiService.instance.setHouseholdIncome(_householdId!, newIncome);
-        try {
-          await supabase.from('households').update({'monthly_income': newIncome}).eq('id', _householdId!);
-        } catch (_) {}
-      }
       return true;
     } catch (e) {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          context.trArgs('set_failed_save_income', {'error': e}),
+          context.trArgs('set_failed_save_income', {'error': _settingSaveError(e)}),
           title: context.tr('set_income_error'),
         );
       }
@@ -266,22 +287,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   Future<bool> _saveRolloverRule(String newRule) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('household_rollover_rule', newRule);
+      await saveHouseholdSetting<String>(
+        householdId: _householdId,
+        value: newRule,
+        saveRemote: (hid, rule) => _confirmAndMirror(ApiService.instance.setHouseholdRolloverRule(hid, rule), hid, {'rollover_rule': rule}),
+        applyLocal: (rule) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('household_rollover_rule', rule);
+        },
+      );
       if (mounted) setState(() => _rolloverRule = newRule);
-
-      if (_householdId != null) {
-        await ApiService.instance.setHouseholdRolloverRule(_householdId!, newRule);
-        try {
-          await supabase.from('households').update({'rollover_rule': newRule}).eq('id', _householdId!);
-        } catch (_) {}
-      }
       return true;
     } catch (e) {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          context.trArgs('set_failed_save_rollover_policy', {'error': e}),
+          context.trArgs('set_failed_save_rollover_policy', {'error': _settingSaveError(e)}),
           title: context.tr('set_rollover_error'),
         );
       }
@@ -475,7 +496,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final codeCtrl = TextEditingController();
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [codeCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Text(context.tr('join_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
@@ -537,6 +560,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -544,7 +568,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final nameCtrl = TextEditingController();
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Text(context.tr('new_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
         content: Column(
@@ -601,6 +627,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             },
           ),
         ],
+      ),
       ),
     );
   }

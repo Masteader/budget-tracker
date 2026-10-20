@@ -324,6 +324,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     );
 
     if (!mounted) return;
+    var queueOffline = false;
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
@@ -408,17 +409,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             errText.contains('offline') ||
             errText.contains('SocketException') ||
             errText.contains('timeout')) {
-          OfflineSyncService.instance.enqueue(
-            endpoint: 'chat',
-            payload: {'message': message, 'user_id': user?.id},
-            householdId: _householdId!,
-          );
-          _messages.add(
-            ChatMessage(
-              isUser: false,
-              text: context.tr('chat_offline_queued'),
-            ),
-          );
+          // Queued below; the reply depends on whether the write succeeded.
+          queueOffline = true;
         } else {
           _messages.add(
             ChatMessage(
@@ -429,6 +421,24 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         }
       }
     });
+
+    if (queueOffline) {
+      // MOB-28: only claim "stored offline" when the queue write succeeded.
+      String reply;
+      try {
+        await OfflineSyncService.instance.enqueue(
+          endpoint: 'chat',
+          payload: {'message': message, 'user_id': user?.id},
+          householdId: _householdId!,
+        );
+        reply = mounted ? context.tr('chat_offline_queued') : '';
+      } catch (e) {
+        debugPrint('[ChatEntry] Offline queue write failed: $e');
+        reply = mounted ? context.tr('offline_queue_failed') : '';
+      }
+      if (!mounted) return;
+      setState(() => _messages.add(ChatMessage(isUser: false, text: reply)));
+    }
 
     _scrollToBottom();
   }

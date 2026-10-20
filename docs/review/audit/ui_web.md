@@ -48,12 +48,12 @@ New tests:
 | UI-17 | Medium | Dashboard stream subscription never cancelled | `screens/home/dashboard_screen.dart:63` | Fixed in 4c39b67 |
 | UI-18 | Medium | `setState` after `await` without a `mounted` check, and context used across async gaps | scanner sheets, chat, edit sheet, sub-budget dialog, budget mgmt, installments, household screen | Fixed in 00565fd, 9c67fef, 886913f, 2d0e26e, c1665dd |
 | UI-19 | Low | Walkthrough `PageController` never disposed | `widgets/onboarding/user_guide_walkthrough_dialog.dart` | Fixed in 2d0e26e |
-| UI-20 | Low | `TextEditingController`s created inside dialog builders are never disposed (17 sites in 7 files) | e.g. `budget_management_screen.dart:289-295`, `sub_budget_allocation_dialog.dart:254-394` | Not fixed (reason below) |
+| UI-20 | Low | `TextEditingController`s created inside dialog builders are never disposed (17 sites in 7 files) | e.g. `budget_management_screen.dart:289-295`, `sub_budget_allocation_dialog.dart:254-394` | Fixed in 29b83f6 (`DisposeOnUnmount`, see below) |
 | UI-21 | Low | Overflow with large text or narrow screens | hero amount, accounts summary, recurring-bill totals, unspent dialog | Fixed in 4c39b67, 886913f, 9c67fef. Remaining screens suspected, not audited exhaustively |
 | UI-22 | Low | Outfit font has no Arabic glyphs; the rules ask for Cairo/Tajawal | `theme/app_themes.dart` textTheme | Not fixed (reason below) |
 | UI-23 | Low | Date fallback used the uninitialized `'en'` locale and would throw | `AppLocalizations.date` | Fixed in c1665dd (found while testing) |
 | UI-24 | Suspected / compliance | "Shared 50/50" partner split is offered in the edit sheet and partner card, while rule 02 prohibits 50/50 spousal splits | `edit_transaction_sheet.dart` settlement banner, `partner_settlement_card.dart` | Resolved (owner decision; family mode has no split, wife reimbursement ledger + allowance) |
-| UI-25 | Suspected | Undo after deleting a transaction re-inserts only some columns (drops paid_by, beneficiary, account_id, sub_category) | `screens/home/transaction_feed_screen.dart` `_deleteTransaction` onUndo | Not fixed (data-layer owner) |
+| UI-25 | Suspected | Undo after deleting a transaction re-inserts only some columns (drops paid_by, beneficiary, account_id, sub_category) | `screens/home/transaction_feed_screen.dart` `_deleteTransaction` onUndo | Fixed in ad26480 (full row restored with the same id, see below) |
 | WEB-01 | High | English mode showed hardcoded Arabic (hero settled state, simulator amounts, ZATCA label, family/roommate ledgers); Arabic mode showed English AI categories | `web_app/src/components/Hero.tsx:153-164`, `Simulator.tsx:50,299-822` | Fixed in b627c01 |
 | WEB-02 | Medium | Screen readers: icon ligatures read aloud, unlabeled controls, no ARIA state | Header, Faq, EarlyAccess, Simulator, all icons | Fixed in b627c01 |
 | WEB-03 | Medium | No `prefers-reduced-motion` support for the canvas, SVG river, CSS loops, framer-motion or confetti | `GlacialParticlesCanvas.tsx`, `AliveGlacialRiver.tsx`, `index.css` | Fixed in b627c01 |
@@ -120,9 +120,12 @@ New tests:
 ### UI-18: async lifecycle
 - **Fix:** a `_safeSetState` helper (setState only while mounted) in the three scanner screens; `if (!mounted) return` guards before post-await `setState`, snackbars and navigation; `ctx.mounted` checks before `setDialogState`; and no parent `context` across async gaps in bottom sheets.
 
-### UI-20: not fixed
-- Disposing a controller right after `await showDialog` can throw "used after disposed" while the exit animation still rebuilds the `TextField`. The correct fix is to extract each dialog into its own `StatefulWidget`, a larger refactor across 7 files.
-- These controllers hold no native resources and are garbage-collected once the dialog closes, so the impact is negligible. Recommended as a follow-up.
+### UI-20: fixed (follow-up, 29b83f6)
+- **Constraint:** disposing a controller right after `await showDialog` can throw "used after disposed", because the exit animation still rebuilds the `TextField`.
+- **Fix:** a small `StatefulWidget`, `widgets/dispose_on_unmount.dart`, wraps each dialog's content and disposes the controllers in `State.dispose`. That runs after the route is removed and after its `TextField`s have detached. Values read synchronously after the `await` still work.
+- **Sites (14):** ingestion settings ×2, edit sheet ×1, budget management ×4, receipt scanner ×1, ZATCA scanner ×1, installment plans ×2, sub-budget add/rename ×3.
+- **Sub-budget list controllers (the other 3 of the 17):** these were already disposed in `State.dispose`. Controllers replaced by a reload, or created after the dialog closed, are now disposed too. The clipboard paste checks `ctx.mounted` before writing.
+- **Tests:** `test/widgets/dispose_on_unmount_test.dart` checks that the controller stays alive through the exit animation and is disposed afterwards. It also scans `lib/` so that every local dialog controller is passed to `disposables:`.
 
 ### UI-22: not fixed
 - Using Cairo/Tajawal for Arabic needs a font decision: either a `GoogleFonts` fallback, which is fetched at runtime and also affects tests, or bundled assets. It also needs a change to `main.dart`, which is outside this agent's ownership.
@@ -137,8 +140,13 @@ New tests:
   - The manual expense sheet and the chat confirmation card use the same selector and send `nafaqah_class`.
 - **Tests:** `family_reimbursement_card_test.dart` (EN + AR RTL), `edit_transaction_sheet_test.dart`, `pending_expense_confirmation_card_test.dart`, `partner_settlement_card_test.dart`, `ui_settlement_failure_test.dart`, `nafaqah_test.dart`, `nafaqah_api_client_test.dart`, `manual_expense_row_test.dart`.
 
-### UI-25: handed off
-- the undo re-insert in `transaction_feed_screen.dart` copies only a subset of transaction columns, so undo drops the payer/beneficiary/account attribution. This belongs with the data-layer owner.
+### UI-25: fixed
+- **UI-25:** the undo re-insert in `transaction_feed_screen.dart` copies only a subset of transaction columns, so undo drops the payer/beneficiary/account attribution. This belongs with the data-layer owner.
+  - **Fixed later in ad26480:** `TransactionProvider.deleteTransaction` deletes with `delete().select()` and keeps the returned row. If no row comes back, it falls back to the full `Transaction.toMap()`. `restoreDeletedTransaction` re-inserts that row unchanged: same id and every column, including `paid_by`, `beneficiary*`, `account_id`, `sub_category`, `user_id`, `qr_code_raw` and `receipt_url`. DB triggers recompute `cycle_key`, budget spend and account balance.
+  - **Receipt image:** it used to be deleted from storage before the DB delete, even when that delete failed. It is now deleted only after a 10 s undo window with no undo.
+  - **Other changes:** undo snapshots are dropped on sign-out or household switch. A failed undo shows a localized error.
+  - **Limit:** foreign-key side effects of the delete are not reversed. The only reference is `installment_plans.original_transaction_id` (`ON DELETE SET NULL`), which stays null after an undo. Line items live in the row's own `items`/`line_items` columns and are restored.
+  - **Tests:** `test/providers/transaction_undo_restore_test.dart`.
 
 ### WEB-01: language leaks on the web
 - **Fix:**

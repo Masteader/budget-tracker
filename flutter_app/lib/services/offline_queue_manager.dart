@@ -12,6 +12,17 @@ import '../models/offline_queue_item.dart';
 /// (receipt images) outside of the SQLite row.
 typedef BlobDirectoryProvider = Future<Directory> Function();
 
+/// The item could not be written to the local offline queue (SQLite or blob
+/// file failure). Nothing was stored; the user must be told.
+class OfflineQueueWriteException implements Exception {
+  const OfflineQueueWriteException(this.operationType);
+
+  final String operationType;
+
+  @override
+  String toString() => 'OfflineQueueWriteException: could not queue "$operationType" offline';
+}
+
 /// SQLite Database manager for queued offline transactions.
 ///
 /// Invariants:
@@ -180,6 +191,29 @@ class OfflineQueueManager {
       debugPrint('[OfflineQueueManager] Error enqueuing: $e');
       return null;
     }
+  }
+
+  /// Like [enqueue] but throws [OfflineQueueWriteException] instead of
+  /// returning null, so callers cannot report "saved offline" for an item
+  /// that never reached the queue (MOB-28).
+  Future<String> enqueueOrThrow({
+    required String operationType,
+    required Map<String, dynamic> payload,
+    required String householdId,
+    String? customId,
+    String? idempotencyKey,
+  }) async {
+    final id = await enqueue(
+      operationType: operationType,
+      payload: payload,
+      householdId: householdId,
+      customId: customId,
+      idempotencyKey: idempotencyKey,
+    );
+    if (id == null) {
+      throw OfflineQueueWriteException(operationType);
+    }
+    return id;
   }
 
   Future<Map<String, dynamic>> _offloadImages(String itemId, Map<String, dynamic> payload) async {

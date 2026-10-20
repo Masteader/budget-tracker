@@ -7,7 +7,33 @@ import '../services/receipt_storage_service.dart';
 
 /// Centralized reactive state provider for all transactions in the household.
 /// Manages list cache, Supabase Realtime synchronization, optimistic deletions, and filtering.
+typedef TransactionRowDeleter = Future<List<Map<String, dynamic>>> Function(String transactionId);
+typedef TransactionRowInserter = Future<void> Function(Map<String, dynamic> row);
+typedef ReceiptDeleter = Future<void> Function(String receiptUrl);
+
 class TransactionProvider extends ChangeNotifier {
+  TransactionProvider({
+    TransactionRowDeleter? deleteRow,
+    TransactionRowInserter? insertRow,
+    ReceiptDeleter? deleteReceipt,
+    this.undoWindow = const Duration(seconds: 10),
+  })  : _deleteRow = deleteRow ?? _supabaseDeleteRow,
+        _insertRow = insertRow ?? _supabaseInsertRow,
+        _deleteReceipt = deleteReceipt ?? _storageDeleteReceipt;
+
+  final TransactionRowDeleter _deleteRow;
+  final TransactionRowInserter _insertRow;
+  final ReceiptDeleter _deleteReceipt;
+
+  /// How long a deleted transaction's receipt image is kept so the delete can
+  /// still be undone. Longer than the undo snackbar (4 s).
+  final Duration undoWindow;
+
+  /// Full database rows of deleted transactions, kept for undo (UI-25).
+  final Map<String, Map<String, dynamic>> _deletedRows = {};
+  final Map<String, Timer> _pendingReceiptCleanups = {};
+  final Map<String, String> _pendingReceiptUrls = {};
+
   String? _householdId;
   List<Transaction> _transactions = [];
   bool _isLoading = false;
@@ -111,6 +137,8 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   void _clearState() {
+    // Never offer an undo across a sign-out or household switch.
+    _flushPendingDeletes();
     _fetchGeneration++;
     _realtimeChannel?.unsubscribe();
     _realtimeChannel = null;
@@ -218,6 +246,13 @@ class TransactionProvider extends ChangeNotifier {
 
   /// Optimistically deletes a transaction, updating UI immediately.
   /// If the remote delete fails, rolls back the deletion and restores list state.
+  ///
+  /// UI-25: the deleted row is captured exactly as the database returned it
+  /// (every column, including payer, beneficiary, account and sub-category
+  /// attribution), so [restoreDeletedTransaction] can undo the delete with the
+  /// same id and values. The receipt image is removed from storage only after
+  /// [undoWindow] passes without an undo; before, it was deleted up front and
+  /// an undone transaction pointed at a missing receipt.
   Future<bool> deleteTransaction(String transactionId) async {
     final existingIdx = _transactions.indexWhere((t) => t.id == transactionId);
     if (existingIdx == -1) return false;
@@ -227,10 +262,15 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (removedTx.receiptUrl != null && removedTx.receiptUrl!.trim().isNotEmpty) {
-        ReceiptStorageService().deleteReceiptByUrl(removedTx.receiptUrl!);
+      final deletedRows = await _deleteRow(transactionId);
+      _deletedRows[transactionId] =
+          deletedRows.isNotEmpty ? Map<String, dynamic>.from(deletedRows.first) : removedTx.toMap();
+      final receiptUrl = removedTx.receiptUrl;
+      if (receiptUrl != null && receiptUrl.trim().isNotEmpty) {
+        _pendingReceiptCleanups[transactionId]?.cancel();
+        _pendingReceiptUrls[transactionId] = receiptUrl;
+        _pendingReceiptCleanups[transactionId] = Timer(undoWindow, () => _runReceiptCleanup(transactionId));
       }
-      await supabase.from('transactions').delete().eq('id', transactionId);
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');
@@ -240,6 +280,64 @@ class TransactionProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Re-inserts a transaction removed by [deleteTransaction] with its original
+  /// id and every original column (UI-25). Returns false when there is nothing
+  /// to restore or the insert fails; the receipt image is then cleaned up.
+  Future<bool> restoreDeletedTransaction(String transactionId) async {
+    final row = _deletedRows[transactionId];
+    if (row == null) return false;
+    _pendingReceiptCleanups.remove(transactionId)?.cancel();
+
+    try {
+      await _insertRow(Map<String, dynamic>.from(row));
+    } catch (e) {
+      debugPrint('[TransactionProvider] Undo failed: $e');
+      _deletedRows.remove(transactionId);
+      _runReceiptCleanup(transactionId);
+      return false;
+    }
+
+    _deletedRows.remove(transactionId);
+    _pendingReceiptUrls.remove(transactionId);
+    try {
+      addTransaction(Transaction.fromMap(row));
+    } catch (e) {
+      // Row shape the model cannot parse: the next fetch shows it.
+      debugPrint('[TransactionProvider] Restored row not parsed locally: $e');
+    }
+    return true;
+  }
+
+  void _runReceiptCleanup(String transactionId) {
+    _pendingReceiptCleanups.remove(transactionId)?.cancel();
+    final url = _pendingReceiptUrls.remove(transactionId);
+    if (url == null) return;
+    _deleteReceipt(url).catchError((Object e) {
+      debugPrint('[TransactionProvider] Receipt cleanup failed: $e');
+    });
+  }
+
+  /// Runs the deferred receipt deletions now and forgets undo snapshots.
+  void _flushPendingDeletes() {
+    for (final id in _pendingReceiptCleanups.keys.toList()) {
+      _runReceiptCleanup(id);
+    }
+    _deletedRows.clear();
+  }
+
+  static Future<List<Map<String, dynamic>>> _supabaseDeleteRow(String id) async {
+    final res = await supabase.from('transactions').delete().eq('id', id).select();
+    return (res as List).map((r) => Map<String, dynamic>.from(r as Map)).toList();
+  }
+
+  static Future<void> _supabaseInsertRow(Map<String, dynamic> row) async {
+    await supabase.from('transactions').insert(row);
+  }
+
+  static Future<void> _storageDeleteReceipt(String url) async {
+    await ReceiptStorageService().deleteReceiptByUrl(url);
   }
 
   /// Optimistically updates a transaction in local state and persists to database.
@@ -318,6 +416,7 @@ class TransactionProvider extends ChangeNotifier {
   @override
   void dispose() {
     _realtimeChannel?.unsubscribe();
+    _flushPendingDeletes();
     super.dispose();
   }
 }

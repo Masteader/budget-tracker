@@ -12,6 +12,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../dispose_on_unmount.dart';
 import '../../models/money.dart';
 
 /// Card displayed on the dashboard for tracking BNPL installment plans (Tamara, Tabby, etc.).
@@ -177,7 +178,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
 
     showDialog(
       context: context,
-      builder: (dCtx) => StatefulBuilder(
+      builder: (dCtx) => DisposeOnUnmount(
+        disposables: [merchantCtrl, amountCtrl],
+        child: StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: context.cardBg,
           title: Text(
@@ -346,6 +349,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

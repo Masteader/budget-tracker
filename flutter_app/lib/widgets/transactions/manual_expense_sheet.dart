@@ -294,9 +294,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           );
         }
       } catch (err) {
+        // MOB-28: the queue write failed, so nothing was saved anywhere; keep
+        // the sheet open with the entered values so the user can retry.
         if (mounted) {
           setState(() => _isSaving = false);
-          AppSnackBar.showError(context, context.trArgs('mes_failed', {'error': err}));
+          AppSnackBar.showError(
+            context,
+            context.trArgs('mes_failed', {
+              'error': err is OfflineQueueWriteException ? context.tr('offline_queue_failed') : err,
+            }),
+            title: context.tr('offline_queue_failed_title'),
+          );
         }
       }
     }

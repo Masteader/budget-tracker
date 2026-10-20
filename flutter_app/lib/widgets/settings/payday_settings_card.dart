@@ -59,7 +59,11 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     setState(() => _saving = true);
     final success = await widget.onSavePayday(_selectedDay);
     if (mounted) {
-      setState(() => _saving = false);
+      setState(() {
+        _saving = false;
+        // MOB-27: a rejected save keeps showing the payday still in effect.
+        if (!success) _selectedDay = widget.initialPayday;
+      });
       if (success) {
         AppSnackBar.showSuccess(
           context,

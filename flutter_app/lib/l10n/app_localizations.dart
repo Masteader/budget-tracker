@@ -1554,6 +1554,17 @@ class AppLocalizations {
       'a11y_next': 'Next',
       'a11y_remove_item': 'Remove item',
       'a11y_remove_photo': 'Remove photo',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'Download & Share',
+      'pdf_preparing': 'Preparing Statement',
+      'pdf_preparing_msg': 'Downloading your PDF statement securely…',
+      'pdf_download_failed': 'Statement Download Failed',
+      'pdf_download_failed_msg': 'Could not download the PDF statement. Check your connection and try again.',
+      'setting_not_saved_server': 'The server did not confirm the change. Your previous setting is still in effect.',
+      'offline_queue_failed': 'Could not save offline on this device either. Nothing was stored — please try again.',
+      'offline_queue_failed_title': 'Not Saved',
+      'tx_restore_failed': 'Undo Failed',
+      'tx_restore_failed_msg': 'The transaction could not be restored. Please add it again.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2829,6 +2840,17 @@ class AppLocalizations {
       'a11y_next': 'التالي',
       'a11y_remove_item': 'حذف الصنف',
       'a11y_remove_photo': 'حذف الصورة',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'تنزيل ومشاركة',
+      'pdf_preparing': 'جارٍ تجهيز الكشف',
+      'pdf_preparing_msg': 'جارٍ تنزيل كشف PDF بشكل آمن…',
+      'pdf_download_failed': 'تعذر تنزيل الكشف',
+      'pdf_download_failed_msg': 'تعذر تنزيل كشف PDF. تحقق من الاتصال وحاول مرة أخرى.',
+      'setting_not_saved_server': 'لم يؤكد الخادم التغيير، وما زال الإعداد السابق مطبقاً.',
+      'offline_queue_failed': 'تعذر الحفظ دون اتصال على هذا الجهاز أيضاً. لم يُحفظ شيء، حاول مرة أخرى.',
+      'offline_queue_failed_title': 'لم يتم الحفظ',
+      'tx_restore_failed': 'تعذر التراجع',
+      'tx_restore_failed_msg': 'تعذرت استعادة العملية. يرجى إضافتها مرة أخرى.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4104,6 +4126,17 @@ class AppLocalizations {
       'a11y_next': 'اگلا',
       'a11y_remove_item': 'آئٹم ہٹائیں',
       'a11y_remove_photo': 'تصویر ہٹائیں',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'ڈاؤن لوڈ اور شیئر کریں',
+      'pdf_preparing': 'اسٹیٹمنٹ تیار ہو رہی ہے',
+      'pdf_preparing_msg': 'آپ کی PDF اسٹیٹمنٹ محفوظ طریقے سے ڈاؤن لوڈ ہو رہی ہے…',
+      'pdf_download_failed': 'اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی',
+      'pdf_download_failed_msg': 'PDF اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔',
+      'setting_not_saved_server': 'سرور نے تبدیلی کی تصدیق نہیں کی، پچھلی سیٹنگ ہی لاگو ہے۔',
+      'offline_queue_failed': 'اس ڈیوائس پر آف لائن بھی محفوظ نہیں ہو سکا۔ کچھ بھی محفوظ نہیں ہوا، دوبارہ کوشش کریں۔',
+      'offline_queue_failed_title': 'محفوظ نہیں ہوا',
+      'tx_restore_failed': 'واپس نہیں ہو سکا',
+      'tx_restore_failed_msg': 'ٹرانزیکشن بحال نہیں ہو سکی۔ براہ کرم اسے دوبارہ شامل کریں۔',
     },
   };
 
