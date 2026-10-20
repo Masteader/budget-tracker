@@ -12,6 +12,9 @@ import 'offline_queue_manager.dart';
 
 typedef ItemDispatcher = Future<Map<String, dynamic>> Function(OfflineQueueItem item);
 
+/// The signed-in user's id, or null when unknown.
+typedef CurrentUserIdReader = String? Function();
+
 /// Inserts one `transactions` row directly through Supabase (RLS enforced).
 typedef TransactionInserter = Future<void> Function(Map<String, dynamic> row);
 
@@ -55,6 +58,7 @@ class SyncWorker {
   final ApiService? _api;
   final int maxPermanentRetries;
   final Duration interItemDelay;
+  final CurrentUserIdReader _currentUserId;
 
   final ValueNotifier<int> pendingCountNotifier = ValueNotifier<int>(0);
   final StreamController<int> _flushedController = StreamController<int>.broadcast();
@@ -70,9 +74,29 @@ class SyncWorker {
     ApiService? api,
     this.maxPermanentRetries = 5,
     this.interItemDelay = const Duration(milliseconds: 100),
+    CurrentUserIdReader? currentUserId,
   })  : queueManager = queueManager ?? OfflineQueueManager(),
         _transactionInserter = transactionInserter,
-        _api = api;
+        _api = api,
+        _currentUserId = currentUserId ?? _supabaseUserId;
+
+  static String? _supabaseUserId() {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// An item recorded by another account on this device waits (untouched)
+  /// until that account signs in again: replayed with the current user's JWT
+  /// it would be refused, or booked under the wrong person (FR-A-09).
+  bool _belongsToAnotherUser(OfflineQueueItem item) {
+    final owner = item.payload['user_id']?.toString();
+    if (owner == null || owner.isEmpty) return false;
+    final current = _currentUserId();
+    return current != null && current.isNotEmpty && current != owner;
+  }
 
   ApiService get _apiService => _api ?? ApiService.instance;
 
@@ -125,6 +149,7 @@ class SyncWorker {
 
         for (final item in batch) {
           attempted.add(item.id);
+          if (_belongsToAnotherUser(item)) continue;
           await queueManager.markSyncing(item.id);
 
           final result = await _replay(item);
@@ -240,7 +265,7 @@ class SyncWorker {
         }
         return ReplayResult(ReplayOutcome.permanent, message ?? 'Server returned an uncommitted preview');
       case 'error':
-        return ReplayResult(_classifyStatusCode(res['status_code']), message);
+        return ReplayResult(_classifyStatusCode(res['status_code'], message), message);
       default:
         // pending_confirmation, duplicate_candidate, non_transactional, or a
         // body without a status: the operation was not committed.
@@ -264,11 +289,20 @@ class SyncWorker {
     return code >= 500 || code == 408 || code == 425 || code == 429;
   }
 
-  static ReplayOutcome _classifyStatusCode(Object? rawCode) {
+  static ReplayOutcome _classifyStatusCode(Object? rawCode, [String? message]) {
     final code = rawCode is num ? rawCode.toInt() : int.tryParse('$rawCode');
     // No HTTP status means the request never completed (offline, DNS, timeout).
     if (code == null) return ReplayOutcome.transient;
-    if (code == 401 || code == 403) return ReplayOutcome.transient;
+    // 401: missing/expired credentials (the session refresh may still succeed).
+    if (code == 401) return ReplayOutcome.transient;
+    // 403 is "not a member / not allowed", which no retry fixes; parking it as
+    // transient blocked every later item of the FIFO queue forever (FR-A-09).
+    // Only the legacy firewall's 403 for an unverifiable token is auth trouble.
+    if (code == 403) {
+      return (message ?? '').contains('Untrusted endpoint access')
+          ? ReplayOutcome.transient
+          : ReplayOutcome.permanent;
+    }
     if (code == 408 || code == 425 || code == 429) return ReplayOutcome.transient;
     if (code == 502 || code == 503 || code == 504) return ReplayOutcome.transient;
     return ReplayOutcome.permanent;

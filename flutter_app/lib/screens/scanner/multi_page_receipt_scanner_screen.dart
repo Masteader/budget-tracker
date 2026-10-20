@@ -10,6 +10,7 @@ import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/sync_worker.dart' show SyncWorker;
 import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_review_section.dart';
@@ -66,6 +67,14 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
     'mp_guide_shot3',
     'mp_guide_shot4',
   ];
+
+  String? get _currentUserId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// setState that is a no-op once the widget is unmounted (async callbacks).
   void _safeSetState(VoidCallback fn) {
@@ -192,7 +201,12 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
     try {
       await OfflineSyncService.instance.enqueue(
         endpoint: 'receipt',
-        payload: {'images_base64': base64List, ..._nafaqahFields},
+        payload: {
+          'images_base64': base64List,
+          // Owner of the queued receipt, so another account never replays it (FR-A-09).
+          if (_currentUserId != null) 'user_id': _currentUserId,
+          ..._nafaqahFields,
+        },
         householdId: widget.householdId,
         idempotencyKey: idempotencyKey,
       );

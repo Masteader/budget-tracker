@@ -103,6 +103,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
     super.dispose();
   }
 
+  /// Owner of queued drafts, so another account never replays them (FR-A-09).
+  String? get _currentUserId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _notifyGlobalProviders() {
     if (!mounted) return;
     try {
@@ -243,6 +252,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             'spent_by': _selectedSpentBy,
             'image_local_path': file.path,
             'needs_cloud_enrichment': true,
+            'user_id': _currentUserId,
             ..._nafaqahRequestFields,
           },
         );
@@ -282,6 +292,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               'spent_by': _selectedSpentBy,
               'image_local_path': file.path,
               'needs_cloud_enrichment': true,
+              'user_id': _currentUserId,
               ..._nafaqahRequestFields,
             },
           );
