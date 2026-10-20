@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 # ─── Singleton client ─────────────────────────────────────────────────────────
 _client: Optional[Client] = None
 
-_KEY_ENV_VARS = ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY")
+_KEY_ENV_VARS = ("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+_PRIVILEGED_ROLES = ("secret", "service_role")
 
 
 def _classify_supabase_key(key: str) -> str:
@@ -34,7 +35,7 @@ def _classify_supabase_key(key: str) -> str:
     'service_role' grant the privileges this server-side service is designed for.
     """
     key = (key or "").strip()
-    if key.startswith("sb_secret_"):
+    if key.startswith("sb_secret_") and len(key) > len("sb_secret_"):
         return "secret"
     if key.startswith("sb_publishable_"):
         return "publishable"
@@ -53,24 +54,53 @@ def _classify_supabase_key(key: str) -> str:
 
 def describe_supabase_key() -> dict:
     """
-    Pick the privileged key to use. SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SECRET_KEY are both
-    accepted, but a key is only used when it is verifiably privileged. Previously
-    SUPABASE_SECRET_KEY always won, so an anon JWT placed there silently downgraded every
-    query to the anon role (RLS denies → all household checks 403, quota RPC denied →
-    quota checks skipped, writes failed into local JSON fallbacks).
+    Pick the privileged key to use from SUPABASE_SECRET_KEY and SUPABASE_SERVICE_ROLE_KEY.
 
-    Returns {"env_var", "role", "key", "rejected": [(env_var, role), ...]}; never log "key".
+    Either variable may hold either kind of privileged key: a new opaque ``sb_secret_…`` key or
+    a legacy JWT whose role claim is ``service_role``. Anon / publishable / authenticated /
+    unrecognised values are never used (an anon JWT once silently downgraded every query to the
+    anon role: RLS denied household checks, the quota RPC was refused, writes fell back to local
+    JSON).
+
+    Precedence (both variables are always inspected):
+      1. an ``sb_secret_`` key (legacy JWT keys can be disabled in the dashboard once a project
+         migrates, so the new key is the one that keeps working), SUPABASE_SECRET_KEY first;
+      2. a legacy ``service_role`` JWT, SUPABASE_SECRET_KEY first.
+    A non-privileged value next to a privileged one is ignored with a warning, as is a second,
+    different privileged key, so a misconfiguration is visible instead of silently skipped.
+
+    Returns {"env_var", "role", "key", "rejected": [(env_var, role)], "warnings": [str]}.
+    Never log "key"; "warnings" name variables and roles only.
     """
+    candidates = []
     rejected = []
     for env_var in _KEY_ENV_VARS:
         value = (os.environ.get(env_var) or "").strip()
         if not value:
             continue
         role = _classify_supabase_key(value)
-        if role in ("secret", "service_role"):
-            return {"env_var": env_var, "role": role, "key": value, "rejected": rejected}
-        rejected.append((env_var, role))
-    return {"env_var": None, "role": None, "key": None, "rejected": rejected}
+        if role in _PRIVILEGED_ROLES:
+            candidates.append((env_var, role, value))
+        else:
+            rejected.append((env_var, role))
+
+    candidates.sort(key=lambda c: _PRIVILEGED_ROLES.index(c[1]))  # stable: keeps variable order
+    chosen = candidates[0] if candidates else None
+    warnings = []
+    if chosen:
+        for env_var, role in rejected:
+            warnings.append(
+                f"{env_var} holds a non-privileged Supabase key (role '{role}') and is ignored; "
+                f"using {chosen[0]} ({chosen[1]})."
+            )
+        for env_var, role, value in candidates[1:]:
+            if value != chosen[2]:
+                warnings.append(
+                    f"{env_var} holds a different privileged key ({role}) and is ignored; "
+                    f"using {chosen[0]} ({chosen[1]}). Remove the stale one."
+                )
+        return {"env_var": chosen[0], "role": chosen[1], "key": chosen[2], "rejected": rejected, "warnings": warnings}
+    return {"env_var": None, "role": None, "key": None, "rejected": rejected, "warnings": warnings}
 
 
 def get_client() -> Client:
@@ -82,10 +112,13 @@ def get_client() -> Client:
         if not url or not info["key"]:
             rejected = ", ".join(f"{var} has role '{role}'" for var, role in info["rejected"])
             raise RuntimeError(
-                "Supabase is not configured with a privileged key. Set SUPABASE_URL and "
-                "SUPABASE_SERVICE_ROLE_KEY (service_role JWT) or SUPABASE_SECRET_KEY (sb_secret_...). "
+                "Supabase is not configured with a privileged key. Set SUPABASE_URL and an "
+                "sb_secret_... key (or a legacy service_role JWT) in SUPABASE_SECRET_KEY or "
+                "SUPABASE_SERVICE_ROLE_KEY. "
                 + (f"Rejected: {rejected}." if rejected else "No key found.")
             )
+        for warning in info["warnings"]:
+            logger.warning(warning)
         _client = create_client(url, info["key"])
         logger.info("Supabase client initialised with %s (%s).", info["env_var"], info["role"])
     return _client

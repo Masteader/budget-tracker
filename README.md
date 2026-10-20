@@ -162,7 +162,7 @@ On first launch the app may request:
 | Variable | Required | Description |
 |---|---|---|
 | `SUPABASE_URL` | ✅ | Your Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key (full DB access, never expose to clients) |
+| `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` | ✅ one | Privileged server key, never exposed to clients: an `sb_secret_…` key or a legacy `service_role` JWT, in either variable. If both are set, an `sb_secret_…` key wins over a legacy JWT (`SUPABASE_SECRET_KEY` first on a tie); anon/publishable values are ignored with a startup warning, and with no privileged key every DB-backed route fails closed. Needs `supabase>=2.16.0` |
 | `GOOGLE_API_KEY` | ✅ | Google AI Studio API key for Gemini models |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |

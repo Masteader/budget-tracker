@@ -248,13 +248,20 @@ def _log_security_configuration() -> None:
     from supabase_client import describe_supabase_key
 
     key_info = describe_supabase_key()
-    for env_var, role in key_info["rejected"]:
+    if key_info["key"]:
+        logger.info("Supabase key: using %s (%s).", key_info["env_var"], key_info["role"])
+        for warning in key_info["warnings"]:
+            logger.warning(warning)
+    else:
+        for env_var, role in key_info["rejected"]:
+            logger.critical(
+                "%s holds a non-privileged Supabase key (role '%s') and is ignored. "
+                "The service needs an sb_secret_ key or a legacy service_role JWT.", env_var, role,
+            )
         logger.critical(
-            "%s holds a non-privileged Supabase key (role '%s') and is ignored. "
-            "The service needs a service_role JWT or an sb_secret_ key.", env_var, role,
+            "No privileged Supabase key configured (SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY): "
+            "all database-backed API routes will fail closed."
         )
-    if not key_info["key"]:
-        logger.critical("No privileged Supabase key configured: all database-backed API routes will fail closed.")
     if not os.environ.get("SUPABASE_JWT_SECRET", "").strip():
         logger.warning(
             "SUPABASE_JWT_SECRET is empty: HS256 user tokens are rejected and only ES256 tokens "

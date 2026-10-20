@@ -13,7 +13,9 @@ httpx>=0.27.0
 litellm>=1.40.0
 
 # ── Supabase & Storage ────────────────────────────────────────────────────────
-supabase>=2.5.0
+# >=2.16.0: up to 2.15.3 create_client() rejected every non-JWT key with "Invalid API key"
+# (a JWT-shaped regex), so the opaque sb_secret_... keys could not be used at all.
+supabase>=2.16.0
 reportlab>=4.0.0
 
 # ── Rate limiting (REDIS_URL); without it the limiter silently fell back to per-process memory
