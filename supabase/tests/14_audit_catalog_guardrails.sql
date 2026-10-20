@@ -45,9 +45,15 @@ BEGIN
         RAISE EXCEPTION 'GUARDRAIL (DB-09): SECURITY DEFINER functions without pinned search_path: %', v_list;
     END IF;
 
+    -- Extension members are skipped: live installs `unaccent` into public, its
+    -- functions are owned by the platform superuser, and they are not app RPCs.
     SELECT string_agg(p.proname, ', ') INTO v_list
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE n.nspname = 'public' AND has_function_privilege('anon', p.oid, 'EXECUTE');
+    WHERE n.nspname = 'public' AND has_function_privilege('anon', p.oid, 'EXECUTE')
+      AND NOT EXISTS (
+          SELECT 1 FROM pg_depend d
+          WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e'
+      );
     IF v_list IS NOT NULL THEN
         RAISE EXCEPTION 'GUARDRAIL: functions executable by anon: %', v_list;
     END IF;

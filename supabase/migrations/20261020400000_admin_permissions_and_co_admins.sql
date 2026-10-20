@@ -33,7 +33,12 @@
 -- households.name, invite_code directly to render the whole household settings
 -- section, so the revoke would break that screen for every user of an older
 -- build. It ships once those builds are retired (see docs/review/audit/db.md).
+--
+-- Wrapped in one transaction so a failure leaves nothing half-applied (also
+-- when the file is run with plain psql, which autocommits per statement).
 -- =============================================================================
+
+BEGIN;
 
 -- 1. Primary admin -------------------------------------------------------------
 ALTER TABLE public.households
@@ -991,3 +996,5 @@ AS $$
     ORDER BY (m.user_id = h.owner_user_id) DESC NULLS LAST, (m.role = 'admin') DESC, m.created_at, m.user_id
     LIMIT 1;
 $$;
+
+COMMIT;

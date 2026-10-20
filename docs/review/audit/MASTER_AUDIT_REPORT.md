@@ -182,7 +182,20 @@ cd web_app && npm ci && npm run build && npm run lint
 6. **Supabase Auth emails** (sign-up, password reset) are configured in the Supabase dashboard, not in this repo: set Authentication → SMTP Settings → Sender email to `fmscoinfo@fmsco.com.sa` so all mail comes from one address.
 
 ### 6.2 Deployment order
-1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020200000_remove_sms_artifacts.sql` (rejects new `source = 'sms'` rows — ship with the new app build) and `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs), then `20261020400000_admin_permissions_and_co_admins.sql` (DB-16/DB-18 permissions, co-admins and the primary admin; deploy before the backend that calls its role RPCs; transactions without a recorded creator become admin-only, so check `SELECT count(*) FROM transactions WHERE user_id IS NULL` first). Re-baseline the migration chain for the Supabase CLI (DB-15).
+1. **Database:** follow [`live_db_preflight.md`](live_db_preflight.md).
+   - **Verdict: safe to apply.** Live was compared read-only with the repo, and a faithful local replica of live passed the 14-file batch with the DB suite at 20/20.
+   - **Order:** apply the pre-flight `20261020005000_preflight_live_alignment.sql` first, then the 13 audit migrations `20261020010000` … `20261020400000`. Use the SQL editor, one file per run, in order (§5).
+   - **Before:** run part A of [`live_db_preflight_checks.sql`](live_db_preflight_checks.sql) and note the totals.
+   - **After:** run part B and compare with §7.
+   - **Drift that matters:**
+     - `reallocate_budget` is missing on live; `20261020030000` creates it.
+     - Live-only `households.rollover_rule` is captured by the pre-flight.
+     - Live's `rls_auto_enable()` loses its anon EXECUTE.
+     - All 14 live transactions have no recorded creator and become admin-only (owner decision).
+   - **MOB-03 answered:** live `transactions` has no `paid_by` / `beneficiary` columns.
+   - **Coupling:** `20261020200000` rejects new `source = 'sms'` rows, so ship it with the new app build. `20261020300000` and `20261020400000` go before the backend that calls their RPCs.
+   - **CLI:** do not use `supabase db push` until the DB-15 re-baseline (§5.3).
+   - **Rollback:** [`../rollback/20261020_audit_batch_rollback_snapshot.sql`](../rollback/20261020_audit_batch_rollback_snapshot.sql).
 2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token` at the firewall, plus their JWT) and the new JWT-only client. **Signed requests:** installed builds sign with the pre-rotation `WEBHOOK_SECRET`; with their valid JWT the stale signature is logged (rate limited) and the request is served, so chat and receipts keep working. Only a bad signature without a valid JWT is 401. Older app builds keep working with the permission migration: their inserts without `user_id` are attributed to the signed-in user, and a refused edit, delete or pool transfer comes back as an error the old app already shows (its optimistic delete rolls back) instead of a silent no-op.
 3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and tighten the join-code policy (DB-17). `WEBHOOK_SECRET` is already optional in app builds.

@@ -17,6 +17,16 @@ PGPORT, PGUSER, PGPASSWORD). ``--rebuild`` drops and recreates the database,
 then applies ``00_local_supabase_stubs.sql`` (platform stubs), ``schema.sql``,
 ``seed.sql`` (system categories that migrations reference) and every migration in replay order (see ``migration_replay_order``) before
 running the tests. Never point ``--rebuild`` at a real Supabase project.
+
+Without ``--rebuild`` the tests run against the existing database named by
+``--db``. Pre-flight against a local replica of live (never live itself)::
+
+    # Expected live baseline: the chain as it stood before PREFIX
+    python3 supabase/tests/run_tests.py --psql --rebuild --stop-before 20261020005000 \\
+        --no-tests --db bt_repo_baseline
+    # Apply the pending migrations (filename >= PREFIX) to an existing local
+    # replica, then run the suite against it
+    python3 supabase/tests/run_tests.py --psql --apply-from 20261020005000 --db bt_live_replica
 """
 
 import argparse
@@ -105,8 +115,12 @@ def run_sql_file(file_path, db_name="live_rebuilt_round5", use_psql=False, quiet
     return True
 
 
-def rebuild_database(db_name):
-    """Drop/recreate db_name and replay stubs + schema + migrations (psql mode only)."""
+def rebuild_database(db_name, stop_before=None):
+    """Drop/recreate db_name and replay stubs + schema + migrations (psql mode only).
+
+    ``stop_before``: replay only migrations whose filename sorts before this
+    prefix (e.g. ``20261020`` rebuilds the chain as it was before that day).
+    """
     if not re.fullmatch(r"[A-Za-z0-9_]+", db_name):
         raise SystemExit(f"Refusing to rebuild database with unsafe name: {db_name!r}")
 
@@ -120,12 +134,27 @@ def rebuild_database(db_name):
         os.path.join(SUPABASE_DIR, "schema.sql"),
         os.path.join(SUPABASE_DIR, "seed.sql"),
     ]
-    steps += migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
+    migrations = migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
+    if stop_before:
+        migrations = [m for m in migrations if os.path.basename(m) < stop_before]
+    steps += migrations
     print(f"Rebuilding {db_name}: {len(steps)} files (stubs, schema.sql, seed.sql, migrations)")
     for step in steps:
         if not run_sql_file(step, db_name=db_name, use_psql=True, quiet=True):
             raise SystemExit(f"Rebuild failed while applying {os.path.relpath(step, SUPABASE_DIR)}")
     print("Rebuild complete.")
+
+
+def apply_pending_migrations(db_name, apply_from, use_psql):
+    """Apply migrations whose filename sorts at or after ``apply_from`` to an existing database."""
+    migrations = [m for m in migration_replay_order(os.path.join(SUPABASE_DIR, "migrations"))
+                  if os.path.basename(m) >= apply_from]
+    print(f"Applying {len(migrations)} pending migration(s) to {db_name}")
+    for m in migrations:
+        print(f"  {os.path.basename(m)}")
+        if not run_sql_file(m, db_name=db_name, use_psql=use_psql, quiet=True):
+            raise SystemExit(f"Migration failed: {os.path.basename(m)}")
+    print("Pending migrations applied.")
 
 
 def main():
@@ -134,6 +163,13 @@ def main():
                         help="Use the local psql binary (libpq env vars) instead of docker exec.")
     parser.add_argument("--rebuild", action="store_true",
                         help="Drop, recreate and replay the full schema before testing (implies --psql).")
+    parser.add_argument("--stop-before", default=None, metavar="PREFIX",
+                        help="With --rebuild: replay only migrations whose filename sorts before PREFIX.")
+    parser.add_argument("--no-tests", action="store_true",
+                        help="Only rebuild / apply; do not run the test files.")
+    parser.add_argument("--apply-from", default=None, metavar="PREFIX",
+                        help="Without --rebuild: apply migrations whose filename sorts at or after PREFIX to the "
+                             "existing --db first (local replicas only).")
     parser.add_argument("--db", default=None, help="Database name (default: $DB_NAME or live_rebuilt_round5).")
     parser.add_argument("tests", nargs="*", help="Optional subset of test files to run.")
     args = parser.parse_args()
@@ -142,7 +178,11 @@ def main():
     db_name = args.db or os.environ.get("DB_NAME", "live_rebuilt_round5")
 
     if args.rebuild:
-        rebuild_database(db_name)
+        rebuild_database(db_name, stop_before=args.stop_before)
+    elif args.apply_from:
+        apply_pending_migrations(db_name, args.apply_from, use_psql)
+    if args.no_tests:
+        sys.exit(0)
 
     if args.tests:
         test_files = [os.path.abspath(t) for t in args.tests]
