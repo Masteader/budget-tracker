@@ -224,6 +224,27 @@ docker compose up --build
 
 ---
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`. Five jobs run in parallel with a read-only token and use no repository secrets:
+
+| Job | What it runs |
+|---|---|
+| `flutter` | `flutter pub get`, `flutter analyze --fatal-infos --fatal-warnings`, `flutter test` (stable channel) |
+| `ai_service` | Python 3.11: `pip install -r requirements.txt fakeredis`, `python -m pytest -q` (hermetic; `tests/conftest.py` sets fake credentials) |
+| `database` | `postgres:16` service container: `python3 supabase/tests/run_tests.py --psql --rebuild --db ci_tests` |
+| `web` | Node 22: `npm ci`, `npm run build`, `npm run lint -- --deny-warnings` |
+| `secrets` | gitleaks over the checked-out tree and over the commits the PR or push adds (`.gitleaks.toml`) |
+
+To reproduce the database job locally, point the libpq variables at a disposable Postgres 16 server (never a Supabase project):
+
+```bash
+PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=postgres \
+  python3 supabase/tests/run_tests.py --psql --rebuild --db ci_tests
+```
+
+---
+
 ## Security Notes
 
 - The **service role key** must **never** appear in the Flutter app or any client-side code.
