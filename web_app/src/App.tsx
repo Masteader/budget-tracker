@@ -42,7 +42,8 @@ export const App: React.FC = () => {
       {/* 3. Pristine Arctic Content Container */}
       <main id="main-content" tabIndex={-1} className="bg-[#eaf5f7] relative z-20 pt-8 pb-20 border-t border-[#d2ecf0] focus:outline-none">
         {/* Interactive Simulator Cockpit */}
-        <Simulator dict={dict} lang={lang} />
+        {/* Keyed by language so the demo inputs (e.g. the AI sample sentence) follow a language switch. */}
+        <Simulator key={lang} dict={dict} lang={lang} />
 
         {/* Live Telemetry Metrics */}
         <Metrics dict={dict} />
