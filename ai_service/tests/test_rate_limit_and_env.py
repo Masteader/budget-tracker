@@ -91,6 +91,87 @@ async def test_quota_denied_by_db_returns_429(fake_supabase):
     assert exc.value.status_code == 429
 
 
+# External review (Gemini) BLOCKER 3: PostgREST can hand back the boolean RPC result in several
+# shapes (scalar, single-element array, object keyed by the function name, text). Every shape that
+# clearly says "allowed" must pass and every clear "denied" must be 429 — never a 503 in production.
+_ALLOWED_SHAPES = [True, [True], {"consume_quota": True}, [{"consume_quota": True}], "true", "TRUE", " t ", ["true"]]
+_DENIED_SHAPES = [False, [False], {"consume_quota": False}, [{"consume_quota": False}], "false", "f", ["false"]]
+_UNKNOWN_SHAPES = [None, [], {}, [True, False], {"other": True}, "maybe", 1, 0, [None], {"consume_quota": None}]
+
+
+@pytest.mark.parametrize("shape", _ALLOWED_SHAPES, ids=repr)
+def test_consume_quota_result_shapes_that_mean_allowed(shape):
+    assert rate_limiter._normalize_quota_result(shape) is True
+
+
+@pytest.mark.parametrize("shape", _DENIED_SHAPES, ids=repr)
+def test_consume_quota_result_shapes_that_mean_denied(shape):
+    assert rate_limiter._normalize_quota_result(shape) is False
+
+
+@pytest.mark.parametrize("shape", _UNKNOWN_SHAPES, ids=repr)
+def test_consume_quota_result_shapes_that_are_unknown(shape):
+    assert rate_limiter._normalize_quota_result(shape) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", _ALLOWED_SHAPES, ids=repr)
+async def test_allowed_quota_shapes_pass_in_production(monkeypatch, fake_supabase, shape):
+    monkeypatch.setenv("ENV", "production")
+    fake_supabase.rpc_handlers["consume_quota"] = lambda _p, _s=shape: _s
+    await check_api_quota(user_id="u-allowed", household_id="h1", bucket="chat_transaction", max_requests=50)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", _DENIED_SHAPES, ids=repr)
+async def test_denied_quota_shapes_are_429_in_production(monkeypatch, fake_supabase, shape):
+    monkeypatch.setenv("ENV", "production")
+    fake_supabase.rpc_handlers["consume_quota"] = lambda _p, _s=shape: _s
+    with pytest.raises(HTTPException) as exc:
+        await check_api_quota(user_id="u-denied", household_id="h1", bucket="chat_transaction", max_requests=50)
+    assert exc.value.status_code == 429
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", _UNKNOWN_SHAPES, ids=repr)
+async def test_unknown_quota_shapes_fail_closed_only_in_production(monkeypatch, fake_supabase, shape):
+    fake_supabase.rpc_handlers["consume_quota"] = lambda _p, _s=shape: _s
+    monkeypatch.setenv("ENV", "production")
+    with pytest.raises(HTTPException) as exc:
+        await check_api_quota(user_id="u-unknown", household_id="h1", bucket="chat_transaction", max_requests=50)
+    assert exc.value.status_code == 503
+    monkeypatch.setenv("ENV", "development")
+    await check_api_quota(user_id="u-unknown", household_id="h1", bucket="chat_transaction", max_requests=50)
+
+
+def test_quota_rpc_call_matches_the_consume_quota_sql_signature(fake_supabase):
+    """The RPC parameters must be exactly the SQL function's named arguments (PostgREST matches by name)."""
+    import pathlib
+    import re
+
+    migrations = pathlib.Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+    definitions = []
+    for path in sorted(migrations.glob("*.sql")):
+        for match in re.finditer(
+            r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.consume_quota\s*\((.*?)\)\s*RETURNS\s+(\w+)",
+            path.read_text(), re.IGNORECASE | re.DOTALL,
+        ):
+            definitions.append((path.name, match.group(1), match.group(2)))
+    assert definitions, "consume_quota must be defined in a migration"
+    _, args, returns = definitions[-1]  # the last definition in migration order is the live one
+    params = [tuple(a.split()[:2]) for a in (x.strip() for x in args.split(",")) if a]
+    assert [(n, t.upper()) for n, t in params] == [
+        ("p_user_id", "UUID"), ("p_bucket", "TEXT"), ("p_limit", "INT"), ("p_window_seconds", "INT"),
+    ]
+    assert returns.upper() == "BOOLEAN"
+
+    rate_limiter._consume_db_quota("00000000-0000-4000-8000-000000000001", "chat_transaction", 30, 600)
+    name, sent = fake_supabase.rpc_calls[-1]
+    assert name == "consume_quota"
+    assert list(sent) == [n for n, _ in params]
+    assert isinstance(sent["p_limit"], int) and isinstance(sent["p_window_seconds"], int)
+
+
 @pytest.mark.asyncio
 async def test_sliding_window_is_per_user_not_per_client_supplied_household():
     for user in ("user-a", "user-b"):

@@ -170,6 +170,36 @@ def _consume_db_quota(user_id: str, bucket: str, max_requests: int, window_secon
     ).execute()
 
 
+_TRUE_TEXT = {"true", "t"}
+_FALSE_TEXT = {"false", "f"}
+
+
+def _normalize_quota_result(data) -> Optional[bool]:
+    """
+    Reduce the consume_quota RPC payload to True (allowed), False (denied) or None (unknown).
+
+    consume_quota RETURNS BOOLEAN, which PostgREST / supabase-py deliver as a bare JSON boolean,
+    but proxies, client versions and a RETURNS TABLE / SETOF variant can wrap it: ``[true]``,
+    ``{"consume_quota": true}``, ``[{"consume_quota": true}]`` or the text ``"true"``. Only an
+    unambiguous single value counts; anything else is unknown so production fails closed (503)
+    instead of guessing.
+    """
+    if isinstance(data, bool):
+        return data
+    if isinstance(data, str):
+        text = data.strip().lower()
+        if text in _TRUE_TEXT:
+            return True
+        if text in _FALSE_TEXT:
+            return False
+        return None
+    if isinstance(data, list):
+        return _normalize_quota_result(data[0]) if len(data) == 1 else None
+    if isinstance(data, dict):
+        return _normalize_quota_result(data["consume_quota"]) if set(data) == {"consume_quota"} else None
+    return None
+
+
 async def check_api_quota(
     user_id: Optional[str] = None,
     household_id: Optional[str] = None,
@@ -189,7 +219,12 @@ async def check_api_quota(
     if user_id:
         try:
             res = await asyncio.to_thread(_consume_db_quota, user_id, bucket, max_requests, window_seconds)
-            allowed = res.data if res is not None else None
+            allowed = _normalize_quota_result(res.data if res is not None else None)
+            if allowed is None:
+                logger.error(
+                    "Unrecognised consume_quota result for bucket=%s (type %s).",
+                    bucket, type(getattr(res, "data", None)).__name__,
+                )
         except Exception as exc:
             allowed = None
             logger.error("Database quota check failed for bucket=%s: %s", bucket, exc)
