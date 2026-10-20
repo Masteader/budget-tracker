@@ -2,17 +2,18 @@
 
 ## 1. Saudi Salary & Payday Cycle Alignment
 
-- **The 27th Standard Payday:** In the Kingdom of Saudi Arabia, public and most private sector salaries are disbursed on the **27th of each Gregorian month**.
-- **Cycle Identification (`cycle_key`):**
-  - All budgets, salary records, and recurring reserves are indexed by `cycle_key` in format `YYYY-MM`.
-  - A cycle runs from the 27th of month $M$ to the 26th of month $M+1$.
+- **Payday per household:** salary cycles follow `households.payday_day` (1–31, default **27**, the common Saudi payday). Only a household admin changes it (`PUT /households/{id}/payday`). Never hard-code the 27th in new code.
+- **Cycle Identification (`cycle_key`, `YYYY-MM`):**
+  - A cycle runs from the payday of one month to the day before the next payday, on the **Asia/Riyadh** calendar date. A payday beyond the month's length is clamped to its last day; payday 1 means the calendar month.
+  - With payday > 15 the key names the month the cycle **ends** in (payday 27: 27 Oct → 26 Nov is `2026-11`); with payday ≤ 15 it names the month it starts in.
+  - SQL (`get_saudi_cycle_for_timestamp`), Python (`salary_cycle.get_cycle_for_date`) and Dart compute the same key; triggers fill `transactions.cycle_key` and clients cannot forge it.
 - **Payday Check-In:**
-  - When the date reaches or passes the 27th, prompt the user with the Payday Check-in Sheet to record their salary, overtime, bonus, and deductions.
-  - Automatically provide the 1-tap Salary Distribution Assistant to fund secondary wallets and bank accounts.
-- **Cycle Rollover Handling:**
-  - Give users an explicit choice for unspent category funds:
-    - **Option A (Category Rollover):** Unspent funds rollover into the new cycle's category cushion (`previous_cycle_delta`).
-    - **Option C (Sweep to Savings):** Unspent funds are swept into an emergency savings reserve, resetting categories clean.
+  - When the household payday arrives, prompt the user with the Payday Check-in Sheet to record their salary, overtime, bonus, and deductions.
+  - Offer the 1-tap Salary Distribution Assistant to fund secondary wallets and bank accounts.
+- **Cycle Rollover Handling:** the household chooses its rule (`households.rollover_rule`, `GET|PUT /households/{id}/rollover-rule`, admin to change):
+  - `send_to_savings` (default): leftover funds are swept into the savings reserve; categories start fresh.
+  - `rollover_to_categories`: leftover funds increase each category in the new cycle (`previous_cycle_delta`).
+  - `fresh_start`: allocations reset to baseline with no carryover.
 
 ## 2. ZATCA Phase 2 E-Invoicing Compliance
 
@@ -34,7 +35,7 @@
 - **Family mode rules (owner decision on audit item UI-24, authoritative).** A household is in family mode when a member has `users.financial_role = 'spouse'`; the husband is a `provider` member (preferring an admin), never a wife because she is an admin.
   1. **Nafaqah is on the husband.** Shared family/household expenses are his responsibility. There is **no 50/50 or any percentage split** between the spouses anywhere in family mode (API, app banners, settlement cards, chat). `split_ratio` and "Shared 50/50" belong to roommate/partner households only.
   2. **Wife pays for something shared** (household, children/dependents, the husband) from her own money → `transactions.nafaqah_class = 'wife_reimbursable'` with `nafaqah_spouse_id` = the wife. It is a debt the husband owes her. The app shows the outstanding balance and history, and records partial or full repayments in the append-only `spouse_reimbursements` ledger (`record_spouse_reimbursement`); paying back more than is outstanding is rejected.
-  3. **Wife buys something personal for herself** → `nafaqah_class = 'wife_personal'`. Not a debt: it is charged to her personal allowance ("مصروفها") for the salary cycle (`cycle_key`, 27th → 26th). The husband or a household admin (never the wife herself) sets the amount per cycle (`member_allowances`, `set_member_allowance`); the app shows allocated / spent / remaining, and overspend shows a negative remainder (never blocked).
+  3. **Wife buys something personal for herself** → `nafaqah_class = 'wife_personal'`. Not a debt: it is charged to her personal allowance ("مصروفها") for the salary cycle (`cycle_key`, household payday to the day before the next). The husband or a household admin (never the wife herself) sets the amount per cycle (`member_allowances`, `set_member_allowance`); the app shows allocated / spent / remaining, and overspend shows a negative remainder (never blocked).
   4. **Husband pays for shared things** (or buys something for his wife) → an ordinary household expense: no class, no debt.
   - A wife's voluntary contribution (Tabarru') is only ever an explicit opt-in flag (`is_tabarru` on a settlement input); it is never assumed or defaulted.
   - Money is `numeric(14,2)` in SQL, `Decimal`/integer halalas in Python. Ledger writes go only through the `SECURITY DEFINER` RPCs with a pinned `search_path` and actor checks; the API passes the verified JWT subject as `p_actor_user_id` and checks the wife belongs to the URL's household (no IDOR).

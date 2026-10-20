@@ -1,17 +1,38 @@
-# budget_tracker
+# Budget Tracker — Flutter App
 
-A new Flutter project.
+Android / iOS client. It talks to Supabase directly (publishable key, Row Level Security, Realtime)
+and to the FastAPI service (`ai_service/`) with the user's Supabase JWT.
 
-## Getting Started
+## Run
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run \
+  --dart-define=SUPABASE_URL=https://<id>.supabase.co \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key> \
+  --dart-define=FASTAPI_BASE_URL=http://<your-machine-ip>:8000
+```
 
-A few resources to get you started if this is your first Flutter project:
+All flags (required and optional) are documented in the root
+[`README.md`](../README.md#flutter-app---dart-define-flags) and defined in
+[`lib/supabase_config.dart`](lib/supabase_config.dart). There are no built-in defaults: a missing
+required flag stops the app at startup, and service-role / `sb_secret_` keys are rejected.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Test
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter test      # unit and widget tests in test/
+flutter analyze   # must report "No issues found!"
+```
+
+## Release
+
+`flutter build apk --release` with the same `--dart-define` values (`https://` URLs). Signing reads
+`android/key.properties` (git-ignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`);
+without it the release build falls back to the debug key with a warning.
+
+## Layout
+
+`lib/l10n` (ar / en / ur strings, `context.tr`), `models`, `providers`, `screens`, `services`
+(API clients, Supabase, offline SQLite queue), `theme`, `widgets`. Project rules:
+[`../.agents/rules/`](../.agents/rules/).

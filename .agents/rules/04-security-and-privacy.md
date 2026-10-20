@@ -10,25 +10,27 @@
 
 ## 2. Supabase API Key Segregation
 
-- **Anon Public Key (`SUPABASE_ANON_KEY` / `SUPABASE_PUBLISHABLE_KEY`):**
-  - Safe for client distribution (Flutter mobile app, React web app).
+- **Publishable / Anon Key (`SUPABASE_PUBLISHABLE_KEY`, alias `SUPABASE_ANON_KEY`):**
+  - Safe for client distribution (the Flutter app; `web_app` does not talk to Supabase at all).
   - All queries are strictly constrained by PostgreSQL Row Level Security (RLS).
 - **Secret / Service Role Key (`SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`):**
   - An `sb_secret_…` key or a legacy `service_role` JWT, in either variable (`ai_service/supabase_client.py` `describe_supabase_key`: an `sb_secret_` key wins over a legacy JWT; anon/publishable values are never used and are logged as ignored). Requires `supabase>=2.16.0`.
   - STRICTLY FORBIDDEN from being embedded or compiled into the Flutter mobile app or client-side assets (the app rejects such keys at startup).
-  - Only stored in server-side environment variables and used exclusively by the Python `ai_service` for administrative background tasks, webhooks, and migrations.
+  - Only stored in server-side environment variables and used exclusively by the Python `ai_service`, which bypasses RLS and therefore re-checks the verified JWT user's household membership and admin rights on every route. Migrations are applied in the Supabase SQL editor (database first, then backend, then app), never by the service.
 
 ## 3. Household Multi-Tenancy & Row Level Security (RLS)
 
-- Every sensitive relational table (`transactions`, `budgets`, `accounts`, `account_transfers`, `income_records`, `recurring_bills`, `installment_plans`, `household_dependents`, `reimbursement_debts`) MUST have Row Level Security enabled.
-- Queries and RLS policies must strictly enforce tenancy isolation:
+- **Every** `public` table MUST have Row Level Security enabled (today: `users`, `households`, `household_memberships`, `household_invites`, `invite_attempt_log`, `household_dependents`, `household_category_settings`, `cost_control_codes`, `cost_control_sub_categories`, `transactions`, `budgets`, `accounts`, `account_transfers`, `income_records`, `installment_plans`, `member_allowances`, `spouse_reimbursements`, `api_quota`). `supabase/tests/14_audit_catalog_guardrails.sql` checks the catalog.
+- Policies scope rows to the caller's active household through the helper, wrapped in `SELECT` so it is evaluated once per statement (DB-13):
   ```sql
-  household_id IN (SELECT household_id FROM public.users WHERE id = auth.uid())
+  household_id = (SELECT public.get_auth_user_household_id())
   ```
-- Personal accounts are restricted to the owner:
+- Personal accounts are visible to their owner; shared pools to the household, and only admins change them:
   ```sql
-  owner_user_id = auth.uid() OR is_shared_pool = true
+  owner_user_id = (SELECT auth.uid())
+    OR (is_shared_pool = true AND household_id = (SELECT public.get_auth_user_household_id()))
   ```
+- `SECURITY DEFINER` functions pin `search_path`; no policy targets `PUBLIC`/`anon`, and `anon` can execute no function in `public` (same guardrail test).
 - Never bypass RLS in client requests.
 
 ## 4. Household Roles & Permissions (owner decision on DB-16 / DB-18)
