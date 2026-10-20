@@ -12,7 +12,9 @@ services:
     environment:
       # ── Supabase ──────────────────────────────────────────────────────────
       SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Privileged key (sb_secret_... or legacy service_role JWT) in either variable; see .env.example.
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       # ── LiteLLM ───────────────────────────────────────────────────────────
       LITELLM_MODEL: ${LITELLM_MODEL:-gemini/gemini-2.0-flash-lite}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}

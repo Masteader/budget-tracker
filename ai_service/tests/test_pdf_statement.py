@@ -6,11 +6,13 @@ from pdf_statement_generator import generate_monthly_pdf_statement
 
 
 @patch("pdf_statement_generator.get_client")
-@patch("pdf_statement_generator.get_salary_cycle_dates")
+@patch("pdf_statement_generator.get_household_payday", new=lambda _household_id: 27)
+@patch("pdf_statement_generator.get_cycle_for_date", new=lambda *a, **k: {"cycle_key": "2026-09"})
+@patch("pdf_statement_generator.get_cycle_info_for_key")
 def test_generate_monthly_pdf_statement_success(mock_cycle, mock_supabase):
     mock_cycle.return_value = {
         "cycle_key": "2026-09",
-        "cycle_label": "September 2026",
+        "label": "September 2026",
         "cycle_start": "2026-08-27",
         "cycle_end": "2026-09-26",
     }

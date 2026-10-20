@@ -36,9 +36,9 @@ async def chat_transaction(request: Request):
     Parse a user chat message into an itemized transaction.
     Extracts merchant, total, line items, and checks for duplicates.
 
-    Authentication is the caller's Supabase JWT. The X-Signature HMAC is no longer required:
-    its secret ships inside the app and authenticates nobody, and requiring it blocked rotating
-    WEBHOOK_SECRET without locking out installed builds.
+    Authentication is the caller's Supabase JWT. X-Signature is optional defense in depth: its
+    secret ships inside the app and authenticates nobody, so a stale signature next to a valid JWT
+    is only logged (auth.verify_signature_if_present, applied to every router in main.py).
 
     Replays: an ``Idempotency-Key`` header makes a commit idempotent per user, and
     ``client_occurred_at`` (ISO-8601) is used as the transaction time.

@@ -1,5 +1,6 @@
 """
-Saudi Salary Cycle (27th of month) forecaster and Pre-Purchase Affordability Simulator.
+Saudi Salary Cycle forecaster and Pre-Purchase Affordability Simulator.
+Cycles follow the household payday (households.payday_day; 27th when unset).
 Calculates days to payday, burn rates, projected run-out dates, and budget health.
 """
 
@@ -13,7 +14,12 @@ from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
 
 logger = logging.getLogger(__name__)
 
-from supabase_client import get_client, fetch_flexible_budgets
+from supabase_client import get_client, fetch_flexible_budgets, first_row, get_household_payday
+
+
+def current_household_cycle(household_id: str) -> Dict[str, Any]:
+    """The household's current salary cycle (Riyadh date, household payday)."""
+    return get_cycle_for_date(payday_day=get_household_payday(household_id))
 
 def adjust_saudi_payday(target_date: date) -> date:
     """
@@ -251,9 +257,10 @@ def simulate_affordability(
 ) -> Dict[str, Any]:
     """
     'Can I Afford This?' Pre-Purchase simulator.
-    Evaluates purchase against current salary cycle headroom, flexible budget pools, and days to 27th.
+    Evaluates purchase against current salary cycle headroom, flexible budget pools, and days to payday.
     """
     forecast = get_salary_cycle_forecast(household_id)
+    payday_date = forecast["cycle"]["payday"]  # household payday, weekend-adjusted
     total_remaining = forecast["total_remaining"]
     days_remaining = forecast["cycle"]["days_remaining"]
     daily_remaining = forecast["daily_remaining_allowance"]
@@ -262,19 +269,28 @@ def simulate_affordability(
     today = riyadh_today()
     month_start = today.replace(day=1).isoformat()
 
-    # Category budget details
+    # Category budget of the household's current cycle (legacy rows without cycle_key: by month).
+    # first_row, not maybe_single(): with postgrest-py 2.x a category without a budget row made
+    # maybe_single() return None and ``resp.data`` raised AttributeError (500).
     cat_budget = None
     if category_code:
-        resp = (
-            client.table("budgets")
-            .select("*")
-            .eq("household_id", household_id)
-            .eq("category_code", category_code)
-            .eq("month", month_start)
-            .maybe_single()
-            .execute()
-        )
-        cat_budget = resp.data
+        cycle_key = forecast["cycle"].get("cycle_key")
+        if cycle_key:
+            cat_budget = first_row(
+                client.table("budgets")
+                .select("*")
+                .eq("household_id", household_id)
+                .eq("category_code", category_code)
+                .eq("cycle_key", cycle_key)
+            )
+        if cat_budget is None:
+            cat_budget = first_row(
+                client.table("budgets")
+                .select("*")
+                .eq("household_id", household_id)
+                .eq("category_code", category_code)
+                .eq("month", month_start)
+            )
 
     cat_remaining = float(cat_budget.get("remaining_amount", 0.0)) if cat_budget else 0.0
 
@@ -316,11 +332,11 @@ def simulate_affordability(
         shortage = target_amount - (cat_remaining + flexible_headroom)
         advice_en = (
             f"❌ Unaffordable right now. This purchase exceeds your total flexible budget by SAR {shortage:.1f}. "
-            f"Consider waiting {days_remaining} days until salary day (27th) or setting up a dedicated savings bucket."
+            f"Consider waiting {days_remaining} days until salary day ({payday_date}) or setting up a dedicated savings bucket."
         )
         advice_ar = (
             f"❌ لا يمكن تحمل تكلفتها حالياً. تتجاوز الميزانية المتاحة بفارق {shortage:.1f} ريال. "
-            f"يُفضل تأجيلها لمدة {days_remaining} يوم حتى موعد نزول الراتب (27 الشهر)."
+            f"يُفضل تأجيلها لمدة {days_remaining} يوم حتى موعد نزول الراتب ({payday_date})."
         )
 
     return {
@@ -460,13 +476,14 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
     Fetches categories and aggregates sub-budget spending for the given salary cycle.
     """
     from supabase_client import get_client, ensure_household_cycle_budgets
-    
-    current_cycle = get_cycle_for_date()
+
+    payday_day = get_household_payday(household_id)
+    current_cycle = get_cycle_for_date(payday_day=payday_day)
     target_key = cycle_key or current_cycle["cycle_key"]
-    cycle_info = get_cycle_info_for_key(target_key)
-    
+    cycle_info = get_cycle_info_for_key(target_key, payday_day=payday_day)
+
     if target_key == current_cycle["cycle_key"]:
-        ensure_household_cycle_budgets(household_id)
+        ensure_household_cycle_budgets(household_id, payday_day=payday_day)
         
     client = get_client()
     
@@ -481,7 +498,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
     ]
     
     if not cycle_budgets and target_key == current_cycle["cycle_key"]:
-        cycle_budgets = ensure_household_cycle_budgets(household_id)
+        cycle_budgets = ensure_household_cycle_budgets(household_id, payday_day=payday_day)
         
     # 2. Category names lookup
     codes_resp = client.table("cost_control_codes").select("code, category").execute()
@@ -688,10 +705,10 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
         }).execute()
     # A shared/system code is used as-is: its definition is never rewritten from a household request.
     
-    current_cycle = get_cycle_for_date()
+    current_cycle = current_household_cycle(req.household_id)
     today = riyadh_today()
     month_str = today.replace(day=1).isoformat()
-    
+
     existing_b = (
         client.table("budgets")
         .select("id")
@@ -750,7 +767,7 @@ def get_sub_categories_for_parent(parent_code: str) -> List[Dict[str, Any]]:
 def archive_category_for_household(household_id: str, category_code: str) -> Dict[str, Any]:
     client = get_client()
 
-    current_cycle = get_cycle_for_date()
+    current_cycle = current_household_cycle(household_id)
     target_key = current_cycle["cycle_key"]
     month_start = f"{target_key}-01"
 
@@ -825,8 +842,7 @@ def add_sub_category_for_household(
         }).execute()
 
 
-    current_cycle = get_cycle_for_date()
-    target_key = cycle_key or current_cycle["cycle_key"]
+    target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
 
     res = (
         client.table("budgets")
@@ -890,8 +906,7 @@ def remove_sub_category_for_household(
     from supabase_client import get_client
     client = get_client()
 
-    current_cycle = get_cycle_for_date()
-    target_key = cycle_key or current_cycle["cycle_key"]
+    target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
 
     # 1. Remove from budgets.sub_allocations and recalculate parent allocated_amount
     res = (
@@ -956,10 +971,9 @@ def save_sub_allocations(
     Automatically sets the parent budget's allocated_amount to the sum of sub-allocations.
     """
     from supabase_client import get_client
-    
-    current_cycle = get_cycle_for_date()
-    target_key = cycle_key or current_cycle["cycle_key"]
-    
+
+    target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
+
     clean_sub_allocations = {k: round(float(v), 2) for k, v in sub_allocations.items()}
     total_allocated = round(sum(clean_sub_allocations.values()), 2)
     
@@ -1162,20 +1176,36 @@ def create_household_custom_category(
     # Set as active in household_category_settings
     toggle_category_status(household_id, clean_code, is_active=True)
 
-    # If allocated_amount > 0, create budget
+    # If allocated_amount > 0, set the budget of the household's current cycle. Activation above
+    # already created that cycle's row, so update it instead of inserting a duplicate row.
     if allocated_amount > 0:
-        current_cycle = get_cycle_for_date()
-        today = riyadh_today()
-        month_str = today.replace(day=1).isoformat()
-        client.table("budgets").insert({
-            "household_id": household_id,
-            "month": month_str,
-            "cycle_key": current_cycle["cycle_key"],
-            "category_code": clean_code,
-            "allocated_amount": allocated_amount,
-            "spent_amount": 0.0,
-            "is_active": True,
-        }).execute()
+        current_cycle = current_household_cycle(household_id)
+        existing = (
+            client.table("budgets")
+            .select("id")
+            .eq("household_id", household_id)
+            .eq("category_code", clean_code)
+            .eq("cycle_key", current_cycle["cycle_key"])
+            .execute()
+            .data
+        )
+        if existing:
+            client.table("budgets").update({
+                "allocated_amount": allocated_amount,
+                "is_active": True,
+            }).eq("id", existing[0]["id"]).execute()
+        else:
+            today = riyadh_today()
+            month_str = today.replace(day=1).isoformat()
+            client.table("budgets").insert({
+                "household_id": household_id,
+                "month": month_str,
+                "cycle_key": current_cycle["cycle_key"],
+                "category_code": clean_code,
+                "allocated_amount": allocated_amount,
+                "spent_amount": 0.0,
+                "is_active": True,
+            }).execute()
 
     return {
         "status": "success",

@@ -306,12 +306,183 @@ def test_chat_commit_needs_jwt_not_webhook_signature(two_households, monkeypatch
     no_sig = client.post("/agent/chat-transaction", content=body,
                          headers={"Content-Type": "application/json", **bearer(USER_A)})
     assert no_sig.status_code == 200 and no_sig.json()["status"] == "success"
+    signed = client.post("/agent/chat-transaction", content=body,
+                         headers={"Content-Type": "application/json", "X-Signature": good_sig, **bearer(USER_A)})
+    assert signed.status_code == 200
+    # Installed builds sign with the pre-rotation WEBHOOK_SECRET: with a valid JWT a stale
+    # signature is logged and ignored, never rejected (the JWT is the authentication).
     stale_sig = client.post("/agent/chat-transaction", content=body,
-                            headers={"Content-Type": "application/json", "X-Signature": "sha256=" + "0" * 64, **bearer(USER_A)})
-    assert stale_sig.status_code == 200
+                            headers={"Content-Type": "application/json", "X-Signature": "sha256=" + "0" * 64,
+                                     "Idempotency-Key": "stale-sig-0001", **bearer(USER_A)})
+    assert stale_sig.status_code == 200 and stale_sig.json()["status"] == "success"
     sig_only = client.post("/agent/chat-transaction", content=body,
                            headers={"Content-Type": "application/json", "X-Signature": good_sig})
     assert sig_only.status_code == 401
+
+
+# ─── External review (Gemini) BLOCKER 2: X-Signature / X-App-Token roles ──────
+
+APP_TOKEN = {"X-App-Token": "test_token_for_ci_only"}  # tests/conftest.py APP_AUTH_TOKEN
+_ANY_PARAMS = {"household_id": HH_A, "parent_code": "OPEX-GROCERY", "sub_code": "meat"}
+
+
+def _sig(body: bytes) -> str:
+    import hashlib
+    import hmac
+    import os
+
+    return "sha256=" + hmac.new(os.environ["WEBHOOK_SECRET"].encode(), body, hashlib.sha256).hexdigest()
+
+
+def _router_operations():
+    for path, operations in app.openapi()["paths"].items():
+        if path in PUBLIC_PATHS - {"/households/invites/{invite_code}"}:
+            continue  # app-level pages/assets, not API routers
+        for method in operations:
+            yield method.upper(), path
+
+
+STALE = "sha256=" + "0" * 64
+
+
+def test_stale_signature_with_a_valid_jwt_is_never_rejected_on_any_api_route(two_households):
+    """Compatibility: WEBHOOK_SECRET was rotated, so every installed build sends a stale signature."""
+    failures = []
+    checked = 0
+    for method, path in _router_operations():
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, content=b'{"household_id": "%s"}' % HH_A.encode(),
+                              headers={"Content-Type": "application/json", "X-Signature": STALE, **bearer(USER_A)})
+        if resp.status_code == 401:
+            failures.append(f"{method} {path} -> {resp.status_code}")
+        checked += 1
+    assert not failures, failures
+    assert checked > 30
+
+
+def test_malformed_or_empty_signature_header_with_jwt_is_ignored(two_households):
+    for value in ("", "sha256=", "md5=abc", "garbage", STALE):
+        resp = client.get("/budgets/installments", params={"household_id": HH_A},
+                          headers={"X-Signature": value, **bearer(USER_A)})
+        assert resp.status_code == 200, value
+
+
+def test_invalid_signature_without_a_valid_jwt_is_rejected(two_households):
+    expired = make_token(USER_A, iat=int(time.time()) - 7200, exp=int(time.time()) - 3600)
+    for headers in ({}, {"Authorization": f"Bearer {expired}"}, {"Authorization": "Bearer not-a-jwt"}):
+        resp = client.get("/budgets/installments", params={"household_id": HH_A},
+                          headers={"X-Signature": STALE, **headers})
+        assert resp.status_code == 401
+
+
+def test_stale_signature_warning_is_rate_limited_and_leaks_nothing(two_households, caplog):
+    import hashlib
+    import logging
+    import os
+
+    import auth
+
+    auth._reset_stale_signature_log()
+    with caplog.at_level(logging.WARNING, logger="auth"):
+        for _ in range(3):
+            client.get("/budgets/installments", params={"household_id": HH_A},
+                       headers={"X-Signature": STALE, **bearer(USER_A)})
+        client.get("/budgets/installments", params={"household_id": HH_A},
+                   headers={"X-Signature": STALE, **bearer(USER_A_MEMBER)})
+    messages = [r.getMessage() for r in caplog.records if r.name == "auth" and "X-Signature" in r.getMessage()]
+    assert len(messages) == 2  # once per (route, user) per interval
+    ref_a = hashlib.sha256(USER_A.encode()).hexdigest()[:12]
+    assert ref_a in messages[0] and "/budgets/installments" in messages[0]
+    for message in messages:
+        assert USER_A not in message and USER_A_MEMBER not in message
+        assert os.environ["WEBHOOK_SECRET"] not in message and STALE not in message
+
+
+def test_stale_signature_warning_repeats_after_the_interval(two_households, caplog, monkeypatch):
+    import logging
+
+    import auth
+
+    auth._reset_stale_signature_log()
+    clock = [5000.0]
+    monkeypatch.setattr(auth, "_monotonic", lambda: clock[0])
+    with caplog.at_level(logging.WARNING, logger="auth"):
+        client.get("/budgets/installments", params={"household_id": HH_A}, headers={"X-Signature": STALE, **bearer(USER_A)})
+        clock[0] += auth._STALE_SIGNATURE_LOG_INTERVAL_SECONDS + 1
+        client.get("/budgets/installments", params={"household_id": HH_A}, headers={"X-Signature": STALE, **bearer(USER_A)})
+    assert len([r for r in caplog.records if r.name == "auth" and "X-Signature" in r.getMessage()]) == 2
+
+
+def test_valid_signature_with_jwt_passes_and_body_reaches_the_route(two_households):
+    resp = client.get("/budgets/installments", params={"household_id": HH_A},
+                      headers={"X-Signature": _sig(b""), **bearer(USER_A)})
+    assert resp.status_code == 200
+
+
+def test_signed_request_in_production_without_webhook_secret_is_served_with_a_jwt(two_households, monkeypatch, caplog):
+    import logging
+
+    import auth
+
+    auth._reset_stale_signature_log()
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("WEBHOOK_SECRET", "")
+    with caplog.at_level(logging.WARNING, logger="auth"):
+        signed = client.get("/budgets/installments", params={"household_id": HH_A},
+                            headers={"X-Signature": STALE, **bearer(USER_A)})
+    assert signed.status_code == 200
+    assert any("WEBHOOK_SECRET is not set" in r.getMessage() for r in caplog.records if r.name == "auth")
+    without_jwt = client.get("/budgets/installments", params={"household_id": HH_A}, headers={"X-Signature": STALE})
+    assert without_jwt.status_code == 401
+    unsigned = client.get("/budgets/installments", params={"household_id": HH_A}, headers=bearer(USER_A))
+    assert unsigned.status_code == 200
+
+
+def test_server_to_server_signature_check_stays_strict(monkeypatch):
+    """utils.verify_signature is what a future JWT-less webhook route must use: no signature, no entry."""
+    from utils import verify_signature
+
+    body = b'{"event": "x"}'
+    assert verify_signature(body, _sig(body)) is True
+    assert verify_signature(body, None) is False
+    assert verify_signature(body, STALE) is False
+    assert verify_signature(body, "md5=" + _sig(body)[7:]) is False
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("WEBHOOK_SECRET", "")
+    assert verify_signature(body, _sig(body)) is False
+
+
+def test_valid_signature_without_jwt_never_reaches_user_data(two_households):
+    for method, path in _router_operations():
+        if path == "/households/invites/{invite_code}" or path == "/public/inquiries":
+            continue  # intentionally anonymous (rate limited, no household data)
+        body = b'{"household_id": "%s"}' % HH_A.encode()
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, content=body,
+                              headers={"Content-Type": "application/json", "X-Signature": _sig(body), **TUNNEL})
+        assert resp.status_code in (401, 403, 422), f"{method} {path} -> {resp.status_code}"
+
+
+def test_app_token_alone_never_grants_access_to_user_routes(two_households):
+    """X-App-Token passes the coarse firewall for old builds, but every route still needs a verified JWT."""
+    failures = []
+    for method, path in _router_operations():
+        if path == "/households/invites/{invite_code}" or path == "/public/inquiries":
+            continue
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, json={"household_id": HH_A},
+                              headers={**TUNNEL, **APP_TOKEN})
+        if resp.status_code not in (401, 403, 422):
+            failures.append(f"{method} {path} -> {resp.status_code}")
+    assert not failures, failures
+
+
+def test_app_token_with_invalid_or_expired_bearer_cannot_reach_user_data(two_households):
+    expired = make_token(USER_A, iat=int(time.time()) - 7200, exp=int(time.time()) - 3600)
+    forged = make_token(USER_A).rsplit(".", 1)[0] + ".forged-signature"
+    for token in (expired, forged, "not-a-jwt"):
+        headers = {**TUNNEL, **APP_TOKEN, "Authorization": f"Bearer {token}"}
+        resp = client.get("/budgets/installments", params={"household_id": HH_A}, headers=headers)
+        assert resp.status_code == 401
+        resp = client.get(f"/households/{HH_A}/members", headers=headers)
+        assert resp.status_code == 401
 
 
 def test_idempotency_key_dedupes_replayed_commit(two_households, monkeypatch):

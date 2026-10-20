@@ -35,7 +35,8 @@ async def scan_receipt(request: Request):
     Analyze receipt image using multimodal Gemini vision.
     Extracts line items, store name, totals, and prevents duplicate charges.
 
-    Authentication is the caller's Supabase JWT (the X-Signature HMAC is no longer required).
+    Authentication is the caller's Supabase JWT. X-Signature is optional; a stale one next to a
+    valid JWT is only logged (auth.verify_signature_if_present, applied to every router in main.py).
     Replays: ``Idempotency-Key`` makes a commit idempotent per user; ``client_occurred_at``
     (ISO-8601) is used as the transaction time.
     """

@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -189,6 +192,52 @@ void main() {
 
     expect(res['status'], equals('success'));
     expect(res['data'], equals([1, 2]));
+  });
+
+  group('Optional X-Signature (WEBHOOK_SECRET)', () {
+    test('without a webhook secret requests are sent unsigned (JWT only)', () async {
+      final seen = <http.Request>[];
+      final mockClient = MockClient((request) async {
+        seen.add(request);
+        return http.Response('{"status": "ok"}', 200);
+      });
+      final client = BaseApiClient(client: mockClient, authTokenProvider: () => 'jwt', signingSecret: '');
+
+      await client.post('/agent/chat-transaction', {'message': 'x'});
+      await client.put('/budgets/x', body: {'a': 1}, shouldSign: true);
+
+      expect(seen.map((r) => r.headers.containsKey('X-Signature')), everyElement(isFalse));
+      expect(seen.map((r) => r.headers['Authorization']), everyElement('Bearer jwt'));
+    });
+
+    test('with a webhook secret the exact body bytes are signed with HMAC-SHA256', () async {
+      late http.Request seen;
+      final mockClient = MockClient((request) async {
+        seen = request;
+        return http.Response('{"status": "ok"}', 200);
+      });
+      const secret = 'unit-test-signing-key';
+      final client = BaseApiClient(client: mockClient, authTokenProvider: () => 'jwt', signingSecret: secret);
+
+      await client.post('/agent/chat-transaction', {'message': 'قهوة 19', 'household_id': 'h'});
+
+      final expected = Hmac(sha256, utf8.encode(secret)).convert(utf8.encode(seen.body)).toString();
+      expect(seen.headers['X-Signature'], equals('sha256=$expected'));
+      expect(seen.headers['Authorization'], equals('Bearer jwt'));
+    });
+
+    test('shouldSign: false never signs even with a secret', () async {
+      late http.Request seen;
+      final mockClient = MockClient((request) async {
+        seen = request;
+        return http.Response('{"status": "ok"}', 200);
+      });
+      final client = BaseApiClient(client: mockClient, authTokenProvider: () => 'jwt', signingSecret: 'k');
+
+      await client.post('/x', {'a': 1}, shouldSign: false);
+
+      expect(seen.headers.containsKey('X-Signature'), isFalse);
+    });
   });
 }
 
