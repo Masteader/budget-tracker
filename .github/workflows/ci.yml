@@ -1,0 +1,183 @@
+name: CI
+
+# Runs on every pull request and on pushes to main. All jobs are independent and run in
+# parallel. No repository secrets are used: every job is hermetic (the ai_service suite
+# forces fake credentials in tests/conftest.py, and the database suite runs against a
+# throwaway Postgres service container, never the live Supabase project).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Cancel superseded PR runs; let every push to main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  flutter:
+    name: Flutter (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: flutter_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter --version
+      - run: flutter pub get
+      # Fails on errors, warnings and infos (zero-issue policy, .agents/rules/05).
+      - run: flutter analyze --fatal-infos --fatal-warnings
+      - run: flutter test
+
+  ai_service:
+    name: AI service (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ai_service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ai_service/requirements.txt
+
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      # tests/conftest.py forces ENV=development and fake Supabase/LLM credentials, blocks
+      # non-loopback sockets and never loads .env, so no secrets are needed here.
+      - run: python -m pytest -q
+
+  database:
+    name: Database (SQL suite on Postgres 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway container credential, only reachable from this job.
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # run_tests.py --psql shells out to psql/dropdb/createdb, which read libpq env vars.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Ensure psql client tools
+        run: |
+          if ! command -v psql >/dev/null || ! command -v createdb >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+          psql -c 'select version();'
+
+      # Rebuilds from 00_local_supabase_stubs.sql + schema.sql + seed.sql + migrations,
+      # then runs every supabase/tests/NN_*.sql file.
+      - run: python3 supabase/tests/run_tests.py --psql --rebuild --db ci_tests
+
+  web:
+    name: Web app (build + lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web_app/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint -- --deny-warnings
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.24.3
+      # sha256 of gitleaks_8.24.3_linux_x64.tar.gz (from the release's checksums.txt).
+      GITLEAKS_SHA256: 9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The gitleaks CLI is used directly (gitleaks-action needs a paid licence for
+      # organisation-owned repositories). The download is checksum-verified.
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Scan working tree
+        run: gitleaks dir . --config .gitleaks.toml --redact --no-banner --exit-code 1
+
+      # Also scan every commit the PR / push introduces, so a secret added and then
+      # deleted inside the same PR is still caught.
+      - name: Scan new commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          elif [ -n "$PUSH_BEFORE" ] && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            range="${PUSH_BEFORE}..${PUSH_AFTER}"
+          else
+            # New branch or force push: the previous tip is unknown or unreachable.
+            echo "No previous commit to diff against; working-tree scan above covers this push."
+            exit 0
+          fi
+          echo "Scanning commit range ${range}"
+          gitleaks git . --config .gitleaks.toml --redact --no-banner --exit-code 1 \
+            --log-opts="${range}"
