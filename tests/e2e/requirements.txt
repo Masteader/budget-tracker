@@ -1,0 +1,3 @@
+# Real-stack e2e suite: the ai_service runtime plus a Postgres driver for fixtures/assertions.
+-r ../../ai_service/requirements.txt
+psycopg[binary]>=3.1
