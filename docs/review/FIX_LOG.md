@@ -98,3 +98,5 @@
 | MOB-28 | "Saved offline" shown when the SQLite/blob queue write failed (batch sheet counted it as saved). | `test/services/offline_queue_write_failure_test.dart` | `enqueueOrThrow` / `OfflineQueueWriteException`; chat awaits the write; all callers show "Not saved" and keep the input. | 28ae0cc | N/A | 6/6 tests. |
 | UI-25 | Undo after delete re-inserted a column subset under a new id; receipt image already deleted. | `test/providers/transaction_undo_restore_test.dart` | Snapshot from `delete().select()`, re-insert the identical row (same id); receipt deletion deferred 10 s; snapshots dropped on sign-out. | ad26480 | N/A | 8/8 tests. |
 | UI-20 | 17 dialog `TextEditingController`s never disposed. | `test/widgets/dispose_on_unmount_test.dart` | `DisposeOnUnmount` disposes after the exit animation (14 sites); replaced sub-budget list controllers disposed. | 29b83f6 | N/A | Full suite 410/410; analyzer clean. |
+
+ARCH-04 follow-up (2026-10-20): the owner does not use GitHub Actions, so `.github/workflows/ci.yml` and `.gitleaks.toml` were removed. Run the gate commands in `docs/review/audit/MASTER_AUDIT_REPORT.md` §5 before each release.

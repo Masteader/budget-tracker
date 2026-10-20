@@ -21,7 +21,7 @@ Detailed reports: [`db.md`](db.md) · [`ai_service.md`](ai_service.md) · [`flut
 - **الإيميلات:** كل طلب دعم أو تسجيل VIP بينبعت فعلياً من `fmscoinfo@fmsco.com.sa` (لـ `CONTACT_RECIPIENT_EMAIL`)، وكل إيميل ظاهر للمستخدم صار `fmscoinfo@fmsco.com.sa`.
 - **الرسائل النصية:** انحذف كل شي له علاقة بقراءة SMS أو رسائل البنك، وضلت بس جملة "التطبيق ما بيقرأ رسائلك".
 - **النفقة:** ما في 50/50 بين الزوجين؛ الزوجة لما تدفع على شي مشترك بينسجّل دين على الزوج، ولما تشتري لنفسها بينخصم من ميزانية مصروفها.
-- **فحص تلقائي (CI)** على GitHub، و**تشفير رموز الدخول** بالتطبيق، وإصلاح رسائل "تم الحفظ" الوهمية والتراجع عن الحذف.
+- **تشفير رموز الدخول** بالتطبيق، وإصلاح رسائل "تم الحفظ" الوهمية والتراجع عن الحذف.
 
 **الاختبارات:** كلها ناجحة. Flutter: 466 اختبار (كانوا 141). Python: 387 (كان في 11 فاشلين). قاعدة البيانات: 19 من 19 (كانوا 2 بس ناجحين).
 
@@ -132,7 +132,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 1. **One source of truth for authorization.** Most High findings are one class of bug: the backend uses a privileged Supabase client and re-implements household checks by hand. Prefer forwarding the user's JWT to PostgREST so RLS enforces access, and reserve the secret key for narrow `SECURITY DEFINER` RPCs that check `auth.uid()` membership themselves. This removes the IDOR class instead of patching instances.
 2. **Money as integers end to end.** Store and compute halalas as `bigint` (or keep `numeric(14,2)` with `CHECK` constraints in DB), `Decimal` in Python (done), and a `Money` value type over `int` in Dart (MOB-29). Ban `double` for currency via an analyzer lint.
 3. **Single cycle specification.** `get_saudi_cycle_for_timestamp` is canonical. Keep the 109 vectors as a shared JSON fixture consumed by the SQL, pytest and Flutter suites so the three implementations cannot drift again.
-4. **Replayable migrations + CI.** CI is added (`.github/workflows/ci.yml`: Flutter, pytest, DB suite on `postgres:16`, web build/lint, gitleaks — ARCH-04). Still to do: re-baseline from live (`supabase db pull`), renumber duplicates, and confirm Actions is enabled on the repository.
+4. **Replayable migrations.** Re-baseline from live (`supabase db pull`), renumber duplicates, (the owner chose not to use GitHub Actions; run the gate commands in §5 before each release).
 5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token` and drop `WEBHOOK_SECRET` from app builds (MOB-23).
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
 7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18 and enforce them in RLS rather than in UI (UI-24 is decided and enforced in schema: `transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`).
@@ -154,7 +154,6 @@ All work is on `audit/claude-comprehensive-review` as merged streams (convention
 | Zero-SMS (API-25) | SMS scripts/pipeline deleted; migration `20261020200000_remove_sms_artifacts.sql` + test 18 (`sms` source removed, historical rows relabelled, none deleted) | [`ai_service.md`](ai_service.md) |
 | Email inquiries (WEB-09) | `mail_service.py`, `routes/inquiries.py`; web, both landings and app help center wired; served `ai_service/static` build refreshed | [`ui_web.md`](ui_web.md) |
 | Mobile reliability | MOB-19/26/27/28, UI-20/25 | [`flutter_logic.md`](flutter_logic.md) |
-| CI (ARCH-04) | `.github/workflows/ci.yml`, `.gitleaks.toml` | root `README.md` "CI" |
 | UI / i18n / web | ~760 strings localized (1206 keys × en/ar/ur, guard test); 32 RTL fixes; a11y labels; light-mode contrast tokens; lifecycle fixes; web a11y/perf/meta | [`ui_web.md`](ui_web.md) |
 
 Commands to reproduce the gates:
