@@ -1516,6 +1516,7 @@ class AppLocalizations {
       'pdf_preparing_msg': 'Downloading your PDF statement securely…',
       'pdf_download_failed': 'Statement Download Failed',
       'pdf_download_failed_msg': 'Could not download the PDF statement. Check your connection and try again.',
+      'setting_not_saved_server': 'The server did not confirm the change. Your previous setting is still in effect.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2753,6 +2754,7 @@ class AppLocalizations {
       'pdf_preparing_msg': 'جارٍ تنزيل كشف PDF بشكل آمن…',
       'pdf_download_failed': 'تعذر تنزيل الكشف',
       'pdf_download_failed_msg': 'تعذر تنزيل كشف PDF. تحقق من الاتصال وحاول مرة أخرى.',
+      'setting_not_saved_server': 'لم يؤكد الخادم التغيير، وما زال الإعداد السابق مطبقاً.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3990,6 +3992,7 @@ class AppLocalizations {
       'pdf_preparing_msg': 'آپ کی PDF اسٹیٹمنٹ محفوظ طریقے سے ڈاؤن لوڈ ہو رہی ہے…',
       'pdf_download_failed': 'اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی',
       'pdf_download_failed_msg': 'PDF اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔',
+      'setting_not_saved_server': 'سرور نے تبدیلی کی تصدیق نہیں کی، پچھلی سیٹنگ ہی لاگو ہے۔',
     },
   };
 
