@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/budget_provider.dart';
+import 'providers/household_role_provider.dart';
 import 'providers/installment_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/recurring_bills_provider.dart';
@@ -75,6 +76,7 @@ class BudgetTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BudgetProvider()),
         ChangeNotifierProvider(create: (_) => RecurringBillsProvider()),
         ChangeNotifierProvider(create: (_) => InstallmentProvider()),
+        ChangeNotifierProvider(create: (_) => HouseholdRoleProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..init()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
       ],
@@ -178,6 +180,7 @@ class _AuthGateState extends State<AuthGate> {
       } else {
         context.read<TransactionProvider>().reset();
         context.read<BudgetProvider>().reset();
+        context.read<HouseholdRoleProvider>().reset();
         ReceiptStorageService.clearSignedUrlCache();
       }
     });
@@ -194,6 +197,7 @@ class _AuthGateState extends State<AuthGate> {
       } else {
         context.read<TransactionProvider>().init(householdId);
         context.read<BudgetProvider>().init(householdId);
+        context.read<HouseholdRoleProvider>().load(householdId);
       }
     });
   }

@@ -296,4 +296,14 @@ class DependentCreateRequest(BaseModel):
     monthly_allowance: Optional[Money] = Field(0.0, description="Monthly allocated allowance in SAR")
 
 
+class PrimaryAdminTransferRequest(BaseModel):
+    """The primary admin hands primary ownership of the household to another member."""
+    new_primary_user_id: str = Field(..., description="User id of the member who becomes the primary admin")
+
+    @field_validator("new_primary_user_id")
+    @classmethod
+    def validate_new_primary_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
+
+
 

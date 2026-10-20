@@ -30,6 +30,10 @@ class Transaction {
   final String? qrCodeRaw;
   final String? rawSms;
 
+  /// Creator of the transaction (`transactions.user_id`, bound to the signed-in
+  /// user by the database). Null for legacy rows: only admins may change those.
+  final String? userId;
+
   /// Ingestion channels a transaction can come from (zero-SMS policy: no SMS channel).
   static const Set<String> sources = {'chat', 'receipt_scan', 'manual'};
 
@@ -55,6 +59,7 @@ class Transaction {
     this.dedupFingerprint,
     this.qrCodeRaw,
     this.rawSms,
+    this.userId,
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -176,6 +181,7 @@ class Transaction {
       qrCodeRaw: map['qr_code_raw'] as String? ??
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       rawSms: raw,
+      userId: map['user_id'] as String?,
     );
   }
 
@@ -238,6 +244,7 @@ class Transaction {
       'dedup_fingerprint': dedupFingerprint,
       'qr_code_raw': qrCodeRaw,
       'raw_sms': rawSms,
+      if (userId != null) 'user_id': userId,
     };
   }
 
@@ -263,6 +270,7 @@ class Transaction {
     String? dedupFingerprint,
     String? qrCodeRaw,
     String? rawSms,
+    String? userId,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -286,6 +294,7 @@ class Transaction {
       dedupFingerprint: dedupFingerprint ?? this.dedupFingerprint,
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
       rawSms: rawSms ?? this.rawSms,
+      userId: userId ?? this.userId,
     );
   }
 }

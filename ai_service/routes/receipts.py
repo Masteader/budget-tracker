@@ -6,10 +6,11 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from auth import verify_household_access, get_current_user_id
+from household_permissions import PermissionDeniedError
 from utils import safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import process_receipt_scan
@@ -102,6 +103,11 @@ async def scan_receipt(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)
         raise
+    except PermissionDeniedError as exc:
+        # Enriching another member's transaction needs a household admin (DB-18).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except Exception as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)

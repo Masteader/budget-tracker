@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -615,6 +616,16 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   Future<void> _deleteTransaction(BuildContext context, Transaction tx, {bool requireConfirm = false}) async {
     final txProvider = context.read<TransactionProvider>();
     final budgetProvider = context.read<BudgetProvider>();
+    // Undo re-inserts the row with its creator; the server only accepts that
+    // for the user's own transactions (an admin cannot re-create another
+    // member's entry in their name), so undo is offered for those only.
+    String? currentUserId;
+    try {
+      currentUserId = context.read<HouseholdRoleProvider>().currentUserId;
+    } on ProviderNotFoundException {
+      currentUserId = null;
+    }
+    final canUndo = tx.userId != null && tx.userId == currentUserId;
 
     if (requireConfirm) {
       final confirm = await showDialog<bool>(
@@ -651,7 +662,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          context.tr('tx_delete_failed_msg'),
+          txProvider.lastWriteDenied ? context.tr('perm_tx_admin_only') : context.tr('tx_delete_failed_msg'),
           title: context.tr('tx_delete_failed'),
         );
       }
@@ -672,7 +683,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         context,
         context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
         title: context.tr('tx_removed'),
-        onUndo: () async {
+        onUndo: !canUndo ? null : () async {
           // UI-25: re-insert the exact deleted row (same id, payer,
           // beneficiary, account, sub-category, receipt...), not a subset.
           final restored = await txProvider.restoreDeletedTransaction(tx.id);
@@ -703,8 +714,19 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     }
   }
 
+  /// The signed-in user's household role; null when no role provider is mounted
+  /// (the server still enforces every rule).
+  HouseholdRoleProvider? _watchRoles(BuildContext context) {
+    try {
+      return context.watch<HouseholdRoleProvider>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final roles = _watchRoles(context);
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -960,9 +982,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     separatorBuilder: (ctx, _) => const SizedBox(height: 6),
                                     itemBuilder: (ctx, i) {
                                       final tx = transactions[i];
+                                      // Members change only their own entries;
+                                      // admins any entry (DB-18).
+                                      final canModify = roles?.canModify(tx) ?? true;
                                       return Dismissible(
                                         key: Key(tx.id),
-                                        direction: DismissDirection.endToStart,
+                                        direction: canModify ? DismissDirection.endToStart : DismissDirection.none,
                                         background: Container(
                                           alignment: AlignmentDirectional.centerEnd,
                                           padding: const EdgeInsetsDirectional.only(end: 20),
@@ -1021,7 +1046,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           isInstallment: tx.isInstallment,
                                           installmentBadgeText: tx.installmentBadgeText,
                                           installmentProvider: tx.installmentProvider,
-                                          onEdit: () async {
+                                          lockedNote: canModify ? null : context.tr('perm_tx_locked_note'),
+                                          onEdit: !canModify ? null : () async {
                                             final res = await EditTransactionSheet.show(context, tx);
                                             if (res == 'deleted') {
                                               if (context.mounted) {
@@ -1043,7 +1069,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               }
                                             }
                                           },
-                                          onDelete: () => _deleteTransaction(context, tx, requireConfirm: true),
+                                          onDelete: !canModify ? null : () => _deleteTransaction(context, tx, requireConfirm: true),
                                         ),
                                       );
                                     },

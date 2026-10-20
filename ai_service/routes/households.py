@@ -20,6 +20,19 @@ from models import (
     DependentCreateRequest,
     CategoryToggleRequest,
     CustomCategoryCreateRequest,
+    PrimaryAdminTransferRequest,
+)
+from household_permissions import (
+    HouseholdPermissionError,
+    InvalidRoleChangeError,
+    MemberNotFoundError,
+    PermissionDeniedError,
+    can_record_settlement,
+    list_members,
+    member_role,
+    promote_member,
+    revoke_admin,
+    transfer_primary_admin,
 )
 from supabase_client import (
     get_household_payday,
@@ -339,6 +352,16 @@ async def record_household_reimbursement_endpoint(
         except Exception as exc:
             raise safe_error_response(exc, public_message="Failed to record reimbursement.")
         return {**result, "mode": "family_nafaqah", "is_settlement": False}
+    # A settlement attributes a payment to members: either party records it, or an admin (DB-18).
+    try:
+        caller_role = await asyncio.to_thread(member_role, household_id, caller)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+    if not can_record_settlement(caller, caller_role, payload.payer_id, payload.recipient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the payer, the recipient or a household admin can record this settlement.",
+        )
     try:
         return await asyncio.to_thread(
             record_household_reimbursement,
@@ -348,6 +371,7 @@ async def record_household_reimbursement_endpoint(
             amount=payload.amount,
             payment_method=payload.payment_method,
             notes=payload.notes,
+            recorded_by=caller,
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to record reimbursement.")
@@ -528,3 +552,102 @@ async def create_custom_category_endpoint(
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to create custom category.")
+
+
+
+# ─── Members, co-admins and the primary admin (owner decision on DB-16 / DB-18) ──
+
+def _permission_http_error(exc: HouseholdPermissionError) -> HTTPException:
+    if isinstance(exc, PermissionDeniedError):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    if isinstance(exc, MemberNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if isinstance(exc, InvalidRoleChangeError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+async def _run_roles(fn, *args, public_message: str):
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except HouseholdPermissionError as exc:
+        raise _permission_http_error(exc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise safe_error_response(exc, public_message=public_message)
+
+
+@router.get(
+    "/households/{household_id}/members",
+    tags=["households"],
+    summary="Members of the household with their roles; the primary admin is listed first.",
+)
+async def list_household_members(
+    household_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(list_members, household_id, caller, public_message="Failed to list members.")
+
+
+@router.post(
+    "/households/{household_id}/members/{member_user_id}/admin",
+    tags=["households"],
+    summary="Make a member an admin (co-admin). Any admin of the household may do this.",
+)
+async def promote_household_member(
+    household_id: str,
+    member_user_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        promote_member, household_id, caller, member_user_id, public_message="Failed to promote member."
+    )
+
+
+@router.delete(
+    "/households/{household_id}/members/{member_user_id}/admin",
+    tags=["households"],
+    summary="Revoke a co-admin. The primary admin and the last admin cannot be demoted.",
+)
+async def revoke_household_admin(
+    household_id: str,
+    member_user_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        revoke_admin, household_id, caller, member_user_id, public_message="Failed to revoke admin."
+    )
+
+
+@router.post(
+    "/households/{household_id}/primary-admin",
+    tags=["households"],
+    summary="Transfer primary admin to another member (primary admin only).",
+)
+async def transfer_household_primary_admin(
+    household_id: str,
+    payload: PrimaryAdminTransferRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        transfer_primary_admin,
+        household_id,
+        caller,
+        payload.new_primary_user_id,
+        public_message="Failed to transfer primary admin.",
+    )

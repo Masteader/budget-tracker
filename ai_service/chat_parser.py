@@ -574,7 +574,7 @@ def process_chat_transaction(
 
     # Explicit enrichment request
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items_dicts, household_id=household_id)
+        success = enrich_transaction_items(enrich_tx_id, items_dicts, household_id=household_id, actor_user_id=user_id)
         if not success:
             return {
                 "status": "error",
@@ -738,6 +738,7 @@ def process_chat_transaction(
         beneficiary=beneficiary,
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
+        user_id=user_id,
     )
 
     # Attach items fallback if needed

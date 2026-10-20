@@ -23,13 +23,15 @@ Detailed reports: [`db.md`](db.md) · [`ai_service.md`](ai_service.md) · [`flut
 - **النفقة:** ما في 50/50 بين الزوجين؛ الزوجة لما تدفع على شي مشترك بينسجّل دين على الزوج، ولما تشتري لنفسها بينخصم من ميزانية مصروفها.
 - **تشفير رموز الدخول** بالتطبيق، وإصلاح رسائل "تم الحفظ" الوهمية والتراجع عن الحذف.
 
-**الاختبارات:** كلها ناجحة. Flutter: 466 اختبار (كانوا 141). Python: 387 (كان في 11 فاشلين). قاعدة البيانات: 19 من 19 (كانوا 2 بس ناجحين).
+**الصلاحيات (قرار صاحب المشروع، للعائلة والسكن المشترك):** العضو بيعدّل أو بيحذف مصاريفه هو بس، والمسؤول (admin) بيعدّل أو بيحذف مصاريف الكل. السحب من الصندوق المشترك للمسؤولين بس. المسؤول بيقدر يعيّن أعضاء كمسؤولين إضافيين ويشيلهم، بس ما حدا منهم بيقدر يشيل المسؤول الرئيسي (صاحب البيت)، والمسؤول الرئيسي بس هو اللي بينقل الملكية.
+
+**الاختبارات:** كلها ناجحة. Flutter: 492 اختبار (كانوا 141). Python: 419 (كان في 11 فاشلين). قاعدة البيانات: 20 من 20 (كانوا 2 بس ناجحين).
 
 **المطلوب من صاحب المشروع قبل النشر** (التفاصيل بالقسم 6):
 1. ✅ `sb_secret` و`WEBHOOK_SECRET` الجديد صاروا على Railway (حسب صاحب المشروع). **باقي يتأكد إنه `APP_AUTH_TOKEN` تغيّر.**
 2. يضيف إعدادات إرسال الإيميل على Railway (Resend أو SMTP، القسم 6.1).
 3. ينشر بالترتيب: قاعدة البيانات، بعدين السيرفر، بعدين نسخة التطبيق الجديدة.
-4. ياخد قرار بسؤالين عن طريقة عمل المنتج (القسم 6.3).
+4. ✅ قرار السؤالين عن طريقة عمل المنتج (DB-16 وDB-18) اتاخد وانطبّق (القسم 6.3).
 
 ---
 
@@ -51,9 +53,9 @@ Scores are the auditors' qualitative assessment (0–10) of the code as found vs
 | Gate | Baseline (`f17eb2b`) | Final |
 |---|---|---|
 | `flutter analyze` | 0 issues | 0 issues |
-| `flutter test` | 141 passed | **466 passed**, 0 failed |
-| `pytest` (ai_service) | 127 passed, **11 failed**, 6 skipped (and non-hermetic: talks to live Supabase when a dev `.env` exists) | **387 passed**, 0 failed; no network, no `.env`, no LLM |
-| DB SQL suites (local Postgres 16, rebuilt from scratch) | 2 passed / 5 failed | **19 / 19 passed** |
+| `flutter test` | 141 passed | **492 passed**, 0 failed |
+| `pytest` (ai_service) | 127 passed, **11 failed**, 6 skipped (and non-hermetic: talks to live Supabase when a dev `.env` exists) | **419 passed**, 0 failed; no network, no `.env`, no LLM |
+| DB SQL suites (local Postgres 16, rebuilt from scratch) | 2 passed / 5 failed | **20 / 20 passed** |
 | `web_app` build + lint | pass, 1 lint warning | pass, 0 warnings |
 
 ---
@@ -102,6 +104,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 - **Offline sync:** stuck rows after app kill, merged identical purchases, retry budget burned by network errors, re-entrant drains, receipt blobs in SQLite (MOB-04/05/09/10/11, fixed).
 - **Security hardening:** Redis limiter correctness and `X-Forwarded-For` spoofing (API-09/10); missing `ENV` treated as dev, API docs public in prod (API-11/29); JWT `exp` not required / no role check / unthrottled JWKS (API-12); stale membership honoured (API-13); receipt path traversal and MIME checks (API-23); receipts bucket without size/type limits (DB-11); search_path not pinned (DB-09); vulnerable `python-jose` (API-28).
 - **Account lifecycle:** sole admin could not delete their account (DB-12).
+- **Household permissions (DB-16 / DB-18, resolved by owner decision; family and roommate alike):** a member creates transactions and edits/deletes only their own; only admins edit or delete another member's (creator bound to `auth.uid()` at insert, immutable, refusals raised as 403). Only admins move money out of a shared pool. Admins promote/revoke co-admins; the primary admin (`households.owner_user_id`) cannot be demoted or removed by a co-admin and alone transfers primary admin; last-admin protections unchanged. Migration `20261020400000_admin_permissions_and_co_admins.sql` + DB test 20; API owner-or-admin checks and `/households/{id}/members`, `/members/{uid}/admin`, `/primary-admin` (`ai_service/tests/test_household_permissions.py`); app hides other members' edit/delete and pool withdrawals for members, adds a Members & Admins section.
 - **Islamic family finance (UI-24, resolved by owner decision; extends API-16/17):** family mode never splits between the spouses. Wife-paid shared expenses are a debt the husband owes her (`nafaqah_class = wife_reimbursable`, append-only `spouse_reimbursements`, partial/full repayment, overpayment rejected); her personal purchases are charged to a per-cycle allowance (`member_allowances`, overspend shown negative); husband-paid shared expenses stay plain expenses. Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + DB test 19; API `/households/{id}/nafaqah*` (`ai_service/tests/test_nafaqah.py`); app family card, allowance card and Nafaqah selector (no "Shared 50/50" in family mode). Roommate mode unchanged.
 - **Tests that could not fail:** DB suites 03/06/07 (DB-14) — note FIX_LOG SEC-06/SEC-08 "verified" entries relied on them.
 - **UI/UX:** 32 RTL mirroring fixes; 22 icon buttons labelled; ~15 white-on-white spots in light mode; brand teal/green text failing contrast replaced by AA tokens; ~25 `mounted`/context-after-await fixes; leaked subscriptions/controllers.
@@ -115,9 +118,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | ID | Sev | Item | Why open |
 |---|---|---|---|
 | DB-15 | Medium | Migration chain not replayable by Supabase CLI (order, duplicate versions); live has drifted. | Needs fresh baseline from live (owner). Local replay fixed. |
-| DB-16 | Medium (suspected) | Any member can move the whole shared pool to their own account. | Product decision |
-| DB-18 | Low (suspected) | Transaction owner not bound to creator; members can edit each other's. | Product decision |
-| DB-17 | Low | Non-admins can read join code via direct table read. | App now uses RPC (MOB-25); tighten policy after new app is adopted |
+| DB-17 | Low | Non-admins can read join code via direct table read. | App now uses RPC (MOB-25). A column revoke cannot exempt admins and breaks the household settings screen of released builds for every user; apply after old builds are retired ([`db.md`](db.md#db-17-members-can-read-the-static-join-code-low-still-open)) |
 | API-32 | Medium (suspected) | Cycle rollover vs savings sweep can double-apply. | Needs DB locking function |
 | API-33 | Medium | Local JSON / in-memory fallbacks diverge across containers. | Design change (require Redis/DB) |
 | API-34/35 | Low | Chat category overrides not validated; JWT decoded twice; full scan after insert. | Low priority |
@@ -135,7 +136,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 4. **Replayable migrations.** Re-baseline from live (`supabase db pull`), renumber duplicates, (the owner chose not to use GitHub Actions; run the gate commands in §5 before each release).
 5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token` and drop `WEBHOOK_SECRET` from app builds (MOB-23).
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
-7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18 and enforce them in RLS rather than in UI (UI-24 is decided and enforced in schema: `transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`).
+7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories. UI-24 (`transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`) and DB-16/DB-18 (creator binding, owner-or-admin writes, admin-only pool withdrawals, co-admins with a protected primary admin) are decided and enforced in the database.
 8. **Mobile hardening.** Tokens are now in `flutter_secure_storage` (MOB-19); certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
 9. **Repository hygiene.** SMS/dev simulation scripts, the legacy SMS pipeline and the `sms` transaction channel are deleted (API-25, guarded by tests); keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
 
@@ -182,11 +183,10 @@ cd web_app && npm ci && npm run build && npm run lint
 6. **Supabase Auth emails** (sign-up, password reset) are configured in the Supabase dashboard, not in this repo: set Authentication → SMTP Settings → Sender email to `fmscoinfo@fmsco.com.sa` so all mail comes from one address.
 
 ### 6.2 Deployment order
-1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020200000_remove_sms_artifacts.sql` (rejects new `source = 'sms'` rows — ship with the new app build) and `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs). Re-baseline the migration chain for the Supabase CLI (DB-15).
-2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client.
+1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020200000_remove_sms_artifacts.sql` (rejects new `source = 'sms'` rows — ship with the new app build) and `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs), then `20261020400000_admin_permissions_and_co_admins.sql` (DB-16/DB-18 permissions, co-admins and the primary admin; deploy before the backend that calls its role RPCs; transactions without a recorded creator become admin-only, so check `SELECT count(*) FROM transactions WHERE user_id IS NULL` first). Re-baseline the migration chain for the Supabase CLI (DB-15).
+2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client. Older app builds keep working with the permission migration: their inserts without `user_id` are attributed to the signed-in user, and a refused edit, delete or pool transfer comes back as an error the old app already shows (its optimistic delete rolls back) instead of a silent no-op.
 3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
 
 ### 6.3 Product decisions needed
-- DB-16: may any member move the entire shared pool into their own account?
-- DB-18: may members edit each other's transactions?
+None. DB-16 and DB-18 were decided by the owner (2026-10-20): only admins move money out of shared pools and edit or delete other members' transactions; admins can appoint co-admins, who cannot demote the primary admin.

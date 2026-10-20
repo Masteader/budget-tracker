@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'api/base_api_client.dart';
 import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
+import 'api/household_roles_api_client.dart';
 import 'api/nafaqah_api_client.dart';
 import 'api/receipt_api_client.dart';
 import 'api/support_api_client.dart';
@@ -237,6 +238,20 @@ class ApiService {
 
   Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
       budget.recordReimbursementPayment(request: request);
+
+  // ── Members, co-admins and the primary admin (DB-16 / DB-18) ───────────────
+  late final HouseholdRolesApiClient roles = HouseholdRolesApiClient(baseClient: base);
+
+  Future<HouseholdRoster> getHouseholdMembers(String householdId) => roles.fetchMembers(householdId);
+
+  Future<HouseholdRoster> promoteHouseholdAdmin(String householdId, String userId) =>
+      roles.promoteToAdmin(householdId, userId);
+
+  Future<HouseholdRoster> revokeHouseholdAdmin(String householdId, String userId) =>
+      roles.revokeAdmin(householdId, userId);
+
+  Future<HouseholdRoster> transferPrimaryAdmin(String householdId, String newPrimaryUserId) =>
+      roles.transferPrimaryAdmin(householdId, newPrimaryUserId);
 
   // ── Family Nafaqah (husband-owes-wife ledger, wife allowance) ──────────────
   late final NafaqahApiClient nafaqah = NafaqahApiClient(baseClient: base);

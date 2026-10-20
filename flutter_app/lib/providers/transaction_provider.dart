@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../models/models.dart';
+import '../services/household_permissions.dart';
 import '../services/receipt_storage_service.dart';
 
 /// Centralized reactive state provider for all transactions in the household.
@@ -45,6 +46,11 @@ class TransactionProvider extends ChangeNotifier {
   String _searchQuery = '';
   String? _categoryFilter;
   String? _spentByFilter; // 'all' | 'me' | 'partner' | 'both'
+
+  /// True when the last failed delete/update was refused by the server for lack
+  /// of rights (another member's transaction and the user is no admin, DB-18).
+  bool _lastWriteDenied = false;
+  bool get lastWriteDenied => _lastWriteDenied;
 
   // Getters
   bool get isLoading => _isLoading;
@@ -258,6 +264,7 @@ class TransactionProvider extends ChangeNotifier {
     if (existingIdx == -1) return false;
 
     final removedTx = _transactions.removeAt(existingIdx);
+    _lastWriteDenied = false;
     _recomputeFiltered();
     notifyListeners();
 
@@ -274,6 +281,7 @@ class TransactionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');
+      _lastWriteDenied = HouseholdPermissions.isPermissionDenied(e);
       // Rollback
       _transactions.insert(existingIdx, removedTx);
       _recomputeFiltered();
@@ -375,9 +383,11 @@ class TransactionProvider extends ChangeNotifier {
       receiptUrl: original.receiptUrl,
       dedupFingerprint: original.dedupFingerprint,
       rawSms: original.rawSms,
+      userId: original.userId,
     );
 
     _transactions[existingIdx] = updated;
+    _lastWriteDenied = false;
     _recomputeFiltered();
     notifyListeners();
 
@@ -396,6 +406,7 @@ class TransactionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[TransactionProvider] Update failed, rolling back: $e');
+      _lastWriteDenied = HouseholdPermissions.isPermissionDenied(e);
       _transactions[existingIdx] = original;
       _recomputeFiltered();
       notifyListeners();

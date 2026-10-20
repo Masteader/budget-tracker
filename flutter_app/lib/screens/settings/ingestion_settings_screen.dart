@@ -14,10 +14,12 @@ import '../../widgets/dashboard/family_reimbursement_card.dart';
 import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import 'package:provider/provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
+import '../../widgets/settings/household_roles_card.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
@@ -124,6 +126,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         }
       }
     } catch (_) {}
+  }
+
+  /// A role change was confirmed by the server: refresh the signed-in user's
+  /// own role (badge, edit rights, shared-pool transfers).
+  void _onRolesChanged() {
+    try {
+      context.read<HouseholdRoleProvider>().refresh();
+    } catch (_) {}
+    _loadUserInfo();
   }
 
   Future<void> _loadHouseholdDetails(String hid) async {
@@ -781,6 +792,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               onCreateHousehold: _showCreateHouseholdDialog,
               onAddDependent: _showAddDependentDialog,
               onRemoveDependent: _removeDependent,
+            ),
+            const SizedBox(height: 16),
+            HouseholdRolesCard(
+              householdId: _householdId!,
+              onRolesChanged: _onRolesChanged,
             ),
             const SizedBox(height: 16),
             PaydaySettingsCard(

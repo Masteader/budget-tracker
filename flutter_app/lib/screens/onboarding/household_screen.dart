@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
@@ -101,6 +102,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
         context.read<BudgetProvider>().init(householdId);
+        try {
+          context.read<HouseholdRoleProvider>().load(householdId);
+        } catch (_) {}
         AppSnackBar.showSuccess(
           context,
           context.trArgs('hh_created_with_code', {'name': hh['name'], 'code': hh['invite_code']}),
@@ -158,6 +162,9 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           await context.read<TransactionProvider>().init(householdId);
         } catch (_) {}
         if (!mounted) return;
+        try {
+          context.read<HouseholdRoleProvider>().load(householdId);
+        } catch (_) {}
         try {
           await context.read<BudgetProvider>().init(householdId);
         } catch (_) {}
