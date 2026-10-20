@@ -80,5 +80,40 @@ void main() {
       expect(pending.first.retryCount, equals(0));
       expect(pending.first.lastError, contains('Backend unreachable'));
     });
+
+    // FR-A-04: a commit that failed online is queued only when a later replay
+    // can succeed; a refusal (400/403/409/422) is shown, not parked offline.
+    test('shouldQueueAfterOnlineFailure queues only transient failures', () {
+      Map<String, dynamic> err(int? code) => {'status': 'error', if (code != null) 'status_code': code};
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(null)), isTrue); // offline / timeout
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(502)), isTrue);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(500)), isTrue);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(429)), isTrue);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(400)), isFalse);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(403)), isFalse);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(409)), isFalse);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(422)), isFalse);
+      expect(SyncWorker.shouldQueueAfterOnlineFailure({'status': 'success'}), isFalse);
+    });
+
+    test('a queued receipt replays with the key of the online attempt', () async {
+      String? sentKey;
+      await queueManager.enqueue(
+        operationType: 'receipt',
+        payload: {'images_base64': ['aGk=']},
+        householdId: 'h-1',
+        idempotencyKey: 'online-attempt-key',
+      );
+      worker = SyncWorker(
+        queueManager: queueManager,
+        interItemDelay: Duration.zero,
+        customDispatcher: (item) async {
+          sentKey = item.idempotencyKey;
+          return {'status': 'success'};
+        },
+      );
+      expect(await worker.drainQueue(), 1);
+      expect(sentKey, 'online-attempt-key');
+    });
   });
 }

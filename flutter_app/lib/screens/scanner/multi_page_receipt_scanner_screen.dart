@@ -8,6 +8,8 @@ import '../../models/nafaqah.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/sync_worker.dart' show SyncWorker;
+import 'package:uuid/uuid.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_review_section.dart';
@@ -118,6 +120,11 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
       return;
     }
     final nafaqah = _nafaqahFields;
+    // One key for the online attempt and its offline replay: a request that
+    // timed out after the server stored the receipt is not booked twice when
+    // the queue replays it (FR-A-04).
+    final idempotencyKey = const Uuid().v4();
+    final occurredAt = DateTime.now();
 
     setState(() {
       _isProcessing = true;
@@ -139,6 +146,8 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         beneficiary: nafaqah['beneficiary'],
         nafaqahClass: nafaqah['nafaqah_class'],
         nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+        idempotencyKey: idempotencyKey,
+        occurredAt: occurredAt,
       );
 
       _safeSetState(() => _isProcessing = false);
@@ -151,9 +160,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
             title: context.tr('mp_saved_title'),
           );
           Navigator.pop(context, true);
-        } else if (res['status'] == 'error' && res['status_code'] != 422) {
-          // If offline, enqueue (a 422 is the server refusing the request itself)
-          await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg');
+        } else if (SyncWorker.shouldQueueAfterOnlineFailure(res)) {
+          // Offline or a transient server failure; a refusal is shown below.
+          await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg', idempotencyKey: idempotencyKey);
         } else {
           _safeSetState(() {
             _errorMessage = res['message'] ?? context.tr('mp_parse_failed');
@@ -169,7 +178,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           final bytes = await f.readAsBytes();
           base64List.add(base64Encode(bytes));
         }
-        await _queueOffline(base64List, messageKey: 'mp_queued_offline_short');
+        await _queueOffline(base64List, messageKey: 'mp_queued_offline_short', idempotencyKey: idempotencyKey);
       } catch (_) {
         _safeSetState(() => _errorMessage = context.trArgs('mp_process_failed', {'error': e}));
       }
@@ -179,12 +188,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
   /// Stores the shots in the offline queue and reports "queued" only when the
   /// write succeeded (MOB-28). On failure the shots stay on screen with an
   /// error so the user can retry; nothing was stored.
-  Future<void> _queueOffline(List<String> base64List, {required String messageKey}) async {
+  Future<void> _queueOffline(List<String> base64List, {required String messageKey, String? idempotencyKey}) async {
     try {
       await OfflineSyncService.instance.enqueue(
         endpoint: 'receipt',
         payload: {'images_base64': base64List, ..._nafaqahFields},
         householdId: widget.householdId,
+        idempotencyKey: idempotencyKey,
       );
     } catch (err) {
       debugPrint('[MultiPageScanner] Offline queue write failed: $err');

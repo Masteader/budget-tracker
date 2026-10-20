@@ -237,6 +237,19 @@ class SyncWorker {
     }
   }
 
+  /// Whether an online commit that came back as [res] should be stored in the
+  /// offline queue: only when it never completed (offline, timeout) or failed
+  /// for a reason a later replay can overcome (5xx, 408/425/429). A refusal of
+  /// the request itself (400/401/403/404/409/422) is shown to the user instead
+  /// of being parked as "saved offline" and failing on every replay (FR-A-04).
+  static bool shouldQueueAfterOnlineFailure(Map<String, dynamic> res) {
+    if (res['status'] != 'error') return false;
+    final raw = res['status_code'];
+    final code = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
+    if (code == null) return true;
+    return code >= 500 || code == 408 || code == 425 || code == 429;
+  }
+
   static ReplayOutcome _classifyStatusCode(Object? rawCode) {
     final code = rawCode is num ? rawCode.toInt() : int.tryParse('$rawCode');
     // No HTTP status means the request never completed (offline, DNS, timeout).
