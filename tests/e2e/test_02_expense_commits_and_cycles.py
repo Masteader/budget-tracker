@@ -188,3 +188,16 @@ def test_occurred_at_window_is_enforced(world, llm):
     too_old = datetime.now(timezone.utc) - timedelta(days=120)
     res = world.chat_commit(flat.admin, flat, llm, merchant="Old", amount=5, occurred_at=_iso(too_old))
     assert res.status_code == 400
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "BUG E2E-03: a chat commit whose category_code override is not in the taxonomy answers 500 "
+    "(the DB trigger's 23503 'Category code ... does not exist' surfaces through insert_transaction's "
+    "fallback chain as an unhandled APIError) instead of a 4xx telling the client to pick a category."
+))
+def test_unknown_category_override_is_a_client_error(world, db, llm):
+    flat = world.roommates("C3", n_members=0)
+    res = world.chat_commit(flat.admin, flat, llm, merchant="Mystery", amount=12, category_code="OPEX-NOPE",
+                            extra_body={"category_code": "OPEX-NOPE"})
+    assert 400 <= res.status_code < 500, (res.status_code, res.text)
+    assert db.scalar("SELECT count(*) FROM public.transactions WHERE household_id = %s", (flat.id,)) == 0
