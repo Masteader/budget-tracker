@@ -14,18 +14,18 @@ python -c "import secrets; print('APP_AUTH_TOKEN=bt_sec_' + secrets.token_hex(16
 ```
 
 ## 3. Server Deployment Update
-1. Update `.env` on your deployment host (e.g. VPS / Cloud Run / Coolify):
+1. Update the environment of the deployment host (Railway today; or a VPS / container host with `ai_service/.env`):
    ```bash
    WEBHOOK_SECRET=<new-generated-hex-64>
-   APP_AUTH_TOKEN=<new-generated-bt-sec-token>
-   SUPABASE_JWT_SECRET=<supabase-project-jwt-secret>
-   REDIS_URL=redis://redis:6379/0
-   ENV=production
+   APP_AUTH_TOKEN=<new-generated-bt-sec-token>   # legacy firewall pass for old app builds only
+   ENV=production                                # unset also counts as production
+   # optional:
+   # SUPABASE_JWT_SECRET=<legacy-hs256-jwt-secret>  # only if the project still issues HS256 user tokens
+   # REDIS_URL=redis://<your-redis-host>:6379/0     # docker-compose.yml starts no Redis service
    ```
-2. Restart the AI service container:
-   ```bash
-   docker compose down && docker compose up -d --build
-   ```
+2. Redeploy / restart the service (with Docker Compose: `cd ai_service && docker compose down && docker compose up -d --build`).
+3. Rotating the Supabase secret key or the Google/Gemini key follows the same pattern; step-by-step
+   owner procedures are in [`../review/OWNER_ACTIONS.md`](../review/OWNER_ACTIONS.md).
 
 ## 4. Mobile Client Build Update
 When building the Flutter APK/iOS bundle, supply the values strictly via `--dart-define`.
