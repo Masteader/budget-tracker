@@ -160,7 +160,7 @@ class AccountsSummaryCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      context.trArgs('across_accounts', {'count': accounts.length}),
+                      context.trPlural('across_accounts', accounts.length),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,

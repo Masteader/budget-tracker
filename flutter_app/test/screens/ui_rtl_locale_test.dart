@@ -69,7 +69,7 @@ void main() {
 
     expect(find.text('يوم 27 من الشهر'), findsOneWidget);
     expect(find.textContaining('27th'), findsNothing);
-    expect(find.text('الراتب ودورة الصرف'), findsOneWidget);
+    expect(find.text('يوم الراتب ودورة الراتب'), findsOneWidget);
   });
 
   testWidgets('login screen survives 2x text scale on a 360dp phone', (tester) async {

@@ -76,7 +76,7 @@ class HouseholdManagementCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      members.length == 1 ? context.tr('hmc_one_active_member') : context.trArgs('hmc_active_members', {'count': members.length}),
+                      context.trPlural('hmc_active_members', members.length),
                       style: TextStyle(color: context.textSecondary, fontSize: 12),
                     ),
                   ],

@@ -1055,7 +1055,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             const SizedBox(height: 4),
                             Text(
                               isOverAllocated
-                                  ? '${context.tr('allocations_exceed_salary')} ${fmt.format(income)}.'
+                                  ? context.trArgs('allocations_exceed_salary', {'amount': context.sar(income)})
                                   : context.tr('protected_buffer_desc'),
                               style: TextStyle(
                                 fontSize: 11,

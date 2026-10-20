@@ -257,7 +257,9 @@ class _SalaryCycleWidgetState extends State<SalaryCycleWidget> {
                     child: Text(
                       paceStatus == 'exhausted'
                           ? context.tr('cycle_alert_exceeded')
-                          : context.trArgs('cycle_alert_burn_high', {'date': _data!['forecast_run_out_date'] ?? context.tr('before_payday')}),
+                          : _data!['forecast_run_out_date'] == null
+                              ? context.tr('cycle_alert_burn_high_no_date')
+                              : context.trArgs('cycle_alert_burn_high', {'date': _data!['forecast_run_out_date']}),
                       style: TextStyle(color: paceColor, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                   ),

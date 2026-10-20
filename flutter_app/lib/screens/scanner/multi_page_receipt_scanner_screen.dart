@@ -470,7 +470,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ),
                             icon: const Icon(Icons.add_a_photo_outlined, size: 20),
                             label: Text(
-                              _capturedShots.isEmpty ? context.tr('take_shot_1') : '${context.tr('take_shot_n')}${_capturedShots.length + 1}',
+                              context.trArgs('take_shot_n', {'n': _capturedShots.length + 1}),
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             onPressed: _isProcessing ? null : _captureShot,

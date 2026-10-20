@@ -44,6 +44,16 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
   const reserveBuffer = safeIncome * 0.15;
   const discretionaryPool = safeIncome * 0.35;
   const dailyRate = discretionaryPool / 30;
+  // Count label with the right plural form (Arabic: 1, 2, 3–10 and 11+ all differ).
+  // A form with {val} shows the big number before the label; one without it
+  // (Arabic "يوم واحد" / "يومان") is shown on its own.
+  const countdownForms = dict.simulator.countdownDays;
+  const countdownForm =
+    countdownForms[new Intl.PluralRules(lang).select(remainingDays)] ?? countdownForms.other;
+  const countdownParts = countdownForm.includes('{val}')
+    ? { number: true, label: countdownForm.replace('{val}', '').trim() }
+    : { number: false, label: countdownForm };
+
   const availableRemaining = remainingDays === 0 ? discretionaryPool : (remainingDays * dailyRate);
   const safeDaily = (remainingDays === 0 ? dailyRate : (availableRemaining / remainingDays)).toFixed(2);
 
@@ -339,12 +349,19 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                       </span>
                     </div>
                     <div className="text-3xl font-bold font-mono text-[#0c2530] mb-1">
-                      {remainingDays === 0 ? dict.simulator.payToday : remainingDays}{' '}
-                      <span className="text-sm font-normal text-slate-400">
-                        {remainingDays === 0
-                          ? dict.simulator.paydayToday
-                          : dict.simulator.countdownDays.replace('{val}', '').trim()}
-                      </span>
+                      {remainingDays === 0 ? (
+                        <>
+                          {dict.simulator.payToday}{' '}
+                          <span className="text-sm font-normal text-slate-400">{dict.simulator.paydayToday}</span>
+                        </>
+                      ) : countdownParts.number ? (
+                        <>
+                          {remainingDays}{' '}
+                          <span className="text-sm font-normal text-slate-400">{countdownParts.label}</span>
+                        </>
+                      ) : (
+                        <span className="text-xl">{countdownParts.label}</span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 mt-2">
                       {dict.simulator.availableRemaining}
@@ -747,17 +764,27 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
                     <div className="p-4 rounded-xl bg-[#f8fdff] border border-[#d4ebf0] flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm">
                       <div>
                         <div className="text-xs font-semibold text-[#0c2530]">
-                          {dict.simulator.splitResolutionTitle}
+                          {splitMode === 'family'
+                            ? dict.simulator.splitResolutionTitleFamily
+                            : dict.simulator.splitResolutionTitle}
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          {dict.simulator.splitResolutionDesc}
+                          {splitMode === 'family'
+                            ? dict.simulator.splitResolutionDescFamily
+                            : dict.simulator.splitResolutionDesc}
                         </div>
                       </div>
                       <button
                         onClick={handleSettleRequest}
                         className="px-4 py-2.5 rounded-lg bg-[#00808c] text-white text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-sm whitespace-nowrap"
                       >
-                        {settleSuccess ? dict.simulator.splitSettleSent : dict.simulator.splitSettleBtn}
+                        {splitMode === 'family'
+                          ? settleSuccess
+                            ? dict.simulator.splitSettleSentFamily
+                            : dict.simulator.splitSettleBtnFamily
+                          : settleSuccess
+                            ? dict.simulator.splitSettleSent
+                            : dict.simulator.splitSettleBtn}
                       </button>
                     </div>
                   </div>

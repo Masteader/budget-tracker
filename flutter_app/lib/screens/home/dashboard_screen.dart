@@ -70,7 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context.read<RecurringBillsProvider>().fetchBills();
         AppSnackBar.showSuccess(
           context,
-          context.trArgs('sync_complete_msg', {'count': count}),
+          context.trPlural('sync_complete_msg', count),
           title: context.tr('sync_complete'),
           icon: Icons.cloud_done_rounded,
         );
@@ -475,7 +475,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            '$pending ${context.tr('queued_offline')}',
+                                            context.trPlural('queued_offline', pending),
                                             style: TextStyle(
                                               color: context.textPrimary,
                                               fontSize: 12,
@@ -699,7 +699,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
-                                    title: '${context.tr('no_allocations_for_cycle')} $_currentCycleKey',
+                                    title: context.trArgs('no_allocations_for_cycle', {'cycle': context.cycleMonth(_currentCycleKey)}),
                                     message: context.tr('budgets_auto_rollover_desc'),
                                   ),
                                 ),

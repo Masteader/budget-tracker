@@ -52,7 +52,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Budget Tracker • ميزانية الأسرة الذكية</title>
-  <meta name="description" content="منصة Budget لإدارة ميزانية الأسرة والحوكمة المالية في السعودية. دورة راتب مرنة، مسح فواتير ZATCA بالذكاء الاصطناعي، تقسيم المصاريف بين الشركاء والأبناء.">
+  <meta name="description" content="منصة Budget لإدارة ميزانية الأسرة والحوكمة المالية في السعودية. دورة راتب مرنة، مسح فواتير ZATCA بالذكاء الاصطناعي، متابعة النفقة الشرعية للأسرة، وتقسيم المصاريف بين شركاء السكن.">
 
   <!-- Favicon: stylized Budget brandmark in obsidian with glowing terracotta accent -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23C2783C'/%3E%3Cstop offset='100%25' stop-color='%23F5C06E'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%23080709' stroke='%23C2783C' stroke-width='2' stroke-opacity='0.4'/%3E%3Ctext x='48%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='Georgia,serif' font-style='italic' font-weight='bold' font-size='38' fill='url(%23g)'%3EB%3C/text%3E%3Ccircle cx='48' cy='46' r='4' fill='%23F0A05A'/%3E%3C/svg%3E">
@@ -429,7 +429,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <span data-i18n="h1a">تحكّم مطلق في</span>
       <span class="h1i" data-i18n="h1b">ميزانية الأسرة.</span>
     </h1>
-    <p class="hsub" data-i18n="hs">منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.</p>
+    <p class="hsub" data-i18n="hs">منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، ومتابعة النفقة الشرعية للأسرة، وتوزيع عادل بين شركاء السكن.</p>
     <div class="hact">
       <a href="#stage"    class="bp" data-i18n="c1">⚡ ابدأ التجربة الحية</a>
       <a href="#features" class="bg" data-i18n="c2">← استكشف المميزات الـ 12</a>
@@ -466,7 +466,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
         <button class="stab on" id="s1" onclick="swTab('sim')">📅 <span data-i18n="t1">دورة الراتب</span></button>
         <button class="stab"    id="s2" onclick="swTab('ai')">✨ <span data-i18n="t2">مساعد الذكاء</span></button>
         <button class="stab"    id="s3" onclick="swTab('zatca')">🧾 <span data-i18n="t3">فواتير ZATCA</span></button>
-        <button class="stab"    id="s4" onclick="swTab('split')">👥 <span data-i18n="t4">توزيع الأسرة</span></button>
+        <button class="stab"    id="s4" onclick="swTab('split')">👥 <span data-i18n="t4">توزيع السكن المشترك</span></button>
       </div>
       <div class="ldot" style="margin:0 6px"></div>
     </div>
@@ -477,7 +477,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
         <div class="simbox">
           <div class="simh">
             <div class="simt">⚙️ <span data-i18n="simT">حدد يوم نزول راتبك الشهري (1 - 31)</span></div>
-            <div class="chip" style="font-size:12px;padding:4px 10px;background:rgba(52,211,153,.13);border-color:rgba(52,211,153,.35);color:#34D399;" data-i18n="simB">✓ موازنة العطلات تلقائياً</div>
+            <div class="chip" style="font-size:12px;padding:4px 10px;background:rgba(52,211,153,.13);border-color:rgba(52,211,153,.35);color:#34D399;" data-i18n="simB">✓ تعديل تلقائي عند العطلات</div>
           </div>
           <div style="margin-bottom:22px">
             <div class="rlbl">
@@ -498,7 +498,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <!-- Tab 2: AI Chat -->
       <div id="p-ai" class="tp">
         <div class="chatbox">
-          <div class="bu" data-i18n="cu">"عشاء عائلي في البيك بـ 68 ريال، دفعتها أنا للأسرة"</div>
+          <div class="bu" data-i18n="cu">"عشاء عائلي في البيك بـ 68 ريال، دفعته أنا للأسرة"</div>
           <div class="bai">
             <div style="font-size:12.5px;color:var(--terra-b);font-weight:700;margin-bottom:8px">🤖 <span data-i18n="cai">تم استخراج المعاملة بالذكاء الاصطناعي بدقة عالية</span></div>
             <div class="apc">
@@ -550,21 +550,21 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <div id="p-split" class="tp">
         <div class="splitp">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:15px;font-weight:800;color:var(--t0)" data-i18n="spt">محاكاة توزيع المصاريف بين الشركاء والأبناء</span>
-            <span class="chip" style="background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.35);color:#7DD3FC">توزيع عادل</span>
+            <span style="font-size:15px;font-weight:800;color:var(--t0)" data-i18n="spt">محاكاة توزيع المصاريف بين شركاء السكن</span>
+            <span class="chip" style="background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.35);color:#7DD3FC" data-i18n="spc">توزيع عادل</span>
           </div>
           <div class="splitbar">
             <div class="sy" id="spty" style="width:60%"></div>
             <div class="sp" id="sptp" style="width:40%"></div>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--t2)">
-            <div><span style="display:inline-block;width:10px;height:10px;background:var(--terra);border-radius:2px;margin-inline-end:6px"></span><span data-i18n="spy">حصة الشريك الأول (أنت)</span>: <strong style="color:var(--t0)" id="pcy">60%</strong></div>
-            <div><span style="display:inline-block;width:10px;height:10px;background:var(--cyan);border-radius:2px;margin-inline-end:6px"></span><span data-i18n="spp">حصة الشريك الثاني</span>: <strong style="color:var(--t0)" id="pcp">40%</strong></div>
+            <div><span style="display:inline-block;width:10px;height:10px;background:var(--terra);border-radius:2px;margin-inline-end:6px"></span><span data-i18n="spy">حصة شريك السكن الأول (أنت)</span>: <strong style="color:var(--t0)" id="pcy">60%</strong></div>
+            <div><span style="display:inline-block;width:10px;height:10px;background:var(--cyan);border-radius:2px;margin-inline-end:6px"></span><span data-i18n="spp">حصة شريك السكن الثاني</span>: <strong style="color:var(--t0)" id="pcp">40%</strong></div>
           </div>
           <div class="dchips">
-            <div class="dc">👶 سارة (ابنة) — 340 <span class="cur-unit">ر.س</span></div>
-            <div class="dc">👦 عمر (ابن) — 280 <span class="cur-unit">ر.س</span></div>
-            <div class="dc">🏠 مصاريف مشتركة للمنزل — 1,200 <span class="cur-unit">ر.س</span></div>
+            <div class="dc"><span data-i18n="dc1">🏠 إيجار الشقة</span> — 3,000 <span class="cur-unit">ر.س</span></div>
+            <div class="dc"><span data-i18n="dc2">⚡ الكهرباء والإنترنت</span> — 700 <span class="cur-unit">ر.س</span></div>
+            <div class="dc"><span data-i18n="dc3">🛒 مقاضي مشتركة</span> — 1,200 <span class="cur-unit">ر.س</span></div>
           </div>
         </div>
       </div>
@@ -632,13 +632,13 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
     <div class="bc s6">
       <div>
         <div class="bi p">👨‍👩‍👧‍👦</div>
-        <div class="bt" data-i18n="b4t">توزيع الشركاء والأبناء</div>
-        <div class="bd" data-i18n="b4d">حدد من دفع ولمن — الشريك أو الأبناء المسجلون. توزيع عادل وشفاف يمنحك وضوحاً كاملاً حول حصة كل فرد في ميزانية الأسرة.</div>
+        <div class="bt" data-i18n="b4t">الدافع والمستفيد لكل مصروف</div>
+        <div class="bd" data-i18n="b4d">حدد من دفع ولمن — الزوجة أو الأبناء المسجلون. في وضع الأسرة يتكفل الزوج بمصاريف البيت، وما تدفعه الزوجة للبيت يُسجَّل لها مستحقاً على الزوج.</div>
       </div>
       <div class="bch">
         <span class="bchip" data-i18n="b4c1">دفع بواسطة</span>
         <span class="bchip" data-i18n="b4c2">لصالح الأبناء</span>
-        <span class="bchip" data-i18n="b4c3">توزيع نسبي</span>
+        <span class="bchip" data-i18n="b4c3">من دفع ولمن</span>
       </div>
     </div>
     <!-- 5 -->
@@ -684,10 +684,10 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <div>
         <div class="bi c">🔒</div>
         <div class="bt" data-i18n="b8t">خصوصية مطلقة — لا SMS ولا بنك</div>
-        <div class="bd" data-i18n="b8d">لا يطلب التطبيق أذونات قراءة الرسائل القصيرة ولا يطلب ربطاً بنكياً. بياناتك مشفّرة بالكامل داخل سحابة Supabase الآمنة.</div>
+        <div class="bd" data-i18n="b8d">لا يطلب التطبيق أذونات قراءة الرسائل القصيرة ولا يطلب ربطاً بنكياً. بيانات كل منزل معزولة بسياسات أمان على مستوى الصف، ومشفّرة أثناء النقل والتخزين في Supabase.</div>
       </div>
       <div class="bst"><span class="acc">100</span><span style="font-size:22px">%</span></div>
-      <div class="bsl" data-i18n="b8sl">بيانات مشفّرة وخصوصية محفوظة بالكامل</div>
+      <div class="bsl" data-i18n="b8sl">بيانات معزولة لكل منزل ومشفّرة أثناء النقل والتخزين</div>
     </div>
     <!-- 9 -->
     <div class="bc s4">
@@ -706,12 +706,12 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <div>
         <div class="bi t">🏠</div>
         <div class="bt" data-i18n="b10t">إعدادات المنزل والأسرة</div>
-        <div class="bd" data-i18n="b10d">سجّل أسماء الشريك والأبناء لتخصيص تجربة التوزيع. اختر المستفيد من قائمة أفراد أسرتك بدقة لضمان إدارة مالية عادلة ومفصّلة.</div>
+        <div class="bd" data-i18n="b10d">سجّل الزوجة والأبناء في ملف المنزل، واختر المستفيد من قائمة أفراد أسرتك بدقة لضمان إدارة مالية عادلة ومفصّلة.</div>
       </div>
       <div class="bch">
-        <span class="bchip" data-i18n="b10c1">الشريك</span>
+        <span class="bchip" data-i18n="b10c1">الزوجة</span>
         <span class="bchip" data-i18n="b10c2">الأبناء والتابعون</span>
-        <span class="bchip" data-i18n="b10c3">هوية المنزل</span>
+        <span class="bchip" data-i18n="b10c3">المنزل والعضوية</span>
       </div>
     </div>
     <!-- 11 -->
@@ -766,7 +766,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
   <div class="faqw">
     <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq1">هل يقرأ التطبيق رسائل SMS البنكية؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa1">لا تماماً. التطبيق لا يطلب إذن قراءة الرسائل نهائياً. الإدخال يدوي أو صوتي أو عبر مسح QR الفاتورة فقط — خصوصيتك وأمان هاتفك خط أحمر.</div></div>
     <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq2">كيف يعمل مسح فاتورة ZATCA بالذكاء الاصطناعي؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa2">تفتح كاميرا التطبيق وتمسح رمز QR لأي فاتورة إلكترونية سعودية متوافقة مع ZATCA. يستخرج التطبيق اسم المنشأة، الإجمالي، وضريبة القيمة المضافة 15% والتاريخ فورياً.</div></div>
-    <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq3">كيف أُضيف أسماء أبنائي وشريكي لتوزيع المصاريف؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa3">من إعدادات التطبيق تحت "هوية المنزل"، أضف أسماء الشريك والأبناء. عند تسجيل أي مصروف تختار بضغطة زر "لصالح من" لتقسيم النفقات بدقة وشفافية.</div></div>
+    <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq3">كيف أُضيف زوجتي وأبنائي لتوزيع المصاريف؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa3">من إعدادات التطبيق تحت "المنزل والعضوية"، أضف الزوجة والأبناء. عند تسجيل أي مصروف تختار بضغطة زر "لصالح من" لتوزيع المصاريف بدقة وشفافية.</div></div>
     <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq4">هل يمكنني تعديل معاملة أو تصنيفها بعد حفظها؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa4">نعم بكل تأكيد. يمكنك تعديل المبلغ، الفئة، الفئة الفرعية، أو الدافع والمستفيد لأي معاملة في أي وقت من سجل المعاملات.</div></div>
     <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq5">ما الفرق بين الفئة الرئيسية والفئة الفرعية؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa5">الفئة الرئيسية مثل (مطاعم وتغذية)، والفئة الفرعية أدق مثل (وجبات سريعة — البيك، كنتاكي). يمكنك تخصيص فئاتك الفرعية لتناسب نمط إنفاق أسرتك بدقة.</div></div>
     <div class="faqit" onclick="tgFaq(this)"><button class="faqtr"><span data-i18n="fq6">هل التطبيق متوفر للتحميل الآن؟</span><span class="faqic">+</span></button><div class="faqbd" data-i18n="fa6">التطبيق قيد المرحلة التجريبية المتقدمة وسيُطرح قريباً على Google Play وApp Store وAppGallery. يمكنك التواصل مع المطور للحصول على وصول تجريبي مبكر.</div></div>
@@ -781,13 +781,13 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
     </div>
     <div id="lp" class="lscr">
       <h4 data-i18n="lp1h">جمع البيانات والخصوصية</h4><p data-i18n="lp1p">لا نقوم بجمع أو طلب بيانات بنكية أو صلاحيات SMS. تُخزّن كافة بيانات الميزانية مشفرة داخل قاعدة بيانات Supabase المؤمنة ولا يتم بيعها أو مشاركتها.</p>
-      <h4 data-i18n="lp2h">معالجة الذكاء الاصطناعي</h4><p data-i18n="lp2p">تُعالج الرسائل النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط ولا تُستخدم لتدريب نماذج عامة دون موافقة.</p>
+      <h4 data-i18n="lp2h">معالجة الذكاء الاصطناعي</h4><p data-i18n="lp2p">تُعالج المدخلات النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط، ولا يُحتفظ بها لتدريب نماذج عامة.</p>
       <h4 data-i18n="lp3h">حذف الحساب والبيانات</h4><p data-i18n="lp3p">يحق للمستخدم طلب الحذف الكامل لحسابه وسجلاته في أي وقت عبر إعدادات التطبيق أو عبر مراسلة الدعم الفني.</p>
     </div>
     <div id="lt2" class="lscr" style="display:none">
       <h4 data-i18n="lt1h">نطاق الاستخدام</h4><p data-i18n="lt1p">المنصة مخصصة لإدارة وحوكمة ميزانيات الأسر والأفراد في المملكة العربية السعودية للاستخدام الشخصي غير التجاري.</p>
       <h4 data-i18n="lt2h">المسؤولية المالية</h4><p data-i18n="lt2p">التطبيق يقدم أدوات تنظيمية واقتراحات استرشادية مبنية على الذكاء الاصطناعي ولا يُعد بديلاً عن المشورة المالية الرسمية.</p>
-      <h4 data-i18n="lt3h">التحديثات والتطوير</h4><p data-i18n="lt3p">تحتفظ إدارة منصة FMSCO بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.</p>
+      <h4 data-i18n="lt3h">التحديثات والتطوير</h4><p data-i18n="lt3p">تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين مسبقاً.</p>
     </div>
   </div>
 
@@ -830,7 +830,7 @@ const T = {
     ey: "نظام حوكمة الميزانية العائلية • المملكة العربية السعودية",
     h1a: "تحكّم مطلق في",
     h1b: "ميزانية الأسرة.",
-    hs: "منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، وتوزيع عادل بين الشركاء والأبناء.",
+    hs: "منصة Budget لإدارة المصاريف والحوكمة المالية للأسرة السعودية — دورة راتب مرنة لأي يوم، ومساعد ذكاء اصطناعي، ومسح فواتير ZATCA، ومتابعة النفقة الشرعية للأسرة، وتوزيع عادل بين شركاء السكن.",
     c1: "⚡ ابدأ التجربة الحية",
     c2: "← استكشف المميزات الـ 12",
     si: "مرر للأسفل لاكتشاف المنصة",
@@ -839,14 +839,14 @@ const T = {
     ste: "LIVE INTERACTIVE DEMO",
     stt: "جرّب المنصة الآن — مباشرةً في المتصفح",
     stb: "أربعة سيناريوهات تفاعلية تحاكي تجربة التطبيق الكاملة بدقة. لا تسجيل، لا تحميل.",
-    t1: "دورة الراتب", t2: "مساعد الذكاء", t3: "فواتير ZATCA", t4: "توزيع الأسرة",
+    t1: "دورة الراتب", t2: "مساعد الذكاء", t3: "فواتير ZATCA", t4: "توزيع السكن المشترك",
     simT: "حدد يوم نزول راتبك الشهري (1 - 31)",
-    simB: "✓ موازنة العطلات تلقائياً",
+    simB: "✓ تعديل تلقائي عند العطلات",
     sm1: "اليوم 1", smc: "يوم الراتب:", sm2: "اليوم 31",
     ml1: "الأيام المتبقية في الدورة", dy: "يوم", ms1: "دورة نشطة متوازنة",
     ml2: "معدل الصرف اليومي الآمن", ms2: "يحميك من نفاد الميزانية مبكراً",
     ml3: "احتياطي الادخار التلقائي", ms3: "فائض محفوظ للطوارئ",
-    cu: "\"عشاء عائلي في البيك بـ 68 ريال، دفعتها أنا للأسرة\"",
+    cu: "\"عشاء عائلي في البيك بـ 68 ريال، دفعته أنا للأسرة\"",
     cai: "تم استخراج المعاملة بالذكاء الاصطناعي بدقة عالية",
     cm: "مطعم البيك (وجبة عائلية)",
     tc: "🍔 المطاعم والتغذية", ts: "🍟 وجبات سريعة", tp2: "👤 دفع: أنا", tf: "👨‍👩‍👧 لصالح: الأسرة",
@@ -854,8 +854,9 @@ const T = {
     zs: "مطابق لهيئة الزكاة والضريبة والجمارك ZATCA",
     zm: "متجر الدانوب (فرع النخيل)",
     zmv: "اسم المنشأة:", ztt: "المجموع الكلي:", zvt: "ضريبة القيمة المضافة (15%):", zdt: "التاريخ والوقت:",
-    spt: "محاكاة توزيع المصاريف بين الشركاء والأبناء",
-    spy: "حصة الشريك الأول (أنت)", spp: "حصة الشريك الثاني",
+    spt: "محاكاة توزيع المصاريف بين شركاء السكن",
+    spy: "حصة شريك السكن الأول (أنت)", spp: "حصة شريك السكن الثاني",
+    spc: "توزيع عادل", dc1: "🏠 إيجار الشقة", dc2: "⚡ الكهرباء والإنترنت", dc3: "🛒 مقاضي مشتركة",
     kl1: "تصنيف ذكي للمصاريف",
     kl2: "دقة استخراج البيانات بالذكاء الاصطناعي",
     kl3: "يوم مرن لدورة الراتب",
@@ -872,9 +873,9 @@ const T = {
     b3t: "ماسح فواتير ZATCA بالذكاء الاصطناعي",
     b3d: "امسح رمز QR لأي فاتورة إلكترونية سعودية واستخرج المبلغ، الضريبة (15%)، اسم المنشأة، والتاريخ فورياً بدقة متناهية.",
     b3c2: "مطابق لـ ZATCA", b3c3: "استخراج فوري",
-    b4t: "توزيع الشركاء والأبناء",
-    b4d: "حدد من دفع ولمن — الشريك أو الأبناء المسجلون. توزيع عادل وشفاف يمنحك ووضوحاً كاملاً حول حصة كل فرد في ميزانية الأسرة.",
-    b4c1: "دفع بواسطة", b4c2: "لصالح الأبناء", b4c3: "توزيع نسبي",
+    b4t: "الدافع والمستفيد لكل مصروف",
+    b4d: "حدد من دفع ولمن — الزوجة أو الأبناء المسجلون. في وضع الأسرة يتكفل الزوج بمصاريف البيت، وما تدفعه الزوجة للبيت يُسجَّل لها مستحقاً على الزوج.",
+    b4c1: "دفع بواسطة", b4c2: "لصالح الأبناء", b4c3: "من دفع ولمن",
     b5t: "لوحة التحكم اللحظية",
     b5d: "رسوم بيانية ومؤشرات فورية للمصاريف، الميزانية المتبقية، معدل الصرف اليومي، والمدى الزمني حتى الراتب القادم.",
     b6t: "تصنيفات وفئات فرعية مخصصة",
@@ -884,14 +885,14 @@ const T = {
     b7d: "يحسب النظام الفائض المتبقي عند نهاية كل دورة مالية ويقترح ترحيله تلقائياً لصندوق الطوارئ أو أهداف الادخار المحددة مسبقاً.",
     b7c1: "احتياطي طوارئ", b7c2: "أهداف ادخار",
     b8t: "خصوصية مطلقة — لا SMS ولا بنك",
-    b8d: "لا يطلب التطبيق أذونات قراءة الرسائل القصيرة ولا يطلب ربطاً بنكياً. بياناتك مشفّرة بالكامل داخل سحابة Supabase الآمنة.",
-    b8sl: "بيانات مشفّرة وخصوصية محفوظة بالكامل",
+    b8d: "لا يطلب التطبيق أذونات قراءة الرسائل القصيرة ولا يطلب ربطاً بنكياً. بيانات كل منزل معزولة بسياسات أمان على مستوى الصف، ومشفّرة أثناء النقل والتخزين في Supabase.",
+    b8sl: "بيانات معزولة لكل منزل ومشفّرة أثناء النقل والتخزين",
     b9t: "سجل المعاملات والتدقيق",
     b9d: "سجل زمني متكامل مع فلاتر ذكية حسب التاريخ أو الفئة أو عضو الأسرة، مع إمكانية التعديل وإعادة التصنيف أو الحذف متى شئت.",
     b9c1: "تعديل لاحق", b9c2: "فلاتر متقدمة",
     b10t: "إعدادات المنزل والأسرة",
-    b10d: "سجّل أسماء الشريك والأبناء لتخصيص تجربة التوزيع. اختر المستفيد من قائمة أفراد أسرتك بدقة لضمان إدارة مالية عادلة ومفصّلة.",
-    b10c1: "الشريك", b10c2: "الأبناء والتابعون", b10c3: "هوية المنزل",
+    b10d: "سجّل الزوجة والأبناء في ملف المنزل، واختر المستفيد من قائمة أفراد أسرتك بدقة لضمان إدارة مالية عادلة ومفصّلة.",
+    b10c1: "الزوجة", b10c2: "الأبناء والتابعون", b10c3: "المنزل والعضوية",
     b11t: "تقارير وتحليلات شهرية",
     b11d: "مقارنات شهرية تفصيلية للمصاريف حسب الفئة والدافع والمستفيد، مع كشف مؤشرات الهدر وتحليل السلوك المالي عبر الزمن.",
     b12t: "إدخال صوتي باللهجة السعودية",
@@ -909,18 +910,18 @@ const T = {
     ft: "أسئلة شائعة",
     fq1: "هل يقرأ التطبيق رسائل SMS البنكية؟", fa1: "لا تماماً. التطبيق لا يطلب إذن قراءة الرسائل نهائياً. الإدخال يدوي أو صوتي أو عبر مسح QR الفاتورة فقط — خصوصيتك وأمان هاتفك خط أحمر.",
     fq2: "كيف يعمل مسح فاتورة ZATCA بالذكاء الاصطناعي؟", fa2: "تفتح كاميرا التطبيق وتمسح رمز QR لأي فاتورة إلكترونية سعودية متوافقة مع ZATCA. يستخرج التطبيق اسم المنشأة، الإجمالي، وضريبة القيمة المضافة 15% والتاريخ فورياً.",
-    fq3: "كيف أُضيف أسماء أبنائي وشريكي لتوزيع المصاريف؟", fa3: "من إعدادات التطبيق تحت \"هوية المنزل\"، أضف أسماء الشريك والأبناء. عند تسجيل أي مصروف تختار بضغطة زر \"لصالح من\" لتقسيم النفقات بدقة وشفافية.",
+    fq3: "كيف أُضيف زوجتي وأبنائي لتوزيع المصاريف؟", fa3: "من إعدادات التطبيق تحت \"المنزل والعضوية\"، أضف الزوجة والأبناء. عند تسجيل أي مصروف تختار بضغطة زر \"لصالح من\" لتوزيع المصاريف بدقة وشفافية.",
     fq4: "هل يمكنني تعديل معاملة أو تصنيفها بعد حفظها؟", fa4: "نعم بكل تأكيد. يمكنك تعديل المبلغ، الفئة، الفئة الفرعية، أو الدافع والمستفيد لأي معاملة في أي وقت من سجل المعاملات.",
     fq5: "ما الفرق بين الفئة الرئيسية والفئة الفرعية؟", fa5: "الفئة الرئيسية مثل (مطاعم وتغذية)، والفئة الفرعية أدق مثل (وجبات سريعة — البيك، كنتاكي). يمكنك تخصيص فئاتك الفرعية لتناسب نمط إنفاق أسرتك بدقة.",
     fq6: "هل التطبيق متوفر للتحميل الآن؟", fa6: "التطبيق قيد المرحلة التجريبية المتقدمة وسيُطرح قريباً على Google Play وApp Store وAppGallery. يمكنك التواصل مع المطور للحصول على وصول تجريبي مبكر.",
     lt: "الشروط والخصوصية",
     ll1: "سياسة الخصوصية", ll2: "شروط الاستخدام",
     lp1h: "جمع البيانات والخصوصية", lp1p: "لا نقوم بجمع أو طلب بيانات بنكية أو صلاحيات SMS. تُخزّن كافة بيانات الميزانية مشفرة داخل قاعدة بيانات Supabase المؤمنة ولا يتم بيعها أو مشاركتها.",
-    lp2h: "معالجة الذكاء الاصطناعي", lp2p: "تُعالج الرسائل النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط ولا تُستخدم لتدريب نماذج عامة دون موافقة.",
+    lp2h: "معالجة الذكاء الاصطناعي", lp2p: "تُعالج المدخلات النصية والصوتية بواسطة نماذج الذكاء الاصطناعي لاستخراج بيانات المصروف فقط، ولا يُحتفظ بها لتدريب نماذج عامة.",
     lp3h: "حذف الحساب والبيانات", lp3p: "يحق للمستخدم طلب الحذف الكامل لحسابه وسجلاته في أي وقت عبر إعدادات التطبيق أو عبر مراسلة الدعم الفني.",
     lt1h: "نطاق الاستخدام", lt1p: "المنصة مخصصة لإدارة وحوكمة ميزانيات الأسر والأفراد في المملكة العربية السعودية للاستخدام الشخصي غير التجاري.",
     lt2h: "المسؤولية المالية", lt2p: "التطبيق يقدم أدوات تنظيمية واقتراحات استرشادية مبنية على الذكاء الاصطناعي ولا يُعد بديلاً عن المشورة المالية الرسمية.",
-    lt3h: "التحديثات والتطوير", lt3p: "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.",
+    lt3h: "التحديثات والتطوير", lt3p: "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين مسبقاً.",
     cth: "هل لديك استفسار أو ترغب بنسخة تجريبية مبكرة؟",
     ctp: "فريق التطوير الهندسي مرحّب بملاحظاتك واستفساراتك للمساهمة في تقديم أفضل تجربة مالية للأسرة.",
     vipl: "البريد الإلكتروني للانضمام إلى قائمة الوصول المبكر VIP", vipph: "بريدك الإلكتروني",
@@ -940,7 +941,7 @@ const T = {
     ey: "ENTERPRISE HOUSEHOLD GOVERNANCE • SAUDI ARABIA",
     h1a: "Capital in the",
     h1b: "Algorithm.",
-    hs: "An advanced household financial governance platform for Saudi families — flexible payday cycles, conversational AI ledger, ZATCA e-invoice scanning, and equitable partner-children allocation.",
+    hs: "An advanced household financial governance platform for Saudi families — flexible payday cycles, conversational AI ledger, ZATCA e-invoice scanning, Nafaqah tracking for families, and fair splits between roommates.",
     c1: "⚡ Launch Interactive Demo",
     c2: "→ Explore All 12 Capabilities",
     si: "Scroll down to explore",
@@ -949,7 +950,7 @@ const T = {
     ste: "LIVE INTERACTIVE DEMO",
     stt: "Experience the Platform — Live in Browser",
     stb: "Four real-time interactive workflows demonstrating our core architecture. Zero setup required.",
-    t1: "Payday Cycle", t2: "AI Assistant", t3: "ZATCA Invoices", t4: "Household Split",
+    t1: "Payday Cycle", t2: "AI Assistant", t3: "ZATCA Invoices", t4: "Roommate Split",
     simT: "Set Your Monthly Payday (1 - 31)",
     simB: "✓ Auto Holiday Adjustment",
     sm1: "Day 1", smc: "Selected Payday:", sm2: "Day 31",
@@ -964,8 +965,9 @@ const T = {
     zs: "ZATCA Phase 2 E-Invoicing Compliant",
     zm: "Danube Hypermarket (Al-Nakheel)",
     zmv: "Merchant:", ztt: "Total Amount:", zvt: "VAT Amount (15%):", zdt: "Timestamp:",
-    spt: "Simulated Expense Allocation Across Household",
-    spy: "Partner 1 Share (You)", spp: "Partner 2 Share",
+    spt: "Simulated Expense Split Between Roommates",
+    spy: "Roommate 1 Share (You)", spp: "Roommate 2 Share",
+    spc: "Fair split", dc1: "🏠 Apartment rent", dc2: "⚡ Electricity & internet", dc3: "🛒 Shared groceries",
     kl1: "Smart Expense Categories",
     kl2: "AI OCR & NLP Data Extraction",
     kl3: "Flexible Payday Range (1-31)",
@@ -982,9 +984,9 @@ const T = {
     b3t: "ZATCA AI E-Invoice Scanner",
     b3d: "Scan any Saudi e-invoice QR code and extract total amount, 15% VAT, merchant name, and timestamp instantaneously with certified precision.",
     b3c2: "ZATCA Compliant", b3c3: "Instant Extraction",
-    b4t: "Partner & Dependent Attribution",
-    b4d: "Designate who paid and who benefited — spouse or registered children. Equitable distribution gives full transparency over household capital.",
-    b4c1: "Paid By", b4c2: "For Dependents", b4c3: "Equitable Split",
+    b4t: "Payer & Beneficiary Attribution",
+    b4d: "Record who paid and who benefited — wife or registered children. In family mode the husband covers household costs, and anything the wife pays for the home is tracked as owed back to her.",
+    b4c1: "Paid By", b4c2: "For Dependents", b4c3: "Who Paid, For Whom",
     b5t: "Real-Time Financial Dashboard",
     b5d: "Visual telemetry for current expenditure, remaining runway, safe daily burn rate, and projected end-of-month surplus.",
     b5c1: "Daily Safe Spend", b5c2: "Budget Runway",
@@ -995,14 +997,14 @@ const T = {
     b7d: "Automatically computes surplus at each cycle cutoff and routes capital directly to emergency cushions or defined savings milestones.",
     b7c1: "Emergency Cushion", b7c2: "Milestone Reserves",
     b8t: "Zero-Compromise Privacy — No Bank / No SMS",
-    b8d: "No SMS reading permissions requested and no bank scraping required. All data is end-to-end encrypted in your dedicated Supabase instance.",
-    b8sl: "100% Encrypted & Sovereign Data",
+    b8d: "No SMS reading permissions requested and no bank scraping required. All data is encrypted in transit and at rest in Supabase.",
+    b8sl: "Isolated per household, encrypted in transit and at rest",
     b9t: "Transaction Ledger & Audit Trail",
     b9d: "Full transactional history with chronological filtering, member breakdown, fast search, and the ability to edit or delete any entry.",
     b9c1: "Post-Edit Capable", b9c2: "Advanced Filters",
     b10t: "Household Profile & Members",
-    b10d: "Register spouse and children under your household profile. Attribute expenses directly to individual family members with complete precision.",
-    b10c1: "Spouse", b10c2: "Dependents", b10c3: "Household ID",
+    b10d: "Register your wife and children under your household. Attribute expenses directly to individual family members with complete precision.",
+    b10c1: "Wife", b10c2: "Dependents", b10c3: "Household & Membership",
     b11t: "Monthly Analytics & Telemetry",
     b11d: "Comprehensive monthly variance reports by category and member, identifying expenditure leaks and historical spending trends.",
     b12t: "Saudi Dialect Voice Input",
@@ -1012,15 +1014,15 @@ const T = {
     pt2: "Your Data Remains Yours — Absolute Privacy",
     pb: "Architected from first principles with zero intrusion. No SMS scraping, no banking credentials, no third-party data sharing.",
     p1h: "No SMS Scraping — Zero Message Access", p1p: "We never request or require SMS permissions. Inputs are entered manually, via voice, or through ZATCA QR scans only.",
-    p2h: "No Bank Linking Required — Full Control", p2p: "Zero integration with banking APIs or open banking scrapers. You retain sovereign control over what is entered.",
-    p3h: "End-to-End Encrypted Storage", p3p: "Supabase cloud storage utilizes enterprise AES-256 encryption with strict Row Level Security (RLS) isolation.",
+    p2h: "No Bank Linking Required — Full Control", p2p: "Zero integration with banking APIs or open banking scrapers. You stay in full control of what is entered.",
+    p3h: "Encrypted Storage", p3p: "Supabase cloud storage utilizes enterprise AES-256 encryption with strict Row Level Security (RLS) isolation.",
     p4h: "Household Privacy Isolation", p4p: "Your family members and children data remain strictly scoped to your private authenticated tenant.",
-    p5h: "Flexible & Sovereign Payday Cycle", p5p: "Your designated payday is private metadata used exclusively for calculating cycle mathematics inside your app.",
+    p5h: "Flexible, Private Payday Cycle", p5p: "Your designated payday is private metadata used exclusively for calculating cycle mathematics inside your app.",
     p6h: "Mandatory Confirmation Card", p6p: "Every capture — voice, text, or receipt scan — presents an explicit review card before committing to the ledger.",
     ft: "Frequently Asked Questions",
     fq1: "Does the app read my private SMS or bank notifications?", fa1: "Never. The app does not request SMS permissions. Expenses are logged through conversational input, voice recording, or ZATCA QR scanning.",
     fq2: "How does the ZATCA QR scanner operate?", fa2: "Using on-device computer vision, the app decodes TLV-encoded Base64 QR tags from Saudi tax receipts, extracting VAT, merchant, date, and totals in milliseconds.",
-    fq3: "How do I register spouse and dependents?", fa3: "Under Account Settings > Household Profile, you can add your partner and children. When capturing expenses, simply select the beneficiary member.",
+    fq3: "How do I register my wife and dependents?", fa3: "Under Settings > Household & Membership, add your wife and children. When capturing expenses, simply select the beneficiary member.",
     fq4: "Can transactions be modified after saving?", fa4: "Yes. Every transaction remains fully mutable. You can update amounts, change categories, or delete entries at any time.",
     fq5: "What is the difference between categories and subcategories?", fa5: "Categories are broad operational divisions (e.g., Dining & Groceries) while subcategories represent specific merchants or types (e.g., Fast Food, Bakeries).",
     fq6: "When will the application be available for public download?", fa6: "Budget Tracker is currently in private enterprise testing. It will soon be accessible on Google Play, the App Store, and Huawei AppGallery.",
@@ -1028,7 +1030,7 @@ const T = {
     ll1: "Privacy Policy", ll2: "Terms of Service",
     lp1h: "Data Collection & Governance", lp1p: "We do not scrape SMS messages or connect to bank portals. User data is stored encrypted within Supabase with strict isolation.",
     lp2h: "AI Processing Protocols", lp2p: "Conversational inputs are routed to specialized language models solely for entity extraction and are not retained for general model training.",
-    lp3h: "Account & Data Erasure", lp3p: "Users may request instantaneous permanent deletion of their account and all associated ledgers directly from settings.",
+    lp3h: "Account & Data Erasure", lp3p: "Users may request full deletion of their account and records at any time from the app settings or by contacting support.",
     lt1h: "Permitted Use", lt1p: "Budget Tracker is licensed for personal and family budget governance within the Kingdom of Saudi Arabia.",
     lt2h: "Financial Disclaimer", lt2p: "The platform delivers operational budgeting telemetry and AI suggestions; it does not offer statutory financial advisory services.",
     lt3h: "Platform Modifications", lt3p: "The platform reserves the right to enhance system capabilities and policies periodically with prior notice to users.",
