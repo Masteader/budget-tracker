@@ -250,13 +250,9 @@ def test_postgrest_idor_sweep(world, db, llm, victim):
     assert db.scalar("SELECT owner_user_id::text FROM public.households WHERE id = %s", (B,)) == victim.husband.id
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-04 (low): SECURITY DEFINER helpers household_primary_admin_id(uuid) and "
-    "nafaqah_husband_id(uuid) are EXECUTE-able by every authenticated user and return another "
-    "household's primary-admin / husband user id for any household id (no membership check); "
-    "nafaqah_is_spouse_member(uuid, uuid) is a membership oracle for any household."
-))
 def test_postgrest_helper_rpcs_do_not_leak_other_household_members(world, victim):
+    # E2E-04 (fixed by migration 20261020600000): the internal helpers are not client-callable;
+    # the SECURITY DEFINER RPCs and triggers that use them keep working (test_03, test_04).
     outsider = world.signup("Outsider")
     for name, params in (
         ("household_primary_admin_id", {"p_household_id": victim.hh.id}),
