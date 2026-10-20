@@ -1,21 +1,46 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import type { TranslationDictionary } from '../i18n/translations';
+import type { Language, TranslationDictionary } from '../i18n/translations';
+import { submitInquiry, type InquiryOutcome } from '../lib/inquiries';
 
 interface EarlyAccessProps {
   dict: TranslationDictionary;
+  lang: Language;
 }
 
-export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict }) => {
+type Status = 'idle' | 'sending' | 'sent' | Exclude<InquiryOutcome, 'sent'>;
+
+export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict, lang }) => {
   const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const errorMessages: Record<Exclude<InquiryOutcome, 'sent'>, string> = {
+    invalid: dict.earlyAccess.errorInvalid,
+    rate_limited: dict.earlyAccess.errorRateLimited,
+    unavailable: dict.earlyAccess.errorUnavailable,
+    network: dict.earlyAccess.errorNetwork,
+  };
+  const errorMessage = status in errorMessages ? errorMessages[status as keyof typeof errorMessages] : null;
+  const sending = status === 'sending';
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    const trimmed = email.trim();
+    if (!trimmed || sending) return;
 
-    setSubmitted(true);
+    setStatus('sending');
+    const outcome = await submitInquiry({
+      type: 'vip_early_access',
+      email: trimmed,
+      locale: lang,
+      source: 'web',
+      ...(honeypot ? { company_website: honeypot } : {}),
+    });
+    setStatus(outcome);
+    if (outcome !== 'sent') return;
+
     confetti({
       disableForReducedMotion: true,
       particleCount: 100,
@@ -43,7 +68,7 @@ export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict }) => {
           {dict.earlyAccess.desc}
         </p>
 
-        {submitted ? (
+        {status === 'sent' ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -54,27 +79,62 @@ export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict }) => {
             <span>{dict.earlyAccess.successMsg}</span>
           </motion.div>
         ) : (
-          <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-2 mb-6">
-            <label htmlFor="early-access-email" className="sr-only">
-              {dict.a11y.emailLabel}
-            </label>
-            <input
-              id="early-access-email"
-              type="email"
-              autoComplete="email"
-              dir="ltr"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={dict.earlyAccess.placeholder}
-              required
-              className="flex-1 bg-[#f8fdff] border border-slate-300 rounded-xl px-4 py-3.5 text-sm text-[#0c2530] focus:border-[#00808c] focus:ring-1 focus:ring-[#00808c] outline-none"
-            />
-            <button
-              type="submit"
-              className="px-6 py-3.5 rounded-xl bg-[#00808c] hover:bg-[#006575] text-white font-bold text-sm active:scale-95 transition-all whitespace-nowrap shadow-[0_4px_14px_rgba(0,128,140,0.25)]"
-            >
-              {dict.earlyAccess.button}
-            </button>
+          <form
+            onSubmit={handleSubmit}
+            aria-busy={sending}
+            className="max-w-md mx-auto mb-6"
+          >
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label htmlFor="early-access-email" className="sr-only">
+                {dict.a11y.emailLabel}
+              </label>
+              <input
+                id="early-access-email"
+                type="email"
+                name="email"
+                autoComplete="email"
+                dir="ltr"
+                maxLength={254}
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errorMessage) setStatus('idle');
+                }}
+                placeholder={dict.earlyAccess.placeholder}
+                required
+                disabled={sending}
+                aria-invalid={status === 'invalid'}
+                aria-describedby={errorMessage ? 'early-access-error' : undefined}
+                className="flex-1 bg-[#f8fdff] border border-slate-300 rounded-xl px-4 py-3.5 text-sm text-[#0c2530] focus:border-[#00808c] focus:ring-1 focus:ring-[#00808c] outline-none disabled:opacity-60"
+              />
+              {/* Honeypot: invisible to people and assistive tech; bots that fill it are ignored. */}
+              <div aria-hidden="true" className="absolute -left-[10000px] w-px h-px overflow-hidden">
+                <input
+                  type="text"
+                  name="company_website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={sending}
+                className="px-6 py-3.5 rounded-xl bg-[#00808c] hover:bg-[#006575] text-white font-bold text-sm active:scale-95 transition-all whitespace-nowrap shadow-[0_4px_14px_rgba(0,128,140,0.25)] disabled:opacity-70 disabled:cursor-wait"
+              >
+                {sending ? dict.earlyAccess.sending : dict.earlyAccess.button}
+              </button>
+            </div>
+            {errorMessage && (
+              <p
+                id="early-access-error"
+                role="alert"
+                className="mt-3 text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3"
+              >
+                {errorMessage}
+              </p>
+            )}
           </form>
         )}
 

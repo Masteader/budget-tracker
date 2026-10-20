@@ -91,3 +91,19 @@ def test_build_script_is_in_sync_with_generated_files():
     here = pathlib.Path(_build_landing.__file__).parent
     assert _build_landing.LANDING_PAGE_PY == (here / "landing_page.py").read_text(encoding="utf-8")
 
+
+
+def test_served_web_bundle_posts_vip_signups_to_same_origin_endpoint():
+    """`/` serves the committed web_app build; it must contain the real VIP submit, not a fake one."""
+    import pathlib
+    import re
+
+    static = pathlib.Path(__file__).resolve().parent.parent / "static"
+    index = (static / "index.html").read_text(encoding="utf-8")
+    scripts = re.findall(r'src="/assets/(index-[^"]+\.js)"', index)
+    assert scripts, "static/index.html must reference its bundled script"
+    bundle = (static / "assets" / scripts[0]).read_text(encoding="utf-8")
+    assert "/public/inquiries" in bundle
+    assert "vip_early_access" in bundle
+    # Built with VITE_API_BASE_URL= (same origin), so no hard-coded production host.
+    assert "budget.fmsco.com.sa/public/inquiries" not in bundle

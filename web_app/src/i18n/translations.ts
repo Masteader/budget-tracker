@@ -196,6 +196,11 @@ export interface TranslationDictionary {
     button: string;
     partnerInfo: string;
     successMsg: string;
+    sending: string;
+    errorInvalid: string;
+    errorRateLimited: string;
+    errorUnavailable: string;
+    errorNetwork: string;
   };
   a11y: {
     pageTitle: string;
@@ -528,7 +533,12 @@ export const translations: Record<Language, TranslationDictionary> = {
       placeholder: 'أدخل بريدك الإلكتروني...',
       button: 'انضم لقائمة VIP',
       partnerInfo: 'للاستفسارات المؤسسية أو شراكات التوزيع:',
-      successMsg: 'تم تسجيلك بنجاح في قائمة الوصول المبكر VIP! سنوافيك برابط التفعيل قريباً.',
+      successMsg: 'تم استلام طلبك وتسجيلك في قائمة الوصول المبكر VIP! سنراسلك على بريدك عند فتح الوصول.',
+      sending: 'جارٍ الإرسال...',
+      errorInvalid: 'يرجى إدخال بريد إلكتروني صحيح.',
+      errorRateLimited: 'وصلنا عدد كبير من الطلبات منك. حاول مرة أخرى بعد قليل.',
+      errorUnavailable: 'تعذر إرسال طلبك حالياً. حاول لاحقاً أو راسلنا مباشرة على البريد أدناه.',
+      errorNetwork: 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.',
     },
     a11y: {
       pageTitle: 'BUDGET Tracker | ميزانية وأكثر - الحوكمة المالية الذكية وإدارة المصاريف المشتركة',
@@ -865,7 +875,12 @@ export const translations: Record<Language, TranslationDictionary> = {
       placeholder: 'Enter your email address...',
       button: 'Join VIP Waitlist',
       partnerInfo: 'For institutional partnerships or household group deployments:',
-      successMsg: 'Thank you for requesting VIP Sovereign Access! Confirmation sent to your email.',
+      successMsg: 'Thank you! Your VIP access request was received. We will email you when your access opens.',
+      sending: 'Sending...',
+      errorInvalid: 'Please enter a valid email address.',
+      errorRateLimited: 'Too many requests from you. Please try again in a little while.',
+      errorUnavailable: 'We could not send your request right now. Please try again later or email us directly below.',
+      errorNetwork: 'Could not reach the server. Check your connection and try again.',
     },
     a11y: {
       pageTitle: 'BUDGET Tracker | Smart financial governance & shared household expenses',

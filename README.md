@@ -203,6 +203,16 @@ fails, `422` for invalid input and `429` past the limits (public: 5 per IP and 3
 hour; app: 5 per user per hour; 200 per hour overall). Set either `RESEND_API_KEY` or the `SMTP_*`
 variables on the deployment, or every form shows an error.
 
+The page served at `/` is the `web_app` production build committed in `ai_service/static/`
+(`landing_page.py` falls back to the generated `_landing_impl.py` page only when it is missing).
+Refresh it after changing `web_app/` so the live VIP form posts to the same origin:
+
+```bash
+cd web_app && npm ci && VITE_API_BASE_URL= npm run build
+rm ../ai_service/static/assets/index-*.js ../ai_service/static/assets/index-*.css
+cp dist/index.html ../ai_service/static/ && cp dist/assets/index-* ../ai_service/static/assets/
+```
+
 ### Flutter App (`--dart-define` flags)
 
 | Flag | Required | Description |
