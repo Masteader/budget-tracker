@@ -250,13 +250,9 @@ def test_postgrest_idor_sweep(world, db, llm, victim):
     assert db.scalar("SELECT owner_user_id::text FROM public.households WHERE id = %s", (B,)) == victim.husband.id
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-04 (low): SECURITY DEFINER helpers household_primary_admin_id(uuid) and "
-    "nafaqah_husband_id(uuid) are EXECUTE-able by every authenticated user and return another "
-    "household's primary-admin / husband user id for any household id (no membership check); "
-    "nafaqah_is_spouse_member(uuid, uuid) is a membership oracle for any household."
-))
 def test_postgrest_helper_rpcs_do_not_leak_other_household_members(world, victim):
+    # E2E-04 (fixed by migration 20261020600000): the internal helpers are not client-callable;
+    # the SECURITY DEFINER RPCs and triggers that use them keep working (test_03, test_04).
     outsider = world.signup("Outsider")
     for name, params in (
         ("household_primary_admin_id", {"p_household_id": victim.hh.id}),
@@ -268,22 +264,28 @@ def test_postgrest_helper_rpcs_do_not_leak_other_household_members(world, victim
     assert oracle.status_code >= 400 or oracle.json() is not True, oracle.text
 
 
-_E2E05 = (
-    "BUG E2E-05: sub-category definitions are global (cost_control_sub_categories has no household_id). "
-    "GET /budgets/sub-categories lists another household's custom sub-categories for any guessed "
-    "parent_code, and POST /budgets/sub-categories (any member; only membership of the body's "
-    "household is checked) inserts a definition under ANY parent_code -- a system category or another "
-    "household's custom category -- that every household then sees (GET /budgets/sub-categories, chat "
-    "preview 'available_sub_categories')."
-)
-
-
-@pytest.mark.xfail(strict=True, reason=_E2E05)
 def test_sub_categories_of_other_household_are_not_listed(world, victim):
+    # E2E-05 listing (fixed): the API lists only sub-categories of system categories and of the
+    # caller's own custom categories; migration 20261020600000 applies the same rule to direct
+    # PostgREST reads of cost_control_sub_categories.
     a_hh = world.roommates("AS", n_members=1)
     attacker = a_hh.members[0]  # a plain member, not even an admin
     peek = attacker.api.get("/budgets/sub-categories", params={"parent_code": victim.custom_code})
     assert peek.status_code in (403, 404) or SECRET not in peek.text, peek.text
+    peek = attacker.api.get("/budgets/sub-categories", params={"parent_code": victim.custom_code,
+                                                               "household_id": victim.hh.id})
+    assert peek.status_code == 403 and SECRET not in peek.text, peek.text
+    direct = attacker.rest.get("/cost_control_sub_categories", params={"parent_code": f"eq.{victim.custom_code}"})
+    assert direct.status_code == 200 and direct.json() == [], direct.text
+    # The owner household and system categories are unaffected.
+    own = victim.wife.api.get("/budgets/sub-categories", params={"parent_code": victim.custom_code})
+    assert own.status_code == 200 and SECRET in own.text, own.text
+    own_direct = victim.wife.rest.get("/cost_control_sub_categories", params={"parent_code": f"eq.{victim.custom_code}"})
+    assert own_direct.status_code == 200 and SECRET in own_direct.text, own_direct.text
+    system = attacker.api.get("/budgets/sub-categories", params={"parent_code": "OPEX-DINING"})
+    assert system.status_code == 200 and system.json()["sub_categories"], system.text
+    system_direct = attacker.rest.get("/cost_control_sub_categories", params={"parent_code": "eq.OPEX-DINING"})
+    assert system_direct.status_code == 200 and system_direct.json(), system_direct.text
 
 
 def test_sub_category_cannot_be_planted_into_other_households(world, victim):
@@ -295,3 +297,18 @@ def test_sub_category_cannot_be_planted_into_other_households(world, victim):
             "household_id": a_hh.id, "parent_code": parent, "name_en": marker})
         b_view = victim.husband.api.get("/budgets/sub-categories", params={"parent_code": parent})
         assert marker not in b_view.text, (parent, b_view.text)
+
+
+def test_admin_cannot_add_sub_categories_under_another_households_category(world, victim):
+    # E2E-05 creation: even an admin of A may only extend system categories or A's own custom
+    # categories; B's custom category is refused like an unknown code, and no row appears.
+    a_hh = world.roommates("AU", n_members=0)
+    marker = f"Admin plant {uuid.uuid4().hex[:6]}"
+    res = a_hh.admin.api.post("/budgets/sub-categories", json={
+        "household_id": a_hh.id, "parent_code": victim.custom_code, "name_en": marker})
+    assert res.status_code == 403, res.text
+    res = a_hh.admin.api.post("/budgets/sub-categories", json={
+        "household_id": a_hh.id, "parent_code": "CUSTOM-DOES-NOT-EXIST", "name_en": marker})
+    assert res.status_code == 403, res.text
+    b_view = victim.husband.api.get("/budgets/sub-categories", params={"parent_code": victim.custom_code})
+    assert marker not in b_view.text, b_view.text

@@ -25,6 +25,8 @@ from supabase_client import (
     fetch_budget,
     fetch_flexible_budgets,
     reallocate_budget,
+    category_code_in_taxonomy,
+    UnknownCategoryError,
 )
 
 from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
@@ -558,6 +560,17 @@ def process_chat_transaction(
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
+    if override_category_code is not None and override_category_code != "":
+        # A client-chosen category must exist for this household (global or its own custom
+        # code); otherwise the DB trigger refuses the insert. Answer 422, not 500 (E2E-03).
+        if (
+            not isinstance(override_category_code, str)
+            or not override_category_code.strip()
+            or len(override_category_code) > 100
+            or category_code_in_taxonomy(household_id, override_category_code.strip()) is False
+        ):
+            raise UnknownCategoryError()
+        override_category_code = override_category_code.strip()
     category_code = override_category_code or (matched.code if matched else parsed.category_code)
 
     sub_category = override_sub_category or getattr(parsed, "sub_category", None)
@@ -612,7 +625,7 @@ def process_chat_transaction(
         available_subs = []
         try:
             from salary_cycle import get_sub_categories_for_parent
-            available_subs = get_sub_categories_for_parent(category_code)
+            available_subs = get_sub_categories_for_parent(category_code, [household_id])
         except Exception as exc:
             logger.debug("Could not fetch sub categories: %s", exc)
 

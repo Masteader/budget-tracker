@@ -230,6 +230,9 @@ def test_members_cannot_write_budgets(db, index):
 
 @pytest.mark.parametrize("index", range(5))
 def test_admins_can_write_budgets(db, index):
+    # Sub-categories may only be added under an existing system or own category (E2E-05).
+    db.seed("cost_control_codes", [{"id": "c-groc", "code": "OPEX-GROCERY", "category": "Groceries",
+                                    "keywords": [], "is_flexible": False, "household_id": None, "is_system": True}])
     method, path, worker, kwargs = _budget_writes(ROOM)[index]
     with patch(f"routes.budgets.{worker}", return_value={"status": "success"}) as work:
         res = getattr(client, method)(path, headers=bearer(A), **kwargs)

@@ -10,7 +10,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from auth import verify_household_access, verify_household_admin_access, get_current_user_id
+from auth import (
+    verify_household_access,
+    verify_household_admin_access,
+    get_current_user_id,
+    get_user_household_ids,
+)
 from household_permissions import (
     PermissionDeniedError,
     TransactionNotFoundError,
@@ -38,6 +43,7 @@ from salary_cycle import (
     archive_category_for_household,
     simulate_affordability,
     get_category_owner_households,
+    sub_category_parent_visible,
 )
 from recurring_detector import (
     fetch_household_recurring_bills,
@@ -332,6 +338,18 @@ async def add_sub_category(
     req: SubCategoryCreateRequest,
 ):
     await verify_household_admin_access(request, req.household_id)
+    # Definitions are global (no household_id column), so a household may only add them under a
+    # system category or one of its own custom categories, never under another household's
+    # custom category (E2E-05). Unknown and foreign parents get the same answer (no oracle).
+    try:
+        visible = await asyncio.to_thread(sub_category_parent_visible, req.parent_code, [req.household_id])
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to add sub-category.")
+    if not visible:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sub-categories can only be added under a system category or one of this household's own categories.",
+        )
     try:
         return await asyncio.to_thread(
             add_sub_category_for_household,
@@ -351,10 +369,20 @@ async def add_sub_category(
     tags=["budgets"],
     summary="Get all sub-categories for a parent category code.",
 )
-async def get_sub_categories_route(parent_code: str, request: Request):
-    get_current_user_id(request)
+async def get_sub_categories_route(parent_code: str, request: Request, household_id: Optional[str] = None):
+    """
+    Sub-categories of a system category, or of a custom category of a household the caller
+    belongs to (``household_id`` when given, else any of the caller's households). Another
+    household's custom category yields an empty list, like an unknown code (E2E-05).
+    """
+    user_id = get_current_user_id(request)
+    if household_id:
+        await verify_household_access(request, household_id)
+        household_ids = [household_id]
+    else:
+        household_ids = await asyncio.to_thread(get_user_household_ids, user_id)
     try:
-        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code)
+        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code, household_ids)
         return {
             "status": "success",
             "sub_categories": sub_cats,

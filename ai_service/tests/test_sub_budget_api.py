@@ -73,7 +73,12 @@ def test_add_and_archive_category(monkeypatch):
     assert del_resp.json()["status"] == "success"
 
 
-def test_add_sub_category_endpoint(monkeypatch):
+def test_add_sub_category_endpoint(monkeypatch, fake_supabase):
+    # Sub-categories may only be added under an existing system or own category (E2E-05).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities", "keywords": [],
+         "is_flexible": False, "household_id": None, "is_system": True},
+    ])
     mock_res = {
         "status": "success",
         "category_code": "OPEX-UTILITIES",

@@ -333,6 +333,50 @@ def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: Any) -> bo
 TRANSACTION_SOURCES = frozenset({"chat", "receipt_scan", "manual"})
 
 
+class UnknownCategoryError(ValueError):
+    """
+    A transaction's category code is in neither the global taxonomy nor the household's own
+    categories (E2E-03). The DB trigger validate_category_code_exists refuses it with 23503;
+    routes answer 422 with ``PUBLIC_MESSAGE`` and never echo the database text.
+    """
+
+    PUBLIC_MESSAGE = "Unknown category_code: choose one of your household's categories."
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
+def is_unknown_category_db_error(exc: BaseException) -> bool:
+    """True for validate_category_code_exists' refusal (SQLSTATE 23503 'Category code ...')."""
+    from postgrest_compat import db_error_fields
+
+    fields = db_error_fields(exc)
+    return fields["code"] == "23503" and "Category code" in fields["message"]
+
+
+def category_code_in_taxonomy(household_id: str, category_code: str) -> Optional[bool]:
+    """
+    Whether ``category_code`` is a global code or one of ``household_id``'s own codes, the same
+    rule as the DB trigger validate_category_code_exists. Queried live (not the 5-minute code
+    cache) so a category created a moment ago is accepted. None when the lookup itself fails:
+    the caller then lets the database decide.
+    """
+    try:
+        rows = (
+            get_client()
+            .table("cost_control_codes")
+            .select("household_id")
+            .eq("code", category_code)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Category code lookup failed: %s", exc)
+        return None
+    return any(r.get("household_id") in (None, household_id) for r in rows)
+
+
 def insert_transaction(
     household_id: str,
     amount: float,
@@ -434,9 +478,13 @@ def insert_transaction(
     payload.update(nafaqah_fields)
 
 
+    # An unknown category code is the caller's error, never a schema mismatch: retrying with a
+    # pruned payload cannot help, and an unhandled APIError surfaced as a 500 (E2E-03).
     try:
         response = client.table("transactions").insert(payload).execute()
     except Exception as exc:
+        if is_unknown_category_db_error(exc):
+            raise UnknownCategoryError() from exc
         logger.warning("Insert with initial payload failed (%s), pruning advanced optional columns.", exc)
         safe_payload = dict(payload)
         safe_payload.pop("qr_code_raw", None)
@@ -444,6 +492,8 @@ def insert_transaction(
         try:
             response = client.table("transactions").insert(safe_payload).execute()
         except Exception as exc3:
+            if is_unknown_category_db_error(exc3):
+                raise UnknownCategoryError() from exc3
             logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
             base_payload = {
                 "household_id": household_id,
@@ -465,7 +515,12 @@ def insert_transaction(
             if spent_by:
                 base_payload["spent_by"] = spent_by
             base_payload.update(nafaqah_fields)
-            response = client.table("transactions").insert(base_payload).execute()
+            try:
+                response = client.table("transactions").insert(base_payload).execute()
+            except Exception as exc4:
+                if is_unknown_category_db_error(exc4):
+                    raise UnknownCategoryError() from exc4
+                raise
 
     transaction_id = response.data[0]["id"]
     logger.info(

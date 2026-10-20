@@ -8,7 +8,7 @@ from __future__ import annotations
 import calendar
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Iterable, List, Optional
 
 from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
 
@@ -747,13 +747,35 @@ def add_category_and_budget(req: Any) -> Dict[str, Any]:
 
 
 
-def get_sub_categories_for_parent(parent_code: str) -> List[Dict[str, Any]]:
+def sub_category_parent_visible(parent_code: str, household_ids: Iterable[str]) -> bool:
+    """
+    Sub-category definitions carry no household_id (E2E-05): they belong to their parent
+    category. A household may see or extend them only when the parent is a system/global
+    category or one of that household's own custom categories, the same rule as the
+    cost_control_codes_select policy and the cost_control_sub_categories RLS policy
+    (migration 20261020600000).
+    """
+    ownership = get_category_owner_households(parent_code)
+    if ownership["shared"]:
+        return True
+    return bool(set(ownership["owners"]) & {str(h) for h in household_ids})
+
+
+def get_sub_categories_for_parent(
+    parent_code: str,
+    household_ids: Optional[Iterable[str]] = None,
+) -> List[Dict[str, Any]]:
     """
     Fetches all sub-category definitions for a parent category code.
+
+    With ``household_ids`` (request-driven callers), nothing is returned unless the parent is a
+    system category or a custom category of one of those households (E2E-05). Fails closed.
     """
     from supabase_client import get_client
     client = get_client()
     try:
+        if household_ids is not None and not sub_category_parent_visible(parent_code, household_ids):
+            return []
         resp = (
             client.table("cost_control_sub_categories")
             .select("sub_code, name_en, name_ar")
