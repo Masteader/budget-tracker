@@ -39,10 +39,10 @@ const authRedirectUrl = String.fromEnvironment(
 /// missing they are sent unsigned and the app still starts normally.
 ///
 /// Requests are authenticated by the user's Supabase JWT. The backend treats a
-/// signature as defense in depth: it is not required, but a signature that is
-/// present must match the backend's WEBHOOK_SECRET (otherwise 401). The key is
-/// extractable from the binary, so it is never an authentication secret; a
-/// build signed with an old, rotated key must be rebuilt (or built without it).
+/// signature as defense in depth: it is not required, and a signature that does
+/// not match the backend's current WEBHOOK_SECRET (e.g. after a rotation) is
+/// logged and ignored while the JWT is valid. The key is extractable from the
+/// binary, so it is never an authentication secret.
 const webhookSecret = String.fromEnvironment('WEBHOOK_SECRET');
 
 /// Returns every configuration problem (empty when the configuration is usable).

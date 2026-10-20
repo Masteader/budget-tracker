@@ -214,7 +214,7 @@ cp dist/index.html ../ai_service/static/ && cp dist/assets/index-* ../ai_service
 | `SUPABASE_URL` | ✅ | Same as above |
 | `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients; `SUPABASE_ANON_KEY` accepted as alias). Service-role / `sb_secret_` keys are rejected at startup. |
 | `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend (`https://` required in release builds) |
-| `WEBHOOK_SECRET` | ❌ | Optional HMAC key: when set, POST bodies carry an `X-Signature` header (defense in depth). It must equal the backend's current `WEBHOOK_SECRET`, because the backend rejects a signature that is present but wrong (401). Leave it out and requests are sent unsigned: the user's Supabase JWT is the credential |
+| `WEBHOOK_SECRET` | ❌ | Optional HMAC key: when set, POST bodies carry an `X-Signature` header (defense in depth). The user's Supabase JWT is the credential: a signature that does not match the backend's current `WEBHOOK_SECRET` (e.g. after a rotation) is logged and ignored while the JWT is valid. Leave it out and requests are sent unsigned |
 | `AUTH_REDIRECT_URL` | ❌ | Email-confirmation redirect (defaults to `FASTAPI_BASE_URL`) |
 
 The app has no built-in defaults: a build missing a required flag (`SUPABASE_URL`, the publishable
@@ -263,11 +263,11 @@ docker compose up --build
 
 - The **service role key** must **never** appear in the Flutter app or any client-side code.
 - **Authentication** of every user route is the caller's Supabase JWT (`Authorization: Bearer`).
-- **`X-Signature`** (HMAC-SHA256 of the exact body with `WEBHOOK_SECRET`) is defense in depth: optional
-  on user routes, but a signature that is present must be valid or the request gets 401 (also in
-  production when `WEBHOOK_SECRET` is unset). A server-to-server webhook route without a JWT must
-  require a valid signature (`utils.verify_signature`). Rotate `WEBHOOK_SECRET` if compromised; app
-  builds signed with the old value then get 401 until rebuilt with the new value or without it.
+- **`X-Signature`** (HMAC-SHA256 of the exact body with `WEBHOOK_SECRET`) is defense in depth, never
+  the authentication of a user route. With a valid JWT, an invalid or unverifiable signature (also
+  when `WEBHOOK_SECRET` is unset) is logged (rate limited, route + hashed user id) and the request is
+  served; without a valid JWT it is 401. Compatibility: `WEBHOOK_SECRET` has already been rotated on Railway, so every installed app build signs with the old value; rejecting those signatures would break all their chat and receipt calls the moment the new backend deploys. A server-to-server webhook route without a
+  JWT must require a valid signature (`utils.verify_signature`); none exists today.
 - **`X-App-Token`** (`APP_AUTH_TOKEN`) is only a legacy pass at the firewall for old app builds; it
   never authenticates a user (every route still verifies the JWT). The current app does not send it.
 - All Supabase tables have **Row Level Security (RLS)** enabled — users can only access their household's data.

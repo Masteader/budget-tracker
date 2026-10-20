@@ -217,26 +217,83 @@ def _decode_token(token: str) -> dict:
 
 SIGNATURE_HEADER = "X-Signature"
 _INVALID_SIGNATURE_DETAIL = "Invalid request signature."
+# A stale signature is logged at most once per (route, user) per interval.
+_STALE_SIGNATURE_LOG_INTERVAL_SECONDS = 300.0
+_STALE_SIGNATURE_LOG_MAX_KEYS = 2048
+_STALE_SIGNATURE_LOGGED: dict = {}
+
+
+def _reset_stale_signature_log() -> None:
+    """Forget which stale-signature warnings were emitted (tests)."""
+    _STALE_SIGNATURE_LOGGED.clear()
+
+
+def _user_ref(user_id: str) -> str:
+    """Short, non-reversible reference to a user for logs (never the raw id)."""
+    import hashlib
+
+    return hashlib.sha256(str(user_id).encode("utf-8")).hexdigest()[:12]
+
+
+def _warn_ignored_signature(route: str, user_id: str) -> None:
+    now = _monotonic()
+    key = (route, _user_ref(user_id))
+    last = _STALE_SIGNATURE_LOGGED.get(key)
+    if last is not None and now - last < _STALE_SIGNATURE_LOG_INTERVAL_SECONDS:
+        return
+    if len(_STALE_SIGNATURE_LOGGED) >= _STALE_SIGNATURE_LOG_MAX_KEYS:
+        cutoff = now - _STALE_SIGNATURE_LOG_INTERVAL_SECONDS
+        for stale_key in [k for k, t in _STALE_SIGNATURE_LOGGED.items() if t < cutoff]:
+            _STALE_SIGNATURE_LOGGED.pop(stale_key, None)
+        if len(_STALE_SIGNATURE_LOGGED) >= _STALE_SIGNATURE_LOG_MAX_KEYS:
+            _STALE_SIGNATURE_LOGGED.clear()
+    _STALE_SIGNATURE_LOGGED[key] = now
+    if not os.environ.get("WEBHOOK_SECRET", "").strip():
+        reason = "cannot be verified (WEBHOOK_SECRET is not set)"
+    else:
+        reason = "does not match WEBHOOK_SECRET (app build signing with a rotated secret?)"
+    logger.warning(
+        "Ignoring %s header on %s for user %s: it %s. The request is authenticated by its JWT.",
+        SIGNATURE_HEADER, route, key[1], reason,
+    )
 
 
 async def verify_signature_if_present(request: Request) -> None:
     """
-    Router-wide dependency: X-Signature is defense-in-depth, not authentication.
+    Router-wide dependency: X-Signature is defense in depth on user routes, never their
+    authentication (the Supabase JWT is).
 
-    User routes are authenticated by the Supabase JWT. A request that carries X-Signature must
-    carry a valid one (HMAC-SHA256 of the exact body with WEBHOOK_SECRET); otherwise it is
-    rejected with 401 before the route runs. A request without the header is not affected.
-    In production a signed request is rejected when WEBHOOK_SECRET is unset (it cannot be
-    verified). Server-to-server routes that have no JWT must call ``utils.verify_signature``
-    themselves and reject a missing signature too.
+    - No header, or a valid signature: nothing to do.
+    - Invalid or unverifiable signature (wrong HMAC, malformed, or WEBHOOK_SECRET unset in
+      production) WITH a valid JWT: served, with a rate-limited warning naming the route and a
+      hash of the user id. Compatibility: WEBHOOK_SECRET has been rotated, so every installed
+      app build signs with the old value; rejecting would break all their chat/receipt calls.
+    - Invalid signature WITHOUT a valid JWT: 401 (there is no credential at all).
+
+    Routes where the signature IS the authentication (server-to-server webhooks without a JWT;
+    none today) must call ``utils.verify_signature`` themselves and reject a missing or invalid
+    signature.
     """
     signature = request.headers.get(SIGNATURE_HEADER)
     if signature is None:
         return
     body = await request.body()  # cached on the request; the route reads the same bytes
-    if not verify_signature(body, signature):
-        logger.warning("Rejected request with an invalid %s header: %s %s", SIGNATURE_HEADER, request.method, request.url.path)
+    if verify_signature(body, signature):
+        return
+
+    claims = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            claims = await decode_token(auth_header[7:].strip())
+        except HTTPException:
+            claims = None
+    if not claims or not claims.get("sub"):
+        logger.info("Rejected request with an invalid %s header and no valid JWT.", SIGNATURE_HEADER)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_SIGNATURE_DETAIL)
+
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path
+    _warn_ignored_signature(route, str(claims["sub"]))
 
 
 def get_verified_claims(request: Request) -> dict:

@@ -35,8 +35,8 @@ async def chat_transaction(request: Request):
     Extracts merchant, total, line items, and checks for duplicates.
 
     Authentication is the caller's Supabase JWT. X-Signature is optional defense in depth: its
-    secret ships inside the app and authenticates nobody, but when the header is present it must
-    be valid (checked for every router in main.py by auth.verify_signature_if_present → 401).
+    secret ships inside the app and authenticates nobody, so a stale signature next to a valid JWT
+    is only logged (auth.verify_signature_if_present, applied to every router in main.py).
 
     Replays: an ``Idempotency-Key`` header makes a commit idempotent per user, and
     ``client_occurred_at`` (ISO-8601) is used as the transaction time.

@@ -4,7 +4,7 @@ FastAPI entry point for the Budget Tracker AI microservice.
 Architecture:
 - Modular routers under `routes/`
 - Supabase JWT authentication (firewall middleware + per-route verification)
-- Optional X-Signature HMAC: verified whenever present (auth.verify_signature_if_present)
+- Optional X-Signature HMAC: checked when present; a stale one next to a valid JWT is logged, not rejected
 - Request body size limiter (DoS protection)
 - Constant-time firewall token middleware
 """
@@ -240,14 +240,16 @@ async def firewall_token_middleware(request: Request, call_next):
 
 
 # ─── HMAC Signature Config ───────────────────────────────────────────────────
-# X-Signature is defense in depth: optional for user routes (the JWT authenticates them), but a
-# request that carries one must carry a valid one (see auth.verify_signature_if_present).
+# X-Signature is defense in depth on user routes, never their authentication (the JWT is). An
+# invalid or unverifiable signature next to a valid JWT is logged and the request is served
+# (installed builds sign with the pre-rotation secret); without a valid JWT it is 401
+# (see auth.verify_signature_if_present).
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
 if not WEBHOOK_SECRET:
     logger.warning(
-        "WEBHOOK_SECRET is not configured: in production every request that carries an "
-        "X-Signature header is rejected (it cannot be verified); unsigned requests with a valid "
-        "JWT are unaffected. Set WEBHOOK_SECRET in environment variables."
+        "WEBHOOK_SECRET is not configured: X-Signature headers cannot be verified. Requests "
+        "with a valid JWT are still served (the signature is logged as ignored); a signed "
+        "request without a valid JWT is rejected. Set WEBHOOK_SECRET in environment variables."
     )
 
 
@@ -344,7 +346,8 @@ async def health_check():
 
 
 # ─── Include Routers ─────────────────────────────────────────────────────────
-# Every API route rejects a present-but-invalid X-Signature (401) before it runs.
+# Every API route checks a present X-Signature first: ignored with a warning when a valid JWT
+# authenticates the request, 401 when there is no valid JWT.
 _SIGNATURE_CHECK = [Depends(verify_signature_if_present)]
 for _router in (
     budgets_router,

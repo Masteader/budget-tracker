@@ -212,7 +212,7 @@ with `python -I` against mocked HTTP (`respx`), never against a live service.
 | Item | Verdict | Fix |
 |---|---|---|
 | BLOCKER 1 — supabase-py too old for `sb_secret_` keys; key selection | **Confirmed** (lower bound) + **partly confirmed** (selection) | `3627484` |
-| BLOCKER 2 — `WEBHOOK_SECRET` / `APP_AUTH_TOKEN` contradiction | **Confirmed** (docs/app/backend disagreed); firewall logic **not** a bug | `03ce01e` |
+| BLOCKER 2 — `WEBHOOK_SECRET` / `APP_AUTH_TOKEN` contradiction | **Confirmed** (docs/app/backend disagreed); firewall logic **not** a bug | `03ce01e`, policy revised in the follow-up commit (stale signature + valid JWT = warn and serve) |
 | BLOCKER 3 — quota RPC shape → 503 | **Partly confirmed**: no 503 with the current client and SQL, but any wrapped shape would 503 | `6be0159` |
 | HIGH 3 — JWKS lock-out and blocking fetch | **Confirmed** (both) | `4df94fb` |
 | HIGH 5 — hard-coded payday 27 | **Confirmed** (and two more call sites) | `d857855` |
@@ -259,20 +259,27 @@ with `python -I` against mocked HTTP (`respx`), never against a live service.
   (expired, forged and malformed Bearer next to a valid `X-App-Token` → 401). They passed before the
   change, confirming the behaviour.
 - **Design now implemented everywhere:** user routes are authenticated by the Supabase JWT.
-  `auth.verify_signature_if_present` is a dependency of every router (`main.py`): a present
-  `X-Signature` must be a valid HMAC of the exact body, otherwise 401 (also 401 in production when
-  `WEBHOOK_SECRET` is unset); an absent header is fine. There is currently no server-to-server
+  `auth.verify_signature_if_present` is a dependency of every router (`main.py`). No header or a
+  valid signature: nothing happens. An invalid, malformed or unverifiable signature (including
+  `WEBHOOK_SECRET` unset in production) **with a valid JWT is served**: a warning is logged at most
+  once per route and user per 5 minutes, naming the route template and a 12-character SHA-256 of
+  the user id, never secret or signature values. Without a valid JWT a bad signature is 401.
+  **Why not reject:** the owner has already rotated `WEBHOOK_SECRET` on Railway, so every installed
+  build signs with the old value; the first version of this fix (`03ce01e`, present-but-invalid →
+  401) would have broken all existing users' chat and receipt calls on deploy. The signature never
+  authenticated anyone (its key ships in the APK), so ignoring a stale one loses no security. There is currently no server-to-server
   route without a JWT (`test_every_non_public_route_rejects_anonymous_requests` guards that); such a
   route must call `utils.verify_signature`, which rejects a missing signature. `X-App-Token` stays a
   legacy firewall pass only. Flutter: `WEBHOOK_SECRET` is optional (no StateError), and
   `BaseApiClient` signs only when a secret is supplied (`signingSecret`, injectable for tests).
-- **Deployment consequence:** an installed build that signs with the pre-rotation `WEBHOOK_SECRET`
-  now gets 401 on its signed POSTs once the rotated secret is live (before this change the signature
-  was ignored). The old value is public, so it cannot be accepted; release the new build with the
-  backend (no define, or the new value).
-- **Tests:** `tests/test_api_audit.py` (invalid signature on every API route with a valid JWT → 401,
-  malformed/empty header → 401, valid signature → 200, signed request in production without a
-  secret → 401, valid signature without JWT never reaches data), Flutter
+- **Deployment:** installed builds keep working after the rotation (stale signature logged, JWT
+  authenticates). The warning count shows how many old builds remain; new builds can drop the define.
+- **Tests:** `tests/test_api_audit.py` (stale signature with a valid JWT is never 401 on any API
+  route; malformed/empty/stale header with JWT → 200; stale chat commit with JWT → 200; bad signature
+  without a valid JWT (none, expired, malformed) → 401; warning rate limited per route and user,
+  repeats after the interval, contains the hash but not the user id, secret or signature; production
+  without `WEBHOOK_SECRET` + JWT → 200 with a warning; `utils.verify_signature` stays strict for future
+  server-to-server routes; valid signature without JWT never reaches data), Flutter
   `test/services/client_config_test.dart`, `test/services/api/base_api_client_test.dart`.
 - Docs aligned: `README.md`, `.agents/rules/04-security-and-privacy.md` §2/§5, `ai_service/.env.example`,
   `docs/runbooks/security-secret-rotation.md`, MOB-23 in `flutter_logic.md`, master report §3/§4/§6.

@@ -39,9 +39,10 @@ flutter build apk --release \
 # optional request signing (must equal the server's current WEBHOOK_SECRET):
 #   --dart-define=WEBHOOK_SECRET=<new-generated-hex-64>
 ```
-After rotating `WEBHOOK_SECRET` on the server, a build that still signs with the old value is
-answered 401 on every signed request (a signature that is present must be valid), so ship a
-build with the new value or without it.
+After rotating `WEBHOOK_SECRET` on the server, builds that still sign with the old value keep
+working: their signature no longer verifies, but the request is authenticated by the user's JWT, so
+the backend logs a rate-limited warning ("Ignoring X-Signature header ...") and serves it. Those
+warnings show how many old builds are still in use; new builds can drop the define.
 
 ## 5. Git History Cleansing (Optional/Recommended for Public Repos)
 If this repository is or will become public, run `git filter-repo` or BFG Repo-Cleaner to scrub the historical commit blobs containing the compromised strings.
