@@ -11,12 +11,14 @@ import 'package:flutter/foundation.dart';
 import 'api/base_api_client.dart';
 import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
+import 'api/nafaqah_api_client.dart';
 import 'api/receipt_api_client.dart';
 import 'api/support_api_client.dart';
 import 'api/transaction_api_client.dart';
 import '../models/recurring_bill.dart';
 import '../models/installment_plan.dart';
 import '../models/models.dart';
+import '../models/nafaqah.dart';
 
 class ApiService {
   ApiService._() : base = BaseApiClient() {
@@ -67,6 +69,7 @@ class ApiService {
     String? subCategory,
     String? paidBy,
     String? beneficiary,
+    String? nafaqahClass,
     String? idempotencyKey,
     DateTime? occurredAt,
   }) =>
@@ -83,6 +86,7 @@ class ApiService {
         subCategory: subCategory,
         paidBy: paidBy,
         beneficiary: beneficiary,
+        nafaqahClass: nafaqahClass,
         idempotencyKey: idempotencyKey,
         occurredAt: occurredAt,
       );
@@ -233,6 +237,38 @@ class ApiService {
 
   Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
       budget.recordReimbursementPayment(request: request);
+
+  // ── Family Nafaqah (husband-owes-wife ledger, wife allowance) ──────────────
+  late final NafaqahApiClient nafaqah = NafaqahApiClient(baseClient: base);
+
+  Future<NafaqahSummary> getNafaqahSummary(String householdId, {String? cycleKey}) =>
+      nafaqah.fetchSummary(householdId: householdId, cycleKey: cycleKey);
+
+  Future<NafaqahLedger> getNafaqahLedger(String householdId, {String? wifeUserId}) =>
+      nafaqah.fetchLedger(householdId: householdId, wifeUserId: wifeUserId);
+
+  Future<double> recordNafaqahReimbursement(
+    String householdId, {
+    required double amount,
+    required String paymentMethod,
+    String? wifeUserId,
+    String? notes,
+  }) =>
+      nafaqah.recordReimbursement(
+        householdId: householdId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        wifeUserId: wifeUserId,
+        notes: notes,
+      );
+
+  Future<AllowanceStatus> setWifeAllowance(
+    String householdId, {
+    required double amount,
+    String? wifeUserId,
+    String? cycleKey,
+  }) =>
+      nafaqah.setAllowance(householdId: householdId, amount: amount, wifeUserId: wifeUserId, cycleKey: cycleKey);
 
   Future<List<HouseholdDependent>> getDependents(String householdId) =>
       budget.fetchHouseholdDependents(householdId: householdId);

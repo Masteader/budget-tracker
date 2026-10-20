@@ -24,7 +24,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary) {},
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) {},
               onCancel: () {},
             ),
           ),
@@ -64,7 +64,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary) {
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) {
                 confirmedStore = store;
                 confirmedCat = cat;
                 confirmedSub = subCat;
@@ -92,5 +92,75 @@ void main() {
     expect(confirmedPaidBy, equals('me'));
     expect(confirmedBeneficiary, equals('both'));
   });
-}
 
+  Map<String, dynamic> familyPreview({String role = 'wife', String paidBy = 'me', String beneficiary = 'both', String? cls}) => {
+        'merchant': 'Panda',
+        'amount': 180.0,
+        'category_code': 'OPEX-GROCERY',
+        'sub_category': 'pantry_staples',
+        'paid_by': paidBy,
+        'beneficiary': beneficiary,
+        'available_sub_categories': [
+          {'sub_code': 'pantry_staples', 'name_en': 'Pantry Staples', 'name_ar': 'المؤن'},
+        ],
+        'dependents': <String>[],
+        'household_mode': 'family_nafaqah',
+        'recorder_role': role,
+        'nafaqah_class': cls,
+      };
+
+  Future<String?> confirmWith(WidgetTester tester, Map<String, dynamic> data, {Future<void> Function()? before}) async {
+    String? confirmed = 'unset';
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: PendingExpenseConfirmationCard(
+            pendingData: data,
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) => confirmed = nafaqahClass,
+            onCancel: () {},
+          ),
+        ),
+      ),
+    ));
+    if (before != null) await before();
+    await tester.tap(find.text('Confirm & Add Expense'));
+    await tester.pumpAndSettle();
+    return confirmed;
+  }
+
+  testWidgets('family: wife-paid shared expense is confirmed as a husband debt, no split', (tester) async {
+    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'));
+    expect(find.text('Shared for family (husband reimburses)'), findsOneWidget);
+    expect(find.text('Personal (from my allowance)'), findsOneWidget);
+    expect(find.text('Husband paid (household expense)'), findsNothing);
+    expect(find.textContaining('50/50'), findsNothing);
+    expect(cls, 'wife_reimbursable');
+  });
+
+  testWidgets('family: the wife can mark it personal (charged to her allowance)', (tester) async {
+    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'), before: () async {
+      await tester.tap(find.text('Personal (from my allowance)'));
+      await tester.pumpAndSettle();
+    });
+    expect(cls, 'wife_personal');
+  });
+
+  testWidgets('family: husband-paid expense needs no choice and is never a debt', (tester) async {
+    final cls = await confirmWith(tester, familyPreview(role: 'husband', paidBy: 'me'));
+    expect(find.text('Shared for family (husband reimburses)'), findsNothing);
+    expect(cls, 'none');
+  });
+
+  testWidgets('family: husband records what his wife paid for herself', (tester) async {
+    final cls = await confirmWith(tester, familyPreview(role: 'husband', paidBy: 'partner', beneficiary: 'partner'));
+    expect(find.text('Personal (from her allowance)'), findsOneWidget);
+    expect(cls, 'wife_personal');
+  });
+
+  testWidgets('roommates: no Nafaqah class is sent', (tester) async {
+    final data = familyPreview()..['household_mode'] = 'not_family';
+    final cls = await confirmWith(tester, data);
+    expect(find.text('Shared for family (husband reimburses)'), findsNothing);
+    expect(cls, isNull);
+  });
+}

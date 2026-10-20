@@ -4,19 +4,26 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/nafaqah.dart';
+import '../nafaqah/nafaqah_class_selector.dart';
+
+/// Confirmed values of a chat expense. [nafaqahClass] is set in family mode
+/// only: 'wife_reimbursable', 'wife_personal' or 'none' (husband paid).
+typedef PendingExpenseConfirmCallback = void Function(
+  String confirmedMerchant,
+  String confirmedCategoryCode,
+  String? confirmedSubCategory,
+  String confirmedPaidBy,
+  String confirmedBeneficiary,
+  String? confirmedNafaqahClass,
+);
 
 /// Interactive confirmation card embedded within chat bubbles that allows
 /// the user to review and modify Merchant, Category, Sub-Category, Who Paid,
 /// and For Whom (beneficiary, including children) before committing.
 class PendingExpenseConfirmationCard extends StatefulWidget {
   final Map<String, dynamic> pendingData;
-  final void Function(
-    String confirmedMerchant,
-    String confirmedCategoryCode,
-    String? confirmedSubCategory,
-    String confirmedPaidBy,
-    String confirmedBeneficiary,
-  ) onConfirm;
+  final PendingExpenseConfirmCallback onConfirm;
   final VoidCallback onCancel;
 
   const PendingExpenseConfirmationCard({
@@ -38,6 +45,43 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   late String _selectedBeneficiary;
   late List<Map<String, dynamic>> _availableSubCategories;
   bool _loadingSubs = false;
+  String? _nafaqahChoice;
+
+  /// 'wife' | 'husband' when the recorder is a spouse in a family household.
+  String? get _spouseRole {
+    if (widget.pendingData['household_mode'] != 'family_nafaqah') return null;
+    final role = widget.pendingData['recorder_role'] as String?;
+    return (role == 'wife' || role == 'husband') ? role : null;
+  }
+
+  bool get _isFamily => widget.pendingData['household_mode'] == 'family_nafaqah';
+
+  /// Recomputes the suggestion after the payer / beneficiary chips change.
+  void _syncNafaqah() {
+    _nafaqahChoice = classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+  }
+
+  void _setPaidBy(String v) => setState(() {
+        _selectedPaidBy = v;
+        _syncNafaqah();
+      });
+
+  void _setBeneficiary(String v) => setState(() {
+        _selectedBeneficiary = v;
+        _syncNafaqah();
+      });
+
+  void _chooseNafaqah(String? cls) {
+    final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
+    setState(() {
+      _nafaqahChoice = cls;
+      if (cls == kWifePersonal) {
+        _selectedBeneficiary = wifeSide;
+      } else if (cls == kWifeReimbursable && _selectedBeneficiary == wifeSide) {
+        _selectedBeneficiary = 'both';
+      }
+    });
+  }
 
   static const List<Map<String, String>> _defaultCategories = [
     {'code': 'OPEX-GROCERY', 'label': 'Groceries & Supermarkets'},
@@ -75,6 +119,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
 
     // Attribution: For Whom (both | me | partner | child name)
     _selectedBeneficiary = (widget.pendingData['beneficiary'] as String? ?? 'both').toLowerCase();
+
+    // Family (Nafaqah): the server's suggestion, else derived from the chips.
+    final suggested = widget.pendingData['nafaqah_class'] as String?;
+    _nafaqahChoice = (suggested == kWifeReimbursable || suggested == kWifePersonal)
+        ? suggested
+        : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
 
     // Available subcategories from backend preview payload
     final rawSubs = widget.pendingData['available_sub_categories'] as List?;
@@ -321,13 +371,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               _buildChoiceChip(
                 label: context.tr('me'),
                 isSelected: _selectedPaidBy == 'me',
-                onSelected: () => setState(() => _selectedPaidBy = 'me'),
+                onSelected: () => _setPaidBy('me'),
               ),
               const SizedBox(width: 8),
               _buildChoiceChip(
                 label: context.tr('partner'),
                 isSelected: _selectedPaidBy == 'partner',
-                onSelected: () => setState(() => _selectedPaidBy = 'partner'),
+                onSelected: () => _setPaidBy('partner'),
               ),
             ],
           ),
@@ -351,29 +401,42 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               _buildChoiceChip(
                 label: context.tr('pec_both_family'),
                 isSelected: _selectedBeneficiary == 'both',
-                onSelected: () => setState(() => _selectedBeneficiary = 'both'),
+                onSelected: () => _setBeneficiary('both'),
               ),
               _buildChoiceChip(
                 label: context.tr('me'),
                 isSelected: _selectedBeneficiary == 'me',
-                onSelected: () => setState(() => _selectedBeneficiary = 'me'),
+                onSelected: () => _setBeneficiary('me'),
               ),
               _buildChoiceChip(
                 label: context.tr('partner'),
                 isSelected: _selectedBeneficiary == 'partner',
-                onSelected: () => setState(() => _selectedBeneficiary = 'partner'),
+                onSelected: () => _setBeneficiary('partner'),
               ),
               ...dependents.map((depName) {
                 return _buildChoiceChip(
                   label: depName,
                   icon: Icons.child_care_rounded,
                   isSelected: _selectedBeneficiary == depName.toLowerCase(),
-                  onSelected: () => setState(() => _selectedBeneficiary = depName.toLowerCase()),
+                  onSelected: () => _setBeneficiary(depName.toLowerCase()),
                 );
               }),
             ],
           ),
           const SizedBox(height: 12),
+
+          // Family: the wife's own money is either a shared advance the husband
+          // reimburses or a personal purchase from her allowance (never split).
+          if (_spouseRole != null &&
+              classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null) ...[
+            NafaqahClassSelector(
+              value: _nafaqahChoice,
+              viewerIsWife: _spouseRole == 'wife',
+              showHusbandOption: false,
+              onChanged: _chooseNafaqah,
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Items Preview (with subcategory badge)
           if (items.isNotEmpty) ...[
@@ -465,6 +528,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                       resolvedSub,
                       _selectedPaidBy,
                       _selectedBeneficiary,
+                      !_isFamily
+                          ? null
+                          : (_spouseRole != null &&
+                                  classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null
+                              ? (_nafaqahChoice ?? kWifeReimbursable)
+                              : 'none'),
                     );
                   },
                 ),

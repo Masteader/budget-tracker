@@ -25,6 +25,8 @@ Map<String, dynamic> buildManualExpenseRow({
   required String beneficiaryId,
   required String? accountId,
   required DateTime occurredAt,
+  String? nafaqahClass,
+  String? nafaqahSpouseId,
 }) {
   final auditPayer = manualPayerAuditTag(paidBy);
   return {
@@ -45,6 +47,12 @@ Map<String, dynamic> buildManualExpenseRow({
     'items': [
       {'name': merchant, 'price': amount, 'quantity': 1}
     ],
+    // Family (Nafaqah): wife_reimbursable = the husband owes her, wife_personal
+    // = charged to her allowance. Both columns are set together or not at all.
+    if (nafaqahClass != null && nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) ...{
+      'nafaqah_class': nafaqahClass,
+      'nafaqah_spouse_id': nafaqahSpouseId,
+    },
   };
 }
 

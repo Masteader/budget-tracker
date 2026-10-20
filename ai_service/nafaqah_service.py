@@ -551,6 +551,7 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             "household_id": ctx.household_id,
             "mode": "not_family",
             "caller_role": role,
+            "caller_user_id": caller_id,
             "cycle_key": None,
             "husband": None,
             "wives": [],
@@ -570,6 +571,7 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
         "household_id": ctx.household_id,
         "mode": "family_nafaqah",
         "caller_role": role,
+        "caller_user_id": caller_id,
         "cycle_key": cycle,
         "husband": (
             {"id": ctx.husband_id, "display_name": ctx.display_name(ctx.husband_id)} if ctx.husband_id else None

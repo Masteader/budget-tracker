@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -14,16 +15,28 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/nafaqah/nafaqah_class_selector.dart';
 import '../../models/money.dart';
+
+/// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
+typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
   final List<String> householdDependents;
 
+  /// Family-mode context; loaded from the API when omitted.
+  final NafaqahSummary? nafaqah;
+  final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
+  final NafaqahFieldsLoader? loadNafaqahFields;
+
   const EditTransactionSheet({
     super.key,
     required this.transaction,
     this.householdDependents = const [],
+    this.nafaqah,
+    this.loadNafaqah,
+    this.loadNafaqahFields,
   });
 
   static Future<String?> show(
@@ -64,6 +77,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   List<Map<String, dynamic>> _subCategories = [];
   List<String> _dependents = [];
   bool _isSaving = false;
+  NafaqahSummary? _nafaqah;
+  String? _storedSpouseId;
 
   final List<Map<String, String>> _categories = const [
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
@@ -112,6 +127,82 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     if (_dependents.isEmpty && widget.transaction.householdId.isNotEmpty) {
       _loadDependents();
     }
+    _nafaqah = widget.nafaqah;
+    if (_nafaqah != null) {
+      _loadStoredNafaqah();
+    } else if (widget.transaction.householdId.isNotEmpty) {
+      _loadNafaqah();
+    }
+  }
+
+  // ── Family mode (Islamic Nafaqah: no spousal split) ────────────────────────
+
+  bool get _isFamily => _nafaqah?.isFamily ?? false;
+
+  /// 'wife' | 'husband' when the viewer is one of the spouses of a family household.
+  String? get _spouseRole {
+    final role = _isFamily ? _nafaqah!.callerRole : null;
+    return (role == 'wife' || role == 'husband') ? role : null;
+  }
+
+  String? get _nafaqahClass =>
+      _spouseRole == null ? null : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+
+  /// Maps the Nafaqah choice onto the viewer-relative payer / beneficiary.
+  void _applyNafaqahChoice(String? nafaqahClass) {
+    final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
+    final husbandSide = _spouseRole == 'wife' ? 'partner' : 'me';
+    if (nafaqahClass == kWifeReimbursable) {
+      _selectedPaidBy = wifeSide;
+      _selectedBeneficiary = 'both';
+    } else if (nafaqahClass == kWifePersonal) {
+      _selectedPaidBy = wifeSide;
+      _selectedBeneficiary = wifeSide;
+    } else {
+      _selectedPaidBy = husbandSide;
+      if (classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null) {
+        _selectedBeneficiary = 'both';
+      }
+    }
+  }
+
+  Future<void> _loadNafaqah() async {
+    try {
+      final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+      final summary = await loader(widget.transaction.householdId);
+      if (!mounted) return;
+      setState(() => _nafaqah = summary);
+      await _loadStoredNafaqah();
+    } catch (_) {}
+  }
+
+  /// The stored class wins over the recorder-relative paid_by / beneficiary, so
+  /// editing the wife's advance from the husband's phone never erases her claim.
+  Future<void> _loadStoredNafaqah() async {
+    if (_spouseRole == null) return;
+    try {
+      final loader = widget.loadNafaqahFields ??
+          (String id) => supabase.from('transactions').select('nafaqah_class, nafaqah_spouse_id').eq('id', id).maybeSingle();
+      final fields = await loader(widget.transaction.id);
+      if (!mounted || fields == null) return;
+      final stored = fields['nafaqah_class'] as String?;
+      setState(() {
+        _storedSpouseId = fields['nafaqah_spouse_id'] as String?;
+        if (stored == kWifeReimbursable || stored == kWifePersonal) _applyNafaqahChoice(stored);
+      });
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _nafaqahPayload() {
+    if (_spouseRole == null) return const {};
+    final cls = _nafaqahClass;
+    final spouseId = _spouseRole == 'wife'
+        ? _nafaqah!.callerUserId
+        : (_storedSpouseId ?? _nafaqah!.primaryWife?.id);
+    if (cls == null || spouseId == null || spouseId.isEmpty) {
+      return const {'nafaqah_class': null, 'nafaqah_spouse_id': null};
+    }
+    return {'nafaqah_class': cls, 'nafaqah_spouse_id': spouseId};
   }
 
   Future<void> _loadSubCategories(String catCode) async {
@@ -187,6 +278,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       try {
         await supabase.from('transactions').update({
           ...basePayload,
+          ..._nafaqahPayload(),
           'paid_by': _selectedPaidBy,
           'beneficiary': _selectedBeneficiary,
           'spent_by': derivedSpentBy,
@@ -203,6 +295,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SubCategory: ${_selectedSubCategory ?? ""} | SpentBy: $derivedSpentBy';
         await supabase.from('transactions').update({
           ...basePayload,
+          ..._nafaqahPayload(),
           'raw_sms': newRaw,
           'spent_by': derivedSpentBy,
         }).eq('id', widget.transaction.id);
@@ -319,7 +412,21 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     IconData icon;
     Color color;
 
-    if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
+    if (_isFamily) {
+      // Family (Nafaqah): never a 50/50 split between the spouses.
+      final cls = _nafaqahClass;
+      if (cls == kWifeReimbursable) {
+        text = context.trArgs('nafaqah_banner_shared', {'amount': context.sar(amount)});
+        icon = Icons.currency_exchange_rounded;
+      } else if (cls == kWifePersonal) {
+        text = context.trArgs('nafaqah_banner_personal', {'amount': context.sar(amount)});
+        icon = Icons.shopping_bag_outlined;
+      } else {
+        text = context.tr('nafaqah_banner_husband');
+        icon = Icons.shield_outlined;
+      }
+      color = NafaqahClassSelector.colorFor(cls);
+    } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
@@ -1041,6 +1148,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 }).toList(),
               ),
             const SizedBox(height: 10),
+
+            if (_spouseRole != null) ...[
+              NafaqahClassSelector(
+                value: _nafaqahClass,
+                viewerIsWife: _spouseRole == 'wife',
+                onChanged: (cls) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _applyNafaqahChoice(cls));
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
 
             // Live Settlement Preview
             _buildSettlementPreviewBanner(parseMoneyInput(_amountCtrl.text) ?? 0.0),

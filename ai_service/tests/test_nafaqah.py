@@ -301,7 +301,7 @@ def test_summary_for_wife(family):
         resp = client.get(f"/households/{HH}/nafaqah", headers=bearer(WIFE))
     assert resp.status_code == 200
     body = resp.json()
-    assert body["mode"] == "family_nafaqah" and body["caller_role"] == "wife"
+    assert body["mode"] == "family_nafaqah" and body["caller_role"] == "wife" and body["caller_user_id"] == WIFE
     assert body["husband"]["id"] == HUSBAND
     wife = body["wives"][0]
     assert wife["id"] == WIFE and wife["reimbursement"]["outstanding"] == 500.5
