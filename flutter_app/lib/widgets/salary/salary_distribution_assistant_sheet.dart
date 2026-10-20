@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
+import '../../services/household_permissions.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../../models/money.dart';
@@ -158,7 +159,9 @@ class _SalaryDistributionAssistantSheetState
         setState(() => _isExecuting = false);
         AppSnackBar.showError(
           context,
-          context.trArgs('sda_failed_msg', {'error': e}),
+          HouseholdPermissions.isPermissionDenied(e)
+              ? context.tr('perm_pool_admin_only')
+              : context.trArgs('sda_failed_msg', {'error': e}),
           title: context.tr('sda_failed_title'),
         );
       }

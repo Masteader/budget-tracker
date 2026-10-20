@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_membership.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
@@ -91,6 +92,9 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
         } catch (_) {}
         try {
           context.read<BudgetProvider>().init(householdId);
+        } catch (_) {}
+        try {
+          context.read<HouseholdRoleProvider>().load(householdId);
         } catch (_) {}
 
         AppSnackBar.showSuccess(

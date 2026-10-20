@@ -26,6 +26,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
+  /// Shown instead of the edit/delete actions when the signed-in user may not
+  /// change this transaction (another member's entry and the user is no admin).
+  final String? lockedNote;
+
   const TransactionItemBreakdownCard({
     super.key,
     required this.merchant,
@@ -44,6 +48,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.installmentProvider,
     this.onEdit,
     this.onDelete,
+    this.lockedNote,
   });
 
   IconData get _sourceIcon {
@@ -723,6 +728,23 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                         onPressed: onDelete,
                       ),
                     ],
+                  ],
+                ),
+              ),
+            ] else if (lockedNote != null) ...[
+              Divider(color: context.borderColor, height: 1),
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_outline_rounded, size: 14, color: context.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        lockedNote!,
+                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                      ),
+                    ),
                   ],
                 ),
               ),

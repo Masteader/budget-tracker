@@ -13,6 +13,7 @@ import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/household_permissions.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_class_selector.dart';
@@ -284,7 +285,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           'beneficiary': _selectedBeneficiary,
           'spent_by': derivedSpentBy,
         }).eq('id', widget.transaction.id);
-      } catch (_) {
+      } catch (e) {
+        // Another member's transaction and the user is no admin (DB-18): no fallback.
+        if (HouseholdPermissions.isPermissionDenied(e)) rethrow;
         // Fallback: update raw_sms with PaidBy and Beneficiary tags
         final raw = widget.transaction.rawSms ?? '';
         final cleanRaw = raw
@@ -313,7 +316,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, context.trArgs('tx_update_failed_msg', {'error': e}), title: context.tr('update_error'));
+        AppSnackBar.showError(
+          context,
+          HouseholdPermissions.isPermissionDenied(e)
+              ? context.tr('perm_tx_admin_only')
+              : context.trArgs('tx_update_failed_msg', {'error': e}),
+          title: context.tr('update_error'),
+        );
       }
     }
   }
@@ -347,10 +356,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     setState(() => _isSaving = true);
 
     try {
+      await supabase.from('transactions').delete().eq('id', widget.transaction.id);
+      // Only after the server accepted the delete: a refused delete keeps its receipt.
       if (widget.transaction.receiptUrl != null && widget.transaction.receiptUrl!.trim().isNotEmpty) {
         ReceiptStorageService().deleteReceiptByUrl(widget.transaction.receiptUrl!);
       }
-      await supabase.from('transactions').delete().eq('id', widget.transaction.id);
       if (mounted) {
         Navigator.pop(context, 'deleted');
         AppSnackBar.showDelete(
@@ -362,7 +372,13 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, context.trArgs('tx_delete_failed_err', {'error': e}), title: context.tr('delete_error'));
+        AppSnackBar.showError(
+          context,
+          HouseholdPermissions.isPermissionDenied(e)
+              ? context.tr('perm_tx_admin_only')
+              : context.trArgs('tx_delete_failed_err', {'error': e}),
+          title: context.tr('delete_error'),
+        );
       }
     }
   }
