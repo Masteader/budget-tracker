@@ -385,7 +385,7 @@ multi-roommate settlement this allowed attribution spoofing.
   - The service role bypasses all of this; `ai_service` passes the verified JWT user as the creator and
     checks owner-or-admin itself (enrichment, installment linking, settlements).
 - **Legacy rows:** transactions created before this migration through `ai_service` or most app screens have
-  `user_id IS NULL` (the creator was never recorded). They are admin-only from now on; no creator is guessed.
+  `user_id IS NULL` (the creator was never recorded). They are admin-only from now on; no creator is guessed. **Owner decision (2026-10-20): keep it this way** — admins edit legacy rows, every new row is attributed to the user who entered it.
 - **Status:** Fixed in `59a422d`. Test: `20_admin_permissions_and_co_admins.sql` §3, §4, §10.
 
 ### Household roles: co-admins and the primary admin (owner decision)
