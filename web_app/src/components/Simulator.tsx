@@ -13,7 +13,8 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
   const [activeTab, setActiveTab] = useState<'salary' | 'ai' | 'zatca' | 'split'>('salary');
 
   // Tab 1: Salary cycle state & custom income
-  const [payday, setPayday] = useState<number>(28);
+  // The 27th is the Saudi standard payday (rule 02); the demo starts there.
+  const [payday, setPayday] = useState<number>(27);
   const [income, setIncome] = useState<number>(15000);
 
   // Dynamic date calculations based on today (captured once per mount so render stays pure)
@@ -24,14 +25,18 @@ export const Simulator: React.FC<SimulatorProps> = ({ dict, lang = 'ar' }) => {
   const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   // Accurate countdown to next payday
+  // A payday past the end of a short month (e.g. the 31st in February) falls on its last day.
+  const daysInNextMonth = new Date(currentYear, currentMonth + 2, 0).getDate();
+  const paydayThisMonth = Math.min(payday, daysInCurrentMonth);
+  const paydayNextMonth = Math.min(payday, daysInNextMonth);
   let remainingDays = 0;
-  if (payday > currentDay) {
-    remainingDays = payday - currentDay;
-  } else if (payday === currentDay) {
+  if (paydayThisMonth > currentDay) {
+    remainingDays = paydayThisMonth - currentDay;
+  } else if (paydayThisMonth === currentDay) {
     remainingDays = 0;
   } else {
     // Current month's payday has passed; next payday is in next month
-    remainingDays = (daysInCurrentMonth - currentDay) + payday;
+    remainingDays = (daysInCurrentMonth - currentDay) + paydayNextMonth;
   }
 
   // Financial allocations based on custom income (50% Fixed, 35% Discretionary, 15% Emergency Reserve)

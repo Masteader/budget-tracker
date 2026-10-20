@@ -7,10 +7,14 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/offline_queue_item.dart';
+import 'api/base_api_client.dart' show BaseApiClient;
 import 'api_service.dart';
 import 'offline_queue_manager.dart';
 
 typedef ItemDispatcher = Future<Map<String, dynamic>> Function(OfflineQueueItem item);
+
+/// The signed-in user's id, or null when unknown.
+typedef CurrentUserIdReader = String? Function();
 
 /// Inserts one `transactions` row directly through Supabase (RLS enforced).
 typedef TransactionInserter = Future<void> Function(Map<String, dynamic> row);
@@ -55,6 +59,7 @@ class SyncWorker {
   final ApiService? _api;
   final int maxPermanentRetries;
   final Duration interItemDelay;
+  final CurrentUserIdReader _currentUserId;
 
   final ValueNotifier<int> pendingCountNotifier = ValueNotifier<int>(0);
   final StreamController<int> _flushedController = StreamController<int>.broadcast();
@@ -70,9 +75,29 @@ class SyncWorker {
     ApiService? api,
     this.maxPermanentRetries = 5,
     this.interItemDelay = const Duration(milliseconds: 100),
+    CurrentUserIdReader? currentUserId,
   })  : queueManager = queueManager ?? OfflineQueueManager(),
         _transactionInserter = transactionInserter,
-        _api = api;
+        _api = api,
+        _currentUserId = currentUserId ?? _supabaseUserId;
+
+  static String? _supabaseUserId() {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// An item recorded by another account on this device waits (untouched)
+  /// until that account signs in again: replayed with the current user's JWT
+  /// it would be refused, or booked under the wrong person (FR-A-09).
+  bool _belongsToAnotherUser(OfflineQueueItem item) {
+    final owner = item.payload['user_id']?.toString();
+    if (owner == null || owner.isEmpty) return false;
+    final current = _currentUserId();
+    return current != null && current.isNotEmpty && current != owner;
+  }
 
   ApiService get _apiService => _api ?? ApiService.instance;
 
@@ -125,6 +150,7 @@ class SyncWorker {
 
         for (final item in batch) {
           attempted.add(item.id);
+          if (_belongsToAnotherUser(item)) continue;
           await queueManager.markSyncing(item.id);
 
           final result = await _replay(item);
@@ -184,6 +210,20 @@ class SyncWorker {
     }
   }
 
+  /// True when a direct `transactions` insert failed because the database
+  /// rejected the row itself (RLS/permission, check or trigger, unknown
+  /// column), i.e. replaying the identical row later can never succeed.
+  /// Network, timeout, auth-expiry and gateway failures are not permanent.
+  static bool isPermanentInsertError(Object error) {
+    if (error is! PostgrestException) return false;
+    final code = error.code;
+    if (code == null || code.isEmpty) return false;
+    if (code == '23505') return false; // already stored: replay reports it committed
+    if (code == 'PGRST301' || code == '401' || code == '403') return false;
+    if (RegExp(r'^5\d\d$').hasMatch(code)) return false;
+    return true;
+  }
+
   static ReplayOutcome _classifyException(Exception e) {
     if (e is PostgrestException) {
       // 23505 unique_violation: the row with this client-generated id is
@@ -226,7 +266,14 @@ class SyncWorker {
         }
         return ReplayResult(ReplayOutcome.permanent, message ?? 'Server returned an uncommitted preview');
       case 'error':
-        return ReplayResult(_classifyStatusCode(res['status_code']), message);
+        // An error body that came back with HTTP 200 (no status code, and not
+        // a transport failure) is the server's verdict on this payload, e.g.
+        // an unreadable receipt: retrying it unchanged cannot help, and as a
+        // transient it would block the FIFO queue forever (FR-A-12).
+        if (res['status_code'] == null && res[BaseApiClient.networkErrorKey] != true) {
+          return ReplayResult(ReplayOutcome.permanent, message);
+        }
+        return ReplayResult(_classifyStatusCode(res['status_code'], message), message);
       default:
         // pending_confirmation, duplicate_candidate, non_transactional, or a
         // body without a status: the operation was not committed.
@@ -237,11 +284,36 @@ class SyncWorker {
     }
   }
 
-  static ReplayOutcome _classifyStatusCode(Object? rawCode) {
+  /// Whether an online commit that came back as [res] should be stored in the
+  /// offline queue: only when it never completed (offline, timeout) or failed
+  /// for a reason a later replay can overcome (5xx, 408/425/429). A refusal of
+  /// the request itself (400/401/403/404/409/422) is shown to the user instead
+  /// of being parked as "saved offline" and failing on every replay (FR-A-04).
+  static bool shouldQueueAfterOnlineFailure(Map<String, dynamic> res) {
+    if (res['status'] != 'error') return false;
+    final raw = res['status_code'];
+    final code = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
+    // No status code: either no answer at all (queue it) or the server
+    // answered 200 {"status": "error"} about this payload (a replay of the
+    // same payload gets the same answer, FR-A-12).
+    if (code == null) return res[BaseApiClient.networkErrorKey] == true;
+    return code >= 500 || code == 408 || code == 425 || code == 429;
+  }
+
+  static ReplayOutcome _classifyStatusCode(Object? rawCode, [String? message]) {
     final code = rawCode is num ? rawCode.toInt() : int.tryParse('$rawCode');
     // No HTTP status means the request never completed (offline, DNS, timeout).
     if (code == null) return ReplayOutcome.transient;
-    if (code == 401 || code == 403) return ReplayOutcome.transient;
+    // 401: missing/expired credentials (the session refresh may still succeed).
+    if (code == 401) return ReplayOutcome.transient;
+    // 403 is "not a member / not allowed", which no retry fixes; parking it as
+    // transient blocked every later item of the FIFO queue forever (FR-A-09).
+    // Only the legacy firewall's 403 for an unverifiable token is auth trouble.
+    if (code == 403) {
+      return (message ?? '').contains('Untrusted endpoint access')
+          ? ReplayOutcome.transient
+          : ReplayOutcome.permanent;
+    }
     if (code == 408 || code == 425 || code == 429) return ReplayOutcome.transient;
     if (code == 502 || code == 503 || code == 504) return ReplayOutcome.transient;
     return ReplayOutcome.permanent;

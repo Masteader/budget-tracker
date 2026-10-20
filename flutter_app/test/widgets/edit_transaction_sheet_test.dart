@@ -137,6 +137,30 @@ void main() {
     expect(find.text('Personal (from her allowance)'), findsOneWidget);
   });
 
+  // FR-A-01: paid_by / beneficiary are relative to whoever recorded the row, so
+  // they cannot decide the Nafaqah class on another phone. A stored "no class"
+  // must stay "husband paid", otherwise an unrelated edit books a false debt.
+  testWidgets("a husband-paid expense stays a household expense on the wife's phone", (tester) async {
+    // Recorded by the husband: 'me' is him, but the wife is viewing.
+    await pumpSheet(tester, groceries(paidBy: 'me', beneficiary: 'both'), family('wife'),
+        stored: {'nafaqah_class': null, 'nafaqah_spouse_id': null});
+    await tester.pump();
+
+    expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
+    expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsNothing);
+  });
+
+  testWidgets("a wife-recorded 'husband paid' expense stays a household expense on the husband's phone",
+      (tester) async {
+    // Recorded by the wife as paid by her husband: 'partner' is him.
+    await pumpSheet(tester, groceries(paidBy: 'partner', beneficiary: 'both'), family('husband'),
+        stored: {'nafaqah_class': null, 'nafaqah_spouse_id': null});
+    await tester.pump();
+
+    expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
+    expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsNothing);
+  });
+
   testWidgets('roommate/partner households keep the shared-split preview', (tester) async {
     await pumpSheet(tester, groceries(), const NafaqahSummary(mode: 'not_family'));
 

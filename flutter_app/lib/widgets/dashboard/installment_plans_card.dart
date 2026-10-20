@@ -627,13 +627,19 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
                                         } else {
+                                          bool recorded;
                                           try {
-                                            await context.read<InstallmentProvider>().recordPayment(plan.id);
+                                            recorded = await context.read<InstallmentProvider>().recordPayment(plan.id);
                                           } catch (_) {
-                                            await ApiService.instance.payInstallment(plan.id);
+                                            recorded = await ApiService.instance.payInstallment(plan.id) != null;
                                           }
+                                          if (!mounted) return;
                                           setState(() => _loadPlans());
-                                          if (context.mounted) {
+                                          if (!recorded && context.mounted) {
+                                            // FR-A-03: never imply a payment the server did not record.
+                                            AppSnackBar.showError(context, context.tr('rb_payment_failed'));
+                                          }
+                                          if (recorded && context.mounted) {
                                             try {
                                               context.read<TransactionProvider>().fetchTransactions();
                                               context.read<BudgetProvider>().refresh();

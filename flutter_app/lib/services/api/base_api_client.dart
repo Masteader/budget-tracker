@@ -191,9 +191,14 @@ class BaseApiClient {
       }
       return {'status': 'success', 'data': decoded};
     } on Exception catch (e) {
-      return {'status': 'error', 'message': e.toString()};
+      // `network_error` tells "no answer at all" (offline, DNS, timeout) apart
+      // from a server that answered 200 with {"status": "error"}.
+      return {'status': 'error', 'message': e.toString(), networkErrorKey: true};
     }
   }
+
+  /// Set on the error map when the request never got an HTTP answer.
+  static const String networkErrorKey = 'network_error';
 
   /// Downloads a binary resource (e.g. the statement PDF) with the same JWT
   /// authentication, refresh and replay as the JSON calls. A bare URL opened
@@ -325,6 +330,30 @@ class ApiBinaryResponse {
     final match = RegExp(r'filename="?([^";]+)"?').firstMatch(header);
     return match?.group(1)?.trim();
   }
+}
+
+/// A JSON request the server refused or that never completed, for callers that
+/// must not treat the normalised error map as a result. [statusCode] is null
+/// for network errors.
+class ApiRequestException implements Exception {
+  const ApiRequestException(this.message, {this.statusCode});
+
+  /// Throws when [res] is an error map produced by [BaseApiClient].
+  static Map<String, dynamic> check(Map<String, dynamic> res) {
+    if (res['status'] == 'error') {
+      throw ApiRequestException(
+        res['message']?.toString() ?? 'Request failed',
+        statusCode: (res['status_code'] as num?)?.toInt(),
+      );
+    }
+    return res;
+  }
+
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => message;
 }
 
 /// A failed binary download. [statusCode] is null for network errors.

@@ -82,6 +82,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   NafaqahSummary? _nafaqah;
   String? _storedSpouseId;
 
+  /// The stored `nafaqah_class` has been read. Until then the class columns
+  /// are left untouched on save (FR-A-01).
+  bool _storedNafaqahLoaded = false;
+
   final List<Map<String, String>> _categories = const [
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-DINING', 'name': 'Dining & Cafes'},
@@ -178,8 +182,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } catch (_) {}
   }
 
-  /// The stored class wins over the recorder-relative paid_by / beneficiary, so
-  /// editing the wife's advance from the husband's phone never erases her claim.
+  /// The stored class is authoritative in family mode. `paid_by` /
+  /// `beneficiary` are relative to whoever recorded the row ('me' is the
+  /// recorder), so on another spouse's phone they cannot tell who paid: a
+  /// stored "no class" is the husband's household expense (FR-A-01), and a
+  /// stored class keeps the wife's claim when the husband edits it.
   Future<void> _loadStoredNafaqah() async {
     if (_spouseRole == null) return;
     try {
@@ -190,13 +197,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final stored = fields['nafaqah_class'] as String?;
       setState(() {
         _storedSpouseId = fields['nafaqah_spouse_id'] as String?;
-        if (stored == kWifeReimbursable || stored == kWifePersonal) _applyNafaqahChoice(stored);
+        _applyNafaqahChoice(stored == kWifeReimbursable || stored == kWifePersonal ? stored : null);
+        _storedNafaqahLoaded = true;
       });
     } catch (_) {}
   }
 
   Map<String, dynamic> _nafaqahPayload() {
-    if (_spouseRole == null) return const {};
+    // Unknown stored class (still loading or unreadable): never rewrite it.
+    if (_spouseRole == null || !_storedNafaqahLoaded) return const {};
     final cls = _nafaqahClass;
     final spouseId = _spouseRole == 'wife'
         ? _nafaqah!.callerUserId

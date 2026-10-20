@@ -185,15 +185,15 @@ class BudgetApiClient {
         if (targetMemberId != null && targetMemberId.isNotEmpty) 'target_member_id': targetMemberId,
       },
     );
-    if (res['invite_code'] != null) {
-      return HouseholdInvite.fromMap(res);
+    // FR-A-11: never invent a code locally; a code the server did not store
+    // can never be redeemed. A refusal (403: admins only) or a network
+    // failure throws [ApiRequestException].
+    ApiRequestException.check(res);
+    final code = res['invite_code'];
+    if (code is! String || code.isEmpty) {
+      throw const ApiRequestException('The server did not return an invite code.');
     }
-    return HouseholdInvite(
-      householdId: householdId,
-      inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
-      role: role,
-      targetMemberId: targetMemberId,
-    );
+    return HouseholdInvite.fromMap(res);
   }
 
   Future<HouseholdInvite> inspectInviteCode({
@@ -495,14 +495,23 @@ class BudgetApiClient {
     }
   }
 
+  /// Throws [ApiRequestException] when the server refuses the plan (403 for
+  /// another member's transaction, 400, 5xx) or cannot be reached, so callers
+  /// never act on a plan that was not created (FR-A-02).
   Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) async {
-    final res = await baseClient.post('/budgets/installments', planData);
-    return InstallmentPlan.fromJson(res);
+    final res = ApiRequestException.check(await baseClient.post('/budgets/installments', planData));
+    final plan = InstallmentPlan.fromJson(res);
+    if (plan.id.isEmpty) {
+      throw const ApiRequestException('The server did not return the created plan.');
+    }
+    return plan;
   }
 
+  /// The updated plan, or null when the payment was not recorded (FR-A-03).
   Future<InstallmentPlan?> payInstallment(String planId) async {
     try {
       final res = await baseClient.post('/budgets/installments/$planId/pay', {});
+      if (res['status'] == 'error') return null;
       return InstallmentPlan.fromJson(res);
     } catch (_) {
       return null;
