@@ -189,6 +189,6 @@ cd web_app && npm ci && npm run build && npm run lint
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
 
 ### 6.3 Product decisions needed
-- Legacy transactions without a recorded creator (`user_id IS NULL`): **decided 2026-10-20** — they stay admin-only (no creator is guessed); every new transaction is attributed to the user who entered it.
-
-None. DB-16 and DB-18 were decided by the owner (2026-10-20): only admins move money out of shared pools and edit or delete other members' transactions; admins can appoint co-admins, who cannot demote the primary admin.
+None open. Decided by the owner on 2026-10-20:
+- DB-16 / DB-18: only admins move money out of shared pools and edit or delete other members' transactions; admins can appoint co-admins, who cannot demote the primary admin.
+- Legacy transactions without a recorded creator (`user_id IS NULL`) stay admin-only (no creator is guessed); every new transaction is attributed to the user who entered it.
