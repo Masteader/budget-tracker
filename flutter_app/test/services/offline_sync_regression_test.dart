@@ -258,6 +258,30 @@ void main() {
       expect(await queue.getPendingCount(), 1);
     });
 
+    // FR-A-12: /agent/scan-receipt answers HTTP 200 {"status": "error"} when it
+    // cannot read the receipt (or the total is 0). That is the server's answer,
+    // not a lost connection; classified as transient it sat at the head of
+    // the FIFO queue and nothing after it ever synced.
+    test('a 200 {"status": "error"} answer is a rejection, not a lost connection', () async {
+      await queue.enqueue(
+        operationType: 'receipt',
+        payload: {'images_base64': ['dW5yZWFkYWJsZQ==']},
+        householdId: 'h-1',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      await queue.enqueue(operationType: 'chat', payload: {'message': 'Coffee 15'}, householdId: 'h-1');
+      final backend = _Backend([
+        (r) => r.url.path.endsWith('/agent/scan-receipt')
+            ? _json({'status': 'error', 'message': 'Could not parse the receipt image(s).'})
+            : _json({'status': 'success'}),
+      ]);
+
+      expect(await worker(backend).drainQueue(), 1, reason: 'the chat item behind it still syncs');
+      final pending = await queue.getPendingItems();
+      expect(pending.single.operationType, 'receipt');
+      expect(pending.single.retryCount, 1);
+    });
+
     test('401 after a failed refresh keeps the item pending without burning retries', () {
       final r = SyncWorker.classifyResponse({'status': 'error', 'status_code': 401}, 'chat');
       expect(r.outcome, ReplayOutcome.transient);

@@ -86,7 +86,8 @@ void main() {
     // can succeed; a refusal (400/403/409/422) is shown, not parked offline.
     test('shouldQueueAfterOnlineFailure queues only transient failures', () {
       Map<String, dynamic> err(int? code) => {'status': 'error', if (code != null) 'status_code': code};
-      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(null)), isTrue); // offline / timeout
+      expect(SyncWorker.shouldQueueAfterOnlineFailure({...err(null), 'network_error': true}), isTrue); // offline / timeout
+      expect(SyncWorker.shouldQueueAfterOnlineFailure(err(null)), isFalse); // 200 {"status": "error"}
       expect(SyncWorker.shouldQueueAfterOnlineFailure(err(502)), isTrue);
       expect(SyncWorker.shouldQueueAfterOnlineFailure(err(500)), isTrue);
       expect(SyncWorker.shouldQueueAfterOnlineFailure(err(429)), isTrue);

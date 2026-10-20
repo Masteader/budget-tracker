@@ -501,11 +501,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           setState(() {
             _scanResult = res;
           });
-        } else if (!SyncWorker.shouldQueueAfterOnlineFailure(res)) {
+        } else if (res['status_code'] != null && !SyncWorker.shouldQueueAfterOnlineFailure(res)) {
           // The server refused the request itself (403 enriching another
           // member's entry, 409/422 Nafaqah choice, 400...): saving it
-          // directly would only bypass that check (FR-A-10). Only an
-          // unreachable or failing server falls back to the direct insert.
+          // directly would only bypass that check (FR-A-10). An unreachable
+          // or failing server, or a commit the AI could not re-read (200
+          // {"status": "error"}), falls back to the reviewed preview.
           setState(() => _errorMessage = res['message'] as String? ?? context.tr('scan_analyze_failed'));
         } else {
           await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);

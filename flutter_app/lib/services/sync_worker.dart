@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/offline_queue_item.dart';
+import 'api/base_api_client.dart' show BaseApiClient;
 import 'api_service.dart';
 import 'offline_queue_manager.dart';
 
@@ -265,6 +266,13 @@ class SyncWorker {
         }
         return ReplayResult(ReplayOutcome.permanent, message ?? 'Server returned an uncommitted preview');
       case 'error':
+        // An error body that came back with HTTP 200 (no status code, and not
+        // a transport failure) is the server's verdict on this payload, e.g.
+        // an unreadable receipt: retrying it unchanged cannot help, and as a
+        // transient it would block the FIFO queue forever (FR-A-12).
+        if (res['status_code'] == null && res[BaseApiClient.networkErrorKey] != true) {
+          return ReplayResult(ReplayOutcome.permanent, message);
+        }
         return ReplayResult(_classifyStatusCode(res['status_code'], message), message);
       default:
         // pending_confirmation, duplicate_candidate, non_transactional, or a
@@ -285,7 +293,10 @@ class SyncWorker {
     if (res['status'] != 'error') return false;
     final raw = res['status_code'];
     final code = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
-    if (code == null) return true;
+    // No status code: either no answer at all (queue it) or the server
+    // answered 200 {"status": "error"} about this payload (a replay of the
+    // same payload gets the same answer, FR-A-12).
+    if (code == null) return res[BaseApiClient.networkErrorKey] == true;
     return code >= 500 || code == 408 || code == 425 || code == 429;
   }
 

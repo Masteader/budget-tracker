@@ -191,9 +191,14 @@ class BaseApiClient {
       }
       return {'status': 'success', 'data': decoded};
     } on Exception catch (e) {
-      return {'status': 'error', 'message': e.toString()};
+      // `network_error` tells "no answer at all" (offline, DNS, timeout) apart
+      // from a server that answered 200 with {"status": "error"}.
+      return {'status': 'error', 'message': e.toString(), networkErrorKey: true};
     }
   }
+
+  /// Set on the error map when the request never got an HTTP answer.
+  static const String networkErrorKey = 'network_error';
 
   /// Downloads a binary resource (e.g. the statement PDF) with the same JWT
   /// authentication, refresh and replay as the JSON calls. A bare URL opened
