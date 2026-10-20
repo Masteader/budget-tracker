@@ -1,7 +1,8 @@
 # Budget Tracker
 
-> **AI-powered household expense management for Saudi families.**
-> Smart receipt scanning with ZATCA QR decoding, conversational AI expense chat, voice logging, and interactive salary-cycle budgeting for modern households.
+> **AI-powered household expense management for Saudi families and shared homes.**
+> Receipt scanning with ZATCA QR decoding, conversational expense chat, voice logging and
+> salary-cycle budgeting that follows each household's payday.
 
 ---
 
@@ -9,25 +10,40 @@
 
 ```
 Android / iOS Phone                 Python AI Service              Supabase
-┌───────────────────────┐           ┌─────────────────────┐       ┌────────────────┐
-│ Flutter App           │ REST /    │ FastAPI + Gemini    │       │ PostgreSQL     │
-│ • Camera / ZATCA QR   │ Multipart │ • Vision Receipt OCR│ ────► │ • transactions │
-│ • Voice / Chat Input  │ ────────► │ • Dialect Chat Agent│       │ • budgets      │
-│ • Dashboard & Bills   │           │ • Bill Reserves     │       │ • users        │
-│ • Live Feed           │ ◄─────────│ • 2D Settlement     │       │                │
-└───────────────────────┘ Realtime  └─────────────────────┘       └────────────────┘
-                          Stream
+┌───────────────────────┐ HTTPS +   ┌─────────────────────┐       ┌────────────────┐
+│ Flutter App           │ user JWT  │ FastAPI + LiteLLM   │       │ PostgreSQL+RLS │
+│ • Camera / ZATCA QR   │ ────────► │ • Receipt OCR       │ ────► │ • transactions │
+│ • Voice / Chat Input  │           │ • Dialect chat      │       │ • budgets      │
+│ • Dashboard & Bills   │           │ • Cycles, settlement│       │ • accounts ... │
+│ • Live Feed           │ ◄──────── │ • Nafaqah, inquiries│       │ • Storage      │
+└──────────┬────────────┘  JSON     └─────────────────────┘       └───────▲────────┘
+           └──────────── supabase_flutter (publishable key, RLS, Realtime) ┘
 ```
+
+- The app talks to Supabase directly (publishable key, Row Level Security, Realtime) and to the
+  FastAPI service for AI and server-side logic.
+- Every user route of the API is authenticated by the caller's Supabase JWT. `X-Signature` is an
+  optional integrity check, never the credential (see [Security Notes](#security-notes)).
+- The API uses the privileged Supabase key and re-checks household membership and admin rights
+  itself ([`.agents/rules/04-security-and-privacy.md`](.agents/rules/04-security-and-privacy.md)).
 
 ---
 
 ## Features
 
-- 🧾 **ZATCA QR & Vision OCR Scanner**: Instant TLV decoding and line-item categorization.
-- 💬 **Conversational AI Expense Chat**: Natural Saudi dialect parser with interactive previews.
-- 🎙️ **Voice Entry**: Quick hands-free logging with automatic item and merchant extraction.
-- 📅 **Salary-Cycle & Recurring Bills**: Saudi 27th payday alignment, reserve tracking, and 1-tap bill payments.
-- 🔒 **Privacy-First & Zero SMS Interception**: Completely standalone without background SMS listeners or SMS permissions.
+- 🧾 **ZATCA QR & Vision OCR Scanner**: TLV decoding and line-item categorization.
+- 💬 **Conversational AI Expense Chat**: Saudi dialect parser with interactive previews.
+- 🎙️ **Voice Entry**: hands-free logging with item and merchant extraction.
+- 📅 **Salary Cycles & Recurring Bills**: cycles follow the household payday
+  (`households.payday_day`, default 27th, Asia/Riyadh dates), bill reserves and BNPL installments.
+- 👪 **Family Nafaqah & Roommate Settlements**: no spousal percentage splits, wife reimbursement
+  ledger and personal allowance; multi-roommate debt simplification.
+- 🛡️ **Admin / co-admin permissions**: the database and the API enforce who may move shared money
+  and edit other members' transactions.
+- ✉️ **Support & VIP early-access email**: in-app and web forms are emailed to the team.
+- 🔒 **Zero SMS Interception**: no SMS permissions, listeners or SMS ingestion anywhere.
+
+Full feature, API and schema reference: [`docs/PROJECT_DETAILS.md`](docs/PROJECT_DETAILS.md).
 
 ---
 
@@ -35,11 +51,13 @@ Android / iOS Phone                 Python AI Service              Supabase
 
 | Tool | Version |
 |---|---|
-| Flutter SDK | ≥ 3.22 |
+| Flutter SDK | Dart `>=3.3.0 <4.0.0` (see `flutter_app/pubspec.yaml`) |
 | Android Studio / SDK | API 26+ target |
-| Python | 3.11 |
-| Docker + Docker Compose | Latest |
-| Supabase account | [supabase.com](https://supabase.com) |
+| Python | 3.11 (Docker image); 3.10+ works |
+| Node.js + npm | for `web_app/` (Vite) |
+| PostgreSQL client (`psql`) + a local server | database test suite only |
+| Docker + Docker Compose | optional, to run the API container |
+| Supabase project | [supabase.com](https://supabase.com) |
 | Google AI Studio API key | [aistudio.google.com](https://aistudio.google.com) |
 
 ---
@@ -48,32 +66,33 @@ Android / iOS Phone                 Python AI Service              Supabase
 
 ```
 budget-tracker/
-├── supabase/           # SQL schema, seed data, Realtime config
-├── ai_service/         # Python FastAPI + Gemini AI microservice
-│   └── tests/          # pytest test suite
-└── flutter_app/        # Flutter Android/iOS mobile application
-    ├── android/        # Native Android project configuration
-    └── lib/            # Dart source code (screens, widgets, providers)
+├── supabase/           # schema.sql, seed.sql, migrations/, tests/ (SQL suite + run_tests.py)
+├── ai_service/         # Python FastAPI + LiteLLM service (routes/, tests/, static/ = built web_app)
+├── flutter_app/        # Flutter Android/iOS app (lib/, test/)
+├── web_app/            # React + Vite landing page (VIP early-access form)
+├── landing_page/       # Standalone static HTML landing pages (VIP form posts to /public/inquiries)
+├── tests/e2e/          # End-to-end suite
+└── docs/               # Documentation hub: docs/README.md
 ```
 
 ---
 
 ## Step 1 — Supabase Setup
 
-### 1.1 Create a Supabase Project
+1. Create a project at [app.supabase.com](https://app.supabase.com) and note the **Project URL**,
+   the **publishable (anon) key** (for the app) and a **secret key** (`sb_secret_…`, or the legacy
+   `service_role` JWT) for the API.
+2. In the **SQL Editor**, run, one file per run and in this order:
+   1. [`supabase/schema.sql`](supabase/schema.sql)
+   2. [`supabase/seed.sql`](supabase/seed.sql)
+   3. every file in [`supabase/migrations/`](supabase/migrations/) in filename order, except that
+      `20261018_multi_source_income_and_accounts.sql` must run **before**
+      `20261018_membership_sync_and_shared_account_policies.sql` (same prefix, reversed
+      dependency; `supabase/tests/run_tests.py` encodes this order).
+3. Enable Realtime as described in [`supabase/realtime_config.md`](supabase/realtime_config.md).
 
-1. Go to [app.supabase.com](https://app.supabase.com) → **New Project**
-2. Note your **Project URL** and both **API keys** (anon + service role)
-
-### 1.2 Apply the Schema
-
-1. Open **SQL Editor** in Supabase Dashboard
-2. Paste and run [`supabase/schema.sql`](supabase/schema.sql)
-3. Then run [`supabase/seed.sql`](supabase/seed.sql)
-
-### 1.3 Enable Realtime
-
-Follow the steps in [`supabase/realtime_config.md`](supabase/realtime_config.md).
+Do not use `supabase db push` on an existing project until the migration history is re-baselined
+(audit item DB-15, [`docs/review/audit/db.md`](docs/review/audit/db.md)).
 
 ---
 
@@ -84,21 +103,23 @@ Follow the steps in [`supabase/realtime_config.md`](supabase/realtime_config.md)
 ```bash
 cd ai_service
 cp .env.example .env
-# Edit .env and fill in your Supabase + Gemini credentials
+# Fill in SUPABASE_URL, SUPABASE_SECRET_KEY, GOOGLE_API_KEY, LITELLM_MODEL, a mail provider,
+# and ENV=development for local work (see the reference below)
 ```
 
-### 2.2 Run with Docker Compose (Recommended)
+### 2.2 Run with Docker Compose
 
 ```bash
+cd ai_service
 docker compose up --build
 ```
 
-Service starts on **http://localhost:8000**
+The compose file builds the API only (no Redis service; without `REDIS_URL` rate limits are kept
+in process memory). Service: **http://localhost:8000**
 
-Verify it's running:
 ```bash
 curl http://localhost:8000/health
-# → {"status":"ok","timestamp":...}
+# → {"status":"ok","version":"1.0.2","timestamp":...}
 ```
 
 ### 2.3 Run Locally (Without Docker)
@@ -111,47 +132,70 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### 2.4 Run Tests
-
-```bash
-cd ai_service
-pip install -r requirements.txt
-pytest tests/ -v
-```
-
-Every test should pass. The suite is hermetic (in-memory Supabase fake, no network, no real LLM).
-`tests/test_sms_removal.py` enforces the zero-SMS policy: no SMS route, SMS parsing module,
-SMS simulator or `sms` transaction channel may exist.
+With `ENV=development` the interactive API docs are at `http://localhost:8000/docs` (hidden in
+production).
 
 ---
 
 ## Step 3 — Flutter App
 
-### 3.1 Install Dependencies
-
 ```bash
 cd flutter_app
 flutter pub get
-```
-
-### 3.2 Build and Run
-
-```bash
 flutter run \
   --dart-define=SUPABASE_URL=https://<id>.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key> \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key> \
   --dart-define=FASTAPI_BASE_URL=http://<your-machine-ip>:8000
 ```
 
-> **Tip**: On a physical Android device, use your machine's LAN IP address (e.g. `192.168.1.10`) — not `localhost`.
-> On the Android emulator, use `10.0.2.2` (the default).
+> On a physical device use your machine's LAN IP (e.g. `192.168.1.10`), on the Android emulator
+> `http://10.0.2.2:8000`. There is no default: a missing flag stops the app at startup.
 
-### 3.3 Grant Permissions
+On first use the app may request **Camera** (receipt photos, ZATCA QR), **Microphone** (voice
+entry) and **Notifications** (bill and cycle reminders, Android 13+). It never requests SMS
+permissions.
 
-On first launch the app may request:
-- **Camera** — required for invoice photo and ZATCA QR code scanning
-- **Microphone** — required for hands-free voice expense logging
-- **Post Notifications** — required for budget cycle & bill reminder alerts (Android 13+)
+---
+
+## Running the Tests
+
+| Suite | Command | Notes |
+|---|---|---|
+| API (pytest) | `cd ai_service && python -m pytest -v` | Hermetic: in-memory Supabase fake, no network, no real LLM. `tests/test_sms_removal.py` enforces the zero-SMS policy. |
+| Flutter | `cd flutter_app && flutter test` and `flutter analyze` | Analyzer must report no issues. |
+| Database (SQL) | `PGHOST=localhost PGPORT=<port> PGUSER=postgres python3 supabase/tests/run_tests.py --psql --rebuild --db bt_tests` | Needs a **local** PostgreSQL server and `psql`. See below. |
+| Web | `cd web_app && npm ci && npm run lint && npm run build` | No unit tests; lint + type-checked build. |
+| End-to-end | see `tests/e2e/` | Local services and mocks only, never live. |
+
+Database runner (`supabase/tests/run_tests.py`) flags:
+
+- `--psql`: use the local `psql` binary with the libpq variables (`PGHOST`, `PGPORT`, `PGUSER`,
+  `PGPASSWORD`). Without it the runner uses `docker exec` into a container named
+  `budget_tracker_review_pg`.
+- `--rebuild`: drop and recreate `--db`, then replay stubs, `schema.sql`, `seed.sql` and all
+  migrations before the tests (implies `--psql`). **Never point it at a real Supabase project.**
+- `--db NAME`: database to use (default `$DB_NAME`, else `live_rebuilt_round5`).
+- `--stop-before PREFIX` (with `--rebuild`): replay only migrations sorting before `PREFIX`.
+- `--apply-from PREFIX` (without `--rebuild`): apply migrations at or after `PREFIX` to an existing
+  local replica first.
+- `--no-tests`: only rebuild / apply.
+- Positional file names run a subset, e.g. `20_admin_permissions_and_co_admins.sql`.
+
+---
+
+## Deployment Order
+
+Ship changes in this order: **database → backend → app**.
+
+1. **Database:** apply new migrations in the SQL Editor, one file per run, in filename order.
+   Before and after, run the checks in
+   [`docs/review/audit/live_db_preflight_checks.sql`](docs/review/audit/live_db_preflight_checks.sql)
+   (procedure: [`docs/review/audit/live_db_preflight.md`](docs/review/audit/live_db_preflight.md)).
+2. **Backend:** deploy `ai_service` (it calls RPCs the migrations create). It still accepts older
+   app builds.
+3. **App:** release a new build with all `--dart-define` values and the release keystore.
+
+Details and couplings: [`docs/review/audit/MASTER_AUDIT_REPORT.md`](docs/review/audit/MASTER_AUDIT_REPORT.md) §6.2.
 
 ---
 
@@ -163,7 +207,13 @@ On first launch the app may request:
 |---|---|---|
 | `SUPABASE_URL` | ✅ | Your Supabase project URL |
 | `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` | ✅ one | Privileged server key, never exposed to clients: an `sb_secret_…` key or a legacy `service_role` JWT, in either variable. If both are set, an `sb_secret_…` key wins over a legacy JWT (`SUPABASE_SECRET_KEY` first on a tie); anon/publishable values are ignored with a startup warning, and with no privileged key every DB-backed route fails closed. Needs `supabase>=2.16.0` |
-| `GOOGLE_API_KEY` | ✅ | Google AI Studio API key for Gemini models |
+| `ENV` | ✅ in practice | `production` on deployments. **Unset counts as production** (`utils.is_production`); use `development` (or `dev`, `local`, `test`) locally to get `/docs`, unsigned dev requests and a fail-open quota check |
+| `GOOGLE_API_KEY` | ✅ for AI | Gemini key for receipt OCR, chat and the support agent (`GEMINI_API_KEY` is also read by the support agent) |
+| `LITELLM_MODEL` | recommended | LiteLLM model string (`.env.example`: `gemini/gemini-3.6-flash-lite`). Unset, each module uses its own default, so set it explicitly. `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for other providers |
+| `SUPABASE_JWT_SECRET` | ❌ | Only for legacy HS256 user tokens; without it only ES256 tokens verified via the project JWKS are accepted |
+| `WEBHOOK_SECRET` | ❌ | HMAC key for the optional `X-Signature` check (see Security Notes) |
+| `APP_AUTH_TOKEN` | ❌ | Legacy firewall pass (`X-App-Token`) for old app builds only |
+| `REDIS_URL` | ❌ | Shared rate-limit store; without it limits are per process (in memory) |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
 | `CONTACT_RECIPIENT_EMAIL` | ❌ | Where support and VIP early-access emails go (default: `abedmowafaq@gmail.com`) |
@@ -180,11 +230,11 @@ On first launch the app may request:
 
 `POST /public/inquiries` (anonymous; web app, landing pages) and `POST /support/inquiries`
 (in-app, requires the user's Supabase JWT, which supplies the sender identity) email each request
-to `CONTACT_RECIPIENT_EMAIL` from `MAIL_FROM` (`Budget Tracker <fmscoinfo@fmsco.com.sa>`) with
-`Reply-To` set to the person who submitted it. With SMTP, use the credentials of the
-`fmscoinfo@fmsco.com.sa` mailbox; with Resend, verify the `fmsco.com.sa` domain (SPF and DKIM
-records) first, or providers will reject or spam-folder the mail. Subjects look like
-`[Budget Tracker] VIP early access — <email>` or `[Budget Tracker] Support — <email>`.
+to `CONTACT_RECIPIENT_EMAIL` from `MAIL_FROM` with `Reply-To` set to the person who submitted it.
+With SMTP, use the credentials of the `fmscoinfo@fmsco.com.sa` mailbox; with Resend, verify the
+`fmsco.com.sa` domain (SPF and DKIM records) first, or providers will reject or spam-folder the
+mail. Subjects look like `[Budget Tracker] VIP early access — <email>` or
+`[Budget Tracker] Support — <email>`.
 
 ```json
 {"type": "vip_early_access" | "support" | "contact", "email": "you@example.com",
@@ -203,15 +253,21 @@ Refresh it after changing `web_app/` so the live VIP form posts to the same orig
 
 ```bash
 cd web_app && npm ci && VITE_API_BASE_URL= npm run build
-rm ../ai_service/static/assets/index-*.js ../ai_service/static/assets/index-*.css
-cp dist/index.html ../ai_service/static/ && cp dist/assets/index-* ../ai_service/static/assets/
+rm -rf ../ai_service/static/assets && cp -r dist/assets ../ai_service/static/
+cp dist/index.html ../ai_service/static/
 ```
+
+### Web App (`web_app/.env`, Vite)
+
+| Variable | Description |
+|---|---|
+| `VITE_API_BASE_URL` | Backend for the VIP form. Unset: `https://budget.fmsco.com.sa`; empty string: same origin (the build served by `ai_service`); e.g. `http://localhost:8000` for local work |
 
 ### Flutter App (`--dart-define` flags)
 
 | Flag | Required | Description |
 |---|---|---|
-| `SUPABASE_URL` | ✅ | Same as above |
+| `SUPABASE_URL` | ✅ | Supabase project URL (`https://` required in release builds) |
 | `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients; `SUPABASE_ANON_KEY` accepted as alias). Service-role / `sb_secret_` keys are rejected at startup. |
 | `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend (`https://` required in release builds) |
 | `WEBHOOK_SECRET` | ❌ | Optional HMAC key: when set, POST bodies carry an `X-Signature` header (defense in depth). The user's Supabase JWT is the credential: a signature that does not match the backend's current `WEBHOOK_SECRET` (e.g. after a rotation) is logged and ignored while the JWT is valid. Leave it out and requests are sent unsigned |
@@ -232,21 +288,20 @@ key, `FASTAPI_BASE_URL`) stops at startup with a `StateError` naming each missin
 
 ### Supabase Realtime not updating the Flutter UI
 
-- Verify both tables are added to the `supabase_realtime` publication (see `realtime_config.md`)
+- Verify `transactions` and `budgets` are in the `supabase_realtime` publication (see [`supabase/realtime_config.md`](supabase/realtime_config.md))
 - Check that your RLS policies allow SELECT for the authenticated user
-- The Python service must use the **service role key** (bypasses RLS); the Flutter SDK uses the **anon key** (subject to RLS)
+- The Python service uses the **secret / service-role key** (bypasses RLS); the Flutter app uses the **publishable key** (subject to RLS)
 
-### Supabase Realtime not updating the Flutter UI
+### API answers 401
 
-- Verify both tables are added to the `supabase_realtime` publication (see `realtime_config.md`)
-- Check that your RLS policies allow SELECT for the authenticated user
-- The Python service must use the **service role key** (bypasses RLS); the Flutter SDK uses the **anon key** (subject to RLS)
+- User routes need `Authorization: Bearer <Supabase access token>`; expired tokens get 401 so the app refreshes and retries.
+- Requests through a proxy or tunnel without a valid JWT are stopped by the firewall middleware.
 
 ### LiteLLM model errors
 
-- Ensure `GOOGLE_API_KEY` is set correctly in `.env`
+- Ensure `GOOGLE_API_KEY` and `LITELLM_MODEL` are set in `.env`
 - Test the key separately: `curl "https://generativelanguage.googleapis.com/v1/models?key=<your-key>"`
-- Try switching `LITELLM_MODEL` to `openai/gpt-4o-mini` if Gemini is unavailable
+- Another provider works too, e.g. `LITELLM_MODEL=openai/gpt-4o-mini` with `OPENAI_API_KEY`
 
 ### Docker: port 8000 already in use
 
@@ -261,20 +316,23 @@ docker compose up --build
 
 ## Security Notes
 
-- The **service role key** must **never** appear in the Flutter app or any client-side code.
+- The **secret / service-role key** must **never** appear in the Flutter app or any client-side code.
 - **Authentication** of every user route is the caller's Supabase JWT (`Authorization: Bearer`).
 - **`X-Signature`** (HMAC-SHA256 of the exact body with `WEBHOOK_SECRET`) is defense in depth, never
   the authentication of a user route. With a valid JWT, an invalid or unverifiable signature (also
   when `WEBHOOK_SECRET` is unset) is logged (rate limited, route + hashed user id) and the request is
-  served; without a valid JWT it is 401. Compatibility: `WEBHOOK_SECRET` has already been rotated on Railway, so every installed app build signs with the old value; rejecting those signatures would break all their chat and receipt calls the moment the new backend deploys. A server-to-server webhook route without a
-  JWT must require a valid signature (`utils.verify_signature`); none exists today.
+  served; without a valid JWT it is 401. Compatibility: `WEBHOOK_SECRET` has already been rotated on
+  Railway, so every installed app build signs with the old value; rejecting those signatures would
+  break all their chat and receipt calls. A server-to-server webhook route without a JWT must
+  require a valid signature (`utils.verify_signature`); none exists today.
 - **`X-App-Token`** (`APP_AUTH_TOKEN`) is only a legacy pass at the firewall for old app builds; it
   never authenticates a user (every route still verifies the JWT). The current app does not send it.
-- All Supabase tables have **Row Level Security (RLS)** enabled — users can only access their household's data.
-- Transaction and receipt audit data is stored securely in Supabase with household-isolated Row Level Security.
+- All `public` tables have **Row Level Security (RLS)** enabled — users only see their household's
+  data; ledger and role changes go through `SECURITY DEFINER` RPCs with actor checks.
+- Secret rotation: [`docs/runbooks/security-secret-rotation.md`](docs/runbooks/security-secret-rotation.md).
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT (no `LICENSE` file is committed yet).
