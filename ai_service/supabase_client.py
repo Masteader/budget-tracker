@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from supabase import create_client, Client
 
@@ -1090,35 +1090,49 @@ def record_household_reimbursement(
     household_id: str,
     payer_id: str,
     recipient_id: str,
-    amount: float,
+    amount: Any,
     payment_method: str = "stc_pay",
     notes: Optional[str] = None,
     recorded_by: Optional[str] = None,
 ) -> dict:
     """
-    Records a settlement reimbursement transaction between household members.
-    ``recorded_by`` (the verified caller) is stored as the transaction's creator.
+    Records a roommate/partner settlement payment (``payer_id`` paid ``recipient_id``).
+
+    Only columns that exist on ``public.transactions`` are written (FR-B-01: there is no
+    ``paid_by`` or ``notes`` column and no ``OPEX-SETTLEMENT`` category, so the previous payload
+    was rejected on every call). The payer is kept in the ``PaidBy:`` audit tag of ``raw_sms``
+    (the tag chat entries use), the recipient in ``beneficiary_id`` / ``settlement_target_id``,
+    and ``category_code`` stays NULL so a settlement is never counted as spending in a budget
+    category. ``recorded_by`` (the verified caller) is the transaction's creator (DB-18).
     """
     import uuid
-    from datetime import datetime, timezone
+    from decimal import Decimal
 
     tx_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    note_text = notes or f"Reimbursement via {payment_method.upper()}"
+    value = Decimal(str(amount)).quantize(Decimal("0.01"))
+    method = (payment_method or "").strip().upper() or "OTHER"
+    # One audit part per tag: a "|" inside the note must not create a second PaidBy tag.
+    note_text = " ".join((notes or "").replace("|", "/").split())[:500]
+    audit = f"Settlement | PaidBy: {payer_id} | Recipient: {recipient_id} | Method: {method}"
+    if note_text:
+        audit += f" | Note: {note_text}"
 
     tx_data = {
         "id": tx_id,
         "household_id": household_id,
         "user_id": recorded_by,
-        "amount": round(float(amount), 2),
-        "merchant": f"Settlement Reimbursement ({payment_method.upper()})",
-        "category_code": "OPEX-SETTLEMENT",
-        "paid_by": payer_id,
+        # Exact decimal text: PostgREST casts it to numeric(14,2) without a float round trip.
+        "amount": format(value, "f"),
+        "currency": "SAR",
+        "merchant": f"Settlement Reimbursement ({method})",
+        "category_code": None,
         "beneficiary_type": "individual",
         "beneficiary_id": recipient_id,
         "settlement_target_id": recipient_id,
         "is_settlement": True,
-        "notes": note_text,
+        "source": "manual",
+        "raw_sms": audit,
         "timestamp": now_iso,
     }
 
@@ -1131,7 +1145,7 @@ def record_household_reimbursement(
         "status": "success",
         "transaction_id": tx_id,
         "household_id": household_id,
-        "amount": round(float(amount), 2),
+        "amount": float(value),
         "payer_id": payer_id,
         "recipient_id": recipient_id,
         "is_settlement": True,

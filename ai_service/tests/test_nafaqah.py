@@ -567,7 +567,7 @@ def test_legacy_route_unchanged_for_roommates(family):
     assert resp.status_code == 200, resp.text
     assert resp.json()["is_settlement"] is True
     settlement = [t for t in family.tables["transactions"] if t.get("is_settlement")]
-    assert len(settlement) == 1 and settlement[0]["amount"] == 75.0
+    assert len(settlement) == 1 and Decimal(str(settlement[0]["amount"])) == Decimal("75.00")
     assert "spouse_reimbursements" not in family.tables
 
 
@@ -621,7 +621,8 @@ def test_settlement_v2_finds_wife_and_roommates_through_memberships(family):
 
     _move_active_household(family, PEER2, HH_OTHER)  # a roommate viewing another household
     family.seed("transactions", [
-        {"id": "r1", "household_id": HH_ROOM, "amount": 100.0, "paid_by": PEER1, "beneficiary_type": "all_peers",
+        # No paid_by column exists: the creator paid unless a PaidBy: tag names another member.
+        {"id": "r1", "household_id": HH_ROOM, "amount": 100.0, "user_id": PEER1, "beneficiary_type": "all_peers",
          "timestamp": "2026-11-03T09:00:00+00:00"},
     ])
     res = calculate_settlement_v2(HH_ROOM, cycle_start="2000-01-01")

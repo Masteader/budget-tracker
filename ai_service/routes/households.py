@@ -324,15 +324,15 @@ async def record_household_reimbursement_endpoint(
     validate_uuid(household_id)
     if payload.household_id != household_id:
         raise HTTPException(status_code=400, detail="Body household_id does not match the URL.")
-    if payload.payer_id == payload.recipient_id:
+    if payload.payer_id.strip().lower() == payload.recipient_id.strip().lower():
         raise HTTPException(status_code=400, detail="payer_id and recipient_id must differ.")
     caller = get_current_user_id(request)
     try:
         ctx = await asyncio.to_thread(load_family_context, household_id)
     except Exception as exc:
-        logger.warning("Could not load family context for reimbursement: %s", exc)
-        ctx = None
-    if ctx is not None and ctx.is_family:
+        # No fallback: guessing "not a family" would record a split between the spouses.
+        raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+    if ctx.is_family:
         try:
             wife_id = resolve_wife_id(ctx, payload.recipient_id)
         except NafaqahError:
@@ -352,12 +352,18 @@ async def record_household_reimbursement_endpoint(
         except Exception as exc:
             raise safe_error_response(exc, public_message="Failed to record reimbursement.")
         return {**result, "mode": "family_nafaqah", "is_settlement": False}
+    # Both parties must be members of this household (the ids are stored on the transaction and
+    # read back by the settlement engines).
+    payer_id = payload.payer_id.strip().lower()
+    recipient_id = payload.recipient_id.strip().lower()
+    if not (ctx.is_member(payer_id) and ctx.is_member(recipient_id)):
+        raise HTTPException(status_code=400, detail="payer_id and recipient_id must be members of this household.")
     # A settlement attributes a payment to members: either party records it, or an admin (DB-18).
     try:
         caller_role = await asyncio.to_thread(member_role, household_id, caller)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to record reimbursement.")
-    if not can_record_settlement(caller, caller_role, payload.payer_id, payload.recipient_id):
+    if not can_record_settlement(caller, caller_role, payer_id, recipient_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the payer, the recipient or a household admin can record this settlement.",
@@ -366,8 +372,8 @@ async def record_household_reimbursement_endpoint(
         return await asyncio.to_thread(
             record_household_reimbursement,
             household_id=household_id,
-            payer_id=payload.payer_id,
-            recipient_id=payload.recipient_id,
+            payer_id=payer_id,
+            recipient_id=recipient_id,
             amount=payload.amount,
             payment_method=payload.payment_method,
             notes=payload.notes,

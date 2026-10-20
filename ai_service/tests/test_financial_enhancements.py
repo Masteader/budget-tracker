@@ -92,15 +92,16 @@ def test_partner_settlement_calculation(mock_client):
 def test_partner_settlement_2d_attribution(mock_client):
     mock_table = MagicMock()
     mock_client.return_value.table.return_value = mock_table
+    # public.transactions has no paid_by/beneficiary columns: attribution lives in raw_sms tags.
     mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = [
         # 1. Groceries 300 SAR for both, I paid -> Partner owes me 150 (50%)
-        {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "paid_by": "me", "beneficiary": "both", "timestamp": "2026-09-28T10:00:00Z"},
+        {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: both", "timestamp": "2026-09-28T10:00:00Z"},
         # 2. Partner dress 200 SAR, I paid -> Partner owes me 200 (100%)
-        {"id": "2", "amount": 200.0, "category_code": "OPEX-SHOPPING", "paid_by": "me", "beneficiary": "partner", "timestamp": "2026-09-28T11:00:00Z"},
+        {"id": "2", "amount": 200.0, "category_code": "OPEX-SHOPPING", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: partner", "timestamp": "2026-09-28T11:00:00Z"},
         # 3. Gym shoes 100 SAR for me, Partner paid -> I owe partner 100 (100%)
-        {"id": "3", "amount": 100.0, "category_code": "OPEX-SHOPPING", "paid_by": "partner", "beneficiary": "me", "timestamp": "2026-09-28T12:00:00Z"},
+        {"id": "3", "amount": 100.0, "category_code": "OPEX-SHOPPING", "raw_sms": "Chat: test | PaidBy: partner | Beneficiary: me", "timestamp": "2026-09-28T12:00:00Z"},
         # 4. Personal coffee 18 SAR, I paid -> 0 debt impact
-        {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "paid_by": "me", "beneficiary": "me", "timestamp": "2026-09-28T13:00:00Z"},
+        {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: me", "timestamp": "2026-09-28T13:00:00Z"},
     ]
 
     res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
