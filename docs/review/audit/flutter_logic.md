@@ -13,6 +13,8 @@ Base commit: `f17eb2b`. File:line references point to the base commit unless not
 | `flutter analyze` | No issues found | No issues found |
 | `flutter test` | 141 passed, 0 failed | 340 passed, 0 failed |
 
+After the follow-up fixes (MOB-19, MOB-26..28, UI-20, UI-25; commits `b73c865`..`29b83f6`), on base `820a6a3`: `flutter analyze` reports no issues and `flutter test` passes 410, fails 0.
+
 Toolchain: Flutter 3.47.7 stable / Dart 3.13.5. There is no Android SDK in the sandbox, so
 I could not build the APK or AAB. The Android manifest and Gradle changes are covered only
 by tests that check the source files.
@@ -47,16 +49,16 @@ how each bug was observed.
 | MOB-16 | Medium | Providers keep the previous household's data (and Realtime channel) across a sign-out or household switch | `providers/transaction_provider.dart:93-98`, `budget_provider.dart:36-40` (init) | Fixed `4e329a5` + tests |
 | MOB-17 | Low | `selectCycle` race: a stale breakdown response overwrites the newer cycle | `providers/budget_provider.dart:42-47,98-115` | Fixed `4e329a5` + test |
 | MOB-18 | Medium | Android `allowBackup` is on by default (session tokens, offline queue and receipts end up in backups); release builds are signed with the debug key (plus a TODO) | `android/app/src/main/AndroidManifest.xml:24-27`, `android/app/build.gradle.kts:30-35` | Fixed `4e329a5` + source tests (build not verified) |
-| MOB-19 | Medium | The Supabase session (refresh token) sits in plaintext SharedPreferences | `supabase_flutter` default storage | Not fixed: needs `flutter_secure_storage` and a migration that can't be built or verified here. MOB-18 mitigates the backup path |
+| MOB-19 | Medium | The Supabase session (refresh token) sits in plaintext SharedPreferences | `supabase_flutter` default storage | Fixed `b73c865` + tests (`flutter_secure_storage` LocalStorage with one-time migration; APK build not verified, no Android SDK) |
 | MOB-20 | Low | The Dashboard `onItemsFlushed` listener is never cancelled (leak plus dead context) | `screens/home/dashboard_screen.dart:63` | Fixed `ef203c1` (no automated test: the screen needs an initialised Supabase) |
 | MOB-21 | Low | Three raw `http` calls bypass BaseApiClient (no refresh, no error normalisation) | `services/api/budget_api_client.dart:363-380,435-461,465-492` | Fixed `b875e71` |
 | MOB-22 | Low | Stored signed receipt URLs are returned verbatim (they break after expiry); on failure the code returns unusable URLs; the cache is unbounded and survives sign-out | `services/receipt_storage_service.dart:106-145` | Fixed `ef203c1` + tests |
 | MOB-23 | Medium | `WEBHOOK_SECRET` (HMAC for chat and receipt calls) is compiled into the client and can be extracted | `supabase_config.dart:37`, `ai_service/routes/chat.py:32`, `routes/receipts.py:33` | Not fixed: the backend still requires `X-Signature` in production; needs a backend change (see below) |
 | MOB-24 | Medium | Naive local ISO timestamps go to `timestamptz`, shifting Riyadh times by 3 h; batch receipt insert used non-existent `date`/`vat_amount` columns, so it always went offline | `manual_expense_sheet.dart:234`, `widgets/scanner/batch_item_review_sheet.dart:223-232`, `services/account_service.dart:74,90,139` | Fixed `b875e71` + test |
 | MOB-25 (DB-17) | Low | The app read `households.invite_code` directly, which blocks the DB from restricting it to admins | `screens/settings/ingestion_settings_screen.dart:129-133`, `budget_api_client.dart:564` | Fixed `4e329a5` + source test |
-| MOB-26 | Low | The statement-PDF URL is shown or opened without auth; the firewall returns 403 | `budget_api_client.dart:getStatementPdfUrl`, `screens/home/transaction_feed_screen.dart:825` | Not fixed: needs an authenticated download plus a file-save UI (UI owner) |
-| MOB-27 | Low | Payday save reports success even if the server rejects it, so client and DB cycles can diverge | `ingestion_settings_screen.dart:216-236` | Not fixed: screen UX/strings (UI owner). The client cache now updates on save |
-| MOB-28 | Low | `OfflineSyncService.enqueue` returns null on a SQLite failure; screens still say "Saved offline" | `offline_sync_service.dart`, callers | Not fixed: needs per-screen error UX (UI owner) |
+| MOB-26 | Low | The statement-PDF URL is shown or opened without auth; the firewall returns 403 | `budget_api_client.dart:getStatementPdfUrl`, `screens/home/transaction_feed_screen.dart:825` | Fixed `82f4478` + tests (authenticated download, share sheet; no signed-URL endpoint exists) |
+| MOB-27 | Low | Payday save reports success even if the server rejects it, so client and DB cycles can diverge | `ingestion_settings_screen.dart:216-236` | Fixed `69f622c` + tests (server-first save; income and rollover too) |
+| MOB-28 | Low | `OfflineSyncService.enqueue` returns null on a SQLite failure; screens still say "Saved offline" | `offline_sync_service.dart`, callers | Fixed `28ae0cc` + tests |
 | MOB-29 | Info | Money is `double` end to end. Totals are folded in double for display; settlement is server-side | models/providers | Not fixed: inputs are now rounded to halalas (MOB-14). Recommend integer halalas or `Decimal` in a future model migration |
 
 ## Details
@@ -176,6 +178,32 @@ how each bug was observed.
 ### MOB-23: client-side HMAC secret (not fixed, needs backend)
 - The HMAC secret ships in every APK, so `X-Signature` proves nothing about the caller. The chat and receipt routes already call `verify_household_access` with the user's JWT.
 - **Recommendation (backend):** skip the HMAC requirement when a verified user JWT is present; keep HMAC only for true server-to-server webhooks. Then drop `WEBHOOK_SECRET` from client builds.
+
+### MOB-19: session in secure storage (follow-up fix)
+- **Fix:** `services/secure_session_storage.dart` implements supabase_flutter's `LocalStorage` on `flutter_secure_storage` 11 and is passed to `Supabase.initialize(authOptions: FlutterAuthClientOptions(localStorage: ...))` in `main.dart`. It uses the same key as the default storage (`sb-<project>-auth-token`).
+- **Migration:** on start, a plaintext session in SharedPreferences is written to secure storage, read back to verify, then deleted. If the secure write fails, the plaintext copy is kept so the user stays signed in, and the move is retried on the next start. A stale plaintext copy next to a secure session is deleted. `persistSession` and `removePersistedSession` always delete the plaintext key and never write it again.
+- **Android options:** `AndroidOptions()` (Keystore RSA-OAEP wrapped AES-GCM). The `encryptedSharedPreferences` flag relied on the deprecated Jetpack Security library and no longer exists in v10+; the plugin migrates data written by it (`migrateOnAlgorithmChange`). `resetOnError` drops an undecryptable value (e.g. after a restore) and the user signs in again instead of the app crashing. Plugin minSdk 24, app minSdk 26. `allowBackup` stays off (MOB-18). iOS: `first_unlock_this_device`.
+- **Not covered:** the PKCE code verifier (short-lived, used only during an OAuth/magic-link exchange) still uses the default SharedPreferences store.
+- **Limits:** I could not build the APK (no Android SDK). The Gradle/Kotlin compatibility of `flutter_secure_storage` 11 and `share_plus` 13 must be confirmed with a real `flutter build apk`.
+- **Tests:** `test/services/secure_session_storage_test.dart` (fake stores: migration, failed secure write, stale copy, persist/remove, unreadable keystore, wiring, minSdk/backup source checks).
+
+### MOB-26: statement PDF download (follow-up fix)
+- **Backend contract:** `GET /reports/statement-pdf?household_id=&cycle_key=` returns the PDF bytes behind `verify_household_access` (JWT). There is no signed-URL endpoint, so no backend change was needed or made.
+- **Fix:** `BaseApiClient.getBinary` reuses the JSON calls' auth path (refresh an expired session, one replay on 401 or the firewall's 403). It throws `ApiDownloadException` on any HTTP or network error. `BudgetApiClient.downloadStatementPdf` also rejects a 200 response without a `%PDF` header. `StatementPdfService` writes the file to `<cache>/statements/`, deleting earlier statements, and opens the system share sheet (`share_plus`) to open, save or send it. The transactions screen no longer shows or copies a URL; failures show a localized error.
+- **Tests:** `test/services/statement_pdf_download_test.dart`.
+
+### MOB-27: household settings saved server-first (follow-up fix)
+- **Fix:** `saveHouseholdSetting()` calls the API first. SharedPreferences, `SalaryCycleService.paydayDay` and screen state are updated only when the server returned `status: success`. A `false` result throws `HouseholdSettingNotSavedException` and shows "The server did not confirm the change. Your previous setting is still in effect." `PaydaySettingsCard` reverts its selection on failure. Monthly income and the rollover rule had the same bug and use the same helper. The best-effort direct `households` update now runs only after the API confirmed.
+- **Tests:** `test/services/household_setting_saver_test.dart`.
+
+### MOB-28: offline queue write failures (follow-up fix)
+- **Fix:** `OfflineQueueManager.enqueueOrThrow` and `OfflineQueueWriteException`. `OfflineSyncService.enqueue` now returns `Future<String>` and throws.
+- **Callers:**
+  - Chat used to enqueue fire-and-forget inside `setState`; it now awaits the write before replying.
+  - Manual expense keeps the sheet open with an error.
+  - Single and multi-page receipt scanners show the error and do not close.
+  - The batch review sheet no longer counts an unsaved receipt as saved; it stays on that receipt for a retry or skip.
+- **Tests:** `test/services/offline_queue_write_failure_test.dart` (closed SQLite DB, blob directory blocked, service contract, source checks).
 
 ## For other owners
 - **Backend:** MOB-06/12 (Idempotency-Key, `client_occurred_at`), MOB-23 (HMAC with JWT), and `salary_cycle.py` using the UTC date.
