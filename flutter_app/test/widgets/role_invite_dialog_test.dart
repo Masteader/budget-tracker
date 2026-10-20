@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/services/api/base_api_client.dart' show ApiRequestException;
 import 'package:budget_tracker/widgets/settings/role_invite_dialog.dart';
 
 void main() {
@@ -30,6 +31,8 @@ void main() {
         home: Scaffold(
           body: RoleInviteDialog(
             householdId: 'hh-role-123',
+            createInvite: (hid, role, {targetMemberId}) async =>
+                HouseholdInvite(householdId: hid, inviteCode: 'ABCD1234', role: role),
             onInviteGenerated: (inv) {
               created = inv;
             },
@@ -49,5 +52,32 @@ void main() {
     expect(find.text('Copy Code'), findsOneWidget);
     expect(created, isNotNull);
     expect(created!.role, equals('spouse'));
+  });
+
+  // FR-A-11: a refused or failed request must not show an invented code that
+  // can never be redeemed.
+  testWidgets('RoleInviteDialog shows an error and no code when the server refuses', (tester) async {
+    HouseholdInvite? created;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoleInviteDialog(
+            householdId: 'hh-role-123',
+            createInvite: (hid, role, {targetMemberId}) async =>
+                throw const ApiRequestException('Forbidden: Admin access required for this household.', statusCode: 403),
+            onInviteGenerated: (inv) => created = inv,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Generate Invite Code'));
+    await tester.pumpAndSettle();
+
+    expect(created, isNull);
+    expect(find.text('Copy Code'), findsNothing);
+    expect(find.textContaining('INV'), findsNothing);
+    expect(find.text('Generate Invite Code'), findsOneWidget, reason: 'the user can retry');
   });
 }

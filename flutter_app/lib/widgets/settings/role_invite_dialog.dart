@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/models.dart';
+import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
@@ -15,6 +16,9 @@ class RoleInviteDialog extends StatefulWidget {
   final String? targetMemberName;
   final ValueChanged<HouseholdInvite>? onInviteGenerated;
 
+  /// Creates the invite on the server; defaults to the API. Injectable for tests.
+  final Future<HouseholdInvite> Function(String householdId, String role, {String? targetMemberId})? createInvite;
+
   const RoleInviteDialog({
     super.key,
     required this.householdId,
@@ -22,6 +26,7 @@ class RoleInviteDialog extends StatefulWidget {
     this.targetMemberId,
     this.targetMemberName,
     this.onInviteGenerated,
+    this.createInvite,
   });
 
   @override
@@ -77,20 +82,22 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
 
     HouseholdInvite invite;
     try {
-      invite = await ApiService.instance.createRoleInvite(
+      final create = widget.createInvite ?? ApiService.instance.createRoleInvite;
+      invite = await create(
         widget.householdId,
         _selectedRole,
         targetMemberId: widget.targetMemberId,
       );
-    } catch (_) {
-      // Offline fallback
-      invite = HouseholdInvite(
-        householdId: widget.householdId,
-        inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
-        role: _selectedRole,
-        targetMemberId: widget.targetMemberId,
-        targetMemberName: widget.targetMemberName,
+    } catch (e) {
+      // FR-A-11: no invented "offline" code; it could never be redeemed.
+      if (!mounted) return;
+      setState(() => _isGenerating = false);
+      final forbidden = e is ApiRequestException && e.statusCode == 403;
+      AppSnackBar.showError(
+        context,
+        forbidden ? context.tr('rid_admin_only') : context.trArgs('rid_generate_failed', {'error': e}),
       );
+      return;
     }
 
     if (mounted) {

@@ -185,15 +185,15 @@ class BudgetApiClient {
         if (targetMemberId != null && targetMemberId.isNotEmpty) 'target_member_id': targetMemberId,
       },
     );
-    if (res['invite_code'] != null) {
-      return HouseholdInvite.fromMap(res);
+    // FR-A-11: never invent a code locally; a code the server did not store
+    // can never be redeemed. A refusal (403: admins only) or a network
+    // failure throws [ApiRequestException].
+    ApiRequestException.check(res);
+    final code = res['invite_code'];
+    if (code is! String || code.isEmpty) {
+      throw const ApiRequestException('The server did not return an invite code.');
     }
-    return HouseholdInvite(
-      householdId: householdId,
-      inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
-      role: role,
-      targetMemberId: targetMemberId,
-    );
+    return HouseholdInvite.fromMap(res);
   }
 
   Future<HouseholdInvite> inspectInviteCode({
