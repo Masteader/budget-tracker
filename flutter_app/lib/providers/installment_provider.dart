@@ -120,9 +120,10 @@ class InstallmentProvider extends ChangeNotifier {
   /// Records an installment payment towards a plan.
   Future<bool> recordPayment(String planId) async {
     try {
-      await ApiService.instance.payInstallment(planId);
+      final plan = await ApiService.instance.payInstallment(planId);
       await fetchPlans(silent: true);
-      return true;
+      // null: the server did not record the payment (FR-A-03).
+      return plan != null;
     } catch (e) {
       debugPrint('[InstallmentProvider] Error recording installment payment: $e');
       return false;

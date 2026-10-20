@@ -327,6 +327,30 @@ class ApiBinaryResponse {
   }
 }
 
+/// A JSON request the server refused or that never completed, for callers that
+/// must not treat the normalised error map as a result. [statusCode] is null
+/// for network errors.
+class ApiRequestException implements Exception {
+  const ApiRequestException(this.message, {this.statusCode});
+
+  /// Throws when [res] is an error map produced by [BaseApiClient].
+  static Map<String, dynamic> check(Map<String, dynamic> res) {
+    if (res['status'] == 'error') {
+      throw ApiRequestException(
+        res['message']?.toString() ?? 'Request failed',
+        statusCode: (res['status_code'] as num?)?.toInt(),
+      );
+    }
+    return res;
+  }
+
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => message;
+}
+
 /// A failed binary download. [statusCode] is null for network errors.
 class ApiDownloadException implements Exception {
   const ApiDownloadException(this.message, {this.statusCode});
