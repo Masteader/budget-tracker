@@ -119,15 +119,9 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-Expected output:
-```
-tests/test_parser.py::test_arabic_grocery_sms        PASSED
-tests/test_parser.py::test_english_education_sms     PASSED
-tests/test_parser.py::test_english_dining_sms        PASSED
-tests/test_parser.py::test_duplicate_sms_rejected    PASSED
-tests/test_parser.py::test_otp_sms_rejected          PASSED
-5 passed in X.XXs
-```
+Every test should pass. The suite is hermetic (in-memory Supabase fake, no network, no real LLM).
+`tests/test_sms_removal.py` enforces the zero-SMS policy: no SMS route, SMS parsing module,
+SMS simulator or `sms` transaction channel may exist.
 
 ---
 

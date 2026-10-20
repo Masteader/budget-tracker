@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from supabase import create_client, Client
@@ -106,7 +106,7 @@ _CACHE_TTL_SECONDS = 300.0  # 5 minutes
 def fetch_all_cost_control_codes(force_refresh: bool = False) -> list[CostControlCode]:
     """
     Load the full cost_control_codes table into memory with a 5-minute TTL cache.
-    Eliminates repetitive network queries for static categories during SMS/chat parsing.
+    Eliminates repetitive network queries for static categories during chat and receipt parsing.
     """
     global _cached_cost_codes, _cached_cost_codes_time
     import time
@@ -303,6 +303,12 @@ def deduct_from_budget(budget_id: str, amount: float) -> None:
 # TRANSACTIONS
 # =============================================================================
 
+# Ingestion channels a transaction can come from. Expenses are entered by chat/voice
+# ("chat"), receipt photo or ZATCA QR scan ("receipt_scan"), or by hand ("manual").
+# There is deliberately no "sms" channel: the app never reads SMS (zero-SMS policy).
+TRANSACTION_SOURCES = frozenset({"chat", "receipt_scan", "manual"})
+
+
 def insert_transaction(
     household_id: str,
     amount: float,
@@ -313,7 +319,7 @@ def insert_transaction(
     raw_sms: str,
     is_reallocated: bool = False,
     reallocated_from_budget_id: Optional[str] = None,
-    source: str = "sms",
+    source: str = "manual",
     items: Optional[list] = None,
     receipt_url: Optional[str] = None,
     spent_by: Optional[str] = None,
@@ -327,7 +333,13 @@ def insert_transaction(
     """
     Insert a new transaction row and return its UUID.
     The on_transaction_insert trigger automatically updates budgets.spent_amount.
+
+    ``raw_sms`` is the free-text audit note column (chat text, receipt summary, manual
+    note); the name is historical — the app never reads SMS. ``source`` must be one of
+    ``TRANSACTION_SOURCES``: there is no SMS ingestion channel (zero-SMS policy).
     """
+    if source not in TRANSACTION_SOURCES:
+        raise ValueError(f"Unsupported transaction source: {source!r}")
     client = get_client()
 
     # Automatically derive cycle_key from timestamp if not supplied
@@ -388,7 +400,7 @@ def insert_transaction(
         response = client.table("transactions").insert(payload).execute()
     except Exception as exc:
         logger.warning("Insert with initial payload failed (%s), retrying without unmigrated attribution columns.", exc)
-        # Prune unmigrated columns (paid_by and beneficiary are already recorded in raw_sms audit trail)
+        # Prune unmigrated columns (paid_by and beneficiary are already recorded in the raw_sms audit note)
         safe_payload = dict(payload)
         safe_payload.pop("paid_by", None)
         safe_payload.pop("beneficiary", None)
@@ -434,25 +446,6 @@ def insert_transaction(
         logger.debug("Background recalculate_budgets on insert failed: %s", recalc_err)
 
     return transaction_id
-
-
-def is_duplicate_sms(raw_sms: str, household_id: str, window_seconds: int = 60) -> bool:
-    """
-    Check if an identical SMS was already processed in the last `window_seconds`.
-    Prevents double-logging if the device retransmits the same SMS.
-    """
-    client = get_client()
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window_seconds)).isoformat()
-    response = (
-        client.table("transactions")
-        .select("id")
-        .eq("household_id", household_id)
-        .eq("raw_sms", raw_sms)
-        .gte("created_at", cutoff)
-        .limit(1)
-        .execute()
-    )
-    return bool(response.data)
 
 
 def ensure_household_cycle_budgets(

@@ -8,13 +8,10 @@
 .pytest_cache/
 tests/
 data/*.json
-# Manual dev scripts (SMS simulation violates the zero-SMS policy; others call live services)
-send_simulated_sms.py
-batch_simulate.py
+# Manual dev scripts (they call a running server or a real LLM)
 test_chat.py
 test_chat_endpoint.py
 test_zatca.py
-graph.py
 _build_landing.py
 docker-compose.yml
 Dockerfile
