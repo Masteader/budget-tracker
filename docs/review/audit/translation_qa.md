@@ -612,3 +612,68 @@ Each table lists key, locale, current, suggested, reason and severity, grouped b
 | `en.faq.items[0].a` | en | We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card pins, or personal SMS text records to any cloud aggregator. | We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card PINs, or personal SMS text records to any cloud aggregator. | English typo: PINs. | Low |
 | `en.footer.rights` | en | © 2025 BUDGET Tracker Sovereign Financial Architecture. All rights reserved. Built for clarity and equitable shared living. | © 2026 BUDGET Tracker. All rights reserved. Built for clarity and equitable shared living. | The year is out of date. | Low |
 | `en.simulator.day27Label` | en | Day 27 (GCC Public) | Day 27 (Saudi Public Sector) | The 27th payday is a Saudi public-sector rule, not a GCC-wide one; the Arabic says الراتب الحكومي. | Low |
+
+## Applied
+
+Branch `audit/translation-qa-apply` (based on `6afa789`), commits `debf4e9` (app), `80fa3ca` (web landing and `ai_service/static`), `0239984` (fallback landing builder), `a1f422a` (`landing_page/index.html`).
+
+Before applying, every row's `current` was compared with the file as it stands now. All 389 still matched exactly, so no row was obsolete and none needed re-evaluation against changed text.
+
+| Severity | Rows | Applied | Skipped |
+|---|---|---|---|
+| High | 53 | 53 | 0 |
+| Medium | 186 | 186 | 0 |
+| Low | 150 | 150 | 0 |
+| **Total** | **389** | **389** | **0** |
+
+By file: `app_localizations.dart` 325/325, `translations.ts` 29/29, `_build_landing.py` 20/20 (Arabic rows also update their `data-i18n` HTML default), `landing_page/index.html` 15/15. Every Low row was a clear win (spelling, glossary term, calque or length), so none was left out.
+
+**Skipped: none.**
+
+**Rows applied with a different value than `suggested`:**
+
+- `en` `support_chip_iqama`, `faq_bills_q2`, `faq_bills_a2`: "dependants' levy (Murafiq fee)" rather than "dependant fee", matching the glossary (رسوم المرافقين / مرافقین فیس).
+- `T.ar.b4d`: keeps the typo fix and "الزوجة", but replaces "حصة كل فرد في ميزانية الأسرة" (a per-member share of the family budget) with the Nafaqah rule.
+- `html:faq-5-answer`: per-household isolation with row-level security, visible only to authorised members, and encrypted in transit and at rest by the platform. The QA wording left out the encryption sentence.
+- 17 rows that only gave interim wording for a code problem were done properly in code: `across_accounts`, `days_to_payday_badge`, `dcc_attach` (ar, ur), `hmc_active_members`, `hmc_one_active_member`, `n_months`, `scan_confirm_save_items`, `scan_items_logged`, `scan_reading_items`, `set_transaction_s_pending_sync` (ar, ur), `sync_complete_msg` (ar, ur), `take_shot_n`, `allocations_exceed_salary`, `no_allocations_for_cycle`. Their glossary terms (المعاملة، لدى، جارٍ، لین دین، سنک) are carried into the new forms.
+
+**Code changes (the table under "Code that glues strings together"):**
+
+- `AppLocalizations.plural()` / `context.trPlural()` and `AppLocalizations.pluralCategory()`: a CLDR plural helper. Arabic uses zero (0), one (1), two (2), few (n % 100 in 3–10), many (11–99) and other (100+ and fractions); English and Urdu use one/other, with an optional zero form. 13 count strings moved out of `_localizedValues` into `_pluralValues`: `days_to_payday_badge`, `across_accounts`, `hmc_active_members` (absorbs `hmc_one_active_member`), `n_months`, `set_transaction_s_pending_sync`, `dcc_attach`, `scan_confirm_save_items`, `scan_items_logged`, `scan_reading_items`, `sync_complete_msg`, `queued_offline`, `transactions_count` (absorbs `transaction_singular`) and `items_count` (replaces `items`).
+- Full-sentence keys with placeholders instead of concatenation:
+  - `take_shot_n` (`{n}`; `take_shot_1` removed);
+  - `allocations_exceed_salary` (`{amount}` via `sar()`);
+  - `no_allocations_for_cycle` (`{cycle}`, now the localized month instead of the raw `2026-11` key);
+  - new `cycle_alert_burn_high_no_date` instead of pushing "before payday" into the `{date}` slot (`before_payday` removed).
+- Web: `simulator.countdownDays` is a set of plural forms chosen with `Intl.PluralRules`. `landing_page` uses a small `arabicDays()` for its days-left counter.
+- Tests in `flutter_app/test/ui_l10n_guard_test.dart`:
+  - no Arabic-only letters (ي ك ى ة) in Urdu, except `language_ar` and the Arabic sample sentence in `chat_welcome`;
+  - the plural table has every required form, matching placeholders, and Arabic script in ar/ur;
+  - every `trPlural` key exists;
+  - CLDR categories and the Arabic forms for 0, 1, 2, 3, 10, 11 and 100.
+- Tests in `ai_service/tests/test_landing_page.py`: the served bundle and the fallback page contain no spousal split, "سيادي", SMS processing or false encryption claims; the family demo shows the husband owing the wife.
+
+**Content changes the owner had already decided (beyond the rows):**
+
+- **Nafaqah.** Family mode has no spousal split: the husband carries shared costs, the wife's household payments are a debt he owes her, and her personal purchases come from her allowance. This is now what the following say:
+  - app walkthrough step 5 (`wt5_title` / `wt5_desc`, en/ar/ur);
+  - web: split-tab title, description and ledger title, FAQ sub-title, pillar 4;
+  - web family demo: husband's Nafaqah, "owed back by husband", wife's personal allowance row, and a family resolution box "Abu Fahad owes Umm Fahad SAR 1,600 · Record repayment";
+  - fallback landing: hero, meta description, attribution card (`b4t/b4d/b4c3`), household card (`b10*`), FAQ 3; its 60/40 demo is now roommates only, with translatable roommate chips in place of hard-coded children chips;
+  - `landing_page`: family demo cards and the split panel description.
+- **Privacy.**
+  - Arabic `lp2p` now says text and voice *inputs* (not SMS) and "not retained for training", like the English.
+  - The web AI pillar no longer says it parses "الرسائل النصية" (text messages).
+  - `landing_page` no longer says SMS "stays encrypted on your device".
+- **Claims.**
+  - The "even admins can't decrypt" claim is gone.
+  - Data is described as isolated per household with row-level security and encrypted in transit and at rest by the platform. This covers web `metric4Desc` / `security.title`, builder `b8d/b8sl/p2p/p5h`, and `landing_page` pillar 8, the privacy section heading and the metric card.
+  - No "سيادي/السيادية/سيادة" anywhere in the Arabic web, builder or landing copy.
+- **Glossary sweep** for leftovers that had no row: Urdu `total_price` ریال, `rid_admin_only` and `settle_wife_desc` گھرانہ/گھریلو. Afterwards there was no مسؤول (admin), تعويض, old ZATCA name or الرمز المربع in ar, and no چکر, ٹرانزیکشن, زمرہ, الاؤنس, بیوی or ر.س in ur.
+
+**Gates (final tree):**
+
+- `flutter analyze`: 0 issues.
+- `flutter test`: all passed (538).
+- `web_app`: `npm ci && npm run build && npm run lint` green.
+- `ai_service`: `pytest`, 614 passed.
