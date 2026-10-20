@@ -1,7 +1,7 @@
 -- =============================================================================
 -- BUDGET TRACKER — SEED DATA: cost_control_codes
 -- Run AFTER schema.sql.
--- Covers the most common merchants seen in Saudi bank (SNB / Al Rajhi) SMS.
+-- Covers the most common Saudi merchants seen on receipts and in chat entries.
 -- Keywords are lowercase; matching is done case-insensitively in the agent.
 -- =============================================================================
 
