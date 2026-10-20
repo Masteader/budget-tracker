@@ -202,8 +202,152 @@ New test modules: `test_api_audit.py`, `test_jwt_hardening.py`, `test_supabase_k
 - **API-34:** chat `category_code`/`sub_category`/`beneficiary` overrides are free text; validate against the household's active categories and dependents.
 - **API-35:** JWT verified in middleware and again in the route; `recalculate_budgets` scans all household transactions after every insert.
 
+## External review (Gemini) — platform items
+
+Second-opinion review of this branch (2026-10-20). Each claim was checked against the code at
+`682fdd3`, the installed libraries in `/opt/venv` (supabase-py 2.33.0, postgrest 2.33.0,
+Starlette 1.9.0) and published wheels of older supabase-py releases, inspected offline and probed
+with `python -I` against mocked HTTP (`respx`), never against a live service.
+
+| Item | Verdict | Fix |
+|---|---|---|
+| BLOCKER 1 — supabase-py too old for `sb_secret_` keys; key selection | **Confirmed** (lower bound) + **partly confirmed** (selection) | `3627484` |
+| BLOCKER 2 — `WEBHOOK_SECRET` / `APP_AUTH_TOKEN` contradiction | **Confirmed** (docs/app/backend disagreed); firewall logic **not** a bug | `03ce01e` |
+| BLOCKER 3 — quota RPC shape → 503 | **Partly confirmed**: no 503 with the current client and SQL, but any wrapped shape would 503 | `6be0159` |
+| HIGH 3 — JWKS lock-out and blocking fetch | **Confirmed** (both) | `4df94fb` |
+| HIGH 5 — hard-coded payday 27 | **Confirmed** (and two more call sites) | `d857855` |
+| MEDIUM 6 — `raw_sms` reads/writes | **Not a bug**: the column exists by design | docs only |
+
+### BLOCKER 1 — supabase-py and `sb_secret_` keys
+- **Library evidence.** `supabase/_sync/client.py` in every release up to **2.15.3** rejects any key
+  that does not match `^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$` with
+  `SupabaseException("Invalid API key")` (2.5.0 line 60–63, 2.15.3 line 61–64). An `sb_secret_…`
+  key has no dot, so `create_client` raised; reproduced with 2.15.3 in a scratch venv. **2.16.0** is
+  the first release without the check (verified for 2.16.0, 2.17.0, 2.18.x, 2.22.x, 2.23.0, 2.33.0).
+- **Headers.** 2.16.0 and 2.33.0 both send `apikey: <key>` and `Authorization: Bearer <key>` (the
+  identical value) to PostgREST and Storage, which is exactly what supabase-js 2.x sends without a
+  session (`SupabaseClient._getAccessToken` falls back to the key; `fetchWithAuth`), and supabase-js
+  is the client Supabase documents for the new keys. Supabase's "send on `apikey`, not `Authorization`"
+  warning is about Edge Functions' `verify_jwt` and `pg_net`; `ai_service` uses neither (only
+  PostgREST, RPCs and Storage). So the "wrong header" part is **not confirmed** for this service.
+- **Decision:** `supabase>=2.16.0` in `ai_service/requirements.txt` (was `>=2.5.0`). `/opt/venv` has
+  2.33.0. The full pytest suite was also run in a scratch venv with exactly `supabase==2.16.0`
+  (gotrue 2.12.4, postgrest 1.1.1, storage3 0.12.2): all green.
+- **Key selection (`supabase_client.describe_supabase_key`).** Before: the loop returned on the
+  first privileged key in `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY` order, so an anon value
+  in the other variable was silently skipped and a legacy JWT beat an `sb_secret_` key. Now both
+  variables are always inspected: an `sb_secret_` key wins over a legacy `service_role` JWT
+  (`SUPABASE_SECRET_KEY` first on a tie), anon/publishable/authenticated/unknown values are never
+  used, an ignored value or a second different privileged key produces a warning (startup log in
+  `main._log_security_configuration` and at client creation), and with no privileged key the
+  startup log is CRITICAL and `get_client()` fails closed. A bare `sb_secret_` prefix is not a key.
+- **Tests:** `tests/test_supabase_key_validation.py` (33 cases: each variable alone with
+  sb_secret / service_role JWT / anon / authenticated / publishable / bare prefix / garbage /
+  other-role JWT; every mixed pair; both privileged; identical and different sb_secret keys;
+  startup log levels without echoing values; requirements lower bound; the installed client
+  accepts the key offline and sends it as `apikey`).
+
+### BLOCKER 2 — `WEBHOOK_SECRET` / `APP_AUTH_TOKEN`
+- **Contradiction confirmed.** README (`README.md:217`) and the app
+  (`flutter_app/lib/supabase_config.dart:74`, StateError in release builds) said the backend requires
+  the signature; `routes/chat.py` and `routes/receipts.py` no longer verified it; `main.py:27`
+  imported `verify_signature` without using it; rule 04 §5 still mandated signature verification.
+- **Firewall (`main.py:224` `token_valid or bearer_valid`) is not a bug.** It is a coarse pass for
+  proxied requests; every non-public route verifies the JWT itself. New tests prove it:
+  `test_app_token_alone_never_grants_access_to_user_routes` (every API route via the proxy with only
+  `X-App-Token` → 401/403/422) and `test_app_token_with_invalid_or_expired_bearer_cannot_reach_user_data`
+  (expired, forged and malformed Bearer next to a valid `X-App-Token` → 401). They passed before the
+  change, confirming the behaviour.
+- **Design now implemented everywhere:** user routes are authenticated by the Supabase JWT.
+  `auth.verify_signature_if_present` is a dependency of every router (`main.py`): a present
+  `X-Signature` must be a valid HMAC of the exact body, otherwise 401 (also 401 in production when
+  `WEBHOOK_SECRET` is unset); an absent header is fine. There is currently no server-to-server
+  route without a JWT (`test_every_non_public_route_rejects_anonymous_requests` guards that); such a
+  route must call `utils.verify_signature`, which rejects a missing signature. `X-App-Token` stays a
+  legacy firewall pass only. Flutter: `WEBHOOK_SECRET` is optional (no StateError), and
+  `BaseApiClient` signs only when a secret is supplied (`signingSecret`, injectable for tests).
+- **Deployment consequence:** an installed build that signs with the pre-rotation `WEBHOOK_SECRET`
+  now gets 401 on its signed POSTs once the rotated secret is live (before this change the signature
+  was ignored). The old value is public, so it cannot be accepted; release the new build with the
+  backend (no define, or the new value).
+- **Tests:** `tests/test_api_audit.py` (invalid signature on every API route with a valid JWT → 401,
+  malformed/empty header → 401, valid signature → 200, signed request in production without a
+  secret → 401, valid signature without JWT never reaches data), Flutter
+  `test/services/client_config_test.dart`, `test/services/api/base_api_client_test.dart`.
+- Docs aligned: `README.md`, `.agents/rules/04-security-and-privacy.md` §2/§5, `ai_service/.env.example`,
+  `docs/runbooks/security-secret-rotation.md`, MOB-23 in `flutter_logic.md`, master report §3/§4/§6.
+
+### BLOCKER 3 — `consume_quota` result shapes
+- **SQL matches the call.** `supabase/migrations/20261019070000_sec07_api_quota_and_rate_limits.sql:30`
+  `consume_quota(p_user_id UUID, p_bucket TEXT, p_limit INT, p_window_seconds INT) RETURNS BOOLEAN`;
+  the only later change (`20261019100000_sec08_round6_hardening.sql:549-550`) restricts EXECUTE to
+  `service_role`. `rate_limiter._consume_db_quota` sends exactly those named parameters.
+- **Shape:** probing supabase-py 2.16.0 and 2.33.0 against a mocked PostgREST, a `true` body gives
+  `res.data is True`, so the current deployment does not 503. But `[true]`, `{"consume_quota": true}`
+  and `[{"consume_quota": true}]` (proxies, a SETOF/TABLE variant, other client versions) reached
+  `allowed is not True` (`rate_limiter.py:206` at `682fdd3`) and would have been 503 in production.
+- **Fix:** `_normalize_quota_result` maps unambiguous allowed shapes (incl. `"true"`/`"t"`) to True and
+  denied shapes to False (→ 429); empty, multi-valued, foreign-keyed, numeric or null values are
+  unknown (→ 503 in production, logged; pass in development).
+- **Tests:** `tests/test_rate_limit_and_env.py` (8 allowed, 7 denied, 10 unknown shapes, each at
+  unit level and through `check_api_quota` in production; SQL signature parsed from the migrations
+  and compared with the RPC parameters).
+
+### HIGH 3 — JWKS fetch
+- **Confirmed:** `auth._get_jwk_for_kid` stamped `last_fetch` before downloading (`auth.py:78` at
+  `682fdd3`), so one transient error rejected every ES256 token for 60 s, and the `urllib` download
+  (`auth.py:60`) ran synchronously on the event loop (via the firewall and `get_current_user_id`
+  inside async routes).
+- **Fix:** the 60 s throttle starts only after a successful download; a failure starts a 2 s back-off
+  (`_JWKS_FAILURE_BACKOFF_SECONDS`), with or without cached keys; known keys survive a failed
+  refresh; a successful refresh replaces the key set (revoked keys stop verifying). The download runs
+  in a worker thread (`asyncio.to_thread`) behind a lock (one fetch per burst) through the new async
+  `auth.decode_token` / `ensure_jwks_for_token`, which the firewall middleware awaits for every
+  protected request. The synchronous `_decode_token` used by `get_current_user_id` only reads the
+  cache, so no route signature changed.
+- **Tests:** `tests/test_jwt_hardening.py` (sync path never fetches; fetch runs off the loop;
+  failure → retry after 2 s, not 60 s; unknown kids throttled 60 s after success; failed refresh with
+  cached keys keeps them and backs off; 5 concurrent requests → 1 fetch; ES256 request through the
+  firewall to a real route → 200).
+
+### HIGH 5 — hard-coded payday 27
+- **Confirmed** in `salary_cycle.py` (`get_cycle_breakdown` 464-466 — which also rolled budgets over
+  with the household payday and so mismatched its own key —, `add_category_and_budget` 691,
+  `archive_category_for_household` 753, `add_sub_category_for_household` 828,
+  `remove_sub_category_for_household` 893, `save_sub_allocations` 960,
+  `create_household_custom_category` 1167, and the affordability advice text "27th"), in
+  `recurring_detector.py` (`detect_recurring_bills` 128 plus the `>= 27` due-date heuristic at 307 and
+  383, `toggle_household_recurring_bill` 509, `get_recurring_bill_candidates` 564), and in
+  `pdf_statement_generator.py:41` (which also used the current cycle's dates for any requested key).
+- **Fix:** `salary_cycle.current_household_cycle(household_id)` / `get_household_payday` at every
+  household-scoped call; `detect_recurring_bills(..., payday_day=)` with due dates placed relative to
+  the cycle start day and clamped to the month length; PDF statements use the household payday and
+  the requested cycle's own dates; creating a custom category with an amount updates the row that
+  activation created instead of inserting a duplicate.
+- **Tests:** `tests/test_household_payday.py` (household paid on the 10th on 2026-10-28 Riyadh:
+  cycle `2026-10`, not `2026-11`, for every function above; due-date cases; payday 1 / February clamp).
+- **Not changed (other stream's files):** `settlement_engine.py:68` and `:456` still call
+  `get_salary_cycle_dates()` without the household payday; `support_agent.py` help texts describe the
+  27th as the usual Saudi payday (informational, not a computation).
+
+### MEDIUM 6 — `raw_sms`
+- **Not a bug.** `transactions.raw_sms` is defined in `supabase/schema.sql:101`, never dropped or
+  renamed by any migration, and `20261020200000_remove_sms_artifacts.sql:28-32` deliberately keeps it
+  as the free-text audit note (installed app builds write it through PostgREST; renaming it would
+  break them and lose notes) and re-documents it (`COMMENT ON COLUMN`, line 77). After rebuilding the
+  local database from all migrations (`run_tests.py --psql --rebuild --db bt_review_b`, 20/20 passed)
+  the column exists as `text` with the audit-note comment, and DB test 18 asserts that. The reads and
+  writes in `dedup_engine.py:177-184` and `installment_service.py:238-248` use it as that note. No
+  code change; the column is not renamed.
+
+### Test results (after `d857855`)
+- `ai_service`: 530 passed (`/opt/venv`, supabase-py 2.33.0) and 530 passed in a scratch venv with
+  supabase-py 2.16.0.
+- `flutter analyze`: no issues; `flutter test`: 497 passed.
+- DB suite (local Postgres 16, rebuilt): 20/20 passed (no SQL changed).
+
 ## Owner actions
 1. Rotate `WEBHOOK_SECRET` and `APP_AUTH_TOKEN` (old values remain in git history). With `8c7ab2b` the app no longer needs either for authentication.
-2. Replace the anon JWT in `SUPABASE_SECRET_KEY` with an `sb_secret_…` key (or remove it so `SUPABASE_SERVICE_ROLE_KEY` is used).
+2. Put an `sb_secret_…` key in `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` (either works; an anon value next to it is ignored with a warning). Deploy with `supabase>=2.16.0`.
 3. Confirm the project's JWT signing: with `SUPABASE_JWT_SECRET` empty only ES256 (JWKS) user tokens are accepted.
 4. Set `ENV=production` explicitly in deployment and `ENV=development` locally; set `TRUSTED_PROXY_IPS`; provision `REDIS_URL` (shared rate limits + idempotency).

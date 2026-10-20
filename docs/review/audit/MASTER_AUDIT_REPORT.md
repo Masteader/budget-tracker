@@ -175,7 +175,7 @@ cd web_app && npm ci && npm run build && npm run lint
 
 ### 6.1 Before anything else
 1. **Rotate secrets.** Owner reports (2026-10-20) that a new `WEBHOOK_SECRET` is set on Railway and the values shared for the audit are test-only. **Still confirm `APP_AUTH_TOKEN` was rotated** — the old values remain in public git history (gitleaks finds 9 hits in `f17eb2b`).
-2. **Service key.** Owner reports the `sb_secret_…` key is set on Railway as `SUPABASE_SECRET_KEY`. The service refuses non-privileged keys and fails closed, so a wrong value shows up immediately as 500s.
+2. **Service key.** Owner reports the `sb_secret_…` key is set on Railway. Either `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` works; an `sb_secret_` key wins over a legacy JWT and an anon/publishable value is ignored with a startup warning. Requires `supabase>=2.16.0` (older supabase-py rejects `sb_secret_` keys). The service fails closed without a privileged key, so a wrong value shows up immediately as 500s.
 3. **Check** `SUPABASE_JWT_SECRET`: it is empty, so only ES256 tokens verified against the project JWKS are accepted. If the project still signs user tokens with the legacy HS256 secret, set it or every request returns 401.
 4. **Set** `ENV=production`, `TRUSTED_PROXY_IPS`, and `REDIS_URL` on the production service.
 5. **Email delivery:** set `RESEND_API_KEY` (preferred on Railway, which blocks SMTP ports below the Pro plan; `fmsco.com.sa` verified) or `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD` for the `fmscoinfo@fmsco.com.sa` mailbox. Optional: `CONTACT_RECIPIENT_EMAIL` (default `abedmowafaq@gmail.com`), `MAIL_FROM`. Until set, the forms return a clear error.
