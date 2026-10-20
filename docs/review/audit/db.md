@@ -28,9 +28,9 @@ Branch: `worktree-agent-a56ddfb476d55d771` · Base: `f17eb2b`
 | DB-10 | Low | Clients can INSERT households directly, which bypasses the quota and gives an invite-code existence oracle | Fixed `f17e6c6`, test 14 |
 | DB-11 | Low | Receipts bucket has no size or MIME limits | Fixed `e1761b4`, test 15 |
 | DB-13 | Low (perf) | RLS helpers run per row; 6 foreign keys and the lockout lookup have no index | Fixed `4271db6`, test 17 |
-| DB-16 | Medium (suspected / design) | Any household member can move the whole shared pool into their own account with `transfer_between_accounts` | Not fixed: product decision |
-| DB-17 | Low | Non-admin members can read `households.invite_code` directly, which bypasses the SEC-08 masking | Not fixed: needs a Flutter change first |
-| DB-18 | Low (suspected / design) | `transactions.user_id` is not bound to the caller, and members can edit or delete each other's transactions | Not fixed: product decision |
+| DB-16 | Medium (suspected / design) | Any household member can move the whole shared pool into their own account with `transfer_between_accounts` | Fixed (owner decision: admins only) `59a422d`, test 20 |
+| DB-17 | Low | Non-admin members can read `households.invite_code` directly, which bypasses the SEC-08 masking | Not fixed: released app builds read the column directly (see below) |
+| DB-18 | Low (suspected / design) | `transactions.user_id` is not bound to the caller, and members can edit or delete each other's transactions | Fixed (owner decision: creator bound, owner-or-admin edits) `59a422d`, test 20 |
 
 ## Test results
 
@@ -41,6 +41,7 @@ Branch: `worktree-agent-a56ddfb476d55d771` · Base: `f17eb2b`
 | New audit tests on the pre-fix schema | all 17 files against `c12baba` migrations | **5 passed / 12 failed**. Every new test fails for the documented reason |
 | After fixes, fresh database rebuilt from scratch | `run_tests.py --psql --rebuild --db bt_audit_final` | **17 passed / 0 failed** (98 PASSED assertions), and 17/17 again on a second run against the same database |
 | Concurrency stress (not committed; script in the session scratchpad) | 4 parallel sessions, 1,200 transfers A→B and B→A | 0 deadlocks / 0 errors. Money conserved: 200,000.00 − 60.00 fees = 199,940.00 |
+| Admin permissions and co-admins (DB-16 / DB-18), fresh rebuild | `run_tests.py --psql --rebuild --db bt_perms` | **20 passed / 0 failed** (test 20: 10 sections, roommate and family households) |
 | RLS overhead, 50k transactions in one household | `EXPLAIN ANALYZE SELECT count(*) …` as `authenticated` | 55 ms → 11 ms (per-row policy calls became an InitPlan) |
 
 ## How to run the DB tests locally
@@ -327,27 +328,86 @@ DB_NAME=live_rebuilt_round5 python3 supabase/tests/run_tests.py
   migrations were not renamed (rule: never edit shipped migrations).
 - **Status:** Partially fixed in `c12baba`. The live baseline is an owner action.
 
-### DB-16: Shared pool can be drained by any member (suspected / design)
+### DB-16: Shared pool can be drained by any member (resolved by owner decision)
 
-`transfer_between_accounts` lets any household member transfer from a shared pool into their own personal
-account (`20261019100000…sql:308-311`). Direct edits and `reconcile_account_balance` on shared pools are
-admin-only. Whether non-admin roommates may withdraw from the pool is a product decision; options are
-admin-only, or a per-pool `withdraw_policy`. **Not fixed.**
+`transfer_between_accounts` let any household member transfer from a shared pool into their own personal
+account (`20261019100000…sql:308-311`). Direct edits and `reconcile_account_balance` on shared pools were
+already admin-only.
 
-### DB-17: Members can read the static join code (Low)
+- **Owner decision (family and roommate households):** only household admins move money out of a shared
+  pool. Members still move money between their own personal accounts and pay into the pool. Expenses
+  recorded against the pool are not transfers and stay allowed for members (roommates spend from the pool);
+  they are attributed to their creator (DB-18) and visible to everyone.
+- **Fix (`20261020400000_admin_permissions_and_co_admins.sql`):** `transfer_between_accounts` raises
+  `42501` when the source is a shared pool and the caller is not an admin of the household (primary admin or
+  co-admin). The app offers pools as a transfer source to admins only.
+- **Status:** Fixed in `59a422d`. Test: `20_admin_permissions_and_co_admins.sql` §5.
+
+### DB-17: Members can read the static join code (Low, still open)
 
 `households_select_own` exposes `households.invite_code` to every member. SEC-08 hides it only in
-`get_user_households()`. A column-level revoke would break
-`flutter_app/lib/screens/settings/ingestion_settings_screen.dart:129`, which selects `name, invite_code`
-directly. **Not fixed.** First the Flutter team needs to read the code via `get_user_households()` (admins
-only); then `REVOKE SELECT (invite_code) ON public.households FROM authenticated`.
+`get_user_households()`. The current app reads the code through that RPC (MOB-25), but:
 
-### DB-18: Transaction attribution is not bound to the caller (suspected / design)
+- Column privileges cannot be limited to non-admins: `REVOKE SELECT (invite_code) ON public.households FROM
+  authenticated` also removes the column from admins' direct reads.
+- Released app builds (`main`) render the whole household settings section from
+  `households.select('name, invite_code')` (`ingestion_settings_screen.dart:129`) and fall back to an
+  embedded `households(name, invite_code)` select in `budget_api_client.dart:594`. With the revoke both
+  queries fail with `42501`, so every user of an older build, admins included, loses the household name,
+  member list, payday, income and rollover settings.
 
-`transactions_insert_household` and `_update_household` do not bind `user_id` to `auth.uid()`, and any member
-can edit or delete any other member's transaction that has no personal account attached. In
-multi-roommate settlement this allows attribution spoofing. Binding requires agreement on `spent_by` and
-partner-entry semantics. **Not fixed.**
+**Decision:** not tightened in this round. Apply `REVOKE SELECT (invite_code) ON public.households FROM
+authenticated` together with a matching column-list `GRANT SELECT` once builds older than this branch are
+retired. Until then a non-admin who reads the table directly still sees the join code.
+
+### DB-18: Transaction attribution bound to the caller (resolved by owner decision)
+
+`transactions_insert_household` and `_update_household` did not bind `user_id` to `auth.uid()`, and any
+member could edit or delete any other member's transaction that had no personal account attached. In
+multi-roommate settlement this allowed attribution spoofing.
+
+- **Owner decision (family and roommate households):** a member creates transactions and edits or deletes
+  only their own. Only household admins edit or delete another member's transactions. The creator is bound
+  at insert.
+- **Fix (`20261020400000_admin_permissions_and_co_admins.sql`):**
+  - `trg_bind_transaction_creator` (BEFORE INSERT): a client insert without `user_id` (older app builds) gets
+    `auth.uid()`; naming anyone else raises `42501`. The insert policy also requires `user_id = auth.uid()`.
+  - `trg_enforce_transaction_write_permission` (BEFORE UPDATE/DELETE): the creator can never change; a
+    non-admin touching someone else's row (or a legacy row with no creator) gets `42501`. It raises instead
+    of hiding the row through RLS so clients, including older builds, report a refusal rather than a silent
+    no-op. Writes issued by other triggers (`pg_trigger_depth() > 1`: foreign-key `SET NULL`/`CASCADE` on
+    account, spouse or household deletion) pass.
+  - `transactions_update_household` keeps household scoping in `USING` and repeats owner-or-admin in
+    `WITH CHECK`; a transaction's personal account must belong to its creator
+    (`transaction_account_matches`, definer because an admin cannot read a member's personal account).
+  - `update_account_balance_on_transaction` lets an admin's edit or delete of a member's own transaction
+    adjust that member's personal account; nobody can attach a transaction to someone else's account.
+  - The service role bypasses all of this; `ai_service` passes the verified JWT user as the creator and
+    checks owner-or-admin itself (enrichment, installment linking, settlements).
+- **Legacy rows:** transactions created before this migration through `ai_service` or most app screens have
+  `user_id IS NULL` (the creator was never recorded). They are admin-only from now on; no creator is guessed.
+- **Status:** Fixed in `59a422d`. Test: `20_admin_permissions_and_co_admins.sql` §3, §4, §10.
+
+### Household roles: co-admins and the primary admin (owner decision)
+
+- `households.owner_user_id` is the primary admin, backfilled from the longest-standing admin membership and
+  kept by triggers: the first admin of a new household becomes primary; when the primary admin's membership
+  ends (leave, removal by themselves, account deletion), the longest-standing remaining admin takes over
+  (after the DB-12 handover promoted one if needed). Clients cannot write the column (column-list `UPDATE`
+  grant on `households`).
+- `promote_member_to_admin`, `revoke_admin`, `transfer_primary_admin`, `get_household_members`: SECURITY
+  DEFINER, pinned `search_path`, caller resolved from the JWT (the service role passes `p_actor_user_id`;
+  an authenticated caller can never act for someone else), household-scoped.
+  - Any admin promotes members and revokes co-admins (themselves included).
+  - Nobody can demote the primary admin (`trg_protect_primary_admin`), and only the primary admin can end
+    their own membership.
+  - Only the primary admin transfers primary admin; the target becomes an admin if needed and the previous
+    primary stays a co-admin.
+- `set_member_role` / `remove_member` (active household) now go through the same rules.
+  `get_user_households()` also returns `is_primary`.
+- The last-admin protections (BUG-03 trigger, DB-12 account deletion handover) are unchanged.
+- Family Nafaqah: the husband or any household admin (co-admins included, never the wife herself) sets the
+  wife's allowance; `nafaqah_husband_id` now prefers the primary admin among provider members.
 
 ## Owner actions
 
@@ -371,7 +431,10 @@ partner-entry semantics. **Not fixed.**
    ```
 4. **DB-15:** take a fresh baseline from live (`supabase db pull`), squash or rename the duplicate-prefix
    migrations in a new baseline, and point CI at `run_tests.py --psql --rebuild`.
-5. Decide DB-16 and DB-18 (product). Schedule DB-17 together with the Flutter change.
+5. DB-16 and DB-18 are decided and fixed (`20261020400000_admin_permissions_and_co_admins.sql`; apply after
+   `20261020300000_*`). Before applying, check how many live transactions have no creator
+   (`SELECT count(*) FROM public.transactions WHERE user_id IS NULL;`): those become admin-only.
+   Schedule DB-17 once older app builds are retired.
 
 ## Cross-team notes (outside `supabase/`, not changed here)
 
