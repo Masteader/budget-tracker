@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import supabase_client
+from postgrest_compat import db_error_fields, first_row
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +106,11 @@ class HouseholdRoster:
 def household_owner_id(client, household_id: str) -> Optional[str]:
     """households.owner_user_id (the primary admin), or None when unset or not migrated yet."""
     try:
-        res = (
-            client.table("households")
-            .select("owner_user_id")
-            .eq("id", household_id)
-            .maybe_single()
-            .execute()
-        )
+        row = first_row(client.table("households").select("owner_user_id").eq("id", household_id))
     except Exception as exc:  # column not migrated yet: derive it like the migration backfill
         logger.warning("Could not read households.owner_user_id: %s", exc)
         return None
-    owner = (res.data or {}).get("owner_user_id") if res is not None else None
+    owner = row.get("owner_user_id") if row else None
     return str(owner) if owner else None
 
 
@@ -184,16 +179,13 @@ def _require_target(roster: HouseholdRoster, user_id: str) -> None:
 # ─── Transactions ─────────────────────────────────────────────────────────────
 
 def member_role(household_id: str, user_id: str) -> Optional[str]:
-    res = (
+    row = first_row(
         supabase_client.get_client()
         .table("household_memberships")
         .select("role")
         .eq("household_id", household_id)
         .eq("user_id", user_id)
-        .maybe_single()
-        .execute()
     )
-    row = res.data if res is not None else None
     if not row:
         return None
     return ADMIN if row.get("role") == ADMIN else MEMBER
@@ -206,16 +198,13 @@ def assert_can_modify_transaction(household_id: str, transaction_id: str, actor_
     """
     if not actor_user_id:
         raise PermissionDeniedError(TRANSACTION_FORBIDDEN)
-    res = (
+    tx = first_row(
         supabase_client.get_client()
         .table("transactions")
         .select("id, household_id, user_id")
         .eq("id", transaction_id)
         .eq("household_id", household_id)
-        .maybe_single()
-        .execute()
     )
-    tx = res.data if res is not None else None
     if not tx:
         raise TransactionNotFoundError("Transaction not found in this household.")
     role = member_role(household_id, actor_user_id)
@@ -260,8 +249,8 @@ def list_members(household_id: str, caller_id: str) -> Dict[str, Any]:
 
 
 def _map_rpc_error(exc: Exception) -> Exception:
-    message = str(getattr(exc, "message", "") or exc)
-    code = str(getattr(exc, "code", "") or "")
+    fields = db_error_fields(exc)
+    message, code = fields["message"], fields["code"]
     if "sole admin" in message.lower():
         return InvalidRoleChangeError("A household needs at least one admin.")
     if code == "42501" or message.startswith("Forbidden") or "primary admin" in message.lower():

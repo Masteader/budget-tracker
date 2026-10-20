@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional
 
+from postgrest_compat import db_error_fields, first_row
 from supabase_client import get_client, get_household_payday
 
 logger = logging.getLogger(__name__)
@@ -326,9 +327,15 @@ def _resolve_cycle(ctx: FamilyContext, cycle_key: Optional[str]) -> str:
 # ─── Database error mapping ───────────────────────────────────────────────────
 
 def _map_db_error(exc: Exception) -> Exception:
-    message = str(getattr(exc, "message", "") or exc)
-    code = str(getattr(exc, "code", "") or "")
-    hint = str(getattr(exc, "hint", "") or "")
+    """
+    Map a refusal of the Nafaqah RPCs to the service's errors. Every RAISE in migration
+    20261020300000 sets an SQLSTATE (42501 forbidden, 22023 invalid, 23514/23503 constraint) and
+    the overpayment refusal also sets HINT 'overpayment'; PostgREST returns them as the JSON
+    ``code`` / ``hint`` / ``message`` that postgrest-py's APIError exposes (read by
+    ``db_error_fields`` from whatever shape the exception arrives in).
+    """
+    fields = db_error_fields(exc)
+    message, code, hint = fields["message"], fields["code"], fields["hint"]
     if hint == "overpayment" or "exceeds the outstanding balance" in message:
         return OverpaymentError("Reimbursement exceeds the outstanding balance.")
     if code == "42501" or message.startswith("Forbidden"):
@@ -434,7 +441,8 @@ def record_reimbursement(
             {
                 "p_household_id": ctx.household_id,
                 "p_wife_user_id": wife_id,
-                "p_amount": float(value),
+                # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+                "p_amount": format(value, "f"),
                 "p_payment_method": method,
                 "p_notes": clean_notes,
                 "p_actor_user_id": actor_id,
@@ -472,16 +480,16 @@ def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) ->
     _require_wife(ctx, wife_id)
     cycle = _resolve_cycle(ctx, cycle_key)
     client = get_client()
-    row = (
+    # (household, member, cycle) is unique; limit(1) instead of maybe_single(), whose zero-row
+    # behaviour differs across postgrest-py versions (see postgrest_compat).
+    row = first_row(
         client.table("member_allowances")
         .select("amount")
         .eq("household_id", ctx.household_id)
         .eq("member_user_id", wife_id)
         .eq("cycle_key", cycle)
-        .maybe_single()
-        .execute()
     )
-    allocated = row.data.get("amount") if row is not None and row.data else None
+    allocated = row.get("amount") if row else None
     spent = (
         client.table("transactions")
         .select("amount")
@@ -517,7 +525,8 @@ def set_allowance(
             {
                 "p_household_id": ctx.household_id,
                 "p_member_user_id": wife_id,
-                "p_amount": float(value),
+                # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+                "p_amount": format(value, "f"),
                 "p_cycle_key": cycle,
                 "p_actor_user_id": actor_id,
             },

@@ -60,7 +60,7 @@ def _install_rpcs(fake):
             "household_id": params["p_household_id"],
             "wife_user_id": params["p_wife_user_id"],
             "paid_by_user_id": HUSBAND,
-            "amount": params["p_amount"],
+            "amount": float(params["p_amount"]),  # numeric column, returned as a JSON number
             "payment_method": params["p_payment_method"],
             "notes": params.get("p_notes"),
             "recorded_by": params["p_actor_user_id"],
@@ -73,11 +73,11 @@ def _install_rpcs(fake):
         key = (params["p_household_id"], params["p_member_user_id"], params["p_cycle_key"])
         for r in rows:
             if (r["household_id"], r["member_user_id"], r["cycle_key"]) == key:
-                r["amount"] = params["p_amount"]
+                r["amount"] = float(params["p_amount"])
                 break
         else:
             rows.append({"household_id": key[0], "member_user_id": key[1], "cycle_key": key[2],
-                         "amount": params["p_amount"], "set_by": params["p_actor_user_id"]})
+                         "amount": float(params["p_amount"]), "set_by": params["p_actor_user_id"]})
         return None  # service re-reads the status itself
 
     fake.rpc_handlers["record_spouse_reimbursement"] = record
@@ -215,7 +215,7 @@ def test_partial_then_full_reimbursement(family):
     assert res["outstanding_after"] == 300.5
     name, params = family.rpc_calls[-1]
     assert name == "record_spouse_reimbursement"
-    assert params["p_actor_user_id"] == HUSBAND and params["p_amount"] == 200.0
+    assert params["p_actor_user_id"] == HUSBAND and params["p_amount"] == "200.00"
 
     # the wife confirms the rest
     res = ns.record_reimbursement(ctx, WIFE, WIFE, Decimal("300.50"), "cash", None)
@@ -676,3 +676,85 @@ def test_partner_settlement_uses_household_payday(family):
     expected = get_salary_cycle_dates(payday_day=10)["cycle_start"]
     assert calculate_partner_settlement(HH_ROOM, caller_user_id=PEER1)["cycle_start"] == expected
     assert calculate_settlement_v2(HH_ROOM)["cycle_start"] == expected
+
+
+# ─── External review (Gemini) HIGH 1 / HIGH 2 / MEDIUM 5: postgrest-py behaviour ────────
+
+def _postgrest_error(status_code: int, body: dict):
+    """The APIError the installed postgrest-py raises for a PostgREST error response."""
+    import httpx
+    from postgrest import SyncPostgrestClient
+    from postgrest.exceptions import APIError
+
+    transport = httpx.MockTransport(lambda _req: httpx.Response(status_code, json=body))
+    pg = SyncPostgrestClient(
+        "http://postgrest.invalid", http_client=httpx.Client(transport=transport, base_url="http://postgrest.invalid")
+    )
+    with pytest.raises(APIError) as caught:
+        pg.rpc("record_spouse_reimbursement", {"p_amount": "1.00"}).execute()
+    return caught.value
+
+
+def _missing_response_maybe_single(self):
+    """postgrest-py 0.14-1.0 (allowed by supabase>=2.5.0): 0 rows unless PostgREST's detail
+    text matches exactly, and any other error, surface as this APIError instead of None."""
+    from postgrest.exceptions import APIError
+
+    raise APIError({"message": "Missing response", "code": "204", "hint": None, "details": None})
+
+
+def test_allowance_lookup_does_not_rely_on_maybe_single(family, monkeypatch):
+    monkeypatch.setattr(type(family.table("member_allowances")), "maybe_single", _missing_response_maybe_single)
+    st = ns.get_allowance(ns.load_family_context(HH), WIFE, "2026-11")
+    assert st["is_set"] is False and st["remaining"] == -1700.0
+    ns.set_allowance(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("1500"), "2026-11")
+    assert ns.get_allowance(ns.load_family_context(HH), WIFE, "2026-11")["allocated"] == 1500.0
+    # The husband is still resolved through the primary admin lookup.
+    assert ns.load_family_context(HH).husband_id == HUSBAND
+
+
+@pytest.mark.parametrize("status_code,body,expected", [
+    (400, {"code": "22023", "details": None, "hint": "overpayment",
+           "message": "Reimbursement of 600.00 exceeds the outstanding balance of 500.50"}, ns.OverpaymentError),
+    (403, {"code": "42501", "details": None, "hint": None,
+           "message": "Forbidden: only the husband, the wife or a household admin can record a reimbursement"},
+     ns.NafaqahForbidden),
+    (403, {"code": "42501", "details": None, "hint": None, "message": "Not authenticated"}, ns.NafaqahForbidden),
+    (400, {"code": "22023", "details": None, "hint": None, "message": "Unsupported payment method x"},
+     ns.InvalidNafaqahRequest),
+    (409, {"code": "23503", "details": None, "hint": None, "message": "nafaqah_spouse_id is not a spouse member"},
+     ns.InvalidNafaqahRequest),
+])
+def test_db_errors_from_real_postgrest_exceptions_are_mapped(status_code, body, expected):
+    exc = _postgrest_error(status_code, body)
+    assert isinstance(ns._map_db_error(exc), expected)
+    # The same error re-raised as a plain exception (dict argument or its str()) still maps.
+    assert isinstance(ns._map_db_error(Exception(dict(body))), expected)
+    assert isinstance(ns._map_db_error(RuntimeError(str(exc))), expected)
+
+
+def test_unmapped_db_errors_pass_through():
+    exc = _postgrest_error(400, {"code": "P0001", "details": None, "hint": None, "message": "boom"})
+    assert ns._map_db_error(exc) is exc
+    plain = RuntimeError("connection reset")
+    assert ns._map_db_error(plain) is plain
+
+
+def test_rpc_overpayment_race_returns_409(family):
+    """The service pre-check passed but the locked RPC refused: the APIError maps to 409."""
+    def refuse(_params):
+        raise _postgrest_error(400, {"code": "22023", "hint": "overpayment", "details": None,
+                                     "message": "Reimbursement of 10.00 exceeds the outstanding balance of 0.00"})
+
+    family.rpc_handlers["record_spouse_reimbursement"] = refuse
+    resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
+                       json={"amount": 10, "payment_method": "cash"})
+    assert resp.status_code == 409, resp.text
+
+
+def test_numeric_rpc_params_are_exact_decimal_strings(family):
+    ctx = ns.load_family_context(HH)
+    ns.record_reimbursement(ctx, HUSBAND, WIFE, Decimal("123.40"), "cash")
+    ns.set_allowance(ctx, HUSBAND, WIFE, "1234567890.10", "2026-11")
+    amounts = {name: params["p_amount"] for name, params in family.rpc_calls}
+    assert amounts == {"record_spouse_reimbursement": "123.40", "set_member_allowance": "1234567890.10"}
