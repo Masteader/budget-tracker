@@ -28,7 +28,7 @@ def _sanitize_history(history: Optional[List[Dict[str, str]]]) -> List[Dict[str,
 
 logger = logging.getLogger(__name__)
 
-SUPPORT_EMAIL = "abedmowafaq@gmail.com"
+SUPPORT_EMAIL = "fmscoinfo@fmsco.com.sa"
 
 SUPPORT_SYSTEM_PROMPTS = {
     "ar": """You are the AI Support Assistant for the Budget Tracker mobile application for Saudi households.

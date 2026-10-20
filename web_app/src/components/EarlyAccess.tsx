@@ -141,10 +141,10 @@ export const EarlyAccess: React.FC<EarlyAccessProps> = ({ dict, lang }) => {
         <p className="text-xs text-slate-400">
           {dict.earlyAccess.partnerInfo}{' '}
           <a
-            href="mailto:abedmowafaq@gmail.com"
+            href="mailto:fmscoinfo@fmsco.com.sa"
             className="text-[#00808c] hover:underline underline-offset-4 font-mono font-medium"
           >
-            abedmowafaq@gmail.com
+            fmscoinfo@fmsco.com.sa
           </a>
         </p>
       </div>

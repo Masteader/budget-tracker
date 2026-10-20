@@ -89,7 +89,7 @@ void main() {
       expect(recorder.requests, hasLength(1));
       expect(find.text('Message the Developer'), findsOneWidget, reason: 'dialog stays open');
       expect(find.textContaining('could not be sent'), findsOneWidget);
-      expect(find.textContaining('abedmowafaq@gmail.com'), findsOneWidget);
+      expect(find.textContaining('fmscoinfo@fmsco.com.sa'), findsOneWidget);
       expect(find.text('Copy Full Diagnostic Info'), findsOneWidget);
       expect(find.text('Message sent'), findsNothing);
       // The typed message is kept for a retry.

@@ -5,7 +5,7 @@ FMSCO Enterprise Budget and Cost Governance Platform. Cinematic Editorial Redesi
 Visual Reference: NURA editorial minimalism, monolithic concrete, warm light, heavy vignette.
 Design System: Deep obsidian base, 1px specular micro-borders, glassmorphism cards.
 Features: Bilingual AR/EN, Live Interactive Product Stage, Asymmetric Bento Grid,
-          KPI Counters, FAQ, Legal, Developer Contact (abedmowafaq@gmail.com).
+          KPI Counters, FAQ, Legal, Developer Contact (fmscoinfo@fmsco.com.sa).
 """
 
 import os

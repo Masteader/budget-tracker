@@ -19,7 +19,7 @@ async def test_root_landing_page():
     assert "AppGallery" in html
     assert "قريباً" in html
     # Verify developer email
-    assert "abedmowafaq@gmail.com" in html
+    assert "fmscoinfo@fmsco.com.sa" in html
     # Verify feature descriptions
     assert "دورة الراتب" in html  # Flexible salary cycle
     assert "الذكاء الاصطناعي" in html  # AI
@@ -35,7 +35,7 @@ async def test_auth_confirm_landing():
     html = res.text
     assert "تم تأكيد البريد الإلكتروني بنجاح" in html
     assert "budgettracker://login" in html
-    assert "abedmowafaq@gmail.com" in html
+    assert "fmscoinfo@fmsco.com.sa" in html
 
 @pytest.mark.asyncio
 async def test_auth_callback_landing():
@@ -73,7 +73,7 @@ def test_fallback_landing_has_vip_form_posting_to_inquiries_endpoint():
     assert "vip_early_access" in LANDING_HTML
     assert 'name="company_website"' in LANDING_HTML  # honeypot
     assert "res.ok" in LANDING_HTML  # success only on 2xx
-    assert 'href="mailto:abedmowafaq@gmail.com"' in LANDING_HTML  # fallback kept
+    assert 'href="mailto:fmscoinfo@fmsco.com.sa"' in LANDING_HTML  # fallback kept
     for lang in ("ar", "en"):
         block = _i18n_block(LANDING_HTML, lang)
         for key in ("vipl", "vipb", "vipsend", "vipok", "viperr", "viperr422", "viperr429", "vipnet"):

@@ -69,7 +69,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   /// Manual fallback address, shown only when in-app delivery fails. In-app
   /// messages go through POST /support/inquiries, which emails the same inbox.
-  static const String developerEmail = 'abedmowafaq@gmail.com';
+  static const String developerEmail = 'fmscoinfo@fmsco.com.sa';
 
   SupportApiClient get _supportClient => widget.supportClient ?? ApiService.instance.support;
 

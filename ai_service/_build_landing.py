@@ -15,7 +15,7 @@ FMSCO Enterprise Budget and Cost Governance Platform. Cinematic Editorial Redesi
 Visual Reference: NURA editorial minimalism, monolithic concrete, warm light, heavy vignette.
 Design System: Deep obsidian base, 1px specular micro-borders, glassmorphism cards.
 Features: Bilingual AR/EN, Live Interactive Product Stage, Asymmetric Bento Grid,
-          KPI Counters, FAQ, Legal, Developer Contact (abedmowafaq@gmail.com).
+          KPI Counters, FAQ, Legal, Developer Contact (fmscoinfo@fmsco.com.sa).
 """
 
 import os
@@ -802,7 +802,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <button id="vip-btn" type="submit" class="bp" data-i18n="vipb">انضم لقائمة VIP</button>
     </form>
     <p id="vip-msg" class="vipmsg" role="status" aria-live="polite"></p>
-    <a href="mailto:abedmowafaq@gmail.com" class="ep">✉ abedmowafaq@gmail.com</a>
+    <a href="mailto:fmscoinfo@fmsco.com.sa" class="ep">✉ fmscoinfo@fmsco.com.sa</a>
   </div>
 
 </main>
@@ -815,7 +815,7 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
       <a href="#features" data-i18n="fl1">المميزات</a>
       <a href="#security" data-i18n="fl2">الخصوصية</a>
       <a href="#faq"      data-i18n="fl3">الأسئلة</a>
-      <a href="mailto:abedmowafaq@gmail.com">abedmowafaq@gmail.com</a>
+      <a href="mailto:fmscoinfo@fmsco.com.sa">fmscoinfo@fmsco.com.sa</a>
     </div>
     <p>© 2026 Budget Tracker • <span data-i18n="fm">صُنع بـ ❤️ للأسر السعودية</span></p>
   </div>
@@ -1257,7 +1257,7 @@ AUTH_CONFIRM_HTML_CONTENT = r'''<!DOCTYPE html>
     <h1>تم تأكيد البريد الإلكتروني بنجاح</h1>
     <p>رائع! حسابك مفعّل وجاهز للاستخدام. انقر على الزر أدناه للعودة إلى التطبيق وبدء إدارة ميزانيتك الذكية.</p>
     <a href="budgettracker://login" class="btn">&#x1F680; فتح التطبيق</a>
-    <div class="sub">مشكلة؟ تواصل معنا على <a href="mailto:abedmowafaq@gmail.com">abedmowafaq@gmail.com</a></div>
+    <div class="sub">مشكلة؟ تواصل معنا على <a href="mailto:fmscoinfo@fmsco.com.sa">fmscoinfo@fmsco.com.sa</a></div>
   </div>
 </body>
 </html>'''

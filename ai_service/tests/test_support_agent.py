@@ -16,7 +16,7 @@ async def test_support_chat_general_faq():
     assert res.status_code == 200
     data = res.json()
     assert "reply" in data
-    assert data["support_email"] == "abedmowafaq@gmail.com"
+    assert data["support_email"] == "fmscoinfo@fmsco.com.sa"
     assert data["escalate_to_developer"] is False
 
 @pytest.mark.asyncio
