@@ -114,3 +114,8 @@ alone decides Nafaqah mode, the husband/wife and the debt direction. Repro: room
   minted, but the API and the app's direct writes can round the same input differently.
 - The fixed-window `consume_quota` resets at epoch-aligned 600 s boundaries, so a burst straddling a
   boundary can get up to 2× the limit; the in-memory sliding window still caps a single instance.
+
+
+## Re-run on the merged branch (2026-10-20)
+
+After merging the final backend review (FR-B-01/02/04/05), the suite was re-run on the fully merged branch: **35 passed, 3 xfailed**. E2E-01, E2E-02, E2E-06, E2E-07 and the planting half of E2E-05 now pass (they were fixed independently by FR-B-01, FR-B-02, FR-B-05 and FR-B-04), so their `xfail` marks were removed. Still open: E2E-03 (Low), E2E-04 (Low), E2E-05 listing (Medium).

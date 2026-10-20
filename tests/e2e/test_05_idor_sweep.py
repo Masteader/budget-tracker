@@ -286,7 +286,6 @@ def test_sub_categories_of_other_household_are_not_listed(world, victim):
     assert peek.status_code in (403, 404) or SECRET not in peek.text, peek.text
 
 
-@pytest.mark.xfail(strict=True, reason=_E2E05)
 def test_sub_category_cannot_be_planted_into_other_households(world, victim):
     a_hh = world.roommates("AT", n_members=1)
     attacker = a_hh.members[0]

@@ -147,11 +147,6 @@ def test_family_settlement_reflects_ledger_never_fifty_fifty(world, db, llm):
 
 # ── Roommates (same endpoints, shared_split / multi_roommate modes) ─────────────
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-01: POST /households/{id}/reimbursements (roommate mode) always 500s: "
-    "supabase_client.record_household_reimbursement inserts columns 'paid_by' and 'notes' that "
-    "do not exist on public.transactions (PostgREST PGRST204), so no roommate settlement can be recorded."
-))
 def test_roommate_settlement_reimbursement_is_recorded(world, db, llm):
     hh = world.roommates("N4", n_members=2)
     a, b = hh.members
@@ -170,13 +165,6 @@ def test_roommate_settlement_permissions(world, db):
     assert res.status_code == 403, res.text
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-02: GET /households/{id}/settlement-v2 (multi_roommate) never reports debts: "
-    "settlement_engine.calculate_settlement_v2 selects transactions.paid_by (no such column); the "
-    "PostgREST error is swallowed and txs=[] so pairwise/simplified debts are always empty. "
-    "Chat/receipt commits also drop paid_by on insert (insert_transaction falls back without it), "
-    "so the payer of a shared roommate expense is never stored anywhere."
-))
 def test_roommate_multi_party_settlement_reports_debts(world, db, llm):
     hh = world.roommates("N6", n_members=2)
     payer = hh.members[0]

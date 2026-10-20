@@ -177,13 +177,6 @@ def test_co_admin_promotion_protection_and_primary_transfer(world, db, llm):
     assert _role(co, hh, co.id) == "admin"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-06: budget/category administration is admin-only in the database (budgets_insert_admin / "
-    "budgets_update_admin RLS, and POST /households/{id}/categories/toggle requires an admin), but the "
-    "service-role API routes POST /budgets/categories and DELETE /budgets/categories/{code} (also "
-    "/budgets/sub-allocations, /budgets/sub-categories) only check membership (verify_household_access), "
-    "so any plain member can re-allocate or deactivate the household's budgets."
-))
 def test_member_cannot_administer_budgets_through_the_api(world, db):
     hh = world.roommates("E4", n_members=1)
     admin, member = hh.admin, hh.members[0]
@@ -207,13 +200,6 @@ def test_member_cannot_administer_budgets_through_the_api(world, db):
     assert (float(row["allocated_amount"]), row["is_active"]) == (900.0, True)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG E2E-07: users.financial_role is client-writable (authenticated has UPDATE on it under "
-    "users_update_own_profile) and it alone decides Nafaqah mode, who the husband/wife is and who owes "
-    "whom. A roommate who PATCHes their own financial_role to 'spouse' turns the flat into a 'family' "
-    "household: their expenses become wife_reimbursable debts the primary admin 'owes'; a wife can "
-    "likewise PATCH herself back to 'provider' and the family loses Nafaqah mode."
-))
 def test_member_cannot_self_assign_financial_role(world, db, llm):
     hh = world.roommates("E5", n_members=1)
     admin, mate = hh.admin, hh.members[0]
