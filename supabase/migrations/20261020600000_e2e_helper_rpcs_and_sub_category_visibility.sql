@@ -26,6 +26,18 @@
 -- origin/main) never .rpc() them. The guard below re-checks this on the target
 -- database and aborts the migration (rolling everything back) if it is wrong.
 --
+-- E2E-05 (Medium, listing half): cost_control_sub_categories has no
+-- household_id, and its SELECT policy was USING (true): any signed-in user
+-- could read another household's custom sub-categories (custom parent codes are
+-- guessable CUSTOM-...). Sub-category rows are now readable only when their
+-- parent category is readable, i.e. the same rule as cost_control_codes_select:
+-- a global/system code, or a code of the caller's active household. The deployed
+-- app (origin/main, sub_budget_allocation_dialog.dart) reads this table directly
+-- only by parent_code of a category of its own active household, which stays
+-- visible; it never writes it (writes go through ai_service with the service
+-- role, which bypasses RLS). Client write privileges, never usable under RLS
+-- (no write policy), and every anon privilege are revoked.
+--
 -- Idempotent (REVOKE/GRANT, DROP POLICY IF EXISTS + CREATE POLICY), no data
 -- change, no schema change. Rollback: see the end of this file.
 -- Proof test: supabase/tests/22_e2e_helper_rpcs_and_sub_category_visibility.sql
@@ -98,6 +110,31 @@ COMMENT ON FUNCTION public.nafaqah_husband_id(uuid) IS
 COMMENT ON FUNCTION public.nafaqah_is_spouse_member(uuid, uuid) IS
     'Internal: is the user a spouse member of the household. Not client-callable (E2E-04); used by SECURITY DEFINER functions.';
 
+-- B. E2E-05: sub-category rows follow their parent category's visibility --------
+
+ALTER TABLE public.cost_control_sub_categories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS cost_control_sub_categories_select_all ON public.cost_control_sub_categories;
+DROP POLICY IF EXISTS cost_control_sub_categories_select_visible_parent ON public.cost_control_sub_categories;
+
+CREATE POLICY cost_control_sub_categories_select_visible_parent ON public.cost_control_sub_categories
+    FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.cost_control_codes c
+            WHERE c.code = cost_control_sub_categories.parent_code
+              AND (c.household_id IS NULL
+                   OR c.household_id = (SELECT public.get_auth_user_household_id()))
+        )
+    );
+
+REVOKE ALL ON public.cost_control_sub_categories FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.cost_control_sub_categories FROM authenticated;
+GRANT SELECT ON public.cost_control_sub_categories TO authenticated;
+GRANT ALL ON public.cost_control_sub_categories TO service_role;
+
 COMMIT;
 
 -- Rollback (restores the previous, leaky behaviour; run only if this migration
@@ -106,4 +143,8 @@ COMMIT;
 --   GRANT EXECUTE ON FUNCTION public.household_primary_admin_id(uuid) TO authenticated;
 --   GRANT EXECUTE ON FUNCTION public.nafaqah_husband_id(uuid) TO authenticated;
 --   GRANT EXECUTE ON FUNCTION public.nafaqah_is_spouse_member(uuid, uuid) TO authenticated;
+--   DROP POLICY IF EXISTS cost_control_sub_categories_select_visible_parent ON public.cost_control_sub_categories;
+--   CREATE POLICY cost_control_sub_categories_select_all ON public.cost_control_sub_categories
+--       FOR SELECT TO authenticated USING (true);
+--   GRANT ALL ON public.cost_control_sub_categories TO anon, authenticated;
 --   COMMIT;

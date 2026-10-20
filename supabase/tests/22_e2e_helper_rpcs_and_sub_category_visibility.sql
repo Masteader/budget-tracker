@@ -8,6 +8,10 @@
 --           "is X the wife of household H" for any household), while every
 --           SECURITY DEFINER function and trigger that uses them keeps working
 --           for authenticated callers.
+--   E2E-05  cost_control_sub_categories has no household_id. A row is readable
+--           only when its parent category is: a global code, or a code of the
+--           caller's active household (same rule as cost_control_codes_select).
+--           Clients cannot write the table; anon cannot read it.
 --
 -- Migration: 20261020600000_e2e_helper_rpcs_and_sub_category_visibility.sql
 -- ============================================================================
@@ -222,6 +226,79 @@ BEGIN
     END IF;
 
     RAISE NOTICE 'PASSED: definer RPCs and triggers that use the helpers still work for members.';
+END $$;
+
+-- E2E-05: sub-categories follow their parent category's visibility ------------
+DO $$
+DECLARE
+    v bigint;
+BEGIN
+    -- The wife (household X) sees system and X's own sub-categories, never Y's.
+    v := pg_temp.count_as('authenticated', 'f2200000-0000-0000-0000-0000000000a2',
+        $q$SELECT count(*) FROM public.cost_control_sub_categories WHERE parent_code = 'CUSTOM-E2E22Y'$q$);
+    IF v IS DISTINCT FROM 0 THEN
+        RAISE EXCEPTION 'VULNERABILITY (E2E-05): X member reads Y custom sub-categories (%)', v;
+    END IF;
+    v := pg_temp.count_as('authenticated', 'f2200000-0000-0000-0000-0000000000a2',
+        $q$SELECT count(*) FROM public.cost_control_sub_categories WHERE parent_code = 'CUSTOM-E2E22X'$q$);
+    IF v IS DISTINCT FROM 1 THEN
+        RAISE EXCEPTION 'REGRESSION (E2E-05): X member cannot read X custom sub-categories (%)', v;
+    END IF;
+    v := pg_temp.count_as('authenticated', 'f2200000-0000-0000-0000-0000000000a2',
+        $q$SELECT count(*) FROM public.cost_control_sub_categories WHERE parent_code = 'OPEX-DINING'$q$);
+    IF v IS NULL OR v < 1 THEN
+        RAISE EXCEPTION 'REGRESSION (E2E-05): system sub-categories are hidden (%)', v;
+    END IF;
+    -- A whole-table read shows exactly the visible rows.
+    v := pg_temp.count_as('authenticated', 'f2200000-0000-0000-0000-0000000000b2',
+        $q$SELECT count(*) FROM public.cost_control_sub_categories WHERE parent_code LIKE 'CUSTOM-E2E22%'$q$);
+    IF v IS DISTINCT FROM 1 THEN
+        RAISE EXCEPTION 'E2E-05: Y member should see only Y custom sub-category (got %)', v;
+    END IF;
+
+    -- Clients cannot write definitions (ai_service writes them with the service role).
+    PERFORM pg_temp.expect('admin inserts a sub-category directly',
+        pg_temp.as_user('f2200000-0000-0000-0000-0000000000b1',
+            $q$INSERT INTO public.cost_control_sub_categories (parent_code, sub_code, name_en, name_ar)
+               VALUES ('OPEX-DINING', 'planted', 'Planted', 'Planted')$q$), '42501');
+    PERFORM pg_temp.expect('admin renames another household''s sub-category',
+        pg_temp.as_user('f2200000-0000-0000-0000-0000000000b1',
+            $q$UPDATE public.cost_control_sub_categories SET name_en = 'pwned' WHERE parent_code = 'CUSTOM-E2E22X'$q$), '42501');
+    PERFORM pg_temp.expect('admin deletes sub-categories',
+        pg_temp.as_user('f2200000-0000-0000-0000-0000000000b1',
+            $q$DELETE FROM public.cost_control_sub_categories WHERE parent_code = 'CUSTOM-E2E22Y'$q$), '42501');
+    IF has_table_privilege('authenticated', 'public.cost_control_sub_categories', 'INSERT')
+       OR has_table_privilege('authenticated', 'public.cost_control_sub_categories', 'UPDATE')
+       OR has_table_privilege('authenticated', 'public.cost_control_sub_categories', 'DELETE')
+       OR has_table_privilege('authenticated', 'public.cost_control_sub_categories', 'TRUNCATE')
+       OR has_table_privilege('anon', 'public.cost_control_sub_categories', 'SELECT') THEN
+        RAISE EXCEPTION 'VULNERABILITY (E2E-05): client privileges remain on cost_control_sub_categories';
+    END IF;
+    IF NOT has_table_privilege('authenticated', 'public.cost_control_sub_categories', 'SELECT') THEN
+        RAISE EXCEPTION 'REGRESSION (E2E-05): the app can no longer read sub-categories';
+    END IF;
+    v := pg_temp.count_as('anon', NULL, $q$SELECT count(*) FROM public.cost_control_sub_categories$q$);
+    IF v IS NOT NULL THEN
+        RAISE EXCEPTION 'VULNERABILITY (E2E-05): anon reads sub-categories (%)', v;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_policies
+               WHERE schemaname = 'public' AND tablename = 'cost_control_sub_categories'
+                 AND (qual = 'true' OR cmd <> 'SELECT')) THEN
+        RAISE EXCEPTION 'VULNERABILITY (E2E-05): permissive or write policy on cost_control_sub_categories';
+    END IF;
+
+    -- The service role (ai_service) still reads and writes every row.
+    PERFORM set_config('request.jwt.claims', '{"role": "service_role"}', true);
+    SET LOCAL ROLE service_role;
+    SELECT count(*) INTO v FROM public.cost_control_sub_categories WHERE parent_code LIKE 'CUSTOM-E2E22%';
+    UPDATE public.cost_control_sub_categories SET name_ar = 'X2' WHERE parent_code = 'CUSTOM-E2E22X';
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+    IF v <> 2 THEN
+        RAISE EXCEPTION 'REGRESSION (E2E-05): service role sees % of 2 rows', v;
+    END IF;
+
+    RAISE NOTICE 'PASSED: E2E-05 sub-categories are visible only with their parent category; clients cannot write them.';
 END $$;
 
 ROLLBACK;

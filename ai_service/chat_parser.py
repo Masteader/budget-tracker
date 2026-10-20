@@ -625,7 +625,7 @@ def process_chat_transaction(
         available_subs = []
         try:
             from salary_cycle import get_sub_categories_for_parent
-            available_subs = get_sub_categories_for_parent(category_code)
+            available_subs = get_sub_categories_for_parent(category_code, [household_id])
         except Exception as exc:
             logger.debug("Could not fetch sub categories: %s", exc)
 

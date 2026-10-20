@@ -10,7 +10,7 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
@@ -354,6 +354,27 @@ def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
         logger.warning("Error querying users fallback: %s", exc)
 
     return None
+
+
+def get_user_household_ids(user_id: str) -> List[str]:
+    """
+    Every household the user is a member of (household_memberships). Empty when the lookup
+    fails: callers use it to narrow what they return, so it fails closed.
+    """
+    try:
+        rows = (
+            get_client()
+            .table("household_memberships")
+            .select("household_id")
+            .eq("user_id", user_id)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Error listing household memberships: %s", exc)
+        return []
+    return sorted({str(r["household_id"]) for r in rows if r.get("household_id")})
 
 
 async def verify_household_access(request: Request, household_id: str) -> str:
