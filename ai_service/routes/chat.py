@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
+from nafaqah_service import NafaqahError
+from routes.nafaqah import nafaqah_http_error
 from utils import safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
@@ -105,7 +107,13 @@ async def chat_transaction(request: Request):
             override_beneficiary=body.get("beneficiary"),
             occurred_at=occurred_at,
             override_nafaqah_class=nafaqah_class,
+            override_nafaqah_spouse_id=body.get("nafaqah_spouse_id"),
         )
+    except NafaqahError as exc:
+        # A class contradicting paid_by/beneficiary, or a wife that is not allowed (422).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "chat-transaction", idem_key)
+        raise nafaqah_http_error(exc)
     except HTTPException:
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)

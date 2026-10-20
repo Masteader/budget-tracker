@@ -758,3 +758,177 @@ def test_numeric_rpc_params_are_exact_decimal_strings(family):
     ns.set_allowance(ctx, HUSBAND, WIFE, "1234567890.10", "2026-11")
     amounts = {name: params["p_amount"] for name, params in family.rpc_calls}
     assert amounts == {"record_spouse_reimbursement": "123.40", "set_member_allowance": "1234567890.10"}
+
+
+# ─── External review (Gemini) HIGH 4: chat class vs. edited paid_by / beneficiary ───────
+
+SECOND_WIFE = "00000000-0000-4000-8000-0000000000aa"
+
+
+def _add_second_wife(fake):
+    fake.seed("users", [{"id": SECOND_WIFE, "household_id": HH, "role": "member", "financial_role": "spouse",
+                         "display_name": "Mona"}])
+    fake.seed("household_memberships", [{"user_id": SECOND_WIFE, "household_id": HH, "role": "member",
+                                         "created_at": "2026-02-01T00:00:00+00:00"}])
+
+
+def _tx_count(fake):
+    return len(fake.tables.get("transactions", []))
+
+
+@pytest.mark.parametrize("user,paid_by,beneficiary,stale_class", [
+    (WIFE, "partner", "both", "wife_reimbursable"),  # edited to "my husband paid"
+    (WIFE, "me", "both", "wife_personal"),           # edited from "for me" to shared
+    (WIFE, "me", "me", "wife_reimbursable"),         # edited from shared to "for me"
+    (WIFE, "me", "both", "none"),                    # wife paid shared: never silently a gift
+    (HUSBAND, "me", "both", "wife_reimbursable"),    # the husband paid
+])
+def test_chat_class_contradicting_explicit_attribution_is_rejected(family, user, paid_by, beneficiary, stale_class):
+    before = _tx_count(family)
+    resp = _chat(user, "دفعت فاتورة البيت 300 ريال", paid_by=paid_by, beneficiary=beneficiary, nafaqah_class=stale_class)
+    assert resp.status_code == 422, resp.text
+    assert _tx_count(family) == before
+
+
+@pytest.mark.parametrize("user,paid_by,beneficiary,cls", [
+    (WIFE, "me", "both", "wife_reimbursable"),
+    (WIFE, "me", "me", "wife_personal"),
+    (WIFE, "partner", "both", "none"),
+    (HUSBAND, "partner", "both", "wife_reimbursable"),
+    (HUSBAND, "partner", "partner", "wife_personal"),
+    (HUSBAND, "me", "partner", "none"),
+])
+def test_chat_consistent_class_and_attribution_are_stored(family, user, paid_by, beneficiary, cls):
+    resp = _chat(user, "دفعت فاتورة البيت 300 ريال", paid_by=paid_by, beneficiary=beneficiary, nafaqah_class=cls)
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    expected = None if cls == "none" else cls
+    assert tx.get("nafaqah_class") == expected
+    assert tx.get("nafaqah_spouse_id") == (WIFE if expected else None)
+    assert (tx["paid_by"], tx["beneficiary"]) == (paid_by, beneficiary)
+
+
+def test_chat_class_without_attribution_recomputes_paid_by_and_beneficiary(family):
+    resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="wife_personal")
+    assert resp.status_code == 200
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and (tx["paid_by"], tx["beneficiary"]) == ("me", "me")
+    resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="none")
+    tx = _last_tx(family)
+    assert tx.get("nafaqah_class") is None and tx["paid_by"] == "partner"
+
+
+def test_chat_multi_wife_household_takes_the_chosen_wife(family):
+    _add_second_wife(family)
+    preview = _chat(HUSBAND, "دفعت زوجتي مقاضي البيت 150 ريال", preview_only=True).json()
+    assert preview["nafaqah_class"] == ns.WIFE_REIMBURSABLE and preview["nafaqah_spouse_id"] is None
+    assert preview["nafaqah_spouse_required"] is True
+    assert [w["id"] for w in preview["wives"]] == [WIFE, SECOND_WIFE]
+
+    before = _tx_count(family)
+    resp = _chat(HUSBAND, "دفعت زوجتي مقاضي البيت 150 ريال", paid_by="partner", beneficiary="both",
+                 nafaqah_class="wife_reimbursable")
+    assert resp.status_code == 422 and _tx_count(family) == before  # never silently dropped
+
+    resp = _chat(HUSBAND, "دفعت زوجتي مقاضي البيت 150 ريال", paid_by="partner", beneficiary="both",
+                 nafaqah_class="wife_reimbursable", nafaqah_spouse_id=SECOND_WIFE)
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == ns.WIFE_REIMBURSABLE and tx["nafaqah_spouse_id"] == SECOND_WIFE
+    ledger = ns.get_reimbursement_ledger(ns.load_family_context(HH), SECOND_WIFE)
+    assert ledger["balance"]["outstanding"] == 150.0
+
+
+@pytest.mark.parametrize("user,spouse", [(WIFE, SECOND_WIFE), (HUSBAND, CHILD), (HUSBAND, OUTSIDER_WIFE)])
+def test_chat_rejects_a_spouse_id_that_is_not_allowed(family, user, spouse):
+    _add_second_wife(family)
+    resp = _chat(user, "دفعت فاتورة البيت 300 ريال", nafaqah_spouse_id=spouse)
+    assert resp.status_code == 422, resp.text
+
+
+def test_chat_non_spouse_member_cannot_classify(family):
+    resp = _chat(CHILD, "دفعت فاتورة البيت 300 ريال", nafaqah_class="wife_reimbursable")
+    assert resp.status_code == 422
+    resp = _chat(CHILD, "دفعت فاتورة البيت 300 ريال")
+    assert resp.status_code == 200 and _last_tx(family).get("nafaqah_class") is None
+
+
+# ─── External review (Gemini) BLOCKER 5: Nafaqah on scanned receipts ────────────────────
+
+def _zatca_qr(total: str = "150.00") -> str:
+    import base64
+
+    def tlv(tag: int, value: str) -> bytes:
+        raw = value.encode()
+        return bytes([tag, len(raw)]) + raw
+
+    return base64.b64encode(
+        tlv(1, "Panda Supermarket") + tlv(2, "300012345600003") + tlv(3, "2026-10-04T12:00:00Z")
+        + tlv(4, total) + tlv(5, "19.57")
+    ).decode()
+
+
+def _scan(user, household=HH, **extra):
+    body = {"household_id": household, "qr_code_raw": _zatca_qr(), "allow_duplicate": True}
+    body.update(extra)
+    with patch("receipt_scanner.fetch_budget", return_value=None):
+        return client.post("/agent/scan-receipt", headers=bearer(user), json=body)
+
+
+def test_receipt_preview_carries_the_nafaqah_suggestion(family):
+    body = _scan(WIFE, preview_only=True).json()
+    assert body["status"] == "preview"
+    assert body["household_mode"] == "family_nafaqah" and body["recorder_role"] == "wife"
+    assert body["nafaqah_class"] == ns.WIFE_REIMBURSABLE and body["nafaqah_spouse_id"] == WIFE
+    assert (body["paid_by"], body["beneficiary"]) == ("me", "both")
+    assert [w["id"] for w in body["wives"]] == [WIFE]
+    assert "transactions" not in family.tables or all(t["id"] != body.get("transaction_id") for t in family.tables["transactions"])
+
+
+def test_wife_scanned_shared_receipt_is_husband_debt(family):
+    resp = _scan(WIFE)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["nafaqah_class"] == ns.WIFE_REIMBURSABLE
+    tx = _last_tx(family)
+    assert tx["source"] == "receipt_scan"
+    assert tx["nafaqah_class"] == ns.WIFE_REIMBURSABLE and tx["nafaqah_spouse_id"] == WIFE
+    ledger = ns.get_reimbursement_ledger(ns.load_family_context(HH), WIFE)
+    assert ledger["balance"]["outstanding"] == 650.5  # 500.50 seeded + 150 scanned
+
+
+def test_wife_scanned_personal_receipt_is_charged_to_her_allowance(family):
+    resp = _scan(WIFE, paid_by="me", beneficiary="me", nafaqah_class="wife_personal")
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and tx["nafaqah_spouse_id"] == WIFE
+    st = ns.get_allowance(ns.load_family_context(HH), WIFE, tx["cycle_key"])
+    assert st["transaction_count"] >= 1 and tx["amount"] == 150.0
+
+
+def test_husband_scanned_receipt_is_plain_household_expense(family):
+    resp = _scan(HUSBAND)
+    assert resp.status_code == 200
+    tx = _last_tx(family)
+    assert tx.get("nafaqah_class") is None and tx.get("nafaqah_spouse_id") is None
+
+
+def test_receipt_husband_records_second_wife_payment(family):
+    _add_second_wife(family)
+    assert _scan(HUSBAND, paid_by="partner", beneficiary="both", nafaqah_class="wife_reimbursable").status_code == 422
+    resp = _scan(HUSBAND, paid_by="partner", beneficiary="both", nafaqah_class="wife_reimbursable",
+                 nafaqah_spouse_id=SECOND_WIFE)
+    assert resp.status_code == 200, resp.text
+    assert _last_tx(family)["nafaqah_spouse_id"] == SECOND_WIFE
+
+
+def test_receipt_rejects_contradicting_or_unknown_class(family):
+    before = _tx_count(family)
+    assert _scan(WIFE, paid_by="partner", beneficiary="both", nafaqah_class="wife_reimbursable").status_code == 422
+    assert _scan(WIFE, nafaqah_class="split_50_50").status_code == 422
+    assert _tx_count(family) == before
+
+
+def test_receipt_roommates_never_classified(family):
+    resp = _scan(PEER1, household=HH_ROOM, nafaqah_class="wife_reimbursable")
+    assert resp.status_code == 200
+    assert _last_tx(family).get("nafaqah_class") is None and resp.json()["nafaqah_class"] is None
