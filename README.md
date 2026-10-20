@@ -172,6 +172,31 @@ On first launch the app may request:
 | `GOOGLE_API_KEY` | ✅ | Google AI Studio API key for Gemini models |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
+| `CONTACT_RECIPIENT_EMAIL` | ❌ | Where support and VIP early-access emails go (default: `abedmowafaq@gmail.com`) |
+| `RESEND_API_KEY` | ✅ one provider | Resend API key; preferred provider (HTTP, works where outbound SMTP is blocked, e.g. Railway non-Pro) |
+| `RESEND_FROM` | ❌ | Sender on a Resend-verified domain (default `onboarding@resend.dev`, which only delivers to the Resend account owner) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | ✅ one provider | SMTP alternative, used when `RESEND_API_KEY` is empty. `SMTP_SECURITY` is `starttls` (default, port 587) or `ssl` (port 465) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | with SMTP | SMTP login and sender address (`SMTP_FROM` defaults to `SMTP_USERNAME`) |
+| `TRUSTED_PROXY_IPS` | ❌ | Proxy IPs whose `X-Forwarded-For` is trusted for per-IP rate limits (default loopback) |
+| `ALLOWED_ORIGINS` | ❌ | Comma-separated CORS origins; replaces the defaults (localhost dev ports + `https://budget.fmsco.com.sa`) |
+
+#### Contact, support and VIP early-access email
+
+`POST /public/inquiries` (anonymous; web app, landing pages) and `POST /support/inquiries`
+(in-app, requires the user's Supabase JWT, which supplies the sender identity) email each request
+to `CONTACT_RECIPIENT_EMAIL` with `Reply-To` set to the sender. Subjects look like
+`[Budget Tracker] VIP early access — <email>` or `[Budget Tracker] Support — <email>`.
+
+```json
+{"type": "vip_early_access" | "support" | "contact", "email": "you@example.com",
+ "name": "optional", "message": "required for support/contact", "locale": "ar", "source": "web" | "landing" | "app"}
+```
+
+The endpoints answer `200 {"status": "sent"}` only after the provider accepted the email, `503`
+when no provider is configured (logged as an error; nothing is sent), `502` when the provider
+fails, `422` for invalid input and `429` past the limits (public: 5 per IP and 3 per email per
+hour; app: 5 per user per hour; 200 per hour overall). Set either `RESEND_API_KEY` or the `SMTP_*`
+variables on the deployment, or every form shows an error.
 
 ### Flutter App (`--dart-define` flags)
 

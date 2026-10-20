@@ -33,6 +33,7 @@ from routes.receipts import router as receipts_router
 from routes.chat import router as chat_router
 from routes.reports import router as reports_router
 from routes.support import router as support_router
+from routes.inquiries import router as inquiries_router
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -182,6 +183,8 @@ async def firewall_token_middleware(request: Request, call_next):
             "/hero_glacier.png",
             "/hero_glacier.jpg",
             "/favicon.svg",
+            # Anonymous waitlist/contact form; protected by validation, honeypot and rate limits.
+            "/public/inquiries",
         ]
         or path.startswith("/assets/")
         or path.startswith("/auth/")
@@ -331,6 +334,7 @@ app.include_router(receipts_router)
 app.include_router(chat_router)
 app.include_router(reports_router)
 app.include_router(support_router)
+app.include_router(inquiries_router)
 
 # Test helper alias
 from rate_limiter import reset_rate_limiters as _reset_receipt_scan_rate_limits
