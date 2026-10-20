@@ -1517,6 +1517,8 @@ class AppLocalizations {
       'pdf_download_failed': 'Statement Download Failed',
       'pdf_download_failed_msg': 'Could not download the PDF statement. Check your connection and try again.',
       'setting_not_saved_server': 'The server did not confirm the change. Your previous setting is still in effect.',
+      'offline_queue_failed': 'Could not save offline on this device either. Nothing was stored — please try again.',
+      'offline_queue_failed_title': 'Not Saved',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2755,6 +2757,8 @@ class AppLocalizations {
       'pdf_download_failed': 'تعذر تنزيل الكشف',
       'pdf_download_failed_msg': 'تعذر تنزيل كشف PDF. تحقق من الاتصال وحاول مرة أخرى.',
       'setting_not_saved_server': 'لم يؤكد الخادم التغيير، وما زال الإعداد السابق مطبقاً.',
+      'offline_queue_failed': 'تعذر الحفظ دون اتصال على هذا الجهاز أيضاً. لم يُحفظ شيء، حاول مرة أخرى.',
+      'offline_queue_failed_title': 'لم يتم الحفظ',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3993,6 +3997,8 @@ class AppLocalizations {
       'pdf_download_failed': 'اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی',
       'pdf_download_failed_msg': 'PDF اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔',
       'setting_not_saved_server': 'سرور نے تبدیلی کی تصدیق نہیں کی، پچھلی سیٹنگ ہی لاگو ہے۔',
+      'offline_queue_failed': 'اس ڈیوائس پر آف لائن بھی محفوظ نہیں ہو سکا۔ کچھ بھی محفوظ نہیں ہوا، دوبارہ کوشش کریں۔',
+      'offline_queue_failed_title': 'محفوظ نہیں ہوا',
     },
   };
 

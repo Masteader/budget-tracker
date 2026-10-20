@@ -624,7 +624,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           final bytes = await file.readAsBytes();
           base64List.add(base64Encode(bytes));
         }
-        await OfflineQueueManager().enqueue(
+        // MOB-28: throws when the draft could not be stored, so "Offline
+        // Draft" is never shown for a receipt that was lost.
+        await OfflineQueueManager().enqueueOrThrow(
           operationType: 'receipt_offline_draft',
           householdId: widget.householdId,
           payload: {
@@ -650,6 +652,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           _notifyGlobalProviders();
           Navigator.pop(context);
         }
+        return;
+      } on OfflineQueueWriteException catch (queueErr) {
+        debugPrint('[ReceiptScanner] Offline draft write failed: $queueErr');
+        _safeSetState(() {
+          _isAnalyzing = false;
+          _errorMessage = context.tr('offline_queue_failed');
+        });
         return;
       } catch (_) {}
 

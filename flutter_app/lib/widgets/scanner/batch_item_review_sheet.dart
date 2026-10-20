@@ -14,6 +14,7 @@ import '../../services/ocr/local_ocr_service.dart';
 import '../../services/offline_queue_manager.dart';
 import '../../theme/app_themes.dart';
 import '../receipt_photo_viewer_dialog.dart';
+import '../app_snackbar.dart';
 import '../../models/money.dart';
 
 /// Sequential review modal for processing a batch of captured receipts step by step.
@@ -204,7 +205,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
       final file = widget.receiptImages[_currentIndex];
 
       if (_isOfflineDraft) {
-        await OfflineQueueManager().enqueue(
+        await OfflineQueueManager().enqueueOrThrow(
           operationType: 'receipt_offline_draft',
           householdId: widget.householdId,
           payload: {
@@ -236,7 +237,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           });
         } catch (_) {
           // If network failed during submit, queue offline
-          await OfflineQueueManager().enqueue(
+          await OfflineQueueManager().enqueueOrThrow(
             operationType: 'receipt_offline_draft',
             householdId: widget.householdId,
             payload: {
@@ -255,15 +256,24 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
       _savedCount++;
       _totalBatchAmount += parsedAmount;
       _notifyGlobalProviders();
-    } catch (_) {
-      // In tests or mock modes, count as saved
-      _savedCount++;
-      _totalBatchAmount += parsedAmount;
-    } finally {
+    } catch (e) {
+      // MOB-28: neither the online insert nor the offline queue stored this
+      // receipt. Do not count it as saved; stay on it so the user can retry
+      // or skip.
+      debugPrint('[BatchItemReview] Receipt not saved: $e');
       if (mounted) {
         setState(() => _isSaving = false);
-        _advanceQueue();
+        AppSnackBar.showError(
+          context,
+          context.tr('offline_queue_failed'),
+          title: context.tr('offline_queue_failed_title'),
+        );
       }
+      return;
+    }
+    if (mounted) {
+      setState(() => _isSaving = false);
+      _advanceQueue();
     }
   }
 

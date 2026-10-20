@@ -113,20 +113,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           Navigator.pop(context, true);
         } else if (res['status'] == 'error') {
           // If offline, enqueue
-          await OfflineSyncService.instance.enqueue(
-            endpoint: 'receipt',
-            payload: {'images_base64': base64List},
-            householdId: widget.householdId,
-          );
-          if (mounted) {
-            AppSnackBar.showWarning(
-              context,
-              context.tr('mp_queued_offline_msg'),
-              title: context.tr('mp_queued_offline'),
-              icon: Icons.cloud_off_rounded,
-            );
-            Navigator.pop(context, true);
-          }
+          await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg');
         } else {
           _safeSetState(() {
             _errorMessage = res['message'] ?? context.tr('mp_parse_failed');
@@ -142,23 +129,39 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           final bytes = await f.readAsBytes();
           base64List.add(base64Encode(bytes));
         }
-        await OfflineSyncService.instance.enqueue(
-          endpoint: 'receipt',
-          payload: {'images_base64': base64List},
-          householdId: widget.householdId,
-        );
-        if (mounted) {
-          AppSnackBar.showWarning(
-            context,
-            context.tr('mp_queued_offline_short'),
-            title: context.tr('mp_queued_offline'),
-            icon: Icons.cloud_off_rounded,
-          );
-          Navigator.pop(context, true);
-        }
+        await _queueOffline(base64List, messageKey: 'mp_queued_offline_short');
       } catch (_) {
         _safeSetState(() => _errorMessage = context.trArgs('mp_process_failed', {'error': e}));
       }
+    }
+  }
+
+  /// Stores the shots in the offline queue and reports "queued" only when the
+  /// write succeeded (MOB-28). On failure the shots stay on screen with an
+  /// error so the user can retry; nothing was stored.
+  Future<void> _queueOffline(List<String> base64List, {required String messageKey}) async {
+    try {
+      await OfflineSyncService.instance.enqueue(
+        endpoint: 'receipt',
+        payload: {'images_base64': base64List},
+        householdId: widget.householdId,
+      );
+    } catch (err) {
+      debugPrint('[MultiPageScanner] Offline queue write failed: $err');
+      _safeSetState(() {
+        _isProcessing = false;
+        _errorMessage = context.tr('offline_queue_failed');
+      });
+      return;
+    }
+    if (mounted) {
+      AppSnackBar.showWarning(
+        context,
+        context.tr(messageKey),
+        title: context.tr('mp_queued_offline'),
+        icon: Icons.cloud_off_rounded,
+      );
+      Navigator.pop(context, true);
     }
   }
 
