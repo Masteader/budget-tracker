@@ -83,3 +83,23 @@ def test_invite_brute_force_lockout_returns_429(world, db):
         "SELECT count(*) FROM public.household_memberships WHERE household_id = %s AND user_id = %s",
         (hh.id, attacker.id),
     ) == 0
+
+
+def test_forged_expired_and_wrong_role_tokens_are_rejected(world, stack):
+    import httpx
+    from jose import jwt as jose_jwt
+
+    from e2e_harness.tokens import service_role_key, user_token
+
+    hh = world.roommates("T1", n_members=0)
+    user = hh.admin
+    forged = jose_jwt.encode(jose_jwt.get_unverified_claims(user.token), "not-the-secret", algorithm="HS256")
+    expired = user_token(stack.gateway.url, user.id, user.email, ttl=-3600)
+    wrong_iss = user_token("https://evil.example", user.id, user.email)
+    for token in (forged, expired, wrong_iss, service_role_key()):
+        api = world.anonymous_api(Authorization=f"Bearer {token}")
+        assert api.get(f"/households/{hh.id}/members").status_code == 401
+    # PostgREST verifies the same secret: a forged token never reaches the database as the user.
+    res = httpx.get(f"{stack.gateway.url}/rest/v1/households", headers={"Authorization": f"Bearer {forged}"},
+                    trust_env=False)
+    assert res.status_code == 401

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+import pytest
+
 
 def _commit(world, llm, user, hh, merchant, amount=50.0):
     res = world.chat_commit(user, hh, llm, merchant=merchant, amount=amount, category_code="OPEX-DINING")
@@ -173,3 +175,54 @@ def test_co_admin_promotion_protection_and_primary_transfer(world, db, llm):
     last = co.api.delete(f"/households/{hh.id}/members/{co.id}/admin")
     assert last.status_code in (403, 409), last.text
     assert _role(co, hh, co.id) == "admin"
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "BUG E2E-06: budget/category administration is admin-only in the database (budgets_insert_admin / "
+    "budgets_update_admin RLS, and POST /households/{id}/categories/toggle requires an admin), but the "
+    "service-role API routes POST /budgets/categories and DELETE /budgets/categories/{code} (also "
+    "/budgets/sub-allocations, /budgets/sub-categories) only check membership (verify_household_access), "
+    "so any plain member can re-allocate or deactivate the household's budgets."
+))
+def test_member_cannot_administer_budgets_through_the_api(world, db):
+    hh = world.roommates("E4", n_members=1)
+    admin, member = hh.admin, hh.members[0]
+    created = admin.api.post("/budgets/categories", json={"household_id": hh.id, "code": "OPEX-DINING",
+                                                          "category": "Dining", "allocated_amount": 900})
+    assert created.status_code == 200, created.text
+    # Direct PostgREST: the member is refused by RLS.
+    rls = member.rest.patch(f"/budgets?household_id=eq.{hh.id}&category_code=eq.OPEX-DINING",
+                            json={"allocated_amount": 1}, headers={"Prefer": "return=representation"})
+    assert rls.status_code in (401, 403) or rls.json() == []
+    toggle = member.api.post(f"/households/{hh.id}/categories/toggle",
+                             json={"category_code": "OPEX-DINING", "is_active": False})
+    assert toggle.status_code == 403
+    # The same changes through the other API routes must be refused as well.
+    realloc = member.api.post("/budgets/categories", json={"household_id": hh.id, "code": "OPEX-DINING",
+                                                           "category": "Dining", "allocated_amount": 1})
+    archive = member.api.delete("/budgets/categories/OPEX-DINING", params={"household_id": hh.id})
+    assert (realloc.status_code, archive.status_code) == (403, 403), (realloc.text, archive.text)
+    row = db.one("SELECT allocated_amount, is_active FROM public.budgets WHERE household_id = %s"
+                 " AND category_code = 'OPEX-DINING'", (hh.id,))
+    assert (float(row["allocated_amount"]), row["is_active"]) == (900.0, True)
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "BUG E2E-07: users.financial_role is client-writable (authenticated has UPDATE on it under "
+    "users_update_own_profile) and it alone decides Nafaqah mode, who the husband/wife is and who owes "
+    "whom. A roommate who PATCHes their own financial_role to 'spouse' turns the flat into a 'family' "
+    "household: their expenses become wife_reimbursable debts the primary admin 'owes'; a wife can "
+    "likewise PATCH herself back to 'provider' and the family loses Nafaqah mode."
+))
+def test_member_cannot_self_assign_financial_role(world, db, llm):
+    hh = world.roommates("E5", n_members=1)
+    admin, mate = hh.admin, hh.members[0]
+    mate.rest.patch(f"/users?id=eq.{mate.id}", json={"financial_role": "spouse"})
+    # Impact first (so a failure shows it): the flat must stay a roommate household...
+    commit = world.chat_commit(mate, hh, llm, merchant="Pizza Hut", amount=90)
+    summary = admin.api.get(f"/households/{hh.id}/nafaqah").json()
+    settlement = admin.api.get(f"/households/{hh.id}/settlement").json()
+    assert (commit.json().get("nafaqah_class"), summary["mode"], settlement["mode"]) == (
+        None, "not_family", "shared_split")
+    # ...and the role itself must not be self-assignable.
+    assert db.scalar("SELECT financial_role FROM public.users WHERE id = %s", (mate.id,)) == "peer"
