@@ -39,7 +39,7 @@ class CsvExportService {
       final vatStr = (total > 0 ? (total * 0.15 / 1.15) : 0.0).toStringAsFixed(2);
 
       final spentBy = _escapeCsv(tx['spent_by']?.toString() ?? 'both');
-      final source = _escapeCsv(tx['source']?.toString() ?? 'sms');
+      final source = _escapeCsv(tx['source']?.toString() ?? 'manual');
 
       // Line items
       String itemsStr = '';
