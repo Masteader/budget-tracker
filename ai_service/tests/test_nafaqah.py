@@ -592,3 +592,87 @@ def test_family_partner_settlement_has_no_spousal_split(family):
     # husband view: the wife's shared advances (500.50) are owed to her; her personal buys are not
     assert res["owed_to_partner"] == 500.5 and res["owed_to_me"] == 0.0
     assert res["fair_share_partner"] == 0.0
+
+
+# ─── External review (Gemini) BLOCKER 4a/4b: settlement uses memberships and the ledger ──
+
+def _move_active_household(fake, user_id, household_id):
+    """switch_active_household(): users.household_id is the *active* household only."""
+    for u in fake.tables["users"]:
+        if u["id"] == user_id:
+            u["household_id"] = household_id
+
+
+def test_partner_settlement_finds_wife_through_memberships(family):
+    from settlement_engine import calculate_partner_settlement
+
+    _move_active_household(family, WIFE, HH_OTHER)  # still a member of HH
+    res = calculate_partner_settlement(HH, cycle_start="2000-01-01", split_ratio=0.5, caller_user_id=HUSBAND)
+    assert res["mode"] == "family_nafaqah"
+    assert res["owed_to_partner"] == 500.5 and res["owed_to_me"] == 0.0
+    assert res["fair_share_partner"] == 0.0
+
+
+def test_settlement_v2_finds_wife_and_roommates_through_memberships(family):
+    _move_active_household(family, WIFE, HH_OTHER)
+    res = calculate_settlement_v2(HH, cycle_start="2000-01-01")
+    assert res["mode"] == "family_nafaqah"
+    assert res["family_summary"]["wife_reimbursement_owed"] == 500.5
+
+    _move_active_household(family, PEER2, HH_OTHER)  # a roommate viewing another household
+    family.seed("transactions", [
+        {"id": "r1", "household_id": HH_ROOM, "amount": 100.0, "paid_by": PEER1, "beneficiary_type": "all_peers",
+         "timestamp": "2026-11-03T09:00:00+00:00"},
+    ])
+    res = calculate_settlement_v2(HH_ROOM, cycle_start="2000-01-01")
+    assert res["mode"] == "multi_roommate"
+    assert res["pairwise_debts"] == [{"from_id": PEER2, "to_id": PEER1, "amount": 50.0}]
+
+
+def test_partner_settlement_reflects_recorded_reimbursements(family):
+    from settlement_engine import calculate_partner_settlement
+
+    resp = client.post(f"/households/{HH}/reimbursements", headers=bearer(HUSBAND), json={
+        "household_id": HH, "payer_id": "husband", "recipient_id": "wife", "amount": 200, "payment_method": "cash",
+    })
+    assert resp.status_code == 200, resp.text
+
+    husband_view = calculate_partner_settlement(HH, cycle_start="2000-01-01", caller_user_id=HUSBAND)
+    assert husband_view["owed_to_partner"] == 300.5
+    assert husband_view["who_owes"] == "me_owes_partner" and husband_view["settlement_amount"] == 300.5
+    assert husband_view["nafaqah"] == {"gross_advanced": 500.5, "reimbursed": 200.0, "outstanding": 300.5}
+
+    wife_view = calculate_partner_settlement(HH, cycle_start="2000-01-01", caller_user_id=WIFE)
+    assert wife_view["owed_to_me"] == 300.5 and wife_view["owed_to_partner"] == 0.0
+    assert wife_view["who_owes"] == "partner_owes_me"
+
+    v2 = calculate_settlement_v2(HH, cycle_start="2000-01-01")
+    assert v2["family_summary"]["wife_reimbursement_owed"] == 300.5
+    assert v2["family_summary"]["reimbursed_total"] == 200.0
+
+    # Paying off all but 0.30 SAR: still owed to the halala (no 0.5 SAR "settled" window).
+    ns.record_reimbursement(ns.load_family_context(HH), HUSBAND, WIFE, Decimal("300.20"), "cash")
+    small = calculate_partner_settlement(HH, cycle_start="2000-01-01", caller_user_id=WIFE)
+    assert small["owed_to_me"] == 0.3 and small["who_owes"] == "partner_owes_me"
+
+
+def test_partner_settlement_route_matches_nafaqah_summary(family):
+    resp = client.post(f"/households/{HH}/nafaqah/reimbursements", headers=bearer(HUSBAND),
+                       json={"amount": 100, "payment_method": "cash"})
+    assert resp.status_code == 200, resp.text
+    summary = client.get(f"/households/{HH}/nafaqah", headers=bearer(WIFE)).json()
+    settlement = client.get(f"/households/{HH}/settlement", headers=bearer(WIFE)).json()
+    assert settlement["mode"] == "family_nafaqah"
+    assert settlement["owed_to_me"] == summary["wives"][0]["reimbursement"]["outstanding"] == 400.5
+
+
+def test_partner_settlement_uses_household_payday(family):
+    from salary_cycle import get_salary_cycle_dates
+    from settlement_engine import calculate_partner_settlement
+
+    for h in family.tables["households"]:
+        if h["id"] == HH_ROOM:
+            h["payday_day"] = 10
+    expected = get_salary_cycle_dates(payday_day=10)["cycle_start"]
+    assert calculate_partner_settlement(HH_ROOM, caller_user_id=PEER1)["cycle_start"] == expected
+    assert calculate_settlement_v2(HH_ROOM)["cycle_start"] == expected

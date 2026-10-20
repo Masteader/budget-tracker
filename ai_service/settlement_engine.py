@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
 
-from supabase_client import get_client
+from supabase_client import get_client, get_household_payday
 from salary_cycle import get_salary_cycle_dates
+from nafaqah_service import FamilyContext, get_reimbursement_ledger, load_family_context
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +27,24 @@ def _to_sar(halalas: int) -> float:
     return float((Decimal(halalas) * _HALALA).quantize(_HALALA))
 
 
-def _household_family_roles(client, household_id: str) -> Tuple[bool, Dict[str, str]]:
+def _cycle_dates(household_id: str) -> Dict[str, Any]:
+    """Active salary cycle of the household (its configured payday, Riyadh dates)."""
+    return get_salary_cycle_dates(payday_day=get_household_payday(household_id))
+
+
+def _nafaqah_balance(ctx: FamilyContext, wife_ids: List[str]) -> Dict[str, Any]:
     """
-    Returns (is_family_household, {user_id: financial_role}). A household with a member whose
-    financial_role is 'spouse' is a married family: Nafaqah applies, never a 50/50 split.
+    Outstanding Nafaqah debt from the ledger (``wife_reimbursable`` advances minus
+    ``spouse_reimbursements``), all time and exact to the halala: the same figures as
+    GET /households/{id}/nafaqah and the database's get_spouse_reimbursement_balance().
     """
-    try:
-        res = client.table("users").select("id, role, financial_role").eq("household_id", household_id).execute()
-        rows = res.data if isinstance(getattr(res, "data", None), list) else []
-    except Exception as exc:
-        logger.warning("Could not load household roles for settlement: %s", exc)
-        rows = []
-    roles = {str(r.get("id")): str(r.get("financial_role") or "").lower() for r in rows if r.get("id")}
-    return any(role == "spouse" for role in roles.values()), roles
+    gross = paid = outstanding = 0
+    for wife_id in wife_ids:
+        balance = get_reimbursement_ledger(ctx, wife_id)["balance"]
+        gross += _to_halalas(balance["gross_advanced"])
+        paid += _to_halalas(balance["reimbursed"])
+        outstanding += _to_halalas(balance["outstanding"])
+    return {"gross_advanced": _to_sar(gross), "reimbursed": _to_sar(paid), "outstanding": _to_sar(outstanding)}
 
 
 def calculate_partner_settlement(
@@ -54,18 +60,23 @@ def calculate_partner_settlement(
       - beneficiary: 'me' | 'partner' | 'both' (who benefits from purchase)
     Backward compatible with legacy 'spent_by' field.
 
-    In a married-family household (a member with financial_role 'spouse') the Islamic Nafaqah
-    rule applies instead of ``split_ratio``: the husband bears household, children and wife
-    expenses in full, so nothing he pays creates a debt for the wife, and everything the wife
-    pays for the household/husband/children is owed back to her in full. ``caller_user_id``
-    identifies which spouse "me" refers to.
+    In a married-family household (a spouse member in ``household_memberships``, which is
+    authoritative: ``users.household_id`` is only the member's *active* household) the Islamic
+    Nafaqah rule applies instead of ``split_ratio``: the husband bears household, children and
+    wife expenses in full, so nothing he pays creates a debt for the wife. What he owes is the
+    Nafaqah ledger: ``wife_reimbursable`` advances minus the repayments recorded in
+    ``spouse_reimbursements`` (all time, to the halala), the same balance as the Nafaqah card.
+    ``caller_user_id`` identifies which spouse "me" refers to; a wife sees her own balance,
+    anyone else the husband's total across wives.
     """
     if not (0.0 <= float(split_ratio) <= 1.0):
         raise ValueError("split_ratio must be between 0 and 1")
     client = get_client()
-    is_family, roles = _household_family_roles(client, household_id)
-    caller_is_wife = roles.get(str(caller_user_id or ""), "") == "spouse"
-    dates = get_salary_cycle_dates()
+    # No fallback on failure: guessing "not a family" would split the spouses 50/50.
+    ctx = load_family_context(household_id)
+    is_family = ctx.is_family
+    caller_is_wife = ctx.is_wife(caller_user_id)
+    dates = _cycle_dates(household_id)
     start_iso = cycle_start or dates["cycle_start"]
 
     try:
@@ -182,16 +193,20 @@ def calculate_partner_settlement(
             shared_txs.append(tx)
 
     total_shared = shared_paid_by_me + shared_paid_by_partner
+    nafaqah_balance: Optional[Dict[str, Any]] = None
     if is_family:
         # Nafaqah: husband carries 100% of shared family expenses; no spousal 50/50 split.
+        # The debt is the ledger balance, so recorded repayments reduce it.
+        wife_ids = [str(caller_user_id)] if caller_is_wife else [w["id"] for w in ctx.wives]
+        nafaqah_balance = _nafaqah_balance(ctx, wife_ids)
         if caller_is_wife:
             fair_share_me, fair_share_partner = 0.0, round(total_shared, 2)
-            total_owed_to_me = shared_paid_by_me + i_paid_for_partner_100
+            total_owed_to_me = nafaqah_balance["outstanding"]
             total_owed_to_partner = 0.0
         else:
             fair_share_me, fair_share_partner = round(total_shared, 2), 0.0
             total_owed_to_me = 0.0
-            total_owed_to_partner = shared_paid_by_partner + partner_paid_for_me_100
+            total_owed_to_partner = nafaqah_balance["outstanding"]
     else:
         fair_share_me = round(total_shared * split_ratio, 2)
         fair_share_partner = round(total_shared * (1.0 - split_ratio), 2)
@@ -208,7 +223,10 @@ def calculate_partner_settlement(
     # Net balance: positive = partner owes me, negative = I owe partner
     net_balance = round(total_owed_to_me - total_owed_to_partner, 2)
 
-    if abs(net_balance) < 0.5:
+    # Roommate splits round to whole riyals; the Nafaqah ledger is exact to the halala, so any
+    # outstanding halala is still shown (the repayment RPC would accept it).
+    settled_below = 0.01 if is_family else 0.5
+    if abs(net_balance) < settled_below:
         who_owes = "settled"
         settle_amt = 0.0
         recommendation_en = "All expenses are evenly balanced! No transfer needed."
@@ -245,6 +263,7 @@ def calculate_partner_settlement(
         "recommendation_ar": recommendation_ar,
         "stc_pay_note": f"Household Budget Settlement - {settle_amt:.2f} SAR",
         "shared_transactions_count": len(shared_txs),
+        "nafaqah": nafaqah_balance,
     }
 
 
@@ -451,25 +470,22 @@ def calculate_settlement_v2(
     Computes unified role-aware settlement:
     - If household contains peer members (roommates) and no spouse: computes multi-party pairwise debts & simplification.
     - Otherwise (default family household): computes Islamic Family Nafaqah (husband provides, wife owes 0).
+
+    Members come from ``household_memberships`` (authoritative); ``users.household_id`` is only
+    each member's active household. In a family household the reimbursement figures
+    (``wife_reimbursement_owed``, ``gross_wife_advances``, ``reimbursed_total``, ``status``) are
+    the Nafaqah ledger balance, so repayments recorded in ``spouse_reimbursements`` reduce them;
+    the spending breakdown (``spent_on_*``, ``family_general_total``) covers the cycle.
     """
     client = get_client()
-    dates = get_salary_cycle_dates()
+    dates = _cycle_dates(household_id)
     start_iso = cycle_start or dates["cycle_start"]
 
-    try:
-        users_resp = (
-            client.table("users")
-            .select("id, display_name, role, financial_role")
-            .eq("household_id", household_id)
-            .execute()
-        )
-        members = users_resp.data or []
-    except Exception as exc:
-        logger.warning("Failed to fetch household members for settlement v2: %s", exc)
-        members = []
-
-    has_peers = any((m.get("financial_role") or "").lower() == "peer" for m in members)
-    has_spouse = any((m.get("financial_role") or "").lower() == "spouse" for m in members)
+    # No fallback on failure: an empty roster would silently change the household's mode.
+    ctx = load_family_context(household_id)
+    members = list(ctx.members.values())
+    has_peers = any(m.get("financial_role") == "peer" for m in members)
+    has_spouse = ctx.is_family
 
     try:
         tx_resp = (
@@ -486,39 +502,36 @@ def calculate_settlement_v2(
         txs = []
 
     if has_peers and not has_spouse:
-        peers = [m.get("id") or m.get("display_name") for m in members]
+        peers = [m["id"] for m in members]
         pairwise = calculate_roommate_pairwise_debts(txs, peers)
         simplified = simplify_debts(pairwise)
         return {
             "mode": "multi_roommate",
+            "cycle_start": start_iso,
             "family_summary": None,
             "pairwise_debts": pairwise,
             "simplified_debts": simplified,
             "roommate_balances": {},
         }
-    else:
-        husband_id = "provider"
-        wife_id = "spouse"
-        # financial_role decides; household admin rights say nothing about who the husband is
-        # (a wife who administers the household was previously treated as the provider).
-        for m in members:
-            f_role = (m.get("financial_role") or "").lower()
-            if f_role == "spouse":
-                wife_id = m.get("id") or "spouse"
-            elif f_role == "provider":
-                husband_id = m.get("id") or "provider"
-        if husband_id == "provider":
-            for m in members:
-                if m.get("role") == "admin" and (m.get("financial_role") or "").lower() != "spouse":
-                    husband_id = m.get("id") or "provider"
-                    break
 
-        family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
-        return {
-            "mode": "family_nafaqah",
-            "family_summary": family_summary,
-            "pairwise_debts": [],
-            "simplified_debts": [],
-            "roommate_balances": {},
-        }
-
+    # financial_role decides (load_family_context); household admin rights say nothing about
+    # who the husband is (a wife who administers the household is never the provider).
+    husband_id = ctx.husband_id or "provider"
+    wife_id = ctx.wives[0]["id"] if ctx.wives else "spouse"
+    family_summary = calculate_family_nafaqah(txs, husband_id=husband_id, wife_id=wife_id)
+    if has_spouse:
+        balance = _nafaqah_balance(ctx, [w["id"] for w in ctx.wives])
+        family_summary.update({
+            "wife_reimbursement_owed": balance["outstanding"],
+            "gross_wife_advances": balance["gross_advanced"],
+            "reimbursed_total": balance["reimbursed"],
+            "status": "settled" if _to_halalas(balance["outstanding"]) == 0 else "reimbursement_pending",
+        })
+    return {
+        "mode": "family_nafaqah",
+        "cycle_start": start_iso,
+        "family_summary": family_summary,
+        "pairwise_debts": [],
+        "simplified_debts": [],
+        "roommate_balances": {},
+    }
