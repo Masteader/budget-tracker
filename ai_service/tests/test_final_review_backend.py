@@ -301,6 +301,18 @@ def test_chat_marks_reallocation_only_when_it_happened(db):
     assert insert.call_args.kwargs["reallocated_from_budget_id"] is None
 
 
+# ─── FR-B-07: a commit never drops the Nafaqah class on a lookup failure ─────
+
+def test_commit_fails_instead_of_storing_an_unclassified_family_expense(db):
+    import nafaqah_service as ns
+
+    with patch("nafaqah_service.load_family_context", side_effect=RuntimeError("db down")):
+        preview = ns.resolve_expense_nafaqah(FAMILY, WIFE, "me", "both", require_spouse=False)
+        assert preview["household_mode"] == "not_family"  # a preview may degrade
+        with pytest.raises(RuntimeError):
+            ns.resolve_expense_nafaqah(FAMILY, WIFE, "me", "both", require_spouse=True)
+
+
 # ─── FR-B-09: one LiteLLM model default for every module ─────────────────────
 
 def test_every_llm_call_uses_the_same_default_model(monkeypatch):
