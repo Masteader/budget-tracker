@@ -1131,22 +1131,31 @@
             المتقدمة ودعم مباشر من فريق التطوير.</p>
 
           <!-- Newsletter / Early Access Form -->
-          <form class="w-full flex flex-col sm:flex-row gap-2.5 mt-2" onsubmit="handleEarlyAccess(event)">
+          <form class="w-full flex flex-col sm:flex-row gap-2.5 mt-2" id="vip-form" onsubmit="handleEarlyAccess(event)">
+            <label class="sr-only" for="vip-email">البريد الإلكتروني</label>
             <input
               class="flex-1 px-5 py-3.5 rounded-full bg-white/90 border border-slate-200 text-coastal-navy placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-primary shadow-inner"
-              id="vip-email" placeholder="أدخل بريدك الإلكتروني هنا..." required="" type="email" />
+              id="vip-email" name="email" dir="ltr" maxlength="254" autocomplete="email"
+              placeholder="أدخل بريدك الإلكتروني هنا..." required="" type="email" />
+            <!-- Honeypot: hidden from people and screen readers; bots that fill it are ignored. -->
+            <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden">
+              <input id="vip-company-website" name="company_website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
             <button
-              class="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
-              type="submit">
-              <span>انضم الآن</span>
-              <span class="material-symbols-outlined text-[18px]">send</span>
+              class="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:cursor-wait"
+              id="vip-submit" type="submit">
+              <span id="vip-submit-label">انضم الآن</span>
+              <span aria-hidden="true" class="material-symbols-outlined text-[18px]">send</span>
             </button>
           </form>
           <div
             class="hidden p-3 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-bold w-full border border-emerald-300"
-            id="access-confirmation">
-            تم تسجيل بريدك بنجاح! سنرسل لك دعوة الوصول المبكر قريباً.
+            id="access-confirmation" role="status">
+            تم استلام طلبك وتسجيل بريدك في قائمة الوصول المبكر! سنراسلك عند فتح الوصول.
           </div>
+          <div
+            class="hidden p-3 rounded-xl bg-red-50 text-red-800 text-xs font-bold w-full border border-red-200"
+            id="access-error" role="alert"></div>
 
           <!-- Direct Developer / Contact Strip -->
           <div
@@ -1354,14 +1363,67 @@
     }
 
     // VIP Early Access confirmation handler
-    function handleEarlyAccess(e) {
+    // VIP signups are emailed to the developer by the backend (POST /public/inquiries).
+    // Success is shown only on a 2xx answer. Override the backend with window.BUDGET_API_BASE_URL
+    // ('' = same origin).
+    const INQUIRY_ENDPOINT =
+      String(window.BUDGET_API_BASE_URL ?? 'https://budget.fmsco.com.sa').replace(/\/+$/, '') + '/public/inquiries';
+    const VIP_ERRORS = {
+      422: 'يرجى إدخال بريد إلكتروني صحيح.',
+      429: 'وصلنا عدد كبير من الطلبات منك. حاول مرة أخرى بعد قليل.',
+      unavailable: 'تعذر إرسال طلبك حالياً. حاول لاحقاً أو راسلنا مباشرة على البريد أدناه.',
+      network: 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.',
+    };
+
+    async function handleEarlyAccess(e) {
       e.preventDefault();
+      const form = document.getElementById('vip-form');
       const conf = document.getElementById('access-confirmation');
+      const errorBox = document.getElementById('access-error');
       const emailInput = document.getElementById('vip-email');
-      if (conf && emailInput) {
-        conf.classList.remove('hidden');
-        emailInput.value = '';
+      const honeypot = document.getElementById('vip-company-website');
+      const button = document.getElementById('vip-submit');
+      const label = document.getElementById('vip-submit-label');
+      const email = emailInput.value.trim();
+      if (!email || button.disabled) return;
+
+      const idleLabel = label.textContent;
+      button.disabled = true;
+      emailInput.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      label.textContent = 'جارٍ الإرسال...';
+      conf.classList.add('hidden');
+      errorBox.classList.add('hidden');
+
+      let error = null;
+      try {
+        const payload = { type: 'vip_early_access', email: email, locale: 'ar', source: 'landing' };
+        if (honeypot && honeypot.value) payload.company_website = honeypot.value;
+        const res = await fetch(INQUIRY_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'omit',
+        });
+        if (!res.ok) error = VIP_ERRORS[res.status] || VIP_ERRORS.unavailable;
+      } catch (err) {
+        error = VIP_ERRORS.network;
       }
+
+      button.disabled = false;
+      emailInput.disabled = false;
+      form.removeAttribute('aria-busy');
+      label.textContent = idleLabel;
+      if (error) {
+        errorBox.textContent = error;
+        errorBox.classList.remove('hidden');
+        emailInput.setAttribute('aria-invalid', 'true');
+        emailInput.focus();
+        return;
+      }
+      emailInput.removeAttribute('aria-invalid');
+      emailInput.value = '';
+      conf.classList.remove('hidden');
     }
   </script>
 </body>

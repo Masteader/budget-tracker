@@ -56,3 +56,38 @@ async def test_hero_background_images():
     assert res_jpg.status_code == 200
     assert "image/jpeg" in res_jpg.headers["content-type"]
 
+
+# ── VIP early-access form (WEB-09) ─────────────────────────────────────────────
+
+def _i18n_block(html: str, lang: str) -> str:
+    table = html.split("const T = {", 1)[1]
+    ar_block, en_block = table.split("\n  en: {", 1)
+    return ar_block if lang == "ar" else en_block
+
+
+def test_fallback_landing_has_vip_form_posting_to_inquiries_endpoint():
+    from _landing_impl import LANDING_HTML
+
+    assert 'id="vip-form"' in LANDING_HTML
+    assert "'/public/inquiries'" in LANDING_HTML  # same-origin endpoint
+    assert "vip_early_access" in LANDING_HTML
+    assert 'name="company_website"' in LANDING_HTML  # honeypot
+    assert "res.ok" in LANDING_HTML  # success only on 2xx
+    assert 'href="mailto:abedmowafaq@gmail.com"' in LANDING_HTML  # fallback kept
+    for lang in ("ar", "en"):
+        block = _i18n_block(LANDING_HTML, lang)
+        for key in ("vipl", "vipb", "vipsend", "vipok", "viperr", "viperr422", "viperr429", "vipnet"):
+            assert f"{key}:" in block, f"{lang}:{key}"
+
+
+def test_build_script_is_in_sync_with_generated_files():
+    """Running _build_landing.py must reproduce the committed files (no silent regressions)."""
+    import pathlib
+
+    import _build_landing
+    import _landing_impl
+
+    assert _build_landing.LANDING_HTML_CONTENT == _landing_impl.LANDING_HTML
+    here = pathlib.Path(_build_landing.__file__).parent
+    assert _build_landing.LANDING_PAGE_PY == (here / "landing_page.py").read_text(encoding="utf-8")
+

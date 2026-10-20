@@ -18,6 +18,8 @@ Features: Bilingual AR/EN, Live Interactive Product Stage, Asymmetric Bento Grid
           KPI Counters, FAQ, Legal, Developer Contact (abedmowafaq@gmail.com).
 """
 
+import os
+
 try:
     from ai_service._landing_impl import LANDING_HTML, AUTH_CONFIRM_HTML, AUTH_CALLBACK_HTML
 except ImportError:
@@ -25,6 +27,10 @@ except ImportError:
 
 
 def get_landing_page_html() -> str:
+    static_index = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(static_index):
+        with open(static_index, "r", encoding="utf-8") as f:
+            return f.read()
     return LANDING_HTML
 
 
@@ -333,6 +339,18 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
     .cp { color: var(--t2); font-size: 16px; max-width: 640px; margin: 0 auto 34px; line-height: 1.75; }
     .ep { display: inline-flex; align-items: center; gap: 12px; background: var(--canvas); border: 1px solid rgba(255,255,255,.14); padding: 14px 34px; border-radius: 999px; color: var(--t0); font-size: 15.5px; font-weight: 800; text-decoration: none; transition: all .3s; }
     .ep:hover { border-color: var(--terra-b); background: rgba(194,120,60,.12); color: var(--terra-b); transform: translateY(-2px); box-shadow: 0 16px 40px rgba(194,120,60,.25); }
+    .vipf { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 540px; margin: 0 auto 14px; }
+    .vipf input[type=email] { flex: 1 1 240px; min-width: 0; background: var(--canvas); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 14px 24px; color: var(--t0); font-family: inherit; font-size: 15px; direction: ltr; }
+    .vipf input[type=email]::placeholder { color: var(--t3); }
+    .vipf input[type=email]:focus-visible, .vipf button:focus-visible { outline: 2px solid var(--terra-b); outline-offset: 2px; }
+    .vipf .bp { border-radius: 999px; }
+    .vipf .bp[disabled] { opacity: .65; cursor: wait; transform: none; }
+    .vipmsg { max-width: 540px; margin: 0 auto 26px; font-size: 14px; font-weight: 700; line-height: 1.7; }
+    .vipmsg:empty { display: none; }
+    .vipmsg.ok { color: var(--emerald); }
+    .vipmsg.err { color: #FCA5A5; }
+    .vsr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .hpf { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
     .legc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 40px 36px; margin-bottom: 100px; }
     .ltabs { display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 22px; }
@@ -777,6 +795,13 @@ LANDING_HTML_CONTENT = r'''<!DOCTYPE html>
   <div id="contact" class="contact" style="scroll-margin-top:90px">
     <h2 class="ch" data-i18n="cth">هل لديك استفسار أو ترغب بنسخة تجريبية مبكرة؟</h2>
     <p class="cp" data-i18n="ctp">فريق FMSCO الهندسي مرحّب بملاحظاتك واستفساراتك للمساهمة في تقديم أفضل تجربة مالية للأسرة.</p>
+    <form id="vip-form" class="vipf" novalidate onsubmit="vipSubmit(event)">
+      <label for="vip-email" class="vsr" data-i18n="vipl">البريد الإلكتروني للانضمام إلى قائمة الوصول المبكر VIP</label>
+      <input id="vip-email" name="email" type="email" required maxlength="254" autocomplete="email" placeholder="بريدك الإلكتروني" aria-describedby="vip-msg">
+      <div class="hpf" aria-hidden="true"><input id="vip-hp" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>
+      <button id="vip-btn" type="submit" class="bp" data-i18n="vipb">انضم لقائمة VIP</button>
+    </form>
+    <p id="vip-msg" class="vipmsg" role="status" aria-live="polite"></p>
     <a href="mailto:abedmowafaq@gmail.com" class="ep">✉ abedmowafaq@gmail.com</a>
   </div>
 
@@ -898,6 +923,13 @@ const T = {
     lt3h: "التحديثات والتطوير", lt3p: "تحتفظ إدارة منصة Budget بحق تحديث المزايا والشروط دورياً لتحسين جودة وأمان الخدمة مع إشعار المستخدمين.",
     cth: "هل لديك استفسار أو ترغب بنسخة تجريبية مبكرة؟",
     ctp: "فريق التطوير الهندسي مرحّب بملاحظاتك واستفساراتك للمساهمة في تقديم أفضل تجربة مالية للأسرة.",
+    vipl: "البريد الإلكتروني للانضمام إلى قائمة الوصول المبكر VIP", vipph: "بريدك الإلكتروني",
+    vipb: "انضم لقائمة VIP", vipsend: "جارٍ الإرسال...",
+    vipok: "تم استلام طلبك! سنراسلك على بريدك عند فتح الوصول المبكر.",
+    viperr: "تعذر إرسال طلبك حالياً. حاول لاحقاً أو راسلنا مباشرة على البريد أدناه.",
+    viperr422: "يرجى إدخال بريد إلكتروني صحيح.",
+    viperr429: "وصلنا عدد كبير من الطلبات منك. حاول مرة أخرى بعد قليل.",
+    vipnet: "تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
     fs: "جميع الأنظمة تعمل بكفاءة",
     fl1: "المميزات", fl2: "الخصوصية", fl3: "الأسئلة",
     fm: "صُنع بـ ❤️ للأسر السعودية"
@@ -1002,6 +1034,13 @@ const T = {
     lt3h: "Platform Modifications", lt3p: "The platform reserves the right to enhance system capabilities and policies periodically with prior notice to users.",
     cth: "Inquiries or Early Beta Access?",
     ctp: "The engineering team welcomes your inquiries, institutional feedback, and feature requests.",
+    vipl: "Email address for the VIP early-access list", vipph: "Your email address",
+    vipb: "Join the VIP list", vipsend: "Sending...",
+    vipok: "Request received! We will email you when early access opens.",
+    viperr: "We could not send your request right now. Please try again later or email us directly below.",
+    viperr422: "Please enter a valid email address.",
+    viperr429: "Too many requests from you. Please try again in a little while.",
+    vipnet: "Could not reach the server. Check your connection and try again.",
     fs: "All Systems Operational",
     fl1: "Capabilities", fl2: "Privacy", fl3: "FAQ",
     fm: "Crafted with care for Saudi Families"
@@ -1040,8 +1079,66 @@ function setL(l) {
       });
     });
   }
+  const vipEmail = document.getElementById('vip-email');
+  if (vipEmail && T[l]) vipEmail.placeholder = T[l].vipph;
+  vipShow('', '');
   // Re-run slider calculation to update labels
   updSim(document.getElementById('pslider').value);
+}
+
+// VIP early access: emailed to the developer by POST /public/inquiries (same origin).
+// Success is shown only when the server answers 2xx; anything else shows an error.
+function vipShow(kind, text) {
+  const m = document.getElementById('vip-msg');
+  if (!m) return;
+  m.className = 'vipmsg' + (kind ? ' ' + kind : '');
+  m.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+  m.textContent = text;
+}
+
+async function vipSubmit(e) {
+  e.preventDefault();
+  const input = document.getElementById('vip-email');
+  const btn = document.getElementById('vip-btn');
+  const hp = document.getElementById('vip-hp');
+  const email = input.value.trim();
+  if (btn.disabled) return;
+  if (!email || !input.checkValidity()) {
+    input.setAttribute('aria-invalid', 'true');
+    vipShow('err', T[L].viperr422);
+    input.focus();
+    return;
+  }
+  btn.disabled = true;
+  input.disabled = true;
+  btn.textContent = T[L].vipsend;
+  vipShow('', '');
+  let err = null;
+  try {
+    const body = { type: 'vip_early_access', email: email, locale: L, source: 'landing' };
+    if (hp && hp.value) body.company_website = hp.value;
+    const res = await fetch('/public/inquiries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'same-origin'
+    });
+    if (!res.ok) err = res.status === 422 ? T[L].viperr422 : res.status === 429 ? T[L].viperr429 : T[L].viperr;
+  } catch (x) {
+    err = T[L].vipnet;
+  }
+  btn.disabled = false;
+  input.disabled = false;
+  btn.textContent = T[L].vipb;
+  if (err) {
+    input.setAttribute('aria-invalid', 'true');
+    vipShow('err', err);
+    input.focus();
+    return;
+  }
+  input.removeAttribute('aria-invalid');
+  input.value = '';
+  vipShow('ok', T[L].vipok);
 }
 
 window.addEventListener('scroll', () => {
