@@ -62,7 +62,7 @@ New tests:
 | WEB-06 | Low | No favicon link, Open Graph or theme-color meta; title not localized | `web_app/index.html`, `App.tsx` | Fixed in b627c01 |
 | WEB-07 | Low | No skip link and no visible focus style | `App.tsx`, `index.css` | Fixed in b627c01 |
 | WEB-08 | Low | Decorative hero image had an English alt text | `Hero.tsx:36` | Fixed in b627c01 |
-| WEB-09 | High | Early-access form shows success and confetti but sends the email nowhere | `web_app/src/components/EarlyAccess.tsx:14-25` | Not fixed (needs backend) |
+| WEB-09 | High | Early-access form shows success and confetti but sends the email nowhere | `web_app/src/components/EarlyAccess.tsx:14-25` | Fixed in b5a5347, b3e1227, 3e7d84e, ee53e2b, f6c78ad (needs the email env vars on the deployment) |
 | WEB-10 | Low | Footer legal links (privacy, terms, security charter) are `href="#"` | `Footer.tsx:31` | Not fixed (pages don't exist) |
 | WEB-11 | Low | Web offers ar/en only; the app supports Urdu | `web_app/src/i18n/translations.ts:1` | Not fixed (product scope) |
 | WEB-12 | Low | Unused or duplicate assets (`hero.png`, `react.svg`, `vite.svg`, `hero_glacier.jpg`, and a JPEG saved as `.png`) | `web_app/src/assets`, `web_app/public` | Not fixed (not bundled, no runtime cost) |
@@ -146,9 +146,14 @@ New tests:
   - The canvas draws one static frame under reduced motion and pauses when off-screen (IntersectionObserver) or when the tab is hidden.
   - The canvas renders at DPR (capped at 2x), uses 32 particles under 640 px, and guards the `dist === 0` NaN.
 
-### WEB-09: not fixed (High)
-- The early-access form calls `preventDefault`, sets `submitted=true` and fires confetti. There is no network request and no storage, so every waitlist signup is lost while the user sees a success message.
-- Fixing it needs a backend endpoint (for example a Supabase table with RLS for anonymous inserts plus rate limiting) or a decision to replace the form with a `mailto:` call to action. Both are owner decisions.
+### WEB-09: fixed (High)
+- **Was:** the early-access form called `preventDefault`, set `submitted=true` and fired confetti. Nothing was sent or stored, so every signup was lost while the user saw a success message.
+- **Fix:**
+  - Backend (b5a5347, b3e1227): `POST /public/inquiries` (anonymous web and landing forms) and `POST /support/inquiries` (in-app; the sender identity comes only from the verified Supabase JWT) email each request to `CONTACT_RECIPIENT_EMAIL` (default `abedmowafaq@gmail.com`) from `MAIL_FROM` (default `Budget Tracker <fmscoinfo@fmsco.com.sa>`), with Reply-To set to the submitter. Delivery is through SMTP or Resend. The endpoints have strict validation, a honeypot field, and per-IP, per-email, per-user and global rate limits that fail closed. A header-injection guard is in place. With no provider configured they answer 503 and log an error; they never report success without delivery.
+  - Web app (ee53e2b): `EarlyAccess.tsx` posts to the endpoint, shows a sending state, and shows success and confetti only on a 2xx answer. Errors are localized (AR/EN). The build served at `/` (`ai_service/static`) was refreshed so the live form posts to the same origin.
+  - Landing pages (3e7d84e): the generated fallback landing has a compact VIP form in the Contact section (AR/EN), and the mailto link is still there. `landing_page/index.html` posts to the same endpoint.
+  - App (f6c78ad): the help center's "Contact Developer" button and the escalation card send through `/support/inquiries` and show an honest success or failure message.
+- **Owner action:** set `RESEND_API_KEY` (with `fmsco.com.sa` verified) or the `SMTP_*` credentials of the `fmscoinfo@fmsco.com.sa` mailbox on the deployment. Until then every form shows an error instead of a fake success.
 
 ### WEB-13: landing_page
 - These look like design prototypes (Stitch exports) that the Vite app has superseded.

@@ -85,7 +85,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | MOB-08 | Expired session received 403 so the app never refreshed. | Fixed (both sides) |
 | MOB-18 | Android backups included tokens/queue/receipts; release signed with debug key. | Fixed (config verified by tests; APK not built — no Android SDK in sandbox) |
 | UI (several) | Payday banner never shown (wrong column `income_type` vs `source_type`, error swallowed); settlement sheets confirmed success on failure; Arabic/Urdu category names collided on code `OPEX-`; Urdu amounts labelled in rupees. | Fixed |
-| WEB-09 | Web waitlist shows success + confetti but sends the email nowhere. | **Not fixed** — needs an endpoint or a mailto decision |
+| WEB-09 | Web waitlist shows success + confetti but sends the email nowhere. | Fixed: VIP and support requests are emailed to the developer via `/public/inquiries` and `/support/inquiries` (needs the email env vars on the deployment) |
 
 ---
 
@@ -180,4 +180,3 @@ cd web_app && npm ci && npm run build && npm run lint
 - DB-16: may any member move the entire shared pool into their own account?
 - DB-18: may members edit each other's transactions?
 - UI-24: should the partner settlement UI keep offering "Shared 50/50" in family mode?
-- WEB-09: waitlist — build an endpoint, or switch to an email link?

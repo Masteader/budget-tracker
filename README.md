@@ -166,6 +166,46 @@ On first launch the app may request:
 | `GOOGLE_API_KEY` | ✅ | Google AI Studio API key for Gemini models |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
+| `CONTACT_RECIPIENT_EMAIL` | ❌ | Where support and VIP early-access emails go (default: `abedmowafaq@gmail.com`) |
+| `MAIL_FROM` | ❌ | Sender of those emails (default: `Budget Tracker <fmscoinfo@fmsco.com.sa>`) |
+| `RESEND_API_KEY` | ✅ one provider | Resend API key; preferred provider (HTTP, works where outbound SMTP is blocked, e.g. Railway non-Pro). `fmsco.com.sa` must be verified in Resend (SPF + DKIM) |
+| `RESEND_FROM` | ❌ | Overrides `MAIL_FROM` for Resend only |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | ✅ one provider | SMTP alternative, used when `RESEND_API_KEY` is empty. `SMTP_SECURITY` is `starttls` (default, port 587) or `ssl` (port 465) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | with SMTP | Login of the `fmscoinfo@fmsco.com.sa` mailbox (the sender) on its own SMTP server |
+| `SMTP_FROM` | ❌ | Overrides `MAIL_FROM` for SMTP only |
+| `TRUSTED_PROXY_IPS` | ❌ | Proxy IPs whose `X-Forwarded-For` is trusted for per-IP rate limits (default loopback) |
+| `ALLOWED_ORIGINS` | ❌ | Comma-separated CORS origins; replaces the defaults (localhost dev ports, `https://budget.fmsco.com.sa`, `https://www.budget.fmsco.com.sa`) |
+
+#### Contact, support and VIP early-access email
+
+`POST /public/inquiries` (anonymous; web app, landing pages) and `POST /support/inquiries`
+(in-app, requires the user's Supabase JWT, which supplies the sender identity) email each request
+to `CONTACT_RECIPIENT_EMAIL` from `MAIL_FROM` (`Budget Tracker <fmscoinfo@fmsco.com.sa>`) with
+`Reply-To` set to the person who submitted it. With SMTP, use the credentials of the
+`fmscoinfo@fmsco.com.sa` mailbox; with Resend, verify the `fmsco.com.sa` domain (SPF and DKIM
+records) first, or providers will reject or spam-folder the mail. Subjects look like
+`[Budget Tracker] VIP early access — <email>` or `[Budget Tracker] Support — <email>`.
+
+```json
+{"type": "vip_early_access" | "support" | "contact", "email": "you@example.com",
+ "name": "optional", "message": "required for support/contact", "locale": "ar", "source": "web" | "landing" | "app"}
+```
+
+The endpoints answer `200 {"status": "sent"}` only after the provider accepted the email, `503`
+when no provider is configured (logged as an error; nothing is sent), `502` when the provider
+fails, `422` for invalid input and `429` past the limits (public: 5 per IP and 3 per email per
+hour; app: 5 per user per hour; 200 per hour overall). Set either `RESEND_API_KEY` or the `SMTP_*`
+variables on the deployment, or every form shows an error.
+
+The page served at `/` is the `web_app` production build committed in `ai_service/static/`
+(`landing_page.py` falls back to the generated `_landing_impl.py` page only when it is missing).
+Refresh it after changing `web_app/` so the live VIP form posts to the same origin:
+
+```bash
+cd web_app && npm ci && VITE_API_BASE_URL= npm run build
+rm ../ai_service/static/assets/index-*.js ../ai_service/static/assets/index-*.css
+cp dist/index.html ../ai_service/static/ && cp dist/assets/index-* ../ai_service/static/assets/
+```
 
 ### Flutter App (`--dart-define` flags)
 

@@ -57,7 +57,7 @@ export const App: React.FC = () => {
         <Faq dict={dict} />
 
         {/* VIP Early Access Waitlist */}
-        <EarlyAccess dict={dict} />
+        <EarlyAccess dict={dict} lang={lang} />
       </main>
 
       {/* 4. Executive Editorial Footer */}

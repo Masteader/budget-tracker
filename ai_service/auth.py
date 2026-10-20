@@ -156,8 +156,8 @@ def _decode_token(token: str) -> dict:
 
 
 
-def get_current_user_id(request: Request) -> str:
-    """Extract and verify the current authenticated user's ID from Supabase JWT."""
+def get_verified_claims(request: Request) -> dict:
+    """Return the verified Supabase JWT claims (sub, email, ...) of the caller, or raise 401."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -166,7 +166,12 @@ def get_current_user_id(request: Request) -> str:
         )
 
     token = auth_header[7:].strip()
-    payload = _decode_token(token)
+    return _decode_token(token)
+
+
+def get_current_user_id(request: Request) -> str:
+    """Extract and verify the current authenticated user's ID from Supabase JWT."""
+    payload = get_verified_claims(request)
 
     user_id = payload.get("sub")
     if not user_id:

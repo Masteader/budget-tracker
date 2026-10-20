@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/api/support_api_client.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
@@ -12,10 +13,14 @@ class HelpSupportScreen extends StatefulWidget {
   final String? householdId;
   final String? userEmail;
 
+  /// Sends developer inquiries; defaults to [ApiService.instance.support].
+  final SupportApiClient? supportClient;
+
   const HelpSupportScreen({
     super.key,
     this.householdId,
     this.userEmail,
+    this.supportClient,
   });
 
   @override
@@ -62,7 +67,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     });
   }
 
-  static const String developerEmail = 'fmscoinfo@fmsco.com.sa';
+  /// Manual fallback address, shown only when in-app delivery fails. In-app
+  /// messages go through POST /support/inquiries, which emails the same inbox.
+  static const String developerEmail = 'abedmowafaq@gmail.com';
+
+  SupportApiClient get _supportClient => widget.supportClient ?? ApiService.instance.support;
 
   // FAQ content is stored as translation keys and resolved in the language
   // selected on this screen (defaults to the app locale).
@@ -170,7 +179,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
             isUser: false,
             text: _t('support_network_error'),
             isEscalation: true,
-            escalationSummary: 'Network error contacting support agent',
+            escalationSummary: query,
           ));
         });
       }
@@ -194,8 +203,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     });
   }
 
-  void _contactDeveloper(String issueSummary) {
-    final emailText = '''To: $developerEmail
+  /// Plain-text diagnostics for the manual email fallback (copied to the clipboard).
+  String _diagnostics(String issueSummary) => '''To: $developerEmail
 Subject: [Budget Tracker Support] $issueSummary
 
 Issue details:
@@ -206,82 +215,27 @@ Household: ${widget.householdId ?? "N/A"}
 User: ${widget.userEmail ?? "N/A"}
 ''';
 
-    Clipboard.setData(const ClipboardData(text: developerEmail));
-    showDialog(
+  /// Opens the in-app composer that emails the developer through the backend.
+  /// [issueSummary] (an escalation summary) pre-fills the message.
+  Future<void> _contactDeveloper([String? issueSummary]) async {
+    final result = await showDialog<SupportInquiryResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: context.borderColor),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.mail_rounded, color: AppThemes.success, size: 24),
-            const SizedBox(width: 10),
-            Text(context.tr('contact_developer'),
-                style: GoogleFonts.outfit(
-                    color: context.textPrimary, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr('support_dev_email_copied_label'),
-              style: GoogleFonts.outfit(
-                  color: context.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: context.subtleCardBg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: SelectableText(
-                developerEmail,
-                style: GoogleFonts.outfit(
-                    color: context.successText,
-                    fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.tr('support_send_email_hint'),
-              style: GoogleFonts.outfit(
-                  color: context.textSecondary, fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: emailText));
-              Navigator.pop(ctx);
-              AppSnackBar.showSuccess(
-                context,
-                context.tr('support_diag_copied'),
-                title: context.tr('set_copied'),
-                icon: Icons.copy_rounded,
-              );
-            },
-            child: Text(context.tr('support_copy_diag'),
-                style: TextStyle(color: context.successText)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('done'),
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+      builder: (ctx) => _DeveloperInquiryDialog(
+        initialMessage: issueSummary ?? '',
+        locale: _selectedLanguage,
+        householdId: widget.householdId,
+        client: _supportClient,
+        developerEmail: developerEmail,
+        diagnostics: _diagnostics,
       ),
+    );
+    if (!mounted || result == null || !result.isSent) return;
+    AppSnackBar.showSuccess(
+      context,
+      context.trArgs('support_inquiry_sent', {'ref': result.reference ?? '-'}),
+      title: context.tr('support_inquiry_sent_title'),
+      icon: Icons.mark_email_read_rounded,
+      duration: const Duration(seconds: 5),
     );
   }
 
@@ -614,9 +568,9 @@ User: ${widget.userEmail ?? "N/A"}
                     ),
                   ),
                   icon: const Icon(Icons.send_rounded, size: 16),
-                  label: Text(context.trArgs('support_email_to', {'email': developerEmail}),
+                  label: Text(context.tr('support_inquiry_send'),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                  onPressed: () => _contactDeveloper('General Developer Inquiry'),
+                  onPressed: () => _contactDeveloper(),
                 ),
               ),
             ],
@@ -751,9 +705,9 @@ User: ${widget.userEmail ?? "N/A"}
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              icon: const Icon(Icons.email_rounded, size: 14),
+                              icon: const Icon(Icons.send_rounded, size: 14),
                               label: Text(
-                                context.trArgs('support_send_email_to', {'email': developerEmail}),
+                                context.tr('support_inquiry_send'),
                                 style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
@@ -892,4 +846,198 @@ class _FaqItem {
     required this.questionKey,
     required this.answerKey,
   });
+}
+
+/// Composer that emails the developer via POST /support/inquiries. It reports
+/// success only when the server confirms delivery; on failure it keeps the
+/// text and offers the manual email fallback.
+class _DeveloperInquiryDialog extends StatefulWidget {
+  final String initialMessage;
+  final String locale;
+  final String? householdId;
+  final SupportApiClient client;
+  final String developerEmail;
+  final String Function(String issueSummary) diagnostics;
+
+  const _DeveloperInquiryDialog({
+    required this.initialMessage,
+    required this.locale,
+    required this.householdId,
+    required this.client,
+    required this.developerEmail,
+    required this.diagnostics,
+  });
+
+  @override
+  State<_DeveloperInquiryDialog> createState() => _DeveloperInquiryDialogState();
+}
+
+class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialMessage);
+  bool _sending = false;
+  String? _error;
+  bool _offerFallback = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (_sending) return;
+    if (text.isEmpty) {
+      setState(() {
+        _error = context.tr('support_inquiry_empty');
+        _offerFallback = false;
+      });
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final result = await widget.client.sendSupportInquiry(
+      message: text,
+      locale: widget.locale,
+      householdId: widget.householdId,
+    );
+    if (!mounted) return;
+    if (result.isSent) {
+      Navigator.of(context).pop(result);
+      return;
+    }
+    setState(() {
+      _sending = false;
+      _offerFallback = result.outcome == SupportInquiryOutcome.unavailable ||
+          result.outcome == SupportInquiryOutcome.network;
+      _error = switch (result.outcome) {
+        SupportInquiryOutcome.unauthorized => context.tr('support_inquiry_err_auth'),
+        SupportInquiryOutcome.rateLimited => context.tr('support_inquiry_err_rate'),
+        SupportInquiryOutcome.network => context.tr('support_inquiry_err_network'),
+        _ => context.trArgs('support_inquiry_err_unavailable', {'email': widget.developerEmail}),
+      };
+    });
+  }
+
+  void _copyDiagnostics() {
+    final text = _controller.text.trim();
+    Clipboard.setData(ClipboardData(
+      text: widget.diagnostics(text.isEmpty ? widget.initialMessage : text),
+    ));
+    AppSnackBar.showSuccess(
+      context,
+      context.tr('support_diag_copied'),
+      title: context.tr('set_copied'),
+      icon: Icons.copy_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: context.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: context.borderColor),
+      ),
+      title: Row(
+        children: [
+          const Icon(Icons.mail_rounded, color: AppThemes.success, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(context.tr('support_inquiry_title'),
+                style: GoogleFonts.outfit(
+                    color: context.textPrimary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('support_inquiry_desc'),
+              style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('support-inquiry-message'),
+              controller: _controller,
+              enabled: !_sending,
+              minLines: 4,
+              maxLines: 8,
+              maxLength: SupportApiClient.maxInquiryLength,
+              textInputAction: TextInputAction.newline,
+              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: context.tr('support_inquiry_hint'),
+                filled: true,
+                fillColor: context.subtleCardBg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: context.borderColor),
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 4),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: context.dangerColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.dangerColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: GoogleFonts.outfit(
+                        color: context.textPrimary, fontSize: 12.5, height: 1.4),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (_offerFallback)
+          TextButton(
+            onPressed: _copyDiagnostics,
+            child: Text(context.tr('support_copy_diag'),
+                style: TextStyle(color: context.successText)),
+          ),
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.of(context).pop(),
+          child: Text(context.tr('cancel'),
+              style: TextStyle(color: context.textSecondary)),
+        ),
+        ElevatedButton.icon(
+          key: const ValueKey('support-inquiry-send'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppThemes.success,
+            foregroundColor: Colors.black,
+          ),
+          onPressed: _sending ? null : _send,
+          icon: _sending
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                )
+              : const Icon(Icons.send_rounded, size: 16),
+          label: Text(
+            _sending ? context.tr('support_inquiry_sending') : context.tr('support_inquiry_send'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
 }
