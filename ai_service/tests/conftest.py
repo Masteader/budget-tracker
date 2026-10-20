@@ -126,6 +126,7 @@ def mock_auth(monkeypatch, request):
     """
     excluded_tests = [
         "test_auth", "test_security_posture", "test_sec03", "test_sec04", "test_api_audit", "test_jwt_hardening",
+        "test_nafaqah",
     ]
     if any(ex in request.node.nodeid for ex in excluded_tests):
         yield
@@ -153,7 +154,7 @@ def mock_auth(monkeypatch, request):
     monkeypatch.setattr(auth, "get_current_user_id", fake_get_current_user_id)
 
     import importlib
-    for mod_name in ["routes.budgets", "routes.households", "routes.analytics", "routes.receipts", "routes.chat", "routes.reports", "routes.support"]:
+    for mod_name in ["routes.budgets", "routes.households", "routes.analytics", "routes.receipts", "routes.chat", "routes.reports", "routes.support", "routes.nafaqah"]:
         mod = importlib.import_module(mod_name)
         if hasattr(mod, "verify_household_access"):
             monkeypatch.setattr(mod, "verify_household_access", fake_verify)

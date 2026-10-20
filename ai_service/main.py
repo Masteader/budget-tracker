@@ -33,6 +33,7 @@ from routes.receipts import router as receipts_router
 from routes.chat import router as chat_router
 from routes.reports import router as reports_router
 from routes.support import router as support_router
+from routes.nafaqah import router as nafaqah_router
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -331,6 +332,7 @@ app.include_router(receipts_router)
 app.include_router(chat_router)
 app.include_router(reports_router)
 app.include_router(support_router)
+app.include_router(nafaqah_router)
 
 # Test helper alias
 from rate_limiter import reset_rate_limiters as _reset_receipt_scan_rate_limits

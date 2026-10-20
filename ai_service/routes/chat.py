@@ -59,6 +59,14 @@ async def chat_transaction(request: Request):
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
 
+    nafaqah_class = body.get("nafaqah_class")
+    if nafaqah_class is not None and nafaqah_class not in ("wife_reimbursable", "wife_personal", "none"):
+        # Family households never split between spouses: there is no "50/50" or ratio class.
+        raise HTTPException(
+            status_code=422,
+            detail="nafaqah_class must be 'wife_reimbursable', 'wife_personal' or 'none'.",
+        )
+
     preview_only = bool(body.get("preview_only", False))
     idem_key = validate_idempotency_key(request.headers.get("Idempotency-Key"))
     occurred_at = parse_client_occurred_at(
@@ -95,6 +103,7 @@ async def chat_transaction(request: Request):
             override_paid_by=body.get("paid_by"),
             override_beneficiary=body.get("beneficiary"),
             occurred_at=occurred_at,
+            override_nafaqah_class=nafaqah_class,
         )
     except HTTPException:
         if use_idempotency:
