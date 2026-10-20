@@ -107,3 +107,65 @@ def test_served_web_bundle_posts_vip_signups_to_same_origin_endpoint():
     assert "vip_early_access" in bundle
     # Built with VITE_API_BASE_URL= (same origin), so no hard-coded production host.
     assert "budget.fmsco.com.sa/public/inquiries" not in bundle
+
+
+# ── Public copy: Nafaqah family mode, privacy and technical claims ─────────────
+
+# Phrases that must never return to the public landing copy (translation QA):
+# a spousal cost split in family mode, "sovereign" (state-backed) wording in
+# Arabic, SMS being processed, and encryption claims the system does not meet.
+_FORBIDDEN_PUBLIC_COPY = (
+    "proportional income allocation",
+    "salary-weighted",
+    "Budget 100% reconciled",
+    "تكامل الميزانية",
+    "تكامل ميزانية الأب والأم",
+    "الشركاء والأبناء",
+    "توزيع نسبي",
+    "سيادي",
+    "السيادية",
+    "تُعالج الرسائل النصية",
+    "دون موافقة",
+    "end-to-end",
+    "End-to-End",
+    "256-BIT RLS",
+    "cryptographic row-level",
+    "فك تشفير ميزانياتك",
+    "الإجمالي الصافي للفاتورة",
+)
+
+
+def _served_bundle() -> str:
+    import pathlib
+    import re
+
+    static = pathlib.Path(__file__).resolve().parent.parent / "static"
+    index = (static / "index.html").read_text(encoding="utf-8")
+    script = re.findall(r'src="/assets/(index-[^"]+\.js)"', index)[0]
+    return index + (static / "assets" / script).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("source", ["served_bundle", "fallback_landing"])
+def test_public_copy_has_no_spousal_split_or_false_claims(source):
+    if source == "served_bundle":
+        text = _served_bundle()
+    else:
+        from _landing_impl import LANDING_HTML as text
+    found = [p for p in _FORBIDDEN_PUBLIC_COPY if p in text]
+    assert not found, f"{source} contains: {found}"
+
+
+def test_served_family_demo_shows_husband_owes_wife():
+    bundle = _served_bundle()
+    assert "مستحق لها على الزوج" in bundle
+    assert "Owed back by husband" in bundle
+    assert "من مصروفها الشخصي" in bundle  # her personal purchases come from her allowance
+
+
+def test_fallback_arabic_privacy_matches_english_no_training():
+    from _landing_impl import LANDING_HTML
+
+    ar = _i18n_block(LANDING_HTML, "ar")
+    en = _i18n_block(LANDING_HTML, "en")
+    assert "ولا يُحتفظ بها لتدريب نماذج عامة" in ar
+    assert "not retained for general model training" in en
