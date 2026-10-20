@@ -415,10 +415,9 @@ def insert_transaction(
         payload["receipt_url"] = receipt_url
     if spent_by:
         payload["spent_by"] = spent_by
-    if paid_by:
-        payload["paid_by"] = paid_by
-    if beneficiary:
-        payload["beneficiary"] = beneficiary
+    # paid_by / beneficiary are not columns of public.transactions (live and the repo schema
+    # agree): callers keep them in the raw_sms "PaidBy: | Beneficiary:" audit tags, which the
+    # settlement engines read. Sending them made every first insert attempt fail (FR-B-11).
     if sub_category:
         payload["sub_category"] = sub_category
     if cycle_key:
@@ -438,42 +437,35 @@ def insert_transaction(
     try:
         response = client.table("transactions").insert(payload).execute()
     except Exception as exc:
-        logger.warning("Insert with initial payload failed (%s), retrying without unmigrated attribution columns.", exc)
-        # Prune unmigrated columns (paid_by and beneficiary are already recorded in the raw_sms audit note)
+        logger.warning("Insert with initial payload failed (%s), pruning advanced optional columns.", exc)
         safe_payload = dict(payload)
-        safe_payload.pop("paid_by", None)
-        safe_payload.pop("beneficiary", None)
+        safe_payload.pop("qr_code_raw", None)
+        safe_payload.pop("dedup_fingerprint", None)
         try:
             response = client.table("transactions").insert(safe_payload).execute()
-        except Exception as exc2:
-            logger.warning("Insert without paid_by/beneficiary failed (%s), pruning advanced optional columns.", exc2)
-            safe_payload.pop("qr_code_raw", None)
-            safe_payload.pop("dedup_fingerprint", None)
-            try:
-                response = client.table("transactions").insert(safe_payload).execute()
-            except Exception as exc3:
-                logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
-                base_payload = {
-                    "household_id": household_id,
-                    "user_id": user_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "merchant": merchant,
-                    "category_code": category_code,
-                    "timestamp": timestamp,
-                    "raw_sms": raw_sms,
-                    "is_reallocated": is_reallocated,
-                    "reallocated_from_budget_id": reallocated_from_budget_id,
-                    "source": source,
-                }
-                if sub_category:
-                    base_payload["sub_category"] = sub_category
-                if cycle_key:
-                    base_payload["cycle_key"] = cycle_key
-                if spent_by:
-                    base_payload["spent_by"] = spent_by
-                base_payload.update(nafaqah_fields)
-                response = client.table("transactions").insert(base_payload).execute()
+        except Exception as exc3:
+            logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
+            base_payload = {
+                "household_id": household_id,
+                "user_id": user_id,
+                "amount": amount,
+                "currency": currency,
+                "merchant": merchant,
+                "category_code": category_code,
+                "timestamp": timestamp,
+                "raw_sms": raw_sms,
+                "is_reallocated": is_reallocated,
+                "reallocated_from_budget_id": reallocated_from_budget_id,
+                "source": source,
+            }
+            if sub_category:
+                base_payload["sub_category"] = sub_category
+            if cycle_key:
+                base_payload["cycle_key"] = cycle_key
+            if spent_by:
+                base_payload["spent_by"] = spent_by
+            base_payload.update(nafaqah_fields)
+            response = client.table("transactions").insert(base_payload).execute()
 
     transaction_id = response.data[0]["id"]
     logger.info(

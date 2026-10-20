@@ -313,6 +313,45 @@ def test_commit_fails_instead_of_storing_an_unclassified_family_expense(db):
             ns.resolve_expense_nafaqah(FAMILY, WIFE, "me", "both", require_spouse=True)
 
 
+# ─── FR-B-11: inserts fit the schema; receipts keep who paid ─────────────────
+
+def test_insert_transaction_fits_the_schema_first_time(db, caplog):
+    from supabase_client import insert_transaction
+
+    with caplog.at_level("WARNING", logger="supabase_client"):
+        tx_id = insert_transaction(
+            household_id=ROOM, amount=12.5, currency="SAR", merchant="Cafe", category_code="OPEX-DINING",
+            timestamp=NOW, raw_sms="Chat: coffee | PaidBy: me | Beneficiary: both", source="chat",
+            paid_by="me", beneficiary="both", user_id=B,
+        )
+    # No failed first attempt naming the non-existent paid_by / beneficiary columns.
+    assert not [r for r in caplog.records if "Insert with initial payload failed" in r.getMessage()]
+    row = next(t for t in db.tables["transactions"] if t["id"] == tx_id)
+    assert set(row) <= TRANSACTION_COLUMNS and row["user_id"] == B
+
+
+def test_receipt_commit_records_who_paid_in_the_audit_tags(db, monkeypatch):
+    from receipt_scanner import process_receipt_scan
+
+    monkeypatch.setattr("receipt_scanner.parse_receipt_image", lambda *_a, **_k: {
+        "merchant": "Panda", "total_amount": 60.0, "items": [{"name": "rice", "quantity": 1, "price": 60.0}],
+    })
+    monkeypatch.setattr("receipt_scanner.fetch_budget", lambda *_a, **_k: None)
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(buf, format="PNG")
+    image = base64.b64encode(buf.getvalue()).decode()
+    res = process_receipt_scan(household_id=ROOM, images_base64=[image], user_id=B, allow_duplicate=True,
+                               paid_by="partner", beneficiary="both")
+    assert res["status"] == "success", res
+    row = next(t for t in db.tables["transactions"] if t["id"] == res["transaction_id"])
+    assert "PaidBy: partner" in row["raw_sms"] and "Beneficiary: both" in row["raw_sms"]
+
+
 # ─── FR-B-09: one LiteLLM model default for every module ─────────────────────
 
 def test_every_llm_call_uses_the_same_default_model(monkeypatch):

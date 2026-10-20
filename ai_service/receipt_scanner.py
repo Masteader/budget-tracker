@@ -752,7 +752,12 @@ def process_receipt_scan(
     items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
     if len(items) > 10:
         items_summary += f" ...and {len(items) - 10} more items"
-    audit_text = f"Receipt Scan: {merchant} ({len(items)} items) | Items: [{items_summary}]"
+    # Who paid and for whom live only in these tags (public.transactions has no paid_by /
+    # beneficiary column); the settlement engines read them like the chat entry's tags.
+    audit_text = (
+        f"Receipt Scan: {merchant} ({len(items)} items) | PaidBy: {nafaqah['paid_by']} "
+        f"| Beneficiary: {nafaqah['beneficiary']} | SpentBy: {spent_by} | Items: [{items_summary}]"
+    )
 
     tx_id = insert_transaction(
         household_id=household_id,

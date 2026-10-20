@@ -806,17 +806,25 @@ def test_chat_consistent_class_and_attribution_are_stored(family, user, paid_by,
     expected = None if cls == "none" else cls
     assert tx.get("nafaqah_class") == expected
     assert tx.get("nafaqah_spouse_id") == (WIFE if expected else None)
-    assert (tx["paid_by"], tx["beneficiary"]) == (paid_by, beneficiary)
+    assert _attribution(tx) == (paid_by, beneficiary)
+
+
+def _attribution(tx):
+    """(paid_by, beneficiary) as stored: raw_sms audit tags (no such columns exist)."""
+    from settlement_engine import audit_tag
+
+    assert "paid_by" not in tx and "beneficiary" not in tx
+    return audit_tag(tx["raw_sms"], "paidby"), audit_tag(tx["raw_sms"], "beneficiary")
 
 
 def test_chat_class_without_attribution_recomputes_paid_by_and_beneficiary(family):
     resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="wife_personal")
     assert resp.status_code == 200
     tx = _last_tx(family)
-    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and (tx["paid_by"], tx["beneficiary"]) == ("me", "me")
+    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and _attribution(tx) == ("me", "me")
     resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="none")
     tx = _last_tx(family)
-    assert tx.get("nafaqah_class") is None and tx["paid_by"] == "partner"
+    assert tx.get("nafaqah_class") is None and _attribution(tx)[0] == "partner"
 
 
 def test_chat_multi_wife_household_takes_the_chosen_wife(family):
