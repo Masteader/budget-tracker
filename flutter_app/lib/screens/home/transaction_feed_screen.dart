@@ -673,18 +673,19 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
         title: context.tr('tx_removed'),
         onUndo: () async {
-          await supabase.from('transactions').insert({
-            'household_id': tx.householdId,
-            'amount': tx.amount,
-            'currency': tx.currency,
-            'merchant': tx.merchant,
-            'category_code': tx.categoryCode,
-            'timestamp': tx.timestamp.toIso8601String(),
-            'source': tx.source,
-            'items': tx.items,
-            'receipt_url': tx.receiptUrl,
-            'spent_by': tx.spentBy,
-          });
+          // UI-25: re-insert the exact deleted row (same id, payer,
+          // beneficiary, account, sub-category, receipt...), not a subset.
+          final restored = await txProvider.restoreDeletedTransaction(tx.id);
+          if (!restored) {
+            if (context.mounted) {
+              AppSnackBar.showError(
+                context,
+                context.tr('tx_restore_failed_msg'),
+                title: context.tr('tx_restore_failed'),
+              );
+            }
+            return;
+          }
           await txProvider.fetchTransactions();
           budgetProvider.refresh();
           if (context.mounted) {

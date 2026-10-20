@@ -1519,6 +1519,8 @@ class AppLocalizations {
       'setting_not_saved_server': 'The server did not confirm the change. Your previous setting is still in effect.',
       'offline_queue_failed': 'Could not save offline on this device either. Nothing was stored — please try again.',
       'offline_queue_failed_title': 'Not Saved',
+      'tx_restore_failed': 'Undo Failed',
+      'tx_restore_failed_msg': 'The transaction could not be restored. Please add it again.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2759,6 +2761,8 @@ class AppLocalizations {
       'setting_not_saved_server': 'لم يؤكد الخادم التغيير، وما زال الإعداد السابق مطبقاً.',
       'offline_queue_failed': 'تعذر الحفظ دون اتصال على هذا الجهاز أيضاً. لم يُحفظ شيء، حاول مرة أخرى.',
       'offline_queue_failed_title': 'لم يتم الحفظ',
+      'tx_restore_failed': 'تعذر التراجع',
+      'tx_restore_failed_msg': 'تعذرت استعادة العملية. يرجى إضافتها مرة أخرى.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3999,6 +4003,8 @@ class AppLocalizations {
       'setting_not_saved_server': 'سرور نے تبدیلی کی تصدیق نہیں کی، پچھلی سیٹنگ ہی لاگو ہے۔',
       'offline_queue_failed': 'اس ڈیوائس پر آف لائن بھی محفوظ نہیں ہو سکا۔ کچھ بھی محفوظ نہیں ہوا، دوبارہ کوشش کریں۔',
       'offline_queue_failed_title': 'محفوظ نہیں ہوا',
+      'tx_restore_failed': 'واپس نہیں ہو سکا',
+      'tx_restore_failed_msg': 'ٹرانزیکشن بحال نہیں ہو سکی۔ براہ کرم اسے دوبارہ شامل کریں۔',
     },
   };
 
