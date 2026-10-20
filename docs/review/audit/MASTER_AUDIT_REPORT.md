@@ -95,6 +95,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 - **Offline sync:** stuck rows after app kill, merged identical purchases, retry budget burned by network errors, re-entrant drains, receipt blobs in SQLite (MOB-04/05/09/10/11, fixed).
 - **Security hardening:** Redis limiter correctness and `X-Forwarded-For` spoofing (API-09/10); missing `ENV` treated as dev, API docs public in prod (API-11/29); JWT `exp` not required / no role check / unthrottled JWKS (API-12); stale membership honoured (API-13); receipt path traversal and MIME checks (API-23); receipts bucket without size/type limits (DB-11); search_path not pinned (DB-09); vulnerable `python-jose` (API-28).
 - **Account lifecycle:** sole admin could not delete their account (DB-12).
+- **Islamic family finance (UI-24, resolved by owner decision; extends API-16/17):** family mode never splits between the spouses. Wife-paid shared expenses are a debt the husband owes her (`nafaqah_class = wife_reimbursable`, append-only `spouse_reimbursements`, partial/full repayment, overpayment rejected); her personal purchases are charged to a per-cycle allowance (`member_allowances`, overspend shown negative); husband-paid shared expenses stay plain expenses. Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + DB test 18; API `/households/{id}/nafaqah*` (`ai_service/tests/test_nafaqah.py`); app family card, allowance card and Nafaqah selector (no "Shared 50/50" in family mode). Roommate mode unchanged.
 - **Tests that could not fail:** DB suites 03/06/07 (DB-14) — note FIX_LOG SEC-06/SEC-08 "verified" entries relied on them.
 - **UI/UX:** 32 RTL mirroring fixes; 22 icon buttons labelled; ~15 white-on-white spots in light mode; brand teal/green text failing contrast replaced by AA tokens; ~25 `mounted`/context-after-await fixes; leaked subscriptions/controllers.
 - **Web:** hardcoded Arabic in English mode, a11y (labels, skip link, focus, reduced motion), multi-MB icon font trimmed, meta/SEO.
@@ -116,7 +117,6 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | MOB-19 | Medium | Tokens in plain SharedPreferences. | Needs `flutter_secure_storage` native build |
 | MOB-23 | Medium | `WEBHOOK_SECRET` still compiled into app for old backend compatibility. | Remove after backend from this branch is live |
 | MOB-26/27/28 | Low | Statement PDF opens unauthenticated; payday save / "saved offline" report success on failure. | UI changes |
-| UI-24 | Medium | Partner settlement UI still offers "Shared 50/50". | Sharia/product decision |
 | UI-25 | Medium | Undo-after-delete recreates the transaction without payer/beneficiary/account. | Data-layer change |
 | UI misc | Low | 17 undisposed dialog controllers; Arabic font not Cairo/Tajawal; 290 remaining hardcoded colors; dead footer links; no Urdu on web; Tailwind via CDN on landing pages. | Low priority |
 
@@ -130,7 +130,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 4. **Replayable migrations + CI.** Re-baseline from live (`supabase db pull`), renumber duplicates, and add a GitHub Actions workflow that: rebuilds Postgres from `00_local_supabase_stubs.sql` + migrations and runs `supabase/tests/run_tests.py --psql --rebuild`; runs `pytest`; runs `flutter analyze` + `flutter test`; builds `web_app`; runs a secret scanner (e.g. gitleaks) on every PR.
 5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token` and drop `WEBHOOK_SECRET` from app builds (MOB-23).
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
-7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18/UI-24 and enforce them in RLS rather than in UI.
+7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18 and enforce them in RLS rather than in UI (UI-24 is decided and enforced in schema: `transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`).
 8. **Mobile hardening.** `flutter_secure_storage` for tokens; certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
 9. **Repository hygiene.** Delete SMS/dev simulation scripts and the legacy pipeline; keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
 
@@ -145,6 +145,7 @@ All work is on `audit/claude-comprehensive-review` as four merged streams (conve
 | Database | 10 new migrations `supabase/migrations/20261020010000_*` … `20261020100000_*` (no shipped migration edited); `supabase/tests/00_local_supabase_stubs.sql`; tests `08_*`–`17_*`; `run_tests.py --psql --rebuild --db` | [`db.md`](db.md) |
 | AI service | Security fixes across routes/auth/quota/storage; Riyadh-time cycles; strict ZATCA decoder; Nafaqah + Decimal settlements; client contract (JWT-only, 401, idempotency, `client_occurred_at`); hermetic test suite; `.dockerignore`; dependency bumps | [`ai_service.md`](ai_service.md) |
 | Flutter logic | Offline sync rewrite (commit-on-replay, idempotent, ordered, crash-safe); config via `--dart-define` only; `SalaryCycleService` parity; Arabic/Urdu digit parsing; auth gate; signed URLs; Android backup/cleartext/signing | [`flutter_logic.md`](flutter_logic.md) |
+| Nafaqah (UI-24) | Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + test 18; `nafaqah_service.py`, `routes/nafaqah.py`, chat classification; Flutter family card, wife allowance card, Nafaqah selector | [`ui_web.md`](ui_web.md#ui-24-resolved-owner-decision), rule 02 |
 | UI / i18n / web | ~760 strings localized (1206 keys × en/ar/ur, guard test); 32 RTL fixes; a11y labels; light-mode contrast tokens; lifecycle fixes; web a11y/perf/meta | [`ui_web.md`](ui_web.md) |
 
 Commands to reproduce the gates:
@@ -171,7 +172,7 @@ cd web_app && npm ci && npm run build && npm run lint
 4. **Set** `ENV=production`, `TRUSTED_PROXY_IPS`, and `REDIS_URL` on the production service.
 
 ### 6.2 Deployment order
-1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order. Re-baseline the migration chain for the Supabase CLI (DB-15).
+1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs). Re-baseline the migration chain for the Supabase CLI (DB-15).
 2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client.
 3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
@@ -179,6 +180,5 @@ cd web_app && npm ci && npm run build && npm run lint
 ### 6.3 Product decisions needed
 - DB-16: may any member move the entire shared pool into their own account?
 - DB-18: may members edit each other's transactions?
-- UI-24: should the partner settlement UI keep offering "Shared 50/50" in family mode?
 - WEB-09: waitlist — build an endpoint, or switch to an email link?
 - API-25: confirm deletion of the SMS/dev simulation scripts.

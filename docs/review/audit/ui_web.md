@@ -52,7 +52,7 @@ New tests:
 | UI-21 | Low | Overflow with large text or narrow screens | hero amount, accounts summary, recurring-bill totals, unspent dialog | Fixed in 4c39b67, 886913f, 9c67fef. Remaining screens suspected, not audited exhaustively |
 | UI-22 | Low | Outfit font has no Arabic glyphs; the rules ask for Cairo/Tajawal | `theme/app_themes.dart` textTheme | Not fixed (reason below) |
 | UI-23 | Low | Date fallback used the uninitialized `'en'` locale and would throw | `AppLocalizations.date` | Fixed in c1665dd (found while testing) |
-| UI-24 | Suspected / compliance | "Shared 50/50" partner split is offered in the edit sheet and partner card, while rule 02 prohibits 50/50 spousal splits | `edit_transaction_sheet.dart` settlement banner, `partner_settlement_card.dart` | Not fixed (domain decision) |
+| UI-24 | Suspected / compliance | "Shared 50/50" partner split is offered in the edit sheet and partner card, while rule 02 prohibits 50/50 spousal splits | `edit_transaction_sheet.dart` settlement banner, `partner_settlement_card.dart` | Resolved (owner decision; family mode has no split, wife reimbursement ledger + allowance) |
 | UI-25 | Suspected | Undo after deleting a transaction re-inserts only some columns (drops paid_by, beneficiary, account_id, sub_category) | `screens/home/transaction_feed_screen.dart` `_deleteTransaction` onUndo | Not fixed (data-layer owner) |
 | WEB-01 | High | English mode showed hardcoded Arabic (hero settled state, simulator amounts, ZATCA label, family/roommate ledgers); Arabic mode showed English AI categories | `web_app/src/components/Hero.tsx:153-164`, `Simulator.tsx:50,299-822` | Fixed in b627c01 |
 | WEB-02 | Medium | Screen readers: icon ligatures read aloud, unlabeled controls, no ARIA state | Header, Faq, EarlyAccess, Simulator, all icons | Fixed in b627c01 |
@@ -128,9 +128,17 @@ New tests:
 - Using Cairo/Tajawal for Arabic needs a font decision: either a `GoogleFonts` fallback, which is fetched at runtime and also affects tests, or bundled assets. It also needs a change to `main.dart`, which is outside this agent's ownership.
 - Today Arabic glyphs fall back to the platform font (Noto Naskh Arabic on Android), which is legible.
 
-### UI-24 / UI-25: handed off
-- **UI-24:** the partner settlement UI still offers "Shared 50/50". Whether this applies to spouses (prohibited by rule 02) or only to peer partners is a product/compliance decision. The text was translated but its meaning was not changed.
-- **UI-25:** the undo re-insert in `transaction_feed_screen.dart` copies only a subset of transaction columns, so undo drops the payer/beneficiary/account attribution. This belongs with the data-layer owner.
+### UI-24: resolved (owner decision)
+- **Decision:** in family mode the husband carries shared expenses (Nafaqah); nothing is split between the spouses. A wife-paid shared expense is a debt the husband owes her; her personal purchases come out of her per-cycle allowance; husband-paid shared expenses are plain household expenses. Roommate mode keeps its splits. Rules 1–4 are in `.agents/rules/02-saudi-fintech-and-islamic-compliance.md`.
+- **Fix:**
+  - `edit_transaction_sheet.dart`: in family mode the 50/50 banners (`settle_shared_partner_owes` / `settle_shared_you_owe`) are replaced by Nafaqah banners, and a `NafaqahClassSelector` offers "Husband paid", "Shared for family (husband reimburses)" or "Personal (from my/her allowance)". The stored `nafaqah_class` wins over the recorder-relative payer, so the husband editing his wife's advance never erases her claim.
+  - `partner_settlement_card.dart`: in family mode `psc_shared` ("Shared 50/50") is replaced by `psc_family_household`.
+  - `family_reimbursement_card.dart`: reads `GET /households/{id}/nafaqah`; husband-owes-wife balance, partial/full repayment (overpayment rejected client- and server-side), ledger history; the "Half" chip was removed. New `wife_allowance_card.dart`: allocated / spent / remaining, negative on overspend, editable by the husband/admin only.
+  - The manual expense sheet and the chat confirmation card use the same selector and send `nafaqah_class`.
+- **Tests:** `family_reimbursement_card_test.dart` (EN + AR RTL), `edit_transaction_sheet_test.dart`, `pending_expense_confirmation_card_test.dart`, `partner_settlement_card_test.dart`, `ui_settlement_failure_test.dart`, `nafaqah_test.dart`, `nafaqah_api_client_test.dart`, `manual_expense_row_test.dart`.
+
+### UI-25: handed off
+- the undo re-insert in `transaction_feed_screen.dart` copies only a subset of transaction columns, so undo drops the payer/beneficiary/account attribution. This belongs with the data-layer owner.
 
 ### WEB-01: language leaks on the web
 - **Fix:**
