@@ -38,7 +38,7 @@ void main() {
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text('Household & 2D Partner Split'), findsOneWidget);
+    expect(find.text('Family Nafaqah & Roommate Splits'), findsOneWidget);
     expect(find.text('Get Started'), findsOneWidget);
 
     // Tap Get Started

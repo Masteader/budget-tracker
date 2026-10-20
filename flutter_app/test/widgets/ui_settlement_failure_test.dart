@@ -96,7 +96,7 @@ void main() {
 
     final dir = Directionality.of(tester.element(find.byType(MultiRoommateSettlementCard)));
     expect(dir, TextDirection.rtl);
-    expect(find.text('عمر عليه لـ أحمد'), findsOneWidget);
+    expect(find.text('عمر مدين لـ أحمد'), findsOneWidget);
     expect(find.text('50.00 ر.س'), findsOneWidget);
     expect(find.textContaining('SAR'), findsNothing);
   });

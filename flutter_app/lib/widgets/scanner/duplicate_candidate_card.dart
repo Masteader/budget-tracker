@@ -59,7 +59,7 @@ class DuplicateCandidateCard extends StatelessWidget {
                   ),
                   onPressed: onEnrich,
                   child: Text(
-                    context.trArgs('dcc_attach', {'count': itemCount}),
+                    context.trPlural('dcc_attach', itemCount),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),

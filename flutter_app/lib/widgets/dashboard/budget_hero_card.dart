@@ -156,7 +156,7 @@ class BudgetHeroCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  context.trArgs('days_to_payday_badge', {'days': daysUntilPayday}),
+                  context.trPlural('days_to_payday_badge', daysUntilPayday),
                   style: GoogleFonts.outfit(
                     color: isDark ? Colors.white70 : const Color(0xFF065F54),
                     fontSize: 10.5,

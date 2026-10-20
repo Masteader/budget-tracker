@@ -384,7 +384,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                       ),
                       Text(
                         items.isNotEmpty
-                            ? '${items.length} ${context.tr('items')}'
+                            ? context.trPlural('items_count', items.length)
                             : context.tr('single_expense'),
                         style: GoogleFonts.outfit(
                           fontSize: 11,

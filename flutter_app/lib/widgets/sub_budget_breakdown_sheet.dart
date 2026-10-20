@@ -480,7 +480,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                         ),
                         if (item.transactionCount > 0)
                           Text(
-                            '${item.transactionCount} ${item.transactionCount == 1 ? context.tr('transaction_singular') : context.tr('transactions_count')}',
+                            context.trPlural('transactions_count', item.transactionCount),
                             style: TextStyle(
                               color: context.textSecondary,
                               fontSize: 11,

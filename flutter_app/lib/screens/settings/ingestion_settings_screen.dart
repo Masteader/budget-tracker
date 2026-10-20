@@ -1133,7 +1133,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(context.tr('set_offline_sqlite_queue'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                              Text(count > 0 ? context.trArgs('set_transaction_s_pending_sync', {'count': count}) : context.tr('set_all_transactions_synchronized'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                              Text(count > 0 ? context.trPlural('set_transaction_s_pending_sync', count) : context.tr('set_all_transactions_synchronized'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                             ],
                           ),
                         ),

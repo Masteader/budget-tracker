@@ -632,7 +632,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                context.trArgs('n_months', {'count': count}),
+                                context.trPlural('n_months', count),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: isSelected ? AppThemes.success : context.textPrimary,

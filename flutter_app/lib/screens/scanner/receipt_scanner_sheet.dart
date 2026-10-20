@@ -990,7 +990,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      context.trArgs('scan_reading_items', {'count': _imageFiles.length}),
+                      context.trPlural('scan_reading_items', _imageFiles.length),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
@@ -1135,7 +1135,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${context.trArgs('scan_items_logged', {'count': items.length, 'merchant': merchant, 'amount': context.sar(amount)})}${isZatcaVerified ? ' • ${context.tr('scan_zatca_verified')}' : ''}',
+                        '${context.trPlural('scan_items_logged', items.length, {'merchant': merchant, 'amount': context.sar(amount)})}${isZatcaVerified ? ' • ${context.tr('scan_zatca_verified')}' : ''}',
                         style: TextStyle(color: context.successText, fontSize: 12),
                       ),
                     ],
@@ -1258,7 +1258,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ),
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
             label: Text(
-              context.trArgs('scan_confirm_save_items', {'count': items.length, 'amount': context.sar(amount)}),
+              context.trPlural('scan_confirm_save_items', items.length, {'amount': context.sar(amount)}),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => _confirmSave(allowDuplicate: false),
