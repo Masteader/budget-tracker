@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 from typing import Optional
 
@@ -39,18 +40,28 @@ def _check_household_membership(user_household_id: Optional[str], requested_hous
 
 
 _JWKS_CACHE: dict = {}
-_JWKS_STATE = {"last_fetch": 0.0}
-# Unknown `kid`s are attacker-controlled: never refetch the JWKS more often than this.
+# last_success: monotonic time of the last successful JWKS download (0 = never);
+# last_failure: monotonic time of the last failed attempt (0 = none since the last success).
+_JWKS_STATE = {"last_success": 0.0, "last_failure": 0.0}
+# Unknown `kid`s are attacker-controlled: after a successful download never refetch the JWKS
+# more often than this.
 _JWKS_MIN_REFRESH_SECONDS = 60.0
+# After a failed download retry soon (a transient DNS/network error must not lock out ES256
+# verification for a minute), but not on every request while the endpoint is down.
+_JWKS_FAILURE_BACKOFF_SECONDS = 2.0
 _JWKS_FETCH_TIMEOUT_SECONDS = 3.0
+# Serialises downloads across worker threads so a burst of requests causes one fetch.
+_JWKS_FETCH_LOCK = threading.Lock()
 _MAX_TOKEN_LENGTH = 8192
 _INVALID_TOKEN_DETAIL = "Invalid or expired authentication token."
+_monotonic = time.monotonic  # test seam
 
 
 def _reset_jwks_cache() -> None:
     """Clear cached JWKS keys (tests / key rotation)."""
     _JWKS_CACHE.clear()
-    _JWKS_STATE["last_fetch"] = 0.0
+    _JWKS_STATE["last_success"] = 0.0
+    _JWKS_STATE["last_failure"] = 0.0
 
 
 def _fetch_jwks_document(url: str) -> dict:
@@ -62,35 +73,81 @@ def _fetch_jwks_document(url: str) -> dict:
 
 
 def _get_jwk_for_kid(kid: str):
+    """Return the cached ES256 verification key for ``kid`` (never does network I/O)."""
+    return _JWKS_CACHE.get(kid)
+
+
+def _jwks_refresh_allowed(now: float) -> bool:
+    last_success = _JWKS_STATE["last_success"]
+    last_failure = _JWKS_STATE["last_failure"]
+    if last_success and now - last_success < _JWKS_MIN_REFRESH_SECONDS:
+        return False
+    if last_failure and now - last_failure < _JWKS_FAILURE_BACKOFF_SECONDS:
+        return False
+    return True
+
+
+def _refresh_jwks_for_kid(kid: str) -> None:
     """
-    Return the cached ES256 verification key for ``kid``, refreshing the project's JWKS at most
-    once per _JWKS_MIN_REFRESH_SECONDS. Previously every request with an unknown kid triggered a
-    blocking 5 s outbound fetch on the event loop (trivial DoS with random kids).
+    Blocking JWKS download; run it in a worker thread (``asyncio.to_thread``), never on the
+    event loop. Only a successful download starts the 60 s throttle: a failure used to stamp
+    the throttle before fetching, so one transient error rejected every ES256 token for a
+    minute. A failure starts the short back-off instead. Known keys stay cached on failure.
     """
-    if kid in _JWKS_CACHE:
-        return _JWKS_CACHE[kid]
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     if not supabase_url:
-        return None
-    now = time.monotonic()
-    if _JWKS_STATE["last_fetch"] and now - _JWKS_STATE["last_fetch"] < _JWKS_MIN_REFRESH_SECONDS:
-        return None
-    _JWKS_STATE["last_fetch"] = now
-    try:
-        from jose import jwk
+        return
+    with _JWKS_FETCH_LOCK:
+        # Another thread may have fetched (or failed) while this one waited for the lock.
+        if kid in _JWKS_CACHE or not _jwks_refresh_allowed(_monotonic()):
+            return
+        try:
+            from jose import jwk
 
-        data = _fetch_jwks_document(f"{supabase_url}/auth/v1/.well-known/jwks.json")
-        for k in data.get("keys", []):
-            # Only asymmetric P-256 signing keys are acceptable for the ES256 path.
-            if not k.get("kid") or k.get("kty") != "EC" or k.get("crv", "P-256") != "P-256":
-                continue
-            if k.get("alg", "ES256") != "ES256":
-                continue
-            _JWKS_CACHE[k["kid"]] = jwk.construct(k, algorithm="ES256")
-        return _JWKS_CACHE.get(kid)
-    except Exception as exc:
-        logger.warning("Failed to fetch Supabase JWKS: %s", exc)
-        return None
+            data = _fetch_jwks_document(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+            keys = {}
+            for k in data.get("keys", []):
+                # Only asymmetric P-256 signing keys are acceptable for the ES256 path.
+                if not k.get("kid") or k.get("kty") != "EC" or k.get("crv", "P-256") != "P-256":
+                    continue
+                if k.get("alg", "ES256") != "ES256":
+                    continue
+                keys[k["kid"]] = jwk.construct(k, algorithm="ES256")
+        except Exception as exc:
+            _JWKS_STATE["last_failure"] = _monotonic()
+            logger.warning("Failed to fetch Supabase JWKS: %s", type(exc).__name__)
+            return
+        # Replace the key set: a key removed from the project's JWKS (revoked) stops verifying.
+        _JWKS_CACHE.clear()
+        _JWKS_CACHE.update(keys)
+        _JWKS_STATE["last_success"] = _monotonic()
+        _JWKS_STATE["last_failure"] = 0.0
+
+
+async def ensure_jwks_for_token(token: str) -> None:
+    """
+    Make sure the verification key for an ES256 token's ``kid`` is cached, downloading the
+    project's JWKS in a worker thread when needed (and allowed by the throttle/back-off).
+    Never raises: verification itself happens in ``_decode_token``.
+    """
+    if not token or len(token) > _MAX_TOKEN_LENGTH:
+        return
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception:
+        return
+    kid = header.get("kid")
+    if header.get("alg") != "ES256" or not kid or str(kid) in _JWKS_CACHE:
+        return
+    if not _jwks_refresh_allowed(_monotonic()):
+        return
+    await asyncio.to_thread(_refresh_jwks_for_kid, str(kid))
+
+
+async def decode_token(token: str) -> dict:
+    """Async variant of ``_decode_token`` that fetches a missing JWKS key off the event loop."""
+    await ensure_jwks_for_token(token)
+    return _decode_token(token)
 
 
 def _reject(reason: str, *args) -> HTTPException:
@@ -126,6 +183,8 @@ def _decode_token(token: str) -> dict:
     if alg == "ES256":
         if not kid:
             raise _reject("ES256 token without kid")
+        # Cache only: the JWKS download happens off the event loop in ensure_jwks_for_token
+        # (firewall middleware / decode_token), never in this synchronous path.
         key = _get_jwk_for_kid(str(kid))
         if not key:
             raise _reject("no JWKS key for kid")

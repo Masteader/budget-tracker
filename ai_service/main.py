@@ -210,8 +210,10 @@ async def firewall_token_middleware(request: Request, call_next):
     if auth_header.startswith("Bearer "):
         token_str = auth_header[7:].strip()
         try:
-            from auth import _decode_token
-            decoded = _decode_token(token_str)
+            from auth import decode_token
+            # Async: a missing JWKS key is downloaded in a worker thread, which also warms the
+            # cache for the synchronous JWT checks inside the routes.
+            decoded = await decode_token(token_str)
             if decoded and decoded.get("sub"):
                 bearer_valid = True
         except Exception:
