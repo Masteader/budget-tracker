@@ -36,25 +36,39 @@ void main() {
         supabaseUrl: '',
         supabaseKey: '',
         fastapiBaseUrl: '',
-        webhookSecret: '',
         isRelease: true,
       );
       expect(problems.join('\n'), contains('SUPABASE_URL'));
       expect(problems.join('\n'), contains('SUPABASE_PUBLISHABLE_KEY'));
       expect(problems.join('\n'), contains('FASTAPI_BASE_URL'));
-      expect(problems.join('\n'), contains('WEBHOOK_SECRET'));
+      // WEBHOOK_SECRET is optional: requests are authenticated by the user's JWT.
+      expect(problems.join('\n'), isNot(contains('WEBHOOK_SECRET')));
+    });
+
+    test('a release build without WEBHOOK_SECRET is valid (signing is optional)', () {
+      final problems = validateClientConfig(
+        supabaseUrl: 'https://x.supabase.co',
+        supabaseKey: 'sb_publishable_example',
+        fastapiBaseUrl: 'https://api.example.com',
+        isRelease: true,
+      );
+      expect(problems, isEmpty);
+    });
+
+    test('the client config no longer requires WEBHOOK_SECRET at startup', () {
+      final source = File('lib/supabase_config.dart').readAsStringSync();
+      expect(source, isNot(contains('Missing --dart-define=WEBHOOK_SECRET')));
     });
 
     test('ensureValidClientConfig throws for the (empty) test build configuration', () {
       expect(() => ensureValidClientConfig(isRelease: true), throwsStateError);
     });
 
-    test('debug builds do not require the webhook secret', () {
+    test('debug builds accept cleartext local endpoints', () {
       final problems = validateClientConfig(
         supabaseUrl: 'http://10.0.2.2:54321',
         supabaseKey: 'sb_publishable_example',
         fastapiBaseUrl: 'http://10.0.2.2:8000',
-        webhookSecret: '',
         isRelease: false,
       );
       expect(problems, isEmpty);
@@ -65,7 +79,6 @@ void main() {
         supabaseUrl: 'http://example.supabase.co',
         supabaseKey: 'sb_publishable_example',
         fastapiBaseUrl: 'http://api.example.com',
-        webhookSecret: 'x',
         isRelease: true,
       );
       expect(problems, hasLength(2));
@@ -81,7 +94,6 @@ void main() {
         supabaseUrl: 'https://x.supabase.co',
         supabaseKey: _jwt({'role': 'service_role'}),
         fastapiBaseUrl: 'https://api.example.com',
-        webhookSecret: 'x',
         isRelease: true,
       );
       expect(problems.single, contains('service-role'));

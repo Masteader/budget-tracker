@@ -306,12 +306,109 @@ def test_chat_commit_needs_jwt_not_webhook_signature(two_households, monkeypatch
     no_sig = client.post("/agent/chat-transaction", content=body,
                          headers={"Content-Type": "application/json", **bearer(USER_A)})
     assert no_sig.status_code == 200 and no_sig.json()["status"] == "success"
+    signed = client.post("/agent/chat-transaction", content=body,
+                         headers={"Content-Type": "application/json", "X-Signature": good_sig, **bearer(USER_A)})
+    assert signed.status_code == 200
+    # Defense in depth (external review BLOCKER 2): a signature that is present must be valid.
     stale_sig = client.post("/agent/chat-transaction", content=body,
                             headers={"Content-Type": "application/json", "X-Signature": "sha256=" + "0" * 64, **bearer(USER_A)})
-    assert stale_sig.status_code == 200
+    assert stale_sig.status_code == 401
     sig_only = client.post("/agent/chat-transaction", content=body,
                            headers={"Content-Type": "application/json", "X-Signature": good_sig})
     assert sig_only.status_code == 401
+
+
+# ─── External review (Gemini) BLOCKER 2: X-Signature / X-App-Token roles ──────
+
+APP_TOKEN = {"X-App-Token": "test_token_for_ci_only"}  # tests/conftest.py APP_AUTH_TOKEN
+_ANY_PARAMS = {"household_id": HH_A, "parent_code": "OPEX-GROCERY", "sub_code": "meat"}
+
+
+def _sig(body: bytes) -> str:
+    import hashlib
+    import hmac
+    import os
+
+    return "sha256=" + hmac.new(os.environ["WEBHOOK_SECRET"].encode(), body, hashlib.sha256).hexdigest()
+
+
+def _router_operations():
+    for path, operations in app.openapi()["paths"].items():
+        if path in PUBLIC_PATHS - {"/households/invites/{invite_code}"}:
+            continue  # app-level pages/assets, not API routers
+        for method in operations:
+            yield method.upper(), path
+
+
+def test_invalid_signature_is_rejected_on_every_api_route_even_with_a_valid_jwt(two_households):
+    failures = []
+    checked = 0
+    for method, path in _router_operations():
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, content=b'{"household_id": "%s"}' % HH_A.encode(),
+                              headers={"Content-Type": "application/json", "X-Signature": "sha256=" + "0" * 64,
+                                       **bearer(USER_A)})
+        if resp.status_code != 401:
+            failures.append(f"{method} {path} -> {resp.status_code}")
+        checked += 1
+    assert not failures, failures
+    assert checked > 30
+
+
+def test_malformed_or_empty_signature_header_is_rejected(two_households):
+    for value in ("", "sha256=", "md5=abc", "garbage"):
+        resp = client.get("/budgets/installments", params={"household_id": HH_A},
+                          headers={"X-Signature": value, **bearer(USER_A)})
+        assert resp.status_code == 401, value
+
+
+def test_valid_signature_with_jwt_passes_and_body_reaches_the_route(two_households):
+    resp = client.get("/budgets/installments", params={"household_id": HH_A},
+                      headers={"X-Signature": _sig(b""), **bearer(USER_A)})
+    assert resp.status_code == 200
+
+
+def test_signed_request_is_rejected_in_production_without_webhook_secret(two_households, monkeypatch):
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("WEBHOOK_SECRET", "")
+    signed = client.get("/budgets/installments", params={"household_id": HH_A},
+                        headers={"X-Signature": "sha256=" + "0" * 64, **bearer(USER_A)})
+    assert signed.status_code == 401
+    unsigned = client.get("/budgets/installments", params={"household_id": HH_A}, headers=bearer(USER_A))
+    assert unsigned.status_code == 200
+
+
+def test_valid_signature_without_jwt_never_reaches_user_data(two_households):
+    for method, path in _router_operations():
+        if path == "/households/invites/{invite_code}" or path == "/public/inquiries":
+            continue  # intentionally anonymous (rate limited, no household data)
+        body = b'{"household_id": "%s"}' % HH_A.encode()
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, content=body,
+                              headers={"Content-Type": "application/json", "X-Signature": _sig(body), **TUNNEL})
+        assert resp.status_code in (401, 403, 422), f"{method} {path} -> {resp.status_code}"
+
+
+def test_app_token_alone_never_grants_access_to_user_routes(two_households):
+    """X-App-Token passes the coarse firewall for old builds, but every route still needs a verified JWT."""
+    failures = []
+    for method, path in _router_operations():
+        if path == "/households/invites/{invite_code}" or path == "/public/inquiries":
+            continue
+        resp = client.request(method, _fill_path(path), params=_ANY_PARAMS, json={"household_id": HH_A},
+                              headers={**TUNNEL, **APP_TOKEN})
+        if resp.status_code not in (401, 403, 422):
+            failures.append(f"{method} {path} -> {resp.status_code}")
+    assert not failures, failures
+
+
+def test_app_token_with_invalid_or_expired_bearer_cannot_reach_user_data(two_households):
+    expired = make_token(USER_A, iat=int(time.time()) - 7200, exp=int(time.time()) - 3600)
+    forged = make_token(USER_A).rsplit(".", 1)[0] + ".forged-signature"
+    for token in (expired, forged, "not-a-jwt"):
+        headers = {**TUNNEL, **APP_TOKEN, "Authorization": f"Bearer {token}"}
+        resp = client.get("/budgets/installments", params={"household_id": HH_A}, headers=headers)
+        assert resp.status_code == 401
+        resp = client.get(f"/households/{HH_A}/members", headers=headers)
+        assert resp.status_code == 401
 
 
 def test_idempotency_key_dedupes_replayed_commit(two_households, monkeypatch):

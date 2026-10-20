@@ -28,15 +28,20 @@ python -c "import secrets; print('APP_AUTH_TOKEN=bt_sec_' + secrets.token_hex(16
    ```
 
 ## 4. Mobile Client Build Update
-When building the Flutter APK/iOS bundle, supply the new values strictly via `--dart-define`:
+When building the Flutter APK/iOS bundle, supply the values strictly via `--dart-define`.
+The app authenticates with the user's Supabase JWT; it does not read `APP_AUTH_TOKEN`, and
+`WEBHOOK_SECRET` is optional (omit it and requests are sent unsigned; the app starts either way):
 ```bash
 flutter build apk --release \
   --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=<your-anon-key> \
-  --dart-define=FASTAPI_BASE_URL=https://<your-api-domain> \
-  --dart-define=APP_AUTH_TOKEN=<new-generated-bt-sec-token> \
-  --dart-define=WEBHOOK_SECRET=<new-generated-hex-64>
+  --dart-define=FASTAPI_BASE_URL=https://<your-api-domain>
+# optional request signing (must equal the server's current WEBHOOK_SECRET):
+#   --dart-define=WEBHOOK_SECRET=<new-generated-hex-64>
 ```
+After rotating `WEBHOOK_SECRET` on the server, a build that still signs with the old value is
+answered 401 on every signed request (a signature that is present must be valid), so ship a
+build with the new value or without it.
 
 ## 5. Git History Cleansing (Optional/Recommended for Public Repos)
 If this repository is or will become public, run `git filter-repo` or BFG Repo-Cleaner to scrub the historical commit blobs containing the compromised strings.

@@ -15,7 +15,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
 
-from utils import validate_uuid
+from utils import validate_uuid, verify_signature
 from supabase_client import get_client
 
 logger = logging.getLogger(__name__)
@@ -213,6 +213,30 @@ def _decode_token(token: str) -> dict:
         raise _reject("role %r is not 'authenticated'", payload.get("role"))
     return payload
 
+
+
+SIGNATURE_HEADER = "X-Signature"
+_INVALID_SIGNATURE_DETAIL = "Invalid request signature."
+
+
+async def verify_signature_if_present(request: Request) -> None:
+    """
+    Router-wide dependency: X-Signature is defense-in-depth, not authentication.
+
+    User routes are authenticated by the Supabase JWT. A request that carries X-Signature must
+    carry a valid one (HMAC-SHA256 of the exact body with WEBHOOK_SECRET); otherwise it is
+    rejected with 401 before the route runs. A request without the header is not affected.
+    In production a signed request is rejected when WEBHOOK_SECRET is unset (it cannot be
+    verified). Server-to-server routes that have no JWT must call ``utils.verify_signature``
+    themselves and reject a missing signature too.
+    """
+    signature = request.headers.get(SIGNATURE_HEADER)
+    if signature is None:
+        return
+    body = await request.body()  # cached on the request; the route reads the same bytes
+    if not verify_signature(body, signature):
+        logger.warning("Rejected request with an invalid %s header: %s %s", SIGNATURE_HEADER, request.method, request.url.path)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_SIGNATURE_DETAIL)
 
 
 def get_verified_claims(request: Request) -> dict:

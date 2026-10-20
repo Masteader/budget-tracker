@@ -11,8 +11,11 @@ typedef SessionRefresher = Future<String?> Function();
 /// Shared HTTP client for the FastAPI backend.
 ///
 /// Authentication is the caller's own Supabase JWT (`Authorization: Bearer`).
-/// No static shared secret is sent: a token compiled into the APK can be
+/// No static app token is sent: a token compiled into the APK can be
 /// extracted by anyone and would let them bypass the backend firewall.
+/// POST bodies (and PUTs with `shouldSign`) carry an `X-Signature` HMAC only
+/// when a WEBHOOK_SECRET was supplied at build time; it is optional defense in
+/// depth, never the credential.
 ///
 /// Every request:
 /// * refreshes the Supabase session first when the access token has expired
@@ -27,15 +30,20 @@ class BaseApiClient {
   final http.Client _client;
   final AuthTokenProvider? _authTokenProvider;
   final SessionRefresher? _sessionRefresher;
+  final String _signingSecret;
   String? _overriddenAccessToken;
 
+  /// [signingSecret] defaults to the optional `--dart-define=WEBHOOK_SECRET`;
+  /// an empty secret means requests are not signed.
   BaseApiClient({
     http.Client? client,
     AuthTokenProvider? authTokenProvider,
     SessionRefresher? sessionRefresher,
+    String? signingSecret,
   })  : _client = client ?? http.Client(),
         _authTokenProvider = authTokenProvider,
-        _sessionRefresher = sessionRefresher;
+        _sessionRefresher = sessionRefresher,
+        _signingSecret = signingSecret ?? webhookSecret;
 
   String? get _currentAccessToken {
     if (_overriddenAccessToken != null) {
@@ -96,10 +104,10 @@ class BaseApiClient {
   }
 
   String sign(String body) {
-    if (webhookSecret.isEmpty) {
+    if (_signingSecret.isEmpty) {
       return '';
     }
-    final key = utf8.encode(webhookSecret);
+    final key = utf8.encode(_signingSecret);
     final bytes = utf8.encode(body);
     final hmacSha256 = Hmac(sha256, key);
     final digest = hmacSha256.convert(bytes);
@@ -255,7 +263,7 @@ class BaseApiClient {
     Map<String, String>? extraHeaders,
   }) {
     final payload = jsonEncode(body);
-    final signature = (shouldSign && webhookSecret.isNotEmpty) ? sign(payload) : null;
+    final signature = (shouldSign && _signingSecret.isNotEmpty) ? sign(payload) : null;
     return _send(
       'POST',
       _resolve(path),
@@ -281,7 +289,7 @@ class BaseApiClient {
     Duration timeout = const Duration(seconds: 15),
   }) {
     final encoded = jsonEncode(body ?? {});
-    final signature = (shouldSign && webhookSecret.isNotEmpty) ? sign(encoded) : null;
+    final signature = (shouldSign && _signingSecret.isNotEmpty) ? sign(encoded) : null;
     return _send('PUT', _resolve(path), body: encoded, signature: signature, timeout: timeout);
   }
 

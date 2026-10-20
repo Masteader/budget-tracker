@@ -34,10 +34,15 @@ const authRedirectUrl = String.fromEnvironment(
   defaultValue: fastapiBaseUrl,
 );
 
-/// HMAC key for `X-Signature` on the chat/receipt endpoints, which the backend
-/// still requires in production. It is extractable from the binary, so it is
-/// an anti-tampering speed bump, not an authentication secret; requests are
-/// authenticated by the user's Supabase JWT.
+/// Optional HMAC key for the `X-Signature` header. When provided with
+/// `--dart-define=WEBHOOK_SECRET=...` POST requests are signed; when it is
+/// missing they are sent unsigned and the app still starts normally.
+///
+/// Requests are authenticated by the user's Supabase JWT. The backend treats a
+/// signature as defense in depth: it is not required, but a signature that is
+/// present must match the backend's WEBHOOK_SECRET (otherwise 401). The key is
+/// extractable from the binary, so it is never an authentication secret; a
+/// build signed with an old, rotated key must be rebuilt (or built without it).
 const webhookSecret = String.fromEnvironment('WEBHOOK_SECRET');
 
 /// Returns every configuration problem (empty when the configuration is usable).
@@ -45,7 +50,6 @@ List<String> validateClientConfig({
   required String supabaseUrl,
   required String supabaseKey,
   required String fastapiBaseUrl,
-  required String webhookSecret,
   required bool isRelease,
 }) {
   final problems = <String>[];
@@ -68,10 +72,6 @@ List<String> validateClientConfig({
     problems.add('Missing --dart-define=FASTAPI_BASE_URL');
   } else if (isRelease && !fastapiBaseUrl.startsWith('https://')) {
     problems.add('FASTAPI_BASE_URL must use https:// in release builds');
-  }
-
-  if (isRelease && webhookSecret.isEmpty) {
-    problems.add('Missing --dart-define=WEBHOOK_SECRET (the production backend rejects unsigned chat/receipt requests)');
   }
 
   return problems;
@@ -99,7 +99,6 @@ void ensureValidClientConfig({required bool isRelease}) {
     supabaseUrl: supabaseUrl,
     supabaseKey: supabasePublishableKey,
     fastapiBaseUrl: fastapiBaseUrl,
-    webhookSecret: webhookSecret,
     isRelease: isRelease,
   );
   if (problems.isNotEmpty) {

@@ -3,7 +3,8 @@ FastAPI entry point for the Budget Tracker AI microservice.
 
 Architecture:
 - Modular routers under `routes/`
-- JWT & HMAC authentication middleware
+- Supabase JWT authentication (firewall middleware + per-route verification)
+- Optional X-Signature HMAC: verified whenever present (auth.verify_signature_if_present)
 - Request body size limiter (DoS protection)
 - Constant-time firewall token middleware
 """
@@ -17,14 +18,15 @@ import time
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
-from utils import verify_signature as _verify_signature, is_production
+from utils import is_production
+from auth import verify_signature_if_present
 from landing_page import get_landing_page_html, get_auth_confirmed_html
 from routes.budgets import router as budgets_router
 from routes.households import router as households_router
@@ -220,9 +222,11 @@ async def firewall_token_middleware(request: Request, call_next):
             bearer_valid = False
 
     # The verified per-user Supabase JWT is the credential (current app builds send only that).
-    # X-App-Token is still accepted at this coarse layer for older builds, but it is extractable
-    # from the APK and every route additionally requires a verified JWT. Missing, invalid or
-    # expired credentials answer 401 (not 403) so the client refreshes its session and retries.
+    # X-App-Token is a legacy pass for older builds at this coarse layer ONLY: it is extractable
+    # from the APK, it never identifies a user, and every non-public route verifies the JWT
+    # itself (an invalid Bearer next to a valid X-App-Token still gets 401 from the route).
+    # Missing, invalid or expired credentials answer 401 (not 403) so the client refreshes its
+    # session and retries.
     if is_tunnel_or_proxy and not (token_valid or bearer_valid):
         logger.warning("Firewall blocked unauthenticated request from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
@@ -236,12 +240,14 @@ async def firewall_token_middleware(request: Request, call_next):
 
 
 # ─── HMAC Signature Config ───────────────────────────────────────────────────
+# X-Signature is defense in depth: optional for user routes (the JWT authenticates them), but a
+# request that carries one must carry a valid one (see auth.verify_signature_if_present).
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
 if not WEBHOOK_SECRET:
     logger.warning(
-        "WEBHOOK_SECRET is not configured. "
-        "HMAC signature verification will reject all signed requests. "
-        "Set WEBHOOK_SECRET in environment variables."
+        "WEBHOOK_SECRET is not configured: in production every request that carries an "
+        "X-Signature header is rejected (it cannot be verified); unsigned requests with a valid "
+        "JWT are unaffected. Set WEBHOOK_SECRET in environment variables."
     )
 
 
@@ -338,15 +344,20 @@ async def health_check():
 
 
 # ─── Include Routers ─────────────────────────────────────────────────────────
-app.include_router(budgets_router)
-app.include_router(households_router)
-app.include_router(analytics_router)
-app.include_router(receipts_router)
-app.include_router(chat_router)
-app.include_router(reports_router)
-app.include_router(support_router)
-app.include_router(inquiries_router)
-app.include_router(nafaqah_router)
+# Every API route rejects a present-but-invalid X-Signature (401) before it runs.
+_SIGNATURE_CHECK = [Depends(verify_signature_if_present)]
+for _router in (
+    budgets_router,
+    households_router,
+    analytics_router,
+    receipts_router,
+    chat_router,
+    reports_router,
+    support_router,
+    inquiries_router,
+    nafaqah_router,
+):
+    app.include_router(_router, dependencies=_SIGNATURE_CHECK)
 
 # Test helper alias
 from rate_limiter import reset_rate_limiters as _reset_receipt_scan_rate_limits

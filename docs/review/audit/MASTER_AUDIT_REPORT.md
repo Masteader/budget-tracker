@@ -123,7 +123,6 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | API-33 | Medium | Local JSON / in-memory fallbacks diverge across containers. | Design change (require Redis/DB) |
 | API-34/35 | Low | Chat category overrides not validated; JWT decoded twice; full scan after insert. | Low priority |
 | MOB-06/12 | Medium | Idempotency/`client_occurred_at`: app + backend done; keys are per-process unless `REDIS_URL` is set. | Set `REDIS_URL` in prod |
-| MOB-23 | Medium | `WEBHOOK_SECRET` still compiled into app for old backend compatibility. | Remove after backend from this branch is live |
 | UI misc | Low | Arabic font not Cairo/Tajawal; 290 remaining hardcoded colors; dead footer links; no Urdu on web; Tailwind via CDN on landing pages. | Low priority |
 
 ---
@@ -134,7 +133,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 2. **Money as integers end to end.** Store and compute halalas as `bigint` (or keep `numeric(14,2)` with `CHECK` constraints in DB), `Decimal` in Python (done), and a `Money` value type over `int` in Dart (MOB-29). Ban `double` for currency via an analyzer lint.
 3. **Single cycle specification.** `get_saudi_cycle_for_timestamp` is canonical. Keep the 109 vectors as a shared JSON fixture consumed by the SQL, pytest and Flutter suites so the three implementations cannot drift again.
 4. **Replayable migrations.** Re-baseline from live (`supabase db pull`), renumber duplicates, (the owner chose not to use GitHub Actions; run the gate commands in §5 before each release).
-5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token` and drop `WEBHOOK_SECRET` from app builds (MOB-23).
+5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token`. `WEBHOOK_SECRET` is already optional in app builds (MOB-23, resolved): leave it out, or keep it equal to the server value because a present signature must be valid.
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
 7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories. UI-24 (`transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`) and DB-16/DB-18 (creator binding, owner-or-admin writes, admin-only pool withdrawals, co-admins with a protected primary admin) are decided and enforced in the database.
 8. **Mobile hardening.** Tokens are now in `flutter_secure_storage` (MOB-19); certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
@@ -184,9 +183,9 @@ cd web_app && npm ci && npm run build && npm run lint
 
 ### 6.2 Deployment order
 1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020200000_remove_sms_artifacts.sql` (rejects new `source = 'sms'` rows — ship with the new app build) and `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs), then `20261020400000_admin_permissions_and_co_admins.sql` (DB-16/DB-18 permissions, co-admins and the primary admin; deploy before the backend that calls its role RPCs; transactions without a recorded creator become admin-only, so check `SELECT count(*) FROM transactions WHERE user_id IS NULL` first). Re-baseline the migration chain for the Supabase CLI (DB-15).
-2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client. Older app builds keep working with the permission migration: their inserts without `user_id` are attributed to the signed-in user, and a refused edit, delete or pool transfer comes back as an error the old app already shows (its optimistic delete rolls back) instead of a silent no-op.
+2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token` at the firewall, plus their JWT) and the new JWT-only client. **Signed requests:** a request that carries `X-Signature` must carry a valid one, so an installed build that still signs with the pre-rotation `WEBHOOK_SECRET` gets 401 on its signed POSTs (chat, receipts, and other POSTs) once the rotated secret is live; the old value is public and cannot be accepted. Ship the new build (no `WEBHOOK_SECRET` define, or the new value) together with the backend. Older app builds keep working with the permission migration: their inserts without `user_id` are attributed to the signed-in user, and a refused edit, delete or pool transfer comes back as an error the old app already shows (its optimistic delete rolls back) instead of a silent no-op.
 3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
-4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
+4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and tighten the join-code policy (DB-17). `WEBHOOK_SECRET` is already optional in app builds.
 
 ### 6.3 Product decisions needed
 None open. Decided by the owner on 2026-10-20:

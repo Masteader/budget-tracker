@@ -214,11 +214,12 @@ cp dist/index.html ../ai_service/static/ && cp dist/assets/index-* ../ai_service
 | `SUPABASE_URL` | ✅ | Same as above |
 | `SUPABASE_PUBLISHABLE_KEY` | ✅ | Public key (safe for clients; `SUPABASE_ANON_KEY` accepted as alias). Service-role / `sb_secret_` keys are rejected at startup. |
 | `FASTAPI_BASE_URL` | ✅ | Full URL to the FastAPI backend (`https://` required in release builds) |
-| `WEBHOOK_SECRET` | ✅ release | HMAC key for `X-Signature` on chat/receipt calls (backend requires it in production) |
+| `WEBHOOK_SECRET` | ❌ | Optional HMAC key: when set, POST bodies carry an `X-Signature` header (defense in depth). It must equal the backend's current `WEBHOOK_SECRET`, because the backend rejects a signature that is present but wrong (401). Leave it out and requests are sent unsigned: the user's Supabase JWT is the credential |
 | `AUTH_REDIRECT_URL` | ❌ | Email-confirmation redirect (defaults to `FASTAPI_BASE_URL`) |
 
-The app has no built-in defaults: a build missing a required flag stops at startup with a
-`StateError` naming each missing flag. Release signing reads `flutter_app/android/key.properties`
+The app has no built-in defaults: a build missing a required flag (`SUPABASE_URL`, the publishable
+key, `FASTAPI_BASE_URL`) stops at startup with a `StateError` naming each missing flag; a missing
+`WEBHOOK_SECRET` never stops the app. Release signing reads `flutter_app/android/key.properties`
 (git-ignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`).
 
 ---
@@ -261,7 +262,14 @@ docker compose up --build
 ## Security Notes
 
 - The **service role key** must **never** appear in the Flutter app or any client-side code.
-- The **WEBHOOK_SECRET** is an HMAC-SHA256 shared secret — rotate it if compromised.
+- **Authentication** of every user route is the caller's Supabase JWT (`Authorization: Bearer`).
+- **`X-Signature`** (HMAC-SHA256 of the exact body with `WEBHOOK_SECRET`) is defense in depth: optional
+  on user routes, but a signature that is present must be valid or the request gets 401 (also in
+  production when `WEBHOOK_SECRET` is unset). A server-to-server webhook route without a JWT must
+  require a valid signature (`utils.verify_signature`). Rotate `WEBHOOK_SECRET` if compromised; app
+  builds signed with the old value then get 401 until rebuilt with the new value or without it.
+- **`X-App-Token`** (`APP_AUTH_TOKEN`) is only a legacy pass at the firewall for old app builds; it
+  never authenticates a user (every route still verifies the JWT). The current app does not send it.
 - All Supabase tables have **Row Level Security (RLS)** enabled — users can only access their household's data.
 - Transaction and receipt audit data is stored securely in Supabase with household-isolated Row Level Security.
 
