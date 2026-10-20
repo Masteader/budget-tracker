@@ -8,6 +8,13 @@ export interface SplitRow {
   status: string;
 }
 
+/**
+ * Count label forms, chosen with Intl.PluralRules for the active language.
+ * Arabic needs zero/one/two/few (3–10)/many (11–99)/other; English one/other.
+ * `{val}` is replaced by the number; a form without `{val}` is shown alone.
+ */
+export type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
+
 export interface TranslationDictionary {
   brand: {
     name: string;
@@ -83,7 +90,7 @@ export interface TranslationDictionary {
     burnRateOptimal: string;
     countdownTitle: string;
     countdownSub: string;
-    countdownDays: string;
+    countdownDays: PluralForms;
     poolLabel: string;
     poolVal: string;
     poolDesc: string;
@@ -127,6 +134,10 @@ export interface TranslationDictionary {
     splitResolutionDesc: string;
     splitSettleBtn: string;
     splitSettleSent: string;
+    splitResolutionTitleFamily: string;
+    splitResolutionDescFamily: string;
+    splitSettleBtnFamily: string;
+    splitSettleSentFamily: string;
     perDay: string;
     payToday: string;
     paydayToday: string;
@@ -225,7 +236,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       name: 'BUDGET Tracker',
       tagline: 'ميزانية وأكثر',
       subtagline: 'الحوكمة المالية الذكية وإدارة المصاريف المشتركة',
-      sovereignBadge: 'نظام سيادي مستقل',
+      sovereignBadge: 'نظام مالي مستقل',
     },
     nav: {
       simulator: 'المحاكي التفاعلي',
@@ -234,14 +245,14 @@ export const translations: Record<Language, TranslationDictionary> = {
       telemetrySub: 'بيانات فورية',
       pillars: 'الركائز الـ 12',
       pillarsSub: 'الهيكل التقني',
-      security: 'الخصوصية السيادية',
-      securitySub: 'صفر ربط بنكي',
+      security: 'الخصوصية التامة',
+      securitySub: 'بدون ربط بنكي',
       faq: 'الأسئلة الشائعة',
       faqSub: 'الدليل والدعم',
       vipCta: 'حجز وصول VIP',
     },
     hero: {
-      badge: 'الحوكمة المالية السيادية • للأسر الحديثة وشركاء السكن',
+      badge: 'الإدارة المالية الذكية • للأسر الحديثة وشركاء السكن',
       title: 'صفاء وانسيابية مالية تامة لأسرتك وشركاء سكنك.',
       subtitle:
         'متابعة حية للتدفقات النقدية مع خصوصية مطلقة لا تقبل المساومة. اضبط دورة راتبك على أي يوم (من 1 إلى 31)، دوّن مصاريفك صوتياً بالذكاء الاصطناعي، افحص فواتير ZATCA الضريبية المعتمدة بلحظة، ووزع التزامات الشقة المشتركة بعدالة دون أي ربط بنكي أو قراءة للرسائل النصية.',
@@ -298,7 +309,14 @@ export const translations: Record<Language, TranslationDictionary> = {
       burnRateOptimal: 'وتيرة إنفاق ممتازة ومتوازنة حتى تاريخ الراتب القادم',
       countdownTitle: 'العد التنازلي للدورة',
       countdownSub: 'الراتب القادم',
-      countdownDays: '{val} يوماً متبقية',
+      countdownDays: {
+        zero: 'يوم الراتب',
+        one: 'يوم واحد متبقٍ',
+        two: 'يومان متبقيان',
+        few: '{val} أيام متبقية',
+        many: '{val} يوماً متبقياً',
+        other: '{val} يوم متبقٍ',
+      },
       poolLabel: 'مجموع الدخل الشهري المستلم:',
       poolVal: '15,000.00 ر.س',
       poolDesc: '50% ضروريات ثابتة • 35% مصاريف مرنة • 15% احتياطي مدخر',
@@ -323,7 +341,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       aiDebtor1: 'ماجد (مدين)',
       aiDebtor2: 'سلمان (مدين)',
       aiImpactLabel: 'أثر العملية على المصروف المرن:',
-      aiImpactVal: '42% متبقي • في النطاق الآمن',
+      aiImpactVal: 'متبقٍ 42% • في النطاق الآمن',
       // Tab 3
       zatcaPill: 'استيعاب مشفر بتقنية Base64 TLV',
       zatcaTitle: 'فك شفرة فواتير ZATCA الضريبية المعتمدة فوراً',
@@ -333,22 +351,26 @@ export const translations: Record<Language, TranslationDictionary> = {
       zatcaBadge: 'فاتورة ضريبية مبسطة معتمدة من هيئة الزكاة والضريبة والجمارك',
       zatcaNet: 'المبلغ الخاضع للضريبة:',
       zatcaTax: 'ضريبة القيمة المضافة 15%:',
-      zatcaGrand: 'الإجمالي الصافي للفاتورة:',
+      zatcaGrand: 'إجمالي الفاتورة (شامل الضريبة):',
       zatcaVerified: 'توقيع إلكتروني مشفر معتمد (TLV Valid)',
       // Tab 4
       splitPill: 'دفتر محاسبي عادل متعدد الأطراف',
-      splitTitle: 'وضعان مخصصان: تضامن الأسرة أو سكن الزملاء',
+      splitTitle: 'وضعان مخصصان: نفقة الأسرة أو سكن الزملاء',
       splitDesc:
-        'تخلص من حرج المطالبات المالية بين الأهل أو الأصدقاء. بدّل بسهولة بين الميزانية الأسرية التضامنية وميزانية سكن الزملاء مع تسويات بنقرة واحدة.',
+        'تخلص من حرج المطالبات المالية بين الأهل أو الأصدقاء. بدّل بسهولة بين ميزانية الأسرة وفق النفقة الشرعية (الزوج يتكفل بمصاريف البيت، وما تدفعه الزوجة للبيت يُسجَّل لها مستحقاً على الزوج) وميزانية سكن الزملاء مع تسويات بنقرة واحدة.',
       splitModeFamily: 'وضع ميزانية الأسرة',
       splitModeRoommates: 'وضع سكن الزملاء والأصدقاء',
-      splitLedgerTitleFamily: 'دفتر التسوية [وضع تضامن الأسرة المستقر]',
+      splitLedgerTitleFamily: 'دفتر النفقة [وضع الأسرة]',
       splitLedgerTitleRoommates: 'دفتر التسوية [وضع السكن المشترك للزملاء والأصدقاء]',
       splitLiveBadge: 'أرصدة حية',
       splitResolutionTitle: 'تسوية المديونيات بنقرة زر واحدة:',
       splitResolutionDesc: 'يمكن للشركاء سداد المبالغ المعلقة مباشرة دون أي حسابات يدوية معقدة',
       splitSettleBtn: 'إرسال طلب تسوية واتساب',
       splitSettleSent: 'تم إرسال الطلب بنجاح ✓',
+      splitResolutionTitleFamily: 'سداد مستحقات الزوجة:',
+      splitResolutionDescFamily: 'على أبي فهد أن يسدد لأم فهد 1,600.00 ر.س مقابل المقاضي التي دفعتها من مالها',
+      splitSettleBtnFamily: 'تسجيل السداد',
+      splitSettleSentFamily: 'تم تسجيل السداد ✓',
       perDay: '/ يومياً',
       payToday: 'اليوم',
       paydayToday: '(يوم الراتب!)',
@@ -361,13 +383,13 @@ export const translations: Record<Language, TranslationDictionary> = {
       aiCatUtilities: 'خدمات السكن (الكهرباء)',
       aiCatDining: 'الضيافة والعزائم المشتركة',
       aiCatInternet: 'الإنترنت عالي السرعة (اتصالات)',
-      aiNoteRooms: '(غرفتين)',
+      aiNoteRooms: '(غرفتان)',
       aiNoteOthers: '(الباقين)',
       aiNoteExempt: '(معفى)',
       familyRows: [
-        { name: 'أبو فهد (المصروف العام للأسرة)', desc: 'المدفوع: الإيجار السنوي، الفواتير، ومصاريف المدرسة', amount: 4800, status: 'مغطى بالكامل' },
-        { name: 'أم فهد (التموينات ومستلزمات البيت)', desc: 'المدفوع: مقاضي بنده، تموينات الأسبوع', amount: 1600, status: 'تكامل الميزانية 100%' },
-        { name: 'صندوق طوارئ واستثمار الأسرة', desc: 'الرصيد التراكمي المحمي للطوارئ الطبية والمدرسية', amount: 8500, status: 'حساب محمي' },
+        { name: 'أبو فهد (الزوج: مصاريف البيت)', desc: 'المدفوع: الإيجار السنوي، الفواتير، ومصاريف المدرسة', amount: 4800, status: 'من نفقة الزوج' },
+        { name: 'أم فهد (دفعت من مالها للبيت)', desc: 'المدفوع: مقاضي بنده، تموينات الأسبوع', amount: 1600, status: 'مستحق لها على الزوج' },
+        { name: 'المصروف الشخصي لأم فهد', desc: 'مشترياتها الشخصية هذه الدورة: من مصروفها، وليست ديناً على أحد', amount: 350, status: 'من مصروفها الشخصي' },
       ],
       roommateRows: [
         { name: 'أحمد (أنت)', desc: 'دفع: كهرباء الشقة، فايبر الإنترنت، مقاضي الشهر', amount: 420, status: 'دائن مستحق' },
@@ -377,8 +399,8 @@ export const translations: Record<Language, TranslationDictionary> = {
     },
     metrics: {
       metric1Val: '100%',
-      metric1Title: 'خصوصية سيادية تامة',
-      metric1Desc: 'صفر قراءة للرسائل النصية، صفر ربط بنكي إجباري. بياناتك تظل ملكك وحدك.',
+      metric1Title: 'خصوصية تامة',
+      metric1Desc: 'لا نقرأ رسائلك النصية ولا نشترط أي ربط بنكي. بياناتك تظل ملكك وحدك.',
       metric2Val: '1 - 31',
       metric2Title: 'مرونة دورة الراتب',
       metric2Desc: 'اضبط راتبك على يوم 27 أو أي يوم في الشهر مع إعادة الحساب الفورية للوتيرة اليومية.',
@@ -397,7 +419,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       items: [
         {
           title: '1. المساعد الصوتي واللغوي الذكي',
-          desc: 'يفكك الرسائل النصية والصوتية الدارجة ويقسم المصاريف المتداخلة بلحظة ودون جداول.',
+          desc: 'يفهم ما تكتبه أو تقوله بلهجتك الدارجة ويقسم المصاريف المتداخلة بلحظة ودون جداول.',
           icon: 'psychology',
         },
         {
@@ -411,8 +433,8 @@ export const translations: Record<Language, TranslationDictionary> = {
           icon: 'qr_code_scanner',
         },
         {
-          title: '4. تسوية مصاريف الأهل والزملاء',
-          desc: 'حساب صافي الالتزامات للإيجار، الفواتير، والمقاضي تلقائياً دون أي إحراج مالي.',
+          title: '4. نفقة الأسرة وتسوية مصاريف الزملاء',
+          desc: 'في الأسرة يتكفل الزوج بمصاريف البيت وما تدفعه الزوجة يُسجَّل لها، وبين شركاء السكن يُحسب صافي الإيجار والفواتير والمقاضي تلقائياً دون أي إحراج.',
           icon: 'pie_chart',
         },
         {
@@ -432,7 +454,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           title: '8. أمان على مستوى الصف RLS',
-          desc: 'سياسات تشفير صارمة تضمن عدم اطلاع أي طرف إلا على السجلات المصرح له بها.',
+          desc: 'سياسات وصول صارمة على مستوى الصف تضمن عدم اطلاع أي طرف إلا على السجلات المصرح له بها.',
           icon: 'security',
         },
         {
@@ -459,7 +481,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     },
     security: {
       badge: 'ميثاق الخصوصية الصارم بدون مساومة',
-      title: 'بياناتك ملكك وحدك. سيادة رقمية بمستويات بنكية.',
+      title: 'بياناتك ملكك وحدك. تحكم كامل وحماية متقدمة.',
       subtitle:
         'الوضوح المالي لا ينبغي أن يكلفك خصوصيتك. تم بناء نظام BUDGET Tracker بشكل مقصود ليعمل بفعالية تامة دون طلب كلمات مرور الحسابات البنكية أو التجسس على الرسائل النصية.',
       cards: [
@@ -468,7 +490,7 @@ export const translations: Record<Language, TranslationDictionary> = {
           desc: 'لا نطلب أبداً بيانات دخولك للإنترنت البنكي، أرقام بطاقاتك، أو تفويضات الوصول المفتوح.',
         },
         {
-          title: 'صفر قراءة للرسائل النصية والـ OTP',
+          title: 'لا نقرأ رسائلك النصية ولا رموز التحقق',
           desc: 'رسائلك النصية ورموز التحقق الثنائية تظل محمية تماماً داخل هاتفك دون أن يمسها أحد.',
         },
         {
@@ -510,8 +532,8 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           q: 'ما الفرق بين وضع ميزانية الأسرة ووضع سكن الزملاء؟',
-          sub: 'التضامن المتكامل مقابل المقاصة الحسابية الدقيقة',
-          a: 'وضع الأسرة يركز على تكامل ميزانية الأب والأم، والمصروفات التضامنية والادخار المشترك. أما وضع الزملاء فيتعامل مع كل فرد كشريك مستقل، مع احتساب دقيق للمبالغ المدفوعة وصافي المديونيات وتسويتها بضغطة زر.',
+          sub: 'النفقة الشرعية مقابل المقاصة الحسابية الدقيقة',
+          a: 'وضع الأسرة يتبع مبدأ النفقة الشرعية: الزوج يتكفل بمصاريف البيت، وما تدفعه الزوجة من مالها للبيت يُسجَّل لها مستحقاً على الزوج، مع ادخار مشترك للأسرة. أما وضع الزملاء فيتعامل مع كل فرد كشريك مستقل، مع احتساب دقيق للمبالغ المدفوعة وصافي المديونيات وتسويتها بضغطة زر.',
         },
         {
           q: 'هل يفهم المساعد الذكي اللهجات السعودية والخليجية؟',
@@ -521,14 +543,14 @@ export const translations: Record<Language, TranslationDictionary> = {
         {
           q: 'متى سيتوفر التطبيق رسمياً على متاجر الهواتف؟',
           sub: 'جدول إطلاق تطبيقات iOS و Android و AppGallery',
-          a: 'النسخة الحالية متاحة كتطبيق ويب فوري PWA، ونعمل حالياً على إتاحة النسخ الرسمية للمسجلين في قائمة الوصول المبكر VIP لأجهزة iPhone و Android و Huawei قريباً.',
+          a: 'نحن حالياً في مرحلة تجريبية مغلقة (VIP)، وسيحصل المسجلون في قائمة الانتظار على أولوية الدعوة لتطبيقات iPhone و Android و Huawei AppGallery.',
         },
       ],
     },
     earlyAccess: {
       badge: 'قائمة الانتظار لأولوية الوصول VIP',
       title: 'احجز مقعدك في الوصول المبكر الحصري',
-      headline: 'اختبر الحوكمة المالية السيادية والصفاء المعيشي',
+      headline: 'اختبر الإدارة المالية الذكية وراحة البال',
       desc: 'انضم إلى أكثر من 1,500 أسرة ومهني يطالبون بصفاء مالي فائق دون أي تفريط في خصوصيتهم الرقمية.',
       placeholder: 'أدخل بريدك الإلكتروني...',
       button: 'انضم لقائمة VIP',
@@ -551,15 +573,15 @@ export const translations: Record<Language, TranslationDictionary> = {
       mainNav: 'التنقل الرئيسي',
     },
     footer: {
-      rights: '© 2025 BUDGET Tracker | ميزانية وأكثر. الحوكمة المالية السيادية. جميع الحقوق محفوظة.',
+      rights: '© 2026 BUDGET Tracker | ميزانية وأكثر. جميع الحقوق محفوظة.',
       links: [
-        'سياسة الخصوصية السيادية',
+        'سياسة الخصوصية',
         'شروط الاستخدام',
         'ميثاق الأمان والتشفير',
         'خدمة كبار العملاء VIP',
         'الدعم والتواصل',
       ],
-      status: 'النظام متصل ويعمل بكفاءة • تشفير RLS 256-BIT',
+      status: 'النظام متصل ويعمل بكفاءة • تشفير AES-256',
     },
   },
   en: {
@@ -630,7 +652,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       disbursementDay: 'Day {val} of Month',
       day1Label: 'Day 1 (Month Start)',
       day15Label: 'Day 15 (Mid-Month)',
-      day27Label: 'Day 27 (GCC Public)',
+      day27Label: 'Day 27 (Saudi Public Sector)',
       day31Label: 'Day 31',
       reserveTitle: 'Automatic Emergency Reserve (15% Lock)',
       reserveVal: 'SAR 2,250.00',
@@ -640,7 +662,10 @@ export const translations: Record<Language, TranslationDictionary> = {
       burnRateOptimal: 'Optimal pacing for the current billing cycle',
       countdownTitle: 'Cycle Countdown',
       countdownSub: 'Next Payday',
-      countdownDays: '{val} Days Left',
+      countdownDays: {
+        one: '{val} Day Left',
+        other: '{val} Days Left',
+      },
       poolLabel: 'Monthly Deposit Pool:',
       poolVal: 'SAR 15,000.00',
       poolDesc: '50% Fixed Essentials • 35% Discretionary • 15% Auto Reserve',
@@ -679,18 +704,22 @@ export const translations: Record<Language, TranslationDictionary> = {
       zatcaVerified: 'Valid Cryptographic Signature (TLV)',
       // Tab 4
       splitPill: 'Equitable Multi-Party Ledger',
-      splitTitle: 'Two Dedicated Modes: Family Solidarity or Roommates',
+      splitTitle: 'Two Dedicated Modes: Family Nafaqah or Roommates',
       splitDesc:
-        'Eliminate awkward financial discussions. Switch smoothly between proportional household budgeting (fair salary-weighted contributions) and roommate mode with zero-friction one-click settlements.',
+        'Eliminate awkward financial discussions. Switch smoothly between Nafaqah-based family budgeting (the husband provides; the wife\'s household payments are tracked as owed back to her) and roommate mode with zero-friction one-click settlements.',
       splitModeFamily: 'Family Mode',
       splitModeRoommates: 'Roommates Mode',
-      splitLedgerTitleFamily: 'Settlement Ledger [Family Solidarity Mode]',
+      splitLedgerTitleFamily: 'Nafaqah Ledger [Family Mode]',
       splitLedgerTitleRoommates: 'Settlement Ledger [Roommates Shared Living Mode]',
       splitLiveBadge: 'LIVE BALANCES',
       splitResolutionTitle: 'One-Click Debt Resolution:',
       splitResolutionDesc: 'Majed & Salman can clear SAR 420.00 to your account seamlessly',
       splitSettleBtn: 'Send Settle Request',
       splitSettleSent: 'Request sent successfully ✓',
+      splitResolutionTitleFamily: 'Wife Reimbursement:',
+      splitResolutionDescFamily: 'Abu Fahad owes Umm Fahad SAR 1,600.00 for the groceries she paid from her own money',
+      splitSettleBtnFamily: 'Record Repayment',
+      splitSettleSentFamily: 'Repayment recorded ✓',
       perDay: '/ day',
       payToday: 'Today!',
       paydayToday: '(Payday!)',
@@ -707,9 +736,9 @@ export const translations: Record<Language, TranslationDictionary> = {
       aiNoteOthers: '(Others)',
       aiNoteExempt: '(Exempt)',
       familyRows: [
-        { name: 'Abu Fahad (family general spending)', desc: 'Paid: annual rent, utility bills and school fees', amount: 4800, status: 'Fully covered' },
-        { name: 'Umm Fahad (groceries & home supplies)', desc: 'Paid: Panda groceries, weekly supplies', amount: 1600, status: 'Budget 100% reconciled' },
-        { name: 'Family emergency & investment fund', desc: 'Protected balance for medical and school emergencies', amount: 8500, status: 'Protected account' },
+        { name: 'Abu Fahad (husband: household costs)', desc: 'Paid: annual rent, utility bills and school fees', amount: 4800, status: "Husband's Nafaqah" },
+        { name: 'Umm Fahad (paid for the home from her own money)', desc: 'Paid: Panda groceries, weekly supplies', amount: 1600, status: 'Owed back by husband' },
+        { name: "Umm Fahad's personal allowance", desc: 'Her personal purchases this cycle, from her allowance; not a debt', amount: 350, status: 'From her allowance' },
       ],
       roommateRows: [
         { name: 'Ahmed (you)', desc: 'Paid: flat electricity, fiber internet, monthly groceries', amount: 420, status: 'Net creditor' },
@@ -729,7 +758,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       metric3Desc: 'Multilingual voice transcripts and tax QR decoders that parse compound shared expenses.',
       metric4Val: '12',
       metric4Title: 'Governance Pillars',
-      metric4Desc: 'From automatic emergency reserves to cryptographic row-level audit trails.',
+      metric4Desc: 'From automatic emergency reserves to row-level access control and audit trails.',
     },
     pillars: {
       badge: 'Architectural Integrity',
@@ -739,7 +768,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       items: [
         {
           title: '1. Conversational AI Assistant',
-          desc: 'Instantly parses messy voice and text messages, breaking down complex multi-person purchases without spreadsheets.',
+          desc: 'Instantly parses whatever you type or say, breaking down complex multi-person purchases without spreadsheets.',
           icon: 'psychology',
         },
         {
@@ -753,8 +782,8 @@ export const translations: Record<Language, TranslationDictionary> = {
           icon: 'qr_code_scanner',
         },
         {
-          title: '4. Fair Family & Roommate Splits',
-          desc: 'Dynamic settlement ledgers calculate net balances for rent, utilities, and groceries without awkward negotiations.',
+          title: '4. Family Nafaqah & Roommate Splits',
+          desc: 'Families track what the husband owes his wife for household costs she paid; roommates get automatic net balances for rent, utilities, and groceries without awkward negotiations.',
           icon: 'pie_chart',
         },
         {
@@ -774,7 +803,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           title: '8. Row-Level Security via Supabase',
-          desc: 'Strict cryptographic row-level security policies ensure only authorized participants view each specific record.',
+          desc: 'Strict row-level access policies ensure only authorized participants view each specific record.',
           icon: 'security',
         },
         {
@@ -801,7 +830,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     },
     security: {
       badge: 'Zero-Compromise Privacy Charter',
-      title: 'Your Data Is Yours Alone. Bank-Grade Sovereignty.',
+      title: 'Your Data Is Yours Alone. Full Control, Strong Protection.',
       subtitle:
         'Financial clarity should never come at the expense of your sovereignty. BUDGET Tracker is intentionally architected to function without invasive open-banking credentials or SMS message access.',
       cards: [
@@ -815,7 +844,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           title: 'AES-256 Cloud Encryption',
-          desc: 'End-to-end encryption in transit and at rest with isolated row-level tenant access controls.',
+          desc: 'Encryption in transit and at rest with isolated row-level tenant access controls.',
         },
         {
           title: 'Protected Roommate Aliases',
@@ -838,7 +867,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         {
           q: 'How does BUDGET Tracker ensure 100% privacy without open-banking links?',
           sub: 'Our zero-compromise architectural approach',
-          a: 'We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card pins, or personal SMS text records to any cloud aggregator.',
+          a: 'We leverage ultra-fast AI input modalities: conversational voice parsing, natural text interpretation, and instantaneous ZATCA QR decoding. By avoiding traditional open-banking integrations, you never expose bank account passwords, card PINs, or personal SMS text records to any cloud aggregator.',
         },
         {
           q: 'Can I customize the salary cycle to the 27th or any other day?',
@@ -852,8 +881,8 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           q: 'What distinguishes Family Mode from Roommates Mode?',
-          sub: 'Harmonious solidarity vs. precise debt clearing',
-          a: 'Family Mode focuses on proportional income allocation, household reserve buffers, and collective child allocations. Roommates Mode treats each person as an autonomous counterparty, keeping clean peer-to-peer debit/credit records with instant 1-click settlements.',
+          sub: 'Nafaqah ledger vs. precise debt clearing',
+          a: 'Family Mode follows the Islamic Nafaqah principle: the husband covers household expenses, and anything the wife pays for the household from her own money is tracked as owed back to her. Roommates Mode treats each person as an autonomous counterparty, keeping clean peer-to-peer debit/credit records with instant 1-click settlements.',
         },
         {
           q: 'Does the AI engine support Gulf dialects as well as English?',
@@ -893,7 +922,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       mainNav: 'Main navigation',
     },
     footer: {
-      rights: '© 2025 BUDGET Tracker Sovereign Financial Architecture. All rights reserved. Built for clarity and equitable shared living.',
+      rights: '© 2026 BUDGET Tracker. All rights reserved. Built for clarity and equitable shared living.',
       links: [
         'Privacy Policy',
         'Terms of Service',
@@ -901,7 +930,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         'VIP SLA',
         'Support',
       ],
-      status: 'SYSTEM ONLINE • 256-BIT RLS',
+      status: 'SYSTEM ONLINE • AES-256 ENCRYPTION',
     },
   },
 };
