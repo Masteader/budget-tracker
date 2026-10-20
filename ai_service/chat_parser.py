@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
@@ -28,7 +27,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +434,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 def parse_chat_expense(text: str) -> ParsedChatExpense:
     """Call Gemini to extract structured expense information from user chat text, with graceful fallback."""
     text = normalize_arabic_numbers(text)
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
+    model = litellm_model()
     
     try:
         response = litellm.completion(
@@ -679,9 +678,9 @@ def process_chat_transaction(
         deficit = parsed.total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
     # Format raw text for audit trail
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)

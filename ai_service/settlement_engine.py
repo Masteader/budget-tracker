@@ -32,6 +32,67 @@ def _cycle_dates(household_id: str) -> Dict[str, Any]:
     return get_salary_cycle_dates(payday_day=get_household_payday(household_id))
 
 
+# public.transactions has no paid_by / beneficiary columns (live and the repo schema agree; see
+# docs/review/audit/live_db_preflight.md, MOB-03): who paid and for whom is kept in the raw_sms
+# audit tags ("PaidBy: me | Beneficiary: both", relative to the creator ``user_id``; settlements
+# carry the payer's member id). Selecting a missing column fails the whole query (FR-B-02/03).
+_PARTNER_TX_COLUMNS = (
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, "
+    "is_settlement, settlement_target_id, nafaqah_class"
+)
+_PARTNER_TX_COLUMNS_PRE_NAFAQAH = (
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, is_settlement, settlement_target_id"
+)
+_V2_TX_COLUMNS = (
+    "id, user_id, amount, raw_sms, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, "
+    "line_items, timestamp, category_code, spent_by, nafaqah_class, nafaqah_spouse_id"
+)
+
+
+def audit_tag(raw_sms: Any, tag: str) -> str:
+    """Lower-cased value of the first ``<tag>: value`` part of a ``|``-separated audit note."""
+    prefix = f"{tag.lower()}:"
+    for part in str(raw_sms or "").split("|"):
+        text = part.strip().lower()
+        if text.startswith(prefix):
+            return text[len(prefix):].strip()
+    return ""
+
+
+def _swap_relative(value: str) -> str:
+    return {"me": "partner", "partner": "me"}.get(value, value)
+
+
+def resolve_payer_id(tx: Dict[str, Any], member_ids: List[str]) -> Optional[str]:
+    """
+    Member id of whoever paid ``tx``: the ``PaidBy:`` tag when it names a member, the creator
+    for 'me' (or no tag), the other member for 'partner' in a two-member household; None when
+    the payer cannot be determined (legacy rows without a creator), never a guess.
+    """
+    members = [str(m).lower() for m in member_ids]
+    creator = str(tx.get("user_id") or "").lower()
+    tag = audit_tag(tx.get("raw_sms"), "paidby")
+    if tag in members:
+        return tag
+    if tag in ("", "me"):
+        return creator if creator in members else None
+    if tag == "partner" and creator in members and len(members) == 2:
+        return next(m for m in members if m != creator)
+    return None
+
+
+def _cycle_transactions(client, household_id: str, start_iso: str, columns: str) -> List[Dict[str, Any]]:
+    response = (
+        client.table("transactions")
+        .select(columns)
+        .eq("household_id", household_id)
+        .gte("timestamp", start_iso)
+        .order("timestamp", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
 def _nafaqah_balance(ctx: FamilyContext, wife_ids: List[str]) -> Dict[str, Any]:
     """
     Outstanding Nafaqah debt from the ledger (``wife_reimbursable`` advances minus
@@ -80,30 +141,12 @@ def calculate_partner_settlement(
     start_iso = cycle_start or dates["cycle_start"]
 
     try:
-        response = (
-            client.table("transactions")
-            .select("id, amount, merchant, category_code, spent_by, paid_by, beneficiary, timestamp, raw_sms, nafaqah_class")
-            .eq("household_id", household_id)
-            .gte("timestamp", start_iso)
-            .order("timestamp", desc=True)
-            .execute()
-        )
-        txs = response.data or []
+        txs = _cycle_transactions(client, household_id, start_iso, _PARTNER_TX_COLUMNS)
     except Exception as exc:
-        logger.warning("Querying with paid_by/beneficiary failed (%s), falling back to spent_by query.", exc)
-        try:
-            response = (
-                client.table("transactions")
-                .select("id, amount, merchant, category_code, spent_by, timestamp, raw_sms")
-                .eq("household_id", household_id)
-                .gte("timestamp", start_iso)
-                .order("timestamp", desc=True)
-                .execute()
-            )
-            txs = response.data or []
-        except Exception as inner_exc:
-            logger.error("Failed to query transactions for settlement: %s", inner_exc)
-            txs = []
+        # Databases without the Nafaqah migration lack nafaqah_class; any other failure propagates
+        # (an empty list would report every balance as settled).
+        logger.warning("Settlement query with nafaqah_class failed (%s), retrying without it.", exc)
+        txs = _cycle_transactions(client, household_id, start_iso, _PARTNER_TX_COLUMNS_PRE_NAFAQAH)
 
     me_personal_total = 0.0
     partner_personal_total = 0.0
@@ -112,17 +155,40 @@ def calculate_partner_settlement(
     i_paid_for_partner_100 = 0.0
     partner_paid_for_me_100 = 0.0
 
+    settled_by_me = 0.0
+    settled_to_me = 0.0
+    caller = str(caller_user_id or "").lower()
+
     shared_txs: List[Dict[str, Any]] = []
 
     for tx in txs:
-        amt = float(tx.get("amount", 0.0))
+        amt = float(tx.get("amount") or 0.0)
         cat = tx.get("category_code") or ""
         raw_sms = (tx.get("raw_sms") or "").lower()
+        creator = str(tx.get("user_id") or "").lower()
 
-        # Check explicit paid_by and beneficiary
-        paid_by = (tx.get("paid_by") or "").strip().lower()
-        beneficiary = (tx.get("beneficiary") or "").strip().lower()
+        if tx.get("is_settlement"):
+            # A recorded settlement payment, not a shared expense. Family debts live in the
+            # Nafaqah ledger (spouse_reimbursements), so settlement rows only move roommate
+            # balances: paying the partner back raises what they owe me (lowers what I owe).
+            if not is_family and caller:
+                payer = audit_tag(raw_sms, "paidby") or creator
+                recipient = str(tx.get("settlement_target_id") or "").lower()
+                if payer == caller:
+                    settled_by_me += amt
+                elif recipient == caller:
+                    settled_to_me += amt
+            continue
+
+        # Attribution tags are relative to the transaction's creator; turn them around when
+        # another member is looking ('me' of the creator is 'partner' of the caller).
+        paid_by = audit_tag(raw_sms, "paidby")
+        beneficiary = audit_tag(raw_sms, "beneficiary")
         spent_by = (tx.get("spent_by") or "").strip().lower()
+        if caller and creator and creator != caller:
+            paid_by, beneficiary, spent_by = (
+                _swap_relative(paid_by), _swap_relative(beneficiary), _swap_relative(spent_by)
+            )
 
         # Family: the explicit Nafaqah class decides, relative to the caller ('me').
         nafaqah_class = str(tx.get("nafaqah_class") or "").strip().lower()
@@ -132,16 +198,6 @@ def calculate_partner_settlement(
                 beneficiary = paid_by
             else:
                 beneficiary = "both"
-
-        # Fallback to parsing raw_sms tags if present
-        if not paid_by and "paidby:" in raw_sms:
-            for part in raw_sms.split("|"):
-                if "paidby:" in part:
-                    paid_by = part.replace("paidby:", "").strip().lower()
-        if not beneficiary and "beneficiary:" in raw_sms:
-            for part in raw_sms.split("|"):
-                if "beneficiary:" in part:
-                    beneficiary = part.replace("beneficiary:", "").strip().lower()
 
         # Fallback to legacy spent_by if still undefined
         if not paid_by or not beneficiary:
@@ -219,6 +275,10 @@ def calculate_partner_settlement(
         # What I owe partner:
         i_owe_for_shared = shared_paid_by_partner * split_ratio
         total_owed_to_partner = partner_paid_for_me_100 + i_owe_for_shared
+
+        # Recorded settlement payments between the two of us.
+        total_owed_to_me += settled_by_me
+        total_owed_to_partner += settled_to_me
 
     # Net balance: positive = partner owes me, negative = I owe partner
     net_balance = round(total_owed_to_me - total_owed_to_partner, 2)
@@ -487,19 +547,15 @@ def calculate_settlement_v2(
     has_peers = any(m.get("financial_role") == "peer" for m in members)
     has_spouse = ctx.is_family
 
-    try:
-        tx_resp = (
-            client.table("transactions")
-            .select("id, amount, paid_by, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, line_items, timestamp, category_code, spent_by, nafaqah_class, nafaqah_spouse_id")
-            .eq("household_id", household_id)
-            .gte("timestamp", start_iso)
-            .order("timestamp", desc=True)
-            .execute()
-        )
-        txs = tx_resp.data or []
-    except Exception as exc:
-        logger.warning("Failed to fetch transactions for settlement v2: %s", exc)
-        txs = []
+    # No fallback on failure: an empty list would report every balance as settled.
+    member_ids = list(ctx.members.keys())
+    txs = []
+    for tx in _cycle_transactions(client, household_id, start_iso, _V2_TX_COLUMNS):
+        payer = resolve_payer_id(tx, member_ids)
+        if payer is None:
+            logger.info("Settlement v2: payer of transaction %s unknown; not attributed.", tx.get("id"))
+            continue
+        txs.append({**tx, "paid_by": payer})
 
     if has_peers and not has_spouse:
         peers = [m["id"] for m in members]

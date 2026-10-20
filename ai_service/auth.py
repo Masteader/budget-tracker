@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 # Supabase JWT Secret — if unset in dev, will warn and skip crypto verification
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "").strip()
-IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
 
 
 def _check_household_membership(user_household_id: Optional[str], requested_household_id: str) -> None:

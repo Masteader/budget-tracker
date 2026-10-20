@@ -12,7 +12,6 @@ import binascii
 import json
 import logging
 import math
-import os
 import re
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -34,7 +33,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
-from utils import riyadh_today, riyadh_date_for_timestamp  # noqa: E402  (Asia/Riyadh calendar date)
+from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +308,7 @@ def parse_receipt_images(
     qr_code_raw: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Call Gemini multimodal vision API with 1 or more receipt images."""
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.5-flash-lite")
+    model = litellm_model()
     
     prompt_text = RECEIPT_PROMPT
     if qr_code_raw:
@@ -746,14 +745,19 @@ def process_receipt_scan(
         deficit = total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
     items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
     if len(items) > 10:
         items_summary += f" ...and {len(items) - 10} more items"
-    audit_text = f"Receipt Scan: {merchant} ({len(items)} items) | Items: [{items_summary}]"
+    # Who paid and for whom live only in these tags (public.transactions has no paid_by /
+    # beneficiary column); the settlement engines read them like the chat entry's tags.
+    audit_text = (
+        f"Receipt Scan: {merchant} ({len(items)} items) | PaidBy: {nafaqah['paid_by']} "
+        f"| Beneficiary: {nafaqah['beneficiary']} | SpentBy: {spent_by} | Items: [{items_summary}]"
+    )
 
     tx_id = insert_transaction(
         household_id=household_id,

@@ -567,7 +567,7 @@ def test_legacy_route_unchanged_for_roommates(family):
     assert resp.status_code == 200, resp.text
     assert resp.json()["is_settlement"] is True
     settlement = [t for t in family.tables["transactions"] if t.get("is_settlement")]
-    assert len(settlement) == 1 and settlement[0]["amount"] == 75.0
+    assert len(settlement) == 1 and Decimal(str(settlement[0]["amount"])) == Decimal("75.00")
     assert "spouse_reimbursements" not in family.tables
 
 
@@ -621,7 +621,8 @@ def test_settlement_v2_finds_wife_and_roommates_through_memberships(family):
 
     _move_active_household(family, PEER2, HH_OTHER)  # a roommate viewing another household
     family.seed("transactions", [
-        {"id": "r1", "household_id": HH_ROOM, "amount": 100.0, "paid_by": PEER1, "beneficiary_type": "all_peers",
+        # No paid_by column exists: the creator paid unless a PaidBy: tag names another member.
+        {"id": "r1", "household_id": HH_ROOM, "amount": 100.0, "user_id": PEER1, "beneficiary_type": "all_peers",
          "timestamp": "2026-11-03T09:00:00+00:00"},
     ])
     res = calculate_settlement_v2(HH_ROOM, cycle_start="2000-01-01")
@@ -805,17 +806,25 @@ def test_chat_consistent_class_and_attribution_are_stored(family, user, paid_by,
     expected = None if cls == "none" else cls
     assert tx.get("nafaqah_class") == expected
     assert tx.get("nafaqah_spouse_id") == (WIFE if expected else None)
-    assert (tx["paid_by"], tx["beneficiary"]) == (paid_by, beneficiary)
+    assert _attribution(tx) == (paid_by, beneficiary)
+
+
+def _attribution(tx):
+    """(paid_by, beneficiary) as stored: raw_sms audit tags (no such columns exist)."""
+    from settlement_engine import audit_tag
+
+    assert "paid_by" not in tx and "beneficiary" not in tx
+    return audit_tag(tx["raw_sms"], "paidby"), audit_tag(tx["raw_sms"], "beneficiary")
 
 
 def test_chat_class_without_attribution_recomputes_paid_by_and_beneficiary(family):
     resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="wife_personal")
     assert resp.status_code == 200
     tx = _last_tx(family)
-    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and (tx["paid_by"], tx["beneficiary"]) == ("me", "me")
+    assert tx["nafaqah_class"] == ns.WIFE_PERSONAL and _attribution(tx) == ("me", "me")
     resp = _chat(WIFE, "دفعت فاتورة البيت 300 ريال", nafaqah_class="none")
     tx = _last_tx(family)
-    assert tx.get("nafaqah_class") is None and tx["paid_by"] == "partner"
+    assert tx.get("nafaqah_class") is None and _attribution(tx)[0] == "partner"
 
 
 def test_chat_multi_wife_household_takes_the_chosen_wife(family):

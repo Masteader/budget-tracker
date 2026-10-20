@@ -150,7 +150,6 @@ async def request_size_limit_middleware(request: Request, call_next):
 
 # ─── Auth Token & Firewall (OWASP A01 / A02) ───────────────────────────────────
 APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
-IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
 
 if not APP_AUTH_TOKEN:
     logger.warning(

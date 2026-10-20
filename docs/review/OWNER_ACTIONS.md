@@ -93,3 +93,8 @@ For automated transactional and password reset emails sent from `budget.fmsco.co
   If `_dmarc.fmsco.com.sa` does not already exist, create:
   `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@fmsco.com.sa; pct=100; adkim=s; aspf=s`
   If a corporate DMARC record already exists, leave it unchanged.
+
+
+## Final backend review (2026-10-20)
+
+- **Apply `supabase/migrations/20261020500000_review_lock_financial_role.sql` to live** (SQL editor, one statement, idempotent, no data change). It stops members from rewriting their own `users.financial_role`, which drives Nafaqah (FR-B-04 in `docs/review/audit/final_review_backend.md`). Deploy the backend from this branch afterwards; the order does not matter for this file.

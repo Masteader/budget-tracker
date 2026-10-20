@@ -282,7 +282,7 @@ class InstallmentService:
             end_ts = f"{cycle_info['cycle_end']}T23:59:59"
             tx_res = (
                 sb.table("transactions")
-                .select("id, category_code, amount, cycle_key, timestamp")
+                .select("id, category_code, amount, cycle_key, timestamp, is_settlement")
                 .eq("household_id", household_id)
                 .execute()
             )
@@ -290,6 +290,8 @@ class InstallmentService:
             # Filter by cycle_key or date range
             spent_by_cat: Dict[str, float] = {}
             for t in (tx_res.data or []):
+                if t.get("is_settlement"):
+                    continue  # a settlement payment between members is not spending
                 t_cycle = t.get("cycle_key")
                 t_ts = t.get("timestamp") or ""
                 in_cycle = (t_cycle == target_key) or (not t_cycle and start_ts <= t_ts <= end_ts)

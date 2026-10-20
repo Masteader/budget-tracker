@@ -16,6 +16,15 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 
+class FakeSchemaError(Exception):
+    """PostgREST's answer to an unknown column (PGRST204 on writes, 42703 on reads)."""
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+
+
 class FakeResponse:
     def __init__(self, data: Any = None, count: Optional[int] = None):
         self.data = data
@@ -34,10 +43,13 @@ class FakeQuery:
         self._single = False
         self._maybe_single = False
         self._on_conflict: Optional[str] = None
+        self._columns: List[str] = []
+        self._filters_columns: List[str] = []
 
     # ── verbs ──────────────────────────────────────────────────────────────
-    def select(self, *_cols: str, **_kw: Any) -> "FakeQuery":
+    def select(self, *cols: str, **_kw: Any) -> "FakeQuery":
         self._op = "select"
+        self._columns = [c.strip() for col in cols for c in str(col).split(",") if c.strip()]
         return self
 
     def insert(self, payload: Any, **_kw: Any) -> "FakeQuery":
@@ -62,40 +74,49 @@ class FakeQuery:
 
     # ── filters ────────────────────────────────────────────────────────────
     def eq(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) == val)
         return self
 
     def neq(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) != val)
         return self
 
     def in_(self, col: str, vals: list) -> "FakeQuery":
+        self._filters_columns.append(col)
         allowed = list(vals)
         self._filters.append(lambda r: r.get(col) in allowed)
         return self
 
     def gt(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) is not None and r.get(col) > val)
         return self
 
     def gte(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) is not None and r.get(col) >= val)
         return self
 
     def lt(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) is not None and r.get(col) < val)
         return self
 
     def lte(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: r.get(col) is not None and r.get(col) <= val)
         return self
 
     def is_(self, col: str, val: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         target = None if val in (None, "null") else val
         self._filters.append(lambda r: r.get(col) is target)
         return self
 
     def contains(self, col: str, vals: Any) -> "FakeQuery":
+        self._filters_columns.append(col)
         self._filters.append(lambda r: all(v in (r.get(col) or []) for v in vals))
         return self
 
@@ -119,7 +140,25 @@ class FakeQuery:
     def _matches(self, row: dict) -> bool:
         return all(f(row) for f in self._filters)
 
+    def _check_schema(self) -> None:
+        """With ``client.schemas[table]`` set, unknown columns fail like they do on PostgREST."""
+        known = self._client.schemas.get(self._table)
+        if known is None:
+            return
+        if self._op == "select":
+            names = [c for c in self._columns if c != "*"]
+        elif self._op in ("insert", "upsert", "update"):
+            items = self._payload if isinstance(self._payload, list) else [self._payload]
+            names = [k for item in items for k in (item or {})]
+        else:
+            names = []
+        for col in self._filters_columns + names:
+            if col not in known:
+                code = "42703" if self._op == "select" else "PGRST204"
+                raise FakeSchemaError(f"column {self._table}.{col} does not exist", code)
+
     def execute(self) -> FakeResponse:
+        self._check_schema()
         rows = self._client.tables.setdefault(self._table, [])
         if self._op == "insert":
             items = self._payload if isinstance(self._payload, list) else [self._payload]
@@ -155,6 +194,9 @@ class FakeQuery:
             return FakeResponse([copy.deepcopy(r) for r in matched])
 
         result = [copy.deepcopy(r) for r in matched]
+        if self._table in self._client.schemas and self._columns and "*" not in self._columns:
+            # Strict tables also return only the selected columns, like PostgREST.
+            result = [{c: r.get(c) for c in self._columns} for r in result]
         if self._order:
             col, desc = self._order
             result.sort(key=lambda r: (r.get(col) is None, r.get(col)), reverse=desc)
@@ -214,6 +256,8 @@ class FakeSupabaseClient:
         self.rpc_calls: List[tuple[str, dict]] = []
         self.storage_objects: Dict[tuple[str, str], bytes] = {}
         self.storage = FakeStorage(self)
+        # Optional {table: {column, ...}}: queries naming other columns raise FakeSchemaError.
+        self.schemas: Dict[str, set] = {}
 
     def table(self, name: str) -> FakeQuery:
         return FakeQuery(self, name)

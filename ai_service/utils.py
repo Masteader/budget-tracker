@@ -71,6 +71,16 @@ def validate_uuid(value: str, field_name: str = "household_id") -> str:
     return value
 
 
+# The one LiteLLM model used when LITELLM_MODEL is unset (chat, receipt scanning and support
+# used to fall back to three different models). Keep .env.example and docker-compose.yml in step.
+DEFAULT_LITELLM_MODEL = "gemini/gemini-3.6-flash-lite"
+
+
+def litellm_model() -> str:
+    """LITELLM_MODEL when set (read per call, so a redeploy-free env change applies), else the default."""
+    return os.environ.get("LITELLM_MODEL", "").strip() or DEFAULT_LITELLM_MODEL
+
+
 _NON_PRODUCTION_ENVS = {"development", "dev", "local", "test", "testing"}
 
 

@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from supabase import create_client, Client
 
@@ -295,44 +295,32 @@ def fetch_flexible_budgets(
     return [BudgetRow(**r) for r in rows]
 
 
-def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: float) -> None:
+def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: Any) -> bool:
     """
-    Reallocate `amount` from a flexible budget to cover a deficit in `to_budget_id`.
-    Atomically shifts `allocated_amount` between the two budgets so total household
-    spend remains strictly pegged to actual transactions without phantom expenses.
+    Move ``amount`` of allocation from a flexible budget to ``to_budget_id`` through the
+    ``reallocate_budget`` RPC (20261020030000: row locks, same-household and sufficient-allocation
+    checks, positive amount with at most 2 decimals). Returns True when it happened.
+
+    The amount is sent as exact decimal text: a float deficit such as 50.3 - 20.1 =
+    30.199999999999996 was refused by the RPC, and the old fallback then rewrote both rows with
+    two unlocked, unchecked updates (FR-B-06). A refusal now just means no reallocation.
     """
-    client = get_client()
+    from decimal import ROUND_HALF_UP, Decimal
+
+    value = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if value <= 0:
+        return False
     try:
-        client.rpc("reallocate_budget", {
+        get_client().rpc("reallocate_budget", {
             "p_from_id": from_budget_id,
             "p_to_id": to_budget_id,
-            "p_amount": amount,
+            "p_amount": format(value, "f"),
         }).execute()
     except Exception as exc:
-        logger.warning("RPC reallocate_budget unavailable (%s), falling back to two-step update.", exc)
-        from_row = client.table("budgets").select("allocated_amount").eq("id", from_budget_id).single().execute()
-        to_row = client.table("budgets").select("allocated_amount").eq("id", to_budget_id).single().execute()
-        client.table("budgets").update({
-            "allocated_amount": from_row.data["allocated_amount"] - amount
-        }).eq("id", from_budget_id).execute()
-        client.table("budgets").update({
-            "allocated_amount": to_row.data["allocated_amount"] + amount
-        }).eq("id", to_budget_id).execute()
-
-    logger.info("Reallocated %.2f from budget %s to %s.", amount, from_budget_id, to_budget_id)
-
-
-def deduct_from_budget(budget_id: str, amount: float) -> None:
-    """
-    Legacy helper: Add `amount` to a budget's spent_amount.
-    """
-    client = get_client()
-    current = client.table("budgets").select("spent_amount").eq("id", budget_id).single().execute()
-    current_spent = current.data["spent_amount"]
-    new_spent = current_spent + amount
-
-    client.table("budgets").update({"spent_amount": new_spent}).eq("id", budget_id).execute()
-    logger.info("Deducted %.2f from budget %s (new spent=%.2f).", amount, budget_id, new_spent)
+        logger.warning("Budget reallocation %s -> %s of %s refused: %s", from_budget_id, to_budget_id, value, exc)
+        return False
+    logger.info("Reallocated %s from budget %s to %s.", value, from_budget_id, to_budget_id)
+    return True
 
 
 # =============================================================================
@@ -427,10 +415,9 @@ def insert_transaction(
         payload["receipt_url"] = receipt_url
     if spent_by:
         payload["spent_by"] = spent_by
-    if paid_by:
-        payload["paid_by"] = paid_by
-    if beneficiary:
-        payload["beneficiary"] = beneficiary
+    # paid_by / beneficiary are not columns of public.transactions (live and the repo schema
+    # agree): callers keep them in the raw_sms "PaidBy: | Beneficiary:" audit tags, which the
+    # settlement engines read. Sending them made every first insert attempt fail (FR-B-11).
     if sub_category:
         payload["sub_category"] = sub_category
     if cycle_key:
@@ -450,42 +437,35 @@ def insert_transaction(
     try:
         response = client.table("transactions").insert(payload).execute()
     except Exception as exc:
-        logger.warning("Insert with initial payload failed (%s), retrying without unmigrated attribution columns.", exc)
-        # Prune unmigrated columns (paid_by and beneficiary are already recorded in the raw_sms audit note)
+        logger.warning("Insert with initial payload failed (%s), pruning advanced optional columns.", exc)
         safe_payload = dict(payload)
-        safe_payload.pop("paid_by", None)
-        safe_payload.pop("beneficiary", None)
+        safe_payload.pop("qr_code_raw", None)
+        safe_payload.pop("dedup_fingerprint", None)
         try:
             response = client.table("transactions").insert(safe_payload).execute()
-        except Exception as exc2:
-            logger.warning("Insert without paid_by/beneficiary failed (%s), pruning advanced optional columns.", exc2)
-            safe_payload.pop("qr_code_raw", None)
-            safe_payload.pop("dedup_fingerprint", None)
-            try:
-                response = client.table("transactions").insert(safe_payload).execute()
-            except Exception as exc3:
-                logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
-                base_payload = {
-                    "household_id": household_id,
-                    "user_id": user_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "merchant": merchant,
-                    "category_code": category_code,
-                    "timestamp": timestamp,
-                    "raw_sms": raw_sms,
-                    "is_reallocated": is_reallocated,
-                    "reallocated_from_budget_id": reallocated_from_budget_id,
-                    "source": source,
-                }
-                if sub_category:
-                    base_payload["sub_category"] = sub_category
-                if cycle_key:
-                    base_payload["cycle_key"] = cycle_key
-                if spent_by:
-                    base_payload["spent_by"] = spent_by
-                base_payload.update(nafaqah_fields)
-                response = client.table("transactions").insert(base_payload).execute()
+        except Exception as exc3:
+            logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
+            base_payload = {
+                "household_id": household_id,
+                "user_id": user_id,
+                "amount": amount,
+                "currency": currency,
+                "merchant": merchant,
+                "category_code": category_code,
+                "timestamp": timestamp,
+                "raw_sms": raw_sms,
+                "is_reallocated": is_reallocated,
+                "reallocated_from_budget_id": reallocated_from_budget_id,
+                "source": source,
+            }
+            if sub_category:
+                base_payload["sub_category"] = sub_category
+            if cycle_key:
+                base_payload["cycle_key"] = cycle_key
+            if spent_by:
+                base_payload["spent_by"] = spent_by
+            base_payload.update(nafaqah_fields)
+            response = client.table("transactions").insert(base_payload).execute()
 
     transaction_id = response.data[0]["id"]
     logger.info(
@@ -1090,35 +1070,49 @@ def record_household_reimbursement(
     household_id: str,
     payer_id: str,
     recipient_id: str,
-    amount: float,
+    amount: Any,
     payment_method: str = "stc_pay",
     notes: Optional[str] = None,
     recorded_by: Optional[str] = None,
 ) -> dict:
     """
-    Records a settlement reimbursement transaction between household members.
-    ``recorded_by`` (the verified caller) is stored as the transaction's creator.
+    Records a roommate/partner settlement payment (``payer_id`` paid ``recipient_id``).
+
+    Only columns that exist on ``public.transactions`` are written (FR-B-01: there is no
+    ``paid_by`` or ``notes`` column and no ``OPEX-SETTLEMENT`` category, so the previous payload
+    was rejected on every call). The payer is kept in the ``PaidBy:`` audit tag of ``raw_sms``
+    (the tag chat entries use), the recipient in ``beneficiary_id`` / ``settlement_target_id``,
+    and ``category_code`` stays NULL so a settlement is never counted as spending in a budget
+    category. ``recorded_by`` (the verified caller) is the transaction's creator (DB-18).
     """
     import uuid
-    from datetime import datetime, timezone
+    from decimal import Decimal
 
     tx_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    note_text = notes or f"Reimbursement via {payment_method.upper()}"
+    value = Decimal(str(amount)).quantize(Decimal("0.01"))
+    method = (payment_method or "").strip().upper() or "OTHER"
+    # One audit part per tag: a "|" inside the note must not create a second PaidBy tag.
+    note_text = " ".join((notes or "").replace("|", "/").split())[:500]
+    audit = f"Settlement | PaidBy: {payer_id} | Recipient: {recipient_id} | Method: {method}"
+    if note_text:
+        audit += f" | Note: {note_text}"
 
     tx_data = {
         "id": tx_id,
         "household_id": household_id,
         "user_id": recorded_by,
-        "amount": round(float(amount), 2),
-        "merchant": f"Settlement Reimbursement ({payment_method.upper()})",
-        "category_code": "OPEX-SETTLEMENT",
-        "paid_by": payer_id,
+        # Exact decimal text: PostgREST casts it to numeric(14,2) without a float round trip.
+        "amount": format(value, "f"),
+        "currency": "SAR",
+        "merchant": f"Settlement Reimbursement ({method})",
+        "category_code": None,
         "beneficiary_type": "individual",
         "beneficiary_id": recipient_id,
         "settlement_target_id": recipient_id,
         "is_settlement": True,
-        "notes": note_text,
+        "source": "manual",
+        "raw_sms": audit,
         "timestamp": now_iso,
     }
 
@@ -1131,7 +1125,7 @@ def record_household_reimbursement(
         "status": "success",
         "transaction_id": tx_id,
         "household_id": household_id,
-        "amount": round(float(amount), 2),
+        "amount": float(value),
         "payer_id": payer_id,
         "recipient_id": recipient_id,
         "is_settlement": True,

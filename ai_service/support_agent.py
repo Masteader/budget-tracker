@@ -4,6 +4,7 @@ import re
 import logging
 from typing import Optional, List, Dict, Tuple
 import litellm
+from utils import litellm_model
 
 _HISTORY_MAX_TURNS = 6
 _HISTORY_MAX_CHARS = 2000
@@ -129,7 +130,7 @@ async def handle_support_query(
 
     if api_key or os.environ.get("LITELLM_MODEL"):
         try:
-            model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
+            model = litellm_model()
             messages = [{"role": "system", "content": SUPPORT_SYSTEM_PROMPTS[lang_key]}]
             messages.extend(_sanitize_history(history))
             messages.append({"role": "user", "content": message})

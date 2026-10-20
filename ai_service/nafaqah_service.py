@@ -302,7 +302,8 @@ def resolve_expense_nafaqah(
     earlier preview is rejected, never stored against the edited attribution); without one the
     attribution is recomputed from the class. ``override_spouse_id`` names the wife in a
     household with several wives (required on commit when the class needs her); a wife records
-    only for herself. Households without a spouse member are never classified.
+    only for herself. Households without a spouse member are never classified. ``require_spouse``
+    marks a commit: then a failed household lookup raises instead of degrading to "not a family".
     Raises InvalidNafaqahRequest for an unknown or contradicting choice.
     """
     chosen = (_norm(override_class) or None) if override_class is not None else None
@@ -325,6 +326,11 @@ def resolve_expense_nafaqah(
     try:
         ctx = load_family_context(household_id)
     except Exception as exc:
+        if require_spouse:
+            # A commit must not guess "not a family": the expense would be stored without its
+            # class and the wife's reimbursement debt silently lost (FR-B-07). Fail so the
+            # client keeps the entry queued and retries.
+            raise
         logger.warning("Could not load family context for Nafaqah classification: %s", exc)
         return result
     if not ctx.is_family:
