@@ -91,7 +91,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | MOB-02 | Production URLs/keys compiled in as defaults; static `X-App-Token` sent from APK. | Fixed: `--dart-define` required, service-role keys rejected, https enforced in release, JWT only |
 | MOB-03/24 | Manual-expense and batch-receipt inserts used non-existent columns → every online save failed; replay dropped payer → wife-paid Nafaqah debt lost; local-time timestamps shifted by 3h. | Fixed (see §6.2 — verify live columns) |
 | MOB-08 | Expired session received 403 so the app never refreshed. | Fixed (both sides) |
-| MOB-18 | Android backups included tokens/queue/receipts; release signed with debug key. | Fixed (config verified by tests; APK not built — no Android SDK in sandbox) |
+| MOB-18 | Android backups included tokens/queue/receipts; release signed with debug key. | Fixed; debug APK, release APK and AAB built and the merged manifest inspected (see [`android_build.md`](android_build.md)). Emulator smoke test not run (no KVM) |
 | UI (several) | Payday banner never shown (wrong column `income_type` vs `source_type`, error swallowed); settlement sheets confirmed success on failure; Arabic/Urdu category names collided on code `OPEX-`; Urdu amounts labelled in rupees. | Fixed |
 | WEB-09 | Web waitlist shows success + confetti but sends the email nowhere. | Fixed: VIP and support requests are emailed to the developer via `/public/inquiries` and `/support/inquiries` (needs the email env vars on the deployment) |
 

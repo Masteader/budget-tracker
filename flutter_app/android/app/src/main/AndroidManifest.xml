@@ -9,6 +9,8 @@
 
     <!-- ── Microphone Permission for Voice Invoice Entry ──────────────────────── -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Voice entry is optional: do not hide the app from devices without a microphone. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- ── Network ──────────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
