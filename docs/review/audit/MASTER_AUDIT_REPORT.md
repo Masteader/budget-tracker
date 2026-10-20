@@ -1,6 +1,6 @@
 # Master Audit & Engineering Report — Budget Tracker
 
-Branch: `audit/claude-comprehensive-review` (base `main` @ `f17eb2b`) · Date: 2026-10-19
+Branch: `audit/claude-comprehensive-review` (base `main` @ `f17eb2b`) · Date: 2026-10-19 (updated 2026-10-20)
 Detailed reports: [`db.md`](db.md) · [`ai_service.md`](ai_service.md) · [`flutter_logic.md`](flutter_logic.md) · [`ui_web.md`](ui_web.md) · Fix log: [`../FIX_LOG.md`](../FIX_LOG.md)
 
 ---
@@ -17,13 +17,19 @@ Detailed reports: [`db.md`](db.md) · [`ai_service.md`](ai_service.md) · [`flut
 5. **تقسيم المصاريف بين الزوجين كان 50/50** بالسيرفر، وهاد عكس قواعد النفقة.
 6. **حوالي 760 نص بالتطبيق كانوا مكتوبين مباشرة** (أغلبهم إنجليزي)، وهلق صاروا مترجمين للعربي والإنجليزي والأوردو.
 
-**الاختبارات:** كلها ناجحة. Flutter: 367 اختبار (كانوا 141). Python: 251 (كان في 11 فاشلين). قاعدة البيانات: 17 من 17 (كانوا 2 بس ناجحين).
+**الجولة التانية (بطلب صاحب المشروع):**
+- **الإيميلات:** كل طلب دعم أو تسجيل VIP بينبعت فعلياً من `fmscoinfo@fmsco.com.sa` (لـ `CONTACT_RECIPIENT_EMAIL`)، وكل إيميل ظاهر للمستخدم صار `fmscoinfo@fmsco.com.sa`.
+- **الرسائل النصية:** انحذف كل شي له علاقة بقراءة SMS أو رسائل البنك، وضلت بس جملة "التطبيق ما بيقرأ رسائلك".
+- **النفقة:** ما في 50/50 بين الزوجين؛ الزوجة لما تدفع على شي مشترك بينسجّل دين على الزوج، ولما تشتري لنفسها بينخصم من ميزانية مصروفها.
+- **فحص تلقائي (CI)** على GitHub، و**تشفير رموز الدخول** بالتطبيق، وإصلاح رسائل "تم الحفظ" الوهمية والتراجع عن الحذف.
+
+**الاختبارات:** كلها ناجحة. Flutter: 466 اختبار (كانوا 141). Python: 387 (كان في 11 فاشلين). قاعدة البيانات: 19 من 19 (كانوا 2 بس ناجحين).
 
 **المطلوب من صاحب المشروع قبل النشر** (التفاصيل بالقسم 6):
-1. يغيّر `WEBHOOK_SECRET` و`APP_AUTH_TOKEN`.
-2. يحط مفتاح السيرفر السري الصحيح (`sb_secret_…`)، لأن المحطوط حالياً هو المفتاح العام.
-3. ينشر بالترتيب: قاعدة البيانات، بعدين السيرفر، بعدين التطبيق.
-4. ياخد قرار بـ5 أسئلة تخص طريقة عمل المنتج (القسم 6.3).
+1. ✅ `sb_secret` و`WEBHOOK_SECRET` الجديد صاروا على Railway (حسب صاحب المشروع). **باقي يتأكد إنه `APP_AUTH_TOKEN` تغيّر.**
+2. يضيف إعدادات إرسال الإيميل على Railway (Resend أو SMTP، القسم 6.1).
+3. ينشر بالترتيب: قاعدة البيانات، بعدين السيرفر، بعدين نسخة التطبيق الجديدة.
+4. ياخد قرار بسؤالين عن طريقة عمل المنتج (القسم 6.3).
 
 ---
 
@@ -45,9 +51,9 @@ Scores are the auditors' qualitative assessment (0–10) of the code as found vs
 | Gate | Baseline (`f17eb2b`) | Final |
 |---|---|---|
 | `flutter analyze` | 0 issues | 0 issues |
-| `flutter test` | 141 passed | **367 passed**, 0 failed |
-| `pytest` (ai_service) | 127 passed, **11 failed**, 6 skipped (and non-hermetic: talks to live Supabase when a dev `.env` exists) | **251 passed**, 0 failed, 6 skipped; no network, no `.env`, no LLM |
-| DB SQL suites (local Postgres 16, rebuilt from scratch) | 2 passed / 5 failed | **17 / 17 passed** |
+| `flutter test` | 141 passed | **466 passed**, 0 failed |
+| `pytest` (ai_service) | 127 passed, **11 failed**, 6 skipped (and non-hermetic: talks to live Supabase when a dev `.env` exists) | **387 passed**, 0 failed; no network, no `.env`, no LLM |
+| DB SQL suites (local Postgres 16, rebuilt from scratch) | 2 passed / 5 failed | **19 / 19 passed** |
 | `web_app` build + lint | pass, 1 lint warning | pass, 0 warnings |
 
 ---
@@ -96,10 +102,12 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 - **Offline sync:** stuck rows after app kill, merged identical purchases, retry budget burned by network errors, re-entrant drains, receipt blobs in SQLite (MOB-04/05/09/10/11, fixed).
 - **Security hardening:** Redis limiter correctness and `X-Forwarded-For` spoofing (API-09/10); missing `ENV` treated as dev, API docs public in prod (API-11/29); JWT `exp` not required / no role check / unthrottled JWKS (API-12); stale membership honoured (API-13); receipt path traversal and MIME checks (API-23); receipts bucket without size/type limits (DB-11); search_path not pinned (DB-09); vulnerable `python-jose` (API-28).
 - **Account lifecycle:** sole admin could not delete their account (DB-12).
-- **Islamic family finance (UI-24, resolved by owner decision; extends API-16/17):** family mode never splits between the spouses. Wife-paid shared expenses are a debt the husband owes her (`nafaqah_class = wife_reimbursable`, append-only `spouse_reimbursements`, partial/full repayment, overpayment rejected); her personal purchases are charged to a per-cycle allowance (`member_allowances`, overspend shown negative); husband-paid shared expenses stay plain expenses. Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + DB test 18; API `/households/{id}/nafaqah*` (`ai_service/tests/test_nafaqah.py`); app family card, allowance card and Nafaqah selector (no "Shared 50/50" in family mode). Roommate mode unchanged.
+- **Islamic family finance (UI-24, resolved by owner decision; extends API-16/17):** family mode never splits between the spouses. Wife-paid shared expenses are a debt the husband owes her (`nafaqah_class = wife_reimbursable`, append-only `spouse_reimbursements`, partial/full repayment, overpayment rejected); her personal purchases are charged to a per-cycle allowance (`member_allowances`, overspend shown negative); husband-paid shared expenses stay plain expenses. Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + DB test 19; API `/households/{id}/nafaqah*` (`ai_service/tests/test_nafaqah.py`); app family card, allowance card and Nafaqah selector (no "Shared 50/50" in family mode). Roommate mode unchanged.
 - **Tests that could not fail:** DB suites 03/06/07 (DB-14) — note FIX_LOG SEC-06/SEC-08 "verified" entries relied on them.
 - **UI/UX:** 32 RTL mirroring fixes; 22 icon buttons labelled; ~15 white-on-white spots in light mode; brand teal/green text failing contrast replaced by AA tokens; ~25 `mounted`/context-after-await fixes; leaked subscriptions/controllers.
 - **Web:** hardcoded Arabic in English mode, a11y (labels, skip link, focus, reduced motion), multi-MB icon font trimmed, meta/SEO.
+- **Mobile reliability (round 2):** session tokens moved to `flutter_secure_storage` with one-time migration (MOB-19; confirm with a real `flutter build apk`); statement PDF downloaded through the authenticated client (MOB-26); payday/income/rollover saves only report success after the server confirms (MOB-27); offline-queue write failures surface as errors (MOB-28); undo-after-delete restores the full row (UI-25; `installment_plans.original_transaction_id` stays null after undo); 14 dialog controllers disposed after close (UI-20).
+- **Support & VIP email (WEB-09):** `/public/inquiries` and `/support/inquiries` email every request from `MAIL_FROM` (default `Budget Tracker <fmscoinfo@fmsco.com.sa>`) to `CONTACT_RECIPIENT_EMAIL`; all user-facing contact addresses show `fmscoinfo@fmsco.com.sa`.
 - **Performance:** per-row RLS helper evaluation and 7 missing indexes (DB-13: 50k-row query 55 ms → 11 ms).
 
 **Open (not fixed), with reason:**
@@ -114,11 +122,8 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | API-33 | Medium | Local JSON / in-memory fallbacks diverge across containers. | Design change (require Redis/DB) |
 | API-34/35 | Low | Chat category overrides not validated; JWT decoded twice; full scan after insert. | Low priority |
 | MOB-06/12 | Medium | Idempotency/`client_occurred_at`: app + backend done; keys are per-process unless `REDIS_URL` is set. | Set `REDIS_URL` in prod |
-| MOB-19 | Medium | Tokens in plain SharedPreferences. | Needs `flutter_secure_storage` native build |
 | MOB-23 | Medium | `WEBHOOK_SECRET` still compiled into app for old backend compatibility. | Remove after backend from this branch is live |
-| MOB-26/27/28 | Low | Statement PDF opens unauthenticated; payday save / "saved offline" report success on failure. | UI changes |
-| UI-25 | Medium | Undo-after-delete recreates the transaction without payer/beneficiary/account. | Data-layer change |
-| UI misc | Low | 17 undisposed dialog controllers; Arabic font not Cairo/Tajawal; 290 remaining hardcoded colors; dead footer links; no Urdu on web; Tailwind via CDN on landing pages. | Low priority |
+| UI misc | Low | Arabic font not Cairo/Tajawal; 290 remaining hardcoded colors; dead footer links; no Urdu on web; Tailwind via CDN on landing pages. | Low priority |
 
 ---
 
@@ -127,25 +132,29 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 1. **One source of truth for authorization.** Most High findings are one class of bug: the backend uses a privileged Supabase client and re-implements household checks by hand. Prefer forwarding the user's JWT to PostgREST so RLS enforces access, and reserve the secret key for narrow `SECURITY DEFINER` RPCs that check `auth.uid()` membership themselves. This removes the IDOR class instead of patching instances.
 2. **Money as integers end to end.** Store and compute halalas as `bigint` (or keep `numeric(14,2)` with `CHECK` constraints in DB), `Decimal` in Python (done), and a `Money` value type over `int` in Dart (MOB-29). Ban `double` for currency via an analyzer lint.
 3. **Single cycle specification.** `get_saudi_cycle_for_timestamp` is canonical. Keep the 109 vectors as a shared JSON fixture consumed by the SQL, pytest and Flutter suites so the three implementations cannot drift again.
-4. **Replayable migrations + CI.** Re-baseline from live (`supabase db pull`), renumber duplicates, and add a GitHub Actions workflow that: rebuilds Postgres from `00_local_supabase_stubs.sql` + migrations and runs `supabase/tests/run_tests.py --psql --rebuild`; runs `pytest`; runs `flutter analyze` + `flutter test`; builds `web_app`; runs a secret scanner (e.g. gitleaks) on every PR.
+4. **Replayable migrations + CI.** CI is added (`.github/workflows/ci.yml`: Flutter, pytest, DB suite on `postgres:16`, web build/lint, gitleaks — ARCH-04). Still to do: re-baseline from live (`supabase db pull`), renumber duplicates, and confirm Actions is enabled on the repository.
 5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token` and drop `WEBHOOK_SECRET` from app builds (MOB-23).
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
 7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18 and enforce them in RLS rather than in UI (UI-24 is decided and enforced in schema: `transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`).
-8. **Mobile hardening.** `flutter_secure_storage` for tokens; certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
+8. **Mobile hardening.** Tokens are now in `flutter_secure_storage` (MOB-19); certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
 9. **Repository hygiene.** SMS/dev simulation scripts, the legacy SMS pipeline and the `sms` transaction channel are deleted (API-25, guarded by tests); keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
 
 ---
 
 ## 5. Summary of Verified Code Changes & Tests
 
-All work is on `audit/claude-comprehensive-review` as four merged streams (conventional commits; per-commit detail in each report and FIX_LOG):
+All work is on `audit/claude-comprehensive-review` as merged streams (conventional commits; per-commit detail in each report and FIX_LOG):
 
 | Stream | Scope | Key artifacts |
 |---|---|---|
 | Database | 10 new migrations `supabase/migrations/20261020010000_*` … `20261020100000_*` (no shipped migration edited); `supabase/tests/00_local_supabase_stubs.sql`; tests `08_*`–`17_*`; `run_tests.py --psql --rebuild --db` | [`db.md`](db.md) |
 | AI service | Security fixes across routes/auth/quota/storage; Riyadh-time cycles; strict ZATCA decoder; Nafaqah + Decimal settlements; client contract (JWT-only, 401, idempotency, `client_occurred_at`); hermetic test suite; `.dockerignore`; dependency bumps | [`ai_service.md`](ai_service.md) |
 | Flutter logic | Offline sync rewrite (commit-on-replay, idempotent, ordered, crash-safe); config via `--dart-define` only; `SalaryCycleService` parity; Arabic/Urdu digit parsing; auth gate; signed URLs; Android backup/cleartext/signing | [`flutter_logic.md`](flutter_logic.md) |
-| Nafaqah (UI-24) | Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + test 18; `nafaqah_service.py`, `routes/nafaqah.py`, chat classification; Flutter family card, wife allowance card, Nafaqah selector | [`ui_web.md`](ui_web.md#ui-24-resolved-owner-decision), rule 02 |
+| Nafaqah (UI-24) | Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + test 19; `nafaqah_service.py`, `routes/nafaqah.py`, chat classification; Flutter family card, wife allowance card, Nafaqah selector | [`ui_web.md`](ui_web.md#ui-24-resolved-owner-decision), rule 02 |
+| Zero-SMS (API-25) | SMS scripts/pipeline deleted; migration `20261020200000_remove_sms_artifacts.sql` + test 18 (`sms` source removed, historical rows relabelled, none deleted) | [`ai_service.md`](ai_service.md) |
+| Email inquiries (WEB-09) | `mail_service.py`, `routes/inquiries.py`; web, both landings and app help center wired; served `ai_service/static` build refreshed | [`ui_web.md`](ui_web.md) |
+| Mobile reliability | MOB-19/26/27/28, UI-20/25 | [`flutter_logic.md`](flutter_logic.md) |
+| CI (ARCH-04) | `.github/workflows/ci.yml`, `.gitleaks.toml` | root `README.md` "CI" |
 | UI / i18n / web | ~760 strings localized (1206 keys × en/ar/ur, guard test); 32 RTL fixes; a11y labels; light-mode contrast tokens; lifecycle fixes; web a11y/perf/meta | [`ui_web.md`](ui_web.md) |
 
 Commands to reproduce the gates:
@@ -166,13 +175,15 @@ cd web_app && npm ci && npm run build && npm run lint
 ## 6. Owner Actions & Release Plan
 
 ### 6.1 Before anything else
-1. **Rotate** `WEBHOOK_SECRET` and `APP_AUTH_TOKEN` (values exist in public git history and in shared chat messages).
-2. **Replace** the value in `SUPABASE_SECRET_KEY` (`ai_service/.env`) — it is an anon-role JWT — with a real `sb_secret_…` key. The service now refuses non-privileged keys and fails closed.
+1. **Rotate secrets.** Owner reports (2026-10-20) that a new `WEBHOOK_SECRET` is set on Railway and the values shared for the audit are test-only. **Still confirm `APP_AUTH_TOKEN` was rotated** — the old values remain in public git history (gitleaks finds 9 hits in `f17eb2b`).
+2. **Service key.** Owner reports the `sb_secret_…` key is set on Railway as `SUPABASE_SECRET_KEY`. The service refuses non-privileged keys and fails closed, so a wrong value shows up immediately as 500s.
 3. **Check** `SUPABASE_JWT_SECRET`: it is empty, so only ES256 tokens verified against the project JWKS are accepted. If the project still signs user tokens with the legacy HS256 secret, set it or every request returns 401.
 4. **Set** `ENV=production`, `TRUSTED_PROXY_IPS`, and `REDIS_URL` on the production service.
+5. **Email delivery:** set `RESEND_API_KEY` (preferred on Railway, which blocks SMTP ports below the Pro plan; `fmsco.com.sa` verified) or `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD` for the `fmscoinfo@fmsco.com.sa` mailbox. Optional: `CONTACT_RECIPIENT_EMAIL` (default `abedmowafaq@gmail.com`), `MAIL_FROM`. Until set, the forms return a clear error.
+6. **Supabase Auth emails** (sign-up, password reset) are configured in the Supabase dashboard, not in this repo: set Authentication → SMTP Settings → Sender email to `fmscoinfo@fmsco.com.sa` so all mail comes from one address.
 
 ### 6.2 Deployment order
-1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs). Re-baseline the migration chain for the Supabase CLI (DB-15).
+1. **Database:** run the catalog checks in [`db.md`](db.md) against live (it has drifted from the repo), confirm whether live `transactions` has `paid_by` / `beneficiary` columns (affects MOB-03), then apply the 10 new migrations in order, followed by `20261020200000_remove_sms_artifacts.sql` (rejects new `source = 'sms'` rows — ship with the new app build) and `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` (Nafaqah ledger and wife allowance; deploy before the backend that calls its RPCs). Re-baseline the migration chain for the Supabase CLI (DB-15).
 2. **Backend:** deploy `ai_service` from this branch. It accepts both old app builds (`X-App-Token`) and the new JWT-only client.
 3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
 4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and `WEBHOOK_SECRET` from the app, and tighten the join-code policy (DB-17).
