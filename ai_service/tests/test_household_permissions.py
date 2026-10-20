@@ -416,3 +416,49 @@ def test_family_member_edits_follow_admin_rule(homes, monkeypatch):
     assert _enrich(WIFE, FAMILY, TX_HUSBAND).status_code == 403
     assert _enrich(WIFE, FAMILY, TX_WIFE).status_code == 200
     assert _enrich(HUSBAND, FAMILY, TX_WIFE).status_code == 200
+
+
+def test_permission_lookups_do_not_rely_on_maybe_single(homes, monkeypatch):
+    """External review (Gemini) HIGH 1: postgrest-py 0.14-1.0 raise APIError('Missing response')
+    from maybe_single() for zero rows; the lookups use limit(1) and work in every version."""
+    from postgrest.exceptions import APIError
+
+    def missing_response(self):
+        raise APIError({"message": "Missing response", "code": "204", "hint": None, "details": None})
+
+    monkeypatch.setattr(type(homes.table("households")), "maybe_single", missing_response)
+    assert hp.member_role(ROOM, MEM) == hp.MEMBER
+    assert hp.member_role(ROOM, OUTSIDER) is None
+    assert hp.household_owner_id(homes, FAMILY) == HUSBAND
+    assert hp.assert_can_modify_transaction(ROOM, TX_MEM, MEM)["id"] == TX_MEM
+    with pytest.raises(hp.TransactionNotFoundError):
+        hp.assert_can_modify_transaction(ROOM, TX_HUSBAND, PRIMARY)
+
+
+def test_role_rpc_errors_map_from_real_postgrest_exceptions():
+    import httpx
+    from postgrest import SyncPostgrestClient
+    from postgrest.exceptions import APIError
+
+    def raised(body):
+        transport = httpx.MockTransport(lambda _req: httpx.Response(400, json=body))
+        pg = SyncPostgrestClient("http://postgrest.invalid",
+                                 http_client=httpx.Client(transport=transport, base_url="http://postgrest.invalid"))
+        with pytest.raises(APIError) as caught:
+            pg.rpc("revoke_admin", {}).execute()
+        return caught.value
+
+    cases = [
+        ({"code": "42501", "message": "Forbidden: household admin privileges required", "hint": None, "details": None},
+         hp.PermissionDeniedError),
+        ({"code": "P0002", "message": "Target user is not a member of this household", "hint": None, "details": None},
+         hp.MemberNotFoundError),
+        ({"code": "P0001", "message": "Cannot demote the sole admin of a household", "hint": None, "details": None},
+         hp.InvalidRoleChangeError),
+        ({"code": "22023", "message": "Choose another member of this household", "hint": None, "details": None},
+         hp.InvalidRoleChangeError),
+    ]
+    for body, expected in cases:
+        exc = raised(body)
+        assert isinstance(hp._map_rpc_error(exc), expected), body
+        assert isinstance(hp._map_rpc_error(RuntimeError(str(exc))), expected), body

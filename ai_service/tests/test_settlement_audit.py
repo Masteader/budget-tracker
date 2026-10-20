@@ -27,6 +27,11 @@ def family(fake_supabase):
         {"id": HUSBAND, "household_id": HH, "role": "member", "financial_role": "provider", "display_name": "Ahmed"},
         {"id": WIFE, "household_id": HH, "role": "admin", "financial_role": "spouse", "display_name": "Sara"},
     ])
+    # household_memberships is authoritative (users.household_id is only the active household).
+    fake_supabase.seed("household_memberships", [
+        {"user_id": HUSBAND, "household_id": HH, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": WIFE, "household_id": HH, "role": "admin", "created_at": "2026-01-02T00:00:00+00:00"},
+    ])
     return fake_supabase
 
 
@@ -56,7 +61,7 @@ def test_husband_paying_for_wife_never_creates_wife_debt():
 def test_v2_admin_wife_is_not_mistaken_for_husband(family):
     family.seed("transactions", [
         {"id": "t1", "household_id": HH, "amount": 100.0, "paid_by": WIFE, "beneficiary_type": "household",
-         "timestamp": NOW},
+         "timestamp": NOW, "nafaqah_class": "wife_reimbursable", "nafaqah_spouse_id": WIFE},
     ])
     res = calculate_settlement_v2(HH, cycle_start="2000-01-01")
     assert res["mode"] == "family_nafaqah"
@@ -77,9 +82,12 @@ def test_partner_settlement_in_family_household_never_splits_50_50(family):
 
 
 def test_partner_settlement_family_wife_paid_household_is_owed_in_full(family):
+    # The debt is the Nafaqah ledger: a wife-paid shared expense carries nafaqah_class
+    # (an unclassified row is an ordinary household expense, as the column is defined).
     family.seed("transactions", [
         {"id": "g2", "household_id": HH, "amount": 300.0, "category_code": "OPEX-GROCERY",
-         "paid_by": "me", "beneficiary": "both", "timestamp": NOW},
+         "paid_by": "me", "beneficiary": "both", "timestamp": NOW,
+         "nafaqah_class": "wife_reimbursable", "nafaqah_spouse_id": WIFE},
     ])
     res = calculate_partner_settlement(HH, split_ratio=0.5, caller_user_id=WIFE)
     assert res["who_owes"] == "partner_owes_me"

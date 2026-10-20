@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -15,6 +16,7 @@ import '../../services/offline_queue_manager.dart';
 import '../../theme/app_themes.dart';
 import '../receipt_photo_viewer_dialog.dart';
 import '../app_snackbar.dart';
+import '../nafaqah/nafaqah_review_section.dart';
 import '../../models/money.dart';
 
 /// Sequential review modal for processing a batch of captured receipts step by step.
@@ -51,6 +53,24 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   String _selectedCategory = 'OPEX-GROCERY';
   final String _selectedSpentBy = 'both';
   bool _isOfflineDraft = false;
+
+  // Family (Islamic Nafaqah), per receipt: the server's suggestion from the
+  // preview and the user's choice (a wife's shared advance the husband owes,
+  // or her personal purchase from her allowance; never split).
+  NafaqahPreview _nafaqah = const NafaqahPreview();
+  String? _nafaqahClass;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
+
+  void _applyNafaqahPreview(Map<String, dynamic>? res) {
+    _nafaqah = NafaqahPreview.fromPreview(res);
+    _nafaqahClass = _nafaqah.suggestedClass;
+    _nafaqahWifeId = _nafaqah.defaultSpouseId;
+    _showWifeRequired = false;
+  }
+
+  Map<String, String> get _nafaqahRequestFields =>
+      _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
 
   static const List<String> _categories = [
     'OPEX-GROCERY',
@@ -113,6 +133,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
         _selectedCategory = res['category_code'] as String? ?? 'OPEX-GROCERY';
         _isAnalyzing = false;
         _isOfflineDraft = res['is_offline_draft'] as bool? ?? false;
+        _applyNafaqahPreview(res);
       });
       return;
     }
@@ -124,6 +145,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
       _amountCtrl.text = '';
       _vatCtrl.text = '';
       _isOfflineDraft = false;
+      _applyNafaqahPreview(null);
     });
 
     try {
@@ -150,6 +172,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             _vatCtrl.text = vat > 0 ? vat.toStringAsFixed(2) : '0.00';
             _selectedCategory = _categories.contains(cat) ? cat : 'OPEX-GROCERY';
             _isAnalyzing = false;
+            _applyNafaqahPreview(res);
           });
           return;
         }
@@ -185,6 +208,10 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
   Future<void> _saveAndNext() async {
     if (_isSaving || _isAnalyzing) return;
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
 
     final parsedAmount = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
     final parsedVat = parseMoneyInput(_vatCtrl.text.trim()) ?? 0.0;
@@ -216,6 +243,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             'spent_by': _selectedSpentBy,
             'image_local_path': file.path,
             'needs_cloud_enrichment': true,
+            ..._nafaqahRequestFields,
           },
         );
       } else {
@@ -234,6 +262,12 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             // naming them always failed and diverted every save offline.
             'timestamp': DateTime.now().toUtc().toIso8601String(),
             'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR | SpentBy: $_selectedSpentBy',
+            // Family Nafaqah: the wife's debt or allowance spending (both columns together).
+            ..._nafaqah.transactionColumns(
+              _nafaqahClass,
+              chosenWifeId: _nafaqahWifeId,
+              currentUserId: user?.id,
+            ),
           });
         } catch (_) {
           // If network failed during submit, queue offline
@@ -248,6 +282,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               'spent_by': _selectedSpentBy,
               'image_local_path': file.path,
               'needs_cloud_enrichment': true,
+              ..._nafaqahRequestFields,
             },
           );
         }
@@ -310,226 +345,241 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
         color: context.cardBg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          // Stepper Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                context.trArgs('receipt_n_of_m', {'current': current, 'total': total}),
-                style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: context.electricTeal,
+      // Scrolls when the family Nafaqah choice and the keyboard need the room.
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              if (_isOfflineDraft)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+            ),
+
+            // Stepper Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  context.trArgs('receipt_n_of_m', {'current': current, 'total': total}),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.electricTeal,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded, size: 12, color: Colors.orange),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.tr('offline_draft_badge'),
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.orange,
+                ),
+                if (_isOfflineDraft)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_off_rounded, size: 12, color: Colors.orange),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.tr('offline_draft_badge'),
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange,
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Progress Bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.white12,
+                valueColor: AlwaysStoppedAnimation<Color>(context.electricTeal),
+                minHeight: 6,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Thumbnail Preview
+            _buildThumbnailPreview(context),
+            const SizedBox(height: 16),
+
+            if (_isAnalyzing)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(context.electricTeal),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('bir_analyzing'),
+                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.white12,
-              valueColor: AlwaysStoppedAnimation<Color>(context.electricTeal),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Thumbnail Preview
-          _buildThumbnailPreview(context),
-          const SizedBox(height: 16),
-
-          if (_isAnalyzing)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(context.electricTeal),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      context.tr('bir_analyzing'),
-                      style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
-                    ),
-                  ],
+              )
+            else ...[
+              // Form Fields
+              TextField(
+                controller: _merchantCtrl,
+                decoration: InputDecoration(
+                  labelText: context.tr('merchant'),
+                  labelStyle: TextStyle(color: context.textSecondary),
+                  prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
+                  filled: true,
+                  fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-            )
-          else ...[
-            // Form Fields
-            TextField(
-              controller: _merchantCtrl,
-              decoration: InputDecoration(
-                labelText: context.tr('merchant'),
-                labelStyle: TextStyle(color: context.textSecondary),
-                prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
-                filled: true,
-                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _amountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: context.tr('bir_total_sar'),
-                      labelStyle: TextStyle(color: context.textSecondary),
-                      prefixIcon: const Icon(Icons.receipt_long_rounded, size: 20),
-                      filled: true,
-                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 1,
-                  child: TextField(
-                    controller: _vatCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: context.tr('bir_vat'),
-                      labelStyle: TextStyle(color: context.textSecondary),
-                      filled: true,
-                      fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Category Dropdown
-            DropdownButtonFormField<String>(
-              initialValue: _selectedCategory,
-              decoration: InputDecoration(
-                labelText: context.tr('category'),
-                labelStyle: TextStyle(color: context.textSecondary),
-                prefixIcon: const Icon(Icons.category_rounded, size: 20),
-                filled: true,
-                fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              items: _categories.map((c) {
-                return DropdownMenuItem<String>(
-                  value: c,
-                  child: Text(context.trCat(c)),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedCategory = val);
-              },
-            ),
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            Row(
-              children: [
-                // Skip Button
-                Expanded(
-                  child: OutlinedButton(
-                    key: const Key('batch_skip_button'),
-                    onPressed: _skipReceipt,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: context.textSecondary.withValues(alpha: 0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(
-                      context.tr('skip_receipt'),
-                      style: GoogleFonts.outfit(
-                        color: context.textSecondary,
-                        fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: context.tr('bir_total_sar'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                        prefixIcon: const Icon(Icons.receipt_long_rounded, size: 20),
+                        filled: true,
+                        fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-
-                // Save & Next Button
-                Expanded(
-                  child: ElevatedButton(
-                    key: const Key('batch_save_next_button'),
-                    onPressed: _saveAndNext,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.electricTeal,
-                      foregroundColor: AppThemes.brandDarkBg,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 1,
+                    child: TextField(
+                      controller: _vatCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: context.tr('bir_vat'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                        filled: true,
+                        fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                          )
-                        : Text(
-                            isLast ? context.tr('save_and_finish') : context.tr('save_and_next'),
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Category Dropdown
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCategory,
+                decoration: InputDecoration(
+                  labelText: context.tr('category'),
+                  labelStyle: TextStyle(color: context.textSecondary),
+                  prefixIcon: const Icon(Icons.category_rounded, size: 20),
+                  filled: true,
+                  fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                items: _categories.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(context.trCat(c)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedCategory = val);
+                },
+              ),
+              if (_nafaqah.canClassify) ...[
+                const SizedBox(height: 12),
+                NafaqahReviewSection(
+                  key: const ValueKey('batch_nafaqah_review'),
+                  preview: _nafaqah,
+                  value: _nafaqahClass,
+                  wifeId: _nafaqahWifeId,
+                  showWifeRequired: _showWifeRequired,
+                  onChanged: (cls) => setState(() => _nafaqahClass = cls),
+                  onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
                 ),
               ],
-            ),
+              const SizedBox(height: 20),
+
+              // Action Buttons
+              Row(
+                children: [
+                  // Skip Button
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const Key('batch_skip_button'),
+                      onPressed: _skipReceipt,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: context.textSecondary.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        context.tr('skip_receipt'),
+                        style: GoogleFonts.outfit(
+                          color: context.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Save & Next Button
+                  Expanded(
+                    child: ElevatedButton(
+                      key: const Key('batch_save_next_button'),
+                      onPressed: _saveAndNext,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.electricTeal,
+                        foregroundColor: AppThemes.brandDarkBg,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                            )
+                          : Text(
+                              isLast ? context.tr('save_and_finish') : context.tr('save_and_next'),
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

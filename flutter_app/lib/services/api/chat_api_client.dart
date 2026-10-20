@@ -20,6 +20,7 @@ class ChatApiClient {
     String? paidBy,
     String? beneficiary,
     String? nafaqahClass,
+    String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
   }) async {
@@ -37,6 +38,7 @@ class ChatApiClient {
       if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
       if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
       if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
+      if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
       if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
     };
 

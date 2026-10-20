@@ -311,6 +311,23 @@ BEGIN
         $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL)$q$);
     IF v_state <> '22023' THEN RAISE EXCEPTION 'Overpayment not rejected with 22023 (got %)', v_state; END IF;
 
+    -- ai_service maps the refusal by SQLSTATE 22023 + HINT 'overpayment' (PostgREST JSON code/hint)
+    DECLARE
+        v_code text;
+        v_hint text;
+    BEGIN
+        PERFORM set_config('request.jwt.claims', json_build_object('sub', 'e1000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
+        SET LOCAL ROLE authenticated;
+        PERFORM public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 400, 'cash', NULL);
+        RAISE EXCEPTION 'BUG: overpayment accepted';
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_code = RETURNED_SQLSTATE, v_hint = PG_EXCEPTION_HINT;
+        IF v_code <> '22023' OR v_hint IS DISTINCT FROM 'overpayment' THEN
+            RAISE EXCEPTION 'Overpayment refusal must carry SQLSTATE 22023 and HINT overpayment (got %, %)', v_code, v_hint;
+        END IF;
+    END;
+    RESET ROLE;
+
     -- zero / negative / sub-halala / unknown method rejected
     v_state := pg_temp.as_user('e1000000-0000-0000-0000-00000000000a',
         $q$SELECT public.record_spouse_reimbursement('e1aa0000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000b', 0, 'cash', NULL)$q$);
@@ -439,6 +456,43 @@ BEGIN
         RAISE EXCEPTION 'Household expense history was deleted with the spouse account';
     END IF;
     RAISE NOTICE 'PASSED: spouse account deletion keeps household history and drops her ledgers.';
+END $$;
+
+-- 11. Every refusal the ai_service maps carries an explicit SQLSTATE (PL/pgSQL defaults to
+--     P0001, which nafaqah_service._map_db_error / household_permissions._map_rpc_error
+--     would not recognise).
+DO $$
+DECLARE
+    r record;
+    v_chunk text;
+    v_checked int := 0;
+BEGIN
+    FOR r IN
+        SELECT p.proname, p.prosrc
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname IN (
+              'nafaqah_resolve_actor', 'nafaqah_require_member', 'get_member_allowance_status',
+              'set_member_allowance', 'get_spouse_reimbursement_balance', 'record_spouse_reimbursement',
+              'validate_transaction_nafaqah_class', 'household_resolve_actor', 'household_require_admin',
+              'promote_member_to_admin', 'revoke_admin', 'transfer_primary_admin',
+              'protect_primary_admin_membership', 'get_household_members')
+    LOOP
+        -- string literals are blanked first: messages may contain ';'
+        FOREACH v_chunk IN ARRAY (regexp_split_to_array(
+            regexp_replace(r.prosrc, '''([^'']|'''')*''', '''''', 'g'), 'RAISE EXCEPTION'))[2:]
+        LOOP
+            v_checked := v_checked + 1;
+            IF split_part(v_chunk, ';', 1) !~ 'ERRCODE' THEN
+                RAISE EXCEPTION 'RAISE without ERRCODE in %: %', r.proname, left(split_part(v_chunk, ';', 1), 120);
+            END IF;
+        END LOOP;
+    END LOOP;
+    IF v_checked < 20 THEN
+        RAISE EXCEPTION 'Expected to inspect the Nafaqah and role RPC refusals, inspected only %', v_checked;
+    END IF;
+    RAISE NOTICE 'PASSED: % mapped RPC refusals set an explicit SQLSTATE.', v_checked;
 END $$;
 
 ROLLBACK;

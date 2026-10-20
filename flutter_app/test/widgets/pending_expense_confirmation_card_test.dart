@@ -24,7 +24,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) {},
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {},
               onCancel: () {},
             ),
           ),
@@ -64,7 +64,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) {
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
                 confirmedStore = store;
                 confirmedCat = cat;
                 confirmedSub = subCat;
@@ -116,7 +116,7 @@ void main() {
         body: SingleChildScrollView(
           child: PendingExpenseConfirmationCard(
             pendingData: data,
-            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass) => confirmed = nafaqahClass,
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) => confirmed = nafaqahClass,
             onCancel: () {},
           ),
         ),
@@ -162,5 +162,74 @@ void main() {
     final cls = await confirmWith(tester, data);
     expect(find.text('Shared for family (husband reimburses)'), findsNothing);
     expect(cls, isNull);
+  });
+
+  // External review (Gemini) HIGH 4: the class follows the edited chips, and a
+  // husband with several wives says which wife paid.
+  testWidgets('family: editing "who paid" after a debt suggestion sends no stale class', (tester) async {
+    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'), before: () async {
+      await tester.tap(find.text('Partner').first); // who paid: my husband
+      await tester.pumpAndSettle();
+    });
+    expect(cls, 'none');
+  });
+
+  testWidgets('family: a husband with several wives must choose the wife', (tester) async {
+    final data = familyPreview(role: 'husband', paidBy: 'partner', cls: 'wife_reimbursable')
+      ..['wives'] = [
+        {'id': 'wife-1', 'display_name': 'Sara'},
+        {'id': 'wife-2', 'display_name': 'Mona'},
+      ]
+      ..['nafaqah_spouse_required'] = true;
+    var calls = 0;
+    String? spouse;
+    String? cls;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: PendingExpenseConfirmationCard(
+            pendingData: data,
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+              calls++;
+              cls = nafaqahClass;
+              spouse = nafaqahSpouseId;
+            },
+            onCancel: () {},
+          ),
+        ),
+      ),
+    ));
+    expect(find.text('Which wife paid?'), findsOneWidget);
+
+    await tester.tap(find.text('Confirm & Add Expense'));
+    await tester.pumpAndSettle();
+    expect(calls, 0);
+    expect(find.text('Choose which wife paid before saving.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('nafaqah_wife_wife-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm & Add Expense'));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    expect(cls, 'wife_reimbursable');
+    expect(spouse, 'wife-2');
+  });
+
+  testWidgets('family: a wife never sends a spouse id', (tester) async {
+    String? spouse = 'unset';
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: PendingExpenseConfirmationCard(
+            pendingData: familyPreview(cls: 'wife_reimbursable'),
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) => spouse = nafaqahSpouseId,
+            onCancel: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('Confirm & Add Expense'));
+    await tester.pumpAndSettle();
+    expect(spouse, isNull);
   });
 }

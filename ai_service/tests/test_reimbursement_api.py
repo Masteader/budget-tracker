@@ -51,6 +51,10 @@ def mock_supabase_for_invites(monkeypatch):
         def maybe_single(self):
             return self
 
+        def limit(self, n):
+            self._filtered = self._filtered[:n]
+            return self
+
         def insert(self, payload):
             if isinstance(payload, list):
                 self.items.extend(payload)

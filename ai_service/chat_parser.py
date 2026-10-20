@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items
+from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
     fetch_all_cost_control_codes,
     match_category,
@@ -463,51 +464,6 @@ def check_category_active_status(category_code: str, categories_state: dict) -> 
     return category_code not in inactive_codes
 
 
-def _resolve_nafaqah(
-    household_id: str,
-    user_id: Optional[str],
-    paid_by: str,
-    beneficiary: Optional[str],
-    override_class: Optional[str],
-) -> Dict[str, Any]:
-    """Nafaqah class (rules 2-4) of a chat expense, from the recorder's role in the household."""
-    from nafaqah_service import NAFAQAH_CLASSES, classify_nafaqah, load_family_context
-
-    result: Dict[str, Any] = {
-        "household_mode": "not_family",
-        "recorder_role": None,
-        "nafaqah_class": None,
-        "nafaqah_spouse_id": None,
-    }
-    try:
-        ctx = load_family_context(household_id)
-    except Exception as exc:
-        logger.warning("Could not load family context for chat classification: %s", exc)
-        return result
-    if not ctx.is_family:
-        return result
-
-    role = ctx.role_of(user_id)
-    result["household_mode"] = "family_nafaqah"
-    result["recorder_role"] = role
-    if role == "wife":
-        spouse_id: Optional[str] = str(user_id)
-    elif len(ctx.wives) == 1:
-        spouse_id = ctx.wives[0]["id"]
-    else:
-        spouse_id = None  # several wives: the class needs an explicit choice in the app
-
-    if override_class is not None:
-        chosen = override_class.strip().lower()
-        nafaqah_class = chosen if chosen in NAFAQAH_CLASSES else None
-    else:
-        nafaqah_class = classify_nafaqah(role, paid_by, beneficiary)
-    if nafaqah_class and spouse_id:
-        result["nafaqah_class"] = nafaqah_class
-        result["nafaqah_spouse_id"] = spouse_id
-    return result
-
-
 def process_chat_transaction(
     household_id: str,
     message: str,
@@ -523,15 +479,19 @@ def process_chat_transaction(
     override_beneficiary: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
     override_nafaqah_class: Optional[str] = None,
+    override_nafaqah_spouse_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
 
     Family households (Islamic Nafaqah): an expense the wife paid is classified as
     ``wife_reimbursable`` (shared → the husband owes her) or ``wife_personal`` (charged to her
-    allowance). The preview returns the suggestion; ``override_nafaqah_class`` is the user's
-    confirmed choice ('wife_reimbursable' | 'wife_personal' | 'none'). Nothing is ever split
-    between the spouses, and roommate households are never classified.
+    allowance). The preview returns the suggestion (and the wives, for a household with several);
+    ``override_nafaqah_class`` is the user's confirmed choice ('wife_reimbursable' |
+    'wife_personal' | 'none') and must agree with an explicit paid_by/beneficiary;
+    ``override_nafaqah_spouse_id`` names the wife when there are several
+    (nafaqah_service.resolve_expense_nafaqah raises InvalidNafaqahRequest otherwise). Nothing is
+    ever split between the spouses, and roommate households are never classified.
     """
     parsed = parse_chat_expense(message)
     if parsed.is_simulation:
@@ -620,7 +580,17 @@ def process_chat_transaction(
         if override_sub_category or not it.get("sub_category"):
             it["sub_category"] = sub_category
 
-    nafaqah = _resolve_nafaqah(household_id, user_id, paid_by, beneficiary, override_nafaqah_class)
+    nafaqah = resolve_expense_nafaqah(
+        household_id,
+        user_id,
+        paid_by,
+        beneficiary,
+        override_class=override_nafaqah_class,
+        override_spouse_id=override_nafaqah_spouse_id,
+        attribution_explicit=override_paid_by is not None or override_beneficiary is not None,
+        require_spouse=not preview_only,
+    )
+    paid_by, beneficiary = nafaqah["paid_by"], nafaqah["beneficiary"]
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -664,6 +634,8 @@ def process_chat_transaction(
             "recorder_role": nafaqah["recorder_role"],
             "nafaqah_class": nafaqah["nafaqah_class"],
             "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+            "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
+            "wives": nafaqah["wives"],
             "items": items_dicts,
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",

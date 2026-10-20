@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
+from nafaqah_service import NafaqahError
+from routes.nafaqah import nafaqah_http_error
 from utils import safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import process_receipt_scan
@@ -98,7 +100,16 @@ async def scan_receipt(request: Request):
             override_spent_by=body.get("spent_by"),
             receipt_url=body.get("receipt_url"),
             occurred_at=occurred_at,
+            paid_by=body.get("paid_by"),
+            beneficiary=body.get("beneficiary"),
+            override_nafaqah_class=body.get("nafaqah_class"),
+            override_nafaqah_spouse_id=body.get("nafaqah_spouse_id"),
         )
+    except NafaqahError as exc:
+        # Family Nafaqah: unknown or contradicting class, or a wife that is not allowed (422).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise nafaqah_http_error(exc)
     except HTTPException:
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional
 
+from postgrest_compat import db_error_fields, first_row
 from supabase_client import get_client, get_household_payday
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,118 @@ def load_family_context(household_id: str) -> FamilyContext:
     return ctx
 
 
+OVERRIDE_NONE = "none"
+NAFAQAH_OVERRIDE_CHOICES = NAFAQAH_CLASSES + (OVERRIDE_NONE,)
+
+
+def attribution_for_class(role: str, nafaqah_class: Optional[str], beneficiary: Optional[str]) -> tuple:
+    """
+    Recorder-relative (paid_by, beneficiary) that express a class chosen without an explicit
+    attribution, so the stored row never contradicts its class. ``nafaqah_class`` None means the
+    husband paid (rule 4).
+    """
+    wife_side, husband_side = ("me", "partner") if role == "wife" else ("partner", "me")
+    ben = beneficiary if _norm(beneficiary) else "both"
+    ben_is_wife = _norm(ben) in (wife_side,) + _WIFE_ALIASES
+    if nafaqah_class == WIFE_PERSONAL:
+        return wife_side, wife_side
+    if nafaqah_class == WIFE_REIMBURSABLE:
+        return wife_side, ("both" if ben_is_wife else ben)
+    return husband_side, ben
+
+
+def resolve_expense_nafaqah(
+    household_id: str,
+    user_id: Optional[str],
+    paid_by: str,
+    beneficiary: Optional[str],
+    *,
+    override_class: Optional[str] = None,
+    override_spouse_id: Any = None,
+    attribution_explicit: bool = False,
+    require_spouse: bool = False,
+) -> Dict[str, Any]:
+    """
+    Nafaqah class (rules 2-4) of an expense entered by chat or a scanned receipt.
+
+    The class follows from who paid for whom (``classify_nafaqah``). ``override_class`` is the
+    user's confirmed choice ('wife_reimbursable' | 'wife_personal' | 'none' = the husband paid):
+    with an explicit ``paid_by``/``beneficiary`` it must agree with them (a stale class from an
+    earlier preview is rejected, never stored against the edited attribution); without one the
+    attribution is recomputed from the class. ``override_spouse_id`` names the wife in a
+    household with several wives (required on commit when the class needs her); a wife records
+    only for herself. Households without a spouse member are never classified.
+    Raises InvalidNafaqahRequest for an unknown or contradicting choice.
+    """
+    chosen = (_norm(override_class) or None) if override_class is not None else None
+    if chosen is not None and chosen not in NAFAQAH_OVERRIDE_CHOICES:
+        raise InvalidNafaqahRequest("nafaqah_class must be 'wife_reimbursable', 'wife_personal' or 'none'.")
+    if override_spouse_id is not None and not isinstance(override_spouse_id, str):
+        raise InvalidNafaqahRequest("nafaqah_spouse_id must be a member id.")
+    requested_spouse = _norm(override_spouse_id) or None
+
+    result: Dict[str, Any] = {
+        "household_mode": "not_family",
+        "recorder_role": None,
+        "nafaqah_class": None,
+        "nafaqah_spouse_id": None,
+        "nafaqah_spouse_required": False,
+        "wives": [],
+        "paid_by": paid_by,
+        "beneficiary": beneficiary,
+    }
+    try:
+        ctx = load_family_context(household_id)
+    except Exception as exc:
+        logger.warning("Could not load family context for Nafaqah classification: %s", exc)
+        return result
+    if not ctx.is_family:
+        return result
+
+    role = ctx.role_of(user_id)
+    result.update({
+        "household_mode": "family_nafaqah",
+        "recorder_role": role,
+        "wives": [{"id": w["id"], "display_name": w["display_name"]} for w in ctx.wives],
+    })
+
+    if role in ("wife", "husband"):
+        if chosen is not None and not attribution_explicit:
+            paid_by, beneficiary = attribution_for_class(role, None if chosen == OVERRIDE_NONE else chosen, beneficiary)
+            result["paid_by"], result["beneficiary"] = paid_by, beneficiary
+        nafaqah_class = classify_nafaqah(role, paid_by, beneficiary)
+        if chosen is not None and (None if chosen == OVERRIDE_NONE else chosen) != nafaqah_class:
+            raise InvalidNafaqahRequest(
+                "nafaqah_class contradicts paid_by/beneficiary: a debt needs the wife to have paid for "
+                "something shared, the allowance a purchase she paid for herself, 'none' the husband paying."
+            )
+    else:
+        # Other members (e.g. an adult child) have no spouse-relative vocabulary to classify with.
+        if chosen not in (None, OVERRIDE_NONE):
+            raise InvalidNafaqahRequest("Only the husband or a wife can classify a family expense.")
+        nafaqah_class = None
+
+    spouse_id: Optional[str] = None
+    if role == "wife":
+        if requested_spouse and requested_spouse != str(user_id):
+            raise InvalidNafaqahRequest("A wife records Nafaqah expenses for herself only.")
+        spouse_id = str(user_id)
+    elif requested_spouse:
+        if not ctx.is_wife(requested_spouse):
+            raise InvalidNafaqahRequest("nafaqah_spouse_id is not a spouse member of this household.")
+        spouse_id = requested_spouse
+    elif len(ctx.wives) == 1:
+        spouse_id = ctx.wives[0]["id"]
+
+    if nafaqah_class and not spouse_id:
+        if require_spouse:
+            raise InvalidNafaqahRequest("This household has several wives: choose the wife (nafaqah_spouse_id).")
+        result["nafaqah_spouse_required"] = True
+    result["nafaqah_class"] = nafaqah_class
+    result["nafaqah_spouse_id"] = spouse_id if nafaqah_class else None
+    return result
+
+
 def resolve_wife_id(ctx: FamilyContext, requested: Optional[str]) -> str:
     """The wife a request refers to: an explicit member id, an alias, or the only wife."""
     req = _norm(requested)
@@ -326,9 +439,15 @@ def _resolve_cycle(ctx: FamilyContext, cycle_key: Optional[str]) -> str:
 # ─── Database error mapping ───────────────────────────────────────────────────
 
 def _map_db_error(exc: Exception) -> Exception:
-    message = str(getattr(exc, "message", "") or exc)
-    code = str(getattr(exc, "code", "") or "")
-    hint = str(getattr(exc, "hint", "") or "")
+    """
+    Map a refusal of the Nafaqah RPCs to the service's errors. Every RAISE in migration
+    20261020300000 sets an SQLSTATE (42501 forbidden, 22023 invalid, 23514/23503 constraint) and
+    the overpayment refusal also sets HINT 'overpayment'; PostgREST returns them as the JSON
+    ``code`` / ``hint`` / ``message`` that postgrest-py's APIError exposes (read by
+    ``db_error_fields`` from whatever shape the exception arrives in).
+    """
+    fields = db_error_fields(exc)
+    message, code, hint = fields["message"], fields["code"], fields["hint"]
     if hint == "overpayment" or "exceeds the outstanding balance" in message:
         return OverpaymentError("Reimbursement exceeds the outstanding balance.")
     if code == "42501" or message.startswith("Forbidden"):
@@ -434,7 +553,8 @@ def record_reimbursement(
             {
                 "p_household_id": ctx.household_id,
                 "p_wife_user_id": wife_id,
-                "p_amount": float(value),
+                # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+                "p_amount": format(value, "f"),
                 "p_payment_method": method,
                 "p_notes": clean_notes,
                 "p_actor_user_id": actor_id,
@@ -472,16 +592,16 @@ def get_allowance(ctx: FamilyContext, wife_id: str, cycle_key: Optional[str]) ->
     _require_wife(ctx, wife_id)
     cycle = _resolve_cycle(ctx, cycle_key)
     client = get_client()
-    row = (
+    # (household, member, cycle) is unique; limit(1) instead of maybe_single(), whose zero-row
+    # behaviour differs across postgrest-py versions (see postgrest_compat).
+    row = first_row(
         client.table("member_allowances")
         .select("amount")
         .eq("household_id", ctx.household_id)
         .eq("member_user_id", wife_id)
         .eq("cycle_key", cycle)
-        .maybe_single()
-        .execute()
     )
-    allocated = row.data.get("amount") if row is not None and row.data else None
+    allocated = row.get("amount") if row else None
     spent = (
         client.table("transactions")
         .select("amount")
@@ -517,7 +637,8 @@ def set_allowance(
             {
                 "p_household_id": ctx.household_id,
                 "p_member_user_id": wife_id,
-                "p_amount": float(value),
+                # Exact decimal text ("123.40"): PostgREST casts it to the numeric parameter.
+                "p_amount": format(value, "f"),
                 "p_cycle_key": cycle,
                 "p_actor_user_id": actor_id,
             },

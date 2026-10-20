@@ -17,6 +17,10 @@ class ReceiptApiClient {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? paidBy,
+    String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
   }) async {
@@ -31,6 +35,11 @@ class ReceiptApiClient {
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
       if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
       if (receiptUrl != null && receiptUrl.trim().isNotEmpty) 'receipt_url': receiptUrl.trim(),
+      // Family Nafaqah (same contract as chat): who paid for whom and the confirmed class.
+      if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
+      if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
+      if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
+      if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
       if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
     };
 

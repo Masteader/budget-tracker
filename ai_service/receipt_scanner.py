@@ -22,6 +22,7 @@ import litellm
 from dotenv import load_dotenv
 
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items, compute_zatca_fingerprint
+from nafaqah_service import resolve_expense_nafaqah
 
 from supabase_client import (
     get_client,
@@ -446,6 +447,10 @@ def process_receipt_scan(
     override_spent_by: Optional[str] = None,
     receipt_url: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
+    paid_by: Optional[str] = None,
+    beneficiary: Optional[str] = None,
+    override_nafaqah_class: Optional[str] = None,
+    override_nafaqah_spouse_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -453,6 +458,13 @@ def process_receipt_scan(
     2. Decode ZATCA QR code if provided (or if photos omitted)
     3. Check for duplicate against recent chat/manual entries
     4. Auto-enrich or insert transaction
+
+    Family households (Islamic Nafaqah) are classified exactly like chat expenses: ``paid_by`` /
+    ``beneficiary`` default to the recorder paying for the household ('me' / 'both'), so a
+    receipt the wife scans is her shared advance (``wife_reimbursable``, the husband owes it)
+    unless she chooses her allowance (``wife_personal``) or says her husband paid ('none'). The
+    preview returns the suggestion; the commit stores the class (resolve_expense_nafaqah raises
+    InvalidNafaqahRequest for a contradicting choice or a missing wife).
     """
     images_base64 = images_base64 or []
 
@@ -615,6 +627,30 @@ def process_receipt_scan(
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
         }
 
+    attributed_paid_by = (paid_by or "me").strip().lower()
+    if attributed_paid_by not in ("me", "partner"):
+        attributed_paid_by = "me"
+    nafaqah = resolve_expense_nafaqah(
+        household_id,
+        user_id,
+        attributed_paid_by,
+        (beneficiary or "both").strip() or "both",
+        override_class=override_nafaqah_class,
+        override_spouse_id=override_nafaqah_spouse_id,
+        attribution_explicit=paid_by is not None or beneficiary is not None,
+        require_spouse=not preview_only,
+    )
+    nafaqah_fields = {
+        "paid_by": nafaqah["paid_by"],
+        "beneficiary": nafaqah["beneficiary"],
+        "household_mode": nafaqah["household_mode"],
+        "recorder_role": nafaqah["recorder_role"],
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+        "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
+        "wives": nafaqah["wives"],
+    }
+
     # Deduplication check (evaluated during BOTH preview and save unless allow_duplicate=True)
     candidate = None
     if not allow_duplicate:
@@ -653,6 +689,7 @@ def process_receipt_scan(
             "spent_by": spent_by,
             "receipt_url": receipt_url,
             "qr_code_raw": resolved_qr,
+            **nafaqah_fields,
             "message": (
                 f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
                 f"was already recorded{ts_suffix}. "
@@ -691,6 +728,7 @@ def process_receipt_scan(
             "zatca_verified": parsed.get("zatca_verified"),
             "receipt_url": receipt_url,
             "qr_code_raw": resolved_qr,
+            **nafaqah_fields,
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
@@ -730,6 +768,10 @@ def process_receipt_scan(
         source="receipt_scan",
         items=items,
         spent_by=spent_by,
+        paid_by=nafaqah["paid_by"],
+        beneficiary=nafaqah["beneficiary"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+        nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         dedup_fingerprint=zatca_fp,
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
@@ -750,5 +792,9 @@ def process_receipt_scan(
         "receipt_url": receipt_url,
         "qr_code_raw": resolved_qr,
         "is_reallocated": is_reallocated,
+        "paid_by": nafaqah["paid_by"],
+        "beneficiary": nafaqah["beneficiary"],
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
         "message": f"Recorded SAR {total_amount:.2f} ({len(items)} items) from scanned receipt ({merchant}).",
     }

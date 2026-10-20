@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../models/nafaqah.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/nafaqah/nafaqah_review_section.dart';
 import '../../l10n/app_localizations.dart';
 
 class MultiPageReceiptScannerScreen extends StatefulWidget {
@@ -25,6 +27,35 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
   final List<File> _capturedShots = [];
   bool _isProcessing = false;
   String? _errorMessage;
+
+  // Family (Islamic Nafaqah): this screen saves without a preview, so the
+  // caller's role comes from the Nafaqah summary. Unknown (offline) = the
+  // server applies the same default as chat.
+  NafaqahPreview _nafaqah = const NafaqahPreview();
+  String? _nafaqahClass;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNafaqahContext();
+  }
+
+  Future<void> _loadNafaqahContext() async {
+    try {
+      final summary = await ApiService.instance.getNafaqahSummary(widget.householdId);
+      _safeSetState(() {
+        _nafaqah = NafaqahPreview.fromSummary(summary);
+        _nafaqahClass = _nafaqah.suggestedClass;
+        _nafaqahWifeId = _nafaqah.defaultSpouseId;
+      });
+    } catch (e) {
+      debugPrint('[MultiPageScanner] Nafaqah context unavailable: $e');
+    }
+  }
+
+  Map<String, String> get _nafaqahFields => _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
 
   // Translation keys for the per-shot capture guidance.
   static const List<String> _guideSteps = [
@@ -82,6 +113,11 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
 
   Future<void> _processAllShots() async {
     if (_capturedShots.isEmpty) return;
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    final nafaqah = _nafaqahFields;
 
     setState(() {
       _isProcessing = true;
@@ -99,6 +135,10 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         imagesBase64: base64List,
         householdId: widget.householdId,
         allowDuplicate: false,
+        paidBy: nafaqah['paid_by'],
+        beneficiary: nafaqah['beneficiary'],
+        nafaqahClass: nafaqah['nafaqah_class'],
+        nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
       );
 
       _safeSetState(() => _isProcessing = false);
@@ -111,8 +151,8 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
             title: context.tr('mp_saved_title'),
           );
           Navigator.pop(context, true);
-        } else if (res['status'] == 'error') {
-          // If offline, enqueue
+        } else if (res['status'] == 'error' && res['status_code'] != 422) {
+          // If offline, enqueue (a 422 is the server refusing the request itself)
           await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg');
         } else {
           _safeSetState(() {
@@ -143,7 +183,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
     try {
       await OfflineSyncService.instance.enqueue(
         endpoint: 'receipt',
-        payload: {'images_base64': base64List},
+        payload: {'images_base64': base64List, ..._nafaqahFields},
         householdId: widget.householdId,
       );
     } catch (err) {
@@ -376,6 +416,19 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ],
                           );
                         },
+                      ),
+                    ),
+                  if (_capturedShots.isNotEmpty && _nafaqah.canClassify)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 0),
+                      child: NafaqahReviewSection(
+                        key: const ValueKey('multipage_nafaqah_review'),
+                        preview: _nafaqah,
+                        value: _nafaqahClass,
+                        wifeId: _nafaqahWifeId,
+                        showWifeRequired: _showWifeRequired,
+                        onChanged: (cls) => setState(() => _nafaqahClass = cls),
+                        onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
                       ),
                     ),
                   const SizedBox(height: 12),
