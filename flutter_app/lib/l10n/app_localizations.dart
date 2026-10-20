@@ -1510,6 +1510,12 @@ class AppLocalizations {
       'a11y_next': 'Next',
       'a11y_remove_item': 'Remove item',
       'a11y_remove_photo': 'Remove photo',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'Download & Share',
+      'pdf_preparing': 'Preparing Statement',
+      'pdf_preparing_msg': 'Downloading your PDF statement securely…',
+      'pdf_download_failed': 'Statement Download Failed',
+      'pdf_download_failed_msg': 'Could not download the PDF statement. Check your connection and try again.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2741,6 +2747,12 @@ class AppLocalizations {
       'a11y_next': 'التالي',
       'a11y_remove_item': 'حذف الصنف',
       'a11y_remove_photo': 'حذف الصورة',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'تنزيل ومشاركة',
+      'pdf_preparing': 'جارٍ تجهيز الكشف',
+      'pdf_preparing_msg': 'جارٍ تنزيل كشف PDF بشكل آمن…',
+      'pdf_download_failed': 'تعذر تنزيل الكشف',
+      'pdf_download_failed_msg': 'تعذر تنزيل كشف PDF. تحقق من الاتصال وحاول مرة أخرى.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3972,6 +3984,12 @@ class AppLocalizations {
       'a11y_next': 'اگلا',
       'a11y_remove_item': 'آئٹم ہٹائیں',
       'a11y_remove_photo': 'تصویر ہٹائیں',
+      // MOB-26 / MOB-27 / MOB-28 / UI-25 (appended)
+      'pdf_download_share': 'ڈاؤن لوڈ اور شیئر کریں',
+      'pdf_preparing': 'اسٹیٹمنٹ تیار ہو رہی ہے',
+      'pdf_preparing_msg': 'آپ کی PDF اسٹیٹمنٹ محفوظ طریقے سے ڈاؤن لوڈ ہو رہی ہے…',
+      'pdf_download_failed': 'اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی',
+      'pdf_download_failed_msg': 'PDF اسٹیٹمنٹ ڈاؤن لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔',
     },
   };
 

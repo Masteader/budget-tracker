@@ -328,11 +328,30 @@ class BudgetApiClient {
     return res;
   }
 
-  String getStatementPdfUrl(String householdId, {String? cycleKey}) {
-    final query = cycleKey != null && cycleKey.isNotEmpty
-        ? '?household_id=$householdId&cycle_key=$cycleKey'
-        : '?household_id=$householdId';
-    return '${baseClient.baseUrl}/reports/statement-pdf$query';
+  /// Downloads the monthly statement PDF with the user's JWT (MOB-26).
+  ///
+  /// The backend has no signed-URL endpoint, so the bytes are fetched through
+  /// the authenticated client instead of handing a bare URL to a browser.
+  /// Throws [ApiDownloadException] on failure or when the body is not a PDF.
+  Future<ApiBinaryResponse> downloadStatementPdf(String householdId, {String? cycleKey}) async {
+    final res = await baseClient.getBinary(
+      '/reports/statement-pdf',
+      queryParams: {
+        'household_id': householdId,
+        if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+      },
+      accept: 'application/pdf',
+    );
+    final bytes = res.bytes;
+    final isPdf = bytes.length >= 4 &&
+        bytes[0] == 0x25 && // %
+        bytes[1] == 0x50 && // P
+        bytes[2] == 0x44 && // D
+        bytes[3] == 0x46; // F
+    if (!isPdf) {
+      throw const ApiDownloadException('The server did not return a PDF document.');
+    }
+    return res;
   }
 
   Future<Map<String, dynamic>> addBudgetCategory({

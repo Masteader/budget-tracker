@@ -315,8 +315,8 @@ class ApiService {
   Future<Map<String, dynamic>> optimizeShoppingBasket(String householdId, List<String> items) =>
       budget.optimizeShoppingBasket(householdId, items);
 
-  String getStatementPdfUrl(String householdId, {String? cycleKey}) =>
-      budget.getStatementPdfUrl(householdId, cycleKey: cycleKey);
+  Future<ApiBinaryResponse> downloadStatementPdf(String householdId, {String? cycleKey}) =>
+      budget.downloadStatementPdf(householdId, cycleKey: cycleKey);
 
   Future<Map<String, dynamic>> addBudgetCategory({
     required String householdId,

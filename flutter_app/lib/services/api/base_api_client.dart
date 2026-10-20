@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -120,7 +121,9 @@ class BaseApiClient {
     return response.statusCode == 403 && response.body.contains('Untrusted endpoint access');
   }
 
-  Future<Map<String, dynamic>> _send(
+  /// Sends one request with the caller's JWT: refreshes the session first when
+  /// it has expired, and once more (replaying the request) on an auth rejection.
+  Future<http.Response> _sendAuthenticated(
     String method,
     Uri uri, {
     String? body,
@@ -135,19 +138,38 @@ class BaseApiClient {
       return _client.send(request).then(http.Response.fromStream).timeout(timeout);
     }
 
+    if (_liveSessionExpired) {
+      await _refreshAccessToken();
+    }
+
+    var response = await attempt();
+
+    if (_isAuthRejection(response)) {
+      final refreshedToken = await _refreshAccessToken();
+      if (refreshedToken != null && refreshedToken.isNotEmpty) {
+        response = await attempt();
+      }
+    }
+    return response;
+  }
+
+  Future<Map<String, dynamic>> _send(
+    String method,
+    Uri uri, {
+    String? body,
+    String? signature,
+    Map<String, String>? extraHeaders,
+    required Duration timeout,
+  }) async {
     try {
-      if (_liveSessionExpired) {
-        await _refreshAccessToken();
-      }
-
-      var response = await attempt();
-
-      if (_isAuthRejection(response)) {
-        final refreshedToken = await _refreshAccessToken();
-        if (refreshedToken != null && refreshedToken.isNotEmpty) {
-          response = await attempt();
-        }
-      }
+      final response = await _sendAuthenticated(
+        method,
+        uri,
+        body: body,
+        signature: signature,
+        extraHeaders: extraHeaders,
+        timeout: timeout,
+      );
 
       if (response.statusCode >= 400) {
         return _errorResponse(response);
@@ -163,6 +185,41 @@ class BaseApiClient {
     } on Exception catch (e) {
       return {'status': 'error', 'message': e.toString()};
     }
+  }
+
+  /// Downloads a binary resource (e.g. the statement PDF) with the same JWT
+  /// authentication, refresh and replay as the JSON calls. A bare URL opened
+  /// in a browser carries no `Authorization` header and is rejected by the
+  /// backend firewall (MOB-26).
+  ///
+  /// Throws [ApiDownloadException] on an HTTP error, a network failure or a
+  /// timeout; an error body is never returned as if it were the file.
+  Future<ApiBinaryResponse> getBinary(
+    String path, {
+    Map<String, dynamic>? queryParams,
+    String? accept,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final http.Response response;
+    try {
+      response = await _sendAuthenticated(
+        'GET',
+        _resolve(path, queryParams),
+        extraHeaders: accept != null ? {'Accept': accept} : null,
+        timeout: timeout,
+      );
+    } on Exception catch (e) {
+      throw ApiDownloadException(e.toString());
+    }
+    if (response.statusCode >= 400) {
+      final error = _errorResponse(response);
+      throw ApiDownloadException(error['message'] as String, statusCode: response.statusCode);
+    }
+    return ApiBinaryResponse(
+      bytes: response.bodyBytes,
+      contentType: response.headers['content-type'],
+      contentDisposition: response.headers['content-disposition'],
+    );
   }
 
   static Map<String, dynamic> _errorResponse(http.Response response) {
@@ -243,4 +300,32 @@ class BaseApiClient {
   }) {
     return _send('DELETE', _resolve(path, queryParams), timeout: timeout);
   }
+}
+
+/// A successful binary download.
+class ApiBinaryResponse {
+  const ApiBinaryResponse({required this.bytes, this.contentType, this.contentDisposition});
+
+  final Uint8List bytes;
+  final String? contentType;
+  final String? contentDisposition;
+
+  /// File name from `Content-Disposition: attachment; filename="..."`, if any.
+  String? get fileName {
+    final header = contentDisposition;
+    if (header == null) return null;
+    final match = RegExp(r'filename="?([^";]+)"?').firstMatch(header);
+    return match?.group(1)?.trim();
+  }
+}
+
+/// A failed binary download. [statusCode] is null for network errors.
+class ApiDownloadException implements Exception {
+  const ApiDownloadException(this.message, {this.statusCode});
+
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => statusCode == null ? message : '$message ($statusCode)';
 }

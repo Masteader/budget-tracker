@@ -12,8 +12,9 @@ import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import 'package:flutter/services.dart';
-import '../../services/api_service.dart';
+import '../../services/api/base_api_client.dart';
 import '../../services/csv_export_service.dart';
+import '../../services/statement_pdf_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
@@ -36,6 +37,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   String _selectedDatePeriod = 'ALL'; // 'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM'
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
+  bool _exportingPdf = false;
 
   static const List<Map<String, String>> _categoryRawOptions = [
     {'code': 'ALL', 'emoji': ''},
@@ -533,6 +535,83 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     );
   }
 
+  /// MOB-26: downloads the statement with the user's JWT and opens the system
+  /// share sheet (open in a PDF viewer, save to Files/Drive, send). The old
+  /// flow showed a bare URL that the backend firewall rejected without auth.
+  Future<void> _exportStatementPdf(BuildContext context) async {
+    final user = supabase.auth.currentUser;
+    if (user == null || _exportingPdf) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                context.tr('monthly_statement_pdf'),
+                style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          context.tr('pdf_statement_desc'),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppThemes.success,
+              foregroundColor: Colors.black,
+            ),
+            icon: const Icon(Icons.ios_share_rounded, size: 16),
+            label: Text(context.tr('pdf_download_share'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    setState(() => _exportingPdf = true);
+    AppSnackBar.showInfo(
+      context,
+      context.tr('pdf_preparing_msg'),
+      title: context.tr('pdf_preparing'),
+      icon: Icons.picture_as_pdf_rounded,
+      duration: const Duration(seconds: 20),
+    );
+    try {
+      final prof = await supabase.from('users').select('household_id').eq('id', user.id).single();
+      final hid = prof['household_id'] as String?;
+      if (hid == null) {
+        throw const ApiDownloadException('No active household');
+      }
+      await StatementPdfService().downloadAndShare(hid);
+      if (context.mounted) ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    } catch (e) {
+      debugPrint('[TransactionFeed] Statement PDF export failed: $e');
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          context.tr('pdf_download_failed_msg'),
+          title: context.tr('pdf_download_failed'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingPdf = false);
+    }
+  }
+
   Future<void> _deleteTransaction(BuildContext context, Transaction tx, {bool requireConfirm = false}) async {
     final txProvider = context.read<TransactionProvider>();
     final budgetProvider = context.read<BudgetProvider>();
@@ -815,91 +894,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                               ),
                               const SizedBox(width: 8),
                               InkWell(
-                                onTap: () async {
-                                  final user = supabase.auth.currentUser;
-                                  if (user == null) return;
-                                  final prof = await supabase.from('users').select('household_id').eq('id', user.id).single();
-                                  final hid = prof['household_id'] as String?;
-                                  if (hid != null && context.mounted) {
-                                    final pdfUrl = ApiService.instance.getStatementPdfUrl(hid);
-                                    showDialog(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        backgroundColor: context.cardBg,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                        title: Row(
-                                          children: [
-                                            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              context.tr('monthly_statement_pdf'),
-                                              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                                            ),
-                                          ],
-                                        ),
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              context.tr('pdf_statement_desc'),
-                                              style: TextStyle(color: context.textSecondary, fontSize: 13),
-                                            ),
-                                            const SizedBox(height: 14),
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: context.subtleCardBg,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: context.borderColor),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(Icons.link_rounded, color: AppThemes.success, size: 18),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      pdfUrl,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(color: context.textPrimary, fontSize: 11, fontFamily: 'monospace'),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx),
-                                            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
-                                          ),
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppThemes.success,
-                                              foregroundColor: Colors.black,
-                                            ),
-                                            icon: const Icon(Icons.copy_rounded, size: 16),
-                                            label: Text(context.tr('copy_pdf_link'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                            onPressed: () async {
-                                              await Clipboard.setData(ClipboardData(text: pdfUrl));
-                                              if (ctx.mounted) {
-                                                Navigator.pop(ctx);
-                                                AppSnackBar.showSuccess(
-                                                  context,
-                                                  context.tr('pdf_link_copied_msg'),
-                                                  title: context.tr('link_copied'),
-                                                  icon: Icons.picture_as_pdf_rounded,
-                                                );
-                                              }
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-                                },
+                                onTap: _exportingPdf ? null : () => _exportStatementPdf(context),
                                 borderRadius: BorderRadius.circular(8),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
