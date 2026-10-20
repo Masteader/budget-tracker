@@ -295,44 +295,32 @@ def fetch_flexible_budgets(
     return [BudgetRow(**r) for r in rows]
 
 
-def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: float) -> None:
+def reallocate_budget(from_budget_id: str, to_budget_id: str, amount: Any) -> bool:
     """
-    Reallocate `amount` from a flexible budget to cover a deficit in `to_budget_id`.
-    Atomically shifts `allocated_amount` between the two budgets so total household
-    spend remains strictly pegged to actual transactions without phantom expenses.
+    Move ``amount`` of allocation from a flexible budget to ``to_budget_id`` through the
+    ``reallocate_budget`` RPC (20261020030000: row locks, same-household and sufficient-allocation
+    checks, positive amount with at most 2 decimals). Returns True when it happened.
+
+    The amount is sent as exact decimal text: a float deficit such as 50.3 - 20.1 =
+    30.199999999999996 was refused by the RPC, and the old fallback then rewrote both rows with
+    two unlocked, unchecked updates (FR-B-06). A refusal now just means no reallocation.
     """
-    client = get_client()
+    from decimal import ROUND_HALF_UP, Decimal
+
+    value = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if value <= 0:
+        return False
     try:
-        client.rpc("reallocate_budget", {
+        get_client().rpc("reallocate_budget", {
             "p_from_id": from_budget_id,
             "p_to_id": to_budget_id,
-            "p_amount": amount,
+            "p_amount": format(value, "f"),
         }).execute()
     except Exception as exc:
-        logger.warning("RPC reallocate_budget unavailable (%s), falling back to two-step update.", exc)
-        from_row = client.table("budgets").select("allocated_amount").eq("id", from_budget_id).single().execute()
-        to_row = client.table("budgets").select("allocated_amount").eq("id", to_budget_id).single().execute()
-        client.table("budgets").update({
-            "allocated_amount": from_row.data["allocated_amount"] - amount
-        }).eq("id", from_budget_id).execute()
-        client.table("budgets").update({
-            "allocated_amount": to_row.data["allocated_amount"] + amount
-        }).eq("id", to_budget_id).execute()
-
-    logger.info("Reallocated %.2f from budget %s to %s.", amount, from_budget_id, to_budget_id)
-
-
-def deduct_from_budget(budget_id: str, amount: float) -> None:
-    """
-    Legacy helper: Add `amount` to a budget's spent_amount.
-    """
-    client = get_client()
-    current = client.table("budgets").select("spent_amount").eq("id", budget_id).single().execute()
-    current_spent = current.data["spent_amount"]
-    new_spent = current_spent + amount
-
-    client.table("budgets").update({"spent_amount": new_spent}).eq("id", budget_id).execute()
-    logger.info("Deducted %.2f from budget %s (new spent=%.2f).", amount, budget_id, new_spent)
+        logger.warning("Budget reallocation %s -> %s of %s refused: %s", from_budget_id, to_budget_id, value, exc)
+        return False
+    logger.info("Reallocated %s from budget %s to %s.", value, from_budget_id, to_budget_id)
+    return True
 
 
 # =============================================================================

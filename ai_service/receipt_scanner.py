@@ -745,9 +745,9 @@ def process_receipt_scan(
         deficit = total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
     items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
     if len(items) > 10:

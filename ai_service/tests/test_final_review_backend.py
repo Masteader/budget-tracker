@@ -237,6 +237,70 @@ def test_admins_can_write_budgets(db, index):
     work.assert_called_once()
 
 
+# ─── FR-B-06: budget reallocation goes through the hardened RPC only ─────────
+
+class _DbError(Exception):
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.message, self.code = message, code
+
+
+def _seed_budgets(fake):
+    fake.seed("budgets", [
+        {"id": "b-from", "household_id": ROOM, "allocated_amount": 100.0},
+        {"id": "b-to", "household_id": ROOM, "allocated_amount": 20.1},
+    ])
+
+
+def test_reallocation_sends_an_exact_two_decimal_amount(db):
+    from supabase_client import reallocate_budget
+
+    _seed_budgets(db)
+
+    def rpc(params):  # the 20261020030000 RPC refuses sub-halala amounts with 22023
+        if Decimal(str(params["p_amount"])) != Decimal(str(params["p_amount"])).quantize(Decimal("0.01")):
+            raise _DbError("Reallocation amount must be positive with at most 2 decimals", "22023")
+        return None
+
+    db.rpc_handlers["reallocate_budget"] = rpc
+    deficit = 50.3 - 20.1  # 30.199999999999996 in binary floating point
+    assert reallocate_budget("b-from", "b-to", deficit) is True
+    assert db.rpc_calls[-1] == ("reallocate_budget", {"p_from_id": "b-from", "p_to_id": "b-to", "p_amount": "30.20"})
+
+
+def test_refused_reallocation_never_falls_back_to_unchecked_updates(db):
+    from supabase_client import reallocate_budget
+
+    _seed_budgets(db)
+
+    def rpc(_params):
+        raise _DbError("Insufficient allocation: 100.00 available, 500.00 requested", "22000")
+
+    db.rpc_handlers["reallocate_budget"] = rpc
+    assert reallocate_budget("b-from", "b-to", 500.0) is False
+    assert [b["allocated_amount"] for b in db.tables["budgets"]] == [100.0, 20.1]
+
+
+def test_chat_marks_reallocation_only_when_it_happened(db):
+    from chat_parser import ChatLineItem, ParsedChatExpense, process_chat_transaction
+    from models import BudgetRow
+
+    parsed = ParsedChatExpense(merchant="Panda", total_amount=50.0, category_code="OPEX-GROCERY",
+                               items=[ChatLineItem(name="milk", price=50.0, quantity=1)], is_transaction=True)
+    budget = BudgetRow(id="b-to", household_id=ROOM, month="2026-10-01", category_code="OPEX-GROCERY",
+                       allocated_amount=20.0, spent_amount=0.0, remaining_amount=20.0)
+    flexible = BudgetRow(id="b-from", household_id=ROOM, month="2026-10-01", category_code="OPEX-DINING",
+                         allocated_amount=100.0, spent_amount=0.0, remaining_amount=100.0)
+    with patch("chat_parser.parse_chat_expense", return_value=parsed), \
+            patch("chat_parser.fetch_budget", return_value=budget), \
+            patch("chat_parser.fetch_flexible_budgets", return_value=[flexible]), \
+            patch("chat_parser.reallocate_budget", return_value=False), \
+            patch("chat_parser.insert_transaction", return_value="tx-1") as insert:
+        process_chat_transaction(household_id=ROOM, message="Panda 50", user_id=A, allow_duplicate=True)
+    assert insert.call_args.kwargs["is_reallocated"] is False
+    assert insert.call_args.kwargs["reallocated_from_budget_id"] is None
+
+
 # ─── FR-B-09: one LiteLLM model default for every module ─────────────────────
 
 def test_every_llm_call_uses_the_same_default_model(monkeypatch):

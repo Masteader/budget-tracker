@@ -678,9 +678,9 @@ def process_chat_transaction(
         deficit = parsed.total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
     # Format raw text for audit trail
     items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
