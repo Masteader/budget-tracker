@@ -184,6 +184,20 @@ class SyncWorker {
     }
   }
 
+  /// True when a direct `transactions` insert failed because the database
+  /// rejected the row itself (RLS/permission, check or trigger, unknown
+  /// column), i.e. replaying the identical row later can never succeed.
+  /// Network, timeout, auth-expiry and gateway failures are not permanent.
+  static bool isPermanentInsertError(Object error) {
+    if (error is! PostgrestException) return false;
+    final code = error.code;
+    if (code == null || code.isEmpty) return false;
+    if (code == '23505') return false; // already stored: replay reports it committed
+    if (code == 'PGRST301' || code == '401' || code == '403') return false;
+    if (RegExp(r'^5\d\d$').hasMatch(code)) return false;
+    return true;
+  }
+
   static ReplayOutcome _classifyException(Exception e) {
     if (e is PostgrestException) {
       // 23505 unique_violation: the row with this client-generated id is

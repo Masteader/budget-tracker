@@ -7,7 +7,8 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/offline_sync_service.dart';
-import '../../services/sync_worker.dart' show kTransactionInsertOperation;
+import '../../services/sync_worker.dart' show SyncWorker, kTransactionInsertOperation;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../../models/manual_expense_row.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
@@ -25,12 +26,22 @@ class ManualExpenseSheet extends StatefulWidget {
   final double? initialAmount;
   final String? initialCategory;
 
+  /// Test seams; default to Supabase / the offline queue.
+  final Future<List<Map<String, dynamic>>> Function(String householdId)? loadMembers;
+  final Future<void> Function(Map<String, dynamic> row)? insertRow;
+  final Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow;
+  final String? Function()? currentUserId;
+
   const ManualExpenseSheet({
     super.key,
     this.householdId,
     this.initialMerchant,
     this.initialAmount,
     this.initialCategory,
+    this.loadMembers,
+    this.insertRow,
+    this.enqueueRow,
+    this.currentUserId,
   });
 
   static Future<void> show(
@@ -149,15 +160,20 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final hid = widget.householdId;
     if (hid == null || hid.isEmpty) return;
     try {
-      final res = await supabase
-          .from('users')
-          .select('id, display_name, role, financial_role')
-          .eq('household_id', hid);
+      final List<Map<String, dynamic>> list;
+      if (widget.loadMembers != null) {
+        list = await widget.loadMembers!(hid);
+      } else {
+        final res = await supabase
+            .from('users')
+            .select('id, display_name, role, financial_role')
+            .eq('household_id', hid);
+        list = List<Map<String, dynamic>>.from(res);
+      }
       if (mounted) {
-        final list = List<Map<String, dynamic>>.from(res);
         final hasPeers = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'peer');
         final hasSpouse = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse');
-        final uid = supabase.auth.currentUser?.id;
+        final uid = _currentUserId;
         setState(() {
           _householdMembers = list;
           _isRoommateMode = hasPeers && !hasSpouse;
@@ -168,7 +184,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           // her claim is never lost silently (the husband sees and can dispute it).
           if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
           if (_isRoommateMode && list.isNotEmpty) {
-            final uid = supabase.auth.currentUser?.id;
+            final uid = _currentUserId;
             final myMember = list.firstWhere(
               (m) => m['id'] == uid,
               orElse: () => list.first,
@@ -178,6 +194,23 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         });
       }
     } catch (_) {}
+  }
+
+  /// Family household (a member is a spouse): Nafaqah rules, never a split.
+  bool get _hasSpouse => _wives.isNotEmpty;
+
+  String? get _currentUserId =>
+      widget.currentUserId != null ? widget.currentUserId!() : supabase.auth.currentUser?.id;
+
+  /// Best-effort refresh; a missing provider must not turn a saved expense
+  /// into a second (offline) save.
+  void _refreshProviders() {
+    try {
+      context.read<TransactionProvider>().fetchTransactions();
+      context.read<BudgetProvider>().refresh();
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Refresh after save skipped: $e');
+    }
   }
 
   @override
@@ -211,7 +244,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     String? nafaqahClass;
 
     if (_isRoommateMode) {
-      paidBy = _selectedRoommateId ?? supabase.auth.currentUser?.id ?? 'me';
+      paidBy = _selectedRoommateId ?? _currentUserId ?? 'me';
       benType = _roommateSplit == 'all' ? 'all_peers' : 'individual';
       benId = _roommateSplit == 'all' ? 'all_peers' : (_selectedRoommateId ?? 'me');
       spentBy = _roommateSplit == 'all' ? 'both' : 'me';
@@ -242,7 +275,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final row = buildManualExpenseRow(
       id: const Uuid().v4(),
       householdId: hid,
-      userId: supabase.auth.currentUser?.id,
+      userId: _currentUserId,
       amount: amount,
       merchant: merchant,
       categoryCode: _selectedCategory,
@@ -256,13 +289,21 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
 
+    Object? insertError;
     try {
       // 1. Direct Supabase insert
-      await supabase.from('transactions').insert(row);
+      if (widget.insertRow != null) {
+        await widget.insertRow!(row);
+      } else {
+        await supabase.from('transactions').insert(row);
+      }
+    } catch (e) {
+      insertError = e;
+    }
 
+    if (insertError == null) {
       if (mounted) {
-        context.read<TransactionProvider>().fetchTransactions();
-        context.read<BudgetProvider>().refresh();
+        _refreshProviders();
         Navigator.pop(context);
         AppSnackBar.showSuccess(
           context,
@@ -270,21 +311,37 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           title: context.tr('mes_logged_title'),
         );
       }
-    } catch (e) {
+    } else if (SyncWorker.isPermanentInsertError(insertError)) {
+      // FR-A-08: the database rejected the row itself (permissions, a check,
+      // the Nafaqah trigger). Replaying it can never succeed, so say so and
+      // keep the sheet open instead of reporting "saved offline".
+      if (mounted) {
+        setState(() => _isSaving = false);
+        AppSnackBar.showError(
+          context,
+          context.trArgs('mes_failed', {
+            'error': insertError is PostgrestException ? insertError.message : insertError,
+          }),
+        );
+      }
+    } else {
       // 2. Offline fallback queue
       try {
         // Replayed verbatim later; the client-generated id makes the replay
         // idempotent if the insert above actually reached the server.
-        await OfflineSyncService.instance.enqueue(
-          endpoint: kTransactionInsertOperation,
-          payload: row,
-          householdId: hid,
-          customId: row['id'] as String,
-        );
+        if (widget.enqueueRow != null) {
+          await widget.enqueueRow!(row, hid);
+        } else {
+          await OfflineSyncService.instance.enqueue(
+            endpoint: kTransactionInsertOperation,
+            payload: row,
+            householdId: hid,
+            customId: row['id'] as String,
+          );
+        }
 
         if (mounted) {
-          context.read<TransactionProvider>().fetchTransactions();
-          context.read<BudgetProvider>().refresh();
+          _refreshProviders();
           Navigator.pop(context);
           AppSnackBar.showSuccess(
             context,
@@ -475,15 +532,21 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    context.tr('paid_by_label'),
-                    style: TextStyle(
-                      color: context.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      context.tr('paid_by_label'),
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  // A household with a spouse is a family (Nafaqah): there is
+                  // no roommate equal split between the spouses (FR-A-05).
+                  if (!_hasSpouse)
                   Container(
+                    key: const ValueKey('manual_mode_toggle'),
                     decoration: BoxDecoration(
                       color: context.subtleCardBg,
                       borderRadius: BorderRadius.circular(20),
@@ -511,7 +574,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 10),
 
-              if (!_isRoommateMode) ...[
+              if (!_isRoommateMode && _hasSpouse) ...[
                 // Family Islamic Nafaqah: husband's expense, wife's shared
                 // advance (husband reimburses) or wife's personal purchase.
                 NafaqahClassSelector(
@@ -538,7 +601,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                     }).toList(),
                   ),
                 ],
-              ] else ...[
+              ] else if (_isRoommateMode) ...[
                 // Multi-Roommate Living Mode
                 if (_householdMembers.isNotEmpty) ...[
                   Align(

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:budget_tracker/services/offline_queue_manager.dart';
 import 'package:budget_tracker/services/sync_worker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 void main() {
   sqfliteFfiInit();
@@ -94,6 +95,18 @@ void main() {
       expect(SyncWorker.shouldQueueAfterOnlineFailure(err(409)), isFalse);
       expect(SyncWorker.shouldQueueAfterOnlineFailure(err(422)), isFalse);
       expect(SyncWorker.shouldQueueAfterOnlineFailure({'status': 'success'}), isFalse);
+    });
+
+    test('isPermanentInsertError separates rejections from transport failures', () {
+      PostgrestException pg(String? code) => PostgrestException(message: 'x', code: code);
+      expect(SyncWorker.isPermanentInsertError(pg('42501')), isTrue); // creator / permission trigger
+      expect(SyncWorker.isPermanentInsertError(pg('23514')), isTrue); // nafaqah pair check
+      expect(SyncWorker.isPermanentInsertError(pg('PGRST204')), isTrue); // unknown column
+      expect(SyncWorker.isPermanentInsertError(pg('23505')), isFalse); // already stored
+      expect(SyncWorker.isPermanentInsertError(pg('PGRST301')), isFalse); // expired JWT
+      expect(SyncWorker.isPermanentInsertError(pg('503')), isFalse);
+      expect(SyncWorker.isPermanentInsertError(pg(null)), isFalse);
+      expect(SyncWorker.isPermanentInsertError(Exception('socket')), isFalse);
     });
 
     test('a queued receipt replays with the key of the online attempt', () async {
