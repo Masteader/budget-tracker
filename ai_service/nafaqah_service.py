@@ -210,8 +210,8 @@ def load_family_context(household_id: str) -> FamilyContext:
     """
     Members of the household (household_memberships is authoritative) with their financial role.
     The husband mirrors public.nafaqah_husband_id(): a provider member (financial_role 'provider'
-    or unset), preferring a household admin, then the longest-standing membership. Admin rights
-    alone never make a wife the husband.
+    or unset), preferring the household's primary admin, then any admin (co-admins included),
+    then the longest-standing membership. Admin rights alone never make a wife the husband.
     """
     client = get_client()
     memberships = (
@@ -252,8 +252,11 @@ def load_family_context(household_id: str) -> FamilyContext:
         if m["financial_role"] == "spouse"
     ]
     if ctx.wives:
+        from household_permissions import household_owner_id
+
+        primary = household_owner_id(client, household_id)
         providers = [m for m in ordered if m["financial_role"] == "provider"]
-        providers.sort(key=lambda m: (m["role"] != "admin", m["created_at"], m["id"]))
+        providers.sort(key=lambda m: (m["id"] != primary, m["role"] != "admin", m["created_at"], m["id"]))
         ctx.husband_id = providers[0]["id"] if providers else None
     return ctx
 

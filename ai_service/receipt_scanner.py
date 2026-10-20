@@ -596,7 +596,7 @@ def process_receipt_scan(
 
     # Explicit enrichment
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id)
+        success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id, actor_user_id=user_id)
         if not success:
             return {
                 "status": "error",
@@ -733,6 +733,7 @@ def process_receipt_scan(
         dedup_fingerprint=zatca_fp,
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
+        user_id=user_id,
     )
 
     if items:

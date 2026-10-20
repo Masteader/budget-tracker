@@ -121,6 +121,7 @@ def enrich_transaction_items(
     items: List[Dict[str, Any]],
     receipt_url: Optional[str] = None,
     household_id: Optional[str] = None,
+    actor_user_id: Optional[str] = None,
 ) -> bool:
     """
     Enrich an existing transaction (e.g. a chat or manual entry) with itemized breakdown and/or receipt URL.
@@ -130,7 +131,21 @@ def enrich_transaction_items(
     scoped to that household: the service-role client bypasses RLS, so an unscoped
     ``.eq("id", ...)`` would let any member rewrite another household's transaction.
     Returns False when no transaction in that household matched.
+
+    ``actor_user_id`` (the verified caller of an explicit enrichment request) must be the
+    transaction's creator or a household admin (DB-18); otherwise PermissionDeniedError is raised.
     """
+    if actor_user_id and household_id:
+        from household_permissions import TransactionNotFoundError, assert_can_modify_transaction
+
+        try:
+            assert_can_modify_transaction(household_id, transaction_id, actor_user_id)
+        except TransactionNotFoundError:
+            logger.warning(
+                "Enrichment refused: transaction %s not found in household %s.", transaction_id, household_id
+            )
+            return False
+
     client = get_client()
     update_data: Dict[str, Any] = {}
 

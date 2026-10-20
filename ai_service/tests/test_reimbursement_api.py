@@ -28,6 +28,8 @@ def mock_supabase_for_invites(monkeypatch):
     db_tables = {
         "household_invites": [],
         "household_reimbursements": [],
+        # The caller is a (non-admin) member: a member may record a settlement they are party to.
+        "household_memberships": [{"household_id": HOUSEHOLD_ID, "user_id": USER_ID, "role": "member"}],
     }
 
     class MockQuery:

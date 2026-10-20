@@ -11,6 +11,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from auth import verify_household_access, verify_household_admin_access, get_current_user_id
+from household_permissions import (
+    PermissionDeniedError,
+    TransactionNotFoundError,
+    assert_can_modify_transaction,
+)
 from utils import safe_error_response, validate_uuid
 from models import (
     MAX_SAR_AMOUNT,
@@ -188,12 +193,25 @@ async def create_installment_plan(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
-    get_current_user_id(request)
+    caller = get_current_user_id(request)
     household_id = body.get("household_id") if isinstance(body, dict) else None
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
+
+    # Linking (and by default rewriting the amount of) an existing transaction is an edit of it:
+    # only its creator or a household admin may do that (DB-18).
+    original_tx = body.get("original_transaction_id")
+    if original_tx:
+        try:
+            await asyncio.to_thread(assert_can_modify_transaction, household_id, str(original_tx), caller)
+        except TransactionNotFoundError:
+            raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
+        except PermissionDeniedError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to verify the original transaction.")
 
     try:
         req = InstallmentPlanCreate(**body)

@@ -331,9 +331,14 @@ def insert_transaction(
     qr_code_raw: Optional[str] = None,
     nafaqah_class: Optional[str] = None,
     nafaqah_spouse_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
+
+    ``user_id`` is the creator: the verified JWT subject of the request (DB-18). The service
+    role bypasses RLS, so request-driven callers must always pass it; it is never pruned by the
+    fallbacks below, and only that user or a household admin may later edit or delete the row.
     The on_transaction_insert trigger automatically updates budgets.spent_amount.
 
     ``raw_sms`` is the free-text audit note column (chat text, receipt summary, manual
@@ -369,6 +374,7 @@ def insert_transaction(
 
     payload = {
         "household_id": household_id,
+        "user_id": user_id,
         "amount": amount,
         "currency": currency,
         "merchant": merchant,
@@ -425,6 +431,7 @@ def insert_transaction(
                 logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
                 base_payload = {
                     "household_id": household_id,
+                    "user_id": user_id,
                     "amount": amount,
                     "currency": currency,
                     "merchant": merchant,
@@ -1046,9 +1053,11 @@ def record_household_reimbursement(
     amount: float,
     payment_method: str = "stc_pay",
     notes: Optional[str] = None,
+    recorded_by: Optional[str] = None,
 ) -> dict:
     """
     Records a settlement reimbursement transaction between household members.
+    ``recorded_by`` (the verified caller) is stored as the transaction's creator.
     """
     import uuid
     from datetime import datetime, timezone
@@ -1060,6 +1069,7 @@ def record_household_reimbursement(
     tx_data = {
         "id": tx_id,
         "household_id": household_id,
+        "user_id": recorded_by,
         "amount": round(float(amount), 2),
         "merchant": f"Settlement Reimbursement ({payment_method.upper()})",
         "category_code": "OPEX-SETTLEMENT",
