@@ -1,32 +1,31 @@
-# React + TypeScript + Vite
+# Budget Tracker — Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite + TailwindCSS landing page (Daylight Coastal theme, Arabic RTL and
+English, payday simulator, VIP early-access form). The only backend call is the anonymous
+`POST /public/inquiries` (see [`src/lib/inquiries.ts`](src/lib/inquiries.ts)).
 
-Currently, two official plugins are available:
+## Develop
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm ci
+npm run dev       # Vite dev server
+npm run lint      # oxlint
+npm run build     # tsc -b && vite build → dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+There are no unit tests; lint and the type-checked build are the checks.
+
+## Configuration (`.env`, see [`.env.example`](.env.example))
+
+| Variable | Effect |
+|---|---|
+| `VITE_API_BASE_URL` unset | Form posts to `https://budget.fmsco.com.sa` |
+| `VITE_API_BASE_URL=` (empty) | Same origin: use this for the build served by `ai_service` |
+| `VITE_API_BASE_URL=http://localhost:8000` | Local backend (its CORS defaults allow ports 3000, 5173 and 8080) |
+
+## Publish
+
+The production page at `/` is this app's build committed in `ai_service/static/`. After changing
+`web_app/`, rebuild with `VITE_API_BASE_URL=` and copy `dist/index.html` and `dist/assets/` there
+(exact commands in the root [`README.md`](../README.md#contact-support-and-vip-early-access-email)).
+Translations live in `src/i18n/translations.ts`.
