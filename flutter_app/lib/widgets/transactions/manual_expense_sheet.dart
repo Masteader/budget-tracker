@@ -13,6 +13,7 @@ import '../../models/manual_expense_row.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
@@ -31,6 +32,7 @@ class ManualExpenseSheet extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic> row)? insertRow;
   final Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow;
   final String? Function()? currentUserId;
+  final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
 
   const ManualExpenseSheet({
     super.key,
@@ -42,6 +44,7 @@ class ManualExpenseSheet extends StatefulWidget {
     this.insertRow,
     this.enqueueRow,
     this.currentUserId,
+    this.loadNafaqah,
   });
 
   static Future<void> show(
@@ -84,6 +87,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   bool _viewerIsWife = false;
   List<Map<String, dynamic>> _wives = [];
   String? _selectedWifeId;
+  bool _canClassifyNafaqah = true;
   String? _selectedRoommateId;
   String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
   List<Map<String, dynamic>> _householdMembers = [];
@@ -194,6 +198,41 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         });
       }
     } catch (_) {}
+    await _loadNafaqahContext(hid);
+  }
+
+  /// The family context from `GET /households/{id}/nafaqah`, the same source as
+  /// the chat, receipt and edit flows (household memberships, not the
+  /// `users.household_id` of each member's *active* household). Offline, the
+  /// member list above stays in effect (FR-A-07).
+  Future<void> _loadNafaqahContext(String hid) async {
+    try {
+      final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+      final summary = await loader(hid);
+      if (!mounted) return;
+      setState(() {
+        if (!summary.isFamily) {
+          _wives = [];
+          _viewerIsWife = false;
+          _selectedWifeId = null;
+          if (_familyPayer != 'me') _familyPayer = 'me';
+          return;
+        }
+        _isRoommateMode = false;
+        _wives = [
+          for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
+        ];
+        _viewerIsWife = summary.callerIsWife;
+        // Only the husband or a wife records a Nafaqah class (as in chat/receipts).
+        _canClassifyNafaqah = summary.callerRole == 'husband' || summary.callerRole == 'wife';
+        if (!_canClassifyNafaqah) _familyPayer = 'me';
+        final uid = summary.callerUserId ?? _currentUserId;
+        _selectedWifeId = _viewerIsWife ? uid : summary.wives.first.id;
+        if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
+      });
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Nafaqah context unavailable: $e');
+    }
   }
 
   /// Family household (a member is a spouse): Nafaqah rules, never a split.
@@ -574,7 +613,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 10),
 
-              if (!_isRoommateMode && _hasSpouse) ...[
+              if (!_isRoommateMode && _hasSpouse && _canClassifyNafaqah) ...[
                 // Family Islamic Nafaqah: husband's expense, wife's shared
                 // advance (husband reimburses) or wife's personal purchase.
                 NafaqahClassSelector(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/widgets/nafaqah/nafaqah_class_selector.dart';
 import 'package:budget_tracker/widgets/transactions/manual_expense_sheet.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ void main() {
     String currentUser = 'u-husband',
     Future<void> Function(Map<String, dynamic> row)? insertRow,
     Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow,
+    NafaqahSummary? nafaqah,
   }) async {
     await tester.binding.setSurfaceSize(const Size(800, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -37,6 +39,7 @@ void main() {
                   currentUserId: () => currentUser,
                   insertRow: insertRow ?? (_) async {},
                   enqueueRow: enqueueRow ?? (_, __) async {},
+                  loadNafaqah: (_) async => nafaqah ?? (throw Exception('offline')),
                 ),
               ),
               child: const Text('open'),
@@ -110,5 +113,50 @@ void main() {
     expect(queuedRow, isNotNull);
     expect(queuedRow!['id'], triedRow!['id']);
     expect(find.byType(ManualExpenseSheet), findsNothing);
+  });
+
+  // FR-A-07: the family context comes from the household memberships (the
+  // Nafaqah summary), not from each member's active household.
+  testWidgets("the wife is found even when her active household is another one", (tester) async {
+    Map<String, dynamic>? saved;
+    await openSheet(
+      tester,
+      members: [_husband], // users.household_id: the wife is active elsewhere
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'husband',
+        callerUserId: 'u-husband',
+        wives: [NafaqahWife(id: 'u-wife', displayName: 'Umm Fahad')],
+      ),
+      insertRow: (row) async => saved = row,
+    );
+
+    expect(find.byKey(const ValueKey('manual_mode_toggle')), findsNothing);
+    expect(find.byType(NafaqahClassSelector), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('nafaqah_option_wife_reimbursable')));
+    await tester.tap(find.byKey(const ValueKey('nafaqah_option_wife_reimbursable')));
+    await tester.pump();
+    await tapSave(tester);
+
+    expect(saved?['nafaqah_class'], kWifeReimbursable);
+    expect(saved?['nafaqah_spouse_id'], 'u-wife');
+  });
+
+  testWidgets('another family member (not a spouse) records without a Nafaqah class', (tester) async {
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      currentUser: 'u-son',
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'member',
+        callerUserId: 'u-son',
+        wives: [NafaqahWife(id: 'u-wife')],
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('manual_mode_toggle')), findsNothing);
+    expect(find.byType(NafaqahClassSelector), findsNothing);
   });
 }
