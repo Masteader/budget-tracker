@@ -13,6 +13,8 @@ Live was only read. Access was a read-only Management API role (`read_only=true`
 
 ## 1. Verdict
 
+> **Status (2026-10-20): applied to live.** Backup taken (read-only JSON export of all `public` tables and `storage.buckets`), part A matched §4, the 14 files ran in order without error, part B matched §7, and the versions were recorded in `supabase_migrations.schema_migrations` (§5.3).
+
 **Safe to apply: yes**, under these conditions:
 
 1. Apply the 14 files one at a time, in the order of §5, starting with the pre-flight migration.

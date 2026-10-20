@@ -183,6 +183,7 @@ cd web_app && npm ci && npm run build && npm run lint
 
 ### 6.2 Deployment order
 1. **Database:** follow [`live_db_preflight.md`](live_db_preflight.md).
+   - **✅ Applied to live on 2026-10-20** (owner-approved): read-only data backup taken first; all 14 files applied in order with no errors; part B matched §7 exactly (`budgets_spent_total` 9112.42 and `accounts_balance_total` 360.00 unchanged); the 14 versions are recorded in `supabase_migrations.schema_migrations`. Verified compatible with the currently deployed (pre-audit) backend and app: they always send an explicit `source`, and service-role inserts pass the new creator trigger unchanged.
    - **Verdict: safe to apply.** Live was compared read-only with the repo, and a faithful local replica of live passed the 14-file batch with the DB suite at 20/20.
    - **Order:** apply the pre-flight `20261020005000_preflight_live_alignment.sql` first, then the 13 audit migrations `20261020010000` … `20261020400000`. Use the SQL editor, one file per run, in order (§5).
    - **Before:** run part A of [`live_db_preflight_checks.sql`](live_db_preflight_checks.sql) and note the totals.
