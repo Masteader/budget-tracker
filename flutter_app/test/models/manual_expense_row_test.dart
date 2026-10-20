@@ -10,6 +10,8 @@ const _transactionColumns = {
   'source', 'items', 'receipt_url', 'dedup_fingerprint', 'spent_by', 'sub_category',
   'cycle_key', 'qr_code_raw', 'beneficiary_type', 'beneficiary_id', 'is_settlement',
   'settlement_target_id', 'line_items', 'account_id',
+  // 20261020300000_nafaqah_wife_allowance_and_reimbursements.sql
+  'nafaqah_class', 'nafaqah_spouse_id',
 };
 
 void main() {
@@ -53,5 +55,33 @@ void main() {
     expect(manualPayerAuditTag('me'), 'me');
     expect(manualPayerAuditTag('wife'), 'partner');
     expect(manualPayerAuditTag('3b0f-roommate'), '3b0f-roommate');
+  });
+
+  test('family Nafaqah class and wife are written together', () {
+    Map<String, dynamic> build({String? cls, String? spouse}) => buildManualExpenseRow(
+          id: 'id-1',
+          householdId: 'h-1',
+          userId: 'u-wife',
+          amount: 120,
+          merchant: 'Panda',
+          categoryCode: 'OPEX-GROCERY',
+          spentBy: 'me',
+          paidBy: 'me',
+          beneficiaryType: 'household',
+          beneficiaryId: 'household',
+          accountId: null,
+          occurredAt: DateTime.utc(2026, 11, 2),
+          nafaqahClass: cls,
+          nafaqahSpouseId: spouse,
+        );
+
+    final shared = build(cls: 'wife_reimbursable', spouse: 'u-wife');
+    expect(shared['nafaqah_class'], 'wife_reimbursable');
+    expect(shared['nafaqah_spouse_id'], 'u-wife');
+    expect(shared.keys.toSet().difference(_transactionColumns), isEmpty);
+
+    // Without a resolvable wife the class is not written (the DB trigger would reject it).
+    expect(build(cls: 'wife_personal').containsKey('nafaqah_class'), isFalse);
+    expect(build().containsKey('nafaqah_class'), isFalse);
   });
 }

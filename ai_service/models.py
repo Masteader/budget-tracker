@@ -183,6 +183,50 @@ class HouseholdReimbursementRequest(BaseModel):
         return _uuid_validator(v)
 
 
+def _two_decimals(v: float) -> float:
+    """SAR amounts are numeric(14,2): reject sub-halala precision instead of rounding it away."""
+    from decimal import Decimal
+
+    if Decimal(str(v)) != Decimal(str(v)).quantize(Decimal("0.01")):
+        raise ValueError("Amount must have at most 2 decimal places")
+    return v
+
+
+class NafaqahReimbursementCreateRequest(BaseModel):
+    """Husband → wife repayment of her Nafaqah advances (family households only)."""
+    amount: PositiveMoney = Field(..., description="Repayment in SAR (partial or full; never above the outstanding balance)")
+    payment_method: str = Field(default="cash", pattern=r"^(stc_pay|urpay|bank_transfer|iban|cash|other)$")
+    notes: Optional[str] = Field(default=None, max_length=500)
+    wife_user_id: Optional[str] = Field(default=None, description="Required only when the household has several wives")
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        return _two_decimals(v)
+
+    @field_validator("wife_user_id")
+    @classmethod
+    def validate_wife_uuid(cls, v: Optional[str]) -> Optional[str]:
+        return _uuid_validator(v)
+
+
+class NafaqahAllowanceSetRequest(BaseModel):
+    """Wife personal allowance (مصروفها) for one salary cycle, set by the husband/admin."""
+    amount: Money = Field(..., description="Allowance in SAR for the cycle (0 allowed)")
+    cycle_key: Optional[str] = Field(default=None, pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    wife_user_id: Optional[str] = None
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        return _two_decimals(v)
+
+    @field_validator("wife_user_id")
+    @classmethod
+    def validate_wife_uuid(cls, v: Optional[str]) -> Optional[str]:
+        return _uuid_validator(v)
+
+
 class ShoppingBasketOptimizeRequest(BaseModel):
     household_id: str
     items: List[ShortText] = Field(default_factory=list, max_length=200, description="List of grocery item names to price and optimize")

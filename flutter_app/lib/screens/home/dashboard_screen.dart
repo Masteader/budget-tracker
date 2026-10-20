@@ -603,7 +603,6 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   }
                                   return FamilyReimbursementCard(
                                     householdId: hid,
-                                    summary: snap.data?.familySummary,
                                   );
                                 },
                               ),

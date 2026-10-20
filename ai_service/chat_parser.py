@@ -114,10 +114,12 @@ SAUDI COLLOQUIAL ARABIC & 2D ATTRIBUTION SUPPORT:
   - "دفعتها أنا / دافعه أنا / ع حسابي / حاسبت" -> "me"
   - "دفعتها زوجتي / حاسبها زوجي / جابته المدام" -> "partner"
 - "beneficiary" (for whom was this expense):
-  - "لي / لي لحالي / ع حسابي الشخصي" -> "me"
+  - "لي / لي لحالي / لنفسي / اشتريت لنفسي / ع حسابي الشخصي" -> "me"
   - "لزوجتي / للشريك" -> "partner"
   - "مقاضي البيت / لنا اثنيننا / مشترك / للبيت" -> "both"
-  - Mention of a child / dependent (e.g. "لسارة", "لفهد", "للأولاد", "حليب سارة", "بامبرز") -> child's name (e.g. "Sarah", "Fahad") or "children".
+  - "للعيال / للأولاد / للأطفال / للبنات" -> "children"
+  - Mention of a specific child / dependent (e.g. "لسارة", "لفهد", "حليب سارة", "بامبرز") -> child's name (e.g. "Sarah", "Fahad").
+- Never split anything between a husband and wife: the app applies the Islamic Nafaqah rules itself from paid_by and beneficiary.
 
 Expense Input examples:
 "عبيت بنزين 91 بـ 60 ريال من ساسكو"
@@ -201,10 +203,16 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
     elif any(k in lower for k in ("i paid", "i spent", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت انا")):
         paid_by = "me"
 
+    children_keywords = (
+        "for the kids", "for my kids", "for the children", "for my children",
+        "للعيال", "للأولاد", "للاولاد", "للأطفال", "للاطفال", "للبنات",
+    )
     beneficiary = "me"
-    if any(k in lower for k in ("for my wife", "for partner", "for husband", "for her", "for him", "لزوجتي", "لزوجي", "للشريك", "فستان زوجتي", "هدية")):
+    if any(k in lower for k in children_keywords):
+        beneficiary = "children"
+    elif any(k in lower for k in ("for my wife", "for partner", "for husband", "for her", "for him", "لزوجتي", "لزوجي", "للشريك", "فستان زوجتي", "هدية")):
         beneficiary = "partner"
-    elif any(k in lower for k in ("for me", "for myself", "bought myself", "لي لحالي", "شريت لنفسي", "قهوتي", "ملابسي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا")):
+    elif any(k in lower for k in ("for me", "for myself", "bought myself", "لي لحالي", "شريت لنفسي", "لنفسي", "قهوتي", "ملابسي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا")):
         beneficiary = "me"
     elif any(k in lower for k in ("cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "both", "we ", "house ", "home ", "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت")):
         beneficiary = "both"
@@ -403,9 +411,9 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
 
     # Detect child / dependent name in beneficiary
     child_match = re.search(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw)
-    if child_match:
+    if child_match and beneficiary != "children":
         cand = child_match.group(1).strip()
-        if cand not in ("ي", "حالي", "البيت", "لنا", "الزوجة", "المدام", "الزوج"):
+        if cand not in ("ي", "حالي", "نفسي", "البيت", "لنا", "الزوجة", "المدام", "الزوج", "زوجتي", "زوجي", "لشريك"):
             beneficiary = cand
 
     return ParsedChatExpense(
@@ -455,6 +463,51 @@ def check_category_active_status(category_code: str, categories_state: dict) -> 
     return category_code not in inactive_codes
 
 
+def _resolve_nafaqah(
+    household_id: str,
+    user_id: Optional[str],
+    paid_by: str,
+    beneficiary: Optional[str],
+    override_class: Optional[str],
+) -> Dict[str, Any]:
+    """Nafaqah class (rules 2-4) of a chat expense, from the recorder's role in the household."""
+    from nafaqah_service import NAFAQAH_CLASSES, classify_nafaqah, load_family_context
+
+    result: Dict[str, Any] = {
+        "household_mode": "not_family",
+        "recorder_role": None,
+        "nafaqah_class": None,
+        "nafaqah_spouse_id": None,
+    }
+    try:
+        ctx = load_family_context(household_id)
+    except Exception as exc:
+        logger.warning("Could not load family context for chat classification: %s", exc)
+        return result
+    if not ctx.is_family:
+        return result
+
+    role = ctx.role_of(user_id)
+    result["household_mode"] = "family_nafaqah"
+    result["recorder_role"] = role
+    if role == "wife":
+        spouse_id: Optional[str] = str(user_id)
+    elif len(ctx.wives) == 1:
+        spouse_id = ctx.wives[0]["id"]
+    else:
+        spouse_id = None  # several wives: the class needs an explicit choice in the app
+
+    if override_class is not None:
+        chosen = override_class.strip().lower()
+        nafaqah_class = chosen if chosen in NAFAQAH_CLASSES else None
+    else:
+        nafaqah_class = classify_nafaqah(role, paid_by, beneficiary)
+    if nafaqah_class and spouse_id:
+        result["nafaqah_class"] = nafaqah_class
+        result["nafaqah_spouse_id"] = spouse_id
+    return result
+
+
 def process_chat_transaction(
     household_id: str,
     message: str,
@@ -469,9 +522,16 @@ def process_chat_transaction(
     override_paid_by: Optional[str] = None,
     override_beneficiary: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
+    override_nafaqah_class: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
+
+    Family households (Islamic Nafaqah): an expense the wife paid is classified as
+    ``wife_reimbursable`` (shared → the husband owes her) or ``wife_personal`` (charged to her
+    allowance). The preview returns the suggestion; ``override_nafaqah_class`` is the user's
+    confirmed choice ('wife_reimbursable' | 'wife_personal' | 'none'). Nothing is ever split
+    between the spouses, and roommate households are never classified.
     """
     parsed = parse_chat_expense(message)
     if parsed.is_simulation:
@@ -560,6 +620,8 @@ def process_chat_transaction(
         if override_sub_category or not it.get("sub_category"):
             it["sub_category"] = sub_category
 
+    nafaqah = _resolve_nafaqah(household_id, user_id, paid_by, beneficiary, override_nafaqah_class)
+
     # Check if category is inactive for this household
     is_inactive = False
     try:
@@ -598,6 +660,10 @@ def process_chat_transaction(
             "paid_by": paid_by,
             "beneficiary": beneficiary,
             "dependents": [d.get("name") for d in dependents if d.get("name")],
+            "household_mode": nafaqah["household_mode"],
+            "recorder_role": nafaqah["recorder_role"],
+            "nafaqah_class": nafaqah["nafaqah_class"],
+            "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
             "items": items_dicts,
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",
@@ -670,6 +736,8 @@ def process_chat_transaction(
         spent_by=spent_by,
         paid_by=paid_by,
         beneficiary=beneficiary,
+        nafaqah_class=nafaqah["nafaqah_class"],
+        nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
     )
 
     # Attach items fallback if needed
@@ -686,6 +754,8 @@ def process_chat_transaction(
         "spent_by": spent_by,
         "paid_by": paid_by,
         "beneficiary": beneficiary,
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
         "is_reallocated": is_reallocated,
         "items": items_dicts,
         "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by}).",

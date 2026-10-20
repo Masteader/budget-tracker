@@ -1012,7 +1012,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 }
                 return FamilyReimbursementCard(
                   householdId: _householdId!,
-                  summary: snap.data?.familySummary,
                 );
               },
             ),

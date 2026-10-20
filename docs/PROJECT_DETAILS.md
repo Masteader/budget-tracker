@@ -117,10 +117,12 @@ Unlike Western budgeting tools that assume generic calendar-month paydays, arbit
   - `DuplicateResolutionCard`: Resolves potential duplicate submissions interactively.
 
 ### 3.6 Islamic Family Nafaqah & Multi-Roommate Settlements
-- **Islamic Nafaqah Enforcement:**
-  - Strict prohibition against arbitrary 50/50 spousal splits.
-  - Tracks wife's household out-of-pocket expenses as **Wife Reimbursement Debt** owed by the husband.
-  - Visual metrics display total debt balance and single-tap payment logging.
+- **Islamic Nafaqah Enforcement (family mode, rules 1–4 in `.agents/rules/02-…`):**
+  - No 50/50 or any percentage split between the spouses: shared family expenses are the husband's Nafaqah.
+  - The wife paying for something shared from her own money is tagged `transactions.nafaqah_class = 'wife_reimbursable'` and becomes a debt the husband owes her; the app shows the outstanding balance and history and records partial or full repayments (overpayment rejected).
+  - Her personal purchases are tagged `wife_personal` and charged to her **personal allowance ("مصروفها")** per salary cycle, set by the husband/admin; allocated / spent / remaining is shown, overspend goes negative and is never blocked.
+  - Expense entry (manual, chat review, edit) offers "Husband paid", "Shared for family (husband reimburses)" or "Personal (from my/her allowance)"; the chat parser suggests the class (e.g. «اشتريت لنفسي…» → personal, «دفعت فاتورة البيت / أغراض البيت / للعيال» → reimbursable).
+  - API: `GET /households/{id}/nafaqah` (summary for the caller), `GET|POST /households/{id}/nafaqah/reimbursements` (ledger / record repayment), `GET|PUT /households/{id}/nafaqah/allowance` (status / set). All require the caller's JWT and household membership; `POST /households/{id}/reimbursements` writes the Nafaqah ledger in family households.
 - **Multi-Roommate Settlement Engine:**
   - Solves multi-way debts between flatmates (Rent, Cleaning, Fiber Internet, Utilities).
   - Graph-based debt simplification minimizes transaction count (e.g. 5 debts simplified into 2 direct payments).
@@ -207,6 +209,7 @@ The database layer consists of 19 incremental, backward-compatible SQL migration
 | `20261015_family_nafaqah_and_multi_roommate_settlement.sql` | 2026-10-15 | `reimbursement_debts` | Tracks husband-to-wife Nafaqah debt and roommate debts. |
 | `20261015_manual_members_and_claim_merge.sql` | 2026-10-15 | `users`, `household_invites`| Supports pre-account placeholder members and claim-on-join. |
 | `20261018_multi_source_income_and_accounts.sql` | 2026-10-18 | `accounts`, `transfers`, `income_records` | Introduces liquid accounts, transfers, multi-source income, and budget links. |
+| `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` | 2026-10-20 | `transactions.nafaqah_class` / `nafaqah_spouse_id`, `member_allowances`, `spouse_reimbursements`, RPCs `set_member_allowance`, `get_member_allowance_status`, `record_spouse_reimbursement`, `get_spouse_reimbursement_balance` | Family Nafaqah (UI-24): wife reimbursement ledger (append-only, overpayment rejected under an advisory lock) and per-cycle wife allowance; RLS read inside the household, writes only via `SECURITY DEFINER` RPCs with pinned `search_path`; proof test `supabase/tests/19_nafaqah_allowance_and_reimbursements.sql`. |
 
 ---
 

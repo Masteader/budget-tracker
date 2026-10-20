@@ -1,93 +1,258 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/l10n/app_localizations.dart';
+import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/widgets/dashboard/family_reimbursement_card.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+const _husband = 'u-husband';
+const _wife = 'u-wife';
+
+Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
+      locale: locale,
+      supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+      localizationsDelegates: const [
+        AppLocalizationsDelegate(),
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: Scaffold(body: SingleChildScrollView(child: child)),
+    );
+
+NafaqahSummary _summary({
+  String role = 'husband',
+  double outstanding = 500.5,
+  double allocated = 1500,
+  double spent = 1700,
+  bool isSet = true,
+  String mode = 'family_nafaqah',
+}) =>
+    NafaqahSummary.fromMap({
+      'mode': mode,
+      'caller_role': role,
+      'caller_user_id': role == 'wife' ? _wife : _husband,
+      'cycle_key': '2026-11',
+      'husband': {'id': _husband, 'display_name': 'Ahmed'},
+      'wives': mode == 'family_nafaqah'
+          ? [
+              {
+                'id': _wife,
+                'display_name': 'Sara',
+                'reimbursement': {
+                  'gross_advanced': outstanding + 100,
+                  'reimbursed': 100.0,
+                  'outstanding': outstanding,
+                },
+                'allowance': {
+                  'cycle_key': '2026-11',
+                  'is_set': isSet,
+                  'allocated': allocated,
+                  'spent': spent,
+                  'remaining': allocated - spent,
+                  'transaction_count': 2,
+                },
+              }
+            ]
+          : [],
+      'can_set_allowance': role != 'wife',
+      'can_record_reimbursement': role != 'member',
+    });
 
 void main() {
-  testWidgets('FamilyReimbursementCard displays wife reimbursement debt and metrics', (tester) async {
-    const summary = FamilyNafaqahSummary(
-      wifeReimbursementOwed: 350.0,
-      spentOnWife: 120.0,
-      spentOnChildren: 450.0,
-      familyGeneralTotal: 1200.0,
-    );
+  testWidgets('husband sees what he owes his wife and her allowance overspend', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(householdId: 'hh', summary: _summary())));
+    await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: FamilyReimbursementCard(
-            householdId: 'hh-test-1',
-            summary: summary,
-          ),
-        ),
-      ),
-    );
-
-    expect(find.textContaining('350.00'), findsWidgets);
-    expect(find.textContaining('450.00'), findsWidgets);
+    expect(find.text('Husband owes Wife:'), findsOneWidget);
+    expect(find.text('SAR 500.50'), findsOneWidget);
     expect(find.text('Reimburse Wife'), findsOneWidget);
+    // No spousal split anywhere in family mode.
+    expect(find.textContaining('50/50'), findsNothing);
+    expect(find.textContaining('Half'), findsNothing);
+
+    expect(find.text("Wife's personal allowance"), findsOneWidget);
+    expect(find.text('SAR 1,500.00'), findsOneWidget);
+    expect(find.text('SAR 1,700.00'), findsOneWidget);
+    expect(find.text('SAR -200.00'), findsOneWidget);
+    expect(find.text('Over the allowance by SAR 200.00'), findsOneWidget);
+    expect(find.text('Change allowance'), findsOneWidget);
   });
 
-  testWidgets('FamilyReimbursementCard opens settlement dialog on tap', (tester) async {
-    const summary = FamilyNafaqahSummary(
-      wifeReimbursementOwed: 350.0,
-      spentOnWife: 120.0,
-      spentOnChildren: 450.0,
-      familyGeneralTotal: 1200.0,
-    );
+  testWidgets('wife sees her claim, records receipt, cannot set her allowance', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(role: 'wife', allocated: 800, spent: 300),
+    )));
+    await tester.pumpAndSettle();
 
-    bool callbackCalled = false;
+    expect(find.text('Your husband owes you:'), findsOneWidget);
+    expect(find.text('Record amount received'), findsOneWidget);
+    expect(find.text('My personal allowance'), findsOneWidget);
+    expect(find.text('SAR 500.00'), findsOneWidget); // remaining 800 - 300
+    expect(find.text('Set by the husband or a household admin.'), findsOneWidget);
+    expect(find.text('Change allowance'), findsNothing);
+    expect(find.text('Set allowance'), findsNothing);
+  });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: FamilyReimbursementCard(
-            householdId: 'hh-test-1',
-            summary: summary,
-            onReimbursed: () {
-              callbackCalled = true;
-            },
-            recordPayment: (_) async => {'status': 'success'},
-          ),
-        ),
-      ),
-    );
+  testWidgets('partial reimbursement is recorded for the wife and the card reloads', (tester) async {
+    final calls = <Map<String, Object>>[];
+    var loads = 0;
+    var reimbursed = false;
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(),
+      onReimbursed: () => reimbursed = true,
+      loadSummary: (_) async {
+        loads++;
+        return _summary(outstanding: 300.5);
+      },
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async {
+        calls.add({'amount': amount, 'method': paymentMethod, 'wife': wifeUserId});
+        return 300.5;
+      },
+    )));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Reimburse Wife'));
     await tester.pumpAndSettle();
-
-    // Dialog title
     expect(find.text('Settle Wife Reimbursement'), findsOneWidget);
-    expect(find.text('Full (SAR 350.00)'), findsOneWidget);
-    expect(find.text('Record Settlement Payment'), findsOneWidget);
+    expect(find.text('Full (SAR 500.50)'), findsOneWidget);
 
-    // Confirm settlement
+    await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '200');
+    await tester.tap(find.text('Cash'));
     await tester.tap(find.text('Record Settlement Payment'));
     await tester.pumpAndSettle();
 
-    expect(callbackCalled, isTrue);
+    expect(calls, [
+      {'amount': 200.0, 'method': 'cash', 'wife': _wife}
+    ]);
+    expect(reimbursed, isTrue);
+    expect(loads, 1);
+    expect(find.text('SAR 300.50'), findsOneWidget);
   });
 
-  testWidgets('FamilyReimbursementCard renders all-settled state when owed is 0', (tester) async {
-    const summary = FamilyNafaqahSummary(
-      wifeReimbursementOwed: 0.0,
-      spentOnWife: 120.0,
-      spentOnChildren: 450.0,
-      familyGeneralTotal: 1200.0,
-    );
+  testWidgets('overpayment is refused before reaching the server', (tester) async {
+    var called = false;
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(),
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async {
+        called = true;
+        return 0;
+      },
+    )));
+    await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: FamilyReimbursementCard(
-            householdId: 'hh-test-1',
-            summary: summary,
-          ),
-        ),
-      ),
-    );
+    await tester.tap(find.text('Reimburse Wife'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '500.51');
+    await tester.tap(find.text('Record Settlement Payment'));
+    await tester.pumpAndSettle();
+
+    expect(called, isFalse);
+    expect(find.text('That is more than the outstanding balance (SAR 500.50).'), findsOneWidget);
+    expect(find.text('Settle Wife Reimbursement'), findsOneWidget);
+  });
+
+  testWidgets('a server-side overpayment rejection is reported, never as success', (tester) async {
+    var reimbursed = false;
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(),
+      onReimbursed: () => reimbursed = true,
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async =>
+          throw const NafaqahApiException('overpayment', 'exceeds', statusCode: 409),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Reimburse Wife'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record Settlement Payment'));
+    await tester.pumpAndSettle();
+
+    expect(reimbursed, isFalse);
+    expect(find.text('Settlement Failed'), findsOneWidget);
+    expect(find.text('That is more than the outstanding balance (SAR 500.50).'), findsOneWidget);
+  });
+
+  testWidgets('settled balance hides the reimburse action', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(householdId: 'hh', summary: _summary(outstanding: 0))));
+    await tester.pumpAndSettle();
 
     expect(find.text('All Settled'), findsOneWidget);
     expect(find.text('Reimburse Wife'), findsNothing);
+    expect(find.text('History'), findsOneWidget);
+  });
+
+  testWidgets('husband sets the allowance for the cycle', (tester) async {
+    final saved = <List<Object?>>[];
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(isSet: false, allocated: 0, spent: 99),
+      loadSummary: (_) async => _summary(allocated: 1200, spent: 99),
+      setAllowance: ({required double amount, required String wifeUserId, String? cycleKey}) async {
+        saved.add([amount, wifeUserId, cycleKey]);
+        return const AllowanceStatus(cycleKey: '2026-11', isSet: true, allocated: 1200, spent: 99, remaining: 1101);
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No allowance set for this cycle yet.'), findsOneWidget);
+    await tester.tap(find.text('Set allowance'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('allowance_amount_field')), '1200');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(saved, [
+      [1200.0, _wife, '2026-11']
+    ]);
+    expect(find.text('SAR 1,101.00'), findsOneWidget);
+  });
+
+  testWidgets('history lists advances and repayments', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(),
+      loadLedger: (_, wifeId) async => NafaqahLedger.fromMap({
+        'balance': {'gross_advanced': 600.5, 'reimbursed': 100, 'outstanding': 500.5},
+        'history': [
+          {'type': 'reimbursement', 'id': 'r1', 'amount': 100, 'payment_method': 'cash', 'timestamp': '2026-11-15T10:00:00Z'},
+          {'type': 'advance', 'id': 't1', 'amount': 300, 'merchant': 'Panda', 'timestamp': '2026-11-10T09:00:00Z'},
+        ],
+      }),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reimbursement history'), findsOneWidget);
+    expect(find.text('Wife paid: Panda'), findsOneWidget);
+    expect(find.text('Reimbursed via Cash'), findsOneWidget);
+    expect(find.text('+SAR 300.00'), findsOneWidget);
+  });
+
+  testWidgets('renders nothing outside family mode (roommates keep their own card)', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(householdId: 'hh', summary: _summary(mode: 'not_family'))));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Family Expenses & Nafaqah'), findsNothing);
+    expect(find.byType(ElevatedButton), findsNothing);
+  });
+
+  testWidgets('Arabic family card is RTL with riyal amounts', (tester) async {
+    await tester.pumpWidget(_app(
+      FamilyReimbursementCard(householdId: 'hh', summary: _summary()),
+      locale: const Locale('ar'),
+    ));
+    await tester.pumpAndSettle();
+
+    final dir = Directionality.of(tester.element(find.byType(FamilyReimbursementCard)));
+    expect(dir, TextDirection.rtl);
+    expect(find.text('مصروف الزوجة الشخصي'), findsOneWidget);
+    expect(find.text('500.50 ر.س'), findsOneWidget);
+    expect(find.textContaining('SAR'), findsNothing);
   });
 }

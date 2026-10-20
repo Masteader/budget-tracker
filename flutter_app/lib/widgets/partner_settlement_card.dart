@@ -73,6 +73,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     final whoOwes = _data!['who_owes'] as String? ?? 'settled';
     final settleAmt = (_data!['settlement_amount'] as num?)?.toDouble() ?? 0.0;
     final totalShared = (_data!['total_shared_expenses'] as num?)?.toDouble() ?? 0.0;
+    final isFamilyMode = _data!['mode'] == 'family_nafaqah';
     final iPaidForPartner = (_data!['i_paid_for_partner_100'] as num?)?.toDouble() ?? 0.0;
     final partnerPaidForMe = (_data!['partner_paid_for_me_100'] as num?)?.toDouble() ?? 0.0;
     final stcNote = _data!['stc_pay_note'] as String? ?? context.tr('psc_household_settlement');
@@ -207,7 +208,10 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                   border: Border.all(color: context.borderColor),
                 ),
                 child: Text(
-                  context.trArgs('psc_shared', {'amount': context.sar(totalShared)}),
+                  // Family (Nafaqah): household costs are the husband's, never split 50/50.
+                  isFamilyMode
+                      ? context.trArgs('psc_family_household', {'amount': context.sar(totalShared)})
+                      : context.trArgs('psc_shared', {'amount': context.sar(totalShared)}),
                   style: TextStyle(color: context.textSecondary, fontSize: 11),
                 ),
               ),

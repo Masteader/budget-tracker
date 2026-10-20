@@ -329,6 +329,8 @@ def insert_transaction(
     cycle_key: Optional[str] = None,
     dedup_fingerprint: Optional[str] = None,
     qr_code_raw: Optional[str] = None,
+    nafaqah_class: Optional[str] = None,
+    nafaqah_spouse_id: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -337,6 +339,8 @@ def insert_transaction(
     ``raw_sms`` is the free-text audit note column (chat text, receipt summary, manual
     note); the name is historical — the app never reads SMS. ``source`` must be one of
     ``TRANSACTION_SOURCES``: there is no SMS ingestion channel (zero-SMS policy).
+    ``nafaqah_class``/``nafaqah_spouse_id`` (family households) are never pruned by the
+    fallbacks below: silently dropping them would erase the wife's reimbursement debt.
     """
     if source not in TRANSACTION_SOURCES:
         raise ValueError(f"Unsupported transaction source: {source!r}")
@@ -393,7 +397,12 @@ def insert_transaction(
         payload["dedup_fingerprint"] = dedup_fingerprint
     if qr_code_raw:
         payload["qr_code_raw"] = qr_code_raw
-        payload["qr_code_raw"] = qr_code_raw
+    nafaqah_fields = (
+        {"nafaqah_class": nafaqah_class, "nafaqah_spouse_id": nafaqah_spouse_id}
+        if nafaqah_class and nafaqah_spouse_id
+        else {}
+    )
+    payload.update(nafaqah_fields)
 
 
     try:
@@ -432,6 +441,7 @@ def insert_transaction(
                     base_payload["cycle_key"] = cycle_key
                 if spent_by:
                     base_payload["spent_by"] = spent_by
+                base_payload.update(nafaqah_fields)
                 response = client.table("transactions").insert(base_payload).execute()
 
     transaction_id = response.data[0]["id"]

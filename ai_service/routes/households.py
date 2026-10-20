@@ -40,6 +40,14 @@ from dependents_service import (
     delete_household_dependent,
 )
 from settlement_engine import calculate_partner_settlement, calculate_settlement_v2
+from nafaqah_service import (
+    PAYMENT_METHODS as NAFAQAH_PAYMENT_METHODS,
+    NafaqahError,
+    load_family_context,
+    record_reimbursement,
+    resolve_wife_id,
+)
+from routes.nafaqah import nafaqah_http_error
 from salary_cycle import (
     get_household_categories,
     toggle_category_status,
@@ -289,8 +297,15 @@ async def claim_household_role_invite_endpoint(
 async def record_household_reimbursement_endpoint(
     household_id: str,
     payload: HouseholdReimbursementRequest,
+    request: Request,
     _auth: str = Depends(verify_household_access),
 ):
+    """
+    Roommate/partner households: a settlement transaction between members (unchanged).
+    Family households (Nafaqah): the only debt is the husband's to his wife for her advances, so
+    a repayment to the wife goes to the append-only Nafaqah ledger (overpayment rejected) and any
+    other direction is refused; nothing in a family is split between the spouses.
+    """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
@@ -298,6 +313,32 @@ async def record_household_reimbursement_endpoint(
         raise HTTPException(status_code=400, detail="Body household_id does not match the URL.")
     if payload.payer_id == payload.recipient_id:
         raise HTTPException(status_code=400, detail="payer_id and recipient_id must differ.")
+    caller = get_current_user_id(request)
+    try:
+        ctx = await asyncio.to_thread(load_family_context, household_id)
+    except Exception as exc:
+        logger.warning("Could not load family context for reimbursement: %s", exc)
+        ctx = None
+    if ctx is not None and ctx.is_family:
+        try:
+            wife_id = resolve_wife_id(ctx, payload.recipient_id)
+        except NafaqahError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="In a family household only the husband's repayments to his wife are recorded.",
+            )
+        method = payload.payment_method.strip().lower()
+        if method not in NAFAQAH_PAYMENT_METHODS:
+            method = "other"
+        try:
+            result = await asyncio.to_thread(
+                record_reimbursement, ctx, caller, wife_id, str(payload.amount), method, payload.notes
+            )
+        except NafaqahError as exc:
+            raise nafaqah_http_error(exc)
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+        return {**result, "mode": "family_nafaqah", "is_settlement": False}
     try:
         return await asyncio.to_thread(
             record_household_reimbursement,

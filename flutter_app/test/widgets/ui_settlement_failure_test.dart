@@ -1,5 +1,6 @@
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/widgets/dashboard/family_reimbursement_card.dart';
 import 'package:budget_tracker/widgets/dashboard/multi_roommate_settlement_card.dart';
 import 'package:flutter/material.dart';
@@ -25,9 +26,16 @@ void main() {
     var confirmed = false;
     await tester.pumpWidget(_app(FamilyReimbursementCard(
       householdId: 'hh-1',
-      summary: const FamilyNafaqahSummary(wifeReimbursementOwed: 350.0),
+      summary: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'husband',
+        callerUserId: 'u-h',
+        wives: [NafaqahWife(id: 'u-w', reimbursement: ReimbursementBalance(grossAdvanced: 350, outstanding: 350))],
+        canRecordReimbursement: true,
+      ),
       onReimbursed: () => confirmed = true,
-      recordPayment: (_) async => throw Exception('HTTP 500'),
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async =>
+          throw Exception('HTTP 500'),
     )));
     await tester.pumpAndSettle();
 

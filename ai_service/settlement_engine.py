@@ -71,7 +71,7 @@ def calculate_partner_settlement(
     try:
         response = (
             client.table("transactions")
-            .select("id, amount, merchant, category_code, spent_by, paid_by, beneficiary, timestamp, raw_sms")
+            .select("id, amount, merchant, category_code, spent_by, paid_by, beneficiary, timestamp, raw_sms, nafaqah_class")
             .eq("household_id", household_id)
             .gte("timestamp", start_iso)
             .order("timestamp", desc=True)
@@ -112,6 +112,15 @@ def calculate_partner_settlement(
         paid_by = (tx.get("paid_by") or "").strip().lower()
         beneficiary = (tx.get("beneficiary") or "").strip().lower()
         spent_by = (tx.get("spent_by") or "").strip().lower()
+
+        # Family: the explicit Nafaqah class decides, relative to the caller ('me').
+        nafaqah_class = str(tx.get("nafaqah_class") or "").strip().lower()
+        if is_family and nafaqah_class in ("wife_reimbursable", "wife_personal"):
+            paid_by = "me" if caller_is_wife else "partner"
+            if nafaqah_class == "wife_personal":
+                beneficiary = paid_by
+            else:
+                beneficiary = "both"
 
         # Fallback to parsing raw_sms tags if present
         if not paid_by and "paidby:" in raw_sms:
@@ -272,6 +281,17 @@ def calculate_family_nafaqah(
         if is_settlement:
             if (paid_by == husband_id.lower() or paid_by in ("me", "husband", "owner")) and (target_id == wife_id.lower() or target_id in ("wife", "spouse")):
                 reimbursed_total += amt
+            continue
+
+        # Explicit Nafaqah classification (set at entry by the wife's choice) wins over the
+        # paid_by/beneficiary heuristics: reimbursable = husband owes her, personal = her allowance.
+        nafaqah_class = str(tx.get("nafaqah_class") or "").strip().lower()
+        if nafaqah_class == "wife_reimbursable":
+            wife_reimbursement_owed += amt
+            family_general_total += amt
+            continue
+        if nafaqah_class == "wife_personal":
+            spent_on_wife += amt
             continue
 
         # Normal expenses
@@ -454,7 +474,7 @@ def calculate_settlement_v2(
     try:
         tx_resp = (
             client.table("transactions")
-            .select("id, amount, paid_by, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, line_items, timestamp, category_code, spent_by")
+            .select("id, amount, paid_by, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, line_items, timestamp, category_code, spent_by, nafaqah_class, nafaqah_spouse_id")
             .eq("household_id", household_id)
             .gte("timestamp", start_iso)
             .order("timestamp", desc=True)

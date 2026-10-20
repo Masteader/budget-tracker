@@ -14,6 +14,8 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../nafaqah/nafaqah_class_selector.dart';
+import '../../models/nafaqah.dart';
 import '../../models/money.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
@@ -67,7 +69,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
 
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
-  String _familyPayer = 'me'; // 'me' (Husband/Provider), 'wife_reimbursable', 'wife_personal'
+  String _familyPayer = 'me'; // 'me' (husband paid), 'wife_reimbursable', 'wife_personal'
+  bool _viewerIsWife = false;
+  List<Map<String, dynamic>> _wives = [];
+  String? _selectedWifeId;
   String? _selectedRoommateId;
   String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
   List<Map<String, dynamic>> _householdMembers = [];
@@ -152,9 +157,16 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         final list = List<Map<String, dynamic>>.from(res);
         final hasPeers = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'peer');
         final hasSpouse = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse');
+        final uid = supabase.auth.currentUser?.id;
         setState(() {
           _householdMembers = list;
           _isRoommateMode = hasPeers && !hasSpouse;
+          _wives = list.where((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse').toList();
+          _viewerIsWife = _wives.any((w) => w['id'] == uid);
+          _selectedWifeId = _viewerIsWife ? uid : (_wives.isNotEmpty ? _wives.first['id'] as String? : null);
+          // The wife records mostly what she paid herself; shared is the default so
+          // her claim is never lost silently (the husband sees and can dispute it).
+          if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
           if (_isRoommateMode && list.isNotEmpty) {
             final uid = supabase.auth.currentUser?.id;
             final myMember = list.firstWhere(
@@ -196,6 +208,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final String benType;
     final String benId;
     final String spentBy;
+    String? nafaqahClass;
 
     if (_isRoommateMode) {
       paidBy = _selectedRoommateId ?? supabase.auth.currentUser?.id ?? 'me';
@@ -203,21 +216,26 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       benId = _roommateSplit == 'all' ? 'all_peers' : (_selectedRoommateId ?? 'me');
       spentBy = _roommateSplit == 'all' ? 'both' : 'me';
     } else {
-      if (_familyPayer == 'wife_reimbursable') {
-        paidBy = 'wife';
+      // Family (Islamic Nafaqah): never split between the spouses. The payer is
+      // stored relative to the recorder ('me'), the wife is 'wife' otherwise.
+      final wifeSide = _viewerIsWife ? 'me' : 'wife';
+      if (_familyPayer == kWifeReimbursable) {
+        paidBy = wifeSide;
         benType = 'household';
         benId = 'household';
-        spentBy = 'partner';
-      } else if (_familyPayer == 'wife_personal') {
-        paidBy = 'wife';
+        spentBy = _viewerIsWife ? 'me' : 'partner';
+        nafaqahClass = kWifeReimbursable;
+      } else if (_familyPayer == kWifePersonal) {
+        paidBy = wifeSide;
         benType = 'individual';
-        benId = 'wife';
-        spentBy = 'partner';
+        benId = wifeSide;
+        spentBy = _viewerIsWife ? 'me' : 'partner';
+        nafaqahClass = kWifePersonal;
       } else {
-        paidBy = 'me';
+        paidBy = _viewerIsWife ? 'husband' : 'me';
         benType = 'household';
         benId = 'household';
-        spentBy = 'me';
+        spentBy = _viewerIsWife ? 'partner' : 'me';
       }
     }
 
@@ -234,6 +252,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       beneficiaryId: benId,
       accountId: _selectedAccountId,
       occurredAt: DateTime.now(),
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
 
     try {
@@ -484,87 +504,32 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               const SizedBox(height: 10),
 
               if (!_isRoommateMode) ...[
-                // Family Islamic Nafaqah options
-                Row(
-                  children: [
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'me',
-                      label: context.tr('payer_nafaqah_me'),
-                      icon: Icons.shield_outlined,
-                      activeColor: AppThemes.success,
-                      onTap: () => setState(() => _familyPayer = 'me'),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'wife_reimbursable',
-                      label: context.tr('payer_nafaqah_wife_reimbursable'),
-                      icon: Icons.currency_exchange_rounded,
-                      activeColor: const Color(0xFFFFA657),
-                      onTap: () => setState(() => _familyPayer = 'wife_reimbursable'),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'wife_personal',
-                      label: context.tr('payer_nafaqah_wife_personal'),
-                      icon: Icons.shopping_bag_outlined,
-                      activeColor: AppThemes.iceCyan,
-                      onTap: () => setState(() => _familyPayer = 'wife_personal'),
-                    ),
-                  ],
+                // Family Islamic Nafaqah: husband's expense, wife's shared
+                // advance (husband reimburses) or wife's personal purchase.
+                NafaqahClassSelector(
+                  value: _familyPayer == 'me' ? null : _familyPayer,
+                  viewerIsWife: _viewerIsWife,
+                  onChanged: (cls) => setState(() => _familyPayer = cls ?? 'me'),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: (_familyPayer == 'wife_reimbursable'
-                            ? const Color(0xFFFFA657)
-                            : _familyPayer == 'wife_personal'
-                                ? AppThemes.iceCyan
-                                : AppThemes.success)
-                        .withValues(alpha: context.isDark ? 0.12 : 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: (_familyPayer == 'wife_reimbursable'
-                              ? const Color(0xFFFFA657)
-                              : _familyPayer == 'wife_personal'
-                                  ? AppThemes.iceCyan
-                                  : AppThemes.success)
-                          .withValues(alpha: context.isDark ? 0.35 : 0.25),
-                    ),
+                if (_familyPayer != 'me' && !_viewerIsWife && _wives.length > 1) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _wives.map((w) {
+                      final wid = w['id'] as String? ?? '';
+                      final name = (w['display_name'] as String?)?.isNotEmpty == true
+                          ? w['display_name'] as String
+                          : context.tr('wife_spouse_title');
+                      return ChoiceChip(
+                        label: Text(name),
+                        selected: _selectedWifeId == wid,
+                        onSelected: (sel) {
+                          if (sel) setState(() => _selectedWifeId = wid);
+                        },
+                      );
+                    }).toList(),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _familyPayer == 'wife_reimbursable'
-                            ? Icons.info_outline_rounded
-                            : _familyPayer == 'wife_personal'
-                                ? Icons.person_outline_rounded
-                                : Icons.check_circle_outline_rounded,
-                        size: 15,
-                        color: _familyPayer == 'wife_reimbursable'
-                            ? const Color(0xFFFFA657)
-                            : _familyPayer == 'wife_personal'
-                                ? AppThemes.iceCyan
-                                : AppThemes.success,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _familyPayer == 'wife_reimbursable'
-                              ? context.tr('nafaqah_wife_reimbursable_hint')
-                              : _familyPayer == 'wife_personal'
-                                  ? context.tr('nafaqah_wife_personal_hint')
-                                  : context.tr('nafaqah_me_hint'),
-                          style: GoogleFonts.outfit(
-                            color: context.textPrimary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ] else ...[
                 // Multi-Roommate Living Mode
                 if (_householdMembers.isNotEmpty) ...[
