@@ -53,7 +53,7 @@ Full feature, API and schema reference: [`docs/PROJECT_DETAILS.md`](docs/PROJECT
 |---|---|
 | Flutter SDK | Dart `>=3.3.0 <4.0.0` (see `flutter_app/pubspec.yaml`) |
 | Android Studio / SDK | API 26+ target |
-| Python | 3.11 (Docker image); 3.10+ works |
+| Python | 3.11 (as in the Docker image) |
 | Node.js + npm | for `web_app/` (Vite) |
 | PostgreSQL client (`psql`) + a local server | database test suite only |
 | Docker + Docker Compose | optional, to run the API container |
