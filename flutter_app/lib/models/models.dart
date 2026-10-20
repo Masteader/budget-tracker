@@ -30,6 +30,9 @@ class Transaction {
   final String? qrCodeRaw;
   final String? rawSms;
 
+  /// Ingestion channels a transaction can come from (zero-SMS policy: no SMS channel).
+  static const Set<String> sources = {'chat', 'receipt_scan', 'manual'};
+
   const Transaction({
     required this.id,
     required this.householdId,
@@ -89,9 +92,13 @@ class Transaction {
       }
     }
 
-    // Determine channel source
+    // Determine channel source. Only chat, receipt_scan and manual exist (the app
+    // never reads SMS); any other stored label is shown as a manual entry.
     String detectedSource = map['source'] as String? ?? 'manual';
-    if (detectedSource == 'manual' || detectedSource == 'sms') {
+    if (!Transaction.sources.contains(detectedSource)) {
+      detectedSource = 'manual';
+    }
+    if (detectedSource == 'manual') {
       if (raw.startsWith('Chat:')) {
         detectedSource = 'chat';
       } else if (raw.startsWith('Receipt Scan:')) {

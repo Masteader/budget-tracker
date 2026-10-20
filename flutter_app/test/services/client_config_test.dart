@@ -113,6 +113,23 @@ void main() {
       expect(pubspec, isNot(contains('sms')));
     });
 
+    test('zero SMS policy: no SMS reading, parsing or SMS channel in app code', () {
+      // `raw_sms` is the historical name of the transactions audit-note column, not SMS data.
+      final smsCode = RegExp(
+        r"webhook/sms|telephony|SmsMessage|SmsQuery|readSms|sms_advanced|flutter_sms|'sms'|" r'"sms"',
+        caseSensitive: false,
+      );
+      final offenders = <String>[];
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>()) {
+        if (!f.path.endsWith('.dart')) continue;
+        final lines = f.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          if (smsCode.hasMatch(lines[i])) offenders.add('${f.path}:${i + 1}');
+        }
+      }
+      expect(offenders, isEmpty);
+    });
+
     test('app data (session tokens, offline queue, receipts) is excluded from backups', () {
       expect(manifest, contains('android:allowBackup="false"'));
       expect(manifest, contains('android:fullBackupContent="false"'));

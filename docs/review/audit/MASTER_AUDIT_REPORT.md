@@ -92,6 +92,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 ## 3. Medium & Low Findings (summary)
 
 - **Data integrity:** transfer rounding minted money (1.005 → −1.00/+1.01) and negative income parts (DB-06); clients could write income records directly (DB-07) and relabel `cycle_key` to hide spending (DB-08); float money math in Python (API-18) and Dart (MOB-29, inputs now rounded to halalas; full integer model pending); NaN/Infinity accepted (API-22); ZATCA TLV decoder lenient on truncation/BER lengths (API-15, fixed); Arabic-Indic digits parsed as 0 (MOB-14, fixed in 39 fields).
+- **Zero-SMS policy:** SMS simulators, the legacy SMS LangGraph pipeline, root dev scripts and the `sms` transaction channel (DB default/CHECK, API, app) removed; historical rows kept and relabelled (API-25, fixed).
 - **Offline sync:** stuck rows after app kill, merged identical purchases, retry budget burned by network errors, re-entrant drains, receipt blobs in SQLite (MOB-04/05/09/10/11, fixed).
 - **Security hardening:** Redis limiter correctness and `X-Forwarded-For` spoofing (API-09/10); missing `ENV` treated as dev, API docs public in prod (API-11/29); JWT `exp` not required / no role check / unthrottled JWKS (API-12); stale membership honoured (API-13); receipt path traversal and MIME checks (API-23); receipts bucket without size/type limits (DB-11); search_path not pinned (DB-09); vulnerable `python-jose` (API-28).
 - **Account lifecycle:** sole admin could not delete their account (DB-12).
@@ -111,7 +112,6 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 | API-32 | Medium (suspected) | Cycle rollover vs savings sweep can double-apply. | Needs DB locking function |
 | API-33 | Medium | Local JSON / in-memory fallbacks diverge across containers. | Design change (require Redis/DB) |
 | API-34/35 | Low | Chat category overrides not validated; JWT decoded twice; full scan after insert. | Low priority |
-| API-25 | Low | Dev/SMS simulation scripts (`send_simulated_sms.py`, `batch_simulate.py`, `test_chat_endpoint.py`, legacy `graph.py`) still in repo. | Excluded from image and tests; **deletion was blocked by the audit sandbox's permission policy — owner should delete** |
 | MOB-06/12 | Medium | Idempotency/`client_occurred_at`: app + backend done; keys are per-process unless `REDIS_URL` is set. | Set `REDIS_URL` in prod |
 | MOB-19 | Medium | Tokens in plain SharedPreferences. | Needs `flutter_secure_storage` native build |
 | MOB-23 | Medium | `WEBHOOK_SECRET` still compiled into app for old backend compatibility. | Remove after backend from this branch is live |
@@ -132,7 +132,7 @@ Full root cause, reproduction and test names are in the per-area reports; this i
 6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
 7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories; decide DB-16/DB-18/UI-24 and enforce them in RLS rather than in UI.
 8. **Mobile hardening.** `flutter_secure_storage` for tokens; certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
-9. **Repository hygiene.** Delete SMS/dev simulation scripts and the legacy pipeline; keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
+9. **Repository hygiene.** SMS/dev simulation scripts, the legacy SMS pipeline and the `sms` transaction channel are deleted (API-25, guarded by tests); keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
 
 ---
 
@@ -181,4 +181,3 @@ cd web_app && npm ci && npm run build && npm run lint
 - DB-18: may members edit each other's transactions?
 - UI-24: should the partner settlement UI keep offering "Shared 50/50" in family mode?
 - WEB-09: waitlist — build an endpoint, or switch to an email link?
-- API-25: confirm deletion of the SMS/dev simulation scripts.

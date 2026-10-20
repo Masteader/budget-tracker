@@ -451,7 +451,7 @@ def process_receipt_scan(
     Process scanned receipt image(s) or ZATCA QR code:
     1. Parse via Gemini Vision across multiple images if photos provided
     2. Decode ZATCA QR code if provided (or if photos omitted)
-    3. Check for duplicate against recent SMS/Chat entries
+    3. Check for duplicate against recent chat/manual entries
     4. Auto-enrich or insert transaction
     """
     images_base64 = images_base64 or []

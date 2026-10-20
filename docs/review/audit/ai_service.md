@@ -49,7 +49,7 @@ New test modules: `test_api_audit.py`, `test_jwt_hardening.py`, `test_supabase_k
 | API-22 | Medium | Money fields accept NaN/Infinity/negative; unbounded strings/lists; NaN passes chat/OCR validators | Fixed in `aee439b` |
 | API-23 | Medium | `receipt_url` stored unvalidated (foreign folder, traversal); no image count/type/size limits | Fixed in `aee439b` |
 | API-24 | High | Test suite not hermetic: loads developer `.env`, hits live Supabase (writes rows), rewrites tracked files | Fixed in `1d11d57` |
-| API-25 | Low | SMS simulators / SMS LangGraph pipeline and dev scripts in repo and Docker image; no `.dockerignore` (`.env` copied into image) | Partially fixed in `5a457d9` (deletion blocked) |
+| API-25 | Low | SMS simulators / SMS LangGraph pipeline and dev scripts in repo and Docker image; no `.dockerignore` (`.env` copied into image) | Fixed in `5a457d9` (`.dockerignore`) and `504bfa2`, `aab959d`, `79f9fc4`, `71a3a70` (deletion, no `sms` channel) |
 | API-26 | Low | Reimbursement: insert failure reported as success; body/URL household mismatch ignored | Fixed in `aee439b` |
 | API-27 | Medium | Savings sweep resets accumulated total when the household row is missing | Fixed in `1d11d57` |
 | API-28 | Low | `python-jose>=3.3.0` (CVE-2024-33663/33664) | Fixed in `5a457d9` (PyJWT migration recommended) |
@@ -179,7 +179,13 @@ New test modules: `test_api_audit.py`, `test_jwt_hardening.py`, `test_supabase_k
 - **Test:** `test_savings_surplus_accumulates_on_existing_household_row` (and the previously network-dependent tests).
 
 ### API-25 — Low — SMS/dev artefacts
-- `send_simulated_sms.py`, `batch_simulate.py` (post to the removed `/webhook/sms`) and `graph.py` (SMS LangGraph pipeline) contradict the zero-SMS policy; root `test_*.py` scripts call live services. **Deletion was denied by the session's permission policy**; mitigated by `.dockerignore`, `testpaths = tests`, and removing the embedded secret. **Owner action:** delete these files.
+- **Was:** `send_simulated_sms.py`, `batch_simulate.py` (posted to the removed `/webhook/sms`) and `graph.py` (SMS LangGraph pipeline) contradicted the zero-SMS policy; root `test_*.py` scripts called live services; `transactions.source` defaulted to and allowed `'sms'`.
+- **Fix:** `5a457d9` added `.dockerignore` and `testpaths = tests`. Then, on owner request ("zero SMS"):
+  - `504bfa2` deleted the simulators, `graph.py`, the `langgraph` dependency, the SMS webhook models, `is_duplicate_sms` and the skipped SMS-parser tests; `insert_transaction` defaults to `manual` and rejects any source outside `chat`/`receipt_scan`/`manual`.
+  - `aab959d` migration `20261020200000_remove_sms_artifacts.sql`: `source` DEFAULT `'manual'`, CHECK without `'sms'`; historical `'sms'` rows are relabelled with the mapping the app already used to display them (no row deleted, no money column touched); `raw_sms` is kept as the audit-note column (installed builds write it). No SMS-only table, function or trigger ever existed, so nothing is dropped.
+  - `79f9fc4` removed the `sms` channel from the Flutter client.
+  - `71a3a70` deleted `test_chat_endpoint.py`, `test_chat.py`, `test_zatca.py`.
+- **Tests:** `tests/test_sms_removal.py` (no SMS route, module, simulator, pipeline identifier, dependency, root dev script or `sms` source), `supabase/tests/18_remove_sms_artifacts.sql`, Flutter `client_config_test.dart` (no SMS permission/receiver/plugin, no SMS code in `lib/`) and `transaction_source_test.dart`.
 
 ### API-30 — High — Client contract (Flutter)
 - **Fix (`8c7ab2b`):** verified JWT alone passes the firewall (old `X-App-Token` still accepted there for old builds); firewall answers 401 + `WWW-Authenticate: Bearer` for missing/invalid/expired credentials; chat/receipt endpoints authenticate by JWT and no longer require `X-Signature` (so `WEBHOOK_SECRET` can be rotated without breaking installed builds; `utils.verify_signature` kept for server-to-server webhooks); `Idempotency-Key` dedupes commits per (user, endpoint, key) and replays the stored result (`Idempotent-Replayed: true`, 409 while in flight); `client_occurred_at` validated (≤ 5 min future, ≤ 90 days old) and used as the transaction time.
@@ -200,4 +206,3 @@ New test modules: `test_api_audit.py`, `test_jwt_hardening.py`, `test_supabase_k
 2. Replace the anon JWT in `SUPABASE_SECRET_KEY` with an `sb_secret_…` key (or remove it so `SUPABASE_SERVICE_ROLE_KEY` is used).
 3. Confirm the project's JWT signing: with `SUPABASE_JWT_SECRET` empty only ES256 (JWKS) user tokens are accepted.
 4. Set `ENV=production` explicitly in deployment and `ENV=development` locally; set `TRUSTED_PROXY_IPS`; provision `REDIS_URL` (shared rate limits + idempotency).
-5. Delete `ai_service/send_simulated_sms.py`, `batch_simulate.py`, `graph.py`, `test_chat_endpoint.py`, `test_chat.py`, `test_zatca.py`.

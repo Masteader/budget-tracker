@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.cost_control_codes (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE  public.cost_control_codes IS 'Category taxonomy + keyword mapping for SMS merchant matching.';
+COMMENT ON TABLE  public.cost_control_codes IS 'Category taxonomy + keyword mapping for merchant matching (chat, receipt and manual entries).';
 COMMENT ON COLUMN public.cost_control_codes.is_flexible IS 'If true, this budget can be raided during automatic reallocation.';
 
 
@@ -87,7 +87,7 @@ COMMENT ON COLUMN public.budgets.remaining_amount IS 'Computed: allocated_amount
 
 -- =============================================================================
 -- TABLE: transactions
--- Every parsed SMS expense is stored here.
+-- Every household expense (chat/voice, receipt or QR scan, manual entry).
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.transactions (
     id                         UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -104,8 +104,8 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     created_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE  public.transactions IS 'Every SMS-derived expense transaction.';
-COMMENT ON COLUMN public.transactions.raw_sms IS 'Original SMS text for audit trail.';
+COMMENT ON TABLE  public.transactions IS 'Every household expense transaction (chat/voice, receipt or QR scan, manual entry).';
+COMMENT ON COLUMN public.transactions.raw_sms IS 'Free-text audit note (chat text, receipt summary, manual/installment/settlement tags). Historical column name; the app never reads SMS.';
 COMMENT ON COLUMN public.transactions.is_reallocated IS 'True if budget was insufficient and funds were pulled from another category.';
 
 

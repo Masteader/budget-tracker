@@ -85,7 +85,7 @@ def test_chat_transaction_duplicate_candidate(mock_dedup, mock_parse):
         items=[ChatLineItem(name="Ice Latte", quantity=1.0, price=19.0)],
     )
     mock_dedup.return_value = {
-        "id": "tx-sms-111",
+        "id": "tx-receipt-111",
         "merchant": "Dunkin'",
         "amount": 19.0,
         "timestamp": "2026-09-25T14:00:00Z",
@@ -101,7 +101,7 @@ def test_chat_transaction_duplicate_candidate(mock_dedup, mock_parse):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "duplicate_candidate"
-    assert data["candidate_transaction_id"] == "tx-sms-111"
+    assert data["candidate_transaction_id"] == "tx-receipt-111"
 
 @patch("chat_parser.enrich_transaction_items")
 @patch("chat_parser.parse_chat_expense")
@@ -122,14 +122,14 @@ def test_chat_transaction_explicit_enrich(mock_parse, mock_enrich):
     payload = {
         "message": "16 latte, 3 donut",
         "household_id": HOUSEHOLD_ID,
-        "enrich_tx_id": "tx-sms-111",
+        "enrich_tx_id": "tx-receipt-111",
     }
     headers = _make_signed_headers(payload)
     response = client.post("/agent/chat-transaction", content=json.dumps(payload), headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "enriched"
-    assert data["transaction_id"] == "tx-sms-111"
+    assert data["transaction_id"] == "tx-receipt-111"
     assert len(data["items"]) == 2
 
 @patch("receipt_scanner.parse_receipt_image")

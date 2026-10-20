@@ -412,7 +412,7 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
 
 def match_sub_category(category_code: str, text: str, items: Optional[list] = None) -> Optional[str]:
     """
-    Matches merchant, SMS text, or item descriptions against seeded sub-category keywords.
+    Matches merchant, audit-note text, or item descriptions against seeded sub-category keywords.
     """
     from supabase_client import get_client
     client = get_client()
