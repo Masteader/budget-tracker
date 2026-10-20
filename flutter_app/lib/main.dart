@@ -24,6 +24,7 @@ import 'services/household_resolver.dart';
 import 'services/offline_sync_service.dart';
 import 'services/receipt_storage_service.dart';
 import 'services/salary_cycle_service.dart';
+import 'services/secure_session_storage.dart';
 import 'supabase_config.dart';
 import 'theme/app_themes.dart';
 
@@ -38,9 +39,16 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Supabase
+  // MOB-19: the session (refresh token) lives in the Keystore/Keychain, not
+  // in plaintext SharedPreferences; an existing session is migrated once.
   await Supabase.initialize(
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SecureSessionLocalStorage(
+        persistSessionKey: SecureSessionLocalStorage.sessionKeyFor(supabaseUrl),
+      ),
+    ),
   );
 
   // Household payday for client-side salary-cycle arithmetic.
