@@ -179,7 +179,7 @@ how each bug was observed.
 
 ## For other owners
 - **Backend:** MOB-06/12 (Idempotency-Key, `client_occurred_at`), MOB-23 (HMAC with JWT), and `salary_cycle.py` using the UTC date.
-- **Secrets hygiene (ai_service, not mobile):** `ai_service/test_chat_endpoint.py` has a hard-coded fallback value for `WEBHOOK_SECRET`. `ai_service/tests/test_sec04_jwt_and_secrets.py` lists previously leaked secret literals as scan patterns. Treat those values as compromised and rotate them if they were ever used in production.
+- **Secrets hygiene (ai_service, not mobile):** `ai_service/test_chat_endpoint.py` had a hard-coded fallback value for `WEBHOOK_SECRET` (default removed, file deleted in `71a3a70`, API-25). `ai_service/tests/test_sec04_jwt_and_secrets.py` lists previously leaked secret literals as scan patterns. Treat those values as compromised and rotate them if they were ever used in production.
 - **DB:** confirm whether the live `transactions` table has `paid_by`/`beneficiary` (MOB-03). After MOB-25 the households policy can hide `invite_code` from non-admins (DB-17).
 
 ## Files outside the mobile-logic ownership touched (minimal logic edits)
