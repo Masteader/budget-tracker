@@ -49,7 +49,7 @@ def test_simulate_affordability(mock_client, mock_flexible, mock_forecast):
     mock_forecast.return_value = {
         "total_remaining": 5000.0,
         "daily_remaining_allowance": 250.0,
-        "cycle": {"days_remaining": 20},
+        "cycle": {"days_remaining": 20, "payday": "2026-10-27"},
     }
     mock_flexible.return_value = []
     mock_table = MagicMock()

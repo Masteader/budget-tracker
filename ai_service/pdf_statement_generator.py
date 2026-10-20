@@ -22,8 +22,8 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-from supabase_client import get_client
-from salary_cycle import get_salary_cycle_dates
+from supabase_client import get_client, get_household_payday
+from salary_cycle import get_cycle_for_date, get_cycle_info_for_key
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,14 @@ def generate_monthly_pdf_statement(
     """
     client = get_client()
 
-    # 1. Resolve Cycle Info
-    cycle_info = get_salary_cycle_dates()
-    selected_cycle_key = cycle_key or cycle_info.get("cycle_key", datetime.now(timezone.utc).strftime("%Y-%m"))
-    cycle_start = cycle_info.get("cycle_start", "")
-    cycle_end = cycle_info.get("cycle_end", "")
-    cycle_label = cycle_info.get("cycle_label", selected_cycle_key)
+    # 1. Resolve Cycle Info: the requested (or current) cycle of this household's payday. The
+    #    dates used to come from the current 27th-based cycle even when another cycle was asked for.
+    payday_day = get_household_payday(household_id)
+    selected_cycle_key = cycle_key or get_cycle_for_date(payday_day=payday_day)["cycle_key"]
+    cycle_info = get_cycle_info_for_key(selected_cycle_key, payday_day=payday_day)
+    cycle_start = cycle_info["cycle_start"]
+    cycle_end = cycle_info["cycle_end"]
+    cycle_label = cycle_info["label"]
 
     # 2. Query Budgets
     try:
