@@ -126,20 +126,7 @@ def get_client() -> Client:
 
 
 
-def first_row(query) -> Optional[dict]:
-    """
-    Run ``query`` with ``limit(1)`` and return its first row, or None when nothing matched.
-
-    Use this instead of ``maybe_single()`` for "zero or one row" lookups: postgrest-py 2.x returns
-    None (not a response) for zero rows, so ``res.data`` raises AttributeError, and postgrest-py
-    0.19-1.1 (allowed by supabase 2.16.0) raises APIError for zero rows unless the server's error
-    text matches what it expects. A plain filtered select behaves the same on every version.
-    """
-    res = query.limit(1).execute()
-    rows = getattr(res, "data", None) if res is not None else None
-    if isinstance(rows, list):
-        return rows[0] if rows and isinstance(rows[0], dict) else None
-    return rows if isinstance(rows, dict) else None
+from postgrest_compat import first_row  # noqa: E402,F401  (zero-or-one-row lookups, any postgrest version)
 
 
 # =============================================================================
