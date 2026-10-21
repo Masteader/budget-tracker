@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:budget_tracker/models/household_membership.dart';
 import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/widgets/nafaqah/nafaqah_class_selector.dart';
 import 'package:budget_tracker/widgets/transactions/manual_expense_sheet.dart';
@@ -15,7 +16,9 @@ const _peerB = {'id': 'u-b', 'display_name': 'Salman', 'financial_role': 'peer'}
 void main() {
   Future<void> openSheet(
     WidgetTester tester, {
-    required List<Map<String, dynamic>> members,
+    List<Map<String, dynamic>>? members,
+    Future<HouseholdRoster> Function(String householdId)? loadRoster,
+    Future<List<Map<String, dynamic>>> Function(String householdId)? loadOwnMemberships,
     String currentUser = 'u-husband',
     Future<void> Function(Map<String, dynamic> row)? insertRow,
     Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow,
@@ -35,7 +38,9 @@ void main() {
                   householdId: 'h1',
                   initialMerchant: 'Panda',
                   initialAmount: 120,
-                  loadMembers: (_) async => members,
+                  loadMembers: members == null ? null : (_) async => members,
+                  loadRoster: loadRoster,
+                  loadOwnMemberships: loadOwnMemberships,
                   currentUserId: () => currentUser,
                   insertRow: insertRow ?? (_) async {},
                   enqueueRow: enqueueRow ?? (_, __) async {},
@@ -164,6 +169,74 @@ void main() {
 
     expect(saved?['nafaqah_class'], kWifeReimbursable);
     expect(saved?['nafaqah_spouse_id'], 'u-wife');
+  });
+
+  // Roles come from GET /households/{id}/members (the role in THIS household),
+  // not users.financial_role filtered by each member's active household.
+  group('members and roles per household', () {
+    HouseholdMember member(String id, String fin) => HouseholdMember(userId: id, displayName: id, financialRole: fin);
+
+    testWidgets('a wife whose active household is elsewhere is still the wife here', (tester) async {
+      await openSheet(
+        tester,
+        loadRoster: (hid) async => HouseholdRoster(
+          householdId: hid,
+          members: [member('u-husband', 'provider'), member('u-wife', 'spouse')],
+        ),
+        loadOwnMemberships: (_) async => fail('the API answered: no fallback'),
+      );
+
+      expect(find.byKey(const ValueKey('manual_mode_toggle')), findsNothing);
+      expect(find.byType(NafaqahClassSelector), findsOneWidget);
+    });
+
+    testWidgets('roommates per household get the split toggle and no Nafaqah choice', (tester) async {
+      await openSheet(
+        tester,
+        currentUser: 'u-a',
+        loadRoster: (hid) async => HouseholdRoster(
+          householdId: hid,
+          members: [member('u-a', 'peer'), member('u-b', 'peer')],
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('manual_mode_toggle')), findsOneWidget);
+      expect(find.byType(NafaqahClassSelector), findsNothing);
+      expect(find.text('u-b'), findsOneWidget);
+    });
+
+    testWidgets('when the members API fails, only the own membership row is used: no spouse is invented',
+        (tester) async {
+      var fallbackFor = '';
+      await openSheet(
+        tester,
+        currentUser: 'u-son',
+        loadRoster: (_) async => throw Exception('API unavailable'),
+        loadOwnMemberships: (hid) async {
+          fallbackFor = hid;
+          return [
+            {'user_id': 'u-son', 'role': 'member', 'financial_role': 'family_member'},
+          ];
+        },
+      );
+
+      expect(fallbackFor, 'h1');
+      expect(find.byType(NafaqahClassSelector), findsNothing);
+    });
+
+    testWidgets('offline (both loads fail): no spouse, the expense is still recordable', (tester) async {
+      Map<String, dynamic>? saved;
+      await openSheet(
+        tester,
+        loadRoster: (_) async => throw Exception('offline'),
+        loadOwnMemberships: (_) async => throw Exception('offline'),
+        insertRow: (row) async => saved = row,
+      );
+
+      expect(find.byType(NafaqahClassSelector), findsNothing);
+      await tapSave(tester);
+      expect(saved?['nafaqah_class'], isNull);
+    });
   });
 
   testWidgets('another family member (not a spouse) records without a Nafaqah class', (tester) async {
