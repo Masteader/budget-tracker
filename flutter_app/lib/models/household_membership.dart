@@ -87,9 +87,35 @@ class HouseholdMember {
       );
 }
 
+/// Household types chosen at creation (`households.household_type`).
+const String kHouseholdTypeFamily = 'family';
+const String kHouseholdTypeRoommates = 'roommates';
+
+/// Financial roles an admin may assign (`PUT .../members/{id}/financial-role`).
+const String kFinancialRoleSpouse = 'spouse';
+const String kFinancialRoleFamilyMember = 'family_member';
+const String kFinancialRoleDependent = 'dependent';
+const String kFinancialRolePeer = 'peer';
+
 /// Members of a household and what the signed-in user may change.
 class HouseholdRoster {
   final String householdId;
+
+  /// 'family' | 'roommates' as served by `GET /households/{id}/members`;
+  /// null from a server that does not send it yet.
+  final String? householdType;
+
+  /// The caller may change the household type (`can_change_household_type`);
+  /// null from a server that does not send it (then: admins).
+  final bool? canChangeHouseholdType;
+
+  /// The caller may change members' financial roles (`can_set_financial_roles`);
+  /// null from a server that does not send it (then: admins).
+  final bool? canSetFinancialRoles;
+
+  /// Financial roles valid for this household type (`assignable_financial_roles`),
+  /// as the server decides; null from a server that does not send it.
+  final List<String>? assignableFinancialRoles;
   final String? primaryAdminUserId;
   final String? callerRole;
   final bool callerIsPrimary;
@@ -105,6 +131,10 @@ class HouseholdRoster {
 
   const HouseholdRoster({
     required this.householdId,
+    this.householdType,
+    this.canChangeHouseholdType,
+    this.canSetFinancialRoles,
+    this.assignableFinancialRoles,
     this.primaryAdminUserId,
     this.callerRole,
     this.callerIsPrimary = false,
@@ -117,6 +147,12 @@ class HouseholdRoster {
 
   factory HouseholdRoster.fromMap(Map<String, dynamic> map) => HouseholdRoster(
         householdId: map['household_id'] as String? ?? '',
+        householdType: (map['household_type'] as String?)?.toLowerCase(),
+        canChangeHouseholdType: map['can_change_household_type'] as bool?,
+        canSetFinancialRoles: map['can_set_financial_roles'] as bool?,
+        assignableFinancialRoles: (map['assignable_financial_roles'] as List?)
+            ?.map((r) => r.toString().toLowerCase())
+            .toList(),
         primaryAdminUserId: map['primary_admin_user_id'] as String?,
         callerRole: map['caller_role'] as String?,
         callerIsPrimary: map['caller_is_primary'] as bool? ?? false,
@@ -139,6 +175,39 @@ class HouseholdRoster {
 
   /// Roommates (peers, no wife): the Nafaqah provider does not apply.
   bool get isRoommateHousehold => !isFamily && members.any((m) => m.isPeer);
+
+  /// The signed-in user is an admin of this household.
+  bool get callerIsAdmin => (callerRole ?? '').toLowerCase() == 'admin' || canManageAdmins;
+
+  /// The household type: as served, else inferred from the members (a wife
+  /// makes a family, peers without a wife roommates).
+  String get effectiveHouseholdType =>
+      householdType ?? (isRoommateHousehold ? kHouseholdTypeRoommates : kHouseholdTypeFamily);
+
+  /// The caller may change the household type.
+  bool get mayChangeHouseholdType => canChangeHouseholdType ?? callerIsAdmin;
+
+  /// The caller may change members' financial roles.
+  bool get maySetFinancialRoles => canSetFinancialRoles ?? callerIsAdmin;
+
+  /// Financial roles an admin may give [member]: the server's
+  /// `assignable_financial_roles` for this household type (else the owner
+  /// rules: a family offers wife / family member / dependent, roommates only
+  /// roommate), and the Nafaqah provider (husband) is never offered "wife".
+  List<String> financialRoleOptions(HouseholdMember member) {
+    final base = assignableFinancialRoles ??
+        (effectiveHouseholdType == kHouseholdTypeRoommates
+            ? const [kFinancialRolePeer]
+            : const [kFinancialRoleSpouse, kFinancialRoleFamilyMember, kFinancialRoleDependent]);
+    final isProvider = member.isNafaqahProvider || nafaqahProvider?.userId == member.userId;
+    return [
+      for (final role in base)
+        if (const {kFinancialRoleSpouse, kFinancialRoleFamilyMember, kFinancialRoleDependent, kFinancialRolePeer}
+                .contains(role) &&
+            !(isProvider && role == kFinancialRoleSpouse))
+          role,
+    ];
+  }
 
   /// The provider while he is still a non-spouse member (mirrors the server's
   /// `nafaqah_husband_id`); null when none is set or he left.

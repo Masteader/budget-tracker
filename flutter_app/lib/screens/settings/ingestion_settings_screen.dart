@@ -22,6 +22,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/household_roles_card.dart';
+import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
@@ -585,14 +586,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   Future<void> _showCreateHouseholdDialog() async {
     final nameCtrl = TextEditingController();
+    // Family or Roommates: asked when the household is created.
+    String? householdType;
+    var showTypeRequired = false;
     await showDialog(
       context: context,
       builder: (ctx) => DisposeOnUnmount(
         disposables: [nameCtrl],
-        child: AlertDialog(
+        child: StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         backgroundColor: context.cardBg,
         title: Text(context.tr('new_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
-        content: Column(
+        content: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -605,7 +611,14 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 hintText: context.tr('set_e_g_summer_beach_house'),
               ),
             ),
+            const SizedBox(height: 12),
+            HouseholdTypeChooser(
+              value: householdType,
+              showRequired: showTypeRequired,
+              onChanged: (type) => setDialogState(() => householdType = type),
+            ),
           ],
+        ),
         ),
         actions: [
           TextButton(
@@ -621,10 +634,19 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             onPressed: () async {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
+              final type = householdType;
+              if (type == null) {
+                setDialogState(() => showTypeRequired = true);
+                return;
+              }
               Navigator.pop(ctx);
               try {
-                final res = await supabase.rpc('create_household_and_claim', params: {'p_name': name});
-                final hhName = (res is Map && res['name'] != null) ? res['name'] : name;
+                final res = await createHouseholdAndClaim(
+                  name: name,
+                  householdType: type,
+                  rpc: (fn, params) => supabase.rpc(fn, params: params),
+                );
+                final hhName = res['name'] ?? name;
 
                 if (mounted) {
                   AppSnackBar.showSuccess(
@@ -646,6 +668,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             },
           ),
         ],
+      ),
       ),
       ),
     );

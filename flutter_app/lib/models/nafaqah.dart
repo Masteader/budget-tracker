@@ -69,34 +69,68 @@ class NafaqahPreview {
   final String? suggestedSpouseId;
   final List<NafaqahWife> wives;
 
+  /// The recorder is a household admin. Owner rule: only the wife, the
+  /// Nafaqah provider (husband) or an admin may classify a family expense as
+  /// wife_reimbursable / wife_personal.
+  final bool callerIsAdmin;
+
   const NafaqahPreview({
     this.isFamily = false,
     this.recorderRole,
     this.suggestedClass,
     this.suggestedSpouseId,
     this.wives = const [],
+    this.callerIsAdmin = false,
   });
 
-  /// Only the husband or a wife records a Nafaqah class.
-  bool get canClassify => isFamily && (recorderRole == 'wife' || recorderRole == 'husband');
+  bool get _isSpouse => recorderRole == 'wife' || recorderRole == 'husband';
+
+  /// Only the wife, the husband (provider) or an admin records a Nafaqah class.
+  bool get canClassify => isFamily && (_isSpouse || callerIsAdmin);
+
+  /// An admin who is neither spouse: classifies on the wife's behalf, naming her.
+  bool get isAdminClassifier => canClassify && !_isSpouse;
 
   bool get viewerIsWife => recorderRole == 'wife';
 
-  /// The husband of several wives says which wife paid.
-  bool get needsWifeChoice => canClassify && recorderRole == 'husband' && wives.length > 1;
+  /// The husband (or an admin) in a family with several wives says which wife paid.
+  bool get needsWifeChoice => canClassify && !viewerIsWife && wives.length > 1;
 
-  /// The wife preselected for the husband (the only one, or the server's pick).
+  /// The wife preselected for the husband or an admin (the only one, or the server's pick).
   String? get defaultSpouseId {
-    if (recorderRole != 'husband') return null;
+    if (!canClassify || viewerIsWife) return null;
     if (wives.length == 1) return wives.first.id;
     return suggestedSpouseId;
   }
+
+  /// The same context with the viewer's admin flag (the preview of
+  /// `/agent/chat-transaction` and `/agent/scan-receipt` may not carry it).
+  NafaqahPreview withAdmin(bool isAdmin) => NafaqahPreview(
+        isFamily: isFamily,
+        recorderRole: recorderRole,
+        suggestedClass: suggestedClass,
+        suggestedSpouseId: suggestedSpouseId,
+        wives: wives,
+        callerIsAdmin: callerIsAdmin || isAdmin,
+      );
 
   /// Fields for `/agent/scan-receipt` or `/agent/chat-transaction`: who paid
   /// for whom and the confirmed class, consistent with each other (empty
   /// outside family mode). A wife never names a spouse: she is the spouse.
   Map<String, String> requestFields(String? nafaqahClass, {String? chosenWifeId}) {
     if (!canClassify) return const {};
+    if (isAdminClassifier) {
+      // An admin who is neither spouse: no class leaves the attribution as
+      // entered; a class names the wife who paid ('partner' resolved by the
+      // server with nafaqah_spouse_id).
+      if (nafaqahClass == null) return const {'nafaqah_class': kNafaqahNone};
+      return {
+        'paid_by': 'partner',
+        'beneficiary': nafaqahClass == kWifePersonal ? 'partner' : 'both',
+        'nafaqah_class': nafaqahClass,
+        if (chosenWifeId != null && chosenWifeId.isNotEmpty) 'nafaqah_spouse_id': chosenWifeId,
+      };
+    }
     final attribution = nafaqahAttribution(recorderRole, nafaqahClass);
     final spouse = viewerIsWife || nafaqahClass == null ? null : chosenWifeId;
     return {
@@ -127,6 +161,8 @@ class NafaqahPreview {
       recorderRole: role,
       suggestedClass: role == 'wife' ? kWifeReimbursable : null,
       wives: summary.wives,
+      // `can_set_provider` is true for household admins.
+      callerIsAdmin: summary.canSetProvider,
     );
   }
 
@@ -138,6 +174,7 @@ class NafaqahPreview {
       recorderRole: data['recorder_role'] as String?,
       suggestedClass: (cls == kWifeReimbursable || cls == kWifePersonal) ? cls : null,
       suggestedSpouseId: data['nafaqah_spouse_id'] as String?,
+      callerIsAdmin: data['caller_is_admin'] == true || data['can_classify'] == true,
       wives: (data['wives'] as List? ?? const [])
           .whereType<Map>()
           .map((w) => NafaqahWife.fromMap(Map<String, dynamic>.from(w)))
@@ -259,6 +296,9 @@ class NafaqahSummary {
   /// The caller is a household admin and may choose the provider.
   final bool canSetProvider;
 
+  /// 'family' | 'roommates' (`household_type`), when the server sends it.
+  final String? householdType;
+
   const NafaqahSummary({
     this.mode = 'not_family',
     this.callerRole,
@@ -272,6 +312,7 @@ class NafaqahSummary {
     this.providerUserId,
     this.needsProvider = false,
     this.canSetProvider = false,
+    this.householdType,
   });
 
   bool get isFamily => mode == 'family_nafaqah' && wives.isNotEmpty;
@@ -304,6 +345,7 @@ class NafaqahSummary {
       providerUserId: map['provider_user_id'] as String?,
       needsProvider: map['needs_provider'] as bool? ?? false,
       canSetProvider: map['can_set_provider'] as bool? ?? false,
+      householdType: map['household_type'] as String?,
     );
   }
 }

@@ -336,14 +336,16 @@ class ApiBinaryResponse {
 /// must not treat the normalised error map as a result. [statusCode] is null
 /// for network errors.
 class ApiRequestException implements Exception {
-  const ApiRequestException(this.message, {this.statusCode});
+  const ApiRequestException(this.message, {this.statusCode, this.code});
 
   /// Throws when [res] is an error map produced by [BaseApiClient].
   static Map<String, dynamic> check(Map<String, dynamic> res) {
     if (res['status'] == 'error') {
+      final detail = res['detail'];
       throw ApiRequestException(
         res['message']?.toString() ?? 'Request failed',
         statusCode: (res['status_code'] as num?)?.toInt(),
+        code: (detail is Map ? detail['code'] : res['code'])?.toString(),
       );
     }
     return res;
@@ -351,6 +353,9 @@ class ApiRequestException implements Exception {
 
   final String message;
   final int? statusCode;
+
+  /// The server's machine code (`detail.code`), e.g. `ledger_would_be_overpaid`.
+  final String? code;
 
   @override
   String toString() => message;

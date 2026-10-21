@@ -29,13 +29,55 @@ String normalizeDigits(String input) {
 }
 
 final RegExp _currencyTokens = RegExp(r'(sar|ر\.س\.?|ريال|﷼|riyals?)', caseSensitive: false);
-// Grouping separators (',' '٬' '،' and spaces incl. NBSP / narrow NBSP) and
-// bidi control marks that Arabic text fields insert around numbers.
-final RegExp _ignorable = RegExp('[,٬،\\s  ‎‏؜]');
-final RegExp _plainNumber = RegExp(r'^([+-]?)(\d*)(?:\.(\d*))?$');
+// Spaces (incl. NBSP / narrow NBSP) and the bidi control marks that Arabic
+// text fields insert around numbers; always dropped.
+final RegExp _ignorable = RegExp('[\\s\u00A0\u202F\u200E\u200F\u061C]');
+// Sign, integer part with optional separators (',' '٬' '،'), optional fraction.
+final RegExp _plainNumber = RegExp(r'^([+-]?)([0-9,٬،]*)(?:\.([0-9]*))?$');
+final RegExp _separator = RegExp('[,٬،]');
 
 /// Largest integer part accepted: the database stores amounts as numeric(14,2).
 const int _maxIntegerDigits = 12;
+
+/// Largest amount numeric(14,2) holds, in halalas (999,999,999,999.99 SAR).
+const int _maxHalalas = 99999999999999;
+
+/// Sign, integer digits and fraction digits of a typed amount, or null when
+/// the text is not a plain number.
+///
+/// Separators (FABLE2-APP-04): a lone comma (',' or '،') followed by one or
+/// two digits, with no '.' anywhere, is a decimal comma ("1,5" is 1.50,
+/// ",5" is 0.50). Every other comma, and the Arabic thousands mark '٬', is a
+/// thousands separator and must be followed by exactly three digits
+/// ("1,234" is 1234, "1,234,567.8" is 1234567.80); anything else ("1,,2",
+/// "1,2,3", "12,5.3") is ambiguous and rejected instead of guessed.
+({String sign, String whole, String fraction})? _splitAmount(String input) {
+  final cleaned = normalizeDigits(input).replaceAll(_currencyTokens, '').replaceAll(_ignorable, '');
+  final match = _plainNumber.firstMatch(cleaned);
+  if (match == null) return null;
+  final sign = match.group(1) ?? '';
+  final integerPart = match.group(2) ?? '';
+  final dotFraction = match.group(3);
+  var whole = integerPart;
+  var fraction = dotFraction ?? '';
+  if (integerPart.contains(_separator)) {
+    final groups = integerPart.split(_separator);
+    final lone = groups.length == 2 && !integerPart.contains('٬');
+    if (dotFraction == null && !cleaned.contains('.') && lone && RegExp(r'^\d{1,2}$').hasMatch(groups[1])) {
+      whole = groups[0];
+      fraction = groups[1];
+    } else {
+      final first = groups.first;
+      if (first.isEmpty || first.length > 3) return null;
+      for (final g in groups.skip(1)) {
+        if (g.length != 3) return null;
+      }
+      whole = groups.join();
+    }
+  }
+  if (whole.isEmpty && fraction.isEmpty) return null;
+  return (sign: sign, whole: whole, fraction: fraction);
+}
 
 /// Parses a typed money amount into integer halalas (1 SAR = 100 halalas),
 /// working on the decimal string itself: the third decimal decides, half-up
@@ -43,27 +85,26 @@ const int _maxIntegerDigits = 12;
 /// binary double made them 1.00 and 0.28 (FABLE-LOGIC-09).
 ///
 /// Accepts Arabic-Indic / Urdu digits, the Arabic decimal and thousands
-/// separators, grouping commas and spaces, and a currency token. Returns null
-/// when the text is not a plain number, exceeds numeric(14,2), or is negative
-/// while [allowNegative] is false.
+/// separators, a decimal comma, grouping commas and spaces, and a currency
+/// token (see [_splitAmount] for the comma rules). Returns null when the text
+/// is not a plain number, exceeds numeric(14,2) after rounding, or is
+/// negative while [allowNegative] is false.
 int? parseMoneyToHalalas(String? input, {bool allowNegative = true}) {
   if (input == null) return null;
-  final cleaned = normalizeDigits(input).replaceAll(_currencyTokens, '').replaceAll(_ignorable, '');
-  final match = _plainNumber.firstMatch(cleaned);
-  if (match == null) return null;
-  final sign = match.group(1) ?? '';
-  final whole = match.group(2) ?? '';
-  final fraction = match.group(3) ?? '';
-  if (whole.isEmpty && fraction.isEmpty) return null;
+  final parts = _splitAmount(input);
+  if (parts == null) return null;
 
-  final integerDigits = whole.replaceFirst(RegExp(r'^0+'), '');
+  final integerDigits = parts.whole.replaceFirst(RegExp(r'^0+'), '');
   if (integerDigits.length > _maxIntegerDigits) return null;
 
-  final padded = fraction.padRight(3, '0');
+  final padded = parts.fraction.padRight(3, '0');
   var halalas = int.parse(integerDigits.isEmpty ? '0' : integerDigits) * 100 + int.parse(padded.substring(0, 2));
   if (padded.codeUnitAt(2) >= 0x35) halalas += 1; // third decimal >= 5: half-up
+  // The cap applies to the stored (rounded) value: "999999999999.995" rounds
+  // to 1,000,000,000,000.00, which numeric(14,2) cannot hold.
+  if (halalas > _maxHalalas) return null;
   if (halalas == 0) return 0;
-  final negative = sign == '-';
+  final negative = parts.sign == '-';
   if (negative && !allowNegative) return null;
   return negative ? -halalas : halalas;
 }
@@ -96,8 +137,7 @@ String? roundedMoneyText(String? input, {bool allowNegative = true}) {
 /// or the text is not a number, so the field is left as typed.
 String? roundedMoneyTextIfRounded(String? input) {
   if (input == null) return null;
-  final cleaned = normalizeDigits(input).replaceAll(_currencyTokens, '').replaceAll(_ignorable, '');
-  final fraction = _plainNumber.firstMatch(cleaned)?.group(3) ?? '';
+  final fraction = _splitAmount(input)?.fraction ?? '';
   if (fraction.length <= 2) return null;
   return roundedMoneyText(input);
 }

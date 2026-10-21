@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/ocr/local_ocr_service.dart';
@@ -64,7 +66,8 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   bool _showWifeRequired = false;
 
   void _applyNafaqahPreview(Map<String, dynamic>? res) {
-    _nafaqah = NafaqahPreview.fromPreview(res);
+    // Only the wife, the provider (husband) or an admin classifies.
+    _nafaqah = NafaqahPreview.fromPreview(res).withAdmin(viewerIsAdminOf(context, widget.householdId));
     _nafaqahClass = _nafaqah.suggestedClass;
     _nafaqahWifeId = _nafaqah.defaultSpouseId;
     _showWifeRequired = false;
@@ -168,6 +171,10 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           previewOnly: true,
         );
 
+        // Photos too large for the server (413) are never parsed: say so.
+        if (mounted && res['status'] == 'error' && res['status_code'] == 413) {
+          AppSnackBar.showError(context, expenseApiErrorText(context, res)!);
+        }
         if (mounted) {
           final merchant = res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
@@ -261,18 +268,24 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
         // Attempt saving online transaction
         try {
           final user = Supabase.instance.client.auth.currentUser;
+          final nafaqahFields = _nafaqahRequestFields;
           await Supabase.instance.client.from('transactions').insert({
             'household_id': widget.householdId,
             'user_id': user?.id,
             'merchant': merchant,
             'amount': parsedAmount,
             'category_code': _selectedCategory,
-            'spent_by': _selectedSpentBy,
+            // Who paid and for whom as the receipt API stores them (FABLE2-APP-06).
+            ...directInsertAttribution(
+              paidBy: nafaqahFields['paid_by'],
+              beneficiary: nafaqahFields['beneficiary'],
+              creatorId: user?.id,
+            ),
             'source': 'receipt_scan',
             // `transactions` has no `date`/`vat_amount` columns: an insert
             // naming them always failed and diverted every save offline.
             'timestamp': DateTime.now().toUtc().toIso8601String(),
-            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR | SpentBy: $_selectedSpentBy',
+            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR',
             // Family Nafaqah: the wife's debt or allowance spending (both columns together).
             ..._nafaqah.transactionColumns(
               _nafaqahClass,

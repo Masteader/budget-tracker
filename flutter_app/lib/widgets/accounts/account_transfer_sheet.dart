@@ -155,7 +155,11 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
   }
 
   double get _amount => parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
-  double get _fee => parseMoneyInput(_feeCtrl.text) ?? 0.0;
+  /// The optional fee: empty is 0; a negative or unreadable fee is null
+  /// (FABLE2-APP-07: a negative fee used to credit the source account).
+  double? get _parsedFee =>
+      _feeCtrl.text.trim().isEmpty ? 0.0 : parseMoneyInput(_feeCtrl.text, allowNegative: false);
+  double get _fee => _parsedFee ?? 0.0;
   double get _totalDeduction => _amount + _fee;
 
   Account? get _fromAccount =>
@@ -176,6 +180,11 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
 
     if (_amount <= 0.0) {
       AppSnackBar.showError(context, context.tr('ats_invalid_amount'));
+      return;
+    }
+
+    if (_parsedFee == null) {
+      AppSnackBar.showError(context, context.tr('ats_invalid_fee'));
       return;
     }
 

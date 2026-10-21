@@ -94,19 +94,6 @@ class ApiService {
         occurredAt: occurredAt,
       );
 
-  Future<Map<String, dynamic>> simulatePurchase({
-    required String message,
-    required String householdId,
-    double? customAmount,
-    String? customCategory,
-  }) =>
-      chat.simulatePurchase(
-        message: message,
-        householdId: householdId,
-        customAmount: customAmount,
-        customCategory: customCategory,
-      );
-
   // ── Receipts & Invoices ──────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> scanReceipt({
@@ -262,6 +249,12 @@ class ApiService {
 
   Future<HouseholdRoster> transferPrimaryAdmin(String householdId, String newPrimaryUserId) =>
       roles.transferPrimaryAdmin(householdId, newPrimaryUserId);
+
+  Future<String> setHouseholdType(String householdId, String householdType) =>
+      roles.setHouseholdType(householdId, householdType);
+
+  Future<String> setMemberFinancialRole(String householdId, String userId, String financialRole) =>
+      roles.setFinancialRole(householdId, userId, financialRole);
 
   // ── Family Nafaqah (husband-owes-wife ledger, wife allowance) ──────────────
   late final NafaqahApiClient nafaqah = NafaqahApiClient(baseClient: base);

@@ -2,6 +2,7 @@
 library;
 
 import '../services/salary_cycle_service.dart';
+import 'transaction_attribution.dart';
 
 export 'household_membership.dart';
 
@@ -21,8 +22,21 @@ class Transaction {
   final DateTime createdAt;
   final String source;
   final String spentBy; // legacy 'me' | 'partner' | 'both'
-  final String paidBy; // 'me' | 'partner'
-  final String beneficiary; // 'me' | 'partner' | 'both' | child name
+  final String paidBy; // 'me' | 'partner' (relative to the creator)
+  final String beneficiary; // 'me' | 'partner' | 'both' | child name (relative to the creator)
+
+  /// Stored structured beneficiary (`beneficiary_type` / `beneficiary_id`);
+  /// null on rows written before the structured columns.
+  final String? beneficiaryType;
+  final String? beneficiaryId;
+
+  /// The stored payer as the settlement engine reads it ('me', 'partner' or,
+  /// for a manual roommate row, the payer's member id); see [storedPayerRef].
+  final String? payerRef;
+
+  /// The `source` column as stored ([source] is normalised for display). The
+  /// server reads a manual row's payer from its note only when this is 'manual'.
+  final String? storedSource;
   final List<Map<String, dynamic>> items;
   final String? accountId;
   final String? receiptUrl;
@@ -53,6 +67,10 @@ class Transaction {
     this.spentBy = 'both',
     this.paidBy = 'me',
     this.beneficiary = 'both',
+    this.beneficiaryType,
+    this.beneficiaryId,
+    this.payerRef,
+    this.storedSource,
     this.items = const [],
     this.accountId,
     this.receiptUrl,
@@ -131,6 +149,31 @@ class Transaction {
     // Determine 2D attribution: paid_by and beneficiary
     String detectedPaidBy = map['paid_by'] as String? ?? '';
     String detectedBeneficiary = map['beneficiary'] as String? ?? '';
+    final storedBenType = map['beneficiary_type'] as String?;
+    final storedBenId = map['beneficiary_id']?.toString();
+    final payerRef = storedPayerRef(map);
+
+    // Structured rows (FABLE2-APP-01): the columns the server reads win over
+    // the free-text note, so the app shows what the settlement engine counts.
+    if (storedBenId != null && storedBenId.trim().isNotEmpty) {
+      final creator = (map['user_id'] as String? ?? '').toLowerCase();
+      if (detectedPaidBy.isEmpty) {
+        detectedPaidBy = (payerRef == 'me' || (creator.isNotEmpty && payerRef == creator)) ? 'me' : 'partner';
+      }
+      if (detectedBeneficiary.isEmpty) {
+        final bid = storedBenId.trim();
+        final low = bid.toLowerCase();
+        if ((storedBenType ?? '').toLowerCase() == 'dependent') {
+          detectedBeneficiary = bid;
+        } else if (kSharedBeneficiaryIds.contains(low)) {
+          detectedBeneficiary = 'both';
+        } else if (low == 'me' || (creator.isNotEmpty && low == creator)) {
+          detectedBeneficiary = 'me';
+        } else {
+          detectedBeneficiary = 'partner';
+        }
+      }
+    }
 
     if (detectedPaidBy.isEmpty) {
       final paidByRegex = RegExp(r'PaidBy:\s*(me|partner)', caseSensitive: false);
@@ -174,6 +217,10 @@ class Transaction {
       spentBy: detectedSpentBy,
       paidBy: detectedPaidBy,
       beneficiary: detectedBeneficiary,
+      beneficiaryType: storedBenType,
+      beneficiaryId: storedBenId,
+      payerRef: payerRef,
+      storedSource: map['source'] as String?,
       items: parsedItems,
       accountId: map['account_id'] as String?,
       receiptUrl: map['receipt_url'] as String?,
@@ -236,8 +283,10 @@ class Transaction {
       'created_at': createdAt.toIso8601String(),
       'source': source,
       'spent_by': spentBy,
-      'paid_by': paidBy,
-      'beneficiary': beneficiary,
+      // Only real columns: transactions has no paid_by / beneficiary (the
+      // payer of a manual row is in raw_sms, FABLE2-APP-05).
+      if (beneficiaryType != null) 'beneficiary_type': beneficiaryType,
+      if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       'items': items,
       'account_id': accountId,
       'receipt_url': receiptUrl,
@@ -264,6 +313,10 @@ class Transaction {
     String? spentBy,
     String? paidBy,
     String? beneficiary,
+    String? beneficiaryType,
+    String? beneficiaryId,
+    String? payerRef,
+    String? storedSource,
     List<Map<String, dynamic>>? items,
     String? accountId,
     String? receiptUrl,
@@ -288,6 +341,10 @@ class Transaction {
       spentBy: spentBy ?? this.spentBy,
       paidBy: paidBy ?? this.paidBy,
       beneficiary: beneficiary ?? this.beneficiary,
+      beneficiaryType: beneficiaryType ?? this.beneficiaryType,
+      beneficiaryId: beneficiaryId ?? this.beneficiaryId,
+      payerRef: payerRef ?? this.payerRef,
+      storedSource: storedSource ?? this.storedSource,
       items: items ?? this.items,
       accountId: accountId ?? this.accountId,
       receiptUrl: receiptUrl ?? this.receiptUrl,

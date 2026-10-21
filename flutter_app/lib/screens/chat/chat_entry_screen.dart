@@ -515,7 +515,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       } else {
         AppSnackBar.showError(
           context,
-          nafaqahWriteErrorText(context, res) ?? res['message'] ?? context.tr('chat_save_failed'),
+          expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('chat_save_failed'),
           title: context.tr('chat_save_error'),
         );
       }

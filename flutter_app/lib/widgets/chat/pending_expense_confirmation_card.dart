@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
+import '../../providers/household_role_provider.dart';
 import '../nafaqah/nafaqah_review_section.dart';
 
 /// Confirmed values of a chat expense. [confirmedNafaqahClass] is set in
@@ -30,11 +31,15 @@ class PendingExpenseConfirmationCard extends StatefulWidget {
   final PendingExpenseConfirmCallback onConfirm;
   final VoidCallback onCancel;
 
+  /// The recorder is a household admin (defaults to the [HouseholdRoleProvider]).
+  final bool? isAdmin;
+
   const PendingExpenseConfirmationCard({
     super.key,
     required this.pendingData,
     required this.onConfirm,
     required this.onCancel,
+    this.isAdmin,
   });
 
   @override
@@ -65,8 +70,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
 
   /// Recomputes the suggestion after the payer / beneficiary chips change.
   void _syncNafaqah() {
+    // An admin who is neither spouse classifies directly, not from the chips.
+    if (_spouseRole == null) return;
     _nafaqahChoice = classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
   }
+
+  bool get _isAdminClassifier => _nafaqahPreview.isAdminClassifier;
 
   void _setPaidBy(String v) => setState(() {
         _selectedPaidBy = v;
@@ -79,6 +88,10 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       });
 
   void _chooseNafaqah(String? cls) {
+    if (_spouseRole == null) {
+      setState(() => _nafaqahChoice = cls);
+      return;
+    }
     final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
     setState(() {
       _nafaqahChoice = cls;
@@ -128,7 +141,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     _selectedBeneficiary = (widget.pendingData['beneficiary'] as String? ?? 'both').toLowerCase();
 
     // Family (Nafaqah): the server's suggestion, else derived from the chips.
-    _nafaqahPreview = NafaqahPreview.fromPreview(widget.pendingData);
+    // Only the wife, the provider (husband) or an admin classifies.
+    _nafaqahPreview = NafaqahPreview.fromPreview(widget.pendingData)
+        .withAdmin(widget.isAdmin ?? viewerIsAdminOf(context, widget.pendingData['household_id'] as String?));
     _nafaqahWifeId = _nafaqahPreview.defaultSpouseId;
     final suggested = widget.pendingData['nafaqah_class'] as String?;
     _nafaqahChoice = (suggested == kWifeReimbursable || suggested == kWifePersonal)
@@ -436,13 +451,13 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
 
           // Family: the wife's own money is either a shared advance the husband
           // reimburses or a personal purchase from her allowance (never split).
-          if (_spouseRole != null &&
-              classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null) ...[
+          if (_isAdminClassifier ||
+              (_spouseRole != null && classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null)) ...[
             NafaqahReviewSection(
               preview: _nafaqahPreview,
               value: _nafaqahChoice,
               wifeId: _nafaqahWifeId,
-              showHusbandOption: false,
+              showHusbandOption: _isAdminClassifier,
               showWifeRequired: _showWifeRequired,
               onChanged: _chooseNafaqah,
               onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
@@ -531,9 +546,16 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   onPressed: () {
                     // The class follows the confirmed chips (the selector keeps
                     // them in sync), so a stale suggestion is never sent.
-                    final derived = _spouseRole == null
-                        ? null
-                        : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+                    final derived = _isAdminClassifier
+                        ? _nafaqahChoice
+                        : (_spouseRole == null
+                            ? null
+                            : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary));
+                    // An admin's class names the wife who paid ('partner' with
+                    // nafaqah_spouse_id), so the attribution never contradicts it.
+                    final adminFields = _isAdminClassifier && derived != null
+                        ? _nafaqahPreview.requestFields(derived, chosenWifeId: _nafaqahWifeId)
+                        : const <String, String>{};
                     if (!NafaqahReviewSection.hasRequiredWife(_nafaqahPreview, derived, _nafaqahWifeId)) {
                       setState(() => _showWifeRequired = true);
                       return;
@@ -547,10 +569,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                       store.isNotEmpty ? store : context.tr('store_name'),
                       _selectedCategoryCode,
                       resolvedSub,
-                      _selectedPaidBy,
-                      _selectedBeneficiary,
+                      adminFields['paid_by'] ?? _selectedPaidBy,
+                      adminFields['beneficiary'] ?? _selectedBeneficiary,
                       !_isFamily ? null : (derived ?? kNafaqahNone),
-                      _isFamily && derived != null && _spouseRole == 'husband' ? _nafaqahWifeId : null,
+                      _isFamily && derived != null && (_spouseRole == 'husband' || _isAdminClassifier)
+                          ? _nafaqahWifeId
+                          : null,
                     );
                   },
                 ),

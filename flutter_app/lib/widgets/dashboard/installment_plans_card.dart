@@ -9,6 +9,7 @@ import '../../providers/transaction_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
@@ -319,7 +320,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         };
                         try {
                           await context.read<InstallmentProvider>().createPlan(planData);
-                        } catch (_) {
+                        } on ProviderNotFoundException {
                           await ApiService.instance.createInstallmentPlan(planData);
                         }
                         if (dCtx.mounted) Navigator.pop(dCtx);
@@ -339,7 +340,10 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       } catch (e) {
                         setDialogState(() => isSubmitting = false);
                         if (dCtx.mounted) {
-                          AppSnackBar.showError(dCtx, dCtx.trArgs('inst_create_failed', {'error': e}));
+                          AppSnackBar.showError(
+                            dCtx,
+                            nafaqahWriteErrorText(dCtx, e) ?? dCtx.trArgs('inst_create_failed', {'error': e}),
+                          );
                         }
                       }
                     },

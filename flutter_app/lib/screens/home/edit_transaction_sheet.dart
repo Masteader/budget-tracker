@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -30,6 +32,9 @@ typedef TransactionRowUpdater = Future<void> Function(String transactionId, Map<
 /// Deletes the transaction row (defaults to a Supabase delete).
 typedef TransactionRowRemover = Future<void> Function(String transactionId);
 
+/// Loads the household roster (defaults to `GET /households/{id}/members`).
+typedef HouseholdRosterLoader = Future<HouseholdRoster> Function(String householdId);
+
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
   final List<String> householdDependents;
@@ -43,6 +48,17 @@ class EditTransactionSheet extends StatefulWidget {
   final TransactionRowUpdater? updateRow;
   final TransactionRowRemover? deleteRow;
 
+  /// The signed-in user (defaults to the Supabase session).
+  final String? Function()? currentUserId;
+
+  /// Roster used to tell who "partner" is when the viewer did not record the
+  /// expense, and whether the viewer is an admin.
+  final HouseholdRosterLoader? loadRoster;
+
+  /// Whether the viewer is a household admin (defaults to the
+  /// [HouseholdRoleProvider], else the roster).
+  final bool? isAdmin;
+
   const EditTransactionSheet({
     super.key,
     required this.transaction,
@@ -52,6 +68,9 @@ class EditTransactionSheet extends StatefulWidget {
     this.loadNafaqahFields,
     this.updateRow,
     this.deleteRow,
+    this.currentUserId,
+    this.loadRoster,
+    this.isAdmin,
   });
 
   static Future<String?> show(
@@ -99,6 +118,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// are left untouched on save (FR-A-01).
   bool _storedNafaqahLoaded = false;
 
+  /// The user changed who paid / for whom. Untouched attribution is never
+  /// rewritten, so an unrelated edit keeps exactly what the server reads
+  /// (FABLE2-APP-01: a merchant edit used to rewrite the payer).
+  bool _payerTouched = false;
+  bool _beneficiaryTouched = false;
+
+  HouseholdRoster? _roster;
+
+  /// Class chosen by an admin who is not one of the spouses (they classify
+  /// directly: the me/partner vocabulary does not name the wife for them).
+  String? _adminClass;
+
   final List<Map<String, String>> _categories = const [
     {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
     {'code': 'OPEX-DINING', 'name': 'Dining & Cafes'},
@@ -138,6 +169,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         _selectedBeneficiary = 'me';
       }
     }
+    // The stored payer/beneficiary are relative to the creator; the sheet
+    // speaks to the viewer ("I paid"), so turn them around for the partner.
+    if (!_viewerIsCreator) {
+      _selectedPaidBy = _swapRelative(_selectedPaidBy);
+      _selectedBeneficiary = _swapRelative(_selectedBeneficiary);
+    }
     _items = widget.transaction.items
         .map((it) => Map<String, dynamic>.from(it))
         .toList();
@@ -147,11 +184,193 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       _loadDependents();
     }
     _nafaqah = widget.nafaqah;
+    if (widget.loadRoster != null || !_viewerIsCreator) {
+      _loadRoster();
+    }
     if (_nafaqah != null) {
       _loadStoredNafaqah();
     } else if (widget.transaction.householdId.isNotEmpty) {
       _loadNafaqah();
     }
+  }
+
+  // ── Who paid / for whom (FABLE2-APP-01) ────────────────────────────────────
+
+  static String _swapRelative(String value) => switch (value) {
+        'me' => 'partner',
+        'partner' => 'me',
+        _ => value,
+      };
+
+  String? get _viewerId {
+    final reader = widget.currentUserId;
+    if (reader != null) return reader()?.toLowerCase();
+    try {
+      return supabase.auth.currentUser?.id.toLowerCase();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get _creatorId {
+    final id = widget.transaction.userId?.trim().toLowerCase();
+    return (id == null || id.isEmpty) ? null : id;
+  }
+
+  /// The viewer recorded the expense (or either is unknown: legacy rows).
+  bool get _viewerIsCreator {
+    final viewer = _viewerId;
+    final creator = _creatorId;
+    return viewer == null || creator == null || viewer == creator;
+  }
+
+  bool get _isStoredManual =>
+      (widget.transaction.storedSource ?? widget.transaction.source).trim().toLowerCase() == 'manual';
+
+  HouseholdRelations get _relations {
+    final roster = _roster;
+    if (roster != null && roster.members.isNotEmpty) {
+      return HouseholdRelations(
+        memberIds: roster.members.map((m) => m.userId).toList(),
+        husbandId: roster.nafaqahProvider?.userId ?? _nafaqah?.husbandId,
+        wifeIds: roster.members.where((m) => m.isSpouse).map((m) => m.userId).toList(),
+        rosterComplete: true,
+      );
+    }
+    final summary = _nafaqah;
+    return HouseholdRelations(
+      husbandId: summary?.husbandId ?? summary?.providerUserId,
+      wifeIds: summary?.wives.map((w) => w.id).toList() ?? const [],
+    );
+  }
+
+  Future<void> _loadRoster() async {
+    final householdId = widget.transaction.householdId;
+    if (householdId.isEmpty) return;
+    try {
+      final loader = widget.loadRoster ?? ApiService.instance.getHouseholdMembers;
+      final roster = await loader(householdId);
+      if (!mounted) return;
+      setState(() => _roster = roster);
+      if (_canClassify && !_storedNafaqahLoaded) await _loadStoredNafaqah();
+    } catch (_) {}
+  }
+
+  /// The viewer's admin flag from the [HouseholdRoleProvider] (read once).
+  bool? _providerAdmin;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      final roles = Provider.of<HouseholdRoleProvider>(context, listen: false);
+      if (roles.isLoaded && roles.householdId == widget.transaction.householdId && _providerAdmin == null) {
+        _providerAdmin = roles.isAdmin;
+        if (roles.isAdmin && _nafaqah != null && !_storedNafaqahLoaded) _loadStoredNafaqah();
+      }
+    } catch (_) {}
+  }
+
+  /// Household admin: the explicit flag, the role provider, else what the
+  /// API says (`can_set_provider` is for admins; the roster's caller role).
+  bool get _isAdmin =>
+      widget.isAdmin ??
+      _providerAdmin ??
+      ((_nafaqah?.canSetProvider ?? false) || (_roster?.callerRole ?? '').toLowerCase() == 'admin');
+
+  /// The member a viewer-relative token names ('me' = the viewer).
+  String? _memberOfViewerToken(String token) {
+    final viewer = _viewerId;
+    if (token == 'me') return viewer;
+    if (token == 'partner') return _relations.counterpartOf(viewer);
+    return null;
+  }
+
+  /// [member] relative to the creator: 'me', 'partner', or null when the
+  /// creator's 'partner' is someone else (or unknown).
+  String? _creatorRelative(String? member, {String? spouseId}) {
+    final creator = _creatorId;
+    if (member == null || creator == null) return null;
+    final m = member.toLowerCase();
+    if (m == creator) return 'me';
+    if (m == _relations.counterpartOf(creator)) return 'partner';
+    // A classified row is paid by the wife it names: the server takes the
+    // payer from nafaqah_spouse_id (several wives, or recorded by an admin).
+    if (spouseId != null && m == spouseId.toLowerCase()) return 'partner';
+    return null;
+  }
+
+  /// The wife a Nafaqah class refers to.
+  String? get _classSpouseId => _spouseRole == 'wife'
+      ? _nafaqah?.callerUserId
+      : (_storedSpouseId ?? _nafaqah?.primaryWife?.id);
+
+  /// Payer to write: the `raw_sms` tail value (a manual row may name a member)
+  /// and `spent_by` ('me' | 'partner', relative to the creator). Null when it
+  /// cannot be expressed for the creator.
+  ({String tail, String spentBy})? _resolvedPayer() {
+    if (!_payerTouched) {
+      final stored = (widget.transaction.payerRef ?? widget.transaction.paidBy).toLowerCase();
+      if (stored == 'me' || stored == 'partner') return (tail: stored, spentBy: stored);
+      return (tail: stored, spentBy: _creatorRelative(stored) ?? (stored == _creatorId ? 'me' : 'partner'));
+    }
+    String? member;
+    final cls = _nafaqahClass;
+    if (_canClassify && cls != null) {
+      member = _classSpouseId; // the wife paid (rules 2 and 3)
+    } else if (_canClassify && _spouseRole != null) {
+      member = _relations.husbandId; // the husband paid (rule 4)
+    }
+    if (member == null && _viewerIsCreator) {
+      return (tail: _selectedPaidBy, spentBy: _selectedPaidBy);
+    }
+    member ??= _memberOfViewerToken(_selectedPaidBy);
+    final relative = _creatorRelative(member, spouseId: cls != null ? _classSpouseId : null);
+    if (relative != null) return (tail: relative, spentBy: relative);
+    // A manual row's note may name the paying member; spent_by stays relative.
+    if (member != null && _isStoredManual) return (tail: member, spentBy: 'partner');
+    return null;
+  }
+
+  /// `beneficiary_type` / `beneficiary_id` to write, or null when the
+  /// beneficiary cannot be named.
+  ({String type, String id})? _resolvedBeneficiary() {
+    final tx = widget.transaction;
+    if (!_beneficiaryTouched && (tx.beneficiaryId ?? '').trim().isNotEmpty) {
+      return (type: tx.beneficiaryType ?? 'household', id: tx.beneficiaryId!.trim());
+    }
+    final cls = _nafaqahClass;
+    if (_canClassify && cls == kWifeReimbursable) return (type: 'household', id: 'household');
+    final wife = _classSpouseId;
+    if (_canClassify && cls == kWifePersonal && wife != null) return (type: 'individual', id: wife.toLowerCase());
+    final ben = _selectedBeneficiary;
+    if (ben != 'me' && ben != 'partner') return beneficiaryColumns(ben, creatorId: _creatorId);
+    if (_viewerIsCreator) {
+      return beneficiaryColumns(ben, creatorId: _creatorId, partnerId: _relations.counterpartOf(_creatorId));
+    }
+    final member = _memberOfViewerToken(ben);
+    return member == null ? null : (type: 'individual', id: member);
+  }
+
+  /// The structured columns (and, for a manual row, the rebuilt note tail)
+  /// for a changed attribution; null when it cannot be expressed.
+  Map<String, dynamic>? _attributionPayload(String merchant) {
+    final payer = _resolvedPayer();
+    final ben = _resolvedBeneficiary();
+    if (payer == null || ben == null) return null;
+    return {
+      'spent_by': payer.spentBy,
+      'beneficiary_type': ben.type,
+      'beneficiary_id': ben.id,
+      // The server reads a manual row's payer from the end of its note.
+      if (_isStoredManual)
+        'raw_sms': manualAuditNote(
+          head: auditNoteHead(widget.transaction.rawSms, fallback: 'Manual: $merchant'),
+          payer: payer.tail,
+          beneficiaryId: ben.id,
+          spentBy: payer.spentBy,
+        ),
+    };
   }
 
   // ── Family mode (Islamic Nafaqah: no spousal split) ────────────────────────
@@ -164,11 +383,22 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     return (role == 'wife' || role == 'husband') ? role : null;
   }
 
-  String? get _nafaqahClass =>
-      _spouseRole == null ? null : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+  /// Only the wife, the Nafaqah provider (husband) or an admin classifies.
+  bool get _canClassify => _isFamily && (_spouseRole != null || _isAdmin);
+
+  String? get _nafaqahClass {
+    if (!_canClassify) return null;
+    if (_spouseRole == null) return _adminClass;
+    return classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+  }
 
   /// Maps the Nafaqah choice onto the viewer-relative payer / beneficiary.
   void _applyNafaqahChoice(String? nafaqahClass) {
+    if (_spouseRole == null) {
+      _adminClass = nafaqahClass;
+      if (nafaqahClass == kWifeReimbursable) _selectedBeneficiary = 'both';
+      return;
+    }
     final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
     final husbandSide = _spouseRole == 'wife' ? 'partner' : 'me';
     if (nafaqahClass == kWifeReimbursable) {
@@ -201,7 +431,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// stored "no class" is the husband's household expense (FR-A-01), and a
   /// stored class keeps the wife's claim when the husband edits it.
   Future<void> _loadStoredNafaqah() async {
-    if (_spouseRole == null) return;
+    if (!_canClassify) return;
     try {
       final loader = widget.loadNafaqahFields ??
           (String id) => supabase.from('transactions').select('nafaqah_class, nafaqah_spouse_id').eq('id', id).maybeSingle();
@@ -218,11 +448,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
   Map<String, dynamic> _nafaqahPayload() {
     // Unknown stored class (still loading or unreadable): never rewrite it.
-    if (_spouseRole == null || !_storedNafaqahLoaded) return const {};
+    if (!_canClassify || !_storedNafaqahLoaded) return const {};
     final cls = _nafaqahClass;
-    final spouseId = _spouseRole == 'wife'
-        ? _nafaqah!.callerUserId
-        : (_storedSpouseId ?? _nafaqah!.primaryWife?.id);
+    final spouseId = _classSpouseId;
     if (cls == null || spouseId == null || spouseId.isEmpty) {
       return const {'nafaqah_class': null, 'nafaqah_spouse_id': null};
     }
@@ -291,58 +519,31 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       return;
     }
 
-    setState(() => _isSaving = true);
-
-    String derivedSpentBy = 'both';
-    if (_selectedBeneficiary == 'both') {
-      derivedSpentBy = 'both';
-    } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'partner') {
-      derivedSpentBy = 'partner';
-    } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'me') {
-      derivedSpentBy = 'me';
-    } else {
-      derivedSpentBy = _selectedBeneficiary;
-    }
-
-    final basePayload = <String, dynamic>{
-      'merchant': _merchantCtrl.text.trim(),
+    final merchant = _merchantCtrl.text.trim();
+    final values = <String, dynamic>{
+      'merchant': merchant,
       'amount': amount,
       'category_code': _selectedCategory,
       'sub_category': _selectedSubCategory,
       'items': _items,
+      ..._nafaqahPayload(),
     };
+    // Who paid / for whom: only when the user changed it, and only in the
+    // columns the server reads (FABLE2-APP-01). There is no paid_by or
+    // beneficiary column, so there is no second, note-only attempt.
+    if (_payerTouched || _beneficiaryTouched) {
+      final attribution = _attributionPayload(merchant);
+      if (attribution == null) {
+        AppSnackBar.showError(context, context.tr('tx_attr_unresolvable'), title: context.tr('update_error'));
+        return;
+      }
+      values.addAll(attribution);
+    }
+
+    setState(() => _isSaving = true);
 
     try {
-      try {
-        await _updateRow({
-          ...basePayload,
-          ..._nafaqahPayload(),
-          'paid_by': _selectedPaidBy,
-          'beneficiary': _selectedBeneficiary,
-          'spent_by': derivedSpentBy,
-        });
-      } catch (e) {
-        // Another member's transaction and the user is no admin (DB-18): no fallback.
-        if (HouseholdPermissions.isPermissionDenied(e)) rethrow;
-        // A Nafaqah rule refused the change (the ledger guard or a missing
-        // provider): the fallback write would be refused the same way.
-        if (nafaqahWriteRefusalOf(e) != null) rethrow;
-        // Fallback: update raw_sms with PaidBy and Beneficiary tags
-        final raw = widget.transaction.rawSms ?? '';
-        final cleanRaw = raw
-            .replaceAll(RegExp(r'\|\s*SpentBy:\s*(me|partner|both)', caseSensitive: false), '')
-            .replaceAll(RegExp(r'\|\s*PaidBy:\s*(me|partner)', caseSensitive: false), '')
-            .replaceAll(RegExp(r'\|\s*Beneficiary:\s*([^\s\|]+)', caseSensitive: false), '')
-            .replaceAll(RegExp(r'\|\s*SubCategory:\s*([^\s\|]+)', caseSensitive: false), '')
-            .trim();
-        final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SubCategory: ${_selectedSubCategory ?? ""} | SpentBy: $derivedSpentBy';
-        await _updateRow({
-          ...basePayload,
-          ..._nafaqahPayload(),
-          'raw_sms': newRaw,
-          'spent_by': derivedSpentBy,
-        });
-      }
+      await _updateRow(values);
 
       if (mounted) {
         Navigator.pop(context, 'updated');
@@ -769,7 +970,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       } catch (e) {
                         if (sheetCtx.mounted) {
                           setModalState(() => isProcessing = false);
-                          AppSnackBar.showError(sheetCtx, sheetCtx.trArgs('bnpl_convert_failed_msg', {'error': e}), title: sheetCtx.tr('conversion_failed'));
+                          AppSnackBar.showError(
+                            sheetCtx,
+                            nafaqahWriteErrorText(sheetCtx, e) ?? sheetCtx.trArgs('bnpl_convert_failed_msg', {'error': e}),
+                            title: sheetCtx.tr('conversion_failed'),
+                          );
                         }
                       }
                     },
@@ -850,6 +1055,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             _dependents.add(name);
           }
           _selectedBeneficiary = name;
+          _beneficiaryTouched = true;
         });
       }
     }
@@ -1055,7 +1261,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   activeColor: const Color(0xFF58A6FF),
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    setState(() => _selectedPaidBy = 'me');
+                    setState(() {
+                      _selectedPaidBy = 'me';
+                      _payerTouched = true;
+                    });
                   },
                 ),
                 const SizedBox(width: 8),
@@ -1066,7 +1275,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   activeColor: const Color(0xFFBC8CFF),
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    setState(() => _selectedPaidBy = 'partner');
+                    setState(() {
+                      _selectedPaidBy = 'partner';
+                      _payerTouched = true;
+                    });
                   },
                 ),
               ],
@@ -1093,7 +1305,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   activeColor: const Color(0xFF58A6FF),
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    setState(() => _selectedBeneficiary = 'me');
+                    setState(() {
+                      _selectedBeneficiary = 'me';
+                      _beneficiaryTouched = true;
+                    });
                   },
                 ),
                 const SizedBox(width: 8),
@@ -1104,7 +1319,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   activeColor: const Color(0xFFBC8CFF),
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    setState(() => _selectedBeneficiary = 'partner');
+                    setState(() {
+                      _selectedBeneficiary = 'partner';
+                      _beneficiaryTouched = true;
+                    });
                   },
                 ),
                 const SizedBox(width: 8),
@@ -1115,7 +1333,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   activeColor: AppThemes.success,
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    setState(() => _selectedBeneficiary = 'both');
+                    setState(() {
+                      _selectedBeneficiary = 'both';
+                      _beneficiaryTouched = true;
+                    });
                   },
                 ),
               ],
@@ -1203,6 +1424,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       HapticFeedback.selectionClick();
                       setState(() {
                         _selectedBeneficiary = selected ? depName : 'both';
+                        _beneficiaryTouched = true;
                       });
                     },
                   );
@@ -1210,13 +1432,18 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ),
             const SizedBox(height: 10),
 
-            if (_spouseRole != null) ...[
+            // Only the wife, the provider (husband) or an admin classifies.
+            if (_canClassify) ...[
               NafaqahClassSelector(
                 value: _nafaqahClass,
                 viewerIsWife: _spouseRole == 'wife',
                 onChanged: (cls) {
                   HapticFeedback.selectionClick();
-                  setState(() => _applyNafaqahChoice(cls));
+                  setState(() {
+                    _applyNafaqahChoice(cls);
+                    _payerTouched = true;
+                    _beneficiaryTouched = true;
+                  });
                 },
               ),
               const SizedBox(height: 10),

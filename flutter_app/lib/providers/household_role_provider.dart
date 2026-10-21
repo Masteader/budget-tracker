@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
@@ -7,6 +8,20 @@ import '../services/household_permissions.dart';
 
 typedef MembershipsLoader = Future<List<HouseholdMembership>> Function();
 typedef CurrentUserIdReader = String? Function();
+
+/// Whether the signed-in user is an admin of [householdId] according to the
+/// [HouseholdRoleProvider] above [context]; false without one, while it is
+/// loading, or for another household. Never subscribes (safe in initState).
+bool viewerIsAdminOf(BuildContext context, String? householdId) {
+  try {
+    final roles = Provider.of<HouseholdRoleProvider>(context, listen: false);
+    if (!roles.isLoaded) return false;
+    if (householdId != null && householdId.isNotEmpty && roles.householdId != householdId) return false;
+    return roles.isAdmin;
+  } on ProviderNotFoundException {
+    return false;
+  }
+}
 
 /// The signed-in user's role in the active household (admin / member, and
 /// whether they are the primary admin), used to show only the actions the
