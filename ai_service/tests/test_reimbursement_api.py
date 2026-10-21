@@ -106,8 +106,10 @@ def test_create_and_inspect_role_invite():
         assert inspect_data.get("is_valid") is True
 
 
-def test_create_peer_roommate_invite():
+def test_create_peer_roommate_invite(monkeypatch):
     hid = HOUSEHOLD_ID
+    # Peer invites belong to roommates households (owner decision D1, migration 20261020900000).
+    monkeypatch.setattr("household_permissions.household_type_of", lambda *_a, **_k: "roommates")
     with patch("auth._get_user_membership") as mock_mem:
         mock_mem.return_value = {"role": "admin", "household_id": hid}
         res = client.post(

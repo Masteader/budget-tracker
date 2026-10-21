@@ -859,8 +859,10 @@ def test_chat_rejects_a_spouse_id_that_is_not_allowed(family, user, spouse):
 
 
 def test_chat_non_spouse_member_cannot_classify(family):
+    # Owner decision D2: only the wife, the provider or an admin classifies (403 with a code).
     resp = _chat(CHILD, "دفعت فاتورة البيت 300 ريال", nafaqah_class="wife_reimbursable")
-    assert resp.status_code == 422
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "nafaqah_classification_forbidden"
     resp = _chat(CHILD, "دفعت فاتورة البيت 300 ريال")
     assert resp.status_code == 200 and _last_tx(family).get("nafaqah_class") is None
 

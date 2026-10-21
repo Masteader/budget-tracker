@@ -317,3 +317,17 @@ class NafaqahProviderSetRequest(BaseModel):
 
 
 
+
+
+class HouseholdTypeUpdateRequest(BaseModel):
+    """An admin switches the household type (owner decision D1, migration 20261020900000)."""
+    household_type: str = Field(..., pattern="^(family|roommates)$", description="'family' or 'roommates'")
+
+
+class MemberFinancialRoleUpdateRequest(BaseModel):
+    """An admin sets a member's financial role within the household type (FABLE2-DB-07)."""
+    financial_role: str = Field(
+        ...,
+        pattern="^(provider|spouse|peer|family_member|dependent)$",
+        description="family: 'spouse' | 'family_member' | 'dependent'; roommates: 'peer'",
+    )

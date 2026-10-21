@@ -1,4 +1,5 @@
-"""Household management routes: payday, income, rollover rules, savings, invites, dependents, settlement, categories."""
+"""Household management routes: payday, income, rollover rules, savings, invites, dependents, settlement, categories,
+members (admins, financial roles) and the household type."""
 
 from __future__ import annotations
 
@@ -21,17 +22,24 @@ from models import (
     CategoryToggleRequest,
     CustomCategoryCreateRequest,
     PrimaryAdminTransferRequest,
+    HouseholdTypeUpdateRequest,
+    MemberFinancialRoleUpdateRequest,
 )
 from household_permissions import (
+    HouseholdConflictError,
     HouseholdPermissionError,
+    InvalidFinancialRoleError,
     InvalidRoleChangeError,
     MemberNotFoundError,
     PermissionDeniedError,
+    assert_invite_role_fits,
     can_record_settlement,
     list_members,
     member_role,
     promote_member,
     revoke_admin,
+    set_household_type,
+    set_member_financial_role,
     transfer_primary_admin,
 )
 from supabase_client import (
@@ -220,6 +228,13 @@ async def create_household_role_invite_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    try:
+        # D1: no spouse/family invite in a roommates household, no peer invite in a family (409).
+        await asyncio.to_thread(assert_invite_role_fits, household_id, payload.role)
+    except HouseholdConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to create invite.")
     try:
         return await asyncio.to_thread(
             create_household_role_invite,
@@ -569,6 +584,10 @@ async def create_custom_category_endpoint(
 # ─── Members, co-admins and the primary admin (owner decision on DB-16 / DB-18) ──
 
 def _permission_http_error(exc: HouseholdPermissionError) -> HTTPException:
+    if isinstance(exc, HouseholdConflictError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
+    if isinstance(exc, InvalidFinancialRoleError):
+        return HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
     if isinstance(exc, PermissionDeniedError):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     if isinstance(exc, MemberNotFoundError):
@@ -661,4 +680,46 @@ async def transfer_household_primary_admin(
         caller,
         payload.new_primary_user_id,
         public_message="Failed to transfer primary admin.",
+    )
+
+
+# ─── Household type and members' financial roles (owner decision D1, FABLE2-DB-07) ──
+
+@router.put(
+    "/households/{household_id}/type",
+    tags=["households"],
+    summary="Switch the household between 'family' and 'roommates' (admins).",
+)
+async def update_household_type(
+    household_id: str,
+    payload: HouseholdTypeUpdateRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        set_household_type, household_id, caller, payload.household_type,
+        public_message="Failed to change the household type.",
+    )
+
+
+@router.put(
+    "/households/{household_id}/members/{member_user_id}/financial-role",
+    tags=["households"],
+    summary="Set a member's financial role within the household type (admins).",
+)
+async def update_member_financial_role(
+    household_id: str,
+    member_user_id: str,
+    payload: MemberFinancialRoleUpdateRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        set_member_financial_role, household_id, caller, member_user_id, payload.financial_role,
+        public_message="Failed to change the member's financial role.",
     )

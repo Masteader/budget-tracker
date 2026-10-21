@@ -22,6 +22,7 @@ from models import NafaqahAllowanceSetRequest, NafaqahProviderSetRequest, Nafaqa
 from nafaqah_service import (
     InvalidNafaqahRequest,
     LedgerWouldBeOverpaid,
+    NafaqahClassificationForbidden,
     NafaqahError,
     NafaqahForbidden,
     NoProviderError,
@@ -47,6 +48,11 @@ _CYCLE_KEY_PATTERN = r"^[0-9]{4}-(0[1-9]|1[0-2])$"
 
 def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
     """Rule violations → 403 (who), 409 (state: not a family / overpayment / ledger / no provider), 422 (input)."""
+    if isinstance(exc, NafaqahClassificationForbidden):
+        # D2: the recorder may not classify (chat / receipt / DB refusal); the client shows why.
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail={"message": str(exc), "code": exc.code}
+        )
     if isinstance(exc, NafaqahForbidden):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     if isinstance(exc, OverpaymentError):
