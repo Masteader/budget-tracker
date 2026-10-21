@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../onboarding/household_screen.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart' show NafaqahSummary;
 import '../../services/api_service.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
@@ -61,6 +62,9 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   List<Map<String, dynamic>> _members = [];
   List<HouseholdDependent> _dependents = [];
   int _paydayDay = 27;
+
+  /// Bumped when the Nafaqah provider changes so the family card reloads.
+  int _nafaqahRevision = 0;
   double _monthlyIncome = 0.0;
   String _rolloverRule = 'send_to_savings';
   double _accumulatedSavings = 0.0;
@@ -135,6 +139,11 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
       context.read<HouseholdRoleProvider>().refresh();
     } catch (_) {}
     _loadUserInfo();
+  }
+
+  /// A new Nafaqah provider was confirmed: reload the family Nafaqah card.
+  void _onNafaqahProviderChanged(NafaqahSummary? _) {
+    if (mounted) setState(() => _nafaqahRevision++);
   }
 
   Future<void> _loadHouseholdDetails(String hid) async {
@@ -797,6 +806,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             HouseholdRolesCard(
               householdId: _householdId!,
               onRolesChanged: _onRolesChanged,
+              onNafaqahProviderChanged: _onNafaqahProviderChanged,
             ),
             const SizedBox(height: 16),
             PaydaySettingsCard(
@@ -1084,6 +1094,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   );
                 }
                 return FamilyReimbursementCard(
+                  key: ValueKey('family-nafaqah-$_nafaqahRevision'),
                   householdId: _householdId!,
                 );
               },

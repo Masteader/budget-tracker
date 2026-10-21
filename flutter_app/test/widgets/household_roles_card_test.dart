@@ -3,6 +3,7 @@
 // co-admins get no action against the primary admin, refusals are explained.
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/household_membership.dart';
+import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/services/api/base_api_client.dart';
 import 'package:budget_tracker/services/api/household_roles_api_client.dart';
 import 'package:budget_tracker/widgets/settings/household_roles_card.dart';
@@ -34,6 +35,35 @@ HouseholdRoster _roster({required String self, bool canManage = false, bool canT
       m('p', 'Ali', 'admin', primary: true),
       m('c', 'Saad', coAdmin == 'c' ? 'admin' : 'member'),
       m('m', 'Majed', 'member'),
+    ],
+  );
+}
+
+/// A family: primary admin (adult son), the husband, the wife.
+HouseholdRoster _family({
+  required String self,
+  String? provider = 'h',
+  bool canSet = false,
+}) {
+  HouseholdMember m(String id, String name, String role, String fin, {bool primary = false}) => HouseholdMember(
+        userId: id,
+        displayName: name,
+        role: role,
+        financialRole: fin,
+        isPrimary: primary,
+        isSelf: id == self,
+        isNafaqahProvider: id == provider,
+      );
+  return HouseholdRoster(
+    householdId: 'hh',
+    primaryAdminUserId: 's',
+    canManageAdmins: canSet,
+    nafaqahProviderUserId: provider,
+    canSetNafaqahProvider: canSet,
+    members: [
+      m('s', 'Fahad', 'admin', 'family_member', primary: true),
+      m('h', 'Ahmed', 'member', 'provider'),
+      m('w', 'Sara', 'member', 'spouse'),
     ],
   );
 }
@@ -152,6 +182,157 @@ void main() {
       expect(find.text('Primary admin'), findsNothing);
     }
     expect(find.text('مرکزی ایڈمن'), findsOneWidget);
+  });
+
+  group('Nafaqah provider (FABLE-LOGIC-04)', () {
+    testWidgets('the provider carries a "Nafaqah provider (husband)" badge; members cannot change it',
+        (tester) async {
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async => _family(self: 'w'),
+      )));
+      await tester.pumpAndSettle();
+
+      final husbandRow = find.byKey(const ValueKey('role-member-h'));
+      expect(
+        find.descendant(of: husbandRow, matching: find.text('Nafaqah provider (husband)')),
+        findsOneWidget,
+      );
+      expect(find.text('Nafaqah provider (husband)'), findsOneWidget, reason: 'only on the provider');
+      expect(find.text('Change provider'), findsNothing);
+      expect(find.byKey(const ValueKey('roles_needs_provider')), findsNothing);
+    });
+
+    testWidgets('roommates never see the Nafaqah provider', (tester) async {
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async => const HouseholdRoster(
+          householdId: 'hh',
+          nafaqahProviderUserId: 'a',
+          canSetNafaqahProvider: true,
+          members: [
+            HouseholdMember(userId: 'a', role: 'admin', financialRole: 'peer', isPrimary: true, isNafaqahProvider: true, isSelf: true),
+            HouseholdMember(userId: 'b', financialRole: 'peer'),
+          ],
+        ),
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Nafaqah provider (husband)'), findsNothing);
+      expect(find.text('Change provider'), findsNothing);
+    });
+
+    testWidgets('an admin chooses another provider among non-spouse members; roster and summary refresh',
+        (tester) async {
+      final calls = <String>[];
+      var loads = 0;
+      NafaqahSummary? notified;
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async {
+          loads++;
+          return _family(self: 's', canSet: true, provider: calls.isEmpty ? 'h' : 's');
+        },
+        setNafaqahProvider: (hh, uid) async {
+          calls.add('$hh:$uid');
+          return const NafaqahProviderChange(
+            providerUserId: 's',
+            previousProviderUserId: 'h',
+            summary: NafaqahSummary(mode: 'family_nafaqah', husbandId: 's', wives: [NafaqahWife(id: 'w')]),
+          );
+        },
+        onNafaqahProviderChanged: (summary) => notified = summary,
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nafaqah provider (husband): Ahmed'), findsOneWidget);
+      await tester.tap(find.text('Change provider'));
+      await tester.pumpAndSettle();
+      expect(find.text('Who is the Nafaqah provider (husband)?'), findsOneWidget);
+      expect(find.byKey(const ValueKey('provider-option-w')), findsNothing, reason: 'a wife is never offered');
+      expect(find.byKey(const ValueKey('provider-option-h')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('provider-option-s')));
+      await tester.pumpAndSettle();
+
+      expect(calls, ['hh:s']);
+      expect(loads, 2, reason: 'the roster is reloaded after the change');
+      expect(notified?.husbandId, 's');
+      expect(find.text('Nafaqah provider updated'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('role-member-s')), matching: find.text('Nafaqah provider (husband)')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('refusals are explained: 403 forbidden and 422 invalid', (tester) async {
+      var attempt = 0;
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async => _family(self: 's', canSet: true),
+        setNafaqahProvider: (hh, uid) async {
+          attempt++;
+          if (attempt == 1) throw const NafaqahApiException('forbidden', 'Forbidden', statusCode: 403);
+          throw const NafaqahApiException('invalid', 'A wife cannot be the Nafaqah provider.', statusCode: 422);
+        },
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Change provider'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('provider-option-s')));
+      await tester.pumpAndSettle();
+      expect(find.text('Only a household admin can choose the Nafaqah provider.'), findsOneWidget);
+      expect(find.text('Nafaqah provider (husband): Ahmed'), findsOneWidget, reason: 'nothing changed');
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change provider'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('provider-option-s')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('That member cannot be the Nafaqah provider (a wife, or no longer in the household).'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a family without a provider prompts an admin to choose one', (tester) async {
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async => _family(self: 's', canSet: true, provider: null),
+        setNafaqahProvider: (hh, uid) async => const NafaqahProviderChange(providerUserId: 'h'),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('roles_needs_provider')), findsOneWidget);
+      expect(
+        find.text('This family has no Nafaqah provider (husband). Choose one so that expenses the wife pays can be recorded.'),
+        findsOneWidget,
+      );
+      expect(find.text('Choose provider'), findsOneWidget);
+      expect(find.text('Nafaqah provider (husband)'), findsNothing);
+    });
+
+    testWidgets('a member of a family without a provider is told to ask an admin', (tester) async {
+      await tester.pumpWidget(_app(HouseholdRolesCard(
+        householdId: 'hh',
+        loadRoster: (_) async => _family(self: 'w', provider: null),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This family has no Nafaqah provider (husband). Ask an admin to set one.'), findsOneWidget);
+      expect(find.text('Choose provider'), findsNothing);
+    });
+
+    testWidgets('the provider section is translated and right-to-left', (tester) async {
+      await tester.pumpWidget(_app(
+        HouseholdRolesCard(householdId: 'hh', loadRoster: (_) async => _family(self: 's', canSet: true)),
+        lang: 'ar',
+      ));
+      await tester.pumpAndSettle();
+      expect(Directionality.of(tester.element(find.byType(HouseholdRolesCard))), TextDirection.rtl);
+      expect(find.text('المكلّف بالنفقة (الزوج)'), findsOneWidget);
+      expect(find.text('تغيير المكلّف بالنفقة'), findsOneWidget);
+    });
   });
 
   group('HouseholdRolesApiClient', () {
