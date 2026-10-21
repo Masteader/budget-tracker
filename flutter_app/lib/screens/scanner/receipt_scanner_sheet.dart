@@ -14,6 +14,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/ocr/local_ocr_service.dart';
 import '../../services/offline_queue_manager.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../services/sync_worker.dart' show SyncWorker;
 import '../../services/receipt_storage_service.dart';
 import '../../services/zatca_decoder.dart';
@@ -507,7 +508,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           // directly would only bypass that check (FR-A-10). An unreachable
           // or failing server, or a commit the AI could not re-read (200
           // {"status": "error"}), falls back to the reviewed preview.
-          setState(() => _errorMessage = res['message'] as String? ?? context.tr('scan_analyze_failed'));
+          setState(() => _errorMessage =
+              nafaqahWriteErrorText(context, res) ?? res['message'] as String? ?? context.tr('scan_analyze_failed'));
         } else {
           await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
         }
@@ -669,6 +671,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         Navigator.pop(context);
       }
     } catch (e) {
+      // A Nafaqah rule refused the row (no provider yet): an offline draft
+      // would be refused the same way, so explain instead.
+      final refusal = nafaqahWriteRefusalOf(e);
+      if (refusal != null) {
+        if (!mounted) return;
+        final message = nafaqahWriteRefusalText(context, refusal);
+        _safeSetState(() {
+          _isAnalyzing = false;
+          _errorMessage = message;
+        });
+        return;
+      }
       try {
         final List<String> base64List = [];
         for (final file in _imageFiles) {

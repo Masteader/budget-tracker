@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
@@ -360,9 +361,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         setState(() => _isSaving = false);
         AppSnackBar.showError(
           context,
-          context.trArgs('mes_failed', {
-            'error': insertError is PostgrestException ? insertError.message : insertError,
-          }),
+          nafaqahWriteErrorText(context, insertError) ??
+              context.trArgs('mes_failed', {
+                'error': insertError is PostgrestException ? insertError.message : insertError,
+              }),
         );
       }
     } else {

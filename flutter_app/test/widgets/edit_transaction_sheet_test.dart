@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/screens/home/edit_transaction_sheet.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 void main() {
   testWidgets('EditTransactionSheet displays subcategory dropdown and child beneficiary chips', (tester) async {
@@ -159,6 +160,93 @@ void main() {
 
     expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
     expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsNothing);
+  });
+
+  // FABLE-LOGIC-02: cutting a repaid wife advance is refused by the ledger
+  // guard; the app explains it instead of showing a raw database error.
+  group('Nafaqah ledger guard and missing provider', () {
+    const guard = PostgrestException(
+      message: 'Nafaqah ledger overpaid: advances 100.00 < repayments 200.00',
+      code: '22023',
+      hint: 'ledger_would_be_overpaid',
+    );
+
+    Future<void> pumpWithSeams(
+      WidgetTester tester, {
+      TransactionRowUpdater? updateRow,
+      TransactionRowRemover? deleteRow,
+    }) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: EditTransactionSheet(
+              transaction: groceries(paidBy: 'me', beneficiary: 'both'),
+              householdDependents: const ['Sarah'],
+              nafaqah: family('wife'),
+              loadNafaqahFields: (_) async => {'nafaqah_class': kWifeReimbursable, 'nafaqah_spouse_id': 'u-wife'},
+              updateRow: updateRow,
+              deleteRow: deleteRow,
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('an edit refused by the guard is explained and not retried another way', (tester) async {
+      final writes = <Map<String, dynamic>>[];
+      await pumpWithSeams(tester, updateRow: (id, values) async {
+        writes.add(values);
+        throw guard;
+      });
+
+      await tester.enterText(find.byType(TextField).at(1), '100');
+      await tester.ensureVisible(find.text('Save Changes'));
+      await tester.tap(find.text('Save Changes'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(writes, hasLength(1), reason: 'the raw_sms fallback would be refused the same way');
+      expect(find.textContaining('the husband has already repaid part of the wife'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a delete refused by the guard is explained', (tester) async {
+      var deletes = 0;
+      await pumpWithSeams(tester, deleteRow: (id) async {
+        deletes++;
+        throw guard;
+      });
+
+      await tester.tap(find.byTooltip('Delete Transaction'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Delete'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(deletes, 1);
+      expect(find.textContaining('the husband has already repaid part of the wife'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a classification refused for a missing provider is explained', (tester) async {
+      await pumpWithSeams(tester, updateRow: (id, values) async {
+        throw const PostgrestException(
+          message: 'This family has no Nafaqah provider',
+          code: '23514',
+          hint: 'no_nafaqah_provider',
+        );
+      });
+
+      await tester.ensureVisible(find.text('Save Changes'));
+      await tester.tap(find.text('Save Changes'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.textContaining('no Nafaqah provider (husband) yet'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
   });
 
   testWidgets('roommate/partner households keep the shared-split preview', (tester) async {

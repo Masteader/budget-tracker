@@ -95,6 +95,29 @@ void main() {
     expect(find.textContaining('not a spouse member'), findsOneWidget);
   });
 
+  // FABLE-LOGIC-04: a family without a Nafaqah provider refuses classified
+  // expenses; the user is told to ask an admin, nothing is queued.
+  testWidgets('a classification refused for a missing provider is explained', (tester) async {
+    var queued = 0;
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      currentUser: 'u-wife',
+      insertRow: (_) async => throw const PostgrestException(
+        message: 'This family has no Nafaqah provider',
+        code: '23514',
+        hint: 'no_nafaqah_provider',
+      ),
+      enqueueRow: (_, __) async => queued++,
+    );
+
+    await tapSave(tester);
+
+    expect(queued, 0);
+    expect(find.byType(ManualExpenseSheet), findsOneWidget);
+    expect(find.textContaining('Ask an admin to choose one'), findsOneWidget);
+  });
+
   testWidgets('a network failure is queued offline with the same row', (tester) async {
     Map<String, dynamic>? queuedRow;
     Map<String, dynamic>? triedRow;
