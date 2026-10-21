@@ -231,7 +231,11 @@ class AllowanceStatus {
     this.transactionCount = 0,
   });
 
-  bool get isOverspent => remaining < 0;
+  /// An allowance was set for the cycle. A working wife may have none: her
+  /// personal purchases are then shown as plain spending, never "overspent".
+  bool get hasAllowance => isSet || allocated > 0;
+
+  bool get isOverspent => hasAllowance && remaining < 0;
 
   /// Share of the allowance used, clamped to [0, 1] for progress bars.
   double get usedFraction {

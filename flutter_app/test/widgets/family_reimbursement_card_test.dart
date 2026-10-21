@@ -270,7 +270,8 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('No allowance set for this cycle yet.'), findsOneWidget);
+    expect(find.text('No allowance is set for this cycle; personal purchases are tracked without a limit.'), findsOneWidget);
+    expect(find.textContaining('Her personal spending this cycle'), findsOneWidget);
     await tester.tap(find.text('Set allowance'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('allowance_amount_field')), '1200');

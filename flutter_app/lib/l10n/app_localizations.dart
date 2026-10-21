@@ -382,7 +382,7 @@ class AppLocalizations {
       'allowance_spent': 'Spent',
       'allowance_remaining': 'Remaining',
       'allowance_overspent': 'Over the allowance by {amount}',
-      'allowance_not_set': 'No allowance set for this cycle yet.',
+      'allowance_not_set': 'No allowance is set for this cycle; personal purchases are tracked without a limit.',
       'allowance_set': 'Set allowance',
       'allowance_edit': 'Change allowance',
       'allowance_set_title': 'Personal allowance for {cycle}',
@@ -1673,6 +1673,8 @@ class AppLocalizations {
       'offline_receipt_pending_notice': 'You\'re offline. The photo will be read when you\'re back online; nothing is guessed. You can also type the amount yourself.',
       'offline_receipt_save_later': 'Save photo, read it later',
       'offline_receipt_type_amount': 'Type the amount instead',
+      'allowance_personal_spending_her': 'Her personal spending this cycle: {amount}',
+      'allowance_personal_spending_mine': 'Your personal spending this cycle: {amount}',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -1730,7 +1732,7 @@ class AppLocalizations {
       'allowance_spent': 'المصروف',
       'allowance_remaining': 'المتبقي',
       'allowance_overspent': 'تجاوز المصروف بمبلغ {amount}',
-      'allowance_not_set': 'لم يُحدَّد مصروف لهذه الدورة بعد.',
+      'allowance_not_set': 'لا يوجد مصروف شخصي محدد لهذه الدورة؛ تُسجَّل المشتريات الشخصية دون حد.',
       'allowance_set': 'تحديد المصروف',
       'allowance_edit': 'تعديل المصروف',
       'allowance_set_title': 'المصروف الشخصي لدورة {cycle}',
@@ -3025,6 +3027,8 @@ class AppLocalizations {
       'offline_receipt_pending_notice': 'أنت غير متصل. ستُقرأ الصورة عند عودة الاتصال، ولن يُخمَّن أي شيء. يمكنك أيضاً إدخال المبلغ بنفسك.',
       'offline_receipt_save_later': 'احفظ الصورة لقراءتها لاحقاً',
       'offline_receipt_type_amount': 'أدخل المبلغ يدوياً',
+      'allowance_personal_spending_her': 'مشترياتها الشخصية في هذه الدورة: {amount}',
+      'allowance_personal_spending_mine': 'مشترياتكِ الشخصية في هذه الدورة: {amount}',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3082,7 +3086,7 @@ class AppLocalizations {
       'allowance_spent': 'خرچ شدہ',
       'allowance_remaining': 'باقی',
       'allowance_overspent': 'جیب خرچ سے {amount} زیادہ',
-      'allowance_not_set': 'اس سائیکل کے لیے ابھی جیب خرچ مقرر نہیں ہوا۔',
+      'allowance_not_set': 'اس سائیکل کے لیے کوئی جیب خرچ مقرر نہیں؛ ذاتی خریداری بغیر حد کے درج ہوتی ہے۔',
       'allowance_set': 'جیب خرچ مقرر کریں',
       'allowance_edit': 'جیب خرچ تبدیل کریں',
       'allowance_set_title': '{cycle} کے لیے ذاتی جیب خرچ',
@@ -4377,6 +4381,8 @@ class AppLocalizations {
       'offline_receipt_pending_notice': 'آپ آف لائن ہیں۔ انٹرنیٹ واپس آنے پر تصویر پڑھی جائے گی؛ کوئی رقم اندازے سے نہیں لکھی جائے گی۔ آپ خود بھی رقم درج کر سکتے ہیں۔',
       'offline_receipt_save_later': 'تصویر محفوظ کریں، بعد میں پڑھیں',
       'offline_receipt_type_amount': 'رقم خود درج کریں',
+      'allowance_personal_spending_her': 'اس سائیکل میں اہلیہ کی ذاتی خریداری: {amount}',
+      'allowance_personal_spending_mine': 'اس سائیکل میں آپ کی ذاتی خریداری: {amount}',
     },
   };
 
