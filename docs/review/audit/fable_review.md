@@ -110,3 +110,19 @@ produce such names); no backfill of historical rows was run (live is never writt
 `installment_service.list_plans` still reconciles plans from notes mentioning Tamara/Tabby.
 
 **App status (2026-10-21, Flutter handoff):** FABLE-LOGIC-04 provider badge/selector and missing-provider prompt, FABLE-LOGIC-02 `overpaid` display and ledger-guard/no-provider explanations, FABLE-LOGIC-01 manual expense roles per household (members API), FABLE-DB-01 join/claim refusal messages: done in the app. FABLE-LOGIC-09: fixed (`money.dart` parses to integer halalas, half-up). Details in `FIX_LOG.md` ("Fable review — app handoff"). FABLE-LOGIC-03 (app writes of `beneficiary_type/beneficiary_id`) left for the follow-up.
+
+## Status — round 3 (owner decisions D1–D3, Fable round-2 DB report; 2026-10-21)
+
+Migration `20261020900000_household_type_and_round2_fixes.sql` (not applied to live), API changes and tests; details in `FIX_LOG.md` ("Round 3").
+
+| ID | Status |
+|---|---|
+| D1 household type | Fixed: `households.household_type` chosen at creation, admin-changeable; roles, joins, invites, provider and settlement mode follow it. |
+| D2 classifier rights | Fixed in DB (client writes) and API (chat/receipt 403 `nafaqah_classification_forbidden`). |
+| D3 wife leaves | Fixed: her ledger in that household is removed; her expenses become ordinary; ledger guard passes only this path. |
+| FABLE2-DB-01 | Fixed: provider never re-defaulted on owner succession. |
+| FABLE2-DB-02 | Fixed: counter CHECK, column grants, ACTIVE-only payments (`plan_not_active`). |
+| FABLE2-DB-05 | Fixed: budget triggers skip settlements. |
+| FABLE2-DB-07 | Fixed: `set_member_financial_role` + `PUT /households/{id}/members/{uid}/financial-role`. |
+
+Follow-ups for other work streams: `settlement_engine.calculate_settlement_v2` should choose the mode from `FamilyContext.settlement_mode` / `household_type` instead of "has peers and no spouse"; `installment_service` should map HINT `plan_not_active` to 409; the app needs the type selector, the financial-role editor and the new refusal codes.
