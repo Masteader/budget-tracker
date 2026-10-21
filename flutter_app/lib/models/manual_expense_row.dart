@@ -9,8 +9,11 @@
 ///   on the 26th, into the next salary cycle);
 /// * the payer is kept in the `raw_sms` audit trail (`PaidBy:` tag) that the
 ///   app and the settlement engine already parse, because `transactions` has
-///   no `paid_by` column.
+///   no `paid_by` column. The tail format is shared with the edit sheet
+///   ([manualAuditNote]) so both write exactly what the server parses.
 library;
+
+import 'transaction_attribution.dart';
 
 Map<String, dynamic> buildManualExpenseRow({
   required String id,
@@ -43,7 +46,12 @@ Map<String, dynamic> buildManualExpenseRow({
     'account_id': accountId,
     'source': 'manual',
     'timestamp': occurredAt.toUtc().toIso8601String(),
-    'raw_sms': 'Manual: $merchant | PaidBy: $auditPayer | Beneficiary: $beneficiaryId | SpentBy: $spentBy',
+    'raw_sms': manualAuditNote(
+      head: 'Manual: $merchant',
+      payer: auditPayer,
+      beneficiaryId: beneficiaryId,
+      spentBy: spentBy,
+    ),
     'items': [
       {'name': merchant, 'price': amount, 'quantity': 1}
     ],

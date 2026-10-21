@@ -96,8 +96,12 @@ void main() {
 
     final row = inserted.single;
     expect(row['id'], _id);
-    expect(row['paid_by'], 'partner');
-    expect(row['beneficiary'], 'both');
+    // Only real columns: an insert naming paid_by / beneficiary is refused
+    // by PostgREST (PGRST204), so the undo would fail (FABLE2-APP-05).
+    expect(row.containsKey('paid_by'), isFalse);
+    expect(row.containsKey('beneficiary'), isFalse);
+    expect(row['spent_by'], 'partner');
+    expect(row['beneficiary_type'], 'household');
     expect(row['account_id'], 'acc-wife-wallet');
     expect(row['sub_category'], 'sub-produce');
   });
