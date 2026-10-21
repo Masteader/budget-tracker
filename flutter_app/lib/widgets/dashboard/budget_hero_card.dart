@@ -136,6 +136,33 @@ class BudgetHeroCard extends StatelessWidget {
       ),
     ];
 
+    final Widget titleText = Text(
+      title,
+      style: GoogleFonts.outfit(
+        color: isDark ? Colors.white.withValues(alpha: 0.75) : const Color(0xFF475569),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    final Widget badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F2642) : const Color(0xFFE6FAF6),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? AppThemes.iceCyan.withValues(alpha: 0.2) : AppThemes.electricTeal.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Text(
+        context.trPlural('days_to_payday_badge', daysUntilPayday),
+        style: GoogleFonts.outfit(
+          color: isDark ? Colors.white70 : const Color(0xFF065F54),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -173,42 +200,20 @@ class BudgetHeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ─── What this is + days to payday ─────────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.outfit(
-                    color: isDark ? Colors.white.withValues(alpha: 0.75) : const Color(0xFF475569),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F2642) : const Color(0xFFE6FAF6),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark
-                        ? AppThemes.iceCyan.withValues(alpha: 0.2)
-                        : AppThemes.electricTeal.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Text(
-                  context.trPlural('days_to_payday_badge', daysUntilPayday),
-                  style: GoogleFonts.outfit(
-                    color: isDark ? Colors.white70 : const Color(0xFF065F54),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // Under large text the badge goes under the title (UX-14).
+          if (stackTiles) ...[
+            titleText,
+            const SizedBox(height: 6),
+            badge,
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: titleText),
+                const SizedBox(width: 8),
+                badge,
+              ],
+            ),
           const SizedBox(height: 6),
 
           // ─── The one big number ────────────────────────────────────
@@ -315,6 +320,7 @@ class BudgetHeroCard extends StatelessWidget {
             )
           else
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: tiles[0]),
                 const SizedBox(width: 8),

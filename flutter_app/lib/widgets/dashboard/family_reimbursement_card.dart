@@ -300,27 +300,32 @@ class _ReimbursementPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded,
-                      size: 12,
-                      color: badgeColor,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed'),
-                      style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+              // Flexible: large system text must not push it off the card (UX-14).
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded,
+                        size: 12,
+                        color: badgeColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed'),
+                          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -472,7 +477,9 @@ class _Pill extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: context.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+          Flexible(
+            child: Text(label, style: TextStyle(color: context.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );

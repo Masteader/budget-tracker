@@ -233,30 +233,30 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                   ],
                 ),
               ),
-              // "Fewest transfers" switch (was the jargon "Simplify debts").
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.tr('simplify_debts'),
-                    style: TextStyle(
-                      color: _simplifyDebts ? context.accentText : context.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // "Fewest transfers" (was the jargon "Simplify debts"), on its own
+          // line so large text cannot push it off the card (UX-14).
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.tr('simplify_debts'),
+                  style: TextStyle(
+                    color: _simplifyDebts ? context.accentText : context.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Transform.scale(
-                    scale: 0.75,
-                    child: Switch(
-                      value: _simplifyDebts,
-                      activeThumbColor: AppThemes.electricTeal,
-                      activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
-                      onChanged: (val) {
-                        setState(() => _simplifyDebts = val);
-                      },
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              Switch(
+                value: _simplifyDebts,
+                activeThumbColor: AppThemes.electricTeal,
+                activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
+                onChanged: (val) {
+                  setState(() => _simplifyDebts = val);
+                },
               ),
             ],
           ),

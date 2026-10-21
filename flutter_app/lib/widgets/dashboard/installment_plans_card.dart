@@ -584,7 +584,10 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -606,16 +609,12 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        plan.merchant,
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w600,
-                                          color: context.textPrimary,
-                                          fontSize: 14,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
+                                    Text(
+                                      plan.merchant,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textPrimary,
+                                        fontSize: 14,
                                       ),
                                     ),
                                     Text(
@@ -643,8 +642,10 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                Wrap(
+                                  alignment: WrapAlignment.spaceBetween,
+                                  spacing: 8,
+                                  runSpacing: 2,
                                   children: [
                                     Text(
                                       _nextDueText(context, plan, today) ??

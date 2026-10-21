@@ -130,8 +130,11 @@ class CategoryBudgetCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Wraps under large text instead of overflowing (UX-14).
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 8,
+                runSpacing: 2,
                 children: [
                   Text(
                     context.trArgs('amount_spent_suffix', {'amount': context.sar(budget.spentAmount)}),
@@ -174,18 +177,22 @@ class CategoryBudgetCard extends StatelessWidget {
                         children: [
                           const Icon(Icons.account_tree_outlined, size: 13, color: AppThemes.success),
                           const SizedBox(width: 6),
-                          Text(
-                            context.tr('itemized_sub_budgets'),
-                            style: TextStyle(
-                              color: context.successText,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              context.tr('itemized_sub_budgets'),
+                              style: TextStyle(
+                                color: context.successText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          const Spacer(),
-                          Text(
-                            context.tr('breakdown'),
-                            style: TextStyle(color: context.textSecondary, fontSize: 10),
+                          Flexible(
+                            child: Text(
+                              context.tr('breakdown'),
+                              textAlign: TextAlign.end,
+                              style: TextStyle(color: context.textSecondary, fontSize: 10),
+                            ),
                           ),
                           const SizedBox(width: 2),
                           Icon(Icons.chevron_right, size: 14, color: context.textSecondary),

@@ -81,15 +81,23 @@ class CardErrorBanner extends StatelessWidget {
         color: context.dangerColor.withValues(alpha: context.isDarkMode ? 0.12 : 0.06),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      // Wrap: under large text the retry button moves under the message.
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.spaceBetween,
         children: [
-          Icon(Icons.cloud_off_rounded, size: 16, color: context.dangerColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              context.trArgs('load_error_stale', {'time': time}),
-              style: TextStyle(color: context.textSecondary, fontSize: 11),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 16, color: context.dangerColor),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  context.trArgs('load_error_stale', {'time': time}),
+                  style: TextStyle(color: context.textSecondary, fontSize: 11),
+                ),
+              ),
+            ],
           ),
           TextButton(
             key: const Key('card_error_banner_retry'),

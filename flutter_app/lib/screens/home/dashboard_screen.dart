@@ -34,6 +34,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
+import '../../widgets/dashboard/app_bottom_nav_bar.dart';
 import '../../widgets/reminder_sync.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
@@ -127,173 +128,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
             ? AppSpeedDialFab(householdId: _householdId)
             : null,
-        bottomNavigationBar: _buildFloatingBottomNavBar(context),
-      ),
-    );
-  }
-
-  Widget _buildFloatingBottomNavBar(BuildContext context) {
-    final isDark = context.isDark;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      height: 68,
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppThemes.deepGlacial.withValues(alpha: 0.94)
-            : Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isDark
-              ? AppThemes.iceCyan.withValues(alpha: 0.22)
-              : AppThemes.electricTeal.withValues(alpha: 0.35),
-          width: 1.2,
+        bottomNavigationBar: AppBottomNavBar(
+          selectedIndex: _selectedIndex,
+          onSelected: (i) => setState(() => _selectedIndex = i),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.45)
-                : AppThemes.electricTeal.withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-          if (!isDark)
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildNavItem(
-            index: 0,
-            icon: Icons.home_outlined,
-            selectedIcon: Icons.home_rounded,
-            label: context.tr('nav_dashboard'),
-          ),
-          _buildNavItem(
-            index: 1,
-            icon: Icons.receipt_long_outlined,
-            selectedIcon: Icons.receipt_long_rounded,
-            label: context.tr('nav_transactions'),
-          ),
-          _buildCenterAiNavItem(),
-          _buildNavItem(
-            index: 3,
-            icon: Icons.pie_chart_outline_rounded,
-            selectedIcon: Icons.pie_chart_rounded,
-            label: context.tr('nav_budgets'),
-          ),
-          _buildNavItem(
-            index: 4,
-            icon: Icons.person_outline_rounded,
-            selectedIcon: Icons.person_rounded,
-            label: context.tr('nav_settings'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required IconData selectedIcon,
-    required String label,
-  }) {
-    final isSelected = _selectedIndex == index;
-    final isDark = context.isDark;
-    final activeColor = isDark ? AppThemes.electricTeal : const Color(0xFF008F7A);
-    final inactiveColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
-
-    return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: EdgeInsets.symmetric(
-                horizontal: isSelected ? 12 : 6,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark
-                        ? AppThemes.electricTeal.withValues(alpha: 0.16)
-                        : AppThemes.electricTeal.withValues(alpha: 0.18))
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                isSelected ? selectedIcon : icon,
-                color: isSelected ? activeColor : inactiveColor,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCenterAiNavItem() {
-    final isSelected = _selectedIndex == 2;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = 2),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppThemes.electricTeal, AppThemes.iceCyan],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppThemes.electricTeal.withValues(alpha: isSelected ? 0.65 : 0.4),
-                  blurRadius: isSelected ? 16 : 10,
-                  spreadRadius: isSelected ? 2 : 0,
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: AppThemes.brandDarkBg,
-              size: 22,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            context.tr('nav_ai'),
-            style: GoogleFonts.outfit(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: isSelected
-                  ? (context.isDark ? AppThemes.electricTeal : const Color(0xFF008F7A))
-                  : (context.isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B)),
-            ),
-          ),
-        ],
       ),
     );
   }
