@@ -49,6 +49,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   /// Family or Roommates: asked when the household is created.
   String? _householdType;
   bool _showTypeRequired = false;
+  bool _showNameRequired = false;
 
   ApiService get _api => widget.apiService ?? ApiService.instance;
 
@@ -96,7 +97,11 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   Future<void> _createHousehold() async {
     final name = _createNameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      // UX-17: say what is missing instead of doing nothing.
+      setState(() => _showNameRequired = true);
+      return;
+    }
     final type = _householdType;
     if (type == null) {
       setState(() => _showTypeRequired = true);
@@ -317,9 +322,13 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                       children: [
                         TextField(
                           controller: _createNameCtrl,
+                          onChanged: (_) {
+                            if (_showNameRequired) setState(() => _showNameRequired = false);
+                          },
                           decoration: InputDecoration(
                             hintText: context.tr('hh_name_hint'),
                             prefixIcon: const Icon(Icons.home_outlined),
+                            errorText: _showNameRequired ? context.tr('hh_name_required') : null,
                           ),
                         ),
                         const SizedBox(height: 16),

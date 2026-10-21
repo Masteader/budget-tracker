@@ -53,14 +53,23 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
     super.dispose();
   }
 
-  // Step texts are translation keys resolved at build time.
+  // Step texts are translation keys resolved at build time. UX-28: the core
+  // promise (what is left until payday) first, then the household rules,
+  // then the ways to record an expense.
   final List<_WalkthroughStep> _steps = const [
     _WalkthroughStep(
-      icon: Icons.qr_code_scanner_rounded,
-      gradientColors: [AppThemes.success, Color(0xFF007A5A)],
-      title: 'wt1_title',
-      subtitle: 'wt1_desc',
-      tags: ['wt1_tag1', 'wt1_tag2', 'wt1_tag3'],
+      icon: Icons.calendar_month_rounded,
+      gradientColors: [Color(0xFFF59E0B), Color(0xFFB45309)],
+      title: 'wt3_title',
+      subtitle: 'wt3_desc',
+      tags: ['wt3_tag1', 'wt3_tag2', 'wt3_tag3'],
+    ),
+    _WalkthroughStep(
+      icon: Icons.people_alt_rounded,
+      gradientColors: [Color(0xFF10B981), Color(0xFF047857)],
+      title: 'wt5_title',
+      subtitle: 'wt5_desc',
+      tags: ['wt5_tag1', 'wt5_tag2', 'wt5_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.mic_rounded,
@@ -70,11 +79,11 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
       tags: ['wt2_tag1', 'wt2_tag2', 'wt2_tag3'],
     ),
     _WalkthroughStep(
-      icon: Icons.calendar_month_rounded,
-      gradientColors: [Color(0xFFF59E0B), Color(0xFFB45309)],
-      title: 'wt3_title',
-      subtitle: 'wt3_desc',
-      tags: ['wt3_tag1', 'wt3_tag2', 'wt3_tag3'],
+      icon: Icons.qr_code_scanner_rounded,
+      gradientColors: [AppThemes.success, Color(0xFF007A5A)],
+      title: 'wt1_title',
+      subtitle: 'wt1_desc',
+      tags: ['wt1_tag1', 'wt1_tag2', 'wt1_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.receipt_long_rounded,
@@ -82,13 +91,6 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
       title: 'wt4_title',
       subtitle: 'wt4_desc',
       tags: ['wt4_tag1', 'wt4_tag2', 'wt4_tag3'],
-    ),
-    _WalkthroughStep(
-      icon: Icons.people_alt_rounded,
-      gradientColors: [Color(0xFF10B981), Color(0xFF047857)],
-      title: 'wt5_title',
-      subtitle: 'wt5_desc',
-      tags: ['wt5_tag1', 'wt5_tag2', 'wt5_tag3'],
     ),
   ];
 
