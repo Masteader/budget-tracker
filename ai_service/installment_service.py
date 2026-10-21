@@ -1,27 +1,111 @@
 """
 BNPL Installment Service (Tamara, Tabby, Bank 0% Installment Plans)
-Manages installment plans, monthly payment schedules, and cycle reservations.
+Manages installment plans, their payment schedules (monthly or every two weeks), and cycle reservations.
+
+Schedule (migration 20261021000000): installment k (0-based) is due on ``start_date`` + k * 14 days
+(``biweekly``: Tabby / Tamara "Pay in 4", first payment at purchase) or ``start_date`` + k months
+(``monthly``: bank plans, Tamara 3 monthly; end-of-month clamped from the anchor, so 31 Jan ->
+28 Feb -> 31 Mar). ``next_due_at`` is the due date of the first unpaid installment while the plan is
+ACTIVE, else None. The database derives the same value (trigger trg_installment_plans_schedule) and
+pay_installment_plan advances it.
 """
 
 from __future__ import annotations
 
+import calendar
 import logging
+import re
 import uuid
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 import supabase_client
 from postgrest_compat import db_error_fields
 
 logger = logging.getLogger(__name__)
 
+FREQUENCIES = ("monthly", "biweekly")
+# Providers whose standard "Pay in 4" plan charges every two weeks, the first payment at purchase.
+PAY_IN_4_PROVIDERS = frozenset({"tabby", "tamara"})
+_HALALA = Decimal("0.01")
+
 
 def _sar_half_up(value: Any) -> float:
     """SAR amount rounded half-up to the halala (Python's round() is half-even on floats)."""
-    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(str(value)).quantize(_HALALA, rounding=ROUND_HALF_UP))
 
-    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+def _halalas(value: Any) -> int:
+    """A SAR amount as an integer number of halalas, rounded half-up."""
+    return int((Decimal(str(value)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def default_frequency_for_provider(provider: Optional[str], installment_count: int = 4) -> str:
+    """Tabby / Tamara "Pay in 4" -> biweekly; every other plan (bank, Tamara 3 monthly, ...) -> monthly."""
+    if (provider or "").strip().lower() in PAY_IN_4_PROVIDERS and installment_count == 4:
+        return "biweekly"
+    return "monthly"
+
+
+def installment_amounts(total_amount: float, installment_count: int) -> List[float]:
+    """
+    Exact per-installment amounts in halalas: every installment is the total divided by the count,
+    rounded half-up to the halala, and the last one absorbs the remainder so the amounts add up to
+    the total exactly (100 / 3 -> 33.33, 33.33, 33.34). When half-up rounding would leave the last
+    installment negative (tiny totals over many installments), the regular amount is rounded down.
+    """
+    count = max(1, int(installment_count))
+    total = _halalas(total_amount)
+    regular = int((Decimal(total) / count).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    if total - regular * (count - 1) < 0:
+        regular = int((Decimal(total) / count).quantize(Decimal("1"), rounding=ROUND_DOWN))
+    last = total - regular * (count - 1)
+    return [regular / 100.0] * (count - 1) + [last / 100.0]
+
+
+def _add_months(anchor: date, months: int) -> date:
+    """``anchor`` + ``months`` calendar months, the day clamped to the month's end (PostgreSQL rule)."""
+    month_index = anchor.month - 1 + months
+    year, month = anchor.year + month_index // 12, month_index % 12 + 1
+    return date(year, month, min(anchor.day, calendar.monthrange(year, month)[1]))
+
+
+def installment_due_date(start_date: date, frequency: str, index: int) -> date:
+    """Due date of installment ``index`` (0-based) of a plan starting on ``start_date``."""
+    index = max(0, int(index))
+    if frequency == "biweekly":
+        return start_date + timedelta(days=14 * index)
+    return _add_months(start_date, index)
+
+
+def _as_date(value: Any) -> Optional[date]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def next_due_date(
+    start_date: Any,
+    frequency: str,
+    paid_installments: int,
+    installment_count: int,
+    status: str = "ACTIVE",
+) -> Optional[str]:
+    """ISO due date of the first unpaid installment of an ACTIVE plan, else None
+    (mirror of public.installment_next_due_at)."""
+    start = _as_date(start_date)
+    if start is None or status != "ACTIVE" or int(paid_installments or 0) >= int(installment_count or 0):
+        return None
+    return installment_due_date(start, frequency, int(paid_installments or 0)).isoformat()
 
 # Plans live in public.installment_plans only. The former container-local JSON fallback (used when
 # the insert failed, e.g. for start_date "not-a-date") reported plans as created that no other
@@ -33,26 +117,49 @@ def calculate_installment_terms(
     installment_count: int = 4,
     start_date: Optional[date] = None,
     day_of_month: int = 27,
+    frequency: str = "monthly",
+    paid_installments: int = 1,
 ) -> Dict[str, Any]:
-    """Calculates monthly payment and remaining balance for an installment plan."""
+    """
+    Payment schedule of an installment plan: exact halala amounts (the last installment absorbs the
+    rounding remainder) and due dates every month or every two weeks from ``start_date``.
+
+    ``monthly_amount`` is the regular installment amount whatever the frequency (the column name
+    predates bi-weekly plans).
+    """
     if installment_count <= 0:
         installment_count = 1
+    if frequency not in FREQUENCIES:
+        raise ValueError(f"frequency must be one of {FREQUENCIES}")
+    start = start_date or date.today()
+    paid = min(max(0, int(paid_installments)), installment_count)
 
-    monthly_amount = _sar_half_up(total_amount / installment_count)
-    # Handle rounding cents on last payment
-    paid_installments = 1
-    remaining_installments = max(0, installment_count - paid_installments)
-    remaining_amount = _sar_half_up(total_amount - (monthly_amount * paid_installments))
+    amounts = installment_amounts(total_amount, installment_count)
+    schedule = [
+        {
+            "number": i + 1,
+            "due_date": installment_due_date(start, frequency, i).isoformat(),
+            "amount": amounts[i],
+            "paid": i < paid,
+        }
+        for i in range(installment_count)
+    ]
+    remaining_halalas = sum(_halalas(a) for a in amounts[paid:])
 
     return {
         "total_amount": _sar_half_up(total_amount),
         "installment_count": installment_count,
-        "monthly_amount": monthly_amount,
-        "paid_installments": paid_installments,
-        "remaining_installments": remaining_installments,
-        "remaining_amount": max(0.0, remaining_amount),
+        "frequency": frequency,
+        "monthly_amount": amounts[0],
+        "final_installment_amount": amounts[-1],
+        "paid_installments": paid,
+        "remaining_installments": installment_count - paid,
+        "remaining_amount": remaining_halalas / 100.0,
         "day_of_month": day_of_month,
-        "start_date": (start_date or date.today()).isoformat(),
+        "start_date": start.isoformat(),
+        "next_due_at": next_due_date(start, frequency, paid, installment_count,
+                                     "ACTIVE" if paid < installment_count else "COMPLETED"),
+        "schedule": schedule,
     }
 
 
@@ -66,6 +173,8 @@ class InstallmentPlanCreate(BaseModel):
     paid_installments: int = Field(1, ge=0, le=60)
     day_of_month: int = Field(27, ge=1, le=31)
     start_date: Optional[str] = Field(None, max_length=32)
+    # None -> by provider: Tabby / Tamara "Pay in 4" biweekly, everything else monthly.
+    frequency: Optional[Literal["monthly", "biweekly"]] = None
     category_code: str = Field("OPEX-SHOPPING", max_length=60)
     original_transaction_id: Optional[str] = Field(None, max_length=64)
     notes: Optional[str] = Field(None, max_length=500)
@@ -82,6 +191,19 @@ class InstallmentPlanCreate(BaseModel):
         except (AttributeError, ValueError):
             raise ValueError("start_date must be an ISO date (YYYY-MM-DD)")
 
+    @field_validator("frequency", mode="before")
+    @classmethod
+    def normalize_frequency(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().lower() or None
+        return v
+
+    @model_validator(mode="after")
+    def default_frequency(self) -> "InstallmentPlanCreate":
+        if self.frequency is None:
+            self.frequency = default_frequency_for_provider(self.provider, self.installment_count)
+        return self
+
 
 class InstallmentPlan(BaseModel):
     id: str
@@ -94,23 +216,29 @@ class InstallmentPlan(BaseModel):
     paid_installments: int = 1
     day_of_month: int = 27
     start_date: str = Field(default_factory=lambda: date.today().isoformat())
+    frequency: str = "monthly"  # monthly | biweekly
+    next_due_at: Optional[str] = None  # YYYY-MM-DD of the first unpaid installment; None unless ACTIVE
     status: str = "ACTIVE"  # ACTIVE, COMPLETED
     category_code: str = "OPEX-SHOPPING"
     original_transaction_id: Optional[str] = None
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
+    @field_validator("start_date", "next_due_at", mode="before")
+    @classmethod
+    def iso_date(cls, v: Any) -> Any:
+        d = _as_date(v) if v is not None else None
+        return d.isoformat() if d is not None else v
+
     @property
     def remaining_amount(self) -> float:
         """Outstanding SAR, computed in Decimal halalas. The final installment absorbs the
         rounding remainder (100/3 → 33.33, 33.33, 33.34), so a completed plan owes exactly 0
         instead of a residual 0.01 from float math."""
-        from decimal import Decimal, ROUND_HALF_UP
-
         if self.paid_installments >= self.installment_count:
             return 0.0
-        total = Decimal(str(self.total_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        monthly = Decimal(str(self.monthly_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        total = Decimal(str(self.total_amount)).quantize(_HALALA, rounding=ROUND_HALF_UP)
+        monthly = Decimal(str(self.monthly_amount)).quantize(_HALALA, rounding=ROUND_HALF_UP)
         remaining = total - monthly * self.paid_installments
         return float(max(Decimal("0"), remaining))
 
@@ -123,6 +251,16 @@ class InstallmentPlan(BaseModel):
             self.paid_installments += 1
         if self.paid_installments >= self.installment_count:
             self.status = "COMPLETED"
+        self.next_due_at = next_due_date(self.start_date, self.frequency, self.paid_installments,
+                                         self.installment_count, self.status)
+
+
+# Suffix written by InstallmentService._adjust_original_transaction on the financed transaction.
+_LEGACY_NOTE = re.compile(
+    r"Financed via\s+([^:\]]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,]+(?:\.[0-9]+)?))?",
+    re.IGNORECASE,
+)
+_LEGACY_PLAN_NAMESPACE = uuid.UUID("6f1c7a52-6a0e-4c43-9a55-0d6b1f3e2b10")
 
 
 class PlanNotActiveError(Exception):
@@ -166,11 +304,15 @@ class InstallmentService:
         ):
             raise PermissionError("original_transaction_id does not belong to this household")
 
-        # Calculate monthly amount if not provided
+        # Regular installment amount if not provided: exact halalas, the last installment absorbs
+        # the remainder (remaining_amount relies on that).
         monthly = req.monthly_amount
         if not monthly or monthly <= 0:
-            monthly = _sar_half_up(req.total_amount / max(1, req.installment_count))
+            monthly = installment_amounts(req.total_amount, req.installment_count)[0]
 
+        frequency = req.frequency or default_frequency_for_provider(req.provider, req.installment_count)
+        start_date = req.start_date or date.today().isoformat()
+        status = "COMPLETED" if req.paid_installments >= req.installment_count else "ACTIVE"
         plan_id = str(uuid.uuid4())
         plan_dict = {
             "id": plan_id,
@@ -182,8 +324,11 @@ class InstallmentService:
             "monthly_amount": monthly,
             "paid_installments": req.paid_installments,
             "day_of_month": req.day_of_month,
-            "start_date": req.start_date or date.today().isoformat(),
-            "status": "COMPLETED" if req.paid_installments >= req.installment_count else "ACTIVE",
+            "start_date": start_date,
+            "frequency": frequency,
+            # Derived; the database trigger recomputes the same value (migration 20261021000000).
+            "next_due_at": next_due_date(start_date, frequency, req.paid_installments, req.installment_count, status),
+            "status": status,
             "category_code": req.category_code,
             "original_transaction_id": req.original_transaction_id,
             "notes": req.notes,
@@ -353,69 +498,103 @@ class InstallmentService:
 
     @classmethod
     def list_plans(cls, household_id: str) -> List[InstallmentPlan]:
-        found_plans: List[InstallmentPlan] = []
-        seen_tx_ids = set()
+        """
+        The household's plans, read from public.installment_plans only (the database is the only
+        store: a failed query fails the request, FABLE-API-09). ACTIVE plans first, by next due
+        date; then the others, newest first.
 
-        # The database is the only store: a failed query fails the request (FABLE-API-09).
+        Plans are no longer reconstructed by regex from transaction notes on every load (product
+        review R10): legacy "Financed via ..." notes without a plan row are turned into rows once,
+        by hand, with ``backfill_plans_from_legacy_notes``.
+        """
         sb = supabase_client.get_client()
         res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
-        for row in (res.data or []):
-            plan = InstallmentPlan(**row)
-            found_plans.append(plan)
-            if plan.original_transaction_id:
-                seen_tx_ids.add(plan.original_transaction_id)
+        plans = [InstallmentPlan(**row) for row in (res.data or [])]
+        active = sorted((p for p in plans if p.status == "ACTIVE"),
+                        key=lambda p: (p.next_due_at or "9999-12-31", p.created_at or ""))
+        others = sorted((p for p in plans if p.status != "ACTIVE"),
+                        key=lambda p: p.created_at or "", reverse=True)
+        return active + others
 
-        # Also reconcile directly from transactions table in Supabase
-        try:
-            sb = supabase_client.get_client()
-            tx_res = sb.table("transactions").select("*").eq("household_id", household_id).execute()
-            import re
-            for tx in (tx_res.data or []):
-                raw = tx.get("raw_sms") or ""
-                tx_id = tx.get("id")
-                if not tx_id or tx_id in seen_tx_ids:
-                    continue
+    @classmethod
+    def backfill_plans_from_legacy_notes(
+        cls,
+        household_id: Optional[str] = None,
+        apply: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        One-time, idempotent backfill (NOT run automatically): creates an installment_plans row for
+        every transaction whose note carries the suffix written by ``_adjust_original_transaction``
+        ("[Financed via <provider>: Installment <n> of <m>. Full price: SAR <total>]") and that no
+        plan references yet. Before migration 20261021000000's release, list_plans re-derived such
+        plans on every load; now only rows are listed.
 
-                if "Financed via" in raw or "Tamara" in raw or "Tabby" in raw:
-                    match = re.search(r"Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,.]+))?", raw, re.IGNORECASE)
-                    provider = "Tamara" if "tamara" in raw.lower() else ("Tabby" if "tabby" in raw.lower() else "Bank")
-                    count = 4
-                    paid = 1
-                    monthly = float(tx.get("amount") or 0.0)
-                    total = monthly * count
+        * ``apply=False`` (default) only reports what would be created.
+        * Idempotent: a transaction that a plan already references (``original_transaction_id``) is
+          skipped, and the plan id is derived from the transaction id (uuid5), so a re-run creates
+          nothing and a concurrent run cannot create a duplicate.
+        * Only the explicit suffix is parsed (no guessing from a bare "Tabby"/"Tamara" mention); the
+          transaction is never changed again; the frequency follows the provider default.
 
-                    if match:
-                        provider = match.group(1).strip()
-                        paid = int(match.group(2))
-                        count = int(match.group(3))
-                        if match.group(4):
-                            try:
-                                total = float(match.group(4).replace(",", ""))
-                            except Exception:
-                                total = monthly * count
+        Run from ``ai_service/`` with the service-role environment of the target database, e.g.
+        ``python -m installment_service --backfill-legacy [--household <uuid>] [--apply]``.
+        """
+        sb = supabase_client.get_client()
+        plan_query = sb.table("installment_plans").select("original_transaction_id")
+        tx_query = sb.table("transactions").select(
+            "id, household_id, merchant, amount, raw_sms, category_code, timestamp")
+        if household_id:
+            plan_query = plan_query.eq("household_id", household_id)
+            tx_query = tx_query.eq("household_id", household_id)
+        linked = {r.get("original_transaction_id") for r in (plan_query.execute().data or [])
+                  if r.get("original_transaction_id")}
 
-                    plan_obj = InstallmentPlan(
-                        id=f"plan-{tx_id[:8]}",
-                        household_id=household_id,
-                        merchant=tx.get("merchant") or "Installment Purchase",
-                        provider=provider,
-                        total_amount=round(total, 2),
-                        installment_count=count,
-                        monthly_amount=round(monthly, 2) if monthly > 0 else round(total / count, 2),
-                        paid_installments=paid,
-                        day_of_month=27,
-                        start_date=(tx.get("timestamp") or date.today().isoformat())[:10],
-                        status="COMPLETED" if paid >= count else "ACTIVE",
-                        category_code=tx.get("category_code") or "OPEX-SHOPPING",
-                        original_transaction_id=tx_id,
-                        notes=raw,
-                    )
-                    found_plans.append(plan_obj)
-                    seen_tx_ids.add(tx_id)
-        except Exception as e:
-            logger.debug("Could not reconcile installment plans from transactions: %s", e)
+        candidates: List[Dict[str, Any]] = []
+        for tx in (tx_query.execute().data or []):
+            tx_id = tx.get("id")
+            match = _LEGACY_NOTE.search(tx.get("raw_sms") or "")
+            if not tx_id or tx_id in linked or not match:
+                continue
+            provider = match.group(1).strip()[:40] or "Other"
+            paid, count = int(match.group(2)), int(match.group(3))
+            if count < 1 or count > 60 or paid < 0 or paid > count:
+                continue
+            amount = _sar_half_up(tx.get("amount") or 0)
+            total = _sar_half_up(match.group(4).replace(",", "")) if match.group(4) else _sar_half_up(amount * count)
+            if total <= 0:
+                continue
+            frequency = default_frequency_for_provider(provider, count)
+            start = (tx.get("timestamp") or date.today().isoformat())[:10]
+            status = "COMPLETED" if paid >= count else "ACTIVE"
+            candidates.append({
+                "id": str(uuid.uuid5(_LEGACY_PLAN_NAMESPACE, str(tx_id))),
+                "household_id": tx.get("household_id"),
+                "merchant": (tx.get("merchant") or "Installment Purchase")[:120],
+                "provider": provider,
+                "total_amount": total,
+                "installment_count": count,
+                "monthly_amount": amount if amount > 0 else installment_amounts(total, count)[0],
+                "paid_installments": paid,
+                "start_date": start,
+                "frequency": frequency,
+                "next_due_at": next_due_date(start, frequency, paid, count, status),
+                "status": status,
+                "category_code": tx.get("category_code") or "OPEX-SHOPPING",
+                "original_transaction_id": tx_id,
+                "notes": "Backfilled from a legacy transaction note",
+            })
 
-        return found_plans
+        created = 0
+        if apply:
+            for row in candidates:
+                res = sb.table("installment_plans").upsert(row, on_conflict="id", ignore_duplicates=True).execute()
+                created += len((res.data if res is not None else None) or [])
+        logger.info("Legacy installment backfill: %d candidate(s), %d written (apply=%s)",
+                    len(candidates), created, apply)
+        return {"candidates": len(candidates), "created": created, "applied": apply,
+                "plans": [{k: r[k] for k in ("id", "household_id", "provider", "installment_count",
+                                             "paid_installments", "frequency", "original_transaction_id")}
+                          for r in candidates]}
 
     @classmethod
     def pay_installment(cls, plan_id: str, household_id: str, actor_user_id: str) -> Optional[InstallmentPlan]:
@@ -445,3 +624,26 @@ class InstallmentService:
         if not rows:
             return None
         return InstallmentPlan(**rows[0])
+
+
+def _main(argv: Optional[List[str]] = None) -> int:
+    """CLI for the one-time legacy backfill (dry run unless --apply)."""
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description="Installment plan maintenance (never run automatically).")
+    parser.add_argument("--backfill-legacy", action="store_true",
+                        help="Create plan rows from legacy 'Financed via' transaction notes.")
+    parser.add_argument("--household", default=None, help="Limit to one household id.")
+    parser.add_argument("--apply", action="store_true", help="Write the rows (default: dry run).")
+    args = parser.parse_args(argv)
+    if not args.backfill_legacy:
+        parser.print_help()
+        return 2
+    result = InstallmentService.backfill_plans_from_legacy_notes(household_id=args.household, apply=args.apply)
+    print(json.dumps(result, indent=2, default=str))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

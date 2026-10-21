@@ -287,6 +287,11 @@ class FakeSupabaseClient:
                     row["paid_installments"] = int(row.get("paid_installments") or 0) + 1
                     if row["paid_installments"] >= int(row["installment_count"]):
                         row["status"] = "COMPLETED"
+                    # 20261021000000: next_due_at moves one interval (NULL once paid up).
+                    from installment_service import next_due_date
+                    row["next_due_at"] = next_due_date(row.get("start_date"), row.get("frequency") or "monthly",
+                                                       row["paid_installments"], int(row["installment_count"]),
+                                                       row["status"])
                 return [copy.deepcopy(row)]
         return []
 

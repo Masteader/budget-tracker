@@ -426,10 +426,28 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
     }
 
 
-# Sub-category definitions seeded by migration 20261002 under the SYSTEM categories. Definitions
-# carry no household column, so under a system parent only these are trusted for keyword matching
-# (FABLE-API-04); households cannot add others there through the API.
+# Sub-category definitions seeded under the SYSTEM categories by migrations 20261002 and
+# 20261021000000 (Saudi taxonomy, product review R4). Definitions carry no household column, so
+# under a system parent only these are trusted for keyword matching (FABLE-API-04); households
+# cannot add others there through the API.
+SAUDI_TAXONOMY_CATEGORIES = (
+    "OPEX-HOUSING", "OPEX-EDUCATION", "OPEX-DOMESTIC-HELP", "OPEX-FAMILY-SUPPORT",
+    "OPEX-CHARITY", "OPEX-TRANSPORT", "OPEX-INSURANCE", "OPEX-REMITTANCE",
+)
 SYSTEM_SUB_CATEGORIES = frozenset({
+    # 20261021000000. OPEX-UTILITIES/housing_rent stays for existing rows; new rent goes to OPEX-HOUSING.
+    ("OPEX-HOUSING", "housing_rent"), ("OPEX-HOUSING", "annual_rent"), ("OPEX-HOUSING", "housing_services"),
+    ("OPEX-EDUCATION", "tuition_fees"), ("OPEX-EDUCATION", "school_transport"),
+    ("OPEX-EDUCATION", "school_uniforms"), ("OPEX-EDUCATION", "books_supplies"),
+    ("OPEX-DOMESTIC-HELP", "maid_salary"), ("OPEX-DOMESTIC-HELP", "driver_salary"),
+    ("OPEX-DOMESTIC-HELP", "recruitment_visa"),
+    ("OPEX-FAMILY-SUPPORT", "parents_support"), ("OPEX-FAMILY-SUPPORT", "relatives_support"),
+    ("OPEX-CHARITY", "sadaqah"), ("OPEX-CHARITY", "zakat"),
+    ("OPEX-TRANSPORT", "car_installment"), ("OPEX-TRANSPORT", "ride_hailing"),
+    ("OPEX-TRANSPORT", "public_transport"), ("OPEX-TRANSPORT", "car_maintenance"),
+    ("OPEX-INSURANCE", "car_insurance"), ("OPEX-INSURANCE", "health_insurance"), ("OPEX-INSURANCE", "home_insurance"),
+    ("OPEX-REMITTANCE", "family_remittance"), ("OPEX-REMITTANCE", "transfer_fees"),
+    # 20261002
     ("OPEX-GROCERY", "meat"), ("OPEX-GROCERY", "vegetables_fruit"), ("OPEX-GROCERY", "dairy_eggs"),
     ("OPEX-GROCERY", "snacks_chips"), ("OPEX-GROCERY", "beverages"), ("OPEX-GROCERY", "pantry_staples"),
     ("OPEX-GROCERY", "cleaning_household"),
@@ -1148,6 +1166,10 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
     Fetches categories available to a household, partitioned into active and inactive.
     System categories with no explicit setting default to active for core categories,
     and inactive for newly added developer categories.
+
+    The Saudi taxonomy codes (SAUDI_TAXONOMY_CATEGORIES, migration 20261021000000) are such added
+    categories: without a household setting or budget row they are listed as inactive, i.e.
+    available in the category library and budgeted only once the household activates them.
     """
     client = get_client()
 
