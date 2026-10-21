@@ -44,6 +44,8 @@ Verified correct: salary-cycle parity SQL/Python/Dart (0 mismatches over 60,388 
 | FABLE-DB-08 | Low | TRUNCATE (ignores RLS) and anon DML privileges remain on several tables (not reachable via PostgREST). | Supabase default grants | Revoke TRUNCATE broadly; revoke anon DML. |
 | FABLE-DB-09 | Low (suspected) | `users` INSERT grant still covers `financial_role`. | `20261020500000:24`; `20261020100000:165-168` | Column-level INSERT grant. |
 
+**Status (2026-10-21):** FABLE-DB-02, -04, -05, -06, -07, -08, -09 fixed in `supabase/migrations/20261020700000_fable_db_hardening.sql` (proof: `supabase/tests/23_fable_db_hardening.sql`, `16_audit_account_deletion.sql`); **not yet applied to live**. FABLE-DB-01 and -03 are handled with the roles redesign. Details in `FIX_LOG.md`.
+
 Verified sound: cross-household isolation, creator binding and owner-or-admin writes, actor spoofing rejected, co-admin/primary-admin protections, admin-only pool withdrawals, deterministic locking, **concurrent overpayment race correctly serialised**, users column privileges, storage policies and bucket limits, every SECURITY DEFINER function pins `search_path`.
 
 ## C. Backend API (`ai_service`)
