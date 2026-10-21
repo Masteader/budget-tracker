@@ -101,7 +101,13 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   bool _viewerIsWife = false;
   List<Map<String, dynamic>> _wives = [];
   String? _selectedWifeId;
-  bool _canClassifyNafaqah = true;
+  /// Only the wife, the Nafaqah provider (husband) or an admin classifies a
+  /// family expense; unknown until the members or the summary are loaded.
+  bool _canClassifyNafaqah = false;
+
+  /// The viewer classifies as an admin who is neither spouse: a class then
+  /// names the wife who paid by her member id.
+  bool _adminClassifier = false;
   String? _selectedRoommateId;
   String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
   List<Map<String, dynamic>> _householdMembers = [];
@@ -189,6 +195,11 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           _isRoommateMode = hasPeers && !hasSpouse;
           _wives = list.where((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse').toList();
           _viewerIsWife = _wives.any((w) => w['id'] == uid);
+          final me = list.where((m) => m['id'] == uid).firstOrNull;
+          final myFinancialRole = (me?['financial_role'] as String?)?.toLowerCase();
+          final iAmAdmin = (me?['role'] as String?)?.toLowerCase() == 'admin';
+          _canClassifyNafaqah = _viewerIsWife || myFinancialRole == 'provider' || iAmAdmin;
+          _adminClassifier = _canClassifyNafaqah && !_viewerIsWife && myFinancialRole != 'provider';
           _selectedWifeId = _viewerIsWife ? uid : (_wives.isNotEmpty ? _wives.first['id'] as String? : null);
           // The wife records mostly what she paid herself; shared is the default so
           // her claim is never lost silently (the husband sees and can dispute it).
@@ -258,8 +269,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
         ];
         _viewerIsWife = summary.callerIsWife;
-        // Only the husband or a wife records a Nafaqah class (as in chat/receipts).
-        _canClassifyNafaqah = summary.callerRole == 'husband' || summary.callerRole == 'wife';
+        // Only the wife, the provider (husband) or an admin records a Nafaqah
+        // class (as in chat, receipts and the edit sheet). `can_set_provider`
+        // is true for household admins.
+        final isSpouse = summary.callerRole == 'husband' || summary.callerRole == 'wife';
+        final isAdmin = summary.canSetProvider ||
+            _householdMembers.any((m) => m['id'] == _currentUserId && (m['role'] as String?)?.toLowerCase() == 'admin');
+        _canClassifyNafaqah = isSpouse || isAdmin;
+        _adminClassifier = _canClassifyNafaqah && !isSpouse;
         if (!_canClassifyNafaqah) _familyPayer = 'me';
         final uid = summary.callerUserId ?? _currentUserId;
         _selectedWifeId = _viewerIsWife ? uid : summary.wives.first.id;
@@ -327,7 +344,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     } else {
       // Family (Islamic Nafaqah): never split between the spouses. The payer is
       // stored relative to the recorder ('me'), the wife is 'wife' otherwise.
-      final wifeSide = _viewerIsWife ? 'me' : 'wife';
+      // An admin who is neither spouse names the wife by her member id.
+      final wifeSide = _viewerIsWife ? 'me' : (_adminClassifier ? (_selectedWifeId ?? 'wife') : 'wife');
       if (_familyPayer == kWifeReimbursable) {
         paidBy = wifeSide;
         benType = 'household';

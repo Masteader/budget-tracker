@@ -271,8 +271,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } catch (_) {}
   }
 
+  /// Household admin: the explicit flag, the role provider, else what the
+  /// API says (`can_set_provider` is for admins; the roster's caller role).
   bool get _isAdmin =>
-      widget.isAdmin ?? _providerAdmin ?? (_roster?.callerRole ?? '').toLowerCase() == 'admin';
+      widget.isAdmin ??
+      _providerAdmin ??
+      ((_nafaqah?.canSetProvider ?? false) || (_roster?.callerRole ?? '').toLowerCase() == 'admin');
 
   /// The member a viewer-relative token names ('me' = the viewer).
   String? _memberOfViewerToken(String token) {
@@ -289,12 +293,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     if (member == null || creator == null) return null;
     final m = member.toLowerCase();
     if (m == creator) return 'me';
-    final relations = _relations;
-    final husband = (relations.husbandId ?? '').toLowerCase();
-    // The husband of several wives: 'partner' is the wife the entry names
-    // (the server resolves it with nafaqah_spouse_id).
-    final partner = relations.counterpartOf(creator) ?? (creator == husband ? spouseId?.toLowerCase() : null);
-    return m == partner ? 'partner' : null;
+    if (m == _relations.counterpartOf(creator)) return 'partner';
+    // A classified row is paid by the wife it names: the server takes the
+    // payer from nafaqah_spouse_id (several wives, or recorded by an admin).
+    if (spouseId != null && m == spouseId.toLowerCase()) return 'partner';
+    return null;
   }
 
   /// The wife a Nafaqah class refers to.
@@ -322,7 +325,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       return (tail: _selectedPaidBy, spentBy: _selectedPaidBy);
     }
     member ??= _memberOfViewerToken(_selectedPaidBy);
-    final relative = _creatorRelative(member, spouseId: _classSpouseId);
+    final relative = _creatorRelative(member, spouseId: cls != null ? _classSpouseId : null);
     if (relative != null) return (tail: relative, spentBy: relative);
     // A manual row's note may name the paying member; spent_by stays relative.
     if (member != null && _isStoredManual) return (tail: member, spentBy: 'partner');

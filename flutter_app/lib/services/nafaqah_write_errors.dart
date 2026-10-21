@@ -15,10 +15,20 @@ enum NafaqahWriteRefusal {
   /// A wife-paid (classified) expense in a family that has no Nafaqah provider
   /// (SQLSTATE 23514, hint `no_nafaqah_provider`; API 409 `no_provider`).
   noProvider,
+
+  /// Only the wife, the Nafaqah provider (husband) or an admin may classify a
+  /// family expense as wife_reimbursable / wife_personal. Recognised by the
+  /// codes `not_classifier` / `nafaqah_classifier_only` (API `detail.code` or
+  /// PostgREST hint) and by the API's current message "... can classify a
+  /// family expense".
+  notClassifier,
 }
 
 const String _ledgerHint = 'ledger_would_be_overpaid';
 const String _noProviderHint = 'no_nafaqah_provider';
+const Set<String> _notClassifierCodes = {'not_classifier', 'nafaqah_classifier_only', 'nafaqah_classifier_forbidden'};
+
+bool _isClassifierMessage(String? message) => (message ?? '').toLowerCase().contains('classify a family expense');
 
 /// Which Nafaqah rule refused [error], or null for any other failure
 /// (network, permissions, validation). Understands a [PostgrestException]
@@ -32,14 +42,20 @@ NafaqahWriteRefusal? nafaqahWriteRefusalOf(Object? error) {
       return NafaqahWriteRefusal.ledgerWouldBeOverpaid;
     }
     if (hint == _noProviderHint) return NafaqahWriteRefusal.noProvider;
+    if (_notClassifierCodes.contains(hint) || _isClassifierMessage(error.message)) {
+      return NafaqahWriteRefusal.notClassifier;
+    }
     return null;
   }
-  if (error is NafaqahApiException) return _fromCode(error.code);
+  if (error is NafaqahApiException) {
+    return _fromCode(error.code) ?? (_isClassifierMessage(error.message) ? NafaqahWriteRefusal.notClassifier : null);
+  }
   if (error is Map) {
     if (error['status'] != 'error') return null;
     final detail = error['detail'];
     final code = detail is Map ? detail['code']?.toString() : error['code']?.toString();
-    return _fromCode(code);
+    final message = detail is Map ? detail['message']?.toString() : (detail ?? error['message'])?.toString();
+    return _fromCode(code) ?? (_isClassifierMessage(message) ? NafaqahWriteRefusal.notClassifier : null);
   }
   return null;
 }
@@ -52,6 +68,7 @@ NafaqahWriteRefusal? _fromCode(String? code) {
     case _noProviderHint:
       return NafaqahWriteRefusal.noProvider;
   }
+  if (_notClassifierCodes.contains(code)) return NafaqahWriteRefusal.notClassifier;
   return null;
 }
 
@@ -62,6 +79,8 @@ String nafaqahWriteRefusalText(BuildContext context, NafaqahWriteRefusal refusal
       return context.tr('nafaqah_err_ledger_overpaid');
     case NafaqahWriteRefusal.noProvider:
       return context.tr('nafaqah_err_no_provider');
+    case NafaqahWriteRefusal.notClassifier:
+      return context.tr('nafaqah_err_not_classifier');
   }
 }
 

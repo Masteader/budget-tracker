@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/ocr/local_ocr_service.dart';
@@ -65,7 +66,8 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   bool _showWifeRequired = false;
 
   void _applyNafaqahPreview(Map<String, dynamic>? res) {
-    _nafaqah = NafaqahPreview.fromPreview(res);
+    // Only the wife, the provider (husband) or an admin classifies.
+    _nafaqah = NafaqahPreview.fromPreview(res).withAdmin(viewerIsAdminOf(context, widget.householdId));
     _nafaqahClass = _nafaqah.suggestedClass;
     _nafaqahWifeId = _nafaqah.defaultSpouseId;
     _showWifeRequired = false;

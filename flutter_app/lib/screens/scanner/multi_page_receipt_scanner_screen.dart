@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/nafaqah.dart';
+import '../../providers/household_role_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
@@ -49,7 +50,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
     try {
       final summary = await ApiService.instance.getNafaqahSummary(widget.householdId);
       _safeSetState(() {
-        _nafaqah = NafaqahPreview.fromSummary(summary);
+        _nafaqah = NafaqahPreview.fromSummary(summary).withAdmin(viewerIsAdminOf(context, widget.householdId));
         _nafaqahClass = _nafaqah.suggestedClass;
         _nafaqahWifeId = _nafaqah.defaultSpouseId;
       });

@@ -1607,6 +1607,7 @@ class AppLocalizations {
       'hh_already_member': 'You are already a member of this household.',
       'ats_invalid_fee': 'The transfer fee must be zero or a positive amount.',
       'tx_attr_unresolvable': 'Who paid or for whom was not saved: another member recorded this expense and the app cannot tell who "partner" means for them. Ask them to change it, or edit only the other fields.',
+      'nafaqah_err_not_classifier': 'Not saved: only the wife, the Nafaqah provider (husband) or an admin can mark a family expense as a wife advance or her personal purchase.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2935,6 +2936,7 @@ class AppLocalizations {
       'hh_already_member': 'أنت عضو في هذا المنزل بالفعل.',
       'ats_invalid_fee': 'يجب أن تكون رسوم التحويل صفراً أو مبلغاً موجباً.',
       'tx_attr_unresolvable': 'لم يُحفظ من دفع أو لمن: سجّل هذا المصروف عضو آخر ولا يستطيع التطبيق معرفة من يقصد بـ"الشريك". اطلب منه تعديله، أو عدّل الحقول الأخرى فقط.',
+      'nafaqah_err_not_classifier': 'لم يُحفظ: تصنيف مصروف الأسرة كمبلغ دفعته الزوجة مقدماً أو كمشترياتها الشخصية متاح للزوجة أو المكلّف بالنفقة (الزوج) أو المشرف فقط.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4263,6 +4265,7 @@ class AppLocalizations {
       'hh_already_member': 'آپ پہلے سے اس گھرانے کے رکن ہیں۔',
       'ats_invalid_fee': 'منتقلی فیس صفر یا مثبت رقم ہونی چاہیے۔',
       'tx_attr_unresolvable': 'کس نے ادا کیا یا کس کے لیے، محفوظ نہیں ہوا: یہ خرچ کسی دوسرے رکن نے درج کیا ہے اور ایپ نہیں جانتی کہ ان کے لیے "پارٹنر" کون ہے۔ ان سے تبدیل کرنے کو کہیں، یا صرف باقی خانے تبدیل کریں۔',
+      'nafaqah_err_not_classifier': 'محفوظ نہیں ہوا: خاندانی خرچ کو اہلیہ کی پیشگی ادائیگی یا اس کی ذاتی خریداری کے طور پر صرف اہلیہ، نفقہ دینے والا (شوہر) یا ایڈمن درج کر سکتا ہے۔',
     },
   };
 
