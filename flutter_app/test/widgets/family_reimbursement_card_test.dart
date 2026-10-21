@@ -27,6 +27,9 @@ NafaqahSummary _summary({
   double spent = 1700,
   bool isSet = true,
   String mode = 'family_nafaqah',
+  double overpaid = 0,
+  bool needsProvider = false,
+  bool canSetProvider = false,
 }) =>
     NafaqahSummary.fromMap({
       'mode': mode,
@@ -43,6 +46,7 @@ NafaqahSummary _summary({
                   'gross_advanced': outstanding + 100,
                   'reimbursed': 100.0,
                   'outstanding': outstanding,
+                  'overpaid': overpaid,
                 },
                 'allowance': {
                   'cycle_key': '2026-11',
@@ -57,6 +61,9 @@ NafaqahSummary _summary({
           : [],
       'can_set_allowance': role != 'wife',
       'can_record_reimbursement': role != 'member',
+      'provider_user_id': needsProvider ? null : _husband,
+      'needs_provider': needsProvider,
+      'can_set_provider': canSetProvider,
     });
 
 void main() {
@@ -197,6 +204,48 @@ void main() {
     expect(reimbursed, isFalse);
     expect(find.text('Settlement Failed'), findsOneWidget);
     expect(find.text('That is more than the outstanding balance (SAR 500.50).'), findsOneWidget);
+  });
+
+  // FABLE-LOGIC-02: repayments above the advances (an advance cut after it was
+  // repaid, before the ledger guard) are shown, never hidden behind "settled".
+  testWidgets('an overpaid ledger shows how much was repaid beyond the advances', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(outstanding: 0, overpaid: 100),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Repaid more than advanced by SAR 100.00'), findsOneWidget);
+    expect(find.text('An advance was reduced or deleted after it had been repaid.'), findsOneWidget);
+    expect(find.text('Reimburse Wife'), findsNothing);
+  });
+
+  testWidgets('no overpaid line when the ledger is consistent', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(householdId: 'hh', summary: _summary(outstanding: 0))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Repaid more than advanced'), findsNothing);
+    expect(find.byKey(const ValueKey('nafaqah_needs_provider')), findsNothing);
+  });
+
+  // FABLE-LOGIC-04: a family without a Nafaqah provider is told who can fix it.
+  testWidgets('a family without a provider asks to have one set', (tester) async {
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(role: 'wife', needsProvider: true),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('nafaqah_needs_provider')), findsOneWidget);
+    expect(find.text('This family has no Nafaqah provider (husband). Ask an admin to set one.'), findsOneWidget);
+
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh2',
+      summary: _summary(role: 'member', needsProvider: true, canSetProvider: true),
+    )));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This family has no Nafaqah provider (husband). Choose one in Settings, under Members & Admins.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('settled balance hides the reimburse action', (tester) async {
