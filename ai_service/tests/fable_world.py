@@ -55,6 +55,8 @@ class World:
                 owner = uid
             memberships.append({
                 "household_id": self.hid, "user_id": uid, "role": role,
+                # Financial role is per membership (FABLE-LOGIC-01); users.financial_role is only a cache.
+                "financial_role": fin_role,
                 "created_at": f"2026-01-0{i + 1}T00:00:00+00:00",
             })
             users.append({"id": uid, "display_name": name, "financial_role": fin_role, "household_id": self.hid,
