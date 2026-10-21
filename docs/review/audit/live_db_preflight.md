@@ -2,6 +2,8 @@
 
 Date: 2026-10-20 · Branch: `audit/claude-comprehensive-review` (from `8971d4a`) · Related: [`db.md`](db.md) (DB-15), [`MASTER_AUDIT_REPORT.md`](MASTER_AUDIT_REPORT.md) §6.2
 
+> Round 2 (2026-10-21, `20261020700000` + `20261020800000`): see [`live_db_preflight_round2.md`](live_db_preflight_round2.md).
+
 This document covers the 13 new migrations (`supabase/migrations/20261020010000_*` to `20261020400000_*`) and one pre-flight migration added by this review (`20261020005000_preflight_live_alignment.sql`). It answers four questions before the owner applies them to the live Supabase project:
 
 - How does live differ from the repository?
