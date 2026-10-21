@@ -202,7 +202,7 @@ void main() {
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': 'household',
       'raw_sms': 'Chat: Dinner | PaidBy: me | Beneficiary: both',
     });
-    final r = await _editAndSave(tester, row, viewer: _c, taps: ['Partner Paid'], roster: _roster([_a, _b, _c]));
+    final r = await _editAndSave(tester, row, viewer: _c, taps: ['The other person paid'], roster: _roster([_a, _b, _c]));
 
     expect(r.writes, isEmpty);
     expect(find.textContaining('another member recorded this expense'), findsOneWidget);
@@ -218,7 +218,7 @@ void main() {
       mode: 'family_nafaqah', callerRole: 'husband', callerUserId: _a, husbandId: _a,
       wives: [NafaqahWife(id: _b)],
     );
-    final r = await _editAndSave(tester, row, nafaqah: summary, taps: ['Shared for family (husband reimburses)']);
+    final r = await _editAndSave(tester, row, nafaqah: summary, taps: ['My wife paid for the home — I pay her back']);
 
     final w = r.writes.single;
     expect(w['nafaqah_class'], kWifeReimbursable);

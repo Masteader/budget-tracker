@@ -102,6 +102,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   bool _viewerIsWife = false;
   List<Map<String, dynamic>> _wives = [];
   String? _selectedWifeId;
+  String? _husbandName;
   /// Only the wife, the Nafaqah provider (husband) or an admin classifies a
   /// family expense; unknown until the members or the summary are loaded.
   bool _canClassifyNafaqah = false;
@@ -261,6 +262,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
         ];
         _viewerIsWife = summary.callerIsWife;
+        _husbandName = summary.husbandName;
         // Only the wife, the provider (husband) or an admin records a Nafaqah
         // class (as in chat, receipts and the edit sheet). `can_set_provider`
         // is true for household admins.
@@ -277,6 +279,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     } catch (e) {
       debugPrint('[ManualExpenseSheet] Nafaqah context unavailable: $e');
     }
+  }
+
+  /// The display name of the chosen wife, or null.
+  String? get _selectedWifeName {
+    for (final w in _wives) {
+      if (w['id'] == _selectedWifeId) {
+        final n = (w['display_name'] as String? ?? '').trim();
+        return n.isEmpty ? null : n;
+      }
+    }
+    return null;
   }
 
   /// Family household (a member is a spouse): Nafaqah rules, never a split.
@@ -666,7 +679,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 // advance (husband reimburses) or wife's personal purchase.
                 NafaqahClassSelector(
                   value: _familyPayer == 'me' ? null : _familyPayer,
-                  viewerIsWife: _viewerIsWife,
+                  viewerRole: _viewerIsWife ? 'wife' : (_adminClassifier ? 'admin' : 'husband'),
+                  wifeName: _viewerIsWife ? null : _selectedWifeName,
+                  husbandName: _husbandName,
                   onChanged: (cls) => setState(() => _familyPayer = cls ?? 'me'),
                 ),
                 if (_familyPayer != 'me' && !_viewerIsWife && _wives.length > 1) ...[

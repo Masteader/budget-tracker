@@ -171,6 +171,40 @@ void main() {
     expect(saved?['nafaqah_spouse_id'], 'u-wife');
   });
 
+  // UX-03: the one Nafaqah question names the spouses.
+  testWidgets('the family question names the wife for the husband and the husband for the wife', (tester) async {
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'husband',
+        callerUserId: 'u-husband',
+        husbandName: 'Abu Fahad',
+        wives: [NafaqahWife(id: 'u-wife', displayName: 'Umm Fahad')],
+      ),
+    );
+    expect(find.text('Umm Fahad paid for the home — I pay her back'), findsOneWidget);
+    expect(find.text("Umm Fahad's personal purchase — from her allowance"), findsOneWidget);
+  });
+
+  testWidgets('the wife sees her husband by name', (tester) async {
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      currentUser: 'u-wife',
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'wife',
+        callerUserId: 'u-wife',
+        husbandName: 'Abu Fahad',
+        wives: [NafaqahWife(id: 'u-wife', displayName: 'Umm Fahad')],
+      ),
+    );
+    expect(find.text('Abu Fahad paid'), findsOneWidget);
+    expect(find.text('For me personally — from my allowance'), findsOneWidget);
+  });
+
   // Roles come from GET /households/{id}/members (the role in THIS household),
   // not users.financial_role filtered by each member's active household.
   group('members and roles per household', () {

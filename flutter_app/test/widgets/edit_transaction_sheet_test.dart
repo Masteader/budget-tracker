@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/models.dart';
@@ -113,16 +115,16 @@ void main() {
     await pumpSheet(tester, groceries(), family('wife'));
 
     expect(find.textContaining('50/50'), findsNothing);
-    expect(find.text('Shared for family (husband reimburses)'), findsOneWidget);
+    expect(find.text('I paid for the home — he pays me back'), findsOneWidget);
     expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Personal (from my allowance)'));
-    await tester.tap(find.text('Personal (from my allowance)'));
+    await tester.ensureVisible(find.text('For me personally — from my allowance'));
+    await tester.tap(find.text('For me personally — from my allowance'));
     await tester.pump();
     expect(find.text("Personal: SAR 300.00 counted against the wife's allowance."), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Husband paid (household expense)'));
-    await tester.tap(find.text('Husband paid (household expense)'));
+    await tester.ensureVisible(find.text('My husband paid'));
+    await tester.tap(find.text('My husband paid'));
     await tester.pump();
     expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
     expect(find.textContaining('50/50'), findsNothing);
@@ -135,7 +137,134 @@ void main() {
     await tester.pump();
 
     expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsOneWidget);
-    expect(find.text('Personal (from her allowance)'), findsOneWidget);
+    expect(find.text("My wife's personal purchase — from her allowance"), findsOneWidget);
+  });
+
+  // UX-03: one Nafaqah question in family mode, with real names.
+  testWidgets('family mode asks one question with real names, no "who paid / for whom" rows', (tester) async {
+    const summary = NafaqahSummary(
+      mode: 'family_nafaqah',
+      callerRole: 'wife',
+      callerUserId: 'u-wife',
+      husbandId: 'u-husband',
+      husbandName: 'Ahmed',
+      wives: [NafaqahWife(id: 'u-wife', displayName: 'Sara')],
+    );
+    await pumpSheet(tester, groceries(), summary, stored: {'nafaqah_class': kWifeReimbursable, 'nafaqah_spouse_id': 'u-wife'});
+    await tester.pump();
+    expect(find.text('Who paid, and for whom?'), findsOneWidget);
+    expect(find.text('Ahmed paid'), findsOneWidget);
+    expect(find.text('Who paid?'), findsNothing);
+    expect(find.text('For whom?'), findsNothing);
+    expect(find.text('The other person paid'), findsNothing);
+    expect(find.text('Partner'), findsNothing);
+    // The optional child row stays.
+    expect(find.text('Sarah'), findsOneWidget);
+  });
+
+  testWidgets("the husband sees the wife's name", (tester) async {
+    const summary = NafaqahSummary(
+      mode: 'family_nafaqah',
+      callerRole: 'husband',
+      callerUserId: 'u-husband',
+      husbandId: 'u-husband',
+      wives: [NafaqahWife(id: 'u-wife', displayName: 'Sara')],
+    );
+    await pumpSheet(tester, groceries(), summary, stored: {'nafaqah_class': kWifeReimbursable, 'nafaqah_spouse_id': 'u-wife'});
+    await tester.pump();
+    expect(find.text('Sara paid for the home — I pay her back'), findsOneWidget);
+    expect(find.text('I paid (household expense)'), findsOneWidget);
+  });
+
+  // UX-23: no default class is shown before the stored one is known.
+  testWidgets('the Nafaqah choice shows a placeholder until the stored class is read', (tester) async {
+    final pending = Completer<Map<String, dynamic>?>();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: EditTransactionSheet(
+            transaction: groceries(),
+            householdDependents: const [],
+            nafaqah: family('husband'),
+            loadNafaqahFields: (_) => pending.future,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('nafaqah_class_loading')), findsOneWidget);
+    expect(find.byKey(const ValueKey('nafaqah_option_husband')), findsNothing);
+
+    pending.complete({'nafaqah_class': kWifePersonal, 'nafaqah_spouse_id': 'u-wife'});
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('nafaqah_class_loading')), findsNothing);
+    expect(find.byKey(const ValueKey('nafaqah_option_wife_personal')), findsOneWidget);
+  });
+
+  testWidgets('a stored class that cannot be read says so and can be retried', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: EditTransactionSheet(
+            transaction: groceries(),
+            householdDependents: const [],
+            nafaqah: family('husband'),
+            loadNafaqahFields: (_) async {
+              calls++;
+              if (calls == 1) throw Exception('offline');
+              return {'nafaqah_class': null, 'nafaqah_spouse_id': null};
+            },
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text("Couldn't read how this expense is classified."), findsOneWidget);
+    expect(find.byKey(const ValueKey('nafaqah_option_husband')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('nafaqah_class_retry')));
+    await tester.pump();
+    await tester.pump();
+    expect(calls, 2);
+    expect(find.byKey(const ValueKey('nafaqah_option_husband')), findsOneWidget);
+  });
+
+  testWidgets('a class carried by the feed row needs no extra read', (tester) async {
+    var calls = 0;
+    final tx = Transaction.fromMap({
+      'id': 'tx-carried',
+      'household_id': 'h1',
+      'amount': 300,
+      'currency': 'SAR',
+      'merchant': 'Panda',
+      'category_code': 'OPEX-GROCERY',
+      'timestamp': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
+      'nafaqah_class': kWifeReimbursable,
+      'nafaqah_spouse_id': 'u-wife',
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: EditTransactionSheet(
+            transaction: tx,
+            householdDependents: const [],
+            nafaqah: family('husband'),
+            loadNafaqahFields: (_) async {
+              calls++;
+              return null;
+            },
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(calls, 0);
+    expect(find.byKey(const ValueKey('nafaqah_class_loading')), findsNothing);
+    expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsOneWidget);
   });
 
   // FR-A-01: paid_by / beneficiary are relative to whoever recorded the row, so
@@ -252,7 +381,8 @@ void main() {
   testWidgets('roommate/partner households keep the shared-split preview', (tester) async {
     await pumpSheet(tester, groceries(), const NafaqahSummary(mode: 'not_family'));
 
-    expect(find.text('Shared for family (husband reimburses)'), findsNothing);
+    expect(find.text('Who paid, and for whom?'), findsNothing);
+    expect(find.text('Who paid?'), findsOneWidget);
     expect(find.text('Shared 50/50: Partner will owe you SAR 150.00'), findsOneWidget);
   });
 }

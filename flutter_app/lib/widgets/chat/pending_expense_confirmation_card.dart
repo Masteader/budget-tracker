@@ -89,19 +89,35 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       });
 
   void _chooseNafaqah(String? cls) {
-    if (_spouseRole == null) {
-      setState(() => _nafaqahChoice = cls);
-      return;
-    }
+    setState(() => _applyNafaqahChoice(cls));
+  }
+
+  /// Family (UX-03): the Nafaqah choice is the one question. For a spouse it
+  /// sets who paid and for whom, so the confirmed payer / beneficiary always
+  /// classify to the chosen class (the server contract is unchanged).
+  void _applyNafaqahChoice(String? cls) {
+    _nafaqahChoice = cls;
+    if (_spouseRole == null) return;
     final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
-    setState(() {
-      _nafaqahChoice = cls;
-      if (cls == kWifePersonal) {
-        _selectedBeneficiary = wifeSide;
-      } else if (cls == kWifeReimbursable && _selectedBeneficiary == wifeSide) {
-        _selectedBeneficiary = 'both';
-      }
-    });
+    final husbandSide = _spouseRole == 'wife' ? 'partner' : 'me';
+    if (cls == kWifePersonal) {
+      _selectedPaidBy = wifeSide;
+      _selectedBeneficiary = wifeSide;
+    } else if (cls == kWifeReimbursable) {
+      _selectedPaidBy = wifeSide;
+      if (_selectedBeneficiary == wifeSide) _selectedBeneficiary = 'both';
+    } else {
+      // The husband paid: an ordinary household expense (also when it was for his wife).
+      _selectedPaidBy = husbandSide;
+    }
+  }
+
+  /// A child the family expense was for (optional), or null.
+  String? _childBeneficiary(List<String> dependents) {
+    for (final d in dependents) {
+      if (d.toLowerCase() == _selectedBeneficiary) return d;
+    }
+    return null;
   }
 
 
@@ -134,6 +150,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     _nafaqahChoice = (suggested == kWifeReimbursable || suggested == kWifePersonal)
         ? suggested
         : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+    // Keep who paid / for whom consistent with the (suggested) class.
+    if (_spouseRole != null) _applyNafaqahChoice(_nafaqahChoice);
 
     // Available subcategories from backend preview payload
     final rawSubs = widget.pendingData['available_sub_categories'] as List?;
@@ -362,7 +380,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           ),
           const SizedBox(height: 12),
 
-          // ── WHO PAID? ──
+          // ── WHO PAID? / FOR WHOM? (roommates and partners only) ──
+          // A family household answers one Nafaqah question instead (UX-03).
+          if (!_isFamily) ...[
           Text(
             context.tr('pec_who_paid_caps'),
             style: GoogleFonts.outfit(
@@ -382,7 +402,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               ),
               const SizedBox(width: 8),
               _buildChoiceChip(
-                label: context.tr('partner'),
+                label: context.tr('pec_payer_other'),
                 isSelected: _selectedPaidBy == 'partner',
                 onSelected: () => _setPaidBy('partner'),
               ),
@@ -431,19 +451,40 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             ],
           ),
           const SizedBox(height: 12),
+          ],
 
           // Family: the wife's own money is either a shared advance the husband
           // reimburses or a personal purchase from her allowance (never split).
-          if (_isAdminClassifier ||
-              (_spouseRole != null && classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null)) ...[
+          if (_isAdminClassifier || _spouseRole != null) ...[
             NafaqahReviewSection(
               preview: _nafaqahPreview,
               value: _nafaqahChoice,
               wifeId: _nafaqahWifeId,
-              showHusbandOption: _isAdminClassifier,
               showWifeRequired: _showWifeRequired,
               onChanged: _chooseNafaqah,
               onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Family: optionally, which child it was for (never for a personal purchase).
+          if (_isFamily && dependents.isNotEmpty && _nafaqahChoice != kWifePersonal) ...[
+            Text(
+              context.tr('nafaqah_for_child_optional'),
+              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: context.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: dependents.map((depName) {
+                final selected = _childBeneficiary(dependents) == depName;
+                return _buildChoiceChip(
+                  label: depName,
+                  icon: Icons.child_care_rounded,
+                  isSelected: selected,
+                  onSelected: () => setState(() => _selectedBeneficiary = selected ? 'both' : depName.toLowerCase()),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 12),
           ],
@@ -515,6 +556,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             children: [
               Expanded(
                 child: ElevatedButton.icon(
+                  key: const ValueKey('pec_confirm'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,

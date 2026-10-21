@@ -14,6 +14,10 @@ class StoreAttributionCard extends StatelessWidget {
   final String? title;
   final bool compact;
 
+  /// Asks "spent by whom?". A family household hides it: the Nafaqah
+  /// question next to the card already says who paid (UX-03).
+  final bool showSpentBy;
+
   const StoreAttributionCard({
     super.key,
     required this.merchantController,
@@ -22,6 +26,7 @@ class StoreAttributionCard extends StatelessWidget {
     this.onMerchantChanged,
     this.title,
     this.compact = false,
+    this.showSpentBy = true,
   });
 
   Widget _buildSpentByOption(
@@ -122,6 +127,7 @@ class StoreAttributionCard extends StatelessWidget {
               ),
             ),
           ),
+          if (showSpentBy) ...[
           SizedBox(height: compact ? 10 : 14),
           Text(
             context.tr('sac_spent_by_caps'),
@@ -157,6 +163,7 @@ class StoreAttributionCard extends StatelessWidget {
               ),
             ],
           ),
+          ],
         ],
       ),
     );

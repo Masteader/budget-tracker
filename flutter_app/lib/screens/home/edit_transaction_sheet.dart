@@ -119,6 +119,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// are left untouched on save (FR-A-01).
   bool _storedNafaqahLoaded = false;
 
+  /// Reading the stored class failed (UX-23): the choice is not shown.
+  bool _storedNafaqahFailed = false;
+
   /// The user changed who paid / for whom. Untouched attribution is never
   /// rewritten, so an unrelated edit keeps exactly what the server reads
   /// (FABLE2-APP-01: a merchant edit used to rewrite the payer).
@@ -419,18 +422,112 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// stored class keeps the wife's claim when the husband edits it.
   Future<void> _loadStoredNafaqah() async {
     if (!_canClassify) return;
+    final tx = widget.transaction;
     try {
-      final loader = widget.loadNafaqahFields ??
-          (String id) => supabase.from('transactions').select('nafaqah_class, nafaqah_spouse_id').eq('id', id).maybeSingle();
-      final fields = await loader(widget.transaction.id);
-      if (!mounted || fields == null) return;
+      // The feed row already carries the class (UX-23): no second read.
+      final Map<String, dynamic>? fields;
+      if (tx.hasNafaqahFields) {
+        fields = {'nafaqah_class': tx.nafaqahClass, 'nafaqah_spouse_id': tx.nafaqahSpouseId};
+      } else {
+        final loader = widget.loadNafaqahFields ??
+            (String id) => supabase.from('transactions').select('nafaqah_class, nafaqah_spouse_id').eq('id', id).maybeSingle();
+        fields = await loader(tx.id);
+      }
+      if (!mounted) return;
+      if (fields == null) {
+        // No readable row: nothing stored to keep; the choice follows the entry.
+        setState(() {
+          _storedNafaqahLoaded = true;
+          _storedNafaqahFailed = false;
+        });
+        return;
+      }
       final stored = fields['nafaqah_class'] as String?;
       setState(() {
-        _storedSpouseId = fields['nafaqah_spouse_id'] as String?;
+        _storedSpouseId = fields!['nafaqah_spouse_id'] as String?;
         _applyNafaqahChoice(stored == kWifeReimbursable || stored == kWifePersonal ? stored : null);
         _storedNafaqahLoaded = true;
+        _storedNafaqahFailed = false;
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _storedNafaqahFailed = true);
+    }
+  }
+
+  /// The wife the Nafaqah choice names, by display name (UX-03).
+  String? get _classWifeName {
+    final id = _classSpouseId?.toLowerCase();
+    for (final w in _nafaqah?.wives ?? const <NafaqahWife>[]) {
+      if (w.id.toLowerCase() == id) {
+        final n = (w.displayName ?? '').trim();
+        return n.isEmpty ? null : n;
+      }
+    }
+    return null;
+  }
+
+  /// The Nafaqah question, or a placeholder until the stored class is known
+  /// (UX-23: never a default class that may be wrong).
+  Widget _buildNafaqahChoice() {
+    if (_storedNafaqahFailed) {
+      return Container(
+        key: const ValueKey('nafaqah_class_failed'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.subtleCardBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.borderColor),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, size: 18, color: context.warnText),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('nafaqah_class_load_failed'),
+                style: TextStyle(color: context.textPrimary, fontSize: 13),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('nafaqah_class_retry'),
+              onPressed: () {
+                setState(() => _storedNafaqahFailed = false);
+                _loadStoredNafaqah();
+              },
+              child: Text(context.tr('try_again')),
+            ),
+          ],
+        ),
+      );
+    }
+    if (!_storedNafaqahLoaded) {
+      return Semantics(
+        label: context.tr('nafaqah_class_loading'),
+        child: Container(
+          key: const ValueKey('nafaqah_class_loading'),
+          height: 160,
+          decoration: BoxDecoration(
+            color: context.subtleCardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: context.borderColor),
+          ),
+        ),
+      );
+    }
+    return NafaqahClassSelector(
+      value: _nafaqahClass,
+      viewerRole: _spouseRole ?? 'admin',
+      wifeName: _spouseRole == 'wife' ? null : _classWifeName,
+      husbandName: _nafaqah?.husbandName,
+      onChanged: (cls) {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _applyNafaqahChoice(cls);
+          _payerTouched = true;
+          _beneficiaryTouched = true;
+        });
+      },
+    );
   }
 
   Map<String, dynamic> _nafaqahPayload() {
@@ -1228,7 +1325,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             ),
             const SizedBox(height: 16),
 
-            // ── WHO PAID? ────────────────────────────────────────────────
+            // ── WHO PAID? / FOR WHOM? (roommates and partners) ───────────
+            // A family household answers one Nafaqah question instead (UX-03).
+            if (!_isFamily) ...[
             Text(
               context.tr('who_paid'),
               style: GoogleFonts.outfit(
@@ -1329,6 +1428,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ],
             ),
             const SizedBox(height: 14),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1421,18 +1521,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             // Only the wife, the provider (husband) or an admin classifies.
             if (_canClassify) ...[
-              NafaqahClassSelector(
-                value: _nafaqahClass,
-                viewerIsWife: _spouseRole == 'wife',
-                onChanged: (cls) {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _applyNafaqahChoice(cls);
-                    _payerTouched = true;
-                    _beneficiaryTouched = true;
-                  });
-                },
-              ),
+              _buildNafaqahChoice(),
               const SizedBox(height: 10),
             ],
 

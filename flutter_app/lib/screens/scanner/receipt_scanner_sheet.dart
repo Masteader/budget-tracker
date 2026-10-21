@@ -1180,6 +1180,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           merchantController: _merchantController,
           selectedSpentBy: _selectedSpentBy,
           onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+          showSpentBy: !_nafaqah.isFamily,
         ),
         if (_nafaqah.canClassify) ...[
           NafaqahReviewSection(
@@ -1325,6 +1326,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             merchantController: _merchantController,
             selectedSpentBy: _selectedSpentBy,
             onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+            showSpentBy: !_nafaqah.isFamily,
           ),
           if (_nafaqah.canClassify) ...[
             NafaqahReviewSection(

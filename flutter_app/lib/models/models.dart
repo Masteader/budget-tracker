@@ -48,6 +48,17 @@ class Transaction {
   /// user by the database). Null for legacy rows: only admins may change those.
   final String? userId;
 
+  /// Family Nafaqah class as stored (`nafaqah_class`: 'wife_reimbursable',
+  /// 'wife_personal' or null) and the wife it names. [hasNafaqahFields] says
+  /// the row was read with these columns (the feed selects every column), so
+  /// a null class is "no class", not "unknown".
+  final String? nafaqahClass;
+  final String? nafaqahSpouseId;
+  final bool hasNafaqahFields;
+
+  /// A settlement transfer between members (`is_settlement`), not an expense.
+  final bool isSettlement;
+
   /// Ingestion channels a transaction can come from (zero-SMS policy: no SMS channel).
   static const Set<String> sources = {'chat', 'receipt_scan', 'manual'};
 
@@ -78,6 +89,10 @@ class Transaction {
     this.qrCodeRaw,
     this.rawSms,
     this.userId,
+    this.nafaqahClass,
+    this.nafaqahSpouseId,
+    this.hasNafaqahFields = false,
+    this.isSettlement = false,
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -229,6 +244,10 @@ class Transaction {
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       rawSms: raw,
       userId: map['user_id'] as String?,
+      nafaqahClass: map['nafaqah_class'] as String?,
+      nafaqahSpouseId: map['nafaqah_spouse_id']?.toString(),
+      hasNafaqahFields: map.containsKey('nafaqah_class'),
+      isSettlement: map['is_settlement'] == true,
     );
   }
 
@@ -352,6 +371,10 @@ class Transaction {
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
       rawSms: rawSms ?? this.rawSms,
       userId: userId ?? this.userId,
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahSpouseId,
+      hasNafaqahFields: hasNafaqahFields,
+      isSettlement: isSettlement,
     );
   }
 }
