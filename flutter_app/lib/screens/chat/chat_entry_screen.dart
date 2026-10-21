@@ -14,6 +14,7 @@ import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
+import '../../widgets/chat/pending_expense_confirmation_card.dart' show PendingExpenseEdits;
 import '../../widgets/chat/voice_listening_banner.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
@@ -459,6 +460,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     String beneficiary,
     String? nafaqahClass,
     String? nafaqahSpouseId,
+    PendingExpenseEdits edits,
   ) async {
     final pending = originalMsg.pendingData;
     if (pending == null || _householdId == null) return;
@@ -489,6 +491,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         beneficiary: beneficiary,
         nafaqahClass: nafaqahClass,
         nafaqahSpouseId: nafaqahSpouseId,
+        // The user's corrections travel with the token (UX-12).
+        amount: edits.amount,
+        occurredAt: edits.occurredAt,
         previewToken: token,
       ),
       rePreview: () => ApiService.instance.postChatTransaction(
@@ -516,7 +521,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           text: res['message'] ?? context.tr('chat_tx_recorded'),
           transactionData: {
             'merchant': res['merchant'] ?? merchant,
-            'amount': (res['amount'] as num?)?.toDouble() ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
+            'amount': (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
             'category_code': res['category_code'] ?? pending['category_code'],
             'items': parsedItems.isNotEmpty ? parsedItems : (pending['items'] as List? ?? []),
             'spent_by': res['spent_by'] ?? (beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both')),
@@ -651,8 +656,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
-                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
-                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId);
+                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
+                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits);
                     },
                     onCancelPending: () {
                       setState(() {

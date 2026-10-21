@@ -75,6 +75,7 @@ class ApiService {
     String? idempotencyKey,
     DateTime? occurredAt,
     String? previewToken,
+    double? amount,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -94,6 +95,7 @@ class ApiService {
         idempotencyKey: idempotencyKey,
         occurredAt: occurredAt,
         previewToken: previewToken,
+        amount: amount,
       );
 
   // ── Receipts & Invoices ──────────────────────────────────────────────────
@@ -117,6 +119,8 @@ class ApiService {
     String? idempotencyKey,
     DateTime? occurredAt,
     String? previewToken,
+    double? amount,
+    String? categoryCode,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -137,6 +141,8 @@ class ApiService {
       idempotencyKey: idempotencyKey,
       occurredAt: occurredAt,
       previewToken: previewToken,
+      amount: amount,
+      categoryCode: categoryCode,
     );
   }
 

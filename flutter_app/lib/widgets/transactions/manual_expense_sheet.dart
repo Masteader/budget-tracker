@@ -19,6 +19,7 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
+import 'expense_date_chips.dart';
 import '../../models/nafaqah.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
@@ -95,6 +96,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   late final TextEditingController _amountCtrl;
   late String _selectedCategory;
   bool _isSaving = false;
+
+  /// When the expense happened (UX-12): today by default, or a past day.
+  DateTime _occurredAt = DateTime.now();
+  bool _datePicked = false;
 
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
@@ -383,7 +388,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       beneficiaryType: benType,
       beneficiaryId: benId,
       accountId: _selectedAccountId,
-      occurredAt: DateTime.now(),
+      // A day the user chose, else the moment of saving.
+      occurredAt: _datePicked ? _occurredAt : DateTime.now(),
       nafaqahClass: nafaqahClass,
       nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
@@ -531,8 +537,27 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 16),
 
+              // Amount first, focused, decimal keypad (UX-12)
+              TextField(
+                key: const ValueKey('manual_amount'),
+                controller: _amountCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                decoration: InputDecoration(
+                  labelText: context.tr('amount_sar'),
+                  prefixText: '${context.tr('sar')} ',
+                  labelStyle: TextStyle(color: context.textSecondary),
+                  filled: true,
+                  fillColor: context.inputBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Merchant
               TextField(
+                key: const ValueKey('manual_merchant'),
                 controller: _merchantCtrl,
                 style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(
@@ -546,20 +571,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 12),
 
-              // Amount
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-                decoration: InputDecoration(
-                  labelText: context.tr('amount_sar'),
-                  prefixText: '${context.tr('sar')} ',
-                  labelStyle: TextStyle(color: context.textSecondary),
-                  prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success, size: 20),
-                  filled: true,
-                  fillColor: context.inputBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+              // When (UX-12): yesterday's cash purchase is not booked today.
+              ExpenseDateChips(
+                value: _occurredAt,
+                maxDaysBack: 365,
+                onChanged: (d) => setState(() {
+                  _occurredAt = d;
+                  _datePicked = true;
+                }),
               ),
               const SizedBox(height: 12),
 

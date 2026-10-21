@@ -88,7 +88,7 @@ void main() {
             child: PendingExpenseConfirmationCard(
               pendingData: _preview(),
               isAdmin: isAdmin,
-              onConfirm: (store, cat, sub, paidBy, beneficiary, cls, spouse) =>
+              onConfirm: (store, cat, sub, paidBy, beneficiary, cls, spouse, edits) =>
                   result = [paidBy, beneficiary, cls, spouse],
               onCancel: () {},
             ),

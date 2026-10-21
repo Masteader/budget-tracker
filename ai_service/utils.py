@@ -3,10 +3,12 @@
 import hashlib
 import hmac
 import logging
+import math
 import os
 import re
 import uuid as _uuid
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -74,6 +76,28 @@ def bounded_text(body: dict, field: str, max_length: int) -> Optional[str]:
     if len(value) > max_length:
         raise HTTPException(status_code=422, detail=f"{field} must be at most {max_length} characters.")
     return value
+
+
+MAX_EXPENSE_AMOUNT = Decimal("10000000")
+
+
+def optional_amount(body: dict, field: str = "amount") -> Optional[float]:
+    """
+    Optional user-corrected expense amount of a JSON body (UX-12): None when absent, else a
+    positive number of at most 10,000,000 SAR rounded to halalas, otherwise HTTP 422. Booleans,
+    text, NaN and infinities are refused.
+    """
+    value = body.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise HTTPException(status_code=422, detail=f"{field} must be a number.")
+    if not math.isfinite(value):
+        raise HTTPException(status_code=422, detail=f"{field} must be a finite number.")
+    amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if amount <= 0 or amount > MAX_EXPENSE_AMOUNT:
+        raise HTTPException(status_code=422, detail=f"{field} must be more than 0 and at most 10,000,000.")
+    return float(amount)
 
 
 def validate_uuid(value: str, field_name: str = "household_id") -> str:

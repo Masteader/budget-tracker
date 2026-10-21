@@ -14,7 +14,7 @@ from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
 from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
-from utils import bounded_text, safe_error_response, validate_uuid
+from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
 from preview_token import InvalidPreviewToken, PreviewTokenExpired
@@ -48,6 +48,9 @@ async def scan_receipt(request: Request):
     to another user or household, is 422 ``{"detail": {"code": "invalid_preview_token"}}``; an
     expired one re-parses the photos / QR sent with it, or is 422
     ``{"detail": {"code": "preview_token_expired"}}`` when the request carries neither.
+
+    UX-12: optional ``amount`` and ``category_code`` are the total and category the user corrected
+    in the review (validated like the chat edits; an unknown category or a bad amount is 422).
     """
     user_id = get_current_user_id(request)
     raw_body = await request.body()
@@ -82,6 +85,9 @@ async def scan_receipt(request: Request):
         )
     }
     qr_code_raw = overrides["qr_code_raw"]
+    # The amount and category the user corrected in the review (UX-12), validated like any edit.
+    override_amount = optional_amount(body)
+    override_category_code = bounded_text(body, "category_code", 100)
     preview_token = body.get("preview_token")
     if preview_token is not None and not isinstance(preview_token, str):
         raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
@@ -128,6 +134,8 @@ async def scan_receipt(request: Request):
             override_nafaqah_class=overrides["nafaqah_class"],
             override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
             preview_token=preview_token,
+            override_amount=override_amount,
+            override_category_code=override_category_code,
         )
     except (InvalidPreviewToken, PreviewTokenExpired) as exc:
         if use_idempotency:

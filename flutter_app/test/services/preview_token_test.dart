@@ -139,6 +139,29 @@ void main() {
       expect(server.bodies[1].containsKey('preview_token'), isFalse);
     });
 
+    // UX-12: a corrected amount (and receipt category) travels with the token.
+    test('chat commit sends a corrected amount with the token; no amount, no field', () async {
+      final server = _Server([(200, {'status': 'success'})]);
+      final chat = ChatApiClient(baseClient: server.client);
+      await chat.postChatTransaction(message: 'm', householdId: 'h', previewOnly: false, previewToken: 'tok', amount: 186);
+      await chat.postChatTransaction(message: 'm', householdId: 'h', previewOnly: false, previewToken: 'tok');
+      expect(server.bodies[0]['amount'], 186);
+      expect(server.bodies[0]['preview_token'], 'tok');
+      expect(server.bodies[1].containsKey('amount'), isFalse);
+    });
+
+    test('receipt commit sends a corrected amount and category with the token', () async {
+      final server = _Server([(200, {'status': 'success'})]);
+      final receipt = ReceiptApiClient(baseClient: server.client);
+      await receipt.scanReceipt(
+          imagesBase64: const ['aGk='], householdId: 'h', previewToken: 'tok', amount: 85.25, categoryCode: 'OPEX-SHOPPING');
+      await receipt.scanReceipt(imagesBase64: const ['aGk='], householdId: 'h', previewToken: 'tok');
+      expect(server.bodies[0]['amount'], 85.25);
+      expect(server.bodies[0]['category_code'], 'OPEX-SHOPPING');
+      expect(server.bodies[1].containsKey('amount'), isFalse);
+      expect(server.bodies[1].containsKey('category_code'), isFalse);
+    });
+
     test('a 422 invalid_preview_token reaches the caller recognisably', () async {
       final server = _Server([_invalid]);
       final res = await ChatApiClient(baseClient: server.client)

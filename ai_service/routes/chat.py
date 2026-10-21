@@ -14,7 +14,7 @@ from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
 from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
-from utils import bounded_text, safe_error_response, validate_uuid
+from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
 from preview_token import InvalidPreviewToken
@@ -49,6 +49,9 @@ async def chat_transaction(request: Request):
     return ``preview_token``. Sending it back with the same ``message`` (and any edited fields)
     commits without calling the model. A tampered token, or one issued to another user or
     household, is 422 ``{"detail": {"code": "invalid_preview_token"}}``; an expired one re-parses.
+
+    UX-12: an optional ``amount`` is the total the user corrected in the confirmation card
+    (positive, at most 10,000,000, rounded to halalas; 422 otherwise).
     """
     user_id = get_current_user_id(request)
     raw_body = await request.body()
@@ -76,6 +79,9 @@ async def chat_transaction(request: Request):
             ("paid_by", 60), ("beneficiary", 60), ("nafaqah_spouse_id", 64), ("enrich_tx_id", 64),
         )
     }
+
+    # The amount the user corrected in the confirmation card (UX-12), validated like any edit.
+    override_amount = optional_amount(body)
 
     nafaqah_class = body.get("nafaqah_class")
     if nafaqah_class is not None and nafaqah_class not in ("wife_reimbursable", "wife_personal", "none"):
@@ -128,6 +134,7 @@ async def chat_transaction(request: Request):
             override_nafaqah_class=nafaqah_class,
             override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
             preview_token=preview_token,
+            override_amount=override_amount,
         )
     except InvalidPreviewToken:
         if use_idempotency:

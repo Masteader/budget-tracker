@@ -25,7 +25,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {},
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {},
               onCancel: () {},
             ),
           ),
@@ -65,7 +65,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
                 confirmedStore = store;
                 confirmedCat = cat;
                 confirmedSub = subCat;
@@ -127,7 +127,7 @@ void main() {
     await tester.pumpWidget(localizedApp(
       PendingExpenseConfirmationCard(
         pendingData: data,
-        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
           out
             ..['called'] = 'yes'
             ..['paid_by'] = paidBy
@@ -251,7 +251,7 @@ void main() {
         body: SingleChildScrollView(
           child: PendingExpenseConfirmationCard(
             pendingData: data,
-            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
               calls++;
               cls = nafaqahClass;
               spouse = nafaqahSpouseId;
@@ -263,14 +263,17 @@ void main() {
     ));
     expect(find.text('Which wife paid?'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
     await tester.tap(find.byKey(const ValueKey('pec_confirm')));
     await tester.pumpAndSettle();
     expect(calls, 0);
     expect(find.text('Choose which wife paid before saving.'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('nafaqah_wife_wife-2')));
     await tester.tap(find.byKey(const ValueKey('nafaqah_wife_wife-2')));
     await tester.pumpAndSettle();
     expect(find.text('Mona paid for the home — I pay her back'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
     await tester.tap(find.byKey(const ValueKey('pec_confirm')));
     await tester.pumpAndSettle();
     expect(calls, 1);
@@ -283,4 +286,84 @@ void main() {
     expect(r['spouse'], isNull);
   });
 
+  // UX-12: the amount can be corrected before saving.
+  testWidgets('the amount is editable and the corrected amount is confirmed', (tester) async {
+    double? confirmed;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => confirmed = edits.amount,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('pec_amount'));
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).controller!.text, '180.00');
+    await tester.enterText(field, '186');
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(confirmed, 186.0);
+  });
+
+  testWidgets('an unchanged amount is confirmed as null (nothing to override)', (tester) async {
+    double? confirmed = -1;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => confirmed = edits.amount,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+  });
+
+  testWidgets('an invalid amount blocks the confirmation', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => calls++,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('pec_amount')), '0');
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(calls, 0);
+    expect(find.text('Enter an amount greater than 0.'), findsOneWidget);
+  });
+
+  testWidgets('a date other than today is confirmed; today sends none', (tester) async {
+    DateTime? when = DateTime(2000);
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => when = edits.occurredAt,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(when, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('expense_date_yesterday')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    expect(when?.day, yesterday.day);
+    expect(when?.month, yesterday.month);
+  });
 }

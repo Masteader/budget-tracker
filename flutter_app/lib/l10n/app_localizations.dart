@@ -1842,6 +1842,11 @@ class AppLocalizations {
       'feed_yesterday': 'Yesterday',
       'feed_more_actions': 'More actions',
       'feed_filter_nafaqah_title': 'WHAT KIND OF EXPENSE?',
+      'expense_date_label': 'Date',
+      'expense_date_pick': 'Pick a date…',
+      'pec_amount_label': 'Amount',
+      'pec_amount_invalid': 'Enter an amount greater than 0.',
+      'scan_review_amount_label': 'Total',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -3272,6 +3277,11 @@ class AppLocalizations {
       'feed_yesterday': 'أمس',
       'feed_more_actions': 'خيارات أخرى',
       'feed_filter_nafaqah_title': 'نوع المصروف',
+      'expense_date_label': 'التاريخ',
+      'expense_date_pick': 'اختيار تاريخ…',
+      'pec_amount_label': 'المبلغ',
+      'pec_amount_invalid': 'اكتب مبلغاً أكبر من صفر.',
+      'scan_review_amount_label': 'الإجمالي',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4702,6 +4712,11 @@ class AppLocalizations {
       'feed_yesterday': 'کل',
       'feed_more_actions': 'مزید اختیارات',
       'feed_filter_nafaqah_title': 'خرچ کی قسم',
+      'expense_date_label': 'تاریخ',
+      'expense_date_pick': 'تاریخ منتخب کریں…',
+      'pec_amount_label': 'رقم',
+      'pec_amount_invalid': 'صفر سے زیادہ رقم درج کریں۔',
+      'scan_review_amount_label': 'کل رقم',
     },
   };
 
