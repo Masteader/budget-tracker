@@ -258,7 +258,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   }
 
   Future<void> _saveChanges() async {
-    final amount = parseMoneyInput(_amountCtrl.text);
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) _amountCtrl.text = rounded; // show the amount that is stored
+    final amount = parseMoneyInput(_amountCtrl.text, allowNegative: false);
     if (amount == null || amount <= 0) {
       AppSnackBar.showError(context, context.tr('invalid_amount_msg'), title: context.tr('invalid_amount'));
       return;

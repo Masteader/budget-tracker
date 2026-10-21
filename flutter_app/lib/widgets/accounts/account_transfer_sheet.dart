@@ -154,7 +154,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     }
   }
 
-  double get _amount => parseMoneyInput(_amountCtrl.text) ?? 0.0;
+  double get _amount => parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
   double get _fee => parseMoneyInput(_feeCtrl.text) ?? 0.0;
   double get _totalDeduction => _amount + _fee;
 

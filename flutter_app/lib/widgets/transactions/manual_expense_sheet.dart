@@ -260,7 +260,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   }
 
   Future<void> _saveExpense() async {
-    final amount = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) _amountCtrl.text = rounded; // show the amount that is stored
+    final amount = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {

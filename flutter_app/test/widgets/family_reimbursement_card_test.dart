@@ -132,6 +132,29 @@ void main() {
     expect(find.text('SAR 300.50'), findsOneWidget);
   });
 
+  testWidgets('a third decimal is rounded half-up from the typed text and shown (FABLE-LOGIC-09)', (tester) async {
+    final amounts = <double>[];
+    await tester.pumpWidget(_app(FamilyReimbursementCard(
+      householdId: 'hh',
+      summary: _summary(),
+      loadSummary: (_) async => _summary(),
+      recordReimbursement: ({required double amount, required String paymentMethod, required String wifeUserId}) async {
+        amounts.add(amount);
+        return 0;
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Reimburse Wife'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('reimburse_amount_field')), '٠٫٢٨٥');
+    await tester.tap(find.text('Record Settlement Payment'));
+    await tester.pump();
+    expect(find.text('0.29'), findsOneWidget, reason: 'the field shows the stored, rounded amount');
+    await tester.pumpAndSettle();
+    expect(amounts, [0.29]);
+  });
+
   testWidgets('overpayment is refused before reaching the server', (tester) async {
     var called = false;
     await tester.pumpWidget(_app(FamilyReimbursementCard(

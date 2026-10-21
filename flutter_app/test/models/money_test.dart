@@ -36,4 +36,60 @@ void main() {
       expect(normalizeDigits('فاتورة ١٢'), 'فاتورة 12');
     });
   });
+
+  group('FABLE-LOGIC-09 exact halala rounding (no binary doubles)', () {
+    const halalas = <String, int?>{
+      '1.005': 101, // 1.005 is 1.00499999... as a double: must still round up
+      '0.285': 29, // 0.28499999... as a double
+      '2.675': 268,
+      '1.004': 100,
+      '1.0049': 100, // only the 3rd decimal decides (half-up), no double rounding
+      '0.995': 100,
+      '٠٫٢٨٥': 29,
+      '١٥٠٫٥': 15050,
+      '١٬٢٥٠٫٧٥': 125075,
+      '1,234,567.891': 123456789,
+      '10.': 1000,
+      '.005': 1,
+      '-1.005': -101,
+      '999999999999.99': 99999999999999,
+      '1234567890123456': null, // beyond numeric(14,2): rejected, never wrapped
+      '1e3': null,
+      'NaN': null,
+      'Infinity': null,
+    };
+    halalas.forEach((input, expected) {
+      test('"$input" -> $expected halalas', () {
+        expect(parseMoneyToHalalas(input), expected);
+      });
+    });
+
+    test('parseMoneyInput returns the rounded SAR value', () {
+      expect(parseMoneyInput('1.005'), 1.01);
+      expect(parseMoneyInput('0.285'), 0.29);
+      expect(parseMoneyInput('١٥٠٫٥'), 150.50);
+      expect(parseMoneyInput('1,250.755'), 1250.76);
+    });
+
+    test('negatives are rejected where a positive amount is required', () {
+      expect(parseMoneyInput('-20', allowNegative: false), isNull);
+      expect(parseMoneyToHalalas('-0.01', allowNegative: false), isNull);
+      expect(parseMoneyInput('20', allowNegative: false), 20.0);
+      expect(parseMoneyInput('-20'), -20.0, reason: 'balances may be negative');
+    });
+
+    test('formatHalalas shows the rounded value with two decimals', () {
+      expect(formatHalalas(101), '1.01');
+      expect(formatHalalas(29), '0.29');
+      expect(formatHalalas(-101), '-1.01');
+      expect(formatHalalas(15050), '150.50');
+      expect(roundedMoneyText('1.005'), '1.01');
+      expect(roundedMoneyText('abc'), isNull);
+      expect(roundedMoneyTextIfRounded('1.005'), '1.01');
+      expect(roundedMoneyTextIfRounded('٠٫٢٨٥'), '0.29');
+      expect(roundedMoneyTextIfRounded('150.5'), isNull, reason: 'nothing rounded away: keep what was typed');
+      expect(roundedMoneyTextIfRounded('150'), isNull);
+      expect(roundedMoneyTextIfRounded('abc'), isNull);
+    });
+  });
 }

@@ -522,7 +522,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   }
 
   Future<void> _submit() async {
-    final amt = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
+    final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     if (amt <= 0) {
       AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
       return;
