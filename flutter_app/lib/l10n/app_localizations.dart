@@ -1605,6 +1605,7 @@ class AppLocalizations {
       'nafaqah_err_ledger_overpaid': 'Not saved: the husband has already repaid part of the wife\'s advances, so this expense cannot be reduced, reclassified or deleted below what was repaid.',
       'nafaqah_err_no_provider': 'This family has no Nafaqah provider (husband) yet, so an expense the wife paid cannot be recorded. Ask an admin to choose one.',
       'hh_already_member': 'You are already a member of this household.',
+      'ats_invalid_fee': 'The transfer fee must be zero or a positive amount.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -2931,6 +2932,7 @@ class AppLocalizations {
       'nafaqah_err_ledger_overpaid': 'لم يُحفظ التغيير: سدّد الزوج جزءاً مما دفعته الزوجة مقدماً، فلا يمكن تخفيض هذا المصروف أو تغيير تصنيفه أو حذفه إلى أقل مما سُدِّد.',
       'nafaqah_err_no_provider': 'لا يوجد في هذه الأسرة مكلّف بالنفقة (الزوج) بعد، لذا لا يمكن تسجيل مصروف دفعته الزوجة. اطلب من المشرف اختياره.',
       'hh_already_member': 'أنت عضو في هذا المنزل بالفعل.',
+      'ats_invalid_fee': 'يجب أن تكون رسوم التحويل صفراً أو مبلغاً موجباً.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4257,6 +4259,7 @@ class AppLocalizations {
       'nafaqah_err_ledger_overpaid': 'تبدیلی محفوظ نہیں ہوئی: شوہر اہلیہ کی پیشگی ادائیگیوں کا کچھ حصہ واپس ادا کر چکا ہے، اس لیے یہ خرچ واپس ادا شدہ رقم سے کم، دوبارہ درجہ بند یا حذف نہیں کیا جا سکتا۔',
       'nafaqah_err_no_provider': 'اس خاندان میں ابھی کوئی نفقہ دینے والا (شوہر) نہیں، اس لیے اہلیہ کا ادا کیا ہوا خرچ درج نہیں ہو سکتا۔ کسی ایڈمن سے منتخب کرنے کو کہیں۔',
       'hh_already_member': 'آپ پہلے سے اس گھرانے کے رکن ہیں۔',
+      'ats_invalid_fee': 'منتقلی فیس صفر یا مثبت رقم ہونی چاہیے۔',
     },
   };
 

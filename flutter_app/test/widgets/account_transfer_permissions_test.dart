@@ -69,4 +69,17 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(find.byIcon(Icons.delete_outline), findsNothing);
   });
+
+  // FABLE2-APP-07: a negative fee was accepted and credited the source account.
+  testWidgets('a negative transfer fee is refused with a message', (tester) async {
+    await _pumpSheet(tester, isAdmin: true, userId: 'p');
+    await tester.enterText(find.widgetWithText(TextField, 'Transfer Amount'), '100');
+    await tester.enterText(find.widgetWithText(TextField, 'Transfer Fee (Optional)'), '-5');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Confirm & Transfer'));
+    await tester.tap(find.text('Confirm & Transfer'));
+    await tester.pump();
+    expect(find.text('The transfer fee must be zero or a positive amount.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
 }
