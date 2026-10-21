@@ -768,7 +768,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
           // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
           _buildSectionHeader(context.tr('set_household_membership')),
@@ -935,7 +935,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           const SizedBox(height: 12),
           _buildAppearanceAndLanguageCard(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 1. HARDWARE & APP PERMISSIONS ──
           _buildSectionHeader(context.tr('hardware_permissions')),
@@ -944,76 +944,93 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             context.tr('set_check_manage_camera_microphone_access'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
-
-          // Camera Permission Card
-          _buildPermissionCard(
-            icon: Icons.camera_alt_outlined,
-            title: context.tr('camera_access'),
-            subtitle: context.tr('camera_access_desc'),
-            status: _cameraStatus,
-            onRequest: _requestCameraPermission,
-            onOpenSettings: openAppSettings,
-            testAction: _cameraStatus.isGranted
-                ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
-                    )
-                : null,
-            testLabel: context.tr('test_camera'),
-          ),
           const SizedBox(height: 10),
-
-          // Microphone Permission Card
-          _buildPermissionCard(
-            icon: Icons.mic_none_outlined,
-            title: context.tr('microphone_access'),
-            subtitle: context.tr('microphone_access_desc'),
-            status: _microphoneStatus,
-            onRequest: _requestMicrophonePermission,
-            onOpenSettings: openAppSettings,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildCompactPermissionRow(
+                  icon: Icons.camera_alt_outlined,
+                  title: context.tr('camera_access'),
+                  subtitle: context.tr('camera_access_desc'),
+                  status: _cameraStatus,
+                  onRequest: _requestCameraPermission,
+                  onOpenSettings: openAppSettings,
+                  testAction: _cameraStatus.isGranted
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
+                          )
+                      : null,
+                  testLabel: context.tr('test_camera'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildCompactPermissionRow(
+                  icon: Icons.mic_none_outlined,
+                  title: context.tr('microphone_access'),
+                  subtitle: context.tr('microphone_access_desc'),
+                  status: _microphoneStatus,
+                  onRequest: _requestMicrophonePermission,
+                  onOpenSettings: openAppSettings,
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildCompactPermissionRow(
+                  icon: Icons.notifications_active_outlined,
+                  title: context.tr('notifications'),
+                  subtitle: context.tr('notifications_desc'),
+                  status: _notificationStatus,
+                  onRequest: () async {
+                    final status = await Permission.notification.request();
+                    setState(() => _notificationStatus = status);
+                  },
+                  onOpenSettings: openAppSettings,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-
-          // Notification Permission Card
-          _buildPermissionCard(
-            icon: Icons.notifications_active_outlined,
-            title: context.tr('notifications'),
-            subtitle: context.tr('notifications_desc'),
-            status: _notificationStatus,
-            onRequest: () async {
-              final status = await Permission.notification.request();
-              setState(() => _notificationStatus = status);
-            },
-            onOpenSettings: openAppSettings,
-          ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 2. ACTIVE INPUT CHANNELS ──
           _buildSectionHeader(context.tr('expense_ingestion_channels')),
           const SizedBox(height: 10),
-          _buildChannelTile(
-            icon: Icons.chat_bubble_outline,
-            title: context.tr('ai_conversational_chat'),
-            subtitle: context.tr('ai_chat_desc'),
-            value: _chatEnabled,
-            onChanged: (val) {
-              setState(() => _chatEnabled = val);
-              _savePreference('channel_chat_enabled', val);
-            },
+          Container(
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildChannelTile(
+                  icon: Icons.chat_bubble_outline,
+                  title: context.tr('ai_conversational_chat'),
+                  subtitle: context.tr('ai_chat_desc'),
+                  value: _chatEnabled,
+                  onChanged: (val) {
+                    setState(() => _chatEnabled = val);
+                    _savePreference('channel_chat_enabled', val);
+                  },
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildChannelTile(
+                  icon: Icons.document_scanner_outlined,
+                  title: context.tr('camera_receipt_scanner'),
+                  subtitle: context.tr('camera_scanner_desc'),
+                  value: _scannerEnabled,
+                  onChanged: (val) {
+                    setState(() => _scannerEnabled = val);
+                    _savePreference('channel_scanner_enabled', val);
+                  },
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _buildChannelTile(
-            icon: Icons.document_scanner_outlined,
-            title: context.tr('camera_receipt_scanner'),
-            subtitle: context.tr('camera_scanner_desc'),
-            value: _scannerEnabled,
-            onChanged: (val) {
-              setState(() => _scannerEnabled = val);
-              _savePreference('channel_scanner_enabled', val);
-            },
-          ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 3. DUPLICATE RESOLUTION POLICY ──
           _buildSectionHeader(context.tr('duplicate_resolution')),
@@ -1022,24 +1039,37 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             context.tr('dup_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
-          _buildPolicyTile(
-            policy: 'auto_enrich',
-            title: context.tr('auto_enrich'),
-            description: context.tr('auto_enrich_desc'),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              children: [
+                _buildPolicyTile(
+                  policy: 'auto_enrich',
+                  title: context.tr('auto_enrich'),
+                  description: context.tr('auto_enrich_desc'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildPolicyTile(
+                  policy: 'prompt',
+                  title: context.tr('prompt_on_conflict'),
+                  description: context.tr('prompt_desc'),
+                ),
+                Divider(color: context.borderColor, height: 1),
+                _buildPolicyTile(
+                  policy: 'strict',
+                  title: context.tr('strict_isolation'),
+                  description: context.tr('strict_desc'),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          _buildPolicyTile(
-            policy: 'prompt',
-            title: context.tr('prompt_on_conflict'),
-            description: context.tr('prompt_desc'),
-          ),
-          const SizedBox(height: 8),
-          _buildPolicyTile(
-            policy: 'strict',
-            title: context.tr('strict_isolation'),
-            description: context.tr('strict_desc'),
-          ),
+          const SizedBox(height: 24),
+
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
           if (_householdId != null && _members.length > 1) ...[
             _buildSectionHeader(context.tr('partner_settlement')),
@@ -1058,7 +1088,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 );
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
           ],
 
           // ── DATA EXPORT & OFFLINE QUEUE ──
@@ -1068,7 +1098,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.cardBg,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.borderColor),
             ),
             child: Column(
@@ -1150,7 +1180,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── HELP & SUPPORT ──
           _buildSectionHeader(context.tr('set_help_support')),
@@ -1159,13 +1189,13 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             context.tr('set_explore_user_guides_interactive_walkthroughs'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Card(
             color: context.cardBg,
             elevation: 0,
             margin: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               side: BorderSide(color: context.borderColor),
             ),
             child: Column(
@@ -1253,7 +1283,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
           // ── 4. HOUSEHOLD & ACCOUNT ──
           _buildSectionHeader(context.tr('set_household_account')),
@@ -1262,7 +1292,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.cardBg,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.borderColor),
             ),
             child: Column(
@@ -1330,7 +1360,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -1574,7 +1604,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     );
   }
 
-  Widget _buildPermissionCard({
+  Widget _buildCompactPermissionRow({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -1585,6 +1615,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     String? testLabel,
   }) {
     final isGranted = status.isGranted;
+    final activeColor = context.electricTeal;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1713,8 +1744,43 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   onPressed: testAction,
                 ),
               ],
-            ],
+            ),
           ),
+          const SizedBox(width: 8),
+          if (!isGranted)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: activeColor,
+                foregroundColor: context.isDark ? Colors.black : Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onRequest,
+              child: Text(context.tr('grant_access'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            )
+          else if (testAction != null)
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.textPrimary,
+                side: BorderSide(color: context.borderColor),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: testAction,
+              child: Text(testLabel ?? 'Test', style: const TextStyle(fontSize: 11)),
+            )
+          else
+            IconButton(
+              icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
+              tooltip: context.tr('open_app_settings'),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: onOpenSettings,
+            ),
         ],
       ),
     );
@@ -1727,32 +1793,27 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.borderColor),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: value ? AppThemes.success.withValues(alpha: 0.12) : context.chipBg,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: context.textSecondary)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: context.textSecondary)),
               ],
             ),
           ),
@@ -1796,7 +1857,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               color: isSelected ? AppThemes.success : context.textSecondary,
               size: 20,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1806,10 +1867,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      color: isSelected ? context.textPrimary : context.textSecondary,
+                      color: isSelected ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF0F766E)) : context.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     description,
                     style: TextStyle(fontSize: 11, color: context.textSecondary, height: 1.3),

@@ -60,7 +60,11 @@ def test_installment_plan_status_transition():
     assert plan.remaining_amount == 0.0
 
 
-def test_installments_api():
+def test_installments_api(tmp_path, monkeypatch):
+    import installment_service
+    temp_plans_file = tmp_path / "installment_plans.json"
+    monkeypatch.setattr(installment_service, "FALLBACK_FILE", temp_plans_file)
+
     from starlette.testclient import TestClient
     from main import app
 

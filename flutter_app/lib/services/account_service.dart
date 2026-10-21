@@ -5,7 +5,7 @@ import '../models/account.dart';
 class AccountService {
   final SupabaseClient? _customClient;
   AccountService({SupabaseClient? client}) : _customClient = client;
-  static final AccountService instance = AccountService();
+  static AccountService instance = AccountService();
 
   SupabaseClient get _client => _customClient ?? Supabase.instance.client;
 

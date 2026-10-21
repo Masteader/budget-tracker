@@ -361,6 +361,31 @@ class AppLocalizations {
       'simplify_debts': 'Simplify Debts',
       'settle_now': 'Settle',
       'all_roommates_settled': 'No pending roommate debts. Everyone is squared away!',
+      'all_settled': 'All Settled',
+      'wife_advanced_household_funds': 'Wife advanced household expenses from personal funds',
+      'nafaqah_children': 'Children',
+      'nafaqah_wife': 'Wife',
+      'nafaqah_household': 'Household',
+      'full': 'Full',
+      'half': 'Half',
+      'payment_amount_sar': 'Payment Amount (SAR)',
+      'copied_note': 'Copied Note',
+      'owes': 'owes',
+      'share_via_whatsapp': 'Share via WhatsApp',
+      'whatsapp_copied': 'WhatsApp settlement text copied to clipboard!',
+      'one_click_settle': '1-Click Settle',
+      'pays': 'pays',
+      'delete_confirm_prefix': 'Delete',
+      'at_merchant': 'at',
+      'budget_will_be_updated': 'Your budget will be updated automatically.',
+      'delete_failed': 'Could not delete transaction. Please check your network connection.',
+      'transaction_removed': 'Transaction Removed',
+      'transaction_restored': 'Transaction Restored',
+      'link_copied': 'Link Copied',
+      'pdf_copied_desc': 'PDF Statement link copied to clipboard. Paste into browser to download.',
+      'stc_pay_label': 'STC Pay',
+      'bank_label': 'Bank',
+      'cash_label': 'Cash',
       'invite_role_spouse': 'Wife / Spouse',
       'invite_role_peer': 'Roommate / Flatmate',
       'invite_role_family': 'Family Dependent',
@@ -649,7 +674,7 @@ class AppLocalizations {
       'item_name': 'Item name',
       'no_itemized_breakdown': 'No itemized breakdown attached.',
       'add': 'Add',
-      'saudi_zatca_vat_qr': 'Saudi ZATCA VAT QR',
+      'saudi_zatca_vat_qr': 'Saudi ZATCA QR',
       'from_clipboard': 'From Clipboard',
       'sample_extra': 'Sample eXtra',
       'try_again': 'Try Again',
@@ -2949,6 +2974,31 @@ class AppLocalizations {
       'simplify_debts': 'قرضوں کو آسان بنائیں',
       'settle_now': 'حساب چکائیں',
       'all_roommates_settled': 'روم میٹس کے درمیان کوئی بقایا نہیں، سب برابر ہے!',
+      'all_settled': 'مکمل ادا ہو چکا',
+      'wife_advanced_household_funds': 'اہلیہ نے گھریلو اخراجات اپنے ذاتی پیسوں سے ادا کیے',
+      'nafaqah_children': 'بچے',
+      'nafaqah_wife': 'اہلیہ',
+      'nafaqah_household': 'گھر',
+      'full': 'مکمل',
+      'half': 'نصف',
+      'payment_amount_sar': 'ادائیگی کی رقم (ریال)',
+      'copied_note': 'نوٹ کاپی ہو گیا',
+      'owes': 'کے مقروض ہیں',
+      'share_via_whatsapp': 'واٹس ایپ پر شیئر کریں',
+      'whatsapp_copied': 'حساب کتاب کی تفصیلات کاپی ہو گئیں!',
+      'one_click_settle': 'فوری تسویہ',
+      'pays': 'ادا کرتے ہیں',
+      'delete_confirm_prefix': 'حذف کریں',
+      'at_merchant': 'بمقام',
+      'budget_will_be_updated': 'آپ کا بجٹ خودکار طور پر اپ ڈیٹ ہو جائے گا۔',
+      'delete_failed': 'لین دین حذف نہیں ہو سکا۔ انٹرنیٹ کنکشن چیک کریں۔',
+      'transaction_removed': 'لین دین ہٹا دیا گیا',
+      'transaction_restored': 'لین دین بحال کر دیا گیا',
+      'link_copied': 'لنک کاپی ہو گیا',
+      'pdf_copied_desc': 'اسٹیٹمنٹ کا لنک کاپی ہو گیا۔ براؤزر میں کھول کر ڈاؤن لوڈ کریں۔',
+      'stc_pay_label': 'STC Pay',
+      'bank_label': 'بینک',
+      'cash_label': 'نقد',
       'invite_role_spouse': 'اہلیہ / شریک حیات',
       'invite_role_peer': 'روم میٹ / فلیٹ میٹ',
       'invite_role_family': 'خاندان کا فرد (زیر کفالت)',
@@ -4590,6 +4640,153 @@ class AppLocalizations {
     }
     return cleanCode;
   }
+
+  // ── Merchant Name Translation / Normalization ──────────────────────────────
+  static const Map<String, Map<String, String>> _merchantDictionary = {
+    'unknown': {
+      'en': 'Unknown Merchant',
+      'ar': 'تاجر غير محدد',
+      'ur': 'نامعلوم تاجر',
+    },
+    'direct': {
+      'en': 'Direct Entry',
+      'ar': 'إدخال مباشر',
+      'ur': 'براہ راست اندراج',
+    },
+    'manual': {
+      'en': 'Manual Expense',
+      'ar': 'مصروف يدوي',
+      'ur': 'دستی خرچ',
+    },
+    'installment purchase': {
+      'en': 'Installment Purchase',
+      'ar': 'شراء بالتقسيط',
+      'ur': 'قسط پر خریداری',
+    },
+    'panda': {
+      'en': 'Panda Supermarket',
+      'ar': 'أسواق بندة',
+      'ur': 'پانڈا سپر مارکیٹ',
+    },
+    'othaim': {
+      'en': 'Al Othaim Markets',
+      'ar': 'أسواق العثيم',
+      'ur': 'العثیم مارکیٹس',
+    },
+    'danube': {
+      'en': 'Danube Supermarket',
+      'ar': 'أسواق الدانوب',
+      'ur': 'دانوب سپر مارکیٹ',
+    },
+    'tamimi': {
+      'en': 'Tamimi Markets',
+      'ar': 'أسواق التميمي',
+      'ur': 'تمیمی مارکیٹس',
+    },
+    'carrefour': {
+      'en': 'Carrefour',
+      'ar': 'كارفور',
+      'ur': 'کیریفور',
+    },
+    'lulu': {
+      'en': 'Lulu Hypermarket',
+      'ar': 'لولو هايبرماركت',
+      'ur': 'لولو ہائپر مارکیٹ',
+    },
+    'jarir': {
+      'en': 'Jarir Bookstore',
+      'ar': 'مكتبة جرير',
+      'ur': 'جریر بک اسٹور',
+    },
+    'extra': {
+      'en': 'eXtra Stores',
+      'ar': 'معارض إكسترا',
+      'ur': 'ایکسٹرا اسٹورز',
+    },
+    'albaik': {
+      'en': 'AlBaik',
+      'ar': 'البيك',
+      'ur': 'البيك',
+    },
+    'stc': {
+      'en': 'stc Telecom',
+      'ar': 'شركة الاتصالات السعودية (stc)',
+      'ur': 'ایس ٹی سی ٹیلی کام',
+    },
+    'mobily': {
+      'en': 'Mobily',
+      'ar': 'موبايلي',
+      'ur': 'موبائیلی',
+    },
+    'zain': {
+      'en': 'Zain KSA',
+      'ar': 'زين السعودية',
+      'ur': 'زین کے ایس اے',
+    },
+    'saudi electricity': {
+      'en': 'Saudi Electricity Company',
+      'ar': 'الشركة السعودية للكهرباء',
+      'ur': 'سعودی الیکٹرسٹی کمپنی',
+    },
+    'national water company': {
+      'en': 'National Water Company',
+      'ar': 'شركة المياه الوطنية',
+      'ur': 'نیشنل واٹر کمپنی',
+    },
+  };
+
+  String merchant(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return get('unknown_merchant');
+    }
+    final clean = raw.trim();
+    final lower = clean.toLowerCase();
+
+    // 1. Exact match handling for generic placeholders
+    if (lower == 'unknown' || lower == 'unknown merchant') {
+      return get('unknown_merchant');
+    }
+    if (lower == 'direct' || lower == 'direct entry') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['direct']?[lang] ?? _merchantDictionary['direct']?['en'] ?? clean;
+    }
+    if (lower == 'manual' || lower == 'manual expense') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['manual']?[lang] ?? _merchantDictionary['manual']?['en'] ?? clean;
+    }
+    if (lower == 'installment purchase') {
+      final lang = locale.languageCode;
+      return _merchantDictionary['installment purchase']?[lang] ?? _merchantDictionary['installment purchase']?['en'] ?? clean;
+    }
+
+    // 2. Explicit exclusions to prevent false positive compound phrases
+    // e.g., 'Panda Express' is a Chinese fast-food chain, not Panda Supermarket
+    if (lower.contains('panda express')) {
+      return clean;
+    }
+
+    // 3. Word-boundary regex matching across registered merchants
+    for (final entry in _merchantDictionary.entries) {
+      if (entry.key == 'unknown' ||
+          entry.key == 'direct' ||
+          entry.key == 'manual' ||
+          entry.key == 'installment purchase') {
+        continue;
+      }
+
+      // Word boundary matching ensures short tokens like 'stc' or 'extra' do not
+      // greedily match inside words like 'Fastcare', 'Postcard', or 'Extraordinary'
+      final pattern = RegExp(
+        r'(?:^|[\s\b.,_\-/])' + RegExp.escape(entry.key) + r'(?:[\s\b.,_\-/]|$)',
+        caseSensitive: false,
+      );
+      if (pattern.hasMatch(lower)) {
+        final lang = locale.languageCode;
+        return entry.value[lang] ?? entry.value['en'] ?? clean;
+      }
+    }
+    return clean;
+  }
 }
 
 extension LocalizationExtension on BuildContext {
@@ -4607,6 +4804,7 @@ extension LocalizationExtension on BuildContext {
   String trCat(String codeOrName) => AppLocalizations.of(this).category(codeOrName);
   String trSub(String subCodeOrName, {String? nameAr, String? nameEn}) =>
       AppLocalizations.of(this).subCategory(subCodeOrName, nameAr: nameAr, nameEn: nameEn);
+  String trMerchant(String? raw) => AppLocalizations.of(this).merchant(raw);
   bool get isArabic => Localizations.localeOf(this).languageCode == 'ar';
   bool get isUrdu => Localizations.localeOf(this).languageCode == 'ur';
   bool get isRtl => isArabic || isUrdu;

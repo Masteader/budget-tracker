@@ -198,7 +198,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  merchant,
+                  context.trMerchant(merchant),
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
