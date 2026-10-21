@@ -231,6 +231,7 @@ async def create_household_role_invite_endpoint(
         raise safe_error_response(exc, public_message="Failed to create invite.")
 
 
+from auth import optional_verified_user_id
 from rate_limiter import default_rate_limiter
 from utils import get_client_ip
 
@@ -244,9 +245,13 @@ async def inspect_household_role_invite_endpoint(invite_code: str, request: Requ
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
 
-    # Rate-limit invite inspection by client IP (rightmost X-Forwarded-For hop)
-    client_ip = get_client_ip(request)
-    await default_rate_limiter.check_rate_limit(f"inspect_invite:{client_ip}", max_requests=20, window_seconds=60)
+    # Rate-limit invite inspection per identity (FABLE-API-03): the verified user, else the client
+    # IP (utils.client_ip_info), under a generous global ceiling, so one proxy address shared by
+    # every visitor cannot lock everyone out.
+    caller = optional_verified_user_id(request)
+    identity = f"user:{caller}" if caller else f"ip:{get_client_ip(request)}"
+    await default_rate_limiter.check_rate_limit(f"inspect_invite:{identity}", max_requests=20, window_seconds=60)
+    await default_rate_limiter.check_rate_limit("inspect_invite:global", max_requests=600, window_seconds=60)
 
     try:
         raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)

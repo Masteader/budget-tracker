@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 import mail_service
 from auth import get_verified_claims
 from rate_limiter import default_rate_limiter
-from utils import get_client_ip, validate_uuid
+from utils import client_ip_info, validate_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -243,12 +243,16 @@ async def submit_public_inquiry(payload: PublicInquiry, request: Request) -> dic
         logger.info("Inquiry ref=%s discarded: honeypot field filled (source=%s).", reference, payload.source)
         return {"status": "sent", "reference": reference}
 
-    client_ip = get_client_ip(request)
-    await _enforce_limits([
-        (f"inquiry:ip:{client_ip}", PUBLIC_PER_IP_LIMIT),
+    # Per identity under a global ceiling (FABLE-API-03): the per-IP bucket only applies to an
+    # address that is really the client's; an untrusted proxy hop is shared by every visitor and
+    # would lock the whole site out after a few requests.
+    client_ip, ip_is_client = client_ip_info(request)
+    buckets = [(f"inquiry:ip:{client_ip}", PUBLIC_PER_IP_LIMIT)] if ip_is_client else []
+    buckets += [
         (f"inquiry:email:{_email_bucket(payload.email)}", PUBLIC_PER_EMAIL_LIMIT),
         ("inquiry:global", GLOBAL_LIMIT),
-    ])
+    ]
+    await _enforce_limits(buckets)
 
     message = _compose(
         inquiry_type=payload.type,

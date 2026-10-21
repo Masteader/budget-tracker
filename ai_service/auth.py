@@ -321,6 +321,14 @@ def get_current_user_id(request: Request) -> str:
     return str(user_id)
 
 
+def optional_verified_user_id(request: Request) -> Optional[str]:
+    """The verified caller's user id when a valid Bearer JWT is present, else None (never raises)."""
+    try:
+        return get_current_user_id(request)
+    except HTTPException:
+        return None
+
+
 def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
     """
     Retrieve the user's role and membership in the given household.

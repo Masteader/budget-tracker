@@ -197,7 +197,11 @@ def test_honeypot_submission_is_discarded_silently(client, mailer):
 # ── Rate limiting ───────────────────────────────────────────────────────────
 
 
-def test_per_ip_rate_limit(client, mailer):
+def test_per_ip_rate_limit(client, mailer, monkeypatch):
+    import routes.inquiries as inquiries
+
+    # A real client address (FABLE-API-03: an untrusted proxy hop gets no per-IP bucket).
+    monkeypatch.setattr(inquiries, "client_ip_info", lambda _request: ("203.0.113.5", True))
     statuses = [
         client.post(PUBLIC_URL, json={"type": "vip_early_access", "email": f"u{i}@example.com"}).status_code
         for i in range(7)
@@ -211,7 +215,7 @@ def test_per_email_rate_limit_across_ips(client, mailer, monkeypatch):
     import routes.inquiries as inquiries
 
     ips = iter(f"203.0.113.{i}" for i in range(1, 20))
-    monkeypatch.setattr(inquiries, "get_client_ip", lambda _request: next(ips))
+    monkeypatch.setattr(inquiries, "client_ip_info", lambda _request: (next(ips), True))
     statuses = [
         client.post(PUBLIC_URL, json={"type": "vip_early_access", "email": "same@example.com"}).status_code
         for _ in range(5)

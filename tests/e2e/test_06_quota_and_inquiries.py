@@ -76,11 +76,13 @@ def resend(stack, monkeypatch):
     stack.gateway.resend_status = 200
 
 
-def _public(world, **overrides):
+def _public(world, client_ip=None, **overrides):
     payload = {"type": "contact", "email": "visitor@example.com", "name": "Visitor", "message": "Hello there",
                "locale": "ar", "source": "web"}
     payload.update(overrides)
-    return world.anonymous_api().post("/public/inquiries", json=payload)
+    # X-Forwarded-For names the client when proxy headers are trusted (TRUST_PROXY_HEADERS).
+    headers = {"X-Forwarded-For": client_ip} if client_ip else {}
+    return world.anonymous_api(**headers).post("/public/inquiries", json=payload)
 
 
 def test_inquiries_without_mail_provider_answer_503(world, stack):
@@ -123,9 +125,13 @@ def test_inquiries_with_mocked_provider(world, resend):
     assert failed.status_code == 502, failed.text
 
 
-def test_public_inquiry_per_ip_limit(world, resend):
-    statuses = [_public(world, email=f"p{i}@example.com").status_code for i in range(5)]
+def test_public_inquiry_per_ip_limit(world, resend, monkeypatch):
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")  # as on Railway (RAILWAY_ENVIRONMENT)
+    statuses = [_public(world, "203.0.113.70", email=f"p{i}@example.com").status_code for i in range(5)]
     assert statuses == [200] * 5
-    limited = _public(world, email="p6@example.com")
+    limited = _public(world, "203.0.113.70", email="p6@example.com")
     assert limited.status_code == 429
     assert len(resend.emails) == 5
+    # FABLE-API-03: the limit is the client's, not everyone's behind the same proxy.
+    assert _public(world, "203.0.113.71", email="p7@example.com").status_code == 200
+    assert _public(world, email="p8@example.com").status_code == 200  # no client address: no per-IP bucket
