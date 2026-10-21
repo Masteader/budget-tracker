@@ -27,9 +27,15 @@ class AccountCard extends StatelessWidget {
     this.onRefresh,
   });
 
+  /// Riyal amounts through the riyal formatter ("1,250.00 ر.س" in Arabic);
+  /// other currencies (USDT…) keep their code (UX-22).
+  String _money(BuildContext context, double amount) {
+    if (account.currency.toUpperCase() == 'SAR') return context.sar(amount);
+    return '${account.currency} ${NumberFormat('#,##0.00', 'en_US').format(amount)}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00');
     final margin = account.calculateMargin(committedBudgets);
     final status = account.getStatus(committedBudgets);
     final isDark = context.isDark;
@@ -46,18 +52,18 @@ class AccountCard extends StatelessWidget {
         break;
       case AccountCapacityStatus.surplus:
         statusColor = AppThemes.iceCyan;
-        statusLabel = '+${account.currency} ${fmt.format(margin)} ${context.tr("surplus_buffer_label")}';
+        statusLabel = '+${_money(context, margin)} ${context.tr("surplus_buffer_label")}';
         statusIcon = Icons.savings_outlined;
         break;
       case AccountCapacityStatus.deficit:
         statusColor = Colors.redAccent;
-        statusLabel = '${context.tr("deficit_label")}: -${account.currency} ${fmt.format(-margin)}';
+        statusLabel = '${context.tr("deficit_label")}: -${_money(context, -margin)}';
         statusIcon = Icons.warning_amber_rounded;
         break;
     }
 
-    final displayBalance = hideBalance ? '••••••' : '${account.currency} ${fmt.format(account.balance)}';
-    final displayCommitted = hideBalance ? '••••' : '${account.currency} ${fmt.format(committedBudgets)}';
+    final displayBalance = hideBalance ? '••••••' : _money(context, account.balance);
+    final displayCommitted = hideBalance ? '••••' : _money(context, committedBudgets);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -215,9 +221,12 @@ class AccountCard extends StatelessWidget {
                 // If in deficit, show immediate resolution action
                 if (status == AccountCapacityStatus.deficit) ...[
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
+                  // An amber outlined "cover the shortfall" action, not a
+                  // full-width solid red one that reads as destructive (UX-22).
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: const Key('account_cover_deficit'),
                       onPressed: () {
                         AccountTransferSheet.show(
                           context,
@@ -229,13 +238,13 @@ class AccountCard extends StatelessWidget {
                       },
                       icon: const Icon(Icons.bolt_rounded, size: 16),
                       label: Text(
-                        '⚡ ${context.tr("quick_transfer")} ${account.currency} ${fmt.format(-margin)}',
+                        context.trArgs('cover_deficit_action', {'amount': _money(context, -margin)}),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
+                        side: BorderSide(color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309), width: 1.4),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),

@@ -10,10 +10,38 @@ import '../../theme/app_themes.dart';
 import '../transactions/manual_expense_sheet.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
+import '../../services/salary_cycle_service.dart';
+
+/// The advice under an affordability verdict, in the user's language (UX-21),
+/// built from the numbers of the API answer or the offline estimate
+/// (`verdict`, `post_purchase_remaining`, `current_daily_allowance`,
+/// `post_purchase_daily_allowance`, `days_to_payday`), never from the
+/// server's own English/Arabic sentences; amounts use the riyal formatter.
+String affordabilityAdvice(AppLocalizations l, Map<String, dynamic> res) {
+  double n(String key) => (res[key] as num?)?.toDouble() ?? 0.0;
+  final days = (res['days_to_payday'] as num?)?.toInt() ?? 0;
+  final daysText = l.plural('sim_days_left', days);
+  switch (res['verdict']) {
+    case 'invalid':
+      return l.get('sim_detail_invalid');
+    case 'caution':
+      return l.format('sim_detail_caution', {
+        'from': l.sar(n('current_daily_allowance')),
+        'to': l.sar(n('post_purchase_daily_allowance')),
+      });
+    case 'unaffordable':
+      return l.format('sim_detail_unaffordable', {'days': daysText});
+    default:
+      return l.format('sim_detail_comfortable', {
+        'remaining': l.sar(n('post_purchase_remaining')),
+        'days': daysText,
+      });
+  }
+}
 
 /// Pre-Purchase Affordability Simulator ("Can I Afford This? / هل أقدر أشتري؟")
 /// Evaluates potential purchase impact against salary cycle headroom, category budgets,
-/// and days until Saudi salary day (27th). Provides full offline calculation fallback.
+/// and days until the household payday. Provides full offline calculation fallback.
 class AffordabilitySimulatorSheet extends StatefulWidget {
   final String? householdId;
   final String? defaultItem;
@@ -140,23 +168,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     String categoryCode,
     String itemName,
   ) {
-    // Saudi salary cycle 27th calculation
-    final now = DateTime.now();
-    DateTime payday;
-    if (now.day < 27) {
-      payday = DateTime(now.year, now.month, 27);
-    } else {
-      final nextMonth = DateTime(now.year, now.month + 1, 1);
-      payday = DateTime(nextMonth.year, nextMonth.month, 27);
-    }
-
-    // Weekend adjustment: Friday -> Thursday (26th), Saturday -> Sunday (28th)
-    if (payday.weekday == DateTime.friday) {
-      payday = payday.subtract(const Duration(days: 1));
-    } else if (payday.weekday == DateTime.saturday) {
-      payday = payday.add(const Duration(days: 1));
-    }
-    final daysRemaining = max(1, payday.difference(now).inDays);
+    // The household payday (never a hard-coded 27th), on the Riyadh date.
+    final daysRemaining = max(1, SalaryCycleService.daysUntilNextPayday());
 
     // Compute from active in-memory cached budgets
     double totalRemaining = 0.0;
@@ -180,30 +193,15 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     final dailyRemaining = totalRemaining / daysRemaining;
     final newDaily = max(0.0, newRemaining / daysRemaining);
 
-    String verdict;
-    String adviceEn;
-    String adviceAr;
-
+    // The advice text is built at display time in the user's language
+    // (affordabilityAdvice), from these numbers.
+    final String verdict;
     if (targetAmount <= catRemaining) {
       verdict = 'comfortable';
-      adviceEn =
-          'Fits comfortably within your budget with SAR ${catRemaining.toStringAsFixed(1)} remaining in this category.';
-      adviceAr =
-          'متاح بكل أريحية ضمن ميزانية البند، ومتبقي لديك ${catRemaining.toStringAsFixed(1)} ريال.';
     } else if (targetAmount <= (catRemaining + flexibleHeadroom)) {
       verdict = 'caution';
-      final deficit = targetAmount - catRemaining;
-      adviceEn =
-          'Affordable with reallocation of SAR ${deficit.toStringAsFixed(1)} from flexible budgets. Daily allowance becomes SAR ${newDaily.toStringAsFixed(1)}/day.';
-      adviceAr =
-          'متاح ولكن يتطلب مناقلة ${deficit.toStringAsFixed(1)} ريال من الميزانيات المرنة. سيصبح المصروف اليومي ${newDaily.toStringAsFixed(1)} ريال/يوم.';
     } else {
       verdict = 'unaffordable';
-      final shortage = targetAmount - (catRemaining + flexibleHeadroom);
-      adviceEn =
-          'Exceeds available flexible cushion by SAR ${shortage.toStringAsFixed(1)}. Consider delaying or splitting into installments.';
-      adviceAr =
-          'يتجاوز الميزانية المتاحة بفارق ${shortage.toStringAsFixed(1)} ريال. يُفضل التأجيل أو التقسيط عبر تابي/تمارا.';
     }
 
     return {
@@ -216,8 +214,6 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
       'current_daily_allowance': dailyRemaining,
       'post_purchase_daily_allowance': newDaily,
       'days_to_payday': daysRemaining,
-      'advice_en': adviceEn,
-      'advice_ar': adviceAr,
       'is_offline': true,
     };
   }
@@ -237,7 +233,6 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final isAr = context.isArabic;
 
     return Container(
       constraints: BoxConstraints(
@@ -437,7 +432,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   // Result Card
                   if (_result != null) ...[
                     const SizedBox(height: 20),
-                    _buildResultCard(context, isAr),
+                    _buildResultCard(context),
                   ],
                 ],
               ),
@@ -458,7 +453,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
     );
   }
 
-  Widget _buildResultCard(BuildContext context, bool isAr) {
+  Widget _buildResultCard(BuildContext context) {
     final res = _result!;
     final verdict = res['verdict'] as String? ?? 'comfortable';
     final targetAmt = (res['target_amount'] as num?)?.toDouble() ?? 0.0;
@@ -482,13 +477,9 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
       verdictLabel = context.tr('unaffordable_exceeds');
     }
 
-    // The API/offline estimate provides en + ar advice; Urdu gets a
-    // localized summary of the verdict instead of falling back to English.
-    final adviceText = isAr
-        ? (res['advice_ar'] as String? ?? '')
-        : (context.isUrdu
-            ? context.tr('sim_advice_$verdict')
-            : (res['advice_en'] as String? ?? ''));
+    // UX-21: the same localized advice for the API answer and the offline
+    // estimate, in en / ar / ur.
+    final adviceText = affordabilityAdvice(AppLocalizations.of(context), res);
 
     final monthlyBnpl = targetAmt > 0 ? (targetAmt / 4.0) : 0.0;
 

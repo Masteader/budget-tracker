@@ -8,13 +8,21 @@ import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../../models/money.dart';
+import '../../main.dart' show supabase;
+import '../../models/household_dues.dart';
 import 'family_reimbursement_card.dart' show ReimbursementRecorder;
 
+/// Roommate balances, centred on the viewer (UX-16): their net balance first,
+/// then the debts they are part of ("You owe Faisal", "Imran owes you"), then
+/// the others.
 class MultiRoommateSettlementCard extends StatefulWidget {
   final String householdId;
   final SettlementV2Summary? summary;
   final VoidCallback? onSettled;
   final ReimbursementRecorder? recordPayment;
+
+  /// The signed-in user; defaults to the Supabase session.
+  final String? currentUserId;
 
   const MultiRoommateSettlementCard({
     super.key,
@@ -22,6 +30,7 @@ class MultiRoommateSettlementCard extends StatefulWidget {
     this.summary,
     this.onSettled,
     this.recordPayment,
+    this.currentUserId,
   });
 
   @override
@@ -97,6 +106,21 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
     );
   }
 
+  String? get _meId {
+    if (widget.currentUserId != null) return widget.currentUserId;
+    try {
+      return supabase.auth.currentUser?.id;
+    } catch (_) {
+      return null; // no Supabase session (tests, signed out)
+    }
+  }
+
+  String _debtTitle(BuildContext context, _DebtItem debt, String? me) {
+    if (me != null && debt.fromId == me) return context.trArgs('settle_you_owe', {'to': debt.toName});
+    if (me != null && debt.toId == me) return context.trArgs('settle_owes_you', {'from': debt.fromName});
+    return context.trArgs('settle_owes', {'from': debt.fromName, 'to': debt.toName});
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -118,9 +142,24 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
     }
 
     final summary = _summary ?? const SettlementV2Summary(mode: 'multi_roommate');
-    final activeDebts = _simplifyDebts
+    final me = _meId;
+    final allDebts = _simplifyDebts
         ? summary.simplifiedDebts.map((d) => _DebtItem(d.fromId, d.toId, d.fromName, d.toName, d.amount)).toList()
         : summary.pairwiseDebts.map((d) => _DebtItem(d.fromId, d.toId, d.fromName, d.toName, d.amount)).toList();
+    // Mine first: what I owe, then what I am owed (largest first), then the rest.
+    int rank(_DebtItem d) => me == null ? 2 : (d.fromId == me ? 0 : (d.toId == me ? 1 : 2));
+    final activeDebts = stableSorted(allDebts, (a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      if (byRank != 0 || rank(a) == 2) return byRank;
+      return b.amount.compareTo(a.amount);
+    });
+    // The viewer's net balance (the same with or without simplification).
+    final myLines = roommateDueLines(summary, me);
+    final myOwe = myLines.where((l) => l.kind == DueKind.iOwe).fold(0.0, (s, l) => s + l.amount);
+    final myOwed = myLines.where((l) => l.kind == DueKind.owedByRoommate).fold(0.0, (s, l) => s + l.amount);
+    final myNet = myOwed - myOwe;
+    // Shown while there are debts; with none, "All settled" says it.
+    final isMember = me != null && (summary.simplifiedDebts.isNotEmpty || summary.pairwiseDebts.isNotEmpty);
 
     final isAllSettled = activeDebts.isEmpty;
 
@@ -194,34 +233,52 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                   ],
                 ),
               ),
-              // Simplify Debts Switch
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.tr('simplify_debts'),
-                    style: TextStyle(
-                      color: _simplifyDebts ? AppThemes.iceCyan : context.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // "Fewest transfers" (was the jargon "Simplify debts"), on its own
+          // line so large text cannot push it off the card (UX-14).
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.tr('simplify_debts'),
+                  style: TextStyle(
+                    color: _simplifyDebts ? context.accentText : context.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Transform.scale(
-                    scale: 0.75,
-                    child: Switch(
-                      value: _simplifyDebts,
-                      activeThumbColor: AppThemes.electricTeal,
-                      activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
-                      onChanged: (val) {
-                        setState(() => _simplifyDebts = val);
-                      },
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              Switch(
+                value: _simplifyDebts,
+                activeThumbColor: AppThemes.electricTeal,
+                activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
+                onChanged: (val) {
+                  setState(() => _simplifyDebts = val);
+                },
               ),
             ],
           ),
+          Text(
+            context.tr('simplify_debts_hint'),
+            style: TextStyle(color: context.textSecondary, fontSize: 11),
+          ),
           const SizedBox(height: 12),
+
+          // The viewer's own net balance first (UX-16).
+          if (isMember) ...[
+            Text(
+              myNet <= -0.005
+                  ? context.trArgs('settle_my_net_owe', {'amount': context.sar(-myNet)})
+                  : myNet >= 0.005
+                      ? context.trArgs('settle_my_net_owed', {'amount': context.sar(myNet)})
+                      : context.tr('settle_my_net_even'),
+              key: const Key('roommate_my_net'),
+              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Member Net Balances
           if (summary.roommateBalances.isNotEmpty) ...[
@@ -341,7 +398,8 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              context.trArgs('settle_owes', {'from': debt.fromName, 'to': debt.toName}),
+                              _debtTitle(context, debt, me),
+                              key: const Key('roommate_debt_title'),
                               style: TextStyle(
                                 color: context.textPrimary,
                                 fontWeight: FontWeight.w600,

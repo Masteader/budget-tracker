@@ -20,8 +20,8 @@ class CategoryBudgetCard extends StatelessWidget {
   });
 
   Color get _barColor {
-    if (budget.usagePercent >= 1.0) return Colors.redAccent;
-    if (budget.usagePercent >= 0.8) return Colors.orange;
+    if (budget.isOverspent || budget.usageRatio >= 1.0) return Colors.redAccent;
+    if (budget.usageRatio >= 0.8) return Colors.orange;
     return AppThemes.success;
   }
 
@@ -105,7 +105,8 @@ class CategoryBudgetCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${(budget.usagePercent * 100).toStringAsFixed(0)}%',
+                        // Not clamped: 131% reads 131% (UX-08); only the bar is.
+                        '${(budget.usageRatio * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           color: _barColor,
                           fontWeight: FontWeight.w700,
@@ -129,8 +130,11 @@ class CategoryBudgetCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Wraps under large text instead of overflowing (UX-14).
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 8,
+                runSpacing: 2,
                 children: [
                   Text(
                     context.trArgs('amount_spent_suffix', {'amount': context.sar(budget.spentAmount)}),
@@ -142,6 +146,21 @@ class CategoryBudgetCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (budget.isOverspent) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: context.dangerColor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        context.trArgs('over_by_amount', {'amount': context.sar(budget.overspentAmount)}),
+                        style: TextStyle(color: context.dangerColor, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (subCategories.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -158,18 +177,22 @@ class CategoryBudgetCard extends StatelessWidget {
                         children: [
                           const Icon(Icons.account_tree_outlined, size: 13, color: AppThemes.success),
                           const SizedBox(width: 6),
-                          Text(
-                            context.tr('itemized_sub_budgets'),
-                            style: TextStyle(
-                              color: context.successText,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              context.tr('itemized_sub_budgets'),
+                              style: TextStyle(
+                                color: context.successText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          const Spacer(),
-                          Text(
-                            context.tr('breakdown'),
-                            style: TextStyle(color: context.textSecondary, fontSize: 10),
+                          Flexible(
+                            child: Text(
+                              context.tr('breakdown'),
+                              textAlign: TextAlign.end,
+                              style: TextStyle(color: context.textSecondary, fontSize: 10),
+                            ),
                           ),
                           const SizedBox(width: 2),
                           Icon(Icons.chevron_right, size: 14, color: context.textSecondary),

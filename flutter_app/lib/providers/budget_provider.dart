@@ -4,13 +4,15 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/salary_cycle_service.dart';
 
-/// Centralized reactive state provider for salary cycle budgets, forecasts, and sub-budget allocations.
+/// Centralized reactive state provider for salary cycle budgets and sub-budget allocations.
+///
+/// The pace and verdict shown on the dashboard come from one place only,
+/// [PaydayOutlook] (UX-07); the server burn-rate forecast is not fetched.
 class BudgetProvider extends ChangeNotifier {
   String? _householdId;
   List<SalaryCycleInfo> _cycles = [];
   int _selectedCycleIndex = 0;
   List<CategoryBreakdownItem> _categories = [];
-  Map<String, dynamic> _forecast = {};
   bool _isLoading = false;
   String? _error;
   int _breakdownGeneration = 0;
@@ -26,7 +28,6 @@ class BudgetProvider extends ChangeNotifier {
   List<SalaryCycleInfo> get cycles => _cycles;
   int get selectedCycleIndex => _selectedCycleIndex;
   List<CategoryBreakdownItem> get categories => _categories;
-  Map<String, dynamic> get forecast => _forecast;
 
   SalaryCycleInfo? get activeCycle {
     if (_cycles.isEmpty) return null;
@@ -62,7 +63,6 @@ class BudgetProvider extends ChangeNotifier {
     _cycles = [];
     _selectedCycleIndex = 0;
     _categories = [];
-    _forecast = {};
     _error = null;
     _isLoading = false;
   }
@@ -83,7 +83,6 @@ class BudgetProvider extends ChangeNotifier {
     try {
       await Future.wait([
         _fetchCycles(),
-        _fetchForecast(),
         _fetchPayday(),
       ]);
       await fetchBreakdown();
@@ -125,15 +124,6 @@ class BudgetProvider extends ChangeNotifier {
       unawaited(SalaryCycleService.cachePayday(payday));
     } catch (e) {
       debugPrint('[BudgetProvider] Error fetching payday: $e');
-    }
-  }
-
-  Future<void> _fetchForecast() async {
-    if (_householdId == null) return;
-    try {
-      _forecast = await _api.getSalaryCycleForecast(_householdId!);
-    } catch (e) {
-      debugPrint('[BudgetProvider] Error fetching forecast: $e');
     }
   }
 
