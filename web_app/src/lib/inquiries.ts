@@ -19,6 +19,9 @@ export type InquiryOutcome = 'sent' | 'invalid' | 'rate_limited' | 'unavailable'
 
 const DEFAULT_API_BASE_URL = 'https://budget.fmsco.com.sa';
 
+/** Public contact address shown on the page (also the mailbox the inquiries are sent from). */
+export const CONTACT_EMAIL = 'fmscoinfo@fmsco.com.sa';
+
 /**
  * VITE_API_BASE_URL selects the backend. Unset → the production API; an empty string →
  * same origin (used when the build is served by the FastAPI service itself).

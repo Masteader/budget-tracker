@@ -165,7 +165,10 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 ### 3.12 React Daylight Coastal Landing Page & Payday Simulator
 - **Stack:** React 19, Vite, TypeScript, TailwindCSS; the production build is committed in
   `ai_service/static/` and served at `/`.
-- **Payday Simulator:** salary slider with a countdown to payday and a distribution preview.
+- **One page, plain copy (Arabic first):** hero with an illustrative payday card (pick a payday,
+  see the real cycle dates and days left, with sample amounts), four benefits (salary cycle,
+  chat/receipt entry, Nafaqah, roommate split), a Nafaqah explainer, a privacy section that names
+  the AI processor (Google Gemini), FAQ, early access and footer. No invented metrics.
 - **VIP early-access form:** posts to `POST /public/inquiries` (`VITE_API_BASE_URL`).
 
 ### 3.13 Trilingual Localization (Arabic, English, Urdu)

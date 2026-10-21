@@ -21,9 +21,9 @@
 ## 2. Daylight Coastal Exploding Flow (Web Landing Page)
 
 - The web app and marketing portal follow the **Daylight Coastal Exploding Flow** aesthetic:
-  - Vibrant morning coastal palette with local ice sea backdrops and flowing ambient animations.
-  - Interactive live Payday Countdown simulator and income allocation sliders.
-  - Floating cards, glass frosted panels, and interactive feature breakdowns.
+  - Light morning coastal palette (teal on white), one subtle hero visual, no decorative canvas or looping effects.
+  - An illustrative payday countdown card (household payday → real cycle dates, sample amounts, labelled as an example).
+  - Plain, true copy: no invented metrics or claims the code does not back (product review 2026-10-21).
 
 ## 3. Strict Trilingual & RTL Guidelines
 

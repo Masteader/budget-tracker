@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React from 'react';
 import type { Language, TranslationDictionary } from '../i18n/translations';
 
 interface HeaderProps {
@@ -8,217 +7,63 @@ interface HeaderProps {
   dict: TranslationDictionary;
 }
 
-export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+export const Logo: React.FC<{ className?: string }> = ({ className = 'w-9 h-9' }) => (
+  <svg aria-hidden="true" focusable="false" viewBox="0 0 48 48" className={className}>
+    <rect width="48" height="48" rx="12" fill="#006575" />
+    <rect x="11" y="14" width="26" height="23" rx="4" fill="none" stroke="#fff" strokeWidth="3" />
+    <path d="M11 21h26M18 10v7M30 10v7" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+    <circle cx="24" cy="29" r="3.5" fill="#7fe0d4" />
+  </svg>
+);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
+  const other: Language = lang === 'ar' ? 'en' : 'ar';
+  const links = [
+    { href: '#features', label: dict.nav.features },
+    { href: '#nafaqah', label: dict.nav.nafaqah },
+    { href: '#privacy', label: dict.nav.privacy },
+    { href: '#faq', label: dict.nav.faq },
+  ];
 
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-300 ${
-        isScrolled
-          ? 'bg-deep-navy/90 backdrop-blur-2xl border-b border-white/20 shadow-2xl py-2.5'
-          : 'bg-deep-navy/40 backdrop-blur-xl border-b border-white/15 py-4'
-      }`}
-    >
-      <div className="flex justify-between items-center w-full px-5 lg:px-12 max-w-[1600px] mx-auto">
-        {/* Brand Entity Anchor */}
-        <a href="#" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-electric-teal via-primary-container to-primary flex items-center justify-center text-white shadow-lg shadow-electric-teal/20 group-hover:scale-105 transition-transform duration-300">
-            <span aria-hidden="true" className="material-symbols-outlined fill-1 text-[24px]">account_balance</span>
-          </div>
-          <div className="flex flex-col text-start">
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold tracking-tight text-white group-hover:text-ice-cyan transition-colors">
-                {dict.brand.name}
-              </span>
-              <span className="text-[10px] font-semibold text-electric-teal bg-white/10 px-2 py-0.5 rounded border border-electric-teal/30 uppercase tracking-wider backdrop-blur-sm">
-                {dict.brand.sovereignBadge}
-              </span>
-            </div>
-            <span className="text-[11px] text-white/70 font-medium tracking-wide hidden sm:inline">
-              {dict.brand.subtagline}
+    <header className="sticky top-0 z-50 border-b border-line bg-white/90 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label={`${dict.brand.name} · ${dict.a11y.home}`}>
+          <Logo />
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="font-bold text-ink" lang="en" dir="ltr">
+              {dict.brand.name}
             </span>
-          </div>
+            <span className="hidden truncate text-xs text-muted sm:block">{dict.brand.tagline}</span>
+          </span>
         </a>
 
-        {/* Minimal Editorial Nav Links */}
-        <nav aria-label={dict.a11y.mainNav} className="hidden xl:flex items-center gap-7 text-sm font-medium">
-          <a
-            href="#simulator"
-            className="text-white hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
-          >
-            <span className="font-semibold">{dict.nav.simulator}</span>
-            <span className="text-[9px] text-white/50 group-hover:text-ice-cyan/70 uppercase font-mono tracking-wider">
-              {dict.nav.simulatorSub}
-            </span>
-          </a>
-          <a
-            href="#metrics"
-            className="text-white/80 hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
-          >
-            <span>{dict.nav.telemetry}</span>
-            <span className="text-[9px] text-white/50 group-hover:text-ice-cyan/70 uppercase font-mono tracking-wider">
-              {dict.nav.telemetrySub}
-            </span>
-          </a>
-          <a
-            href="#pillars"
-            className="text-white/80 hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
-          >
-            <span>{dict.nav.pillars}</span>
-            <span className="text-[9px] text-white/50 group-hover:text-ice-cyan/70 uppercase font-mono tracking-wider">
-              {dict.nav.pillarsSub}
-            </span>
-          </a>
-          <a
-            href="#security"
-            className="text-white/80 hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
-          >
-            <span>{dict.nav.security}</span>
-            <span className="text-[9px] text-white/50 group-hover:text-ice-cyan/70 uppercase font-mono tracking-wider">
-              {dict.nav.securitySub}
-            </span>
-          </a>
-          <a
-            href="#faq"
-            className="text-white/80 hover:text-ice-cyan transition-colors flex flex-col items-center py-1 group"
-          >
-            <span>{dict.nav.faq}</span>
-            <span className="text-[9px] text-white/50 group-hover:text-ice-cyan/70 uppercase font-mono tracking-wider">
-              {dict.nav.faqSub}
-            </span>
-          </a>
+        <nav aria-label={dict.a11y.mainNav} className="hidden items-center gap-6 text-sm font-medium md:flex">
+          {links.map((link) => (
+            <a key={link.href} href={link.href} className="text-muted transition-colors hover:text-teal">
+              {link.label}
+            </a>
+          ))}
         </nav>
 
-        {/* Language Switcher & Action Cluster */}
-        <div className="flex items-center gap-3">
-          {/* Dual Language Toggle Pill */}
-          <div className="inline-flex items-center bg-black/40 p-1 rounded-full border border-white/20 backdrop-blur-md shadow-inner relative">
-            <button
-              type="button"
-              lang="en"
-              aria-pressed={lang === 'en'}
-              aria-label={dict.a11y.switchToEnglish}
-              onClick={() => setLanguage('en')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
-                lang === 'en'
-                  ? 'bg-primary-container text-white shadow-md'
-                  : 'text-white/80 hover:text-ice-cyan'
-              }`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              lang="ar"
-              aria-pressed={lang === 'ar'}
-              aria-label={dict.a11y.switchToArabic}
-              onClick={() => setLanguage('ar')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
-                lang === 'ar'
-                  ? 'bg-primary-container text-white shadow-md'
-                  : 'text-white/80 hover:text-ice-cyan'
-              }`}
-            >
-              العربية
-            </button>
-          </div>
-
-          {/* VIP CTA Button */}
-          <a
-            href="#early-access"
-            className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary-container via-primary to-secondary text-white text-xs lg:text-sm font-bold shadow-lg shadow-primary/30 hover:shadow-electric-teal/30 hover:-translate-y-0.5 active:scale-95 transition-all border border-white/20"
-          >
-            <span aria-hidden="true" className="material-symbols-outlined text-[18px] text-electric-teal">bolt</span>
-            <span>{dict.nav.vipCta}</span>
-          </a>
-
-          {/* Mobile Menu Button */}
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            aria-label={mobileMenuOpen ? dict.a11y.closeMenu : dict.a11y.openMenu}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="xl:hidden p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            lang={other}
+            onClick={() => setLanguage(other)}
+            aria-label={other === 'en' ? dict.a11y.switchToEnglish : dict.a11y.switchToArabic}
+            className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink transition-colors hover:border-teal hover:text-teal"
           >
-            <span aria-hidden="true" className="material-symbols-outlined text-[22px]">
-              {mobileMenuOpen ? 'close' : 'menu'}
-            </span>
+            {other === 'en' ? 'English' : 'العربية'}
           </button>
+          <a
+            href="#early-access"
+            className="hidden rounded-lg bg-teal px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-teal-dark sm:inline-block"
+          >
+            {dict.nav.cta}
+          </a>
         </div>
       </div>
-
-      {/* Mobile Menu Drawer */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.nav
-            id="mobile-menu"
-            aria-label={dict.a11y.mainNav}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="xl:hidden bg-deep-navy/95 border-b border-white/20 px-6 py-5 flex flex-col gap-4 text-sm font-semibold"
-          >
-            <a
-              href="#simulator"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-white hover:text-ice-cyan py-2 flex items-center justify-between border-b border-white/10"
-            >
-              <span>{dict.nav.simulator}</span>
-              <span className="text-xs text-electric-teal">{dict.nav.simulatorSub}</span>
-            </a>
-            <a
-              href="#metrics"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-white hover:text-ice-cyan py-2 flex items-center justify-between border-b border-white/10"
-            >
-              <span>{dict.nav.telemetry}</span>
-              <span className="text-xs text-electric-teal">{dict.nav.telemetrySub}</span>
-            </a>
-            <a
-              href="#pillars"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-white hover:text-ice-cyan py-2 flex items-center justify-between border-b border-white/10"
-            >
-              <span>{dict.nav.pillars}</span>
-              <span className="text-xs text-electric-teal">{dict.nav.pillarsSub}</span>
-            </a>
-            <a
-              href="#security"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-white hover:text-ice-cyan py-2 flex items-center justify-between border-b border-white/10"
-            >
-              <span>{dict.nav.security}</span>
-              <span className="text-xs text-electric-teal">{dict.nav.securitySub}</span>
-            </a>
-            <a
-              href="#faq"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-white hover:text-ice-cyan py-2 flex items-center justify-between border-b border-white/10"
-            >
-              <span>{dict.nav.faq}</span>
-              <span className="text-xs text-electric-teal">{dict.nav.faqSub}</span>
-            </a>
-            <a
-              href="#early-access"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-primary-container via-primary to-secondary text-white font-bold text-sm shadow-lg"
-            >
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">bolt</span>
-              <span>{dict.nav.vipCta}</span>
-            </a>
-          </motion.nav>
-        )}
-      </AnimatePresence>
     </header>
   );
 };

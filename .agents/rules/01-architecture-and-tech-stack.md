@@ -25,7 +25,7 @@
 | Layer | Technology | Primary Role |
 |---|---|---|
 | **Mobile Client** | Flutter 3.22+, Dart 3.x | Cross-platform mobile app (Android & iOS). Sovereign OS & Iced Ocean HUD design. |
-| **Web Portal / Landing** | React 19, TypeScript, Vite, TailwindCSS | Daylight Coastal RTL web landing page, interactive salary & payday simulator, VIP early-access form. Built into `ai_service/static/`. |
+| **Web Portal / Landing** | React 19, TypeScript, Vite, TailwindCSS | Daylight Coastal RTL web landing page (the only one), payday countdown example, VIP early-access form. Built into `ai_service/static/`. |
 | **AI Microservice** | Python 3.11, FastAPI, Uvicorn, LiteLLM | Receipt OCR and dialect chat agent (model from `LITELLM_MODEL`, Gemini by default), salary cycles, settlements and Nafaqah, recurring bill detector, price tracker, PDF statements, support/inquiry email. |
 | **Database & Storage** | Supabase (PostgreSQL 15+) | Multi-tenant relational storage, Row Level Security (RLS), Supabase Storage (receipt images), Realtime subscriptions. |
 | **Local Offline Cache** | SQLite (`sqflite`) | Local offline transaction buffer and queue with auto-sync on network reconnect. |
