@@ -21,8 +21,8 @@ import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
-import '../../widgets/dashboard/family_reimbursement_card.dart';
-import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
+import '../../widgets/dashboard/household_balances_section.dart';
+import '../../widgets/card_error_state.dart';
 import '../../widgets/dashboard/accounts_summary_card.dart';
 import '../../widgets/dashboard/payday_checkin_banner.dart';
 import '../../widgets/app_snackbar.dart';
@@ -308,6 +308,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   List<SalaryCycleInfo> _cycles = [];
   int _currentCycleIndex = 0;
 
+  /// Bumped by "Try again" to subscribe to the budgets stream afresh.
+  int _budgetStreamGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -413,6 +416,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         return Scaffold(
           body: SafeArea(
             child: StreamBuilder<List<Map<String, dynamic>>>(
+              key: ValueKey('budgets-$hid-$_budgetStreamGeneration'),
               stream: supabase
                   .from('budgets')
                   .stream(primaryKey: ['id'])
@@ -436,7 +440,19 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                     _buildAppBar(hid),
-                    if (!budgetSnap.hasData)
+                    if (budgetSnap.hasError && !budgetSnap.hasData)
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        sliver: SliverToBoxAdapter(
+                          // UX-01: a failed budget stream is an error, not an endless skeleton.
+                          child: CardErrorState(
+                            title: context.tr('cycle_remaining_budget'),
+                            message: context.tr('load_error_budgets'),
+                            onRetry: () => setState(() => _budgetStreamGeneration++),
+                          ),
+                        ),
+                      )
+                    else if (!budgetSnap.hasData)
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         sliver: SliverToBoxAdapter(
@@ -519,20 +535,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               // Tools screen always has them.
                               AccountsSummaryCard(householdId: hid, minAccounts: 2),
                               const SizedBox(height: 12),
-                              FutureBuilder<SettlementV2Summary>(
-                                future: ApiService.instance.getSettlementV2(hid),
-                                builder: (context, snap) {
-                                  if (snap.hasData && snap.data!.isRoommateMode) {
-                                    return MultiRoommateSettlementCard(
-                                      householdId: hid,
-                                      summary: snap.data,
-                                    );
-                                  }
-                                  return FamilyReimbursementCard(
-                                    householdId: hid,
-                                  );
-                                },
-                              ),
+                              HouseholdBalancesSection(householdId: hid),
                               const SizedBox(height: 16),
                               // Commitments: recurring bills and installments together.
                               Padding(

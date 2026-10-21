@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -13,6 +12,7 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
 import '../dispose_on_unmount.dart';
 import '../../models/money.dart';
 import '../../services/salary_cycle_service.dart';
@@ -39,7 +39,8 @@ class InstallmentPlansCard extends StatefulWidget {
 }
 
 class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
-  late Future<List<InstallmentPlan>> _futurePlans;
+  /// Used only without an [InstallmentProvider]; created on first build.
+  Future<List<InstallmentPlan>>? _futurePlans;
   bool _isExpanded = true;
   TransactionProvider? _txProvider;
 
@@ -84,71 +85,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     super.dispose();
   }
 
-  void _loadPlans() {
-    if (widget.plans != null) {
-      _futurePlans = Future.value(widget.plans);
-    } else if (widget.householdId != null && widget.householdId!.isNotEmpty) {
-      _futurePlans = _fetchPlans(widget.householdId!);
-    } else {
-      _futurePlans = Future.value([]);
-    }
-  }
+  /// Forgets the loaded plans; the next build without a provider loads them again.
+  void _loadPlans() => _futurePlans = null;
 
-  Future<List<InstallmentPlan>> _fetchPlans(String hid) async {
-    try {
-      final apiPlans = await ApiService.instance.getInstallments(hid);
-      if (apiPlans.isNotEmpty) return apiPlans;
-    } catch (_) {}
-
-    // Fallback: Check Supabase transactions for financed purchases
-    try {
-      final rows = await supabase
-          .from('transactions')
-          .select('id, amount, merchant, timestamp, raw_sms, category_code')
-          .eq('household_id', hid)
-          .like('raw_sms', '%Financed via%');
-
-      final result = <InstallmentPlan>[];
-      for (final r in (rows as List)) {
-        final raw = (r['raw_sms'] as String? ?? '');
-        final regex = RegExp(
-          r'Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,.]+))?',
-          caseSensitive: false,
-        );
-        final match = regex.firstMatch(raw);
-        final provider = match?.group(1)?.trim() ??
-            (raw.toLowerCase().contains('tamara') ? 'Tamara' : 'Tabby');
-        final paid = int.tryParse(match?.group(2) ?? '1') ?? 1;
-        final count = int.tryParse(match?.group(3) ?? '4') ?? 4;
-        final monthly = (r['amount'] as num?)?.toDouble() ?? 0.0;
-        final totalParsed = match?.group(4) != null
-            ? double.tryParse(match!.group(4)!.replaceAll(',', ''))
-            : null;
-        final total = totalParsed ?? (monthly * count);
-
-        result.add(InstallmentPlan(
-          id: 'plan-${(r['id'] as String).substring(0, 8)}',
-          householdId: hid,
-          merchant: r['merchant'] as String? ?? 'Installment Purchase',
-          provider: provider,
-          totalAmount: total,
-          installmentCount: count,
-          monthlyAmount: monthly > 0 ? monthly : (total / count),
-          paidInstallments: paid,
-          dayOfMonth: 27,
-          startDate: (r['timestamp'] as String? ??
-                  DateTime.now().toIso8601String())
-              .substring(0, 10),
-          status: paid >= count ? 'COMPLETED' : 'ACTIVE',
-          categoryCode: r['category_code'] as String? ?? 'OPEX-SHOPPING',
-          originalTransactionId: r['id'] as String?,
-          notes: raw,
-        ));
-      }
-      if (result.isNotEmpty) return result;
-    } catch (_) {}
-
-    return [];
+  /// Rows from the API only; a failure reaches the FutureBuilder as an error.
+  Future<List<InstallmentPlan>> _fetchPlans() {
+    final hid = widget.householdId;
+    if (hid == null || hid.isEmpty) return Future.value(const []);
+    return ApiService.instance.getInstallments(hid);
   }
 
   @override
@@ -416,18 +360,55 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
       return _buildCardContent(context, widget.plans!, fmt);
     }
 
-    if (installmentProv != null) {
-      return _buildCardContent(context, installmentProv.plans, fmt);
+    final prov = installmentProv;
+    if (prov != null) {
+      // Loading, error and empty are distinct (UX-01): an empty list is shown
+      // only after a successful load.
+      if (prov.error != null && !prov.hasLoaded) return _buildError(context, prov.fetchPlans);
+      if (!prov.hasLoaded) return _buildLoading(context);
+      return _buildCardContent(
+        context,
+        prov.plans,
+        fmt,
+        staleBanner: prov.error == null
+            ? null
+            : CardErrorBanner(lastUpdated: prov.lastUpdated, onRetry: prov.fetchPlans),
+      );
     }
 
     return FutureBuilder<List<InstallmentPlan>>(
-      future: _futurePlans,
+      future: _futurePlans ??= _fetchPlans(),
       builder: (context, snapshot) {
-        final plans = snapshot.data ?? [];
-        return _buildCardContent(context, plans, fmt);
+        if (snapshot.hasError) return _buildError(context, () => setState(_loadPlans));
+        if (snapshot.connectionState != ConnectionState.done) return _buildLoading(context);
+        return _buildCardContent(context, snapshot.data ?? const [], fmt);
       },
     );
   }
+
+  Widget _buildLoading(BuildContext context) => Container(
+        key: const Key('installments_loading'),
+        height: 88,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: context.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.borderColor),
+        ),
+        child: const Center(
+          child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+
+  Widget _buildError(BuildContext context, VoidCallback onRetry) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: CardErrorState(
+          title: context.tr('installments_bnpl'),
+          message: context.tr('load_error_installments'),
+          icon: Icons.credit_score_rounded,
+          onRetry: onRetry,
+        ),
+      );
 
   /// "Installment 2 of 4 paid · next 29 Oct" for an active plan.
   String? _nextDueText(BuildContext context, InstallmentPlan plan, DateTime today) {
@@ -443,8 +424,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   Widget _buildCardContent(
     BuildContext context,
     List<InstallmentPlan> plans,
-    NumberFormat fmt,
-  ) {
+    NumberFormat fmt, {
+    Widget? staleBanner,
+  }) {
     final activePlans = plans.where((p) => !p.isCompleted).toList();
     // What the installments take before the next payday (both frequencies),
     // instead of a "/month" total that is wrong for bi-weekly plans.
@@ -500,14 +482,17 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              activePlans.isEmpty
+                              // UX-25: "all cleared" only when plans exist and all are paid.
+                              plans.isEmpty
+                                  ? context.tr('no_installments')
+                                  : activePlans.isEmpty
                                   ? context.tr('all_installments_cleared')
                                   : dueBeforePayday > 0
                                       ? context.trArgs('inst_due_before_payday', {'amount': context.sar(dueBeforePayday)})
                                       : context.tr('inst_nothing_due_before_payday'),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: activePlans.isEmpty
+                                color: activePlans.isEmpty && plans.isNotEmpty
                                     ? AppThemes.success
                                     : context.textSecondary,
                               ),
@@ -526,6 +511,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                 ),
               ),
 
+              if (staleBanner != null)
+                Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 8), child: staleBanner),
               if (_isExpanded) ...[
                 Divider(color: context.borderColor, height: 1),
                 if (plans.isEmpty) ...[

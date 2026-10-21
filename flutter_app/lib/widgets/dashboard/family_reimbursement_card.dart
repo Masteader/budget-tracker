@@ -10,6 +10,7 @@ import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
 import '../nafaqah/wife_allowance_card.dart';
 
 /// Records a roommate settlement payment (used by the roommate card).
@@ -32,11 +33,16 @@ typedef NafaqahLedgerLoader = Future<NafaqahLedger> Function(String householdId,
 /// responsibility and are never split between the spouses. The card shows what
 /// the husband owes his wife for shared things she paid from her own money,
 /// records partial or full repayments, lists the history, and shows her
-/// personal allowance for the salary cycle. Renders nothing outside family mode.
+/// personal allowance for the salary cycle. Renders nothing outside family mode;
+/// a failed load is an error with a retry, never "nothing owed" (UX-01).
 class FamilyReimbursementCard extends StatefulWidget {
   final String householdId;
   final NafaqahSummary? summary;
   final VoidCallback? onReimbursed;
+
+  /// Every summary the card loads (first load, retry, after a repayment), so
+  /// the dashboard hero can show what is owed to the wife.
+  final ValueChanged<NafaqahSummary>? onSummaryLoaded;
   final NafaqahSummaryLoader? loadSummary;
   final NafaqahReimbursementRecorder? recordReimbursement;
   final NafaqahLedgerLoader? loadLedger;
@@ -47,6 +53,7 @@ class FamilyReimbursementCard extends StatefulWidget {
     required this.householdId,
     this.summary,
     this.onReimbursed,
+    this.onSummaryLoaded,
     this.loadSummary,
     this.recordReimbursement,
     this.loadLedger,
@@ -60,6 +67,8 @@ class FamilyReimbursementCard extends StatefulWidget {
 class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
   NafaqahSummary? _summary;
   bool _isLoading = true;
+  bool _failed = false;
+  DateTime? _lastUpdated;
 
   @override
   void initState() {
@@ -79,6 +88,10 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
       _summary = widget.summary;
       _isLoading = false;
     } else if (widget.householdId != oldWidget.householdId) {
+      // Never show the previous household's ledger while this one loads.
+      _summary = null;
+      _isLoading = true;
+      _failed = false;
       _loadSummary();
     }
   }
@@ -91,11 +104,24 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
         setState(() {
           _summary = res;
           _isLoading = false;
+          _failed = false;
+          _lastUpdated = DateTime.now();
         });
+        widget.onSummaryLoaded?.call(res);
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _failed = true;
+        });
+      }
     }
+  }
+
+  void _retry() {
+    setState(() => _isLoading = _summary == null);
+    _loadSummary();
   }
 
   @override
@@ -119,6 +145,14 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     }
 
     final summary = _summary;
+    if (summary == null && _failed) {
+      return CardErrorState(
+        title: context.tr('family_nafaqah_title'),
+        message: context.tr('load_error_nafaqah'),
+        icon: Icons.family_restroom_rounded,
+        onRetry: _retry,
+      );
+    }
     if (summary == null || !summary.isFamily) return const SizedBox.shrink();
 
     final wives = summary.callerIsWife
@@ -129,6 +163,10 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_failed) ...[
+          CardErrorBanner(lastUpdated: _lastUpdated, onRetry: _retry),
+          const SizedBox(height: 8),
+        ],
         if (summary.needsProvider) ...[
           _NoticeBanner(
             key: const ValueKey('nafaqah_needs_provider'),

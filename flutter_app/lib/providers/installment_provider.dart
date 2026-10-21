@@ -2,31 +2,51 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/installment_plan.dart';
 import '../services/api_service.dart';
-import '../../main.dart';
 
 /// Centralized reactive state provider for BNPL & installment plans (Tamara, Tabby, Bank).
 class InstallmentProvider extends ChangeNotifier {
+  InstallmentProvider({ApiService? api}) : _apiOverride = api;
+
+  final ApiService? _apiOverride;
+  ApiService get _api => _apiOverride ?? ApiService.instance;
+
   String? _householdId;
   List<InstallmentPlan> _plans = [];
   bool _isLoading = false;
   String? _error;
+  DateTime? _lastUpdated;
 
   List<InstallmentPlan> get plans => _plans;
   bool get isLoading => _isLoading;
+
+  /// Set when the last load failed; [plans] then still holds the plans from
+  /// [lastUpdated], if any.
   String? get error => _error;
+  DateTime? get lastUpdated => _lastUpdated;
+
+  /// Plans were loaded at least once for this household (an empty list then
+  /// really means "no plans").
+  bool get hasLoaded => _lastUpdated != null;
   String? get householdId => _householdId;
   bool get isInitialized => _householdId != null;
 
   /// Initialize provider with active household ID and fetch plans.
   Future<void> init(String householdId) async {
     final changed = _householdId != householdId;
+    if (changed) {
+      _plans = [];
+      _lastUpdated = null;
+      _error = null;
+    }
     _householdId = householdId;
-    if (changed || _plans.isEmpty) {
+    if (changed || !hasLoaded) {
       await fetchPlans();
     }
   }
 
-  /// Re-fetch installment plans from the API or Supabase fallback.
+  /// Re-fetch installment plans from the API (rows only, R10: legacy notes are
+  /// never reconstructed into plans on the client). A failure keeps the last
+  /// plans and sets [error] (UX-01: never an empty "all cleared" list).
   Future<void> fetchPlans({bool silent = false}) async {
     if (_householdId == null || _householdId!.isEmpty) return;
     if (!silent) {
@@ -34,81 +54,26 @@ class InstallmentProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
     }
-
+    final householdId = _householdId!;
     try {
-      final apiPlans = await ApiService.instance.getInstallments(_householdId!);
-      if (apiPlans.isNotEmpty) {
-        _plans = apiPlans;
-        _isLoading = false;
-        _error = null;
-        notifyListeners();
-        return;
-      }
-    } catch (e) {
-      debugPrint('[InstallmentProvider] API getInstallments error: $e');
-    }
-
-    // Fallback: Check Supabase transactions for financed purchases
-    try {
-      final rows = await supabase
-          .from('transactions')
-          .select('id, amount, merchant, timestamp, raw_sms, category_code')
-          .eq('household_id', _householdId!)
-          .like('raw_sms', '%Financed via%');
-
-      final result = <InstallmentPlan>[];
-      for (final r in (rows as List)) {
-        final raw = (r['raw_sms'] as String? ?? '');
-        final regex = RegExp(
-          r'Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,.]+))?',
-          caseSensitive: false,
-        );
-        final match = regex.firstMatch(raw);
-        final provider = match?.group(1)?.trim() ??
-            (raw.toLowerCase().contains('tamara') ? 'Tamara' : 'Tabby');
-        final paid = int.tryParse(match?.group(2) ?? '1') ?? 1;
-        final count = int.tryParse(match?.group(3) ?? '4') ?? 4;
-        final monthly = (r['amount'] as num?)?.toDouble() ?? 0.0;
-        final totalParsed = match?.group(4) != null
-            ? double.tryParse(match!.group(4)!.replaceAll(',', ''))
-            : null;
-        final total = totalParsed ?? (monthly * count);
-
-        result.add(InstallmentPlan(
-          id: 'plan-${(r['id'] as String).substring(0, 8)}',
-          householdId: _householdId!,
-          merchant: r['merchant'] as String? ?? 'Installment Purchase',
-          provider: provider,
-          totalAmount: total,
-          installmentCount: count,
-          monthlyAmount: monthly > 0 ? monthly : (total / count),
-          paidInstallments: paid,
-          dayOfMonth: 27,
-          startDate: (r['timestamp'] as String? ??
-                  DateTime.now().toIso8601String())
-              .substring(0, 10),
-          status: paid >= count ? 'COMPLETED' : 'ACTIVE',
-          categoryCode: r['category_code'] as String? ?? 'OPEX-SHOPPING',
-          originalTransactionId: r['id'] as String?,
-          notes: raw,
-        ));
-      }
-      _plans = result;
-      _isLoading = false;
+      final plans = await _api.getInstallments(householdId);
+      if (householdId != _householdId) return; // switched household meanwhile
+      _plans = plans;
       _error = null;
-      notifyListeners();
+      _lastUpdated = DateTime.now();
     } catch (e) {
-      _isLoading = false;
+      if (householdId != _householdId) return;
       _error = e.toString();
-      debugPrint('[InstallmentProvider] Error fetching fallback plans: $e');
-      notifyListeners();
+      debugPrint('[InstallmentProvider] getInstallments error: $e');
     }
+    _isLoading = false;
+    notifyListeners();
   }
 
   /// Creates a new installment plan and refreshes active plans.
   Future<InstallmentPlan> createPlan(Map<String, dynamic> planData) async {
     try {
-      final plan = await ApiService.instance.createInstallmentPlan(planData);
+      final plan = await _api.createInstallmentPlan(planData);
       await fetchPlans(silent: true);
       return plan;
     } catch (e) {
@@ -120,7 +85,7 @@ class InstallmentProvider extends ChangeNotifier {
   /// Records an installment payment towards a plan.
   Future<bool> recordPayment(String planId) async {
     try {
-      final plan = await ApiService.instance.payInstallment(planId);
+      final plan = await _api.payInstallment(planId);
       await fetchPlans(silent: true);
       // null: the server did not record the payment (FR-A-03).
       return plan != null;
@@ -136,6 +101,7 @@ class InstallmentProvider extends ChangeNotifier {
     _plans = [];
     _isLoading = false;
     _error = null;
+    _lastUpdated = null;
     notifyListeners();
   }
 
@@ -143,6 +109,7 @@ class InstallmentProvider extends ChangeNotifier {
   @visibleForTesting
   void setPlansForTesting(List<InstallmentPlan> testPlans, {String? householdId}) {
     _plans = testPlans;
+    _lastUpdated = DateTime.now();
     if (householdId != null) _householdId = householdId;
     notifyListeners();
   }

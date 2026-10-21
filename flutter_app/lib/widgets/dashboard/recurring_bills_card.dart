@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
 
 /// Interactive dashboard card displaying recurring monthly bills, payment status
 /// in the active salary cycle, reserved fund allowance, and category inclusion settings.
@@ -82,25 +83,23 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     return Consumer<RecurringBillsProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.summary == null) {
-          return Container(
-            height: 110,
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
-              ),
-            ),
+          return _buildLoading();
+        }
+        final summary = provider.summary;
+        // UX-01: a failed load is an error with a retry, never the set-up
+        // state of a household without bills.
+        if (summary == null && provider.error != null) {
+          return CardErrorState(
+            title: context.tr('recurring_bills'),
+            message: context.tr('load_error_bills'),
+            icon: Icons.repeat_rounded,
+            onRetry: provider.fetchBills,
           );
         }
-
-        final summary = provider.summary;
-        if (summary == null || summary.bills.isEmpty) {
+        if (summary == null) {
+          return _buildLoading();
+        }
+        if (summary.bills.isEmpty) {
           return _buildEmptyOrActionCard();
         }
         final upcomingCount = summary.bills.where((b) => b.isUpcoming || b.isOverdue).length;
@@ -198,6 +197,11 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 ),
               ),
 
+              if (provider.error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: CardErrorBanner(lastUpdated: provider.lastUpdated, onRetry: provider.fetchBills),
+                ),
               // Visual Progress Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -308,6 +312,25 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      key: const Key('recurring_bills_loading'),
+      height: 110,
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
+        ),
+      ),
     );
   }
 
