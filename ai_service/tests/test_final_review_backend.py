@@ -348,11 +348,16 @@ def test_receipt_commit_records_who_paid_in_the_audit_tags(db, monkeypatch):
     buf = io.BytesIO()
     Image.new("RGB", (4, 4)).save(buf, format="PNG")
     image = base64.b64encode(buf.getvalue()).decode()
+    # 'partner' must name someone: a two-member flat (FABLE-API-01 / FABLE-LOGIC-03).
+    db.tables["household_memberships"] = [m for m in db.tables["household_memberships"] if m["user_id"] != C]
     res = process_receipt_scan(household_id=ROOM, images_base64=[image], user_id=B, allow_duplicate=True,
                                paid_by="partner", beneficiary="both")
     assert res["status"] == "success", res
     row = next(t for t in db.tables["transactions"] if t["id"] == res["transaction_id"])
-    assert "PaidBy: partner" in row["raw_sms"] and "Beneficiary: both" in row["raw_sms"]
+    assert row["raw_sms"].startswith("PaidBy: partner | Beneficiary: both")
+    # Structured attribution, which the settlement engines read.
+    assert row["spent_by"] == "partner"
+    assert (row["beneficiary_type"], row["beneficiary_id"]) == ("household", "household")
 
 
 # ─── FR-B-09: one LiteLLM model default for every module ─────────────────────

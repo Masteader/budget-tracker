@@ -5,6 +5,7 @@ Calculates balance between partners for shared household expenses and generates 
 
 from __future__ import annotations
 import logging
+import re
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
@@ -32,25 +33,50 @@ def _cycle_dates(household_id: str) -> Dict[str, Any]:
     return get_salary_cycle_dates(payday_day=get_household_payday(household_id))
 
 
-# public.transactions has no paid_by / beneficiary columns (live and the repo schema agree; see
-# docs/review/audit/live_db_preflight.md, MOB-03): who paid and for whom is kept in the raw_sms
-# audit tags ("PaidBy: me | Beneficiary: both", relative to the creator ``user_id``; settlements
-# carry the payer's member id). Selecting a missing column fails the whole query (FR-B-02/03).
+# Who paid and for whom (FABLE-API-01 / FABLE-LOGIC-03). public.transactions has no paid_by
+# column (live and the repo schema agree; selecting a missing column fails the whole query,
+# FR-B-02/03). Rows written by the API store the attribution structurally:
+#   * ``spent_by``  payer relative to the creator ``user_id``: 'me' | 'partner';
+#   * ``beneficiary_type`` / ``beneficiary_id``: 'household'/'household' (everyone),
+#     'individual'/<member id> or 'dependent'/<name> (a household cost).
+# The ``raw_sms`` note is for humans. Rows from the app's manual sheet (direct inserts) carry the
+# payer in the fixed tail of their note ("… | PaidBy: <x> | Beneficiary: <y> | SpentBy: <z>"),
+# read right-anchored so a merchant containing a forged tag cannot shadow it. Rows written before
+# this change (``beneficiary_id`` NULL) are read from their tags, but only from the
+# server-authored segment (the last occurrence, before the trailing item summary), and a chat or
+# receipt row's payer can only be 'me' or 'partner' there (the API never wrote a member id).
+# Settlement rows carry the payer in their server-authored head "Settlement | PaidBy: <id> |".
 _PARTNER_TX_COLUMNS = (
-    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, "
-    "is_settlement, settlement_target_id, nafaqah_class"
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, source, "
+    "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, nafaqah_class"
 )
 _PARTNER_TX_COLUMNS_PRE_NAFAQAH = (
-    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, is_settlement, settlement_target_id"
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, source, "
+    "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id"
 )
 _V2_TX_COLUMNS = (
-    "id, user_id, amount, raw_sms, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, "
+    "id, user_id, amount, raw_sms, source, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, "
     "line_items, timestamp, category_code, spent_by, nafaqah_class, nafaqah_spouse_id"
 )
 
+SHARED = "shared"
+_SHARED_IDS = {"", "household", "all_peers", "all", "both", "shared", "family", "everyone"}
+_WIFE_TOKENS = ("wife", "spouse")
+_HUSBAND_TOKENS = ("husband", "provider")
+_RELATIVE_TOKENS = ("me", "partner") + _WIFE_TOKENS + _HUSBAND_TOKENS
+_MANUAL_TAIL_RE = re.compile(
+    r"\|\s*PaidBy:\s*([^|]*?)\s*\|\s*Beneficiary:\s*([^|]*?)\s*\|\s*SpentBy:\s*([^|]*?)\s*$", re.IGNORECASE
+)
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_SETTLEMENT_HEAD_RE = re.compile(r"^\s*Settlement\s*\|\s*PaidBy:\s*([^|]+?)\s*\|", re.IGNORECASE)
+
 
 def audit_tag(raw_sms: Any, tag: str) -> str:
-    """Lower-cased value of the first ``<tag>: value`` part of a ``|``-separated audit note."""
+    """
+    Lower-cased value of the first ``<tag>: value`` part of a ``|``-separated audit note. For
+    display and tests only: notes written by the API start with the server's tags, but money is
+    never attributed from a note's free text (see transaction_attribution).
+    """
     prefix = f"{tag.lower()}:"
     for part in str(raw_sms or "").split("|"):
         text = part.strip().lower()
@@ -63,21 +89,206 @@ def _swap_relative(value: str) -> str:
     return {"me": "partner", "partner": "me"}.get(value, value)
 
 
-def resolve_payer_id(tx: Dict[str, Any], member_ids: List[str]) -> Optional[str]:
+def counterpart_id(ctx: FamilyContext, creator: Optional[str]) -> Optional[str]:
     """
-    Member id of whoever paid ``tx``: the ``PaidBy:`` tag when it names a member, the creator
-    for 'me' (or no tag), the other member for 'partner' in a two-member household; None when
-    the payer cannot be determined (legacy rows without a creator), never a guess.
+    The member 'partner' refers to for ``creator``: the other member of a two-member household,
+    or in a family the spouse (husband <-> his only wife). None when it names nobody.
     """
-    members = [str(m).lower() for m in member_ids]
-    creator = str(tx.get("user_id") or "").lower()
-    tag = audit_tag(tx.get("raw_sms"), "paidby")
-    if tag in members:
-        return tag
-    if tag in ("", "me"):
-        return creator if creator in members else None
-    if tag == "partner" and creator in members and len(members) == 2:
-        return next(m for m in members if m != creator)
+    members = [str(m).lower() for m in ctx.members]
+    me = str(creator or "").lower()
+    if me not in members:
+        return None
+    if len(members) == 2:
+        return next(m for m in members if m != me)
+    if ctx.is_family:
+        husband = str(ctx.husband_id or "").lower()
+        wives = [str(w["id"]).lower() for w in ctx.wives]
+        if me == husband and len(wives) == 1:
+            return wives[0]
+        if me in wives and husband in members:
+            return husband
+    return None
+
+
+def resolve_member_ref(ref: Any, creator: Optional[str], ctx: FamilyContext) -> Optional[str]:
+    """Member id named by ``ref`` (a member id or a token relative to ``creator``), else None."""
+    value = str(ref or "").strip().lower()
+    members = {str(m).lower() for m in ctx.members}
+    me = str(creator or "").lower()
+    if value in members:
+        return value
+    if value in ("", "me"):
+        return me if me in members else None
+    if value == "partner":
+        return counterpart_id(ctx, me)
+    if value in _WIFE_TOKENS:
+        wives = [str(w["id"]).lower() for w in ctx.wives]
+        if me in wives:
+            return me
+        return wives[0] if len(wives) == 1 else None
+    if value in _HUSBAND_TOKENS:
+        husband = str(ctx.husband_id or "").lower()
+        return husband if husband in members else None
+    return None
+
+
+def _beneficiary_ref(beneficiary_type: Any, beneficiary_id: Any) -> str:
+    """Normalised beneficiary: SHARED for everyone or a dependent, else the stored id or token."""
+    btype = str(beneficiary_type or "").strip().lower()
+    bid = str(beneficiary_id or "").strip().lower()
+    if bid in _SHARED_IDS or btype == "dependent":
+        return SHARED
+    return bid
+
+
+def _legacy_tags(raw_sms: Any) -> Dict[str, str]:
+    """Tags of a pre-structured note: the server's segment (last occurrence, before the items)."""
+    text = str(raw_sms or "")
+    cut = text.rfind(" | Items: [")
+    if cut != -1:
+        text = text[:cut]
+    tags: Dict[str, str] = {}
+    for part in text.split("|"):
+        low = part.strip().lower()
+        for tag in ("paidby", "beneficiary", "spentby"):
+            if low.startswith(tag + ":"):
+                tags[tag] = low[len(tag) + 1:].strip()
+    return tags
+
+
+def transaction_attribution(tx: Dict[str, Any]) -> Tuple[str, str]:
+    """
+    ``(payer_ref, beneficiary_ref)`` of a non-settlement row. Refs are member ids or tokens
+    relative to the creator ('me', 'partner', 'wife', 'husband'); ``beneficiary_ref`` SHARED
+    means the whole household. Resolve them with resolve_member_ref.
+    """
+    source = str(tx.get("source") or "").strip().lower()
+    raw = str(tx.get("raw_sms") or "")
+    if str(tx.get("beneficiary_id") or "").strip():
+        beneficiary = _beneficiary_ref(tx.get("beneficiary_type"), tx.get("beneficiary_id"))
+        if source == "manual":
+            tail = _MANUAL_TAIL_RE.search(raw)
+            payer = tail.group(1).strip().lower() if tail else "me"
+        else:
+            payer = str(tx.get("spent_by") or "me").strip().lower()
+            if payer not in ("me", "partner"):
+                payer = "me"
+        return payer or "me", beneficiary
+
+    tags = _legacy_tags(raw)
+    payer, beneficiary = tags.get("paidby", ""), tags.get("beneficiary", "")
+    api_row = source in ("chat", "receipt_scan") or raw.lstrip().startswith(("Chat:", "Receipt Scan:"))
+    if api_row and payer not in ("", "me", "partner"):
+        payer = "me"
+    if not payer or not beneficiary:
+        # Oldest rows: no tags at all, only the legacy spent_by and the category.
+        spent_by = str(tx.get("spent_by") or "").strip().lower()
+        category = str(tx.get("category_code") or "")
+        shared_hint = (
+            any(k in category for k in ("GROCERY", "UTILITIES", "MISC"))
+            or "shared" in raw.lower() or "both" in raw.lower()
+        )
+        if spent_by in ("me", "partner"):
+            payer = payer or spent_by
+            beneficiary = beneficiary or (SHARED if shared_hint else spent_by)
+        else:
+            payer = payer or "me"
+            beneficiary = beneficiary or SHARED
+    return payer, _beneficiary_ref(None, beneficiary)
+
+
+def _item_beneficiary(item: Dict[str, Any], creator: Optional[str], ctx: FamilyContext) -> str:
+    """A line item's beneficiary as a member id, or 'all_peers' for everyone / non-members."""
+    ref = str(item.get("beneficiary") or item.get("beneficiary_id") or "").strip().lower()
+    if ref in _SHARED_IDS:
+        return "all_peers"
+    return resolve_member_ref(ref, creator, ctx) or "all_peers"
+
+
+def settlement_payer_ref(tx: Dict[str, Any]) -> str:
+    """Payer of a settlement row: the member id in its server-authored head, else the creator."""
+    head = _SETTLEMENT_HEAD_RE.match(str(tx.get("raw_sms") or ""))
+    return head.group(1).strip().lower() if head else "me"
+
+
+def structured_attribution(
+    ctx: Optional[FamilyContext],
+    creator: Optional[str],
+    paid_by: Optional[str],
+    beneficiary: Optional[str],
+    spouse_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Columns recording who paid (``spent_by``) and for whom (``beneficiary_type`` /
+    ``beneficiary_id``) for an API insert. ``paid_by`` is 'me' or 'partner' (relative to the
+    creator); ``beneficiary`` is 'me', 'partner', 'both'/'household', 'children', a member id or a
+    dependent's name. 'partner' must name someone (two-member household, the spouse in a family,
+    or ``spouse_id``: the wife a Nafaqah entry names in a household with several wives),
+    otherwise InvalidAttributionError. Without a roster (``ctx`` None or empty) the relative
+    token is stored and resolved by the settlement engines when they read the row.
+    """
+    from supabase_client import InvalidAttributionError
+    from utils import sanitize_audit_text
+
+    if ctx is not None and not ctx.members:
+        ctx = None
+    me = str(creator or "").lower()
+    spouse = str(spouse_id or "").lower()
+    if ctx is not None and spouse not in {str(m).lower() for m in ctx.members}:
+        spouse = ""
+
+    def partner_of_creator() -> Optional[str]:
+        return (counterpart_id(ctx, me) or spouse or None) if ctx is not None else None
+
+    payer = str(paid_by or "me").strip().lower()
+    if payer not in ("me", "partner"):
+        raise InvalidAttributionError("paid_by must be 'me' or 'partner'.")
+    if payer == "partner" and ctx is not None and partner_of_creator() is None:
+        raise InvalidAttributionError(
+            "paid_by 'partner' does not name a member of this household: the member who paid records the expense."
+        )
+
+    raw_ben = str(beneficiary or "").strip()
+    ben = raw_ben.lower()
+    if ben in _SHARED_IDS or ben in ("us", "we", "home", "house"):
+        btype, bid = "household", "household"
+    elif ben == "me":
+        btype, bid = "individual", me or "me"
+    elif ben in ("children", "kids", "child", "dependents"):
+        btype, bid = "dependent", "children"
+    elif ben in _RELATIVE_TOKENS:
+        resolved = None
+        if ctx is not None:
+            resolved = partner_of_creator() if ben == "partner" else resolve_member_ref(ben, me, ctx)
+            if resolved is None and ben in _WIFE_TOKENS:
+                resolved = spouse or None
+        if resolved is None and ctx is not None:
+            raise InvalidAttributionError(
+                f"beneficiary '{ben}' does not name a member of this household: choose the member."
+            )
+        btype, bid = "individual", resolved or ben
+    elif ben in ({str(m).lower() for m in ctx.members} if ctx is not None else set()) or (
+        ctx is None and _UUID_RE.match(ben)
+    ):
+        btype, bid = "individual", ben
+    else:
+        btype, bid = "dependent", sanitize_audit_text(raw_ben, 60) or "children"
+    return {"spent_by": payer, "beneficiary_type": btype, "beneficiary_id": bid}
+
+
+def _caller_relative(ref: str, creator: str, anchor: str, ctx: FamilyContext) -> Optional[str]:
+    """
+    'me' / 'partner' relative to ``anchor`` (the caller, or the creator when nobody is asking).
+    Without a known roster the creator-relative token is turned around for another caller.
+    None when the household roster is known but the ref names nobody in it.
+    """
+    member = resolve_member_ref(ref, creator, ctx)
+    if member is not None and anchor:
+        return "me" if member == anchor else "partner"
+    if ctx.members:
+        return None
+    if ref in ("me", "partner"):
+        return _swap_relative(ref) if anchor and creator and creator != anchor else ref
     return None
 
 
@@ -163,16 +374,15 @@ def calculate_partner_settlement(
 
     for tx in txs:
         amt = float(tx.get("amount") or 0.0)
-        cat = tx.get("category_code") or ""
-        raw_sms = (tx.get("raw_sms") or "").lower()
         creator = str(tx.get("user_id") or "").lower()
+        anchor = caller or creator
 
         if tx.get("is_settlement"):
             # A recorded settlement payment, not a shared expense. Family debts live in the
             # Nafaqah ledger (spouse_reimbursements), so settlement rows only move roommate
             # balances: paying the partner back raises what they owe me (lowers what I owe).
             if not is_family and caller:
-                payer = audit_tag(raw_sms, "paidby") or creator
+                payer = resolve_member_ref(settlement_payer_ref(tx), creator, ctx) or creator
                 recipient = str(tx.get("settlement_target_id") or "").lower()
                 if payer == caller:
                     settled_by_me += amt
@@ -180,43 +390,22 @@ def calculate_partner_settlement(
                     settled_to_me += amt
             continue
 
-        # Attribution tags are relative to the transaction's creator; turn them around when
-        # another member is looking ('me' of the creator is 'partner' of the caller).
-        paid_by = audit_tag(raw_sms, "paidby")
-        beneficiary = audit_tag(raw_sms, "beneficiary")
-        spent_by = (tx.get("spent_by") or "").strip().lower()
-        if caller and creator and creator != caller:
-            paid_by, beneficiary, spent_by = (
-                _swap_relative(paid_by), _swap_relative(beneficiary), _swap_relative(spent_by)
-            )
-
         # Family: the explicit Nafaqah class decides, relative to the caller ('me').
         nafaqah_class = str(tx.get("nafaqah_class") or "").strip().lower()
         if is_family and nafaqah_class in ("wife_reimbursable", "wife_personal"):
             paid_by = "me" if caller_is_wife else "partner"
-            if nafaqah_class == "wife_personal":
-                beneficiary = paid_by
-            else:
-                beneficiary = "both"
-
-        # Fallback to legacy spent_by if still undefined
-        if not paid_by or not beneficiary:
-            if spent_by == "me":
-                paid_by = "me"
-                # Check category or text for shared household vs personal
-                if any(k in cat for k in ("GROCERY", "UTILITIES", "MISC")) or "shared" in raw_sms or "both" in raw_sms:
-                    beneficiary = "both"
-                else:
-                    beneficiary = "me"
-            elif spent_by == "partner":
-                paid_by = "partner"
-                if any(k in cat for k in ("GROCERY", "UTILITIES", "MISC")) or "shared" in raw_sms or "both" in raw_sms:
-                    beneficiary = "both"
-                else:
-                    beneficiary = "partner"
-            else:  # "both" or unspecified
-                paid_by = paid_by or "me"
-                beneficiary = "both"
+            beneficiary = paid_by if nafaqah_class == "wife_personal" else "both"
+        else:
+            # Structured attribution (the same as /settlement-v2), relative to the caller.
+            payer_ref, beneficiary_ref = transaction_attribution(tx)
+            paid_by = _caller_relative(payer_ref, creator, anchor, ctx)
+            if paid_by is None:
+                logger.info("Settlement: payer of transaction %s unknown; not attributed.", tx.get("id"))
+                continue
+            beneficiary = (
+                "both" if beneficiary_ref == SHARED
+                else (_caller_relative(beneficiary_ref, creator, anchor, ctx) or "both")
+            )
 
         # Apply 2D financial attribution
         if paid_by == "me":
@@ -416,6 +605,25 @@ def calculate_family_nafaqah(
 # MULTI-PARTY ROOMMATE PAIRWISE LEDGER & DEBT SIMPLIFICATION
 # =============================================================================
 
+def _pro_rata(weights: List[int], total: int) -> List[int]:
+    """
+    Split ``total`` halalas (may be negative) over ``weights`` proportionally, exact to the
+    halala: floor shares, then the leftover halalas to the largest remainders (ties: first item).
+    Equal shares when every weight is zero.
+    """
+    if not weights or total == 0:
+        return [0] * len(weights)
+    sign, magnitude = (1, total) if total > 0 else (-1, -total)
+    if sum(weights) <= 0:
+        weights = [1] * len(weights)
+    weight_sum = sum(weights)
+    shares = [magnitude * w // weight_sum for w in weights]
+    remainders = sorted(range(len(weights)), key=lambda i: (-(magnitude * weights[i] % weight_sum), i))
+    for i in remainders[: magnitude - sum(shares)]:
+        shares[i] += 1
+    return [sign * s for s in shares]
+
+
 def calculate_roommate_pairwise_debts(
     txs: List[Dict[str, Any]],
     peers: List[str],
@@ -456,22 +664,35 @@ def calculate_roommate_pairwise_debts(
                 balance[paid_by][target_id] += amt
             continue
 
-        line_items = tx.get("line_items") or []
-        if isinstance(line_items, list) and len(line_items) > 0:
-            for item in line_items:
-                item_amt = _to_halalas(item.get("amount"))
-                ben = str(item.get("beneficiary") or item.get("beneficiary_id") or "all_peers").strip().lower()
-                if ben in ("all_peers", "all", "shared", "household", ""):
-                    split_equally(paid_by, item_amt)
-                elif ben in balance and ben != paid_by:
-                    balance[paid_by][ben] += item_amt
+        def attribute(beneficiary: str, amount_halalas: int) -> None:
+            # A member (incl. the payer: a personal purchase) or, for anyone/anything else
+            # (everyone, a child, a dependent), an equal split among all roommates.
+            if beneficiary in balance:
+                if beneficiary != paid_by:
+                    balance[paid_by][beneficiary] += amount_halalas
+            else:
+                split_equally(paid_by, amount_halalas)
+
+        line_items = [i for i in (tx.get("line_items") or []) if isinstance(i, dict)]
+        if line_items:
+            items = [
+                (
+                    str(item.get("beneficiary") or item.get("beneficiary_id") or "all_peers").strip().lower(),
+                    _to_halalas(item.get("amount", item.get("price"))),
+                )
+                for item in line_items
+            ]
+            # VAT, service or a discount that is not itemised (FABLE-LOGIC-08): the receipt total
+            # minus the item sum follows the items pro-rata, to the halala (largest remainder).
+            for (ben, item_amt), extra in zip(items, _pro_rata([a for _, a in items], amt - sum(a for _, a in items))):
+                attribute(ben, item_amt + extra)
         else:
             ben_type = str(tx.get("beneficiary_type") or "all_peers").strip().lower()
             ben_id = str(tx.get("beneficiary_id") or "").strip().lower()
             if ben_type in ("all_peers", "household", "both") or not ben_id:
                 split_equally(paid_by, amt)
-            elif ben_id in balance and ben_id != paid_by:
-                balance[paid_by][ben_id] += amt
+            else:
+                attribute(ben_id, amt)
 
     # Compute net pairwise debts
     debts: List[Dict[str, Any]] = []
@@ -548,14 +769,35 @@ def calculate_settlement_v2(
     has_spouse = ctx.is_family
 
     # No fallback on failure: an empty list would report every balance as settled.
-    member_ids = list(ctx.members.keys())
     txs = []
     for tx in _cycle_transactions(client, household_id, start_iso, _V2_TX_COLUMNS):
-        payer = resolve_payer_id(tx, member_ids)
+        creator = str(tx.get("user_id") or "").lower()
+        if tx.get("is_settlement"):
+            payer = resolve_member_ref(settlement_payer_ref(tx), creator, ctx)
+            normalized = {"beneficiary_type": tx.get("beneficiary_type"), "beneficiary_id": tx.get("beneficiary_id")}
+        else:
+            # Structured attribution (the same as /settlement), resolved to member ids.
+            payer_ref, beneficiary_ref = transaction_attribution(tx)
+            payer = resolve_member_ref(payer_ref, creator, ctx)
+            if str(tx.get("nafaqah_class") or "").lower() in ("wife_reimbursable", "wife_personal"):
+                # A classified Nafaqah row was paid by the wife it names (several wives: 'partner'
+                # alone does not say which).
+                payer = resolve_member_ref(tx.get("nafaqah_spouse_id"), creator, ctx) or payer
+            beneficiary = None if beneficiary_ref == SHARED else resolve_member_ref(beneficiary_ref, creator, ctx)
+            normalized = {
+                "line_items": [
+                    {**item, "beneficiary": _item_beneficiary(item, creator, ctx)}
+                    for item in (tx.get("line_items") or []) if isinstance(item, dict)
+                ],
+            }
+            if not has_spouse:
+                # The family summary keeps the stored columns (member id, 'household', dependent).
+                normalized["beneficiary_type"] = "individual" if beneficiary else "all_peers"
+                normalized["beneficiary_id"] = beneficiary
         if payer is None:
             logger.info("Settlement v2: payer of transaction %s unknown; not attributed.", tx.get("id"))
             continue
-        txs.append({**tx, "paid_by": payer})
+        txs.append({**tx, **normalized, "paid_by": payer})
 
     if has_peers and not has_spouse:
         peers = [m["id"] for m in members]

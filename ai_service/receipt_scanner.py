@@ -30,10 +30,19 @@ from supabase_client import (
     insert_transaction,
     fetch_budget,
     fetch_flexible_budgets,
+    household_attribution,
     reallocate_budget,
 )
 
-from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
 
 logger = logging.getLogger(__name__)
 
@@ -550,10 +559,15 @@ def process_receipt_scan(
         }
 
     resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")
-    merchant = (override_merchant or parsed.get("merchant") or "Scanned Merchant").strip()
-    spent_by = (override_spent_by or "both").lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = (
+        sanitize_audit_text(override_merchant or parsed.get("merchant"), MAX_MERCHANT_LENGTH) or "Scanned Merchant"
+    )
+    attributed_paid_by = (paid_by or "me").strip().lower()
+    if attributed_paid_by not in ("me", "partner"):
+        attributed_paid_by = "me"
+    # spent_by is the payer relative to the recorder; the client's legacy spent_by is ignored.
+    spent_by = attributed_paid_by
     total_amount = float(parsed.get("total_amount") or 0.0)
     category_code = parsed.get("category_code") or "OPEX-MISC"
     raw_items = parsed.get("items") or []
@@ -626,9 +640,6 @@ def process_receipt_scan(
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
         }
 
-    attributed_paid_by = (paid_by or "me").strip().lower()
-    if attributed_paid_by not in ("me", "partner"):
-        attributed_paid_by = "me"
     nafaqah = resolve_expense_nafaqah(
         household_id,
         user_id,
@@ -649,6 +660,7 @@ def process_receipt_scan(
         "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
         "wives": nafaqah["wives"],
     }
+    spent_by = nafaqah["paid_by"]
 
     # Deduplication check (evaluated during BOTH preview and save unless allow_duplicate=True)
     candidate = None
@@ -731,6 +743,12 @@ def process_receipt_scan(
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    attribution = household_attribution(
+        household_id, user_id, nafaqah["paid_by"], nafaqah["beneficiary"], nafaqah["nafaqah_spouse_id"]
+    )
+
     # A replayed offline commit carries the client-side event time (validated by the route).
     event_time = occurred_at or datetime.now(timezone.utc)
     now_iso = event_time.isoformat()
@@ -749,14 +767,17 @@ def process_receipt_scan(
                 is_reallocated = True
                 reallocated_from_id = flexible[0].id
 
-    items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
+    items_summary = ", ".join(
+        f"{it['quantity']}x {sanitize_audit_text(it['name'], 80)} ({it['price']} SAR)" for it in items[:10]
+    )
     if len(items) > 10:
         items_summary += f" ...and {len(items) - 10} more items"
-    # Who paid and for whom live only in these tags (public.transactions has no paid_by /
-    # beneficiary column); the settlement engines read them like the chat entry's tags.
-    audit_text = (
-        f"Receipt Scan: {merchant} ({len(items)} items) | PaidBy: {nafaqah['paid_by']} "
-        f"| Beneficiary: {nafaqah['beneficiary']} | SpentBy: {spent_by} | Items: [{items_summary}]"
+    # Audit note for humans: the server's tags first, the merchant text defused. Who paid and for
+    # whom are stored in columns (spent_by, beneficiary_type/id) that the settlement engines read.
+    audit_text = build_audit_note(
+        nafaqah["paid_by"], nafaqah["beneficiary"], spent_by,
+        f"Receipt Scan: {merchant} ({len(items)} items)",
+        f"Items: [{items_summary}]",
     )
 
     tx_id = insert_transaction(
@@ -771,9 +792,9 @@ def process_receipt_scan(
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",
         items=items,
-        spent_by=spent_by,
-        paid_by=nafaqah["paid_by"],
-        beneficiary=nafaqah["beneficiary"],
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         dedup_fingerprint=zatca_fp,

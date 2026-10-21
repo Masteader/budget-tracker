@@ -13,7 +13,7 @@ from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import UnknownCategoryError
+from supabase_client import InvalidAttributionError, UnknownCategoryError
 from utils import safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
@@ -130,6 +130,11 @@ async def chat_transaction(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)
         raise HTTPException(status_code=422, detail=UnknownCategoryError.PUBLIC_MESSAGE)
+    except InvalidAttributionError as exc:
+        # paid_by / beneficiary name nobody in this household (a fixed, database-free message).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "chat-transaction", idem_key)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)

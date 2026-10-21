@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import uuid as _uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -145,3 +146,42 @@ def verify_signature(body: bytes, signature_header: str | None) -> bool:
         return hmac.compare_digest(provided_sig, expected_sig)
     except Exception:
         return False
+
+
+# ─── Audit notes (transactions.raw_sms) ─────────────────────────────────────────
+# The note is for humans. Money attribution lives in structured columns (spent_by,
+# beneficiary_type, beneficiary_id); legacy rows written before that kept it in "Tag: value"
+# parts of the note, so user text placed in a note must never look like a tag (FABLE-API-01).
+AUDIT_TAG_KEYWORDS = ("paid by", "beneficiary", "spent by", "recipient", "items", "method", "note")
+_AUDIT_TAG_RE = re.compile(
+    r"(?:paid\s*by|beneficiary|spent\s*by|recipient|items|method|note)\s*:\s*", re.IGNORECASE
+)
+
+
+def sanitize_audit_text(value: object, limit: int = 500) -> str:
+    """
+    User text made safe for an audit note: no control characters, no ``|`` separator (becomes
+    ``/``) and no ``<tag>:`` keyword (removed until none is left, so nested spellings such as
+    ``PaiPaidBy:dBy:`` cannot reassemble one), whitespace collapsed, at most ``limit`` characters.
+    """
+    text = "".join(ch if ch.isprintable() else " " for ch in str(value or ""))
+    text = text.replace("|", "/")
+    while True:
+        cleaned = _AUDIT_TAG_RE.sub("", text)
+        if cleaned == text:
+            break
+        text = cleaned
+    return " ".join(text.split())[:limit]
+
+
+def build_audit_note(paid_by: str, beneficiary: str, spent_by: str, *parts: str) -> str:
+    """
+    ``PaidBy: … | Beneficiary: … | SpentBy: … | <parts>``: the server's tags first, then the
+    caller's (already sanitised) descriptive parts. Tag values are sanitised too.
+    """
+    head = (
+        f"PaidBy: {sanitize_audit_text(paid_by, 60)} | Beneficiary: {sanitize_audit_text(beneficiary, 60)} "
+        f"| SpentBy: {sanitize_audit_text(spent_by, 20)}"
+    )
+    tail = [p for p in parts if p]
+    return " | ".join([head, *tail])

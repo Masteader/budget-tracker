@@ -26,10 +26,19 @@ from supabase_client import (
     fetch_flexible_budgets,
     reallocate_budget,
     category_code_in_taxonomy,
+    household_attribution,
     UnknownCategoryError,
 )
 
-from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
 
 logger = logging.getLogger(__name__)
 
@@ -552,10 +561,8 @@ def process_chat_transaction(
             "message": f"Successfully enriched existing transaction with {len(items_dicts)} items.",
         }
 
-    merchant = (override_merchant or parsed.merchant).strip()
-    spent_by = (override_spent_by or parsed.spent_by).lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = sanitize_audit_text(override_merchant or parsed.merchant, MAX_MERCHANT_LENGTH) or "Unknown Merchant"
 
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
@@ -603,6 +610,9 @@ def process_chat_transaction(
         require_spouse=not preview_only,
     )
     paid_by, beneficiary = nafaqah["paid_by"], nafaqah["beneficiary"]
+    # spent_by is the payer relative to the recorder ('me' | 'partner'); the client's legacy
+    # spent_by is ignored so the stored columns never contradict paid_by (FABLE-LOGIC-03).
+    spent_by = paid_by
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -676,6 +686,10 @@ def process_chat_transaction(
                 ),
             }
 
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    attribution = household_attribution(household_id, user_id, paid_by, beneficiary, nafaqah["nafaqah_spouse_id"])
+
     # A replayed offline commit carries the client-side event time (validated by the route).
     event_time = occurred_at or datetime.now(timezone.utc)
     now_iso = event_time.isoformat()
@@ -695,12 +709,15 @@ def process_chat_transaction(
                 is_reallocated = True
                 reallocated_from_id = flexible[0].id
 
-    # Format raw text for audit trail
-    items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
-    audit_text = (
-        f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by} | Items: [{items_summary}]"
-        if items_summary
-        else f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by}"
+    # Audit note for humans: the server's tags first, the user's text defused (FABLE-API-01).
+    items_summary = ", ".join(
+        f"{it.get('quantity', 1)}x {sanitize_audit_text(it.get('name'), 80)} ({it.get('price')} SAR)"
+        for it in items_dicts
+    )
+    audit_text = build_audit_note(
+        paid_by, beneficiary, spent_by,
+        f"Chat: {sanitize_audit_text(message, 1000)}",
+        f"Items: [{items_summary}]" if items_summary else "",
     )
 
     # Insert transaction
@@ -717,9 +734,9 @@ def process_chat_transaction(
         reallocated_from_budget_id=reallocated_from_id,
         source="chat",
         items=items_dicts,
-        spent_by=spent_by,
-        paid_by=paid_by,
-        beneficiary=beneficiary,
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         user_id=user_id,
