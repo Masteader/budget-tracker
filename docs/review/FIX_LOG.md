@@ -307,3 +307,9 @@ Flutter only (`flutter_app/`); no backend or database change. The app now writes
 | Owner decision: financial roles | Admins could not change a member's financial role. | same | `PUT .../members/{user_id}/financial-role` from `assignable_financial_roles` (never "wife" for the provider; co-admins no action on the primary admin); 403/404/422/409 (`provider_is_spouse`, `spouse_has_ledger`) localized; roster refreshed. Also: invites 409 `invite_role_mismatch`/400/404, receipt 413, installments 409, recurring toggle 422, reimbursement 422 localized. | `ccfb482` | N/A (app) | green |
 
 Gates (each commit): `flutter pub get && flutter analyze` 0 issues; `flutter test` all green (709 at the last commit).
+
+## Product review (Fable, 2026-10-21): API items R4 / R6 / R9 / 4.1 / 3.1
+
+| Finding ID | What Was Wrong | Proof Test | Fix Summary | Commit | Applied to Live? | Verification Output |
+|---|---|---|---|---|---|---|
+| PRODUCT-R4 | The chat parser had no category for rent, school fees, domestic help, family support, charity, transport, insurance or remittances (rent and Uber/Careem landed in utilities/fuel, the rest in Misc); no Urdu examples. | `ai_service/tests/test_product_taxonomy.py` | `chat_parser.py`: constants `OPEX-HOUSING`, `-EDUCATION`, `-DOMESTIC-HELP`, `-FAMILY-SUPPORT`, `-CHARITY`, `-TRANSPORT`, `-INSURANCE`, `-REMITTANCE` in the LLM prompt and in the heuristic (Arabic/English/Urdu word cues, no match inside other words, e.g. "معاملة" or "parents"); 7 Urdu examples in the prompt; a parsed code missing from the taxonomy falls back to its legacy code (housing → utilities, transport → fuel, others/unknown → Misc), so nothing is refused before the system-category migration is applied. | `feat(chat): household taxonomy and Urdu cues in the chat parser` | N/A (API) | pytest green; DB suite green; e2e green |
