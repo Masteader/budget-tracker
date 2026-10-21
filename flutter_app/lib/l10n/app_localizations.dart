@@ -24,9 +24,9 @@ class AppLocalizations {
       'ur': 'ریسٹورینٹ اور کیفے',
     },
     'OPEX-FUEL': {
-      'en': 'Fuel & Transport',
-      'ar': 'الوقود والمواصلات',
-      'ur': 'ایندھن اور ٹرانسپورٹ',
+      'en': 'Fuel',
+      'ar': 'الوقود',
+      'ur': 'ایندھن',
     },
     'OPEX-UTILITIES': {
       'en': 'Utilities & Bills',
@@ -62,6 +62,46 @@ class AppLocalizations {
       'en': 'Miscellaneous',
       'ar': 'مصاريف متنوعة',
       'ur': 'متفرق اخراجات',
+    },
+    'OPEX-HOUSING': {
+      'en': 'Housing & Rent',
+      'ar': 'السكن والإيجار',
+      'ur': 'رہائش اور کرایہ',
+    },
+    'OPEX-EDUCATION': {
+      'en': 'School & Education',
+      'ar': 'المدارس والتعليم',
+      'ur': 'اسکول اور تعلیم',
+    },
+    'OPEX-DOMESTIC-HELP': {
+      'en': 'Domestic Help & Driver',
+      'ar': 'العمالة المنزلية والسائق',
+      'ur': 'گھریلو ملازم اور ڈرائیور',
+    },
+    'OPEX-FAMILY-SUPPORT': {
+      'en': 'Family Support',
+      'ar': 'دعم الوالدين والأقارب',
+      'ur': 'والدین اور رشتہ داروں کی مدد',
+    },
+    'OPEX-CHARITY': {
+      'en': 'Charity & Sadaqah',
+      'ar': 'الصدقات والتبرعات',
+      'ur': 'صدقہ و خیرات',
+    },
+    'OPEX-TRANSPORT': {
+      'en': 'Car & Transport',
+      'ar': 'السيارة والمواصلات',
+      'ur': 'گاڑی اور ٹرانسپورٹ',
+    },
+    'OPEX-INSURANCE': {
+      'en': 'Insurance',
+      'ar': 'التأمين',
+      'ur': 'انشورنس',
+    },
+    'OPEX-REMITTANCE': {
+      'en': 'Remittances Abroad',
+      'ar': 'الحوالات إلى الخارج',
+      'ur': 'بیرون ملک رقم کی ترسیل',
     },
     'OPEX-TESTING': {
       'en': 'Testing Category',

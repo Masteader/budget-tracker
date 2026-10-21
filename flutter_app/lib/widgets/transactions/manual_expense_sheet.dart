@@ -21,6 +21,7 @@ import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
 import '../../models/nafaqah.dart';
 import '../../models/money.dart';
+import '../../models/category_catalog.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
 class ManualExpenseSheet extends StatefulWidget {
@@ -114,17 +115,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   List<Account> _accounts = [];
   String? _selectedAccountId;
 
-  static const List<Map<String, String>> _categories = [
-    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
-    {'code': 'OPEX-DINING', 'emoji': '☕ '},
-    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
-    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
-    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
-    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
-    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
-    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
-    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
-    {'code': 'OPEX-MISC', 'emoji': '📦 '},
+  static final List<Map<String, String>> _categories = [
+    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
   ];
 
   @override

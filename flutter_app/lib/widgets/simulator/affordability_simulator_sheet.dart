@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../transactions/manual_expense_sheet.dart';
 import '../../models/money.dart';
+import '../../models/category_catalog.dart';
 
 /// Pre-Purchase Affordability Simulator ("Can I Afford This? / هل أقدر أشتري؟")
 /// Evaluates potential purchase impact against salary cycle headroom, category budgets,
@@ -62,17 +63,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
   bool _isSimulating = false;
   Map<String, dynamic>? _result;
 
-  static const List<Map<String, String>> _categories = [
-    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
-    {'code': 'OPEX-DINING', 'emoji': '☕ '},
-    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
-    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
-    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
-    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
-    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
-    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
-    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
-    {'code': 'OPEX-MISC', 'emoji': '📦 '},
+  static final List<Map<String, String>> _categories = [
+    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
   ];
 
   @override

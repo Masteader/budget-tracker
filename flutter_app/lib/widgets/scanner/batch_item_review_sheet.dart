@@ -21,6 +21,7 @@ import '../receipt_photo_viewer_dialog.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_review_section.dart';
 import '../../models/money.dart';
+import '../../models/category_catalog.dart';
 
 /// Sequential review modal for processing a batch of captured receipts step by step.
 class BatchItemReviewSheet extends StatefulWidget {
@@ -82,18 +83,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   Map<String, String> get _nafaqahRequestFields =>
       _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
 
-  static const List<String> _categories = [
-    'OPEX-GROCERY',
-    'OPEX-DINING',
-    'OPEX-FUEL',
-    'OPEX-UTILITIES',
-    'OPEX-HEALTH',
-    'OPEX-SHOPPING',
-    'OPEX-ENTERTAINMENT',
-    'CAPEX-EDUCATION',
-    'OPEX-GOV',
-    'OPEX-MISC',
-  ];
+  static const List<String> _categories = CategoryCatalog.pickerCodes;
 
   @override
   void initState() {

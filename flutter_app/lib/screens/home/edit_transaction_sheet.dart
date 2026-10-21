@@ -22,6 +22,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_class_selector.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../models/money.dart';
+import '../../models/category_catalog.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
@@ -130,18 +131,6 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// directly: the me/partner vocabulary does not name the wife for them).
   String? _adminClass;
 
-  final List<Map<String, String>> _categories = const [
-    {'code': 'OPEX-GROCERY', 'name': 'Groceries & Supermarkets'},
-    {'code': 'OPEX-DINING', 'name': 'Dining & Cafes'},
-    {'code': 'OPEX-SHOPPING', 'name': 'Shopping & Retail'},
-    {'code': 'OPEX-UTILITIES', 'name': 'Utilities & Bills'},
-    {'code': 'OPEX-FUEL', 'name': 'Fuel & Transport'},
-    {'code': 'OPEX-ENTERTAINMENT', 'name': 'Entertainment'},
-    {'code': 'OPEX-HEALTH', 'name': 'Health & Pharmacy'},
-    {'code': 'CAPEX-EDUCATION', 'name': 'Education'},
-    {'code': 'OPEX-GOV', 'name': 'Government & Fees'},
-    {'code': 'OPEX-MISC', 'name': 'Miscellaneous'},
-  ];
 
   @override
   void initState() {
@@ -149,11 +138,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
     var initialCat = widget.transaction.categoryCode ?? 'OPEX-MISC';
-    if (initialCat == 'OPEX-GROCERIES') initialCat = 'OPEX-GROCERY';
-    if (initialCat == 'OPEX-TRANSPORT') initialCat = 'OPEX-FUEL';
-    if (initialCat == 'OPEX-EDUCATION') initialCat = 'CAPEX-EDUCATION';
-    if (initialCat == 'OPEX-HOUSING') initialCat = 'OPEX-UTILITIES';
-    _selectedCategory = initialCat;
+    // Keep the stored category (new system codes included); only known
+    // aliases are normalised, never remapped to another category.
+    _selectedCategory = CategoryCatalog.normalize(initialCat);
     _selectedSubCategory = widget.transaction.subCategory;
     _selectedPaidBy = widget.transaction.paidBy.isNotEmpty ? widget.transaction.paidBy : 'me';
     _selectedBeneficiary = widget.transaction.beneficiary.isNotEmpty ? widget.transaction.beneficiary : 'both';
@@ -1178,7 +1165,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             // Category Dropdown
             DropdownButtonFormField<String>(
-              initialValue: _categories.any((c) => c['code'] == _selectedCategory) ? _selectedCategory : 'OPEX-MISC',
+              initialValue: _selectedCategory,
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
@@ -1188,10 +1175,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              items: _categories.map((c) {
+              items: CategoryCatalog.pickerCodesIncluding(_selectedCategory).map((code) {
                 return DropdownMenuItem(
-                  value: c['code'],
-                  child: Text(context.trCat(c['code']!)),
+                  value: code,
+                  child: Text(context.trCat(code)),
                 );
               }).toList(),
               onChanged: (val) {
