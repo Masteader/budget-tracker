@@ -30,10 +30,19 @@ from supabase_client import (
     insert_transaction,
     fetch_budget,
     fetch_flexible_budgets,
+    household_attribution,
     reallocate_budget,
 )
 
-from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +50,26 @@ logger = logging.getLogger(__name__)
 MAX_RECEIPT_IMAGES = 8
 MAX_RECEIPT_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_RECEIPT_PIXELS = 40_000_000  # per image; guards PIL decompression bombs during stitching
+# FABLE-API-02: bounds on the stitched receipt. Pages are checked from their headers before any
+# pixel is decoded, decoded in JPEG draft mode and downscaled to STITCH_MAX_WIDTH (legible for
+# OCR) one at a time, so peak memory is about one reduced page plus the canvas.
+MAX_COMBINED_RECEIPT_PIXELS = 100_000_000  # all photos of one receipt (8 x 12 MP phone photos fit)
+STITCH_MAX_WIDTH = 1600
+MAX_STITCHED_HEIGHT = 20_000  # 1600 x 20000 RGB canvas = 96 MB
+
+
+class ReceiptImageTooLarge(ValueError):
+    """The photos of a receipt exceed the pixel or stitched-size limits (HTTP 413)."""
+
+    PUBLIC_MESSAGE = (
+        "Receipt photos are too large: use fewer or smaller photos "
+        f"(at most {MAX_COMBINED_RECEIPT_PIXELS // 1_000_000} megapixels in total)."
+    )
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
 _IMAGE_MAGIC = (
     (b"\xff\xd8\xff", "jpeg"),
     (b"\x89PNG\r\n\x1a\n", "png"),
@@ -79,10 +108,34 @@ def normalize_receipt_path(receipt_url: Optional[str], household_id: str) -> Opt
     return value
 
 
+def _image_dimensions(raw: bytes) -> tuple:
+    """(width, height) from the image header only; ValueError for an unreadable image."""
+    import io
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(raw)) as img:  # lazy: reads the header, decodes no pixels
+            return img.size
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        raise ValueError("Receipt photo could not be read as an image.") from exc
+
+
+def _stitch_plan(sizes: List[tuple]) -> tuple:
+    """Canvas width and per-page target sizes: every page scaled to one width <= STITCH_MAX_WIDTH."""
+    canvas_width = max(1, min(STITCH_MAX_WIDTH, max(w for w, _ in sizes)))
+    targets = [(canvas_width, max(1, round(h * canvas_width / w))) for w, h in sizes]
+    return canvas_width, targets
+
+
 def validate_receipt_images(images_base64: List[str]) -> None:
-    """Reject too many images, oversized/invalid base64 and payloads that are not JPEG/PNG/WebP."""
+    """
+    Reject too many images, oversized/invalid base64, payloads that are not JPEG/PNG/WebP, and
+    photos whose pixels (each, all together, or the stitched canvas) exceed the limits
+    (ReceiptImageTooLarge, HTTP 413). Only headers are read: nothing is decoded here.
+    """
     if len(images_base64) > MAX_RECEIPT_IMAGES:
         raise ValueError(f"A receipt can have at most {MAX_RECEIPT_IMAGES} photos.")
+    sizes = []
     for img in images_base64:
         data = img.split(",", 1)[1] if isinstance(img, str) and "," in img else img
         if not isinstance(data, str) or len(data) > (MAX_RECEIPT_IMAGE_BYTES * 4) // 3 + 4:
@@ -95,6 +148,14 @@ def validate_receipt_images(images_base64: List[str]) -> None:
             raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
         if raw.startswith(b"RIFF") and raw[8:12] != b"WEBP":
             raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
+        width, height = _image_dimensions(raw)
+        if width <= 0 or height <= 0 or width * height > MAX_RECEIPT_PIXELS:
+            raise ReceiptImageTooLarge()
+        sizes.append((width, height))
+    if sum(w * h for w, h in sizes) > MAX_COMBINED_RECEIPT_PIXELS:
+        raise ReceiptImageTooLarge()
+    if len(sizes) > 1 and sum(h for _, h in _stitch_plan(sizes)[1]) > MAX_STITCHED_HEIGHT:
+        raise ReceiptImageTooLarge()
 
 
 def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
@@ -226,27 +287,29 @@ def stitch_images_vertically(images_base64: List[str]) -> bytes:
     if len(raw_bytes_list) == 1:
         return raw_bytes_list[0]
 
-    try:
-        opened = [Image.open(io.BytesIO(b)) for b in raw_bytes_list]  # lazy: header only
-        if any(img.width * img.height > MAX_RECEIPT_PIXELS for img in opened):
-            raise ValueError("Receipt photo dimensions exceed the stitching limit.")
-        pil_images = [img.convert("RGB") for img in opened]
-        base_width = pil_images[0].width
-        resized = []
-        total_height = 0
-        for img in pil_images:
-            if img.width != base_width:
-                w_percent = base_width / float(img.width)
-                h_size = int(float(img.height) * float(w_percent))
-                img = img.resize((base_width, h_size), Image.Resampling.LANCZOS)
-            resized.append(img)
-            total_height += img.height
+    # Bounded before decoding (FABLE-API-02): callers validate first, this re-checks.
+    sizes = [_image_dimensions(b) for b in raw_bytes_list]
+    if any(w * h > MAX_RECEIPT_PIXELS for w, h in sizes) or sum(w * h for w, h in sizes) > MAX_COMBINED_RECEIPT_PIXELS:
+        raise ReceiptImageTooLarge()
+    canvas_width, targets = _stitch_plan(sizes)
+    total_height = sum(h for _, h in targets)
+    if total_height > MAX_STITCHED_HEIGHT:
+        raise ReceiptImageTooLarge()
 
-        combined = Image.new("RGB", (base_width, total_height))
+    try:
+        combined = Image.new("RGB", (canvas_width, total_height), (255, 255, 255))
         y_offset = 0
-        for img in resized:
-            combined.paste(img, (0, y_offset))
-            y_offset += img.height
+        for raw, (target_w, target_h) in zip(raw_bytes_list, targets):
+            # One page at a time: JPEG draft mode decodes at 1/2..1/8 scale when that still
+            # covers the target, then the page is resized to the canvas width and released.
+            with Image.open(io.BytesIO(raw)) as img:
+                img.draft("RGB", (target_w, target_h))
+                page = img.convert("RGB")
+            if page.size != (target_w, target_h):
+                page = page.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            combined.paste(page, (0, y_offset))
+            y_offset += target_h
+            del page
 
         out = io.BytesIO()
         combined.save(out, format="JPEG", quality=85)
@@ -417,7 +480,7 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"Invalid receipt item price ({price}). Must be between 0 and 10,000,000 SAR.")
 
         valid_items.append({
-            "name": name or "Item",
+            "name": (name or "Item")[:200],
             "quantity": round(qty, 2),
             "price": round(price, 2),
         })
@@ -470,6 +533,8 @@ def process_receipt_scan(
     try:
         receipt_url = normalize_receipt_path(receipt_url, household_id)
         validate_receipt_images(images_base64)
+    except ReceiptImageTooLarge:
+        raise  # the route answers 413 (FABLE-API-02)
     except ValueError as invalid:
         return {"status": "error", "message": str(invalid)}
 
@@ -549,11 +614,21 @@ def process_receipt_scan(
             "parsed_data": parsed,
         }
 
-    resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")
-    merchant = (override_merchant or parsed.get("merchant") or "Scanned Merchant").strip()
-    spent_by = (override_spent_by or "both").lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # Persist a QR payload only when it is a decodable ZATCA code (<= 4096 characters, enforced by
+    # decode_zatca_tlv): arbitrary client or model text is never stored (FABLE-API-06).
+    resolved_qr = next(
+        (q for q in (qr_code_raw, parsed.get("zatca_qr_raw")) if isinstance(q, str) and decode_zatca_tlv(q)),
+        None,
+    )
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = (
+        sanitize_audit_text(override_merchant or parsed.get("merchant"), MAX_MERCHANT_LENGTH) or "Scanned Merchant"
+    )
+    attributed_paid_by = (paid_by or "me").strip().lower()
+    if attributed_paid_by not in ("me", "partner"):
+        attributed_paid_by = "me"
+    # spent_by is the payer relative to the recorder; the client's legacy spent_by is ignored.
+    spent_by = attributed_paid_by
     total_amount = float(parsed.get("total_amount") or 0.0)
     category_code = parsed.get("category_code") or "OPEX-MISC"
     raw_items = parsed.get("items") or []
@@ -626,9 +701,6 @@ def process_receipt_scan(
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
         }
 
-    attributed_paid_by = (paid_by or "me").strip().lower()
-    if attributed_paid_by not in ("me", "partner"):
-        attributed_paid_by = "me"
     nafaqah = resolve_expense_nafaqah(
         household_id,
         user_id,
@@ -649,6 +721,7 @@ def process_receipt_scan(
         "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
         "wives": nafaqah["wives"],
     }
+    spent_by = nafaqah["paid_by"]
 
     # Deduplication check (evaluated during BOTH preview and save unless allow_duplicate=True)
     candidate = None
@@ -731,6 +804,12 @@ def process_receipt_scan(
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    attribution = household_attribution(
+        household_id, user_id, nafaqah["paid_by"], nafaqah["beneficiary"], nafaqah["nafaqah_spouse_id"]
+    )
+
     # A replayed offline commit carries the client-side event time (validated by the route).
     event_time = occurred_at or datetime.now(timezone.utc)
     now_iso = event_time.isoformat()
@@ -749,14 +828,17 @@ def process_receipt_scan(
                 is_reallocated = True
                 reallocated_from_id = flexible[0].id
 
-    items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
+    items_summary = ", ".join(
+        f"{it['quantity']}x {sanitize_audit_text(it['name'], 80)} ({it['price']} SAR)" for it in items[:10]
+    )
     if len(items) > 10:
         items_summary += f" ...and {len(items) - 10} more items"
-    # Who paid and for whom live only in these tags (public.transactions has no paid_by /
-    # beneficiary column); the settlement engines read them like the chat entry's tags.
-    audit_text = (
-        f"Receipt Scan: {merchant} ({len(items)} items) | PaidBy: {nafaqah['paid_by']} "
-        f"| Beneficiary: {nafaqah['beneficiary']} | SpentBy: {spent_by} | Items: [{items_summary}]"
+    # Audit note for humans: the server's tags first, the merchant text defused. Who paid and for
+    # whom are stored in columns (spent_by, beneficiary_type/id) that the settlement engines read.
+    audit_text = build_audit_note(
+        nafaqah["paid_by"], nafaqah["beneficiary"], spent_by,
+        f"Receipt Scan: {merchant} ({len(items)} items)",
+        f"Items: [{items_summary}]",
     )
 
     tx_id = insert_transaction(
@@ -771,9 +853,9 @@ def process_receipt_scan(
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",
         items=items,
-        spent_by=spent_by,
-        paid_by=nafaqah["paid_by"],
-        beneficiary=nafaqah["beneficiary"],
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         dedup_fingerprint=zatca_fp,

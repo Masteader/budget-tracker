@@ -42,12 +42,10 @@ def load_app(data_dir: Path):
     dotenv.load_dotenv = lambda *a, **k: False  # never read a developer .env during e2e
 
     import supabase_client
-    import installment_service
 
     data_dir.mkdir(parents=True, exist_ok=True)
     supabase_client.HOUSEHOLD_SETTINGS_FILE = str(data_dir / "household_settings.json")
     supabase_client.HOUSEHOLD_INVITES_FILE = str(data_dir / "household_invites.json")
-    installment_service.FALLBACK_FILE = data_dir / "installment_plans.json"
 
     import main
 

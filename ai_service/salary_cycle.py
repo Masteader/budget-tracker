@@ -426,26 +426,90 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
     }
 
 
-def match_sub_category(category_code: str, text: str, items: Optional[list] = None) -> Optional[str]:
+# Sub-category definitions seeded by migration 20261002 under the SYSTEM categories. Definitions
+# carry no household column, so under a system parent only these are trusted for keyword matching
+# (FABLE-API-04); households cannot add others there through the API.
+SYSTEM_SUB_CATEGORIES = frozenset({
+    ("OPEX-GROCERY", "meat"), ("OPEX-GROCERY", "vegetables_fruit"), ("OPEX-GROCERY", "dairy_eggs"),
+    ("OPEX-GROCERY", "snacks_chips"), ("OPEX-GROCERY", "beverages"), ("OPEX-GROCERY", "pantry_staples"),
+    ("OPEX-GROCERY", "cleaning_household"),
+    ("OPEX-UTILITIES", "housing_rent"), ("OPEX-UTILITIES", "electricity_sec"), ("OPEX-UTILITIES", "fiber_internet"),
+    ("OPEX-UTILITIES", "mobile_sims"), ("OPEX-UTILITIES", "water_municipal"),
+    ("OPEX-DINING", "restaurants_dinners"), ("OPEX-DINING", "coffee_bakeries"), ("OPEX-DINING", "delivery_apps"),
+    ("OPEX-FUEL", "gas_fuel"), ("OPEX-FUEL", "car_maintenance"), ("OPEX-FUEL", "ride_hailing"),
+    ("OPEX-HEALTH", "prescriptions_meds"), ("OPEX-HEALTH", "clinics_dental"),
+    ("OPEX-SHOPPING", "clothing_fashion"), ("OPEX-SHOPPING", "electronics_gadgets"), ("OPEX-SHOPPING", "home_furniture"),
+})
+MIN_KEYWORD_LENGTH = 3
+# One refusal for every sub-category write a household may not make (unknown parent, system
+# parent, another household's or a shared custom code, not an admin): FABLE-API-05/08, no oracle.
+SUB_CATEGORY_FORBIDDEN = (
+    "Forbidden: sub-categories can only be created or changed under a category that belongs to this household alone."
+)
+
+
+def sub_category_keywords(name: str) -> List[str]:
+    """Matching keywords for a household-defined sub-category: its name, if long enough."""
+    keyword = (name or "").strip().lower()
+    return [keyword] if len(keyword) >= MIN_KEYWORD_LENGTH else []
+
+
+def sub_category_write_allowed(parent_code: str, sub_code: Optional[str], household_id: str) -> bool:
     """
-    Matches merchant, audit-note text, or item descriptions against seeded sub-category keywords.
+    Whether ``household_id`` may define (or allocate to) ``sub_code`` under ``parent_code``: under
+    a system category only the seeded definitions (allocation, no new definition); under a custom
+    category only when this household is its sole owner (codes are unique per household, so two
+    households can own the same CUSTOM-… code and would otherwise edit each other's definitions).
+    """
+    ownership = get_category_owner_households(parent_code)
+    if ownership["shared"]:
+        return bool(sub_code) and (parent_code, sub_code) in SYSTEM_SUB_CATEGORIES
+    return ownership["owners"] == [str(household_id)]
+
+
+def sub_category_sole_owner(parent_code: str) -> Optional[str]:
+    """The one household owning custom ``parent_code``; None for system, unknown or shared codes."""
+    ownership = get_category_owner_households(parent_code)
+    if ownership["shared"] or len(ownership["owners"]) != 1:
+        return None
+    return ownership["owners"][0]
+
+
+def match_sub_category(
+    category_code: str,
+    text: str,
+    items: Optional[list] = None,
+    household_id: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Matches merchant, audit-note text, or item descriptions against sub-category keywords.
+
+    Only trusted definitions are considered (FABLE-API-04): under a system category the seeded
+    ones, under a custom category those of ``household_id`` when it owns the code alone. Keywords
+    shorter than MIN_KEYWORD_LENGTH characters never match.
     """
     from supabase_client import get_client
     client = get_client()
     try:
         subs = client.table("cost_control_sub_categories").select("*").eq("parent_code", category_code).execute().data or []
+        if subs:
+            ownership = get_category_owner_households(category_code)
+            if ownership["shared"]:
+                subs = [s for s in subs if (category_code, s.get("sub_code")) in SYSTEM_SUB_CATEGORIES]
+            elif not (household_id and ownership["owners"] == [str(household_id)]):
+                subs = []
     except Exception:
         return None
-        
+
     search_corpus = (text or "").lower()
     if items:
         for it in items:
             search_corpus += " " + str(it.get("name", "")).lower()
-            
+
     for sub in subs:
         keywords = sub.get("keywords") or []
         for kw in keywords:
-            if kw.lower() in search_corpus:
+            if isinstance(kw, str) and len(kw.strip()) >= MIN_KEYWORD_LENGTH and kw.strip().lower() in search_corpus:
                 return sub["sub_code"]
 
     # Static fallback for essential keywords if DB keywords are incomplete
@@ -864,7 +928,7 @@ def add_sub_category_for_household(
             "sub_code": sub_code,
             "name_en": name_en,
             "name_ar": name_en,
-            "keywords": [name_en.lower()],
+            "keywords": sub_category_keywords(name_en),
         }).execute()
 
 
@@ -950,9 +1014,9 @@ def remove_sub_category_for_household(
     if matching:
         budget_row = matching[0]
         sub_allocs = budget_row.get("sub_allocations") or {}
-        if isinstance(sub_allocs, dict) and sub_code in sub_allocs:
+        if isinstance(sub_allocs, dict) and sub_code in sub_allocs and not is_allocation_metadata_key(sub_code):
             del sub_allocs[sub_code]
-            new_total = round(sum(float(v) for v in sub_allocs.values()), 2)
+            new_total = round(sum(numeric_sub_allocations(sub_allocs).values()), 2)
             client.table("budgets").update({
                 "sub_allocations": sub_allocs,
                 "allocated_amount": new_total,
@@ -986,6 +1050,26 @@ def remove_sub_category_for_household(
     }
 
 
+def is_allocation_metadata_key(key: Any) -> bool:
+    """``_``-prefixed keys of budgets.sub_allocations hold metadata, not amounts (FABLE-API-07)."""
+    return str(key).startswith("_")
+
+
+def numeric_sub_allocations(sub_allocations: Any) -> Dict[str, float]:
+    """The amount entries of a sub_allocations dict (metadata keys and non-numbers skipped)."""
+    if not isinstance(sub_allocations, dict):
+        return {}
+    out: Dict[str, float] = {}
+    for key, value in sub_allocations.items():
+        if is_allocation_metadata_key(key) or isinstance(value, (dict, list, bool)) or value is None:
+            continue
+        try:
+            out[str(key)] = round(float(value), 2)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def save_sub_allocations(
     household_id: str,
     category_code: str,
@@ -995,16 +1079,20 @@ def save_sub_allocations(
     """
     Saves sub-category allocations for a category in the specified cycle.
     Automatically sets the parent budget's allocated_amount to the sum of sub-allocations.
+
+    ``_``-prefixed keys are metadata kept in the same JSONB (e.g. ``_recurring_config`` of the
+    recurring bills): they are ignored in the input (clients cannot write them), excluded from
+    the total and preserved from the stored row (FABLE-API-07).
     """
     from supabase_client import get_client
 
     target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
 
-    clean_sub_allocations = {k: round(float(v), 2) for k, v in sub_allocations.items()}
+    clean_sub_allocations = numeric_sub_allocations(sub_allocations)
     total_allocated = round(sum(clean_sub_allocations.values()), 2)
-    
+
     client = get_client()
-    
+
     res = (
         client.table("budgets")
         .select("*")
@@ -1021,10 +1109,14 @@ def save_sub_allocations(
     
     if matching:
         budget_id = matching[0]["id"]
+        stored = matching[0].get("sub_allocations")
+        metadata = (
+            {k: v for k, v in stored.items() if is_allocation_metadata_key(k)} if isinstance(stored, dict) else {}
+        )
         # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
         update_data = {
             "allocated_amount": total_allocated,
-            "sub_allocations": clean_sub_allocations,
+            "sub_allocations": {**clean_sub_allocations, **metadata},
             "cycle_key": target_key,
             "is_active": True,
         }

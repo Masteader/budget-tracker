@@ -103,18 +103,27 @@ def test_unknown_parent_lists_nothing(db):
     assert _list(A_MEMBER, "CUSTOM-NOPE").json()["sub_categories"] == []
 
 
-def _add(user, household_id, parent_code):
+def _add(user, household_id, parent_code, sub_code=None):
+    body = {"household_id": household_id, "parent_code": parent_code, "name_en": "Planted", "allocated_amount": 0}
+    if sub_code:
+        body["sub_code"] = sub_code
     with patch("routes.budgets.add_sub_category_for_household", return_value={"status": "success"}) as work:
-        res = client.post("/budgets/sub-categories", headers=bearer(user), json={
-            "household_id": household_id, "parent_code": parent_code, "name_en": "Planted", "allocated_amount": 0})
+        res = client.post("/budgets/sub-categories", headers=bearer(user), json=body)
     return res, work
 
 
-@pytest.mark.parametrize("parent", ["OPEX-DINING", "CUSTOM-A-ONLY"])
-def test_admin_adds_under_system_or_own_category(db, parent):
-    res, work = _add(A_ADMIN, HH_A, parent)
+@pytest.mark.parametrize("parent,sub_code", [("OPEX-DINING", "coffee_bakeries"), ("CUSTOM-A-ONLY", None)])
+def test_admin_adds_under_system_or_own_category(db, parent, sub_code):
+    # Under a system category: an allocation to a seeded sub-category only (FABLE-API-04).
+    res, work = _add(A_ADMIN, HH_A, parent, sub_code)
     assert res.status_code == 200, res.text
     work.assert_called_once()
+
+
+def test_admin_cannot_define_new_sub_categories_under_a_system_category(db):
+    res, work = _add(A_ADMIN, HH_A, "OPEX-DINING")
+    assert res.status_code == 403, res.text
+    work.assert_not_called()
 
 
 @pytest.mark.parametrize("parent", ["CUSTOM-B-ONLY", "CUSTOM-NOPE"])

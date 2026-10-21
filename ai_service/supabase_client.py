@@ -346,6 +346,13 @@ class UnknownCategoryError(ValueError):
         super().__init__(message)
 
 
+class InvalidAttributionError(ValueError):
+    """
+    ``paid_by`` / ``beneficiary`` of an expense name nobody in the household (e.g. 'partner' in a
+    flat of three). Routes answer 422 with the message, which never contains database text.
+    """
+
+
 def is_unknown_category_db_error(exc: BaseException) -> bool:
     """True for validate_category_code_exists' refusal (SQLSTATE 23503 'Category code ...')."""
     from postgrest_compat import db_error_fields
@@ -377,6 +384,30 @@ def category_code_in_taxonomy(household_id: str, category_code: str) -> Optional
     return any(r.get("household_id") in (None, household_id) for r in rows)
 
 
+def household_attribution(
+    household_id: str,
+    user_id: Optional[str],
+    paid_by: Optional[str],
+    beneficiary: Optional[str],
+    spouse_id: Optional[str] = None,
+) -> dict:
+    """
+    ``{spent_by, beneficiary_type, beneficiary_id}`` for an expense ``user_id`` records in
+    ``household_id`` (settlement_engine.structured_attribution against the household roster).
+    Raises InvalidAttributionError when 'partner' names nobody. If the roster cannot be read the
+    relative token is stored and resolved by the settlement engines when they read the row.
+    """
+    from nafaqah_service import load_family_context
+    from settlement_engine import structured_attribution
+
+    try:
+        ctx = load_family_context(household_id)
+    except Exception as exc:
+        logger.warning("Household roster unavailable for attribution (%s); storing relative tokens.", exc)
+        ctx = None
+    return structured_attribution(ctx, user_id, paid_by, beneficiary, spouse_id=spouse_id)
+
+
 def insert_transaction(
     household_id: str,
     amount: float,
@@ -400,9 +431,18 @@ def insert_transaction(
     nafaqah_class: Optional[str] = None,
     nafaqah_spouse_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    beneficiary_type: Optional[str] = None,
+    beneficiary_id: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
+
+    Who paid and for whom are stored in columns (FABLE-API-01 / FABLE-LOGIC-03): ``spent_by`` is
+    the payer relative to the creator ('me' | 'partner') and ``beneficiary_type`` /
+    ``beneficiary_id`` the beneficiary (settlement_engine.structured_attribution). Callers pass
+    the three columns, or ``paid_by`` / ``beneficiary`` and they are derived here (raising
+    InvalidAttributionError when 'partner' names nobody). The settlement engines read these
+    columns, never the free text of ``raw_sms``.
 
     ``user_id`` is the creator: the verified JWT subject of the request (DB-18). The service
     role bypasses RLS, so request-driven callers must always pass it; it is never pruned by the
@@ -417,6 +457,10 @@ def insert_transaction(
     """
     if source not in TRANSACTION_SOURCES:
         raise ValueError(f"Unsupported transaction source: {source!r}")
+    if beneficiary_id is None and (paid_by is not None or beneficiary is not None):
+        attribution = household_attribution(household_id, user_id, paid_by, beneficiary, nafaqah_spouse_id)
+        spent_by = attribution["spent_by"]
+        beneficiary_type, beneficiary_id = attribution["beneficiary_type"], attribution["beneficiary_id"]
     client = get_client()
 
     # Automatically derive cycle_key from timestamp if not supplied
@@ -436,7 +480,7 @@ def insert_transaction(
     if not sub_category and category_code:
         try:
             from salary_cycle import match_sub_category
-            sub_category = match_sub_category(category_code, f"{merchant} {raw_sms}", items)
+            sub_category = match_sub_category(category_code, f"{merchant} {raw_sms}", items, household_id=household_id)
         except Exception:
             pass
 
@@ -460,8 +504,14 @@ def insert_transaction(
     if spent_by:
         payload["spent_by"] = spent_by
     # paid_by / beneficiary are not columns of public.transactions (live and the repo schema
-    # agree): callers keep them in the raw_sms "PaidBy: | Beneficiary:" audit tags, which the
-    # settlement engines read. Sending them made every first insert attempt fail (FR-B-11).
+    # agree; sending them made every first insert attempt fail, FR-B-11): they are stored as
+    # spent_by + beneficiary_type/beneficiary_id, which the settlement engines read.
+    attribution_fields = (
+        {"beneficiary_type": beneficiary_type or "household", "beneficiary_id": beneficiary_id}
+        if beneficiary_id
+        else {}
+    )
+    payload.update(attribution_fields)
     if sub_category:
         payload["sub_category"] = sub_category
     if cycle_key:
@@ -514,6 +564,8 @@ def insert_transaction(
                 base_payload["cycle_key"] = cycle_key
             if spent_by:
                 base_payload["spent_by"] = spent_by
+            # Never pruned: without them the expense would be split among every member.
+            base_payload.update(attribution_fields)
             base_payload.update(nafaqah_fields)
             try:
                 response = client.table("transactions").insert(base_payload).execute()

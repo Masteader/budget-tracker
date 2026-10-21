@@ -13,8 +13,8 @@ from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import UnknownCategoryError
-from utils import safe_error_response, validate_uuid
+from supabase_client import InvalidAttributionError, UnknownCategoryError
+from utils import bounded_text, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
@@ -62,6 +62,14 @@ async def chat_transaction(request: Request):
 
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
+    # Free-text overrides are bounded (FABLE-API-06): 422 instead of storing megabytes per row.
+    overrides = {
+        field: bounded_text(body, field, limit)
+        for field, limit in (
+            ("merchant", 120), ("spent_by", 20), ("sub_category", 60),
+            ("paid_by", 60), ("beneficiary", 60), ("nafaqah_spouse_id", 64), ("enrich_tx_id", 64),
+        )
+    }
 
     nafaqah_class = body.get("nafaqah_class")
     if nafaqah_class is not None and nafaqah_class not in ("wife_reimbursable", "wife_personal", "none"):
@@ -98,17 +106,17 @@ async def chat_transaction(request: Request):
             message=message,
             user_id=user_id,
             allow_duplicate=bool(body.get("allow_duplicate", False)),
-            enrich_tx_id=body.get("enrich_tx_id"),
+            enrich_tx_id=overrides["enrich_tx_id"],
             preview_only=preview_only,
-            override_merchant=body.get("merchant"),
-            override_spent_by=body.get("spent_by"),
-            override_category_code=body.get("category_code"),
-            override_sub_category=body.get("sub_category"),
-            override_paid_by=body.get("paid_by"),
-            override_beneficiary=body.get("beneficiary"),
+            override_merchant=overrides["merchant"],
+            override_spent_by=overrides["spent_by"],
+            override_category_code=body.get("category_code"),  # unknown/oversized: 422 in the parser
+            override_sub_category=overrides["sub_category"],
+            override_paid_by=overrides["paid_by"],
+            override_beneficiary=overrides["beneficiary"],
             occurred_at=occurred_at,
             override_nafaqah_class=nafaqah_class,
-            override_nafaqah_spouse_id=body.get("nafaqah_spouse_id"),
+            override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
         )
     except NafaqahError as exc:
         # A class contradicting paid_by/beneficiary, or a wife that is not allowed (422).
@@ -130,6 +138,11 @@ async def chat_transaction(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)
         raise HTTPException(status_code=422, detail=UnknownCategoryError.PUBLIC_MESSAGE)
+    except InvalidAttributionError as exc:
+        # paid_by / beneficiary name nobody in this household (a fixed, database-free message).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "chat-transaction", idem_key)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)

@@ -13,10 +13,10 @@ from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import UnknownCategoryError
-from utils import safe_error_response, validate_uuid
+from supabase_client import InvalidAttributionError, UnknownCategoryError
+from utils import bounded_text, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
-from receipt_scanner import process_receipt_scan
+from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
 
 logger = logging.getLogger(__name__)
@@ -58,12 +58,22 @@ async def scan_receipt(request: Request):
     if not isinstance(images_base64, list):
         raise HTTPException(status_code=400, detail="images_base64 must be a list.")
 
-    qr_code_raw = body.get("qr_code_raw")
     household_id = body.get("household_id")
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
     await verify_household_access(request, household_id)
+    # Free-text overrides are bounded (FABLE-API-06); a ZATCA QR payload is at most 4096
+    # characters and is persisted only when it decodes (receipt_scanner).
+    overrides = {
+        field: bounded_text(body, field, limit)
+        for field, limit in (
+            ("merchant", 120), ("spent_by", 20), ("paid_by", 60), ("beneficiary", 60),
+            ("qr_code_raw", 4096), ("receipt_url", 512), ("nafaqah_class", 32),
+            ("nafaqah_spouse_id", 64), ("enrich_tx_id", 64),
+        )
+    }
+    qr_code_raw = overrides["qr_code_raw"]
 
     if not images_base64 and not qr_code_raw:
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
@@ -96,16 +106,16 @@ async def scan_receipt(request: Request):
             qr_code_raw=qr_code_raw,
             user_id=user_id,
             allow_duplicate=bool(body.get("allow_duplicate", False)),
-            enrich_tx_id=body.get("enrich_tx_id"),
+            enrich_tx_id=overrides["enrich_tx_id"],
             preview_only=preview_only,
-            override_merchant=body.get("merchant"),
-            override_spent_by=body.get("spent_by"),
-            receipt_url=body.get("receipt_url"),
+            override_merchant=overrides["merchant"],
+            override_spent_by=overrides["spent_by"],
+            receipt_url=overrides["receipt_url"],
             occurred_at=occurred_at,
-            paid_by=body.get("paid_by"),
-            beneficiary=body.get("beneficiary"),
-            override_nafaqah_class=body.get("nafaqah_class"),
-            override_nafaqah_spouse_id=body.get("nafaqah_spouse_id"),
+            paid_by=overrides["paid_by"],
+            beneficiary=overrides["beneficiary"],
+            override_nafaqah_class=overrides["nafaqah_class"],
+            override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
         )
     except NafaqahError as exc:
         # Family Nafaqah: unknown or contradicting class, or a wife that is not allowed (422).
@@ -127,6 +137,16 @@ async def scan_receipt(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)
         raise HTTPException(status_code=422, detail=UnknownCategoryError.PUBLIC_MESSAGE)
+    except ReceiptImageTooLarge as exc:
+        # Pixel / stitched-canvas limits, checked from the image headers before decoding.
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=413, detail=str(exc))
+    except InvalidAttributionError as exc:
+        # paid_by / beneficiary name nobody in this household (a fixed, database-free message).
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)

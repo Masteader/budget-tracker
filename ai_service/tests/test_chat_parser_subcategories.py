@@ -126,8 +126,9 @@ def test_confirm_chat_transaction_preserves_category_sub_category_and_attributio
     kwargs = mock_insert.call_args.kwargs
     assert kwargs["category_code"] == "OPEX-DINING"
     assert kwargs["sub_category"] == "restaurants_dinners"
-    assert kwargs["paid_by"] == "partner"
-    assert kwargs["beneficiary"] == "both"
+    # Attribution is stored as columns (FABLE-LOGIC-03): spent_by = payer, beneficiary_type/id.
+    assert kwargs["spent_by"] == "partner"
+    assert (kwargs["beneficiary_type"], kwargs["beneficiary_id"]) == ("household", "household")
     assert kwargs["items"][0]["sub_category"] == "restaurants_dinners"
 
 

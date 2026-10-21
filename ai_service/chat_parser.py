@@ -26,10 +26,19 @@ from supabase_client import (
     fetch_flexible_budgets,
     reallocate_budget,
     category_code_in_taxonomy,
+    household_attribution,
     UnknownCategoryError,
 )
 
-from utils import litellm_model, riyadh_today, riyadh_date_for_timestamp  # noqa: E402
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +47,11 @@ class ChatLineItem(BaseModel):
     quantity: float = Field(1.0, description="Quantity of item")
     price: float = Field(..., description="Total price for this item line in SAR")
     sub_category: Optional[str] = Field(None, description="Sub-category code for this specific item")
+
+    @field_validator("name")
+    @classmethod
+    def bound_name(cls, v: str) -> str:
+        return v[:200] if isinstance(v, str) else v
 
     @field_validator("price")
     @classmethod
@@ -72,6 +86,9 @@ class ParsedChatExpense(BaseModel):
     beneficiary: str = Field("both", description="For whom: 'me', 'partner', 'both', or dependent/child name")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
+    # Heuristic parser only: it could not tell who paid for what (FABLE-LOGIC-07); the preview
+    # asks instead of suggesting a Nafaqah class.
+    attribution_needs_confirmation: bool = False
 
     @field_validator("total_amount")
     @classmethod
@@ -84,6 +101,12 @@ class ParsedChatExpense(BaseModel):
         if v > 10_000_000:
             raise ValueError("Total expense amount exceeds maximum limit (10,000,000 SAR)")
         return round(float(v), 2)
+
+    @field_validator("beneficiary", "sub_category", "paid_by", "spent_by")
+    @classmethod
+    def bound_short_text(cls, v: Optional[str]) -> Optional[str]:
+        # Model output is not trusted either (FABLE-API-06): short attribution/code fields.
+        return v[:60] if isinstance(v, str) else v
 
     @field_validator("merchant")
     @classmethod
@@ -152,6 +175,60 @@ Return STRICTLY valid JSON conforming to:
 }
 """
 
+# ─── Heuristic attribution vocabulary (FABLE-LOGIC-07) ─────────────────────────
+# Recorder-relative: 'partner' is the other spouse / roommate, 'me' the recorder.
+_PARTNER_PAID_CUES = (
+    "partner paid", "wife paid", "husband paid", "paid by my wife", "paid by my husband", "paid by wife",
+    "paid by husband", "paid by my partner", "paid by partner", "my partner paid",
+    "حاسبتها هي", "دفعتها هي", "دفعتها زوجتي", "دفعته زوجتي", "دفعت زوجتي", "زوجتي دفعت", "زوجتي دفعتها",
+    "حاسبت زوجتي", "حاسبتها زوجتي", "زوجتي حاسبت", "دفعتها المدام", "دفعت المدام", "المدام دفعت",
+    "حاسبت المدام", "المدام حاسبت", "جابته المدام", "جابته زوجتي", "دفعه زوجي", "دفعها زوجي", "دفعته زوجي",
+    "دفع زوجي", "زوجي دفع", "حاسب زوجي", "حاسبه زوجي", "حاسبها زوجي", "زوجي حاسب", "جابه زوجي",
+    "على حساب زوجي", "ع حساب زوجي", "على حساب زوجتي", "ع حساب زوجتي", "على حساب المدام",
+)
+_ME_PAID_CUES = (
+    "i paid", "i spent", "i bought", "bought", "paid", "spent",
+    "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت", "دفعت", "شريت",
+    "اشتريت", "عبيت", "طلبت", "تقضيت", "تقضينا", "طلبنا", "جبت",
+)
+_CHILDREN_CUES = (
+    "for the kids", "for my kids", "for the children", "for my children", "kids'", "children's",
+    "للعيال", "للأولاد", "للاولاد", "للأطفال", "للاطفال", "للبنات",
+)
+_PARTNER_BENEFICIARY_CUES = (
+    "for my wife", "for my husband", "for partner", "for my partner", "for husband", "for wife", "for her",
+    "for him", "لزوجتي", "لزوجي", "للمدام", "للشريك", "فستان زوجتي", "هدية زوجتي", "هدية لزوجتي",
+)
+_PARTNER_PRONOUN_WORDS = {"لها", "له"}
+_ME_BENEFICIARY_CUES = (
+    "for me", "for myself", "bought myself", "my own", "لي لحالي", "شريت لنفسي", "لنفسي", "قهوتي", "ملابسي",
+    "عطري", "جوالي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا",
+)
+_EXTERNAL_BENEFICIARY_CUES = (
+    "gift", "present for", "for my mother", "for my mom", "for my father", "for my dad", "for my sister",
+    "for my brother", "for my friend", "for my parents",
+    "هدية", "هديه", "لأمي", "لامي", "لأبوي", "لابوي", "لأبي", "لابي", "لأختي", "لاختي", "لأخوي", "لاخوي",
+    "لأخي", "لاخي", "لخالتي", "لعمتي", "لصديقتي", "لصديقي", "لأهلي", "لاهلي",
+)
+_SHARED_BENEFICIARY_CUES = (
+    "cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "bill", "both", "we ", "house ",
+    "home ", "rent", "electricity", "water bill", "internet", "milk", "bread", "eggs", "rice", "vegetables",
+    "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت", "فاتورة", "فاتوره", "الكهرباء", "كهرباء",
+    "المياه", "الانترنت", "انترنت", "ايجار", "إيجار", "حليب", "خبز", "بيض", "رز", "خضار", "دجاج",
+    "بنده", "عثيم", "تميمي", "دانوب", "لولو", "كارفور", "بقالة", "سوبرماركت",
+)
+# After the "ل" (for) prefix: pronoun suffixes and words that are never a dependent's name.
+_NOT_A_NAME_AFTER_LAM = {
+    "ي", "ه", "ها", "هم", "هن", "هما", "نا", "ك", "كم", "كن", "كي",
+    "حالي", "نفسي", "نفسها", "نفسه", "البيت", "بيت", "لنا", "الزوجة", "المدام", "الزوج", "زوجتي", "زوجي",
+    "لشريك", "شريك", "كل", "الكل", "عيال", "لعيال",
+}
+_WORDS_STARTING_WITH_LAM = {
+    "لبن", "لبنة", "لحم", "لحوم", "ليمون", "لوز", "لابتوب", "لولو", "لاب", "لعبة", "لعب", "لوازم", "ليلة",
+    "لاتيه", "لفة", "لزقة", "لمبة", "لمبات",
+}
+
+
 def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
     """Robust heuristic fallback parser for natural language expense logs and simulation queries."""
     import re
@@ -198,30 +275,37 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             notes="Heuristic simulation detection",
         )
 
-    # Attribution 2D: paid_by and beneficiary
+    # Attribution 2D: paid_by and beneficiary (FABLE-LOGIC-07). The other spouse paying is checked
+    # first ("دفعت زوجتي" also contains "دفعت", "paid by my husband" also contains "paid").
+    words = re.findall(r"[\w']+", lower)
     paid_by = "me"
-    if any(k in lower for k in ("partner paid", "wife paid", "husband paid", "حاسبتها هي", "دفعتها زوجتي", "دفعه زوجي", "حاسبت زوجتي", "دفعت زوجتي")):
+    payer_cue = True
+    if any(k in lower for k in _PARTNER_PAID_CUES):
         paid_by = "partner"
-    elif any(k in lower for k in ("i paid", "i spent", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت انا")):
-        paid_by = "me"
+    elif not any(k in lower for k in _ME_PAID_CUES):
+        payer_cue = False  # nobody said who paid: the recorder, but the preview asks
 
-    children_keywords = (
-        "for the kids", "for my kids", "for the children", "for my children",
-        "للعيال", "للأولاد", "للاولاد", "للأطفال", "للاطفال", "للبنات",
-    )
-    beneficiary = "me"
-    if any(k in lower for k in children_keywords):
+    beneficiary_cue = True
+    external = False
+    if any(k in lower for k in _CHILDREN_CUES):
         beneficiary = "children"
-    elif any(k in lower for k in ("for my wife", "for partner", "for husband", "for her", "for him", "لزوجتي", "لزوجي", "للشريك", "فستان زوجتي", "هدية")):
+    elif any(k in lower for k in _PARTNER_BENEFICIARY_CUES) or any(w in _PARTNER_PRONOUN_WORDS for w in words):
         beneficiary = "partner"
-    elif any(k in lower for k in ("for me", "for myself", "bought myself", "لي لحالي", "شريت لنفسي", "لنفسي", "قهوتي", "ملابسي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا")):
+    elif any(k in lower for k in _ME_BENEFICIARY_CUES) or "لي" in words:
         beneficiary = "me"
-    elif any(k in lower for k in ("cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "both", "we ", "house ", "home ", "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت")):
-        beneficiary = "both"
-    elif any(k in lower for k in ("بنده", "عثيم", "تميمي", "دانوب", "لولو", "كارفور", "بقالة", "سوبرماركت")):
+    elif any(k in lower for k in _EXTERNAL_BENEFICIARY_CUES):
+        # A gift / someone outside the household: neither shared nor obviously the recorder's own
+        # allowance. Undetermined: no automatic Nafaqah class, the preview asks.
+        beneficiary = "me"
+        external = True
+    elif any(k in lower for k in _SHARED_BENEFICIARY_CUES):
         beneficiary = "both"
     else:
         beneficiary = "me"
+        beneficiary_cue = False
+    if external:
+        paid_by = "unknown"
+    needs_confirmation = external or not (payer_cue or beneficiary_cue)
 
     # Backward-compatible spent_by
     if beneficiary == "both":
@@ -411,12 +495,18 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         if not getattr(it, "sub_category", None):
             it.sub_category = sub_cat
 
-    # Detect child / dependent name in beneficiary
-    child_match = re.search(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw)
-    if child_match and beneficiary != "children":
-        cand = child_match.group(1).strip()
-        if cand not in ("ي", "حالي", "نفسي", "البيت", "لنا", "الزوجة", "المدام", "الزوج", "زوجتي", "زوجي", "لشريك"):
+    # Detect a child / dependent named after the "ل" (for) prefix ("حليب لسارة"), unless an
+    # explicit cue already decided the beneficiary. Pronoun suffixes (لها، له، لي، لنا ...) and
+    # ordinary words starting with ل (لبن، لحم ...) are never names (FABLE-LOGIC-07).
+    if beneficiary == "both" or not beneficiary_cue:
+        for child_match in re.finditer(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw):
+            cand = child_match.group(1).strip()
+            if cand in _NOT_A_NAME_AFTER_LAM or ("ل" + cand) in _WORDS_STARTING_WITH_LAM or len(cand) < 2:
+                continue
             beneficiary = cand
+            beneficiary_cue = True
+            needs_confirmation = external or not (payer_cue or beneficiary_cue)
+            break
 
     return ParsedChatExpense(
         is_transaction=True,
@@ -430,6 +520,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         beneficiary=beneficiary,
         items=items,
         notes="Parsed via robust heuristic fallback",
+        attribution_needs_confirmation=needs_confirmation,
     )
 
 
@@ -552,10 +643,8 @@ def process_chat_transaction(
             "message": f"Successfully enriched existing transaction with {len(items_dicts)} items.",
         }
 
-    merchant = (override_merchant or parsed.merchant).strip()
-    spent_by = (override_spent_by or parsed.spent_by).lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = sanitize_audit_text(override_merchant or parsed.merchant, MAX_MERCHANT_LENGTH) or "Unknown Merchant"
 
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
@@ -577,11 +666,20 @@ def process_chat_transaction(
     if not sub_category and category_code:
         try:
             from salary_cycle import match_sub_category
-            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts)
+            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts, household_id=household_id)
         except Exception:
             pass
 
-    paid_by = (override_paid_by or getattr(parsed, "paid_by", "me")).lower()
+    parsed_paid_by = str(getattr(parsed, "paid_by", "me") or "me").lower()
+    # The heuristic parser could not tell who paid for what (FABLE-LOGIC-07): the preview asks
+    # (attribution_needs_confirmation) and, for 'unknown' (e.g. a gift outside the household),
+    # suggests no Nafaqah class. A commit without an explicit choice records the recorder paying.
+    attribution_explicit = override_paid_by is not None or override_beneficiary is not None
+    needs_confirmation = not attribution_explicit and (
+        parsed_paid_by == "unknown" or bool(getattr(parsed, "attribution_needs_confirmation", False))
+    )
+    paid_by = (override_paid_by or parsed_paid_by).lower()
+    classify_as = "unknown" if (preview_only and paid_by == "unknown" and not attribution_explicit) else None
     if paid_by not in ("me", "partner"):
         paid_by = "me"
 
@@ -595,14 +693,19 @@ def process_chat_transaction(
     nafaqah = resolve_expense_nafaqah(
         household_id,
         user_id,
-        paid_by,
+        classify_as or paid_by,
         beneficiary,
         override_class=override_nafaqah_class,
         override_spouse_id=override_nafaqah_spouse_id,
-        attribution_explicit=override_paid_by is not None or override_beneficiary is not None,
+        attribution_explicit=attribution_explicit,
         require_spouse=not preview_only,
     )
     paid_by, beneficiary = nafaqah["paid_by"], nafaqah["beneficiary"]
+    if paid_by not in ("me", "partner"):
+        paid_by = "me"
+    # spent_by is the payer relative to the recorder ('me' | 'partner'); the client's legacy
+    # spent_by is ignored so the stored columns never contradict paid_by (FABLE-LOGIC-03).
+    spent_by = paid_by
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -641,6 +744,7 @@ def process_chat_transaction(
             "spent_by": spent_by,
             "paid_by": paid_by,
             "beneficiary": beneficiary,
+            "attribution_needs_confirmation": needs_confirmation,
             "dependents": [d.get("name") for d in dependents if d.get("name")],
             "household_mode": nafaqah["household_mode"],
             "recorder_role": nafaqah["recorder_role"],
@@ -676,6 +780,10 @@ def process_chat_transaction(
                 ),
             }
 
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    attribution = household_attribution(household_id, user_id, paid_by, beneficiary, nafaqah["nafaqah_spouse_id"])
+
     # A replayed offline commit carries the client-side event time (validated by the route).
     event_time = occurred_at or datetime.now(timezone.utc)
     now_iso = event_time.isoformat()
@@ -695,12 +803,15 @@ def process_chat_transaction(
                 is_reallocated = True
                 reallocated_from_id = flexible[0].id
 
-    # Format raw text for audit trail
-    items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
-    audit_text = (
-        f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by} | Items: [{items_summary}]"
-        if items_summary
-        else f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by}"
+    # Audit note for humans: the server's tags first, the user's text defused (FABLE-API-01).
+    items_summary = ", ".join(
+        f"{it.get('quantity', 1)}x {sanitize_audit_text(it.get('name'), 80)} ({it.get('price')} SAR)"
+        for it in items_dicts
+    )
+    audit_text = build_audit_note(
+        paid_by, beneficiary, spent_by,
+        f"Chat: {sanitize_audit_text(message, 1000)}",
+        f"Items: [{items_summary}]" if items_summary else "",
     )
 
     # Insert transaction
@@ -717,9 +828,9 @@ def process_chat_transaction(
         reallocated_from_budget_id=reallocated_from_id,
         source="chat",
         items=items_dicts,
-        spent_by=spent_by,
-        paid_by=paid_by,
-        beneficiary=beneficiary,
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         user_id=user_id,

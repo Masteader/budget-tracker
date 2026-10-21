@@ -110,7 +110,6 @@ def fake_supabase(monkeypatch, tmp_path):
     monkeypatch.setattr(supabase_client, "_cached_cost_codes_time", None)
     monkeypatch.setattr(supabase_client, "HOUSEHOLD_SETTINGS_FILE", str(tmp_path / "household_settings.json"))
     monkeypatch.setattr(supabase_client, "HOUSEHOLD_INVITES_FILE", str(tmp_path / "household_invites.json"))
-    monkeypatch.setattr(installment_service, "FALLBACK_FILE", tmp_path / "installment_plans.json")
     from rate_limiter import reset_rate_limiters
     from idempotency import idempotency_store
     reset_rate_limiters()
@@ -127,6 +126,7 @@ def mock_auth(monkeypatch, request):
     excluded_tests = [
         "test_auth", "test_security_posture", "test_sec03", "test_sec04", "test_api_audit", "test_jwt_hardening",
         "test_nafaqah", "test_household_permissions", "test_final_review", "test_sub_category_scoping",
+        "test_fable_",
     ]
     if any(ex in request.node.nodeid for ex in excluded_tests):
         yield

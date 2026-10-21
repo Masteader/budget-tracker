@@ -211,7 +211,8 @@ def _budget_writes(household_id):
         ("post", "/budgets/sub-allocations", "save_sub_allocations",
          {"json": {"household_id": household_id, "category_code": "OPEX-GROCERY", "sub_allocations": {"sub-veg": 50}}}),
         ("post", "/budgets/sub-categories", "add_sub_category_for_household",
-         {"json": {"household_id": household_id, "parent_code": "OPEX-GROCERY", "name_en": "Veg", "allocated_amount": 20}}),
+         {"json": {"household_id": household_id, "parent_code": "OPEX-GROCERY", "name_en": "Veg",
+                   "sub_code": "vegetables_fruit", "allocated_amount": 20}}),
         ("delete", "/budgets/sub-categories", "remove_sub_category_for_household",
          {"params": {"household_id": household_id, "parent_code": "OPEX-GROCERY", "sub_code": "sub-veg"}}),
         ("delete", "/budgets/categories/OPEX-GROCERY", "archive_category_for_household",
@@ -230,7 +231,7 @@ def test_members_cannot_write_budgets(db, index):
 
 @pytest.mark.parametrize("index", range(5))
 def test_admins_can_write_budgets(db, index):
-    # Sub-categories may only be added under an existing system or own category (E2E-05).
+    # Under a system category only the seeded sub-categories can be allocated (E2E-05, FABLE-API-04).
     db.seed("cost_control_codes", [{"id": "c-groc", "code": "OPEX-GROCERY", "category": "Groceries",
                                     "keywords": [], "is_flexible": False, "household_id": None, "is_system": True}])
     method, path, worker, kwargs = _budget_writes(ROOM)[index]
@@ -348,11 +349,16 @@ def test_receipt_commit_records_who_paid_in_the_audit_tags(db, monkeypatch):
     buf = io.BytesIO()
     Image.new("RGB", (4, 4)).save(buf, format="PNG")
     image = base64.b64encode(buf.getvalue()).decode()
+    # 'partner' must name someone: a two-member flat (FABLE-API-01 / FABLE-LOGIC-03).
+    db.tables["household_memberships"] = [m for m in db.tables["household_memberships"] if m["user_id"] != C]
     res = process_receipt_scan(household_id=ROOM, images_base64=[image], user_id=B, allow_duplicate=True,
                                paid_by="partner", beneficiary="both")
     assert res["status"] == "success", res
     row = next(t for t in db.tables["transactions"] if t["id"] == res["transaction_id"])
-    assert "PaidBy: partner" in row["raw_sms"] and "Beneficiary: both" in row["raw_sms"]
+    assert row["raw_sms"].startswith("PaidBy: partner | Beneficiary: both")
+    # Structured attribution, which the settlement engines read.
+    assert row["spent_by"] == "partner"
+    assert (row["beneficiary_type"], row["beneficiary_id"]) == ("household", "household")
 
 
 # ─── FR-B-09: one LiteLLM model default for every module ─────────────────────
