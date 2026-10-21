@@ -4,19 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
 import '../../screens/chat/chat_entry_screen.dart';
 import '../../screens/scanner/receipt_scanner_sheet.dart';
-import '../../screens/scanner/batch_receipt_scanner_screen.dart';
-import '../simulator/affordability_simulator_sheet.dart';
 import '../transactions/manual_expense_sheet.dart';
-import '../accounts/record_income_sheet.dart';
-import '../accounts/account_transfer_sheet.dart';
 import '../../l10n/app_localizations.dart';
 
-/// Animated multi-action Speed Dial FAB for quick transaction input and pre-purchase check.
-/// Provides direct 1-tap shortcuts to:
-/// 1. 📸 Scan Receipt / Invoice (Camera & Gallery)
-/// 2. 🎙️ Voice & AI Chat (Conversational expense logging)
-/// 3. 💡 Can I Afford This? (Pre-Purchase Affordability Simulator)
-/// 4. ✏️ Manual Log (Direct expense logging)
+/// Speed-dial FAB with the three ways to add an expense: manual entry,
+/// voice / AI chat and the receipt scanner. Everything else is on the
+/// Tools screen.
 class AppSpeedDialFab extends StatefulWidget {
   final String? householdId;
 
@@ -88,20 +81,6 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
     }
   }
 
-  void _onBatchScanReceipts() {
-    _close();
-    HapticFeedback.selectionClick();
-    final hid = widget.householdId;
-    if (hid != null && mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BatchReceiptScannerScreen(householdId: hid),
-        ),
-      );
-    }
-  }
-
   void _onVoiceEntry() {
     _close();
     HapticFeedback.selectionClick();
@@ -111,34 +90,10 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
     );
   }
 
-  void _onAffordabilitySimulator() {
-    _close();
-    HapticFeedback.selectionClick();
-    AffordabilitySimulatorSheet.show(context, householdId: widget.householdId);
-  }
-
   void _onManualEntry() {
     _close();
     HapticFeedback.selectionClick();
     ManualExpenseSheet.show(context, householdId: widget.householdId);
-  }
-
-  void _onRecordIncome() {
-    _close();
-    HapticFeedback.selectionClick();
-    final hid = widget.householdId;
-    if (hid != null && mounted) {
-      RecordIncomeSheet.show(context, householdId: hid);
-    }
-  }
-
-  void _onTransferFunds() {
-    _close();
-    HapticFeedback.selectionClick();
-    final hid = widget.householdId;
-    if (hid != null && mounted) {
-      AccountTransferSheet.show(context, householdId: hid);
-    }
   }
 
   Widget _buildOption({
@@ -226,50 +181,25 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
             behavior: HitTestBehavior.opaque,
             child: const SizedBox(
               width: 300,
-              height: 480,
+              height: 240,
             ),
           ),
-        _buildOption(
-          icon: Icons.dynamic_feed_rounded,
-          label: context.tr('batch_scan_receipts'),
-          color: const Color(0xFF80E5FF),
-          onTap: _onBatchScanReceipts,
-          offset: 340,
-        ),
+        // Three primary actions (R3/R7): manual entry first, then chat, then
+        // the receipt scanner. Batch scan, income, transfers and the
+        // affordability simulator live on the Tools screen.
         _buildOption(
           icon: Icons.camera_alt_rounded,
           label: context.tr('scan_receipt'),
           color: AppThemes.iceCyan,
           onTap: _onScanReceipt,
-          offset: 290,
+          offset: 150,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
           color: AppThemes.electricTeal,
           onTap: _onVoiceEntry,
-          offset: 240,
-        ),
-        _buildOption(
-          icon: Icons.savings_rounded,
-          label: context.tr('record_income'),
-          color: context.electricTeal,
-          onTap: _onRecordIncome,
-          offset: 190,
-        ),
-        _buildOption(
-          icon: Icons.swap_horiz_rounded,
-          label: context.tr('transfer_funds'),
-          color: context.iceCyan,
-          onTap: _onTransferFunds,
-          offset: 140,
-        ),
-        _buildOption(
-          icon: Icons.calculate_outlined,
-          label: context.tr('affordability_simulator'),
-          color: AppThemes.champagneGold,
-          onTap: _onAffordabilitySimulator,
-          offset: 95,
+          offset: 100,
         ),
         _buildOption(
           icon: Icons.edit_note_rounded,

@@ -92,7 +92,7 @@ void main() {
   });
 
   test('settings screen saves payday/income/rollover server-first', () {
-    final src = File('lib/screens/settings/ingestion_settings_screen.dart').readAsStringSync();
+    final src = File('lib/screens/settings/settings_screen.dart').readAsStringSync();
     for (final setting in ['saveHouseholdSetting<int>', 'saveHouseholdSetting<double>', 'saveHouseholdSetting<String>']) {
       expect(src, contains(setting));
     }

@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
 import '../../providers/household_role_provider.dart';
 import '../nafaqah/nafaqah_review_section.dart';
+import '../../models/category_catalog.dart';
 
 /// Confirmed values of a chat expense. [confirmedNafaqahClass] is set in
 /// family mode only: 'wife_reimbursable', 'wife_personal' or 'none' (husband
@@ -103,18 +104,6 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     });
   }
 
-  static const List<Map<String, String>> _defaultCategories = [
-    {'code': 'OPEX-GROCERY', 'label': 'Groceries & Supermarkets'},
-    {'code': 'OPEX-DINING', 'label': 'Dining & Cafes'},
-    {'code': 'OPEX-SHOPPING', 'label': 'Shopping & Retail'},
-    {'code': 'OPEX-UTILITIES', 'label': 'Utilities & Bills'},
-    {'code': 'OPEX-FUEL', 'label': 'Fuel & Transport'},
-    {'code': 'OPEX-ENTERTAINMENT', 'label': 'Entertainment'},
-    {'code': 'OPEX-HEALTH', 'label': 'Health & Pharmacy'},
-    {'code': 'CAPEX-EDUCATION', 'label': 'Education'},
-    {'code': 'OPEX-GOV', 'label': 'Government & Fees'},
-    {'code': 'OPEX-MISC', 'label': 'Miscellaneous'},
-  ];
 
   @override
   void initState() {
@@ -123,11 +112,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     final defaultMerchant = widget.pendingData['merchant'] as String? ?? '';
     _merchantController = TextEditingController(text: defaultMerchant);
 
-    var rawCat = (widget.pendingData['category_code'] as String? ?? 'OPEX-MISC').toUpperCase();
-    if (rawCat == 'OPEX-GROCERIES') rawCat = 'OPEX-GROCERY';
-    if (rawCat == 'OPEX-TRANSPORT') rawCat = 'OPEX-FUEL';
-    if (rawCat == 'OPEX-HEALTHCARE') rawCat = 'OPEX-HEALTH';
-    _selectedCategoryCode = rawCat;
+    _selectedCategoryCode = CategoryCatalog.normalize(widget.pendingData['category_code'] as String?);
 
     _selectedSubCategory = widget.pendingData['sub_category'] as String?;
 
@@ -294,16 +279,14 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _defaultCategories.any((c) => c['code'] == _selectedCategoryCode)
-                          ? _selectedCategoryCode
-                          : _defaultCategories.first['code'],
+                      value: _selectedCategoryCode,
                       isExpanded: true,
                       dropdownColor: context.cardBg,
                       style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12),
-                      items: _defaultCategories.map((c) {
+                      items: CategoryCatalog.pickerCodesIncluding(_selectedCategoryCode).map((code) {
                         return DropdownMenuItem(
-                          value: c['code'],
-                          child: Text(context.trCat(c['code']!)),
+                          value: code,
+                          child: Text(context.trCat(code)),
                         );
                       }).toList(),
                       onChanged: (val) {

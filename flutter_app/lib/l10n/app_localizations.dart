@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
+import '../services/salary_cycle_service.dart';
+
 class AppLocalizations {
   final Locale locale;
 
@@ -24,9 +26,9 @@ class AppLocalizations {
       'ur': 'ریسٹورینٹ اور کیفے',
     },
     'OPEX-FUEL': {
-      'en': 'Fuel & Transport',
-      'ar': 'الوقود والمواصلات',
-      'ur': 'ایندھن اور ٹرانسپورٹ',
+      'en': 'Fuel',
+      'ar': 'الوقود',
+      'ur': 'ایندھن',
     },
     'OPEX-UTILITIES': {
       'en': 'Utilities & Bills',
@@ -62,6 +64,46 @@ class AppLocalizations {
       'en': 'Miscellaneous',
       'ar': 'مصاريف متنوعة',
       'ur': 'متفرق اخراجات',
+    },
+    'OPEX-HOUSING': {
+      'en': 'Housing & Rent',
+      'ar': 'السكن والإيجار',
+      'ur': 'رہائش اور کرایہ',
+    },
+    'OPEX-EDUCATION': {
+      'en': 'School Costs',
+      'ar': 'مصاريف المدارس',
+      'ur': 'اسکول کے اخراجات',
+    },
+    'OPEX-DOMESTIC-HELP': {
+      'en': 'Domestic Help',
+      'ar': 'العمالة المنزلية',
+      'ur': 'گھریلو ملازمین',
+    },
+    'OPEX-FAMILY-SUPPORT': {
+      'en': 'Family Support',
+      'ar': 'بر الوالدين ودعم الأسرة',
+      'ur': 'خاندان کی کفالت',
+    },
+    'OPEX-CHARITY': {
+      'en': 'Charity & Zakat',
+      'ar': 'الصدقات والزكاة',
+      'ur': 'صدقہ اور زکوٰۃ',
+    },
+    'OPEX-TRANSPORT': {
+      'en': 'Car & Transport',
+      'ar': 'السيارة والنقل',
+      'ur': 'گاڑی اور ٹرانسپورٹ',
+    },
+    'OPEX-INSURANCE': {
+      'en': 'Insurance',
+      'ar': 'التأمين',
+      'ur': 'انشورنس',
+    },
+    'OPEX-REMITTANCE': {
+      'en': 'Remittances Abroad',
+      'ar': 'الحوالات الخارجية',
+      'ur': 'بیرون ملک ترسیلات',
     },
     'OPEX-TESTING': {
       'en': 'Testing Category',
@@ -276,6 +318,97 @@ class AppLocalizations {
       'ar': 'متنوعات عامة',
       'ur': 'عام متفرقات',
     },
+    // R4 taxonomy refresh sub-codes (names also come from the DB)
+    'annual_rent': {
+      'en': 'Annual Rent',
+      'ar': 'الإيجار السنوي',
+      'ur': 'سالانہ کرایہ',
+    },
+    'housing_services': {
+      'en': 'Housing Services & Maintenance',
+      'ar': 'خدمات وصيانة السكن',
+      'ur': 'رہائش کی خدمات اور مرمت',
+    },
+    'school_transport': {
+      'en': 'School Transport',
+      'ar': 'النقل المدرسي',
+      'ur': 'اسکول ٹرانسپورٹ',
+    },
+    'school_uniforms': {
+      'en': 'School Uniforms',
+      'ar': 'الزي المدرسي',
+      'ur': 'اسکول یونیفارم',
+    },
+    'maid_salary': {
+      'en': 'Housemaid Salary',
+      'ar': 'راتب العاملة المنزلية',
+      'ur': 'گھریلو ملازمہ کی تنخواہ',
+    },
+    'driver_salary': {
+      'en': 'Driver Salary',
+      'ar': 'راتب السائق',
+      'ur': 'ڈرائیور کی تنخواہ',
+    },
+    'recruitment_visa': {
+      'en': 'Recruitment & Visa Fees',
+      'ar': 'رسوم الاستقدام والتأشيرة',
+      'ur': 'بھرتی اور ویزا فیس',
+    },
+    'parents_support': {
+      'en': 'Support for Parents',
+      'ar': 'بر الوالدين',
+      'ur': 'والدین کی مدد',
+    },
+    'relatives_support': {
+      'en': 'Support for Relatives',
+      'ar': 'دعم الأقارب',
+      'ur': 'رشتہ داروں کی مدد',
+    },
+    'sadaqah': {
+      'en': 'Sadaqah',
+      'ar': 'الصدقات',
+      'ur': 'صدقہ',
+    },
+    'zakat': {
+      'en': 'Zakat',
+      'ar': 'الزكاة',
+      'ur': 'زکوٰۃ',
+    },
+    'car_installment': {
+      'en': 'Car Installment',
+      'ar': 'قسط السيارة',
+      'ur': 'گاڑی کی قسط',
+    },
+    'public_transport': {
+      'en': 'Public Transport',
+      'ar': 'النقل العام',
+      'ur': 'پبلک ٹرانسپورٹ',
+    },
+    'car_insurance': {
+      'en': 'Car Insurance',
+      'ar': 'تأمين السيارة',
+      'ur': 'گاڑی کی انشورنس',
+    },
+    'health_insurance': {
+      'en': 'Health Insurance',
+      'ar': 'التأمين الصحي',
+      'ur': 'ہیلتھ انشورنس',
+    },
+    'home_insurance': {
+      'en': 'Home Insurance',
+      'ar': 'تأمين المنزل',
+      'ur': 'گھر کی انشورنس',
+    },
+    'family_remittance': {
+      'en': 'Family Remittance',
+      'ar': 'حوالة للأهل',
+      'ur': 'گھر والوں کو رقم کی ترسیل',
+    },
+    'transfer_fees': {
+      'en': 'Transfer Fees',
+      'ar': 'رسوم التحويل',
+      'ur': 'ترسیل کی فیس',
+    },
   };
 
   // ── General Localized Values Dictionary ────────────────────────────────────
@@ -340,7 +473,7 @@ class AppLocalizations {
       'allowance_spent': 'Spent',
       'allowance_remaining': 'Remaining',
       'allowance_overspent': 'Over the allowance by {amount}',
-      'allowance_not_set': 'No allowance set for this cycle yet.',
+      'allowance_not_set': 'No allowance is set for this cycle; personal purchases are tracked without a limit.',
       'allowance_set': 'Set allowance',
       'allowance_edit': 'Change allowance',
       'allowance_set_title': 'Personal allowance for {cycle}',
@@ -601,7 +734,6 @@ class AppLocalizations {
       'appearance_language': 'APPEARANCE & LANGUAGE',
       'hardware_permissions': 'HARDWARE & APP PERMISSIONS',
       'ingestion_channels': 'EXPENSE INGESTION CHANNELS',
-      'duplicate_resolution': 'CROSS-CHANNEL DUPLICATE RESOLUTION',
       'reports_offline_queue': 'REPORTS & OFFLINE QUEUE',
       'user_guide': 'USER GUIDE & DOCUMENTATION',
       'account_session': 'ACCOUNT & SESSION',
@@ -651,7 +783,6 @@ class AppLocalizations {
       'add': 'Add',
       'saudi_zatca_vat_qr': 'Saudi ZATCA VAT QR',
       'from_clipboard': 'From Clipboard',
-      'sample_extra': 'Sample eXtra',
       'try_again': 'Try Again',
       'dismiss': 'Dismiss',
       'scan_another_receipt': 'Scan Another Receipt',
@@ -677,18 +808,6 @@ class AppLocalizations {
       'microphone_access_desc': 'Enables voice dictation for speaking items & expenses into AI chat.',
       'notifications': 'Notifications',
       'notifications_desc': 'Receive budget threshold alerts and offline sync status.',
-      'expense_ingestion_channels': 'EXPENSE INGESTION CHANNELS',
-      'ai_conversational_chat': 'AI Conversational Chat',
-      'ai_chat_desc': 'Log purchases via chat ("Dunkin 19 SAR: 16 latte 3 donut").',
-      'camera_receipt_scanner': 'Camera Receipt Scanner',
-      'camera_scanner_desc': 'OCR scan thermal receipts and ZATCA tax invoices.',
-      'dup_desc': 'Choose how the system handles transactions when multiple methods are used.',
-      'auto_enrich': 'Smart Auto-Enrichment (Recommended)',
-      'auto_enrich_desc': 'If a matching recent transaction exists, scanning a receipt or chatting line items will attach the details without creating a double charge.',
-      'prompt_on_conflict': 'Prompt on Conflict',
-      'prompt_desc': 'Always prompt you whether to enrich the recent transaction or record it as a separate expense.',
-      'strict_isolation': 'Strict Channel Isolation',
-      'strict_desc': 'Flag any duplicate merchant and amount entries between receipt scanning and AI chat.',
       'leave_household': 'Leave Household',
       'leave_household_confirm': 'Are you sure you want to leave this household? You will no longer have access to its shared budgets and transactions until you are re-invited.',
       'leave': 'Leave',
@@ -834,7 +953,7 @@ class AppLocalizations {
       'save_and_next': 'Save & Next →',
       'skip_receipt': 'Skip this Receipt',
       'offline_draft_badge': 'Offline Draft',
-      'offline_draft_notice': 'Captured offline. Total SAR and store extracted locally; line items will enrich when online.',
+      'offline_draft_notice': 'Saved offline. The receipt will be read when you\'re back online.',
       'batch_complete_title': 'Batch Processing Complete',
       'batch_complete_desc': 'All receipts in the queue have been reviewed and saved.',
       'save_and_finish': 'Save & Finish',
@@ -1642,6 +1761,54 @@ class AppLocalizations {
       'rb_toggle_invalid': 'This bill type is not recognised, so it was not changed.',
       'rb_toggle_failed': 'Could not update this recurring bill. Try again.',
       'nafaqah_err_invalid_amount': 'Not recorded: enter a positive amount with at most two decimals.',
+      'offline_receipt_pending_notice': 'You\'re offline. The photo will be read when you\'re back online; nothing is guessed. You can also type the amount yourself.',
+      'offline_receipt_save_later': 'Save photo, read it later',
+      'offline_receipt_type_amount': 'Type the amount instead',
+      'allowance_personal_spending_her': 'Her personal spending this cycle: {amount}',
+      'allowance_personal_spending_mine': 'Your personal spending this cycle: {amount}',
+      'invite_share_text': 'Join our household "{household}" on Budget Tracker.\nOpen Budget Tracker → Join Household → enter the code: {code}',
+      'invite_share_subject': 'Invitation to our household on Budget Tracker',
+      'share_invite': 'Share invite',
+      'share_invite_failed': 'Could not open the share sheet. The invite was copied instead.',
+      'inst_installment_count': 'Number of installments',
+      'inst_frequency': 'Payment schedule',
+      'inst_every_two_weeks': 'Every 2 weeks',
+      'inst_every_month': 'Monthly',
+      'inst_two_weeks_short': '2 wks',
+      'inst_due_before_payday': '{amount} due before payday',
+      'inst_paid_next_due': 'Installment {paid} of {count} paid · next {date}',
+      'inst_nothing_due_before_payday': 'Nothing due before payday',
+      'tools_title': 'Tools',
+      'tools_desc': 'Planning, accounts and extra capture tools. Adding an expense stays on the + button.',
+      'tool_affordability_desc': 'Check a purchase against what is left until payday.',
+      'tool_accounts_desc': 'Bank, wallet and cash balances, reconcile and capacity.',
+      'tool_record_income_desc': 'Salary, bonus or any money coming in.',
+      'tool_transfer_desc': 'Move money between your accounts or into the shared pool.',
+      'tool_batch_scan_desc': 'Photograph several receipts, review them one by one.',
+      'tool_price_tracker_desc': 'Price history from your own receipts; useful after many scans.',
+      'tool_smart_basket_desc': 'Compare a shopping list across the stores you used.',
+      'commitments': 'Commitments',
+      'notif_payday_title': 'It\'s payday',
+      'notif_payday_body': 'Record your salary and plan the new cycle.',
+      'notif_cycle_end_title': '3 days until payday',
+      'notif_cycle_end_body': 'This cycle ends on {date}. Check what\'s left before payday.',
+      'notif_bill_title': '{merchant} is due today',
+      'notif_bill_body': 'About {amount}. Mark it paid in Budget Tracker.',
+      'notif_installment_title': '{provider} installment due today',
+      'notif_installment_body': '{amount} for {merchant}.',
+      'notif_channel_name': 'Reminders',
+      'notif_channel_desc': 'Payday, bill and installment reminders',
+      'reminders_title': 'Reminders',
+      'reminders_desc': 'Scheduled on this phone for 09:00 Riyadh time; nothing is sent to a server.',
+      'reminder_payday': 'Payday check-in',
+      'reminder_payday_desc': 'On payday: record the salary and plan the cycle.',
+      'reminder_cycle_end': '3 days before payday',
+      'reminder_cycle_end_desc': 'A nudge to check what is left in the cycle.',
+      'reminder_bills': 'Recurring bills',
+      'reminder_bills_desc': 'On each bill\'s expected day.',
+      'reminder_installments': 'Installments',
+      'reminder_installments_desc': 'On each installment\'s due date (bi-weekly or monthly).',
+      'reminders_permission_denied': 'Notifications are off for this app. Allow them in the phone settings to get reminders.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -1699,7 +1866,7 @@ class AppLocalizations {
       'allowance_spent': 'المصروف',
       'allowance_remaining': 'المتبقي',
       'allowance_overspent': 'تجاوز المصروف بمبلغ {amount}',
-      'allowance_not_set': 'لم يُحدَّد مصروف لهذه الدورة بعد.',
+      'allowance_not_set': 'لا يوجد مصروف شخصي محدد لهذه الدورة؛ تُسجَّل المشتريات الشخصية دون حد.',
       'allowance_set': 'تحديد المصروف',
       'allowance_edit': 'تعديل المصروف',
       'allowance_set_title': 'المصروف الشخصي لدورة {cycle}',
@@ -1960,7 +2127,6 @@ class AppLocalizations {
       'appearance_language': 'المظهر واللغة',
       'hardware_permissions': 'صلاحيات الجهاز والتطبيق',
       'ingestion_channels': 'قنوات تسجيل المصروفات',
-      'duplicate_resolution': 'معالجة المعاملات المكررة',
       'reports_offline_queue': 'التقارير وقائمة الانتظار دون اتصال',
       'user_guide': 'دليل الاستخدام والتعليمات',
       'account_session': 'الحساب والجلسة',
@@ -2010,7 +2176,6 @@ class AppLocalizations {
       'add': 'إضافة',
           'saudi_zatca_vat_qr': 'رمز QR الضريبي (زاتكا)',
       'from_clipboard': 'من الحافظة',
-      'sample_extra': 'نموذج إكسترا',
       'try_again': 'إعادة المحاولة',
       'dismiss': 'تجاهل',
       'scan_another_receipt': 'مسح فاتورة أخرى',
@@ -2036,18 +2201,6 @@ class AppLocalizations {
       'microphone_access_desc': 'يتيح الإملاء الصوتي لتسجيل المصاريف والأصناف عبر المحادثة الذكية.',
       'notifications': 'الإشعارات',
       'notifications_desc': 'تلقي تنبيهات حدود الميزانية وحالة المزامنة بدون اتصال.',
-      'expense_ingestion_channels': 'قنوات تسجيل المصاريف',
-      'ai_conversational_chat': 'المساعد المالي عبر المحادثة',
-      'ai_chat_desc': 'سجل المشتريات بالمحادثة ("دانكن 19 ريال: 16 لاتيه 3 دونات").',
-      'camera_receipt_scanner': 'ماسح الفواتير عبر الكاميرا',
-      'camera_scanner_desc': 'قراءة الفواتير الورقية والفواتير الضريبية تلقائياً.',
-      'dup_desc': 'حدد كيف يتعامل النظام عند تسجيل المعاملة بأكثر من وسيلة.',
-      'auto_enrich': 'الدمج الذكي التلقائي (موصى به)',
-      'auto_enrich_desc': 'في حال وجود معاملة سابقة مطابقة، فإن مسح الفاتورة أو إرسال تفاصيلها يدمج الأصناف دون احتساب خصم مكرر.',
-      'prompt_on_conflict': 'السؤال عند التعارض',
-      'prompt_desc': 'تنبيهك دائماً للاختيار بين دمج الأصناف أو تسجيلها كمصروف منفصل.',
-      'strict_isolation': 'عزل تام للقنوات',
-      'strict_desc': 'تنبيه عن أي تكرار للمتجر والمبلغ بين ماسح الفواتير ومحادثة الذكاء الاصطناعي.',
       'leave_household': 'مغادرة المنزل',
       'leave_household_confirm': 'هل أنت متأكد من مغادرة هذا المنزل؟ ستفقد الوصول للميزانيات والمعاملات المشتركة حتى تتم دعوتك مجدداً.',
       'leave': 'مغادرة',
@@ -2193,7 +2346,7 @@ class AppLocalizations {
       'save_and_next': 'حفظ والتالي ←',
       'skip_receipt': 'تخطي هذه الفاتورة',
       'offline_draft_badge': 'مسودة دون اتصال',
-      'offline_draft_notice': 'تم التقاطها دون اتصال. تم استخراج الإجمالي والمتجر محلياً، وستكتمل البنود تلقائياً عند استعادة الاتصال.',
+      'offline_draft_notice': 'حُفظت دون اتصال. ستُقرأ الفاتورة عند عودة الاتصال.',
       'batch_complete_title': 'اكتملت معالجة المجموعة',
       'batch_complete_desc': 'تمت مراجعة وحفظ جميع فواتير المجموعة بنجاح.',
       'save_and_finish': 'حفظ وإنهاء',
@@ -3005,6 +3158,54 @@ class AppLocalizations {
       'rb_toggle_invalid': 'نوع هذه الفاتورة غير معروف، لذا لم يُغيَّر.',
       'rb_toggle_failed': 'تعذّر تحديث هذه الفاتورة المتكررة. حاول مرة أخرى.',
       'nafaqah_err_invalid_amount': 'لم يُسجَّل: أدخل مبلغاً موجباً بخانتين عشريتين على الأكثر.',
+      'offline_receipt_pending_notice': 'أنت غير متصل. ستُقرأ الصورة عند عودة الاتصال، ولن يُخمَّن أي شيء. يمكنك أيضاً إدخال المبلغ بنفسك.',
+      'offline_receipt_save_later': 'احفظ الصورة لقراءتها لاحقاً',
+      'offline_receipt_type_amount': 'أدخل المبلغ يدوياً',
+      'allowance_personal_spending_her': 'مشترياتها الشخصية في هذه الدورة: {amount}',
+      'allowance_personal_spending_mine': 'مشترياتكِ الشخصية في هذه الدورة: {amount}',
+      'invite_share_text': 'انضم إلى منزلنا «{household}» في تطبيق ميزانية الأسرة.\nافتح التطبيق ← الانضمام لمنزل ← أدخل الرمز: {code}',
+      'invite_share_subject': 'دعوة للانضمام إلى منزلنا في ميزانية الأسرة',
+      'share_invite': 'مشاركة الدعوة',
+      'share_invite_failed': 'تعذّر فتح نافذة المشاركة، فنُسخت الدعوة بدلاً من ذلك.',
+      'inst_installment_count': 'عدد الأقساط',
+      'inst_frequency': 'جدول السداد',
+      'inst_every_two_weeks': 'كل أسبوعين',
+      'inst_every_month': 'شهرياً',
+      'inst_two_weeks_short': 'أسبوعان',
+      'inst_due_before_payday': '{amount} مستحقة قبل الراتب',
+      'inst_paid_next_due': 'تم سداد القسط {paid} من {count} · القادم {date}',
+      'inst_nothing_due_before_payday': 'لا أقساط مستحقة قبل الراتب',
+      'tools_title': 'الأدوات',
+      'tools_desc': 'أدوات التخطيط والحسابات والإدخال الإضافي. إضافة مصروف تبقى من زر +.',
+      'tool_affordability_desc': 'تحقق من قدرتك على الشراء مقارنةً بالمتبقي حتى الراتب.',
+      'tool_accounts_desc': 'أرصدة البنوك والمحافظ والنقد، والمطابقة والسعة.',
+      'tool_record_income_desc': 'الراتب أو المكافأة أو أي دخل آخر.',
+      'tool_transfer_desc': 'انقل المال بين حساباتك أو إلى الصندوق المشترك.',
+      'tool_batch_scan_desc': 'صوّر عدة فواتير وراجعها واحدة تلو الأخرى.',
+      'tool_price_tracker_desc': 'سجل الأسعار من فواتيرك؛ يفيد بعد مسح فواتير كثيرة.',
+      'tool_smart_basket_desc': 'قارن قائمة مشترياتك بين المتاجر التي تسوقت منها.',
+      'commitments': 'الالتزامات',
+      'notif_payday_title': 'اليوم يوم الراتب',
+      'notif_payday_body': 'سجّل راتبك وخطّط للدورة الجديدة.',
+      'notif_cycle_end_title': '3 أيام على الراتب',
+      'notif_cycle_end_body': 'تنتهي هذه الدورة في {date}. راجع المتبقي قبل الراتب.',
+      'notif_bill_title': 'فاتورة {merchant} مستحقة اليوم',
+      'notif_bill_body': 'حوالي {amount}. سجّل سدادها في التطبيق.',
+      'notif_installment_title': 'قسط {provider} مستحق اليوم',
+      'notif_installment_body': '{amount} لمشتريات {merchant}.',
+      'notif_channel_name': 'التذكيرات',
+      'notif_channel_desc': 'تذكيرات الراتب والفواتير والأقساط',
+      'reminders_title': 'التذكيرات',
+      'reminders_desc': 'تُجدول على هذا الجوال الساعة 09:00 بتوقيت الرياض، ولا يُرسل شيء إلى خادم.',
+      'reminder_payday': 'تذكير يوم الراتب',
+      'reminder_payday_desc': 'يوم الراتب: سجّل الراتب وخطّط للدورة.',
+      'reminder_cycle_end': 'قبل الراتب بثلاثة أيام',
+      'reminder_cycle_end_desc': 'تنبيه لمراجعة المتبقي في الدورة.',
+      'reminder_bills': 'الفواتير المتكررة',
+      'reminder_bills_desc': 'في اليوم المتوقع لكل فاتورة.',
+      'reminder_installments': 'الأقساط',
+      'reminder_installments_desc': 'في تاريخ استحقاق كل قسط (كل أسبوعين أو شهرياً).',
+      'reminders_permission_denied': 'الإشعارات متوقفة لهذا التطبيق. فعّلها من إعدادات الجوال لتصلك التذكيرات.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -3062,7 +3263,7 @@ class AppLocalizations {
       'allowance_spent': 'خرچ شدہ',
       'allowance_remaining': 'باقی',
       'allowance_overspent': 'جیب خرچ سے {amount} زیادہ',
-      'allowance_not_set': 'اس سائیکل کے لیے ابھی جیب خرچ مقرر نہیں ہوا۔',
+      'allowance_not_set': 'اس سائیکل کے لیے کوئی جیب خرچ مقرر نہیں؛ ذاتی خریداری بغیر حد کے درج ہوتی ہے۔',
       'allowance_set': 'جیب خرچ مقرر کریں',
       'allowance_edit': 'جیب خرچ تبدیل کریں',
       'allowance_set_title': '{cycle} کے لیے ذاتی جیب خرچ',
@@ -3323,7 +3524,6 @@ class AppLocalizations {
       'appearance_language': 'ظاہری شکل اور زبان',
       'hardware_permissions': 'ڈیوائس اور ایپ کی اجازتیں',
       'ingestion_channels': 'اخراجات کے اندراج کے ذرائع',
-      'duplicate_resolution': 'ڈپلیکیٹ لین دین کا حل',
       'reports_offline_queue': 'رپورٹس اور آف لائن قطار',
       'user_guide': 'صارف رہنما اور دستاویزات',
       'account_session': 'اکاؤنٹ اور سیشن',
@@ -3373,7 +3573,6 @@ class AppLocalizations {
       'add': 'شامل کریں',
           'saudi_zatca_vat_qr': 'سعودی زاتکا VAT کیو آر کوڈ',
       'from_clipboard': 'کلپ بورڈ سے',
-      'sample_extra': 'نمونہ ایکسٹرا',
       'try_again': 'دوبارہ کوشش کریں',
       'dismiss': 'نظر انداز کریں',
       'scan_another_receipt': 'دوسری رسید اسکین کریں',
@@ -3399,18 +3598,6 @@ class AppLocalizations {
       'microphone_access_desc': 'اے آئی چیٹ میں آواز کے ذریعے اخراجات بولنے کے لیے۔',
       'notifications': 'اطلاعات',
       'notifications_desc': 'بجٹ الرٹس اور آف لائن سنک اسٹیٹس حاصل کریں۔',
-      'expense_ingestion_channels': 'اخراجات درج کرنے کے ذرائع',
-      'ai_conversational_chat': 'اے آئی چیٹ اسسٹنٹ',
-      'ai_chat_desc': 'چیٹ کے ذریعے خریداری درج کریں ("ڈنکن 19 ریال: 16 لیٹے 3 ڈونٹ")۔',
-      'camera_receipt_scanner': 'کیمرہ رسید اسکینر',
-      'camera_scanner_desc': 'کاغذی رسیدیں اور ٹیکس رسیدیں خودکار پڑھیں۔',
-      'dup_desc': 'منتخب کریں کہ جب ایک سے زیادہ طریقوں سے لین دین درج ہو تو سسٹم کیا کرے۔',
-      'auto_enrich': 'اسمارٹ خودکار افزودگی (تجویز کردہ)',
-      'auto_enrich_desc': 'اگر ملتا جلتا لین دین موجود ہو تو رسید اسکین کرنے سے تفصیلات جڑ جائیں گی اور ڈبل خرچ نہیں ہوگا۔',
-      'prompt_on_conflict': 'ٹکراؤ کی صورت میں پوچھیں',
-      'prompt_desc': 'ہمیشہ پوچھیں کہ آیا تفصیلات کو جوڑنا ہے یا الگ خرچ بنانا ہے۔',
-      'strict_isolation': 'چینلز کی مکمل علیحدگی',
-      'strict_desc': 'رسید اسکین اور اے آئی چیٹ کے درمیان ایک ہی دکان اور رقم کے دہرے اندراج کو نشان زد کریں۔',
       'leave_household': 'گھرانہ چھوڑیں',
       'leave_household_confirm': 'کیا آپ واقعی یہ گھرانہ چھوڑنا چاہتے ہیں؟ دوبارہ مدعو کیے جانے تک آپ اس کے مشترکہ بجٹ اور لین دین تک رسائی کھو دیں گے۔',
       'leave': 'چھوڑیں',
@@ -3556,7 +3743,7 @@ class AppLocalizations {
       'save_and_next': 'محفوظ کریں اور آگے ←',
       'skip_receipt': 'یہ رسید چھوڑیں',
       'offline_draft_badge': 'آف لائن مسودہ',
-      'offline_draft_notice': 'آف لائن ریکارڈ۔ رقم اور اسٹور مقامی طور پر حاصل؛ انٹرنیٹ پر مکمل تفصیلات آ جائیں گی۔',
+      'offline_draft_notice': 'آف لائن محفوظ ہو گئی۔ انٹرنیٹ واپس آنے پر رسید پڑھی جائے گی۔',
       'batch_complete_title': 'بیچ پروسیسنگ مکمل',
       'batch_complete_desc': 'قطار کی تمام رسیدوں کا جائزہ لے کر محفوظ کر لیا گیا ہے۔',
       'save_and_finish': 'محفوظ کریں اور ختم کریں',
@@ -4368,6 +4555,54 @@ class AppLocalizations {
       'rb_toggle_invalid': 'اس بل کی قسم پہچانی نہیں گئی، اس لیے تبدیل نہیں ہوا۔',
       'rb_toggle_failed': 'یہ بار بار آنے والا بل اپ ڈیٹ نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
       'nafaqah_err_invalid_amount': 'درج نہیں ہوا: زیادہ سے زیادہ دو اعشاریہ والی مثبت رقم درج کریں۔',
+      'offline_receipt_pending_notice': 'آپ آف لائن ہیں۔ انٹرنیٹ واپس آنے پر تصویر پڑھی جائے گی؛ کوئی رقم اندازے سے نہیں لکھی جائے گی۔ آپ خود بھی رقم درج کر سکتے ہیں۔',
+      'offline_receipt_save_later': 'تصویر محفوظ کریں، بعد میں پڑھیں',
+      'offline_receipt_type_amount': 'رقم خود درج کریں',
+      'allowance_personal_spending_her': 'اس سائیکل میں اہلیہ کی ذاتی خریداری: {amount}',
+      'allowance_personal_spending_mine': 'اس سائیکل میں آپ کی ذاتی خریداری: {amount}',
+      'invite_share_text': 'بجٹ ٹریکر میں ہمارے گھرانے «{household}» میں شامل ہوں۔\nبجٹ ٹریکر کھولیں ← گھرانے میں شامل ہوں ← یہ کوڈ درج کریں: {code}',
+      'invite_share_subject': 'بجٹ ٹریکر میں ہمارے گھرانے کی دعوت',
+      'share_invite': 'دعوت بھیجیں',
+      'share_invite_failed': 'شیئر کی اسکرین نہیں کھل سکی، اس لیے دعوت کاپی کر لی گئی۔',
+      'inst_installment_count': 'اقساط کی تعداد',
+      'inst_frequency': 'ادائیگی کا شیڈول',
+      'inst_every_two_weeks': 'ہر دو ہفتے',
+      'inst_every_month': 'ماہانہ',
+      'inst_two_weeks_short': '2 ہفتے',
+      'inst_due_before_payday': 'تنخواہ سے پہلے {amount} واجب الادا',
+      'inst_paid_next_due': '{count} میں سے {paid} قسط ادا · اگلی {date}',
+      'inst_nothing_due_before_payday': 'تنخواہ سے پہلے کوئی قسط واجب الادا نہیں',
+      'tools_title': 'ٹولز',
+      'tools_desc': 'منصوبہ بندی، اکاؤنٹس اور اضافی اندراج کے ٹولز۔ خرچ شامل کرنا + بٹن سے ہی ہوتا ہے۔',
+      'tool_affordability_desc': 'دیکھیں کہ تنخواہ تک بچی رقم میں یہ خریداری ممکن ہے یا نہیں۔',
+      'tool_accounts_desc': 'بینک، والیٹ اور نقد بیلنس، مطابقت اور گنجائش۔',
+      'tool_record_income_desc': 'تنخواہ، بونس یا کوئی بھی آمدنی۔',
+      'tool_transfer_desc': 'اپنے اکاؤنٹس کے درمیان یا مشترکہ فنڈ میں رقم منتقل کریں۔',
+      'tool_batch_scan_desc': 'کئی رسیدوں کی تصویر لیں اور ایک ایک کر کے جائزہ لیں۔',
+      'tool_price_tracker_desc': 'آپ کی اپنی رسیدوں سے قیمتوں کی تاریخ؛ کئی اسکین کے بعد مفید۔',
+      'tool_smart_basket_desc': 'اپنی خریداری کی فہرست کا ان دکانوں میں موازنہ کریں جہاں سے آپ نے خریدا۔',
+      'commitments': 'واجبات',
+      'notif_payday_title': 'آج تنخواہ کا دن ہے',
+      'notif_payday_body': 'اپنی تنخواہ درج کریں اور نئے سائیکل کی منصوبہ بندی کریں۔',
+      'notif_cycle_end_title': 'تنخواہ میں 3 دن باقی',
+      'notif_cycle_end_body': 'یہ سائیکل {date} کو ختم ہو رہا ہے۔ تنخواہ سے پہلے بچی رقم دیکھ لیں۔',
+      'notif_bill_title': '{merchant} کا بل آج واجب الادا ہے',
+      'notif_bill_body': 'تقریباً {amount}۔ ادائیگی ایپ میں درج کریں۔',
+      'notif_installment_title': '{provider} کی قسط آج واجب الادا ہے',
+      'notif_installment_body': '{merchant} کے لیے {amount}۔',
+      'notif_channel_name': 'یاد دہانیاں',
+      'notif_channel_desc': 'تنخواہ، بل اور قسط کی یاد دہانیاں',
+      'reminders_title': 'یاد دہانیاں',
+      'reminders_desc': 'اس فون پر ریاض کے وقت کے مطابق 09:00 بجے کے لیے طے ہوتی ہیں؛ سرور کو کچھ نہیں بھیجا جاتا۔',
+      'reminder_payday': 'تنخواہ کے دن کی یاد دہانی',
+      'reminder_payday_desc': 'تنخواہ کے دن: تنخواہ درج کریں اور سائیکل کی منصوبہ بندی کریں۔',
+      'reminder_cycle_end': 'تنخواہ سے 3 دن پہلے',
+      'reminder_cycle_end_desc': 'سائیکل میں بچی رقم دیکھنے کی یاد دہانی۔',
+      'reminder_bills': 'باقاعدہ بل',
+      'reminder_bills_desc': 'ہر بل کے متوقع دن۔',
+      'reminder_installments': 'اقساط',
+      'reminder_installments_desc': 'ہر قسط کی مقررہ تاریخ پر (ہر دو ہفتے یا ماہانہ)۔',
+      'reminders_permission_denied': 'اس ایپ کی اطلاعات بند ہیں۔ یاد دہانیاں پانے کے لیے فون کی ترتیبات میں اجازت دیں۔',
     },
   };
 
@@ -4697,6 +4932,32 @@ class AppLocalizations {
     return date(DateTime(int.parse(m.group(1)!), int.parse(m.group(2)!)), 'MMMM yyyy');
   }
 
+  /// A salary cycle shown by its dates, e.g. "27 Oct – 26 Nov" (Arabic and
+  /// Urdu month names, Western digits). Years are added only when the cycle
+  /// is not entirely in the current (Riyadh) year, e.g. "27 Dec 2026 – 26 Jan 2027".
+  String cycleRange(DateTime start, DateTime end, {DateTime? now}) {
+    final year = SalaryCycleService.riyadhToday(now: now).year;
+    final withYear = start.year != year || end.year != year;
+    final pattern = withYear ? 'd MMM y' : 'd MMM';
+    return '${date(start, pattern)} – ${date(end, pattern)}';
+  }
+
+  /// [cycleRange] for server ISO dates (`cycle_start` / `cycle_end`).
+  String cycleRangeIso(String startIso, String endIso, {String fallback = '', DateTime? now}) {
+    final start = DateTime.tryParse(startIso);
+    final end = DateTime.tryParse(endIso);
+    if (start == null || end == null) return fallback;
+    return cycleRange(start, end, now: now);
+  }
+
+  /// [cycleRange] for a `YYYY-MM` cycle key and the household payday.
+  /// Returns [fallback] (or the key) when the key is not in that format.
+  String cycleLabel(String cycleKey, {int? paydayDay, String fallback = '', DateTime? now}) {
+    final cycle = SalaryCycleService.cycleForKey(cycleKey, paydayDay: paydayDay);
+    if (cycle == null) return fallback.isNotEmpty ? fallback : cycleKey;
+    return cycleRange(cycle.start, cycle.end, now: now);
+  }
+
   /// Looks up [key] and substitutes each `{name}` placeholder with the
   /// matching entry of [args], e.g. `format('across_accounts', {'count': 3})`.
   String format(String key, Map<String, Object?> args) {
@@ -4952,6 +5213,10 @@ extension LocalizationExtension on BuildContext {
       AppLocalizations.of(this).date(date, pattern);
   String cycleMonth(String cycleKey, {String fallback = ''}) =>
       AppLocalizations.of(this).cycleMonth(cycleKey, fallback: fallback);
+  String cycleLabel(String cycleKey, {String fallback = ''}) =>
+      AppLocalizations.of(this).cycleLabel(cycleKey, fallback: fallback);
+  String cycleRangeIso(String startIso, String endIso, {String fallback = ''}) =>
+      AppLocalizations.of(this).cycleRangeIso(startIso, endIso, fallback: fallback);
   String trCat(String codeOrName) => AppLocalizations.of(this).category(codeOrName);
   String trSub(String subCodeOrName, {String? nameAr, String? nameEn}) =>
       AppLocalizations.of(this).subCategory(subCodeOrName, nameAr: nameAr, nameEn: nameEn);

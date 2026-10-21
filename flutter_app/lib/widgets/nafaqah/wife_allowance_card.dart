@@ -61,7 +61,7 @@ class WifeAllowanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final st = wife.allowance;
     final key = cycleKey ?? st.cycleKey;
-    final cycle = AppLocalizations.of(context).cycleMonth(key, fallback: key);
+    final cycle = AppLocalizations.of(context).cycleLabel(key, fallback: key);
     final remainingColor = st.isOverspent ? context.dangerColor : context.successText;
     final barColor = st.isOverspent ? context.dangerColor : AppThemes.iceCyan;
     final title = viewerIsWife ? context.tr('allowance_title_mine') : context.tr('allowance_title');
@@ -109,28 +109,39 @@ class WifeAllowanceCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              _Stat(label: context.tr('allowance_allocated'), value: context.sar(st.allocated), color: context.textPrimary),
-              _Stat(label: context.tr('allowance_spent'), value: context.sar(st.spent), color: context.textPrimary),
-              _Stat(
-                key: const ValueKey('allowance_remaining_value'),
-                label: context.tr('allowance_remaining'),
-                value: context.sar(st.remaining),
-                color: remainingColor,
+          if (!st.hasAllowance) ...[
+            Text(
+              context.trArgs(
+                viewerIsWife ? 'allowance_personal_spending_mine' : 'allowance_personal_spending_her',
+                {'amount': context.sar(st.spent)},
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: st.usedFraction,
-              minHeight: 6,
-              backgroundColor: context.subtleCardBg,
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+              key: const ValueKey('allowance_personal_spending'),
+              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
             ),
-          ),
+          ] else ...[
+            Row(
+              children: [
+                _Stat(label: context.tr('allowance_allocated'), value: context.sar(st.allocated), color: context.textPrimary),
+                _Stat(label: context.tr('allowance_spent'), value: context.sar(st.spent), color: context.textPrimary),
+                _Stat(
+                  key: const ValueKey('allowance_remaining_value'),
+                  label: context.tr('allowance_remaining'),
+                  value: context.sar(st.remaining),
+                  color: remainingColor,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: st.usedFraction,
+                minHeight: 6,
+                backgroundColor: context.subtleCardBg,
+                valueColor: AlwaysStoppedAnimation<Color>(barColor),
+              ),
+            ),
+          ],
           if (st.isOverspent) ...[
             const SizedBox(height: 8),
             Row(
@@ -146,7 +157,7 @@ class WifeAllowanceCard extends StatelessWidget {
               ],
             ),
           ],
-          if (!st.isSet) ...[
+          if (!st.hasAllowance) ...[
             const SizedBox(height: 8),
             Text(context.tr('allowance_not_set'), style: TextStyle(color: context.textSecondary, fontSize: 11.5)),
           ],
@@ -292,7 +303,7 @@ class _AllowanceEditorSheetState extends State<_AllowanceEditorSheet> {
         children: [
           Text(
             context.trArgs('allowance_set_title', {
-              'cycle': AppLocalizations.of(context).cycleMonth(widget.cycleKey, fallback: widget.cycleKey),
+              'cycle': AppLocalizations.of(context).cycleLabel(widget.cycleKey, fallback: widget.cycleKey),
             }),
             style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
           ),

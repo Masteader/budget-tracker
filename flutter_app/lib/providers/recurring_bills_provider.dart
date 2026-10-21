@@ -121,6 +121,15 @@ class RecurringBillsProvider extends ChangeNotifier {
     };
   }
 
+  /// Forgets the household's bills (sign-out).
+  void reset() {
+    _householdId = null;
+    _summary = null;
+    _isLoading = false;
+    _error = null;
+    notifyListeners();
+  }
+
   /// Testing helper
   @visibleForTesting
   void setSummaryForTesting(RecurringBillsSummary summary, {String? householdId}) {

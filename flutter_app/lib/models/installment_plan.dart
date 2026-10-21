@@ -15,6 +15,13 @@ class InstallmentPlan {
   final String? originalTransactionId;
   final String? notes;
 
+  /// 'monthly' or 'biweekly' (Tabby / Tamara "pay in 4"). [monthlyAmount] is
+  /// the amount of one installment for either frequency.
+  final String frequency;
+
+  /// Next unpaid installment's date from the API (ACTIVE plans only).
+  final DateTime? nextDueAt;
+
   InstallmentPlan({
     required this.id,
     required this.householdId,
@@ -30,7 +37,66 @@ class InstallmentPlan {
     this.categoryCode,
     this.originalTransactionId,
     this.notes,
+    this.frequency = 'monthly',
+    this.nextDueAt,
   });
+
+  bool get isBiweekly => frequency == 'biweekly';
+
+  /// Amount of one installment (the API's `monthly_amount`).
+  double get installmentAmount => monthlyAmount;
+
+  /// Dates of the remaining installments, first one first (it may be in the
+  /// past when overdue), at most [max]. Uses `next_due_at` when the API sent
+  /// it; otherwise a biweekly plan counts 14 days per paid installment from
+  /// the start date and a monthly plan uses `day_of_month` from [today].
+  /// [today] is a calendar date (UTC midnight).
+  List<DateTime> dueDates({required DateTime today, int max = 6}) {
+    final remaining = remainingInstallments;
+    if (isCompleted || remaining <= 0) return const [];
+    final day0 = DateTime.utc(today.year, today.month, today.day);
+    DateTime first;
+    int anchorDay;
+    if (nextDueAt != null) {
+      first = nextDueAt!;
+      anchorDay = first.day;
+    } else if (isBiweekly) {
+      final start = DateTime.tryParse(startDate);
+      if (start == null) return const [];
+      first = DateTime.utc(start.year, start.month, start.day).add(Duration(days: 14 * paidInstallments));
+      anchorDay = first.day;
+    } else {
+      anchorDay = dayOfMonth.clamp(1, 31);
+      first = _monthDay(day0.year, day0.month, anchorDay);
+      if (first.isBefore(day0)) first = _monthDay(day0.year, day0.month + 1, anchorDay);
+    }
+    final out = <DateTime>[];
+    for (var i = 0; i < remaining && out.length < max; i++) {
+      out.add(isBiweekly
+          ? first.add(Duration(days: 14 * i))
+          : _monthDay(first.year, first.month + i, anchorDay));
+    }
+    return out;
+  }
+
+  /// The next installment's date (see [dueDates]), or null when none is due.
+  DateTime? nextDueDate({required DateTime today}) {
+    final dates = dueDates(today: today, max: 1);
+    return dates.isEmpty ? null : dates.first;
+  }
+
+  static DateTime _monthDay(int year, int month, int day) {
+    final y = year + (month - 1) ~/ 12;
+    final m = (month - 1) % 12 + 1;
+    final last = DateTime.utc(y, m + 1, 0).day;
+    return DateTime.utc(y, m, day < last ? day : last);
+  }
+
+  static DateTime? _parseDate(Object? raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    final d = DateTime.tryParse(raw);
+    return d == null ? null : DateTime.utc(d.year, d.month, d.day);
+  }
 
   bool get isCompleted => status.toUpperCase() == 'COMPLETED' || paidInstallments >= installmentCount;
 
@@ -64,6 +130,8 @@ class InstallmentPlan {
       categoryCode: json['category_code'] as String?,
       originalTransactionId: json['original_transaction_id'] as String?,
       notes: json['notes'] as String?,
+      frequency: json['frequency'] == 'biweekly' ? 'biweekly' : 'monthly',
+      nextDueAt: _parseDate(json['next_due_at']),
     );
   }
 
@@ -83,6 +151,8 @@ class InstallmentPlan {
       'category_code': categoryCode,
       'original_transaction_id': originalTransactionId,
       'notes': notes,
+      'frequency': frequency,
+      'next_due_at': nextDueAt?.toIso8601String().substring(0, 10),
     };
   }
 }

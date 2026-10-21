@@ -14,13 +14,16 @@ import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/ocr/local_ocr_service.dart';
+import '../../services/api/base_api_client.dart' show BaseApiClient;
+import '../../services/api/preview_token.dart';
+import '../../services/offline_receipt_draft.dart';
 import '../../services/offline_queue_manager.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../services/sync_worker.dart' show SyncWorker;
 import '../../services/receipt_storage_service.dart';
 import '../../services/zatca_decoder.dart';
 import '../../widgets/receipt_photo_strip.dart';
+import '../../widgets/transactions/manual_expense_sheet.dart';
 import '../../widgets/scanner/duplicate_candidate_card.dart';
 import '../../widgets/store_attribution_card.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
@@ -223,18 +226,6 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     }
                   },
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  icon: const Icon(Icons.receipt_long_outlined, size: 14, color: AppThemes.success),
-                  label: Text(context.tr('sample_extra'), style: TextStyle(fontSize: 11, color: context.successText)),
-                  onPressed: () {
-                    ctrl.text = 'ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=';
-                  },
-                ),
               ],
             ),
           ],
@@ -363,6 +354,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         previewOnly: true,
       );
 
+      // Offline (the request never reached the server): fall back to the
+      // ZATCA QR values or keep the photo as a pending draft.
+      if (res[BaseApiClient.networkErrorKey] == true) {
+        await _applyOfflineFallback(res['message']);
+        return;
+      }
+
       _safeSetState(() {
         _isAnalyzing = false;
         if (res['status'] == 'error') {
@@ -383,61 +381,118 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         }
       });
     } catch (e) {
-      if (_zatcaDecoded != null) {
-        final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
-        final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
-        final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
-        final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
-        if (!isDup && mounted) {
-          setState(() {
-            _isAnalyzing = false;
-            _scanResult = {
-              'status': 'preview',
-              'merchant': sellerName,
-              'amount': total,
-              'vat_amount': vat,
-              'category_code': 'OPEX-GROCERY',
-              'spent_by': _selectedSpentBy,
-              'items': [
-                {
-                  'name': context.trArgs('scan_invoice_total_item', {'vat': context.sar(vat)}),
-                  'quantity': 1.0,
-                  'price': total,
-                }
-              ],
-              'zatca_verified': _zatcaDecoded,
-            };
-          });
-        }
-      } else {
-        if (_imageFiles.isNotEmpty) {
-          try {
-            final draft = await LocalOcrService.instance.extractDraft(_imageFiles.first);
-            if (mounted && draft.amount > 0) {
-              setState(() {
-                _isAnalyzing = false;
-                _merchantController.text = draft.merchant;
-                _scanResult = {
-                  'status': 'preview',
-                  'merchant': draft.merchant,
-                  'amount': draft.amount,
-                  'vat_amount': draft.vatAmount,
-                  'category_code': 'OPEX-GROCERY',
-                  'confidence': 'offline_fallback',
-                  'items': [],
-                  'is_offline_draft': true,
-                };
-              });
-              return;
-            }
-          } catch (_) {}
-        }
-        _safeSetState(() {
+      await _applyOfflineFallback(e);
+    }
+  }
+
+  /// The receipt could not be read online. A ZATCA QR still gives the seller,
+  /// total and VAT; photos alone are kept as a pending draft that the server
+  /// reads once the device is back online. Nothing is guessed (R8).
+  Future<void> _applyOfflineFallback(Object? error) async {
+    if (_zatcaDecoded != null) {
+      final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
+      final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
+      final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
+      final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
+      if (!isDup && mounted) {
+        setState(() {
           _isAnalyzing = false;
-          _errorMessage = context.trArgs('scan_failed_msg', {'error': e});
+          _scanResult = {
+            'status': 'preview',
+            'merchant': sellerName,
+            'amount': total,
+            'vat_amount': vat,
+            'category_code': 'OPEX-GROCERY',
+            'spent_by': _selectedSpentBy,
+            'items': [
+              {
+                'name': context.trArgs('scan_invoice_total_item', {'vat': context.sar(vat)}),
+                'quantity': 1.0,
+                'price': total,
+              }
+            ],
+            'zatca_verified': _zatcaDecoded,
+          };
         });
       }
+      return;
     }
+    if (_imageFiles.isNotEmpty) {
+      _safeSetState(() {
+        _isAnalyzing = false;
+        _scanResult = {
+          'status': 'preview',
+          'items': const <Map<String, dynamic>>[],
+          'is_offline_draft': true,
+        };
+      });
+      return;
+    }
+    _safeSetState(() {
+      _isAnalyzing = false;
+      _errorMessage = context.trArgs('scan_failed_msg', {'error': error ?? ''});
+    });
+  }
+
+  /// Stores the photos (and anything the user typed) in the offline queue;
+  /// the sync worker sends them to the receipt reader when back online.
+  Future<void> _saveOfflineDraft() async {
+    if (_isAnalyzing) return;
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    setState(() {
+      _isAnalyzing = true;
+      _errorMessage = null;
+    });
+    try {
+      final List<String> base64List = [];
+      for (final file in _imageFiles) {
+        base64List.add(base64Encode(await file.readAsBytes()));
+      }
+      // MOB-28: throws when the draft could not be stored.
+      await OfflineQueueManager().enqueueOrThrow(
+        operationType: 'receipt_offline_draft',
+        householdId: widget.householdId,
+        payload: offlineReceiptDraftPayload(
+          imagesBase64: base64List,
+          merchant: _merchantController.text,
+          qrCodeRaw: _zatcaQrRaw,
+          userId: supabase.auth.currentUser?.id,
+          nafaqahFields: _nafaqahFields,
+        )..['spent_by'] = _selectedSpentBy,
+      );
+      _safeSetState(() => _isAnalyzing = false);
+      if (mounted) {
+        AppSnackBar.showSuccess(
+          context,
+          context.tr('offline_draft_notice'),
+          title: context.tr('offline_draft_badge'),
+        );
+        _notifyGlobalProviders();
+        Navigator.pop(context);
+      }
+    } catch (queueErr) {
+      debugPrint('[ReceiptScanner] Offline draft write failed: $queueErr');
+      _safeSetState(() {
+        _isAnalyzing = false;
+        _errorMessage = context.tr('offline_queue_failed');
+      });
+    }
+  }
+
+  /// Closes the scanner and opens manual entry with whatever was typed.
+  void _typeAmountManually() {
+    final merchant = _merchantController.text.trim();
+    final navigator = Navigator.of(context);
+    final rootContext = navigator.context;
+    navigator.pop();
+    ManualExpenseSheet.show(
+      rootContext,
+      householdId: widget.householdId,
+      initialMerchant: merchant.isNotEmpty ? merchant : null,
+    );
   }
 
   Future<void> _confirmSave({bool allowDuplicate = false, String? enrichTxId}) async {
@@ -473,21 +528,34 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final confirmedMerchant = _merchantController.text.trim();
       final nafaqah = _nafaqahFields;
 
-      final res = await ApiService.instance.scanReceipt(
-        imagesBase64: base64List,
-        qrCodeRaw: _zatcaQrRaw,
-        householdId: widget.householdId,
-        userId: user?.id,
-        allowDuplicate: allowDuplicate,
-        enrichTxId: enrichTxId,
-        merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
-        spentBy: _selectedSpentBy,
-        previewOnly: false,
-        receiptUrl: uploadedReceiptUrl,
-        paidBy: nafaqah['paid_by'],
-        beneficiary: nafaqah['beneficiary'],
-        nafaqahClass: nafaqah['nafaqah_class'],
-        nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+      // The preview's token (when the server sends one) is returned
+      // unchanged; an expired token re-runs the preview once.
+      final res = await commitWithPreviewToken(
+        token: previewTokenOf(_scanResult),
+        commit: (token) => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          allowDuplicate: allowDuplicate,
+          enrichTxId: enrichTxId,
+          merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
+          spentBy: _selectedSpentBy,
+          previewOnly: false,
+          receiptUrl: uploadedReceiptUrl,
+          paidBy: nafaqah['paid_by'],
+          beneficiary: nafaqah['beneficiary'],
+          nafaqahClass: nafaqah['nafaqah_class'],
+          nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+          previewToken: token,
+        ),
+        rePreview: () => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          previewOnly: true,
+        ),
       );
 
       _safeSetState(() => _isAnalyzing = false);
@@ -698,19 +766,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         await OfflineQueueManager().enqueueOrThrow(
           operationType: 'receipt_offline_draft',
           householdId: widget.householdId,
-          payload: {
-            'merchant': _merchantController.text.trim().isNotEmpty
-                ? _merchantController.text.trim()
-                : 'Merchant',
-            'amount': (_scanResult?['amount'] as num?)?.toDouble() ?? 0.0,
-            'vat_amount': (_scanResult?['vat_amount'] as num?)?.toDouble() ?? 0.0,
-            'category_code': _scanResult?['category_code'] ?? 'OPEX-GROCERY',
-            'images_base64': base64List,
-            'qr_code_raw': _zatcaQrRaw,
-            'user_id': supabase.auth.currentUser?.id,
-            'needs_cloud_enrichment': true,
-            ..._nafaqahFields,
-          },
+          payload: offlineReceiptDraftPayload(
+            imagesBase64: base64List,
+            merchant: _merchantController.text,
+            amount: (_scanResult?['amount'] as num?)?.toDouble(),
+            qrCodeRaw: _zatcaQrRaw,
+            userId: supabase.auth.currentUser?.id,
+            nafaqahFields: _nafaqahFields,
+          )
+            ..addAll({
+              if ((_scanResult?['vat_amount'] as num?) != null) 'vat_amount': _scanResult!['vat_amount'],
+              if (_scanResult?['category_code'] != null) 'category_code': _scanResult!['category_code'],
+            }),
         );
         _safeSetState(() => _isAnalyzing = false);
         if (mounted) {
@@ -825,7 +892,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                             ),
                           ),
                           Text(
-                            context.tr('offline_draft_notice'),
+                            context.tr('offline_receipt_pending_notice'),
                             style: TextStyle(
                               fontSize: 11,
                               color: context.textSecondary,
@@ -1102,7 +1169,65 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
   }
 
+  /// A photo captured offline: no merchant or amount is shown because none
+  /// was read; the user saves it for later or types the amount instead.
+  Widget _buildOfflineDraftContent() {
+    return Column(
+      key: const ValueKey('receipt_offline_draft'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        StoreAttributionCard(
+          merchantController: _merchantController,
+          selectedSpentBy: _selectedSpentBy,
+          onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+        ),
+        if (_nafaqah.canClassify) ...[
+          NafaqahReviewSection(
+            key: const ValueKey('receipt_nafaqah_review'),
+            preview: _nafaqah,
+            value: _nafaqahClass,
+            wifeId: _nafaqahWifeId,
+            showWifeRequired: _showWifeRequired,
+            onChanged: (cls) => setState(() => _nafaqahClass = cls),
+            onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+          ),
+          const SizedBox(height: 12),
+        ],
+        ElevatedButton.icon(
+          key: const ValueKey('receipt_offline_save_later'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppThemes.success,
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+          label: Text(
+            context.tr('offline_receipt_save_later'),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          onPressed: _saveOfflineDraft,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          key: const ValueKey('receipt_offline_type_amount'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: context.textPrimary,
+            side: BorderSide(color: context.borderColor),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: const Icon(Icons.edit_note_rounded, size: 20),
+          label: Text(context.tr('offline_receipt_type_amount')),
+          onPressed: _typeAmountManually,
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _buildResultContent() {
+    if (_scanResult!['is_offline_draft'] == true) return _buildOfflineDraftContent();
     final status = _scanResult!['status'] as String? ?? '';
     final isCandidate = status == 'duplicate_candidate';
     final isSuccess = status == 'success' || status == 'enriched';

@@ -24,6 +24,7 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
+import '../../models/category_catalog.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
   const TransactionFeedScreen({super.key});
@@ -41,18 +42,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
   bool _exportingPdf = false;
 
-  static const List<Map<String, String>> _categoryRawOptions = [
+  static final List<Map<String, String>> _categoryRawOptions = [
     {'code': 'ALL', 'emoji': ''},
-    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
-    {'code': 'OPEX-DINING', 'emoji': '☕ '},
-    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
-    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
-    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
-    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
-    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
-    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
-    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
-    {'code': 'OPEX-MISC', 'emoji': '📦 '},
+    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
   ];
 
   List<Map<String, String>> _getCategoryOptions(BuildContext context) {

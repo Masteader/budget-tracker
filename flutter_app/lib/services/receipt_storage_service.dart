@@ -127,7 +127,7 @@ class ReceiptStorageService {
 
     final client = _supabase;
     if (client == null) {
-      // Offline or mock mode: return original if it is a full URL, or null
+      // No Supabase client (tests, before init): return the original if it is a full URL, or null
       return trimmed.startsWith('http') ? trimmed : null;
     }
 

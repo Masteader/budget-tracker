@@ -4,6 +4,7 @@ import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import 'role_invite_dialog.dart';
+import '../../services/household_invite_share.dart';
 
 /// Card for managing household membership, invite code, household switching, and dependents.
 class HouseholdManagementCard extends StatelessWidget {
@@ -14,6 +15,10 @@ class HouseholdManagementCard extends StatelessWidget {
   final List<HouseholdDependent> dependents;
   final String? householdId;
   final VoidCallback onCopyInviteCode;
+
+  /// Opens the share sheet with an invite message (shown when the code is
+  /// readable, i.e. for admins).
+  final VoidCallback? onShareInvite;
   final VoidCallback onLeaveHousehold;
   final VoidCallback onSwitchHousehold;
   final VoidCallback onCreateHousehold;
@@ -29,6 +34,7 @@ class HouseholdManagementCard extends StatelessWidget {
     this.dependents = const [],
     this.householdId,
     required this.onCopyInviteCode,
+    this.onShareInvite,
     required this.onLeaveHousehold,
     required this.onSwitchHousehold,
     required this.onCreateHousehold,
@@ -151,28 +157,46 @@ class HouseholdManagementCard extends StatelessWidget {
                   label: Text(context.tr('copy_code'), style: const TextStyle(fontSize: 11)),
                   onPressed: onCopyInviteCode,
                 ),
-                if (householdId != null && householdId!.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
-                    label: Text(context.tr('hmc_invite_with_role'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (_) => RoleInviteDialog(householdId: householdId!),
-                      );
-                    },
-                  ),
-                ],
               ],
             ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (onShareInvite != null && isShareableInviteCode(inviteCode))
+                ElevatedButton.icon(
+                  key: const ValueKey('share_invite_button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppThemes.success,
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.share_rounded, size: 16),
+                  label: Text(context.tr('share_invite'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: onShareInvite,
+                ),
+              if (householdId != null && householdId!.isNotEmpty)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.successText,
+                    side: BorderSide(color: AppThemes.success.withValues(alpha: 0.6)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                  label: Text(context.tr('hmc_invite_with_role'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => RoleInviteDialog(householdId: householdId!),
+                    );
+                  },
+                ),
+            ],
           ),
 
           const SizedBox(height: 16),

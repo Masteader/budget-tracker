@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../models/nafaqah.dart' show NafaqahSummary;
 import '../../services/api_service.dart';
 import '../../services/household_join.dart';
+import '../../services/household_invite_share.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
@@ -25,6 +26,7 @@ import '../../widgets/settings/household_roles_card.dart';
 import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
+import '../../widgets/settings/reminder_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
@@ -37,19 +39,15 @@ import 'help_support_screen.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../services/household_setting_saver.dart';
 
-class IngestionSettingsScreen extends StatefulWidget {
-  const IngestionSettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
 
   @override
-  State<IngestionSettingsScreen> createState() => _IngestionSettingsScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
+class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
-  bool _chatEnabled = true;
-  bool _scannerEnabled = true;
-  String _dedupPolicy = 'auto_enrich'; // 'auto_enrich' | 'prompt' | 'strict'
-  bool _isLoading = true;
 
   // Permission statuses
   PermissionStatus _cameraStatus = PermissionStatus.denied;
@@ -75,7 +73,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadPreferences();
     _checkPermissions();
     _loadUserInfo();
   }
@@ -332,27 +329,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     }
   }
 
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _chatEnabled = prefs.getBool('channel_chat_enabled') ?? true;
-        _scannerEnabled = prefs.getBool('channel_scanner_enabled') ?? true;
-        _dedupPolicy = prefs.getString('dedup_policy') ?? 'auto_enrich';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _savePreference(String key, dynamic value) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (value is bool) {
-      await prefs.setBool(key, value);
-    } else if (value is String) {
-      await prefs.setString(key, value);
-    }
-  }
-
   Future<void> _requestCameraPermission() async {
     final status = await Permission.camera.request();
     if (mounted) {
@@ -437,6 +413,22 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         title: context.tr('set_code_copied'),
         icon: Icons.copy_rounded,
       );
+    }
+  }
+
+  Future<void> _shareInvite() async {
+    final code = _inviteCode;
+    if (!isShareableInviteCode(code)) return;
+    final l = AppLocalizations.of(context);
+    final name = _householdName ?? '';
+    try {
+      await shareHouseholdInvite(l, householdName: name, code: code!);
+    } catch (_) {
+      // No share target (or the sheet failed): copy the same message.
+      await Clipboard.setData(ClipboardData(text: inviteShareText(l, householdName: name, code: code!)));
+      if (mounted) {
+        AppSnackBar.showInfo(context, context.tr('share_invite_failed'), title: context.tr('set_code_copied'));
+      }
     }
   }
 
@@ -777,13 +769,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: context.scaffoldBg,
-        body: const Center(child: CircularProgressIndicator(color: AppThemes.success)),
-      );
-    }
-
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -818,6 +803,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               members: _members,
               dependents: _dependents,
               onCopyInviteCode: _copyInviteCode,
+              onShareInvite: _shareInvite,
               onLeaveHousehold: _confirmLeaveHousehold,
               onSwitchHousehold: _showHouseholdSwitchSheet,
               onCreateHousehold: _showCreateHouseholdDialog,
@@ -1027,79 +1013,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
           ),
           const SizedBox(height: 24),
 
-          // ── 2. ACTIVE INPUT CHANNELS ──
-          _buildSectionHeader(context.tr('expense_ingestion_channels')),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Column(
-              children: [
-                _buildChannelTile(
-                  icon: Icons.chat_bubble_outline,
-                  title: context.tr('ai_conversational_chat'),
-                  subtitle: context.tr('ai_chat_desc'),
-                  value: _chatEnabled,
-                  onChanged: (val) {
-                    setState(() => _chatEnabled = val);
-                    _savePreference('channel_chat_enabled', val);
-                  },
-                ),
-                Divider(color: context.borderColor, height: 1),
-                _buildChannelTile(
-                  icon: Icons.document_scanner_outlined,
-                  title: context.tr('camera_receipt_scanner'),
-                  subtitle: context.tr('camera_scanner_desc'),
-                  value: _scannerEnabled,
-                  onChanged: (val) {
-                    setState(() => _scannerEnabled = val);
-                    _savePreference('channel_scanner_enabled', val);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── 3. DUPLICATE RESOLUTION POLICY ──
-          _buildSectionHeader(context.tr('duplicate_resolution')),
+          // ── REMINDERS (local notifications) ──
+          _buildSectionHeader(context.tr('reminders_title')),
           const SizedBox(height: 6),
           Text(
-            context.tr('dup_desc'),
+            context.tr('reminders_desc'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Column(
-              children: [
-                _buildPolicyTile(
-                  policy: 'auto_enrich',
-                  title: context.tr('auto_enrich'),
-                  description: context.tr('auto_enrich_desc'),
-                ),
-                Divider(color: context.borderColor, height: 1),
-                _buildPolicyTile(
-                  policy: 'prompt',
-                  title: context.tr('prompt_on_conflict'),
-                  description: context.tr('prompt_desc'),
-                ),
-                Divider(color: context.borderColor, height: 1),
-                _buildPolicyTile(
-                  policy: 'strict',
-                  title: context.tr('strict_isolation'),
-                  description: context.tr('strict_desc'),
-                ),
-              ],
-            ),
-          ),
+          const ReminderSettingsCard(),
           const SizedBox(height: 24),
 
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
@@ -1749,95 +1671,6 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               onPressed: onOpenSettings,
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildChannelTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: value ? AppThemes.success.withValues(alpha: 0.12) : context.chipBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(fontSize: 11, color: context.textSecondary)),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            activeThumbColor: AppThemes.success,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPolicyTile({
-    required String policy,
-    required String title,
-    required String description,
-  }) {
-    final isSelected = _dedupPolicy == policy;
-    return InkWell(
-      onTap: () {
-        setState(() => _dedupPolicy = policy);
-        _savePreference('dedup_policy', policy);
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? AppThemes.success : context.textSecondary,
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: isSelected ? context.electricTeal : context.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: TextStyle(fontSize: 11, color: context.textSecondary, height: 1.3),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

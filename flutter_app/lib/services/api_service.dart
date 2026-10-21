@@ -74,6 +74,7 @@ class ApiService {
     String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
+    String? previewToken,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -92,6 +93,7 @@ class ApiService {
         nafaqahSpouseId: nafaqahSpouseId,
         idempotencyKey: idempotencyKey,
         occurredAt: occurredAt,
+        previewToken: previewToken,
       );
 
   // ── Receipts & Invoices ──────────────────────────────────────────────────
@@ -114,6 +116,7 @@ class ApiService {
     String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
+    String? previewToken,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -133,6 +136,7 @@ class ApiService {
       nafaqahSpouseId: nafaqahSpouseId,
       idempotencyKey: idempotencyKey,
       occurredAt: occurredAt,
+      previewToken: previewToken,
     );
   }
 

@@ -15,7 +15,12 @@ import '../../theme/app_themes.dart';
 class AccountsSummaryCard extends StatefulWidget {
   final String householdId;
 
-  const AccountsSummaryCard({super.key, required this.householdId});
+  /// Hidden until the household has at least this many accounts (the
+  /// dashboard passes 2: with one account it repeats the budget; the Tools
+  /// screen always shows it).
+  final int minAccounts;
+
+  const AccountsSummaryCard({super.key, required this.householdId, this.minAccounts = 1});
 
   @override
   State<AccountsSummaryCard> createState() => _AccountsSummaryCardState();
@@ -86,7 +91,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
     final isDark = context.isDark;
 
     final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
-    if (accounts.isEmpty) return const SizedBox.shrink();
+    if (accounts.isEmpty || accounts.length < widget.minAccounts) return const SizedBox.shrink();
 
         final totalLiquidity =
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);

@@ -25,21 +25,19 @@ import '../../widgets/dashboard/family_reimbursement_card.dart';
 import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
 import '../../widgets/dashboard/accounts_summary_card.dart';
 import '../../widgets/dashboard/payday_checkin_banner.dart';
-import '../../widgets/salary_cycle_widget.dart';
-import '../analytics/grocery_price_intelligence_screen.dart';
-import '../../widgets/simulator/affordability_simulator_sheet.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
-import '../settings/ingestion_settings_screen.dart';
+import '../../widgets/reminder_sync.dart';
+import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import '../chat/chat_entry_screen.dart';
-import '../scanner/receipt_scanner_sheet.dart';
+import '../tools/tools_screen.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
 import '../../services/salary_cycle_service.dart';
@@ -110,19 +108,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const TransactionFeedScreen(),
       const ChatEntryScreen(),
       const BudgetManagementScreen(),
-      const IngestionSettingsScreen(),
+      const SettingsScreen(),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: screens,
+    // Local reminders follow this household's payday, bills and plans.
+    return ReminderSync(
+      child: Scaffold(
+        extendBody: true,
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: screens,
+        ),
+        floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
+            ? AppSpeedDialFab(householdId: _householdId)
+            : null,
+        bottomNavigationBar: _buildFloatingBottomNavBar(context),
       ),
-      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
-          ? AppSpeedDialFab(householdId: _householdId)
-          : null,
-      bottomNavigationBar: _buildFloatingBottomNavBar(context),
     );
   }
 
@@ -358,6 +359,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
+  /// The selected cycle by its dates ("27 Oct – 26 Nov").
+  String _cycleLabel(BuildContext context) {
+    final c = _selectedCycle;
+    final byKey = context.cycleLabel(_currentCycleKey);
+    return c == null ? byKey : context.cycleRangeIso(c.cycleStart, c.cycleEnd, fallback: byKey);
+  }
+
   bool _matchesSelectedCycle(Budget b) {
     final key = _currentCycleKey;
     if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
@@ -507,90 +515,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                     .toList(),
                                 cycle: _selectedCycle,
                               ),
-                              const SizedBox(height: 12),
-
-                              // ─── Sovereign Quick Action Dock ────────────────
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: context.isDark ? AppThemes.deepGlacial : Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: context.isDark
-                                        ? AppThemes.iceCyan.withValues(alpha: 0.2)
-                                        : AppThemes.electricTeal.withValues(alpha: 0.35),
-                                    width: 1.2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: context.isDark
-                                          ? Colors.black.withValues(alpha: 0.25)
-                                          : AppThemes.electricTeal.withValues(alpha: 0.08),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                    if (!context.isDark)
-                                      BoxShadow(
-                                        color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                  children: [
-                                    _QuickActionButton(
-                                      icon: Icons.qr_code_scanner_rounded,
-                                      label: context.tr('scan_receipt'),
-                                      color: AppThemes.iceCyan,
-                                      onTap: () {
-                                        showModalBottomSheet(
-                                          context: context,
-                                          isScrollControlled: true,
-                                          backgroundColor: Colors.transparent,
-                                          builder: (_) => ReceiptScannerSheet(householdId: hid),
-                                        );
-                                      },
-                                    ),
-                                    _QuickActionButton(
-                                      icon: Icons.mic_rounded,
-                                      label: context.tr('voice_chat'),
-                                      color: AppThemes.electricTeal,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => const ChatEntryScreen()),
-                                        );
-                                      },
-                                    ),
-                                    _QuickActionButton(
-                                      icon: Icons.calculate_outlined,
-                                      label: context.tr('quick_simulator'),
-                                      color: AppThemes.champagneGold,
-                                      onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
-                                    ),
-                                    _QuickActionButton(
-                                      icon: Icons.trending_up_rounded,
-                                      label: context.tr('quick_prices'),
-                                      color: AppThemes.mintNeon,
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => GroceryPriceIntelligenceScreen(householdId: hid),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 12),
-                              AccountsSummaryCard(householdId: hid),
-                              const SizedBox(height: 12),
-                              SalaryCycleWidget(householdId: hid),
+                              // Balances only once there are 2+ accounts; the
+                              // Tools screen always has them.
+                              AccountsSummaryCard(householdId: hid, minAccounts: 2),
                               const SizedBox(height: 12),
                               FutureBuilder<SettlementV2Summary>(
                                 future: ApiService.instance.getSettlementV2(hid),
@@ -606,81 +533,23 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   );
                                 },
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
+                              // Commitments: recurring bills and installments together.
+                              Padding(
+                                padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
+                                child: Text(
+                                  context.tr('commitments'),
+                                  style: GoogleFonts.outfit(
+                                    color: context.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ),
                               RecurringBillsCard(householdId: hid),
                               const SizedBox(height: 12),
                               InstallmentPlansCard(householdId: hid),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => GroceryPriceIntelligenceScreen(householdId: hid),
-                                        ),
-                                      ),
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                                        decoration: BoxDecoration(
-                                          color: context.cardBg,
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: context.borderColor),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.trending_up_rounded, color: AppThemes.electricTeal, size: 18),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                context.tr('price_tracker'),
-                                                style: GoogleFonts.outfit(
-                                                  color: context.textPrimary,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: () => AffordabilitySimulatorSheet.show(context, householdId: hid),
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                                        decoration: BoxDecoration(
-                                          color: context.cardBg,
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: context.borderColor),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.calculate_outlined, color: Color(0xFFA371F7), size: 18),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                context.tr('affordability_simulator'),
-                                                style: GoogleFonts.outfit(
-                                                  color: context.textPrimary,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ],
                           ),
                         ),
@@ -699,7 +568,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
-                                    title: context.trArgs('no_allocations_for_cycle', {'cycle': context.cycleMonth(_currentCycleKey)}),
+                                    title: context.trArgs('no_allocations_for_cycle', {'cycle': _cycleLabel(context)}),
                                     message: context.tr('budgets_auto_rollover_desc'),
                                   ),
                                 ),
@@ -768,6 +637,12 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       ),
       actions: [
         IconButton(
+          key: const Key('tools_appbar_button'),
+          icon: const Icon(Icons.grid_view_rounded, color: AppThemes.electricTeal),
+          tooltip: context.tr('tools_title'),
+          onPressed: () => ToolsScreen.open(context, householdId: hid),
+        ),
+        IconButton(
           key: const Key('switch_household_appbar_button'),
           icon: const Icon(Icons.swap_horiz_rounded, color: AppThemes.electricTeal),
           tooltip: context.tr('switch_household'),
@@ -801,74 +676,6 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           onPressed: () => supabase.auth.signOut(),
         ),
       ],
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDark;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(26),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDark ? color.withValues(alpha: 0.12) : Colors.white,
-                border: Border.all(
-                  color: isDark
-                      ? color.withValues(alpha: 0.5)
-                      : color.withValues(alpha: 0.45),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: isDark ? 0.25 : 0.12),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Icon(
-                icon,
-                color: isDark
-                    ? color
-                    : (color == AppThemes.electricTeal ? const Color(0xFF008F7A) : color),
-                size: 23,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                color: context.textPrimary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

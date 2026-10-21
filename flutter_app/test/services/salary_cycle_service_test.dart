@@ -199,5 +199,29 @@ void main() {
         7,
       );
     });
+
+    test('cycleForKey returns the dates of a cycle key for any payday', () {
+      final nov = SalaryCycleService.cycleForKey('2026-11', paydayDay: 27)!;
+      expect(nov.startIso, '2026-10-27');
+      expect(nov.endIso, '2026-11-26');
+      final jan = SalaryCycleService.cycleForKey('2027-01', paydayDay: 27)!;
+      expect(jan.startIso, '2026-12-27');
+      expect(jan.endIso, '2027-01-26');
+      final early = SalaryCycleService.cycleForKey('2026-10', paydayDay: 10)!;
+      expect(early.startIso, '2026-10-10');
+      expect(early.endIso, '2026-11-09');
+      final calendar = SalaryCycleService.cycleForKey('2027-02', paydayDay: 1)!;
+      expect(calendar.startIso, '2027-02-01');
+      expect(calendar.endIso, '2027-02-28');
+      expect(SalaryCycleService.cycleForKey('2026-11-01', paydayDay: 27)!.key, '2026-11');
+      expect(SalaryCycleService.cycleForKey('bad'), isNull);
+      // Round trip over every payday and month of a year.
+      for (var payday = 1; payday <= 31; payday++) {
+        for (var month = 1; month <= 12; month++) {
+          final key = '2027-${month.toString().padLeft(2, '0')}';
+          expect(SalaryCycleService.cycleForKey(key, paydayDay: payday)!.key, key, reason: 'payday $payday $key');
+        }
+      }
+    });
   });
 }
