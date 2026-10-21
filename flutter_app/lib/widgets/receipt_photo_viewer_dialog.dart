@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
+import '../l10n/app_localizations.dart';
 
 class ReceiptPhotoViewerDialog extends StatelessWidget {
   final String receiptUrl;
@@ -57,9 +58,10 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                     ),
                     if (amount != null)
                       Text(
-                        'SAR ${amount!.toStringAsFixed(2)}',
+                        context.sar(amount!),
                         style: GoogleFonts.outfit(
-                          color: const Color(0xFF00C896),
+                          // Header sits on the dark modal barrier in both themes.
+                          color: AppThemes.success,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -68,6 +70,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: context.tr('close'),
                 icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -91,7 +94,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                       builder: (ctx, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
-                            child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                            child: CircularProgressIndicator(color: AppThemes.success),
                           );
                         }
                         final resolvedUrl = snapshot.data;
@@ -104,7 +107,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                                 Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Unable to load receipt image',
+                                  context.tr('rpv_load_failed'),
                                   style: GoogleFonts.outfit(color: context.textSecondary),
                                 ),
                               ],
@@ -117,7 +120,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                           loadingBuilder: (ctx, child, progress) {
                             if (progress == null) return child;
                             return const Center(
-                              child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                              child: CircularProgressIndicator(color: AppThemes.success),
                             );
                           },
                           errorBuilder: (ctx, _, __) => Center(
@@ -127,7 +130,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                                 Icon(Icons.broken_image_outlined, size: 48, color: context.textSecondary),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Unable to load receipt image',
+                                  context.tr('rpv_load_failed'),
                                   style: GoogleFonts.outfit(color: context.textSecondary),
                                 ),
                               ],

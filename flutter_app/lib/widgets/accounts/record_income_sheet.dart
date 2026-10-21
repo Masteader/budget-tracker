@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../services/salary_cycle_service.dart';
+import '../../models/money.dart';
 
 /// Modal bottom sheet to record received income (Salary, Overtime, Bonus, Side Gig, Roommate Share).
 class RecordIncomeSheet extends StatefulWidget {
@@ -62,7 +63,8 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController(text: 'Monthly Salary');
+    // Default title is filled in didChangeDependencies, in the app language.
+    _titleCtrl = TextEditingController();
     _baseAmountCtrl = TextEditingController();
     _overtimeCtrl = TextEditingController();
     _bonusCtrl = TextEditingController();
@@ -70,6 +72,19 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
     _notesCtrl = TextEditingController();
     _selectedAccountId = widget.initialAccountId;
     _loadAccounts();
+  }
+
+  bool _titleInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_titleInitialized) {
+      _titleInitialized = true;
+      if (_titleCtrl.text.isEmpty) {
+        _titleCtrl.text = context.tr(_selectedSource.translationKey);
+      }
+    }
   }
 
   @override
@@ -100,30 +115,25 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
     }
   }
 
-  double get _base => double.tryParse(_baseAmountCtrl.text) ?? 0.0;
-  double get _overtime => double.tryParse(_overtimeCtrl.text) ?? 0.0;
-  double get _bonus => double.tryParse(_bonusCtrl.text) ?? 0.0;
-  double get _deductions => double.tryParse(_deductionsCtrl.text) ?? 0.0;
+  double get _base => parseMoneyInput(_baseAmountCtrl.text) ?? 0.0;
+  double get _overtime => parseMoneyInput(_overtimeCtrl.text) ?? 0.0;
+  double get _bonus => parseMoneyInput(_bonusCtrl.text) ?? 0.0;
+  double get _deductions => parseMoneyInput(_deductionsCtrl.text) ?? 0.0;
   double get _netTotal => (_base + _overtime + _bonus - _deductions).clamp(0.0, double.infinity);
 
   String get _currentCycleKey {
-    final now = _receivedAt;
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(_receivedAt);
   }
 
   Future<void> _saveIncome() async {
     final targetAccountId = _selectedAccountId;
     if (targetAccountId == null || targetAccountId.isEmpty) {
-      AppSnackBar.showError(context, 'Please select a destination account.');
+      AppSnackBar.showError(context, context.tr('ris_select_account'));
       return;
     }
 
     if (_base <= 0.0 && _netTotal <= 0.0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount.');
+      AppSnackBar.showError(context, context.tr('ris_invalid_amount'));
       return;
     }
 
@@ -149,15 +159,15 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
         Navigator.pop(context);
         AppSnackBar.showSuccess(
           context,
-          'Deposited SAR ${NumberFormat('#,##0.00').format(_netTotal)} into ${_accounts.firstWhere((a) => a.id == targetAccountId).name}!',
-          title: 'Income Recorded',
+          context.trArgs('ris_deposited', {'amount': context.sar(_netTotal), 'account': _accounts.firstWhere((a) => a.id == targetAccountId).name}),
+          title: context.tr('ris_recorded_title'),
           icon: Icons.savings_rounded,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, 'Failed to record income: $e');
+        AppSnackBar.showError(context, context.trArgs('ris_failed', {'error': e}));
       }
     }
   }
@@ -165,7 +175,6 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -249,8 +258,10 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                   onSelected: (val) {
                     if (val) {
                       setState(() {
+                        final hadDefaultTitle = _titleCtrl.text.isEmpty ||
+                            _titleCtrl.text == context.tr(_selectedSource.translationKey);
                         _selectedSource = src;
-                        if (_titleCtrl.text.isEmpty || _titleCtrl.text == 'Monthly Salary' || _titleCtrl.text == 'Income') {
+                        if (hadDefaultTitle) {
                           _titleCtrl.text = context.tr(src.translationKey);
                         }
                       });
@@ -287,7 +298,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );
@@ -319,7 +330,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
               style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
               decoration: InputDecoration(
                 labelText: context.tr('base_amount'),
-                prefixText: 'SAR ',
+                prefixText: '${context.tr('sar')} ',
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -341,7 +352,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: '${context.tr('overtime')} (+)',
-                        prefixText: 'SAR ',
+                        prefixText: '${context.tr('sar')} ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
                         fillColor: context.inputBg,
@@ -358,7 +369,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: '${context.tr('bonus')} (+)',
-                        prefixText: 'SAR ',
+                        prefixText: '${context.tr('sar')} ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
                         fillColor: context.inputBg,
@@ -376,7 +387,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                 style: const TextStyle(color: Colors.redAccent, fontSize: 14),
                 decoration: InputDecoration(
                   labelText: '${context.tr('deductions_gosi')} (-)',
-                  prefixText: 'SAR ',
+                  prefixText: '${context.tr('sar')} ',
                   labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                   filled: true,
                   fillColor: context.inputBg,
@@ -400,7 +411,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                 children: [
                   Text(context.tr('net_deposit_summary'), style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
                   Text(
-                    'SAR ${fmt.format(_netTotal)}',
+                    context.sar(_netTotal),
                     style: TextStyle(color: context.electricTeal, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ],

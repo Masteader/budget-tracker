@@ -21,6 +21,13 @@ class ReceiptStorageService {
     }
   }
 
+  /// Number of cached signed URLs (exposed for tests).
+  @visibleForTesting
+  static int get cachedSignedUrlCount => _signedUrlCache.length;
+
+  /// Drops every cached signed URL (they are bearer links to receipts).
+  static void clearSignedUrlCache() => _signedUrlCache.clear();
+
   static String generateStoragePath(String householdId, String originalFileName) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final uuid = const Uuid().v4().substring(0, 8);
@@ -103,13 +110,8 @@ class ReceiptStorageService {
     final trimmed = receiptPathOrUrl.trim();
     if (trimmed.isEmpty) return null;
 
-    // If it's already an active signed URL with a token query param, return as-is
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      if (trimmed.contains('token=')) {
-        return trimmed;
-      }
-    }
-
+    // Stored signed URLs (legacy rows) are re-signed from their storage path:
+    // their embedded token has a fixed expiry and would eventually 400.
     final path = extractStoragePath(trimmed);
     // If not a path belonging to our receipts bucket, return the original URL
     if (path == null) {
@@ -125,7 +127,7 @@ class ReceiptStorageService {
 
     final client = _supabase;
     if (client == null) {
-      // Offline or mock mode: return original if it is a full URL, or null
+      // No Supabase client (tests, before init): return the original if it is a full URL, or null
       return trimmed.startsWith('http') ? trimmed : null;
     }
 
@@ -134,14 +136,17 @@ class ReceiptStorageService {
         path,
         expiresInSeconds,
       );
+      _signedUrlCache.removeWhere((_, entry) => !entry.expiresAt.isAfter(now));
       _signedUrlCache[path] = (
         url: signedUrl,
         expiresAt: now.add(Duration(seconds: expiresInSeconds)),
       );
       return signedUrl;
     } catch (e) {
-      debugPrint('[ReceiptStorageService] Failed to create signed URL for $path: $e');
-      return trimmed.startsWith('http') ? trimmed : null;
+      debugPrint('[ReceiptStorageService] Failed to create signed URL: $e');
+      // The bucket is private: a stored public/expired URL cannot work, and a
+      // relative path is not a URL. Let the viewer show its error state.
+      return null;
     }
   }
 

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -6,20 +8,63 @@ import 'package:uuid/uuid.dart';
 
 import '../models/offline_queue_item.dart';
 
+/// Resolves the directory used to store large offline payload blobs
+/// (receipt images) outside of the SQLite row.
+typedef BlobDirectoryProvider = Future<Directory> Function();
+
+/// The item could not be written to the local offline queue (SQLite or blob
+/// file failure). Nothing was stored; the user must be told.
+class OfflineQueueWriteException implements Exception {
+  const OfflineQueueWriteException(this.operationType);
+
+  final String operationType;
+
+  @override
+  String toString() => 'OfflineQueueWriteException: could not queue "$operationType" offline';
+}
+
 /// SQLite Database manager for queued offline transactions.
+///
+/// Invariants:
+/// * Every enqueue creates a new row unless the caller passes an explicit
+///   [idempotencyKey] that is already queued (double-submit protection).
+/// * Receipt images are written to files under the blob directory and only
+///   their file names are stored in the row, so a multi-page receipt can never
+///   exceed Android's ~2 MB CursorWindow and wedge the whole queue.
+/// * Rows are read one at a time, so a single unreadable legacy row is
+///   quarantined as `failed` instead of blocking every other queued expense.
 class OfflineQueueManager {
   static const String tableName = 'offline_sync_queue';
   static const int databaseVersion = 2;
 
+  /// Payload key holding inline base64 images supplied by callers.
+  static const String inlineImagesKey = 'images_base64';
+
+  /// Payload key holding the blob file names that replaced [inlineImagesKey].
+  static const String imageBlobsKey = 'image_blob_files';
+
   Database? _db;
   final Database? customDb;
+  final BlobDirectoryProvider? _blobDirectoryProvider;
 
-  OfflineQueueManager({this.customDb}) : _db = customDb;
+  OfflineQueueManager({this.customDb, BlobDirectoryProvider? blobDirectoryProvider})
+      : _db = customDb,
+        _blobDirectoryProvider = blobDirectoryProvider;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
     _db = await _initDatabase();
     return _db!;
+  }
+
+  Future<Directory> _blobDirectory() async {
+    final dir = _blobDirectoryProvider != null
+        ? await _blobDirectoryProvider()
+        : Directory(p.join(await getDatabasesPath(), 'offline_blobs'));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
   }
 
   Future<Database> _initDatabase() async {
@@ -47,6 +92,7 @@ class OfflineQueueManager {
                 operationType: endpoint,
                 householdId: hid,
                 payload: {'raw': payloadStr},
+                nonce: id,
               );
               await db.insert(tableName, {
                 'id': id,
@@ -85,42 +131,50 @@ class OfflineQueueManager {
     ''');
   }
 
-  /// Enqueues an operation idempotently. If an operation with identical idempotencyKey
-  /// is already pending or syncing, returns the existing ID without creating a duplicate.
+  /// Enqueues an operation.
+  ///
+  /// Each call creates a new queue row, because two identical offline expenses
+  /// are two real purchases. Pass a stable [idempotencyKey] (e.g. a UUID minted
+  /// when the user opened the form) to make repeated submissions of the same
+  /// user action collapse into one row; in that case the existing row's ID is
+  /// returned whatever its status.
   Future<String?> enqueue({
     required String operationType,
     required Map<String, dynamic> payload,
     required String householdId,
     String? customId,
+    String? idempotencyKey,
   }) async {
     try {
       final db = await database;
-      final idempotencyKey = OfflineQueueItem.generateIdempotencyKey(
-        operationType: operationType,
-        householdId: householdId,
-        payload: payload,
-      );
+      final itemId = customId ?? const Uuid().v4();
+      final key = idempotencyKey ??
+          OfflineQueueItem.generateIdempotencyKey(
+            operationType: operationType,
+            householdId: householdId,
+            payload: payload,
+            nonce: itemId,
+          );
 
-      // Check for existing pending or syncing item with the same idempotency key
       final existing = await db.query(
         tableName,
         columns: ['id'],
-        where: 'idempotency_key = ? AND status IN (?, ?)',
-        whereArgs: [idempotencyKey, 'pending', 'syncing'],
+        where: 'idempotency_key = ?',
+        whereArgs: [key],
       );
-
       if (existing.isNotEmpty) {
-        debugPrint('[OfflineQueueManager] Deduplicated operation $idempotencyKey');
+        debugPrint('[OfflineQueueManager] Deduplicated repeated submission of one user action.');
         return existing.first['id'] as String;
       }
 
-      final itemId = customId ?? const Uuid().v4();
+      final storedPayload = await _offloadImages(itemId, payload);
+
       final item = OfflineQueueItem(
         id: itemId,
         operationType: operationType,
-        payload: payload,
+        payload: storedPayload,
         householdId: householdId,
-        idempotencyKey: idempotencyKey,
+        idempotencyKey: key,
         status: 'pending',
         retryCount: 0,
         createdAt: DateTime.now().toUtc(),
@@ -129,7 +183,7 @@ class OfflineQueueManager {
       await db.insert(
         tableName,
         item.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: ConflictAlgorithm.abort,
       );
 
       return itemId;
@@ -139,18 +193,117 @@ class OfflineQueueManager {
     }
   }
 
-  /// Returns all operations pending sync, ordered chronologically.
-  Future<List<OfflineQueueItem>> getPendingItems({int limit = 50}) async {
+  /// Like [enqueue] but throws [OfflineQueueWriteException] instead of
+  /// returning null, so callers cannot report "saved offline" for an item
+  /// that never reached the queue (MOB-28).
+  Future<String> enqueueOrThrow({
+    required String operationType,
+    required Map<String, dynamic> payload,
+    required String householdId,
+    String? customId,
+    String? idempotencyKey,
+  }) async {
+    final id = await enqueue(
+      operationType: operationType,
+      payload: payload,
+      householdId: householdId,
+      customId: customId,
+      idempotencyKey: idempotencyKey,
+    );
+    if (id == null) {
+      throw OfflineQueueWriteException(operationType);
+    }
+    return id;
+  }
+
+  Future<Map<String, dynamic>> _offloadImages(String itemId, Map<String, dynamic> payload) async {
+    final images = payload[inlineImagesKey];
+    if (images is! List || images.isEmpty) return payload;
+
+    final dir = await _blobDirectory();
+    final names = <String>[];
+    for (var i = 0; i < images.length; i++) {
+      final name = '${itemId}_$i.b64';
+      await File(p.join(dir.path, name)).writeAsString(images[i].toString(), flush: true);
+      names.add(name);
+    }
+    final stored = Map<String, dynamic>.from(payload)..remove(inlineImagesKey);
+    stored[imageBlobsKey] = names;
+    return stored;
+  }
+
+  /// Returns the base64 images attached to [item], reading offloaded blob
+  /// files and falling back to images stored inline by older app versions.
+  Future<List<String>> loadImages(OfflineQueueItem item) async {
+    final names = item.payload[imageBlobsKey];
+    if (names is List && names.isNotEmpty) {
+      final dir = await _blobDirectory();
+      final result = <String>[];
+      for (final name in names) {
+        final file = File(p.join(dir.path, p.basename(name.toString())));
+        if (await file.exists()) {
+          result.add(await file.readAsString());
+        }
+      }
+      return result;
+    }
+    final inline = item.payload[inlineImagesKey];
+    if (inline is List) {
+      return inline.map((e) => e.toString()).toList();
+    }
+    return const [];
+  }
+
+  Future<void> _deleteBlobs(String id) async {
+    try {
+      final dir = await _blobDirectory();
+      await for (final entity in dir.list()) {
+        if (entity is File && p.basename(entity.path).startsWith('${id}_')) {
+          await entity.delete();
+        }
+      }
+    } catch (e) {
+      debugPrint('[OfflineQueueManager] Blob cleanup notice: $e');
+    }
+  }
+
+  /// Returns operations pending sync, oldest first.
+  ///
+  /// IDs are listed first and each row is then loaded on its own, so one
+  /// oversized or corrupt row is quarantined (`failed`) instead of throwing
+  /// for the whole batch. Rows whose IDs are in [excludeIds] are skipped.
+  Future<List<OfflineQueueItem>> getPendingItems({
+    int limit = 50,
+    Set<String> excludeIds = const {},
+  }) async {
     final db = await database;
-    final rows = await db.query(
+    final idRows = await db.query(
       tableName,
+      columns: ['id'],
       where: 'status = ?',
       whereArgs: ['pending'],
-      orderBy: 'created_at ASC',
-      limit: limit,
+      orderBy: 'created_at ASC, rowid ASC',
     );
 
-    return rows.map(OfflineQueueItem.fromMap).toList();
+    final items = <OfflineQueueItem>[];
+    for (final row in idRows) {
+      if (items.length >= limit) break;
+      final id = row['id'] as String;
+      if (excludeIds.contains(id)) continue;
+      try {
+        final rows = await db.query(tableName, where: 'id = ?', whereArgs: [id]);
+        if (rows.isNotEmpty) items.add(OfflineQueueItem.fromMap(rows.first));
+      } catch (e) {
+        debugPrint('[OfflineQueueManager] Quarantining unreadable queue row: $e');
+        await db.update(
+          tableName,
+          {'status': 'failed', 'last_error': 'Unreadable queue row: $e'},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    }
+    return items;
   }
 
   /// Marks an item as currently transmitting over the network.
@@ -164,22 +317,50 @@ class OfflineQueueManager {
     );
   }
 
-  /// Removes an item from the queue after successful upload.
+  /// Returns rows left in `syncing` by a drain that never finished (the app
+  /// was killed mid-request) to `pending` so they are replayed. Must only be
+  /// called while no drain is running in this process.
+  Future<int> recoverInterruptedItems() async {
+    final db = await database;
+    return db.update(
+      tableName,
+      {'status': 'pending'},
+      where: 'status = ?',
+      whereArgs: ['syncing'],
+    );
+  }
+
+  /// Removes an item (and its image blobs) from the queue after successful upload.
   Future<void> markSuccess(String id) async {
     final db = await database;
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+    await _deleteBlobs(id);
   }
 
-  /// Records a failure. If retry_count reaches maxRetries, status becomes 'failed'.
-  /// Otherwise resets status to 'pending' for subsequent retry attempts.
-  Future<void> markFailed(String id, {required String error, int maxRetries = 5}) async {
+  /// Records a failure.
+  ///
+  /// A [transient] failure (no network, timeout, 5xx gateway, auth refresh
+  /// pending) returns the item to `pending` without consuming its retry
+  /// budget. A permanent failure increments `retry_count`; once it reaches
+  /// [maxRetries] the item is parked as `failed` (poison message).
+  Future<void> markFailed(
+    String id, {
+    required String error,
+    int maxRetries = 5,
+    bool transient = false,
+  }) async {
     final db = await database;
-    final rows = await db.query(tableName, where: 'id = ?', whereArgs: [id]);
+    final rows = await db.query(
+      tableName,
+      columns: ['retry_count'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     if (rows.isEmpty) return;
 
     final currentRetries = (rows.first['retry_count'] as num?)?.toInt() ?? 0;
-    final newRetries = currentRetries + 1;
-    final newStatus = newRetries >= maxRetries ? 'failed' : 'pending';
+    final newRetries = transient ? currentRetries : currentRetries + 1;
+    final newStatus = !transient && newRetries >= maxRetries ? 'failed' : 'pending';
 
     await db.update(
       tableName,
@@ -204,9 +385,34 @@ class OfflineQueueManager {
     return count ?? 0;
   }
 
-  /// Clears all entries from the queue (useful in tests).
+  /// Returns the count of poison items parked as `failed`.
+  Future<int> getFailedCount() async {
+    final db = await database;
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery("SELECT COUNT(*) FROM $tableName WHERE status = 'failed'"),
+    );
+    return count ?? 0;
+  }
+
+  /// Moves every parked `failed` item back to `pending` with a fresh retry
+  /// budget (explicit user-initiated retry).
+  Future<int> requeueFailed() async {
+    final db = await database;
+    return db.update(
+      tableName,
+      {'status': 'pending', 'retry_count': 0},
+      where: 'status = ?',
+      whereArgs: ['failed'],
+    );
+  }
+
+  /// Clears all entries (and image blobs) from the queue.
   Future<void> clearQueue() async {
     final db = await database;
+    final ids = await db.query(tableName, columns: ['id']);
     await db.delete(tableName);
+    for (final row in ids) {
+      await _deleteBlobs(row['id'] as String);
+    }
   }
 }

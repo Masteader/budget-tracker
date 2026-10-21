@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
+import '../../models/money.dart';
+import '../../l10n/app_localizations.dart';
 
 typedef AddMemberCallback = Future<void> Function({
   required String name,
@@ -58,27 +60,27 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
   final List<Map<String, dynamic>> _roleOptions = const [
     {
       'id': 'spouse',
-      'title': 'Wife / Spouse',
+      'title': 'wife_spouse_title',
       'icon': Icons.favorite_rounded,
       'color': Color(0xFFE5A93C),
       'avatar': 'wife',
-      'desc': 'Can advance household expenses & receive Nafaqah reimbursements.',
+      'desc': 'ahm_spouse_desc',
     },
     {
       'id': 'roommate',
-      'title': 'Roommate / Partner',
+      'title': 'roommate_partner_title',
       'icon': Icons.group_outlined,
       'color': Color(0xFF38BDF8),
       'avatar': 'roommate',
-      'desc': 'Shares living expenses & participates in debt simplification.',
+      'desc': 'ahm_peer_desc',
     },
     {
       'id': 'child',
-      'title': 'Child / Dependent',
+      'title': 'child_dependent_title',
       'icon': Icons.child_care_rounded,
       'color': Color(0xFF34D399),
       'avatar': 'child',
-      'desc': 'Tracks personal expenses & allowance without settlement balances.',
+      'desc': 'ahm_child_desc',
     },
   ];
 
@@ -92,11 +94,11 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
   Future<void> _handleSubmit() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a member name');
+      setState(() => _errorMessage = context.tr('ahm_enter_name'));
       return;
     }
 
-    final allowance = double.tryParse(_allowanceController.text.trim()) ?? 0.0;
+    final allowance = parseMoneyInput(_allowanceController.text.trim()) ?? 0.0;
     final selectedOption = _roleOptions.firstWhere((r) => r['id'] == _selectedRole);
     final avatar = selectedOption['avatar'] as String;
 
@@ -168,12 +170,12 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: AppThemes.success.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.person_add_alt_1_rounded,
-                    color: Color(0xFF00C896),
+                    color: AppThemes.success,
                     size: 22,
                   ),
                 ),
@@ -183,7 +185,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Add Household Member',
+                        context.tr('ahm_title'),
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -192,7 +194,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Pre-create profile before they join with their account.',
+                        context.tr('ahm_subtitle'),
                         style: TextStyle(
                           fontSize: 12,
                           color: context.textSecondary,
@@ -202,6 +204,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: const Icon(Icons.close_rounded, size: 20),
                   color: context.textSecondary,
                   onPressed: () => Navigator.of(context).pop(),
@@ -213,7 +216,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
 
             // Member Name Input
             Text(
-              'MEMBER NAME',
+              context.tr('ahm_member_name_caps'),
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -228,7 +231,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               autofocus: true,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                hintText: 'e.g. Fatima, Tariq, or Zaid',
+                hintText: context.tr('ahm_name_hint'),
                 hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6)),
                 filled: true,
                 fillColor: context.inputBg,
@@ -239,7 +242,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
               onChanged: (_) {
@@ -253,7 +256,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
 
             // Living Role Selection
             Text(
-              'LIVING ROLE',
+              context.tr('ahm_living_role_caps'),
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -298,7 +301,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              opt['title'] as String,
+                              context.tr(opt['title'] as String),
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -307,7 +310,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              opt['desc'] as String,
+                              context.tr(opt['desc'] as String),
                               style: TextStyle(
                                 fontSize: 11,
                                 color: context.textSecondary,
@@ -337,7 +340,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
 
             // Monthly Allowance (Masroof) Input
             Text(
-              'MONTHLY ALLOWANCE / MASROOF (OPTIONAL)',
+              context.tr('ahm_allowance_caps'),
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -350,22 +353,23 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               key: const Key('add_member_allowance_input'),
               controller: _allowanceController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
+              // Accept Arabic-Indic / Urdu digits and the Arabic decimal separator too.
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^[0-9\u0660-\u0669\u06F0-\u06F9]+[.\u066B]?[0-9\u0660-\u0669\u06F0-\u06F9]{0,2}'))],
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                hintText: '0.00 SAR',
+                hintText: '0.00 ${context.tr('sar')}',
                 hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6)),
                 filled: true,
                 fillColor: context.inputBg,
                 prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
-                suffixText: 'SAR',
+                suffixText: context.tr('sar'),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: context.borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
             ),
@@ -403,7 +407,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               child: ElevatedButton.icon(
                 key: const Key('add_member_submit_button'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
@@ -416,7 +420,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                       )
                     : const Icon(Icons.check_rounded, size: 18),
                 label: Text(
-                  _isSubmitting ? 'Creating Profile...' : 'Create Member Profile',
+                  _isSubmitting ? context.tr('ahm_creating') : context.tr('create_member_profile'),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

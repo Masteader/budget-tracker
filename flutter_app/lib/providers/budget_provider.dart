@@ -2,16 +2,25 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/salary_cycle_service.dart';
 
-/// Centralized reactive state provider for salary cycle budgets, forecasts, and sub-budget allocations.
+/// Centralized reactive state provider for salary cycle budgets and sub-budget allocations.
+///
+/// The pace and verdict shown on the dashboard come from one place only,
+/// [PaydayOutlook] (UX-07); the server burn-rate forecast is not fetched.
 class BudgetProvider extends ChangeNotifier {
   String? _householdId;
   List<SalaryCycleInfo> _cycles = [];
   int _selectedCycleIndex = 0;
   List<CategoryBreakdownItem> _categories = [];
-  Map<String, dynamic> _forecast = {};
   bool _isLoading = false;
   String? _error;
+  int _breakdownGeneration = 0;
+  final ApiService? _apiOverride;
+
+  BudgetProvider({ApiService? api}) : _apiOverride = api;
+
+  ApiService get _api => _apiOverride ?? ApiService.instance;
 
   // Getters
   bool get isLoading => _isLoading;
@@ -19,7 +28,6 @@ class BudgetProvider extends ChangeNotifier {
   List<SalaryCycleInfo> get cycles => _cycles;
   int get selectedCycleIndex => _selectedCycleIndex;
   List<CategoryBreakdownItem> get categories => _categories;
-  Map<String, dynamic> get forecast => _forecast;
 
   SalaryCycleInfo? get activeCycle {
     if (_cycles.isEmpty) return null;
@@ -35,8 +43,28 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<void> init(String householdId) async {
     if (_householdId == householdId && _cycles.isNotEmpty) return;
+    if (_householdId != householdId) {
+      // Never show another household's budgets while the new ones load.
+      _clearData();
+    }
     _householdId = householdId;
     await refresh();
+  }
+
+  /// Drops all cached household data (sign-out / household switch).
+  void reset() {
+    _householdId = null;
+    _clearData();
+    notifyListeners();
+  }
+
+  void _clearData() {
+    _breakdownGeneration++;
+    _cycles = [];
+    _selectedCycleIndex = 0;
+    _categories = [];
+    _error = null;
+    _isLoading = false;
   }
 
   Future<void> selectCycle(int index) async {
@@ -55,7 +83,7 @@ class BudgetProvider extends ChangeNotifier {
     try {
       await Future.wait([
         _fetchCycles(),
-        _fetchForecast(),
+        _fetchPayday(),
       ]);
       await fetchBreakdown();
       _isLoading = false;
@@ -71,7 +99,7 @@ class BudgetProvider extends ChangeNotifier {
   Future<void> _fetchCycles() async {
     if (_householdId == null) return;
     try {
-      final res = await ApiService.instance.getSalaryCycles(_householdId!);
+      final res = await _api.getSalaryCycles(_householdId!);
       if (res['cycles'] != null) {
         _cycles = (res['cycles'] as List)
             .map((c) => SalaryCycleInfo.fromMap(Map<String, dynamic>.from(c as Map)))
@@ -86,23 +114,31 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _fetchForecast() async {
+  /// Keeps the client cycle arithmetic on the household's real payday.
+  Future<void> _fetchPayday() async {
     if (_householdId == null) return;
     try {
-      _forecast = await ApiService.instance.getSalaryCycleForecast(_householdId!);
+      final payday = await _api.getHouseholdPayday(_householdId!);
+      // Applied in memory synchronously; persisting to preferences must not
+      // hold up the budget refresh.
+      unawaited(SalaryCycleService.cachePayday(payday));
     } catch (e) {
-      debugPrint('[BudgetProvider] Error fetching forecast: $e');
+      debugPrint('[BudgetProvider] Error fetching payday: $e');
     }
   }
 
   Future<void> fetchBreakdown() async {
     if (_householdId == null) return;
     final currentKey = activeCycle?.cycleKey;
+    final generation = ++_breakdownGeneration;
     try {
-      final res = await ApiService.instance.getBudgetBreakdown(
+      final res = await _api.getBudgetBreakdown(
         _householdId!,
         cycleKey: currentKey,
       );
+      // A newer selectCycle()/refresh() superseded this request: drop the
+      // stale response instead of showing another cycle's categories.
+      if (generation != _breakdownGeneration) return;
       if (res['categories'] != null) {
         _categories = (res['categories'] as List)
             .map((cat) => CategoryBreakdownItem.fromMap(Map<String, dynamic>.from(cat as Map)))
@@ -121,7 +157,7 @@ class BudgetProvider extends ChangeNotifier {
     if (_householdId == null) return false;
     final cycleKey = activeCycle?.cycleKey;
     try {
-      final res = await ApiService.instance.saveSubAllocations(
+      final res = await _api.saveSubAllocations(
         householdId: _householdId!,
         categoryCode: categoryCode,
         subAllocations: subAllocations,
@@ -147,7 +183,7 @@ class BudgetProvider extends ChangeNotifier {
     if (_householdId == null) return false;
     final cycleKey = activeCycle?.cycleKey;
     try {
-      final res = await ApiService.instance.addSubCategory(
+      final res = await _api.addSubCategory(
         householdId: _householdId!,
         parentCode: parentCode,
         nameEn: nameEn,
@@ -173,7 +209,7 @@ class BudgetProvider extends ChangeNotifier {
     if (_householdId == null) return false;
     final cycleKey = activeCycle?.cycleKey;
     try {
-      final res = await ApiService.instance.removeSubCategory(
+      final res = await _api.removeSubCategory(
         householdId: _householdId!,
         parentCode: parentCode,
         subCode: subCode,
@@ -198,7 +234,7 @@ class BudgetProvider extends ChangeNotifier {
   }) async {
     if (_householdId == null) return false;
     try {
-      final res = await ApiService.instance.addBudgetCategory(
+      final res = await _api.addBudgetCategory(
         householdId: _householdId!,
         code: code,
         category: category,
@@ -219,7 +255,7 @@ class BudgetProvider extends ChangeNotifier {
   Future<bool> archiveCategory(String categoryCode) async {
     if (_householdId == null) return false;
     try {
-      final res = await ApiService.instance.archiveBudgetCategory(
+      final res = await _api.archiveBudgetCategory(
         _householdId!,
         categoryCode,
       );

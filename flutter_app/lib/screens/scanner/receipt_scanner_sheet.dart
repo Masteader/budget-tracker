@@ -8,20 +8,32 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/ocr/local_ocr_service.dart';
+import '../../services/api/base_api_client.dart' show BaseApiClient;
+import '../../services/api/preview_token.dart';
+import '../../services/offline_receipt_draft.dart';
 import '../../services/offline_queue_manager.dart';
+import '../../services/nafaqah_write_errors.dart';
+import '../../services/sync_worker.dart' show SyncWorker;
 import '../../services/receipt_storage_service.dart';
 import '../../services/zatca_decoder.dart';
 import '../../widgets/receipt_photo_strip.dart';
+import '../../widgets/transactions/manual_expense_sheet.dart';
 import '../../widgets/scanner/duplicate_candidate_card.dart';
 import '../../widgets/store_attribution_card.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/dispose_on_unmount.dart';
+import '../../widgets/nafaqah/nafaqah_review_section.dart';
+import '../../widgets/transactions/nafaqah_feed_badge.dart';
+import '../../widgets/scanner/receipt_review_editor.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
@@ -62,15 +74,71 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   late final TextEditingController _merchantController;
   String _selectedSpentBy = 'both';
 
+  // UX-12: the scanned total and category, editable before saving.
+  final TextEditingController _reviewAmountCtrl = TextEditingController();
+  String? _reviewCategory;
+  bool _reviewAmountInvalid = false;
+
+  double get _scannedAmount =>
+      ((_zatcaDecoded?['total'] as num?) ??
+              (_scanResult?['amount'] as num?) ??
+              (_scanResult?['parsed_data']?['amount'] as num?) ??
+              0)
+          .toDouble();
+
+  String? get _scannedCategory =>
+      (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String?;
+
+  /// Shows the scanned values in the review fields.
+  void _resetReview() {
+    final amount = _scannedAmount;
+    _reviewAmountCtrl.text = amount > 0 ? amount.toStringAsFixed(2) : '';
+    _reviewCategory = _scannedCategory ?? 'OPEX-MISC';
+    _reviewAmountInvalid = false;
+  }
+
+  ReceiptReviewEdits get _reviewEdits => ReceiptReviewEdits.from(
+        scannedAmount: _scannedAmount,
+        scannedCategory: _scannedCategory,
+        amountText: _reviewAmountCtrl.text,
+        chosenCategory: _reviewCategory,
+      );
+
+  // Family (Islamic Nafaqah): the server's suggestion from the preview and the
+  // user's choice. A wife's receipt is her shared advance (the husband owes
+  // it) or a personal purchase from her allowance; never split.
+  NafaqahPreview _nafaqah = const NafaqahPreview();
+  String? _nafaqahClass;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
+
+  void _applyNafaqahPreview(Map<String, dynamic>? res) {
+    // Only the wife, the provider (husband) or an admin classifies.
+    _nafaqah = NafaqahPreview.fromPreview(res).withAdmin(viewerIsAdminOf(context, widget.householdId));
+    _nafaqahClass = _nafaqah.suggestedClass;
+    _nafaqahWifeId = _nafaqah.defaultSpouseId;
+    _showWifeRequired = false;
+  }
+
+  /// `paid_by` / `beneficiary` / `nafaqah_class` / `nafaqah_spouse_id` for the
+  /// commit, consistent with each other (empty outside family mode).
+  Map<String, String> get _nafaqahFields => _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
+
   @override
   void initState() {
     super.initState();
     _merchantController = TextEditingController();
   }
 
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
   @override
   void dispose() {
     _merchantController.dispose();
+    _reviewAmountCtrl.dispose();
     super.dispose();
   }
 
@@ -90,10 +158,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       if (!status.isGranted) {
         final requested = await Permission.camera.request();
         if (!requested.isGranted) {
-          setState(() {
+          _safeSetState(() {
             _errorMessage = requested.isPermanentlyDenied
-                ? 'Camera permission is permanently denied. Please allow it in Settings to take receipt photos.'
-                : 'Camera permission is needed to take receipt photos.';
+                ? context.tr('scan_cam_perm_permanent')
+                : context.tr('scan_cam_perm_needed');
           });
           return;
         }
@@ -109,7 +177,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       );
       if (picked == null) return;
 
-      setState(() {
+      _safeSetState(() {
         _imageFiles.add(File(picked.path));
         _errorMessage = null;
         _scanResult = null;
@@ -117,15 +185,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     } on PlatformException catch (pe) {
       if (pe.code.toLowerCase().contains('camera_access_denied') ||
           (pe.message?.toLowerCase().contains('camera') ?? false)) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage =
-              'Camera access was denied by the system. Please grant Camera permission in Settings.';
+              context.tr('scan_cam_denied_by_system');
         });
       } else {
-        setState(() => _errorMessage = 'Camera error: ${pe.message ?? pe.code}');
+        _safeSetState(() => _errorMessage = context.trArgs('scan_camera_error', {'error': pe.message ?? pe.code}));
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error capturing photo: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
     }
   }
 
@@ -140,11 +208,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final ctrl = TextEditingController(text: _zatcaQrRaw ?? '');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [ctrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: Color(0xFF00C896)),
+            const Icon(Icons.qr_code_2_rounded, color: AppThemes.success),
             const SizedBox(width: 8),
             Text(context.tr('saudi_zatca_vat_qr'), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
           ],
@@ -154,7 +224,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paste or scan the Base64 QR code from your tax invoice. It automatically verifies merchant, total, and 15% VAT.',
+              context.tr('scan_paste_qr_desc'),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -163,7 +233,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               maxLines: 3,
               style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: context.textPrimary),
               decoration: InputDecoration(
-                hintText: 'e.g. AQ5UYW1pbWkgTWFya2V0cwIPMzAwMDAwMDAwMDAwMDAz...',
+                hintText: '${context.tr('example_prefix')} AQ5UYW1pbWkgTWFya2V0cwIPMzAwMDAwMDAwMDAwMDAz...',
                 hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6), fontSize: 11),
                 filled: true,
                 fillColor: context.inputBg,
@@ -180,24 +250,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.paste, size: 14, color: Color(0xFF58A6FF)),
-                  label: const Text('From Clipboard', style: TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
+                  label: Text(context.tr('from_clipboard'), style: const TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
                   onPressed: () async {
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    if (data?.text != null) {
+                    // The dialog (and its controller) may be gone by now.
+                    if (data?.text != null && ctx.mounted) {
                       ctrl.text = data!.text!.trim();
                     }
-                  },
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  icon: const Icon(Icons.receipt_long_outlined, size: 14, color: Color(0xFF00C896)),
-                  label: const Text('Sample eXtra', style: TextStyle(fontSize: 11, color: Color(0xFF00C896))),
-                  onPressed: () {
-                    ctrl.text = 'ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=';
                   },
                 ),
               ],
@@ -207,10 +266,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
             onPressed: () {
               final text = ctrl.text.trim();
               Navigator.pop(ctx);
@@ -229,6 +288,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             child: Text(context.tr('apply_qr_code'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
   }
@@ -251,17 +311,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ],
               ),
               content: Text(
-                'Camera permission is required to scan invoice QR codes.\n\nPlease tap "Open Settings" to enable Camera for Budget Tracker.',
+                context.tr('scan_qr_cam_perm_required'),
                 style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                  child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                   ),
                   onPressed: () {
@@ -269,7 +329,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     openAppSettings();
                   },
                   icon: const Icon(Icons.settings, size: 16),
-                  label: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -288,7 +348,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final decoded = ZatcaDecoder.decodeTlv(scannedCode);
       final sellerName = decoded?['seller'] as String? ?? 'Store Name';
 
-      setState(() {
+      _safeSetState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
         if (sellerName.isNotEmpty && sellerName != 'Store Name') {
@@ -301,7 +361,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _analyzeReceipt() async {
     if (_imageFiles.isEmpty && _zatcaQrRaw == null) {
-      setState(() => _errorMessage = 'Please take at least one photo or provide a ZATCA QR code.');
+      setState(() => _errorMessage = context.tr('photo_or_qr_required'));
       return;
     }
 
@@ -327,12 +387,21 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         previewOnly: true,
       );
 
-      setState(() {
+      // Offline (the request never reached the server): fall back to the
+      // ZATCA QR values or keep the photo as a pending draft.
+      if (res[BaseApiClient.networkErrorKey] == true) {
+        await _applyOfflineFallback(res['message']);
+        return;
+      }
+
+      _safeSetState(() {
         _isAnalyzing = false;
         if (res['status'] == 'error') {
-          _errorMessage = res['message'] ?? 'Failed to analyze receipt.';
+          _errorMessage = expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('scan_analyze_failed');
         } else {
           _scanResult = res;
+          _applyNafaqahPreview(res);
+          _resetReview();
           final detectedMerchant = _zatcaDecoded?['seller'] as String? ??
               res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
@@ -346,65 +415,132 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         }
       });
     } catch (e) {
-      if (_zatcaDecoded != null) {
-        final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
-        final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
-        final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
-        final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
-        if (!isDup && mounted) {
-          setState(() {
-            _isAnalyzing = false;
-            _scanResult = {
-              'status': 'preview',
-              'merchant': sellerName,
-              'amount': total,
-              'vat_amount': vat,
-              'category_code': 'OPEX-GROCERY',
-              'spent_by': _selectedSpentBy,
-              'items': [
-                {
-                  'name': 'Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
-                  'quantity': 1.0,
-                  'price': total,
-                }
-              ],
-              'zatca_verified': _zatcaDecoded,
-            };
-          });
-        }
-      } else {
-        if (_imageFiles.isNotEmpty) {
-          try {
-            final draft = await LocalOcrService.instance.extractDraft(_imageFiles.first);
-            if (mounted && draft.amount > 0) {
-              setState(() {
-                _isAnalyzing = false;
-                _merchantController.text = draft.merchant;
-                _scanResult = {
-                  'status': 'preview',
-                  'merchant': draft.merchant,
-                  'amount': draft.amount,
-                  'vat_amount': draft.vatAmount,
-                  'category_code': 'OPEX-GROCERY',
-                  'confidence': 'offline_fallback',
-                  'items': [],
-                  'is_offline_draft': true,
-                };
-              });
-              return;
-            }
-          } catch (_) {}
-        }
+      await _applyOfflineFallback(e);
+    }
+  }
+
+  /// The receipt could not be read online. A ZATCA QR still gives the seller,
+  /// total and VAT; photos alone are kept as a pending draft that the server
+  /// reads once the device is back online. Nothing is guessed (R8).
+  Future<void> _applyOfflineFallback(Object? error) async {
+    if (_zatcaDecoded != null) {
+      final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
+      final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
+      final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
+      final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
+      if (!isDup && mounted) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Scan failed: $e';
+          _scanResult = {
+            'status': 'preview',
+            'merchant': sellerName,
+            'amount': total,
+            'vat_amount': vat,
+            'category_code': 'OPEX-GROCERY',
+            'spent_by': _selectedSpentBy,
+            'items': [
+              {
+                'name': context.trArgs('scan_invoice_total_item', {'vat': context.sar(vat)}),
+                'quantity': 1.0,
+                'price': total,
+              }
+            ],
+            'zatca_verified': _zatcaDecoded,
+          };
+          _resetReview();
         });
       }
+      return;
     }
+    if (_imageFiles.isNotEmpty) {
+      _safeSetState(() {
+        _isAnalyzing = false;
+        _scanResult = {
+          'status': 'preview',
+          'items': const <Map<String, dynamic>>[],
+          'is_offline_draft': true,
+        };
+      });
+      return;
+    }
+    _safeSetState(() {
+      _isAnalyzing = false;
+      _errorMessage = context.trArgs('scan_failed_msg', {'error': error ?? ''});
+    });
+  }
+
+  /// Stores the photos (and anything the user typed) in the offline queue;
+  /// the sync worker sends them to the receipt reader when back online.
+  Future<void> _saveOfflineDraft() async {
+    if (_isAnalyzing) return;
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    setState(() {
+      _isAnalyzing = true;
+      _errorMessage = null;
+    });
+    try {
+      final List<String> base64List = [];
+      for (final file in _imageFiles) {
+        base64List.add(base64Encode(await file.readAsBytes()));
+      }
+      // MOB-28: throws when the draft could not be stored.
+      await OfflineQueueManager().enqueueOrThrow(
+        operationType: 'receipt_offline_draft',
+        householdId: widget.householdId,
+        payload: offlineReceiptDraftPayload(
+          imagesBase64: base64List,
+          merchant: _merchantController.text,
+          qrCodeRaw: _zatcaQrRaw,
+          userId: supabase.auth.currentUser?.id,
+          nafaqahFields: _nafaqahFields,
+        )..['spent_by'] = _selectedSpentBy,
+      );
+      _safeSetState(() => _isAnalyzing = false);
+      if (mounted) {
+        AppSnackBar.showSuccess(
+          context,
+          context.tr('offline_draft_notice'),
+          title: context.tr('offline_draft_badge'),
+        );
+        _notifyGlobalProviders();
+        Navigator.pop(context);
+      }
+    } catch (queueErr) {
+      debugPrint('[ReceiptScanner] Offline draft write failed: $queueErr');
+      _safeSetState(() {
+        _isAnalyzing = false;
+        _errorMessage = context.tr('offline_queue_failed');
+      });
+    }
+  }
+
+  /// Closes the scanner and opens manual entry with whatever was typed.
+  void _typeAmountManually() {
+    final merchant = _merchantController.text.trim();
+    final navigator = Navigator.of(context);
+    final rootContext = navigator.context;
+    navigator.pop();
+    ManualExpenseSheet.show(
+      rootContext,
+      householdId: widget.householdId,
+      initialMerchant: merchant.isNotEmpty ? merchant : null,
+    );
   }
 
   Future<void> _confirmSave({bool allowDuplicate = false, String? enrichTxId}) async {
     if (_isAnalyzing) return;
+    if (enrichTxId == null && !NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    final edits = enrichTxId == null ? _reviewEdits : const ReceiptReviewEdits();
+    if (edits.invalid) {
+      setState(() => _reviewAmountInvalid = true);
+      return;
+    }
     setState(() {
       _isAnalyzing = true;
       _errorMessage = null;
@@ -430,28 +566,49 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       }
       final user = supabase.auth.currentUser;
       final confirmedMerchant = _merchantController.text.trim();
+      final nafaqah = _nafaqahFields;
 
-      final res = await ApiService.instance.scanReceipt(
-        imagesBase64: base64List,
-        qrCodeRaw: _zatcaQrRaw,
-        householdId: widget.householdId,
-        userId: user?.id,
-        allowDuplicate: allowDuplicate,
-        enrichTxId: enrichTxId,
-        merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
-        spentBy: _selectedSpentBy,
-        previewOnly: false,
-        receiptUrl: uploadedReceiptUrl,
+      // The preview's token (when the server sends one) is returned
+      // unchanged; an expired token re-runs the preview once.
+      final res = await commitWithPreviewToken(
+        token: previewTokenOf(_scanResult),
+        commit: (token) => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          allowDuplicate: allowDuplicate,
+          enrichTxId: enrichTxId,
+          merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
+          spentBy: _selectedSpentBy,
+          previewOnly: false,
+          receiptUrl: uploadedReceiptUrl,
+          paidBy: nafaqah['paid_by'],
+          beneficiary: nafaqah['beneficiary'],
+          nafaqahClass: nafaqah['nafaqah_class'],
+          nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+          // The user's corrections travel with the token (UX-12).
+          amount: edits.amount,
+          categoryCode: edits.categoryCode,
+          previewToken: token,
+        ),
+        rePreview: () => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          previewOnly: true,
+        ),
       );
 
-      setState(() => _isAnalyzing = false);
+      _safeSetState(() => _isAnalyzing = false);
 
       if (mounted) {
         if (res['status'] == 'success' || res['status'] == 'enriched') {
           AppSnackBar.showSuccess(
             context,
-            res['message'] ?? 'Invoice transaction saved successfully!',
-            title: 'Invoice Saved',
+            res['message'] ?? context.tr('scan_invoice_saved_msg'),
+            title: context.tr('scan_invoice_saved'),
           );
           _notifyGlobalProviders();
           Navigator.pop(context);
@@ -459,6 +616,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           setState(() {
             _scanResult = res;
           });
+        } else if (res['status_code'] != null && !SyncWorker.shouldQueueAfterOnlineFailure(res)) {
+          // The server refused the request itself (403 enriching another
+          // member's entry, 409/422 Nafaqah choice, 400...): saving it
+          // directly would only bypass that check (FR-A-10). An unreachable
+          // or failing server, or a commit the AI could not re-read (200
+          // {"status": "error"}), falls back to the reviewed preview.
+          setState(() => _errorMessage =
+              expenseApiErrorText(context, res) ?? res['message'] as String? ?? context.tr('scan_analyze_failed'));
         } else {
           await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
         }
@@ -497,7 +662,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   'amount': total,
                   'items': _scanResult?['items'],
                   'message':
-                      "A transaction of SAR ${rowAmt.toStringAsFixed(2)} at '$merchant' was already recorded. Attach items or log as separate?",
+                      context.trArgs('scan_duplicate_found_msg', {'amount': context.sar(rowAmt), 'merchant': merchant}),
                 };
               });
             }
@@ -519,13 +684,16 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           );
         } catch (_) {}
       }
+      if (!mounted) return;
 
       final merchant = _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
           : (_zatcaDecoded?['seller'] as String? ??
               _scanResult?['merchant'] as String? ??
-              'VAT Tax Invoice');
-      final total = (_zatcaDecoded?['total'] as num?)?.toDouble() ??
+              context.tr('scan_vat_tax_invoice'));
+      final edited = _reviewEdits;
+      final total = edited.amount ??
+          (_zatcaDecoded?['total'] as num?)?.toDouble() ??
           (_scanResult?['amount'] as num?)?.toDouble() ??
           0.0;
       final vat = (_zatcaDecoded?['vat'] as num?)?.toDouble() ??
@@ -534,7 +702,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       if (!allowDuplicate && total > 0) {
         final isDup = await _checkFallbackDuplicateCandidate(merchant, total, vat);
-        if (isDup) return;
+        if (isDup || !mounted) return;
       }
 
       final dynamic rawItems = _scanResult?['items'];
@@ -542,7 +710,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
           : [
               {
-                'name': 'Tax Invoice Total (15% VAT ${vat.toStringAsFixed(2)} SAR)',
+                'name': context.trArgs('scan_tax_invoice_total_item', {'vat': context.sar(vat)}),
                 'quantity': 1.0,
                 'price': total,
               }
@@ -554,37 +722,45 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         auditText += ' | ZATCA QR: $_zatcaQrRaw';
       }
 
-      final baseData = <String, dynamic>{
+      final userId = supabase.auth.currentUser?.id;
+      final nafaqahFields = _nafaqahFields;
+      // The category the scan found (as the API would store it), never a
+      // hard-coded one (FABLE2-APP-06).
+      final categoryCode = edited.categoryCode ??
+          (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String? ??
+          'OPEX-MISC';
+      final row = <String, dynamic>{
         'household_id': widget.householdId,
+        if (userId != null) 'user_id': userId,
         'amount': total,
         'currency': 'SAR',
         'merchant': merchant,
-        'category_code': 'OPEX-GROCERY',
+        'category_code': categoryCode,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
+        'source': 'receipt_scan',
+        'items': items,
+        // Who paid and for whom in the columns the settlement engine reads,
+        // as the receipt API would store them (FABLE2-APP-06).
+        ...directInsertAttribution(
+          paidBy: nafaqahFields['paid_by'],
+          beneficiary: nafaqahFields['beneficiary'],
+          creatorId: userId,
+        ),
         if (receiptUrl != null && receiptUrl.isNotEmpty) 'receipt_url': receiptUrl,
         if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) 'qr_code_raw': _zatcaQrRaw,
+        // Losing it would erase the wife's reimbursement debt or her
+        // allowance spending.
+        ..._nafaqah.transactionColumns(
+          _nafaqahClass,
+          chosenWifeId: _nafaqahWifeId,
+          currentUserId: userId,
+        ),
       };
 
-      Map<String, dynamic> res;
-      try {
-        res = await supabase.from('transactions').insert({
-          ...baseData,
-          'source': 'receipt_scan',
-          'spent_by': _selectedSpentBy,
-          'items': items,
-        }).select().single();
-      } catch (_) {
-        try {
-          res = await supabase.from('transactions').insert({
-            ...baseData,
-            'source': 'receipt_scan',
-            'spent_by': _selectedSpentBy,
-          }).select().single();
-        } catch (_) {
-          res = await supabase.from('transactions').insert(baseData).select().single();
-        }
-      }
+      // One insert of real columns: the old cascade could store the row
+      // without its attribution.
+      final Map<String, dynamic> res = await supabase.from('transactions').insert(row).select().single();
 
       final txId = res['id'] as String?;
       if (txId != null) {
@@ -600,41 +776,55 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         }
       }
 
-      setState(() => _isAnalyzing = false);
+      _safeSetState(() => _isAnalyzing = false);
 
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          'Saved SAR ${total.toStringAsFixed(2)} at $merchant!',
-          title: 'Invoice Recorded',
+          context.trArgs('scan_saved_amount_at', {'amount': context.sar(total), 'merchant': merchant}),
+          title: context.tr('scan_invoice_recorded'),
         );
         _notifyGlobalProviders();
         Navigator.pop(context);
       }
     } catch (e) {
+      // A Nafaqah rule refused the row (no provider yet): an offline draft
+      // would be refused the same way, so explain instead.
+      final refusal = nafaqahWriteRefusalOf(e);
+      if (refusal != null) {
+        if (!mounted) return;
+        final message = nafaqahWriteRefusalText(context, refusal);
+        _safeSetState(() {
+          _isAnalyzing = false;
+          _errorMessage = message;
+        });
+        return;
+      }
       try {
         final List<String> base64List = [];
         for (final file in _imageFiles) {
           final bytes = await file.readAsBytes();
           base64List.add(base64Encode(bytes));
         }
-        await OfflineQueueManager().enqueue(
+        // MOB-28: throws when the draft could not be stored, so "Offline
+        // Draft" is never shown for a receipt that was lost.
+        await OfflineQueueManager().enqueueOrThrow(
           operationType: 'receipt_offline_draft',
           householdId: widget.householdId,
-          payload: {
-            'merchant': _merchantController.text.trim().isNotEmpty
-                ? _merchantController.text.trim()
-                : 'Merchant',
-            'amount': (_scanResult?['amount'] as num?)?.toDouble() ?? 0.0,
-            'vat_amount': (_scanResult?['vat_amount'] as num?)?.toDouble() ?? 0.0,
-            'category_code': _scanResult?['category_code'] ?? 'OPEX-GROCERY',
-            'images_base64': base64List,
-            'qr_code_raw': _zatcaQrRaw,
-            'user_id': supabase.auth.currentUser?.id,
-            'needs_cloud_enrichment': true,
-          },
+          payload: offlineReceiptDraftPayload(
+            imagesBase64: base64List,
+            merchant: _merchantController.text,
+            amount: (_scanResult?['amount'] as num?)?.toDouble(),
+            qrCodeRaw: _zatcaQrRaw,
+            userId: supabase.auth.currentUser?.id,
+            nafaqahFields: _nafaqahFields,
+          )
+            ..addAll({
+              if ((_scanResult?['vat_amount'] as num?) != null) 'vat_amount': _scanResult!['vat_amount'],
+              if (_scanResult?['category_code'] != null) 'category_code': _scanResult!['category_code'],
+            }),
         );
-        setState(() => _isAnalyzing = false);
+        _safeSetState(() => _isAnalyzing = false);
         if (mounted) {
           AppSnackBar.showSuccess(
             context,
@@ -645,11 +835,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           Navigator.pop(context);
         }
         return;
+      } on OfflineQueueWriteException catch (queueErr) {
+        debugPrint('[ReceiptScanner] Offline draft write failed: $queueErr');
+        _safeSetState(() {
+          _isAnalyzing = false;
+          _errorMessage = context.tr('offline_queue_failed');
+        });
+        return;
       } catch (_) {}
 
-      setState(() {
+      _safeSetState(() {
         _isAnalyzing = false;
-        _errorMessage = 'Could not save invoice: $e';
+        _errorMessage = context.trArgs('scan_save_failed_msg', {'error': e});
       });
     }
   }
@@ -681,11 +878,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.document_scanner_outlined, color: Color(0xFF00C896), size: 24),
+                const Icon(Icons.document_scanner_outlined, color: AppThemes.success, size: 24),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Scan Invoice & Long Receipts',
+                    context.tr('scan_invoice_title'),
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -697,7 +894,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'For long 60+ item receipts, snap multiple photos (top, middle, bottom). You can also scan the ZATCA VAT QR code.',
+              context.tr('scan_invoice_desc'),
               style: GoogleFonts.outfit(fontSize: 13, color: context.textSecondary),
             ),
             const SizedBox(height: 16),
@@ -705,7 +902,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             // ── ZATCA QR Status Badge ──
             if (_zatcaDecoded != null)
               ZatcaStatusBadge(
-                seller: _zatcaDecoded!['seller'] ?? 'Merchant',
+                seller: _zatcaDecoded!['seller'] ?? context.tr('merchant_generic'),
                 total: (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0,
                 vat: (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0,
                 onDismiss: () => setState(() {
@@ -740,7 +937,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                             ),
                           ),
                           Text(
-                            context.tr('offline_draft_notice'),
+                            context.tr('offline_receipt_pending_notice'),
                             style: TextStyle(
                               fontSize: 11,
                               color: context.textSecondary,
@@ -768,7 +965,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -804,7 +1001,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -848,9 +1045,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                    label: const Text(
-                      '📸 Snap Receipt Photo to Extract Items',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    label: Text(
+                      context.tr('scan_snap_to_extract'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     onPressed: _isAnalyzing ? null : () async {
                       await _addPhoto(ImageSource.camera);
@@ -867,7 +1064,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     ),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
                     label: Text(
-                      'Save Total Only (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'}) without items',
+                      context.trArgs('scan_save_total_only', {'amount': context.sar((_zatcaDecoded!['total'] as num?) ?? 0)}),
                       style: const TextStyle(fontSize: 12),
                     ),
                     onPressed: _isAnalyzing ? null : () => _confirmSave(allowDuplicate: false),
@@ -875,14 +1072,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 ] else ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.auto_awesome, size: 20),
                     label: Text(
-                      'Extract Items with AI & Verify (SAR ${(_zatcaDecoded!['total'] as num?)?.toStringAsFixed(2) ?? '0.00'})',
+                      context.trArgs('scan_extract_and_verify', {'amount': context.sar((_zatcaDecoded!['total'] as num?) ?? 0)}),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     onPressed: _isAnalyzing ? null : _analyzeReceipt,
@@ -899,7 +1096,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   ),
                   icon: const Icon(Icons.auto_awesome),
                   label: Text(
-                    'Extract Items from ${_imageFiles.length} Photo(s) with AI',
+                    context.trArgs('scan_extract_from_photos', {'count': _imageFiles.length}),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   onPressed: _analyzeReceipt,
@@ -915,15 +1112,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 alignment: Alignment.center,
                 child: Column(
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFF00C896)),
+                    const CircularProgressIndicator(color: AppThemes.success),
                     const SizedBox(height: 16),
                     Text(
-                      'AI Scanning Long Receipt...',
+                      context.tr('scan_ai_scanning'),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: context.textPrimary, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Reading all line items item-by-item across ${_imageFiles.length} photo(s)',
+                      context.trPlural('scan_reading_items', _imageFiles.length),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
                     ),
@@ -965,13 +1162,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                           Expanded(
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               icon: const Icon(Icons.settings, size: 16),
-                              label: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                               onPressed: () => openAppSettings(),
                             ),
                           ),
@@ -985,7 +1182,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Try Again', style: TextStyle(fontSize: 12)),
+                              label: Text(context.tr('try_again'), style: const TextStyle(fontSize: 12)),
                               onPressed: () => _addPhoto(ImageSource.camera),
                             ),
                           ),
@@ -1017,7 +1214,66 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
   }
 
+  /// A photo captured offline: no merchant or amount is shown because none
+  /// was read; the user saves it for later or types the amount instead.
+  Widget _buildOfflineDraftContent() {
+    return Column(
+      key: const ValueKey('receipt_offline_draft'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        StoreAttributionCard(
+          merchantController: _merchantController,
+          selectedSpentBy: _selectedSpentBy,
+          onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+          showSpentBy: !_nafaqah.isFamily,
+        ),
+        if (_nafaqah.canClassify) ...[
+          NafaqahReviewSection(
+            key: const ValueKey('receipt_nafaqah_review'),
+            preview: _nafaqah,
+            value: _nafaqahClass,
+            wifeId: _nafaqahWifeId,
+            showWifeRequired: _showWifeRequired,
+            onChanged: (cls) => setState(() => _nafaqahClass = cls),
+            onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+          ),
+          const SizedBox(height: 12),
+        ],
+        ElevatedButton.icon(
+          key: const ValueKey('receipt_offline_save_later'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppThemes.success,
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+          label: Text(
+            context.tr('offline_receipt_save_later'),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          onPressed: _saveOfflineDraft,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          key: const ValueKey('receipt_offline_type_amount'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: context.textPrimary,
+            side: BorderSide(color: context.borderColor),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: const Icon(Icons.edit_note_rounded, size: 20),
+          label: Text(context.tr('offline_receipt_type_amount')),
+          onPressed: _typeAmountManually,
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _buildResultContent() {
+    if (_scanResult!['is_offline_draft'] == true) return _buildOfflineDraftContent();
     final status = _scanResult!['status'] as String? ?? '';
     final isCandidate = status == 'duplicate_candidate';
     final isSuccess = status == 'success' || status == 'enriched';
@@ -1025,7 +1281,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final merchant = _zatcaDecoded?['seller'] as String? ??
         _scanResult!['merchant'] ??
         _scanResult!['parsed_data']?['merchant'] ??
-        'Merchant';
+        context.tr('merchant_generic');
 
     final num amountNum = (_zatcaDecoded?['total'] as num?) ??
         (_scanResult!['amount'] ??
@@ -1050,26 +1306,26 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF00C896).withValues(alpha: 0.15),
+              color: AppThemes.success.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF00C896)),
+              border: Border.all(color: AppThemes.success),
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF00C896), size: 28),
+                const Icon(Icons.check_circle_rounded, color: AppThemes.success, size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Invoice Saved Successfully!',
+                        context.tr('scan_saved_success_title'),
                         style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${items.length} items logged under $merchant (SAR ${amount.toStringAsFixed(2)})${isZatcaVerified ? ' • ZATCA Verified' : ''}',
-                        style: const TextStyle(color: Color(0xFF00C896), fontSize: 12),
+                        '${context.trPlural('scan_items_logged', items.length, {'merchant': merchant, 'amount': context.sar(amount)})}${isZatcaVerified ? ' • ${context.tr('scan_zatca_verified')}' : ''}',
+                        style: TextStyle(color: context.successText, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1082,7 +1338,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
         if (isCandidate) ...[
           DuplicateCandidateCard(
-            message: _scanResult!['message'] ?? 'An identical amount was recorded recently.',
+            message: _scanResult!['message'] ?? context.tr('scan_identical_recent'),
             itemCount: items.length,
             onEnrich: () {
               final cId = _scanResult!['candidate_transaction_id'];
@@ -1093,8 +1349,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               Navigator.of(context).pop();
               AppSnackBar.showInfo(
                 context,
-                'Duplicate receipt scan discarded.',
-                title: 'Scan Discarded',
+                context.tr('scan_duplicate_discarded'),
+                title: context.tr('scan_discarded'),
                 icon: Icons.delete_sweep_outlined,
               );
             },
@@ -1106,16 +1362,38 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             seller: merchant,
             total: amount,
             vat: (_zatcaDecoded?['vat'] as num?)?.toDouble() ?? (amount * 0.15 / 1.15),
-            customSubtitle: 'Total: SAR ${amount.toStringAsFixed(2)}  •  ${items.length} items extracted with AI',
+            customSubtitle: context.trArgs('scan_total_items_extracted', {'amount': context.sar(amount), 'count': items.length}),
           ),
         ],
+
+        if (!isSuccess && !isCandidate && _reviewCategory != null)
+          ReceiptReviewEditor(
+            amountController: _reviewAmountCtrl,
+            categoryCode: _reviewCategory!,
+            amountInvalid: _reviewAmountInvalid,
+            onAmountChanged: () => setState(() => _reviewAmountInvalid = false),
+            onCategoryChanged: (c) => setState(() => _reviewCategory = c),
+          ),
 
         if (!isSuccess) ...[
           StoreAttributionCard(
             merchantController: _merchantController,
             selectedSpentBy: _selectedSpentBy,
             onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+            showSpentBy: !_nafaqah.isFamily,
           ),
+          if (_nafaqah.canClassify) ...[
+            NafaqahReviewSection(
+              key: const ValueKey('receipt_nafaqah_review'),
+              preview: _nafaqah,
+              value: _nafaqahClass,
+              wifeId: _nafaqahWifeId,
+              showWifeRequired: _showWifeRequired,
+              onChanged: (cls) => setState(() => _nafaqahClass = cls),
+              onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (!isCandidate && isZatcaVerified && _imageFiles.isEmpty) ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -1125,9 +1403,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: const Icon(Icons.camera_alt_rounded, size: 18),
-              label: const Text(
-                '📸 Snap Receipt Photo to Extract Items with AI',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              label: Text(
+                context.tr('scan_snap_to_extract_ai'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               onPressed: () async {
                 await _addPhoto(ImageSource.camera);
@@ -1144,10 +1422,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           merchant: _merchantController.text.trim().isNotEmpty
               ? _merchantController.text.trim()
               : merchant,
-          amount: amount,
-          categoryCode: categoryCode,
+          amount: isSuccess ? amount : (_reviewEdits.amount ?? amount),
+          categoryCode: isSuccess ? categoryCode : (_reviewEdits.categoryCode ?? categoryCode),
           source: 'receipt_scan',
           spentBy: _selectedSpentBy,
+          // Family: what the Nafaqah choice makes of it, not "shared" (UX-04).
+          attributionBadge: _nafaqah.isFamily
+              ? NafaqahFeedBadge(
+                  kind: nafaqahBadgeKindForClass(_nafaqahClass),
+                  wifeName: _nafaqah.wifeNameFor(_nafaqahWifeId),
+                  viewerIsWife: _nafaqah.viewerIsWife,
+                )
+              : null,
           items: items,
           initiallyExpanded: true,
         ),
@@ -1156,15 +1442,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         if (isSuccess) ...[
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: const Icon(Icons.check_circle_outline, size: 20),
-            label: const Text(
-              'Done / View in Dashboard',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            label: Text(
+              context.tr('scan_done_view_dashboard'),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => Navigator.pop(context, true),
           ),
@@ -1172,14 +1458,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         ] else if (!isCandidate) ...[
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
             label: Text(
-              'Confirm & Save ${items.length} Items (SAR ${amount.toStringAsFixed(2)})',
+              context.trPlural('scan_confirm_save_items', items.length, {'amount': context.sar(_reviewEdits.amount ?? amount)}),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => _confirmSave(allowDuplicate: false),
@@ -1195,8 +1481,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _zatcaQrRaw = null;
             _zatcaDecoded = null;
             _scanResult = null;
+            _applyNafaqahPreview(null);
           }),
-          label: Text('Scan Another Receipt', style: TextStyle(color: context.textSecondary)),
+          label: Text(context.tr('scan_another_receipt'), style: TextStyle(color: context.textSecondary)),
         ),
         const SizedBox(height: 16),
       ],

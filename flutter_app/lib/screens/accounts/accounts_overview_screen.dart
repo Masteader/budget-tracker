@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -12,6 +11,7 @@ import '../../widgets/accounts/account_card.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../../widgets/accounts/add_edit_account_dialog.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Screen displaying all user accounts, live balances, budget capacity statuses, and quick transfers.
 class AccountsOverviewScreen extends StatefulWidget {
@@ -77,12 +77,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   String get _currentCycleKey {
-    final now = DateTime.now();
-    if (now.day >= 27) {
-      final next = DateTime(now.year, now.month + 1, 1);
-      return DateFormat('yyyy-MM').format(next);
-    }
-    return DateFormat('yyyy-MM').format(now);
+    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
   Future<void> _loadCommittedBudgets() async {
@@ -127,7 +122,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
-    final fmt = NumberFormat('#,##0.00');
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -141,7 +135,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         actions: [
           IconButton(
             icon: Icon(_hideBalances ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-            tooltip: _hideBalances ? 'Show' : 'Hide',
+            tooltip: _hideBalances ? context.tr('show_balances') : context.tr('hide_balances'),
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
@@ -157,11 +151,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           ),
         ],
       ),
-      body: _buildBody(context, fmt, isDark),
+      body: _buildBody(context, isDark),
     );
   }
 
-  Widget _buildBody(BuildContext context, NumberFormat fmt, bool isDark) {
+  Widget _buildBody(BuildContext context, bool isDark) {
     if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
       return Center(
         child: CircularProgressIndicator(
@@ -258,11 +252,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     gradient: context.icedHeroGradient,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: const Color(0xFF00E5BF).withValues(alpha: isDark ? 0.3 : 0.5),
+                      color: AppThemes.electricTeal.withValues(alpha: isDark ? 0.3 : 0.5),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isDark ? Colors.black.withValues(alpha: 0.3) : const Color(0xFF00E5BF).withValues(alpha: 0.1),
+                        color: isDark ? Colors.black.withValues(alpha: 0.3) : AppThemes.electricTeal.withValues(alpha: 0.1),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -277,7 +271,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                           Text(
                             context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
-                              color: isDark ? const Color(0xFF00E5BF) : const Color(0xFF008F7A),
+                              color: context.heroCaption,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.1,
@@ -287,7 +281,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: deficitCount == 0
-                                  ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                  ? AppThemes.success.withValues(alpha: 0.15)
                                   : Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -296,17 +290,17 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 Icon(
                                   deficitCount == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                                   size: 13,
-                                  color: deficitCount == 0 ? const Color(0xFF00C896) : Colors.redAccent,
+                                  color: deficitCount == 0 ? AppThemes.success : Colors.redAccent,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   deficitCount == 0
-                                      ? 'Funded'
+                                      ? context.tr('funded')
                                       : '$deficitCount ${context.tr("deficit_label")}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: deficitCount == 0 ? const Color(0xFF00C896) : Colors.redAccent,
+                                    color: context.heroText,
                                   ),
                                 ),
                               ],
@@ -316,9 +310,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _hideBalances ? '••••••••' : 'SAR ${fmt.format(totalNetSAR)}',
+                        _hideBalances ? '••••••••' : context.sar(totalNetSAR),
                         style: GoogleFonts.outfit(
-                          color: context.textPrimary,
+                          color: context.heroText,
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),
@@ -339,8 +333,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.savings_rounded, size: 16),
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
-                                foregroundColor: const Color(0xFF051424),
+                                backgroundColor: AppThemes.success,
+                                foregroundColor: AppThemes.brandDarkBg,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
@@ -359,8 +353,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                               label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00E5BF),
-                                foregroundColor: const Color(0xFF051424),
+                                backgroundColor: AppThemes.electricTeal,
+                                foregroundColor: AppThemes.brandDarkBg,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
@@ -414,7 +408,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
   Widget _buildSectionHeader(String title, int count) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      padding: const EdgeInsetsDirectional.only(bottom: 8, start: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

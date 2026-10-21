@@ -11,6 +11,8 @@ import '../providers/budget_provider.dart';
 import '../providers/recurring_bills_provider.dart';
 import '../services/api_service.dart';
 import 'app_snackbar.dart';
+import 'dispose_on_unmount.dart';
+import '../models/money.dart';
 
 class SubBudgetAllocationDialog extends StatefulWidget {
   final String householdId;
@@ -74,7 +76,6 @@ class _SubCategoryItemDef {
 }
 
 class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
-  final NumberFormat _currencyFmt = NumberFormat('#,##0.00', 'en_US');
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
@@ -110,11 +111,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     double sum = 0.0;
     if (_subItems.isNotEmpty) {
       for (final item in _subItems) {
-        final val = double.tryParse(item.controller.text.trim()) ?? 0.0;
+        final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
         sum += val;
       }
     } else {
-      sum = double.tryParse(_fallbackParentController.text.trim()) ?? 0.0;
+      sum = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
     }
     setState(() {
       _totalSum = sum;
@@ -265,14 +266,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         );
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _subItems.clear();
-          _subItems.addAll(list);
-          _isLoading = false;
-        });
-        _recomputeTotal();
-      }
+      _replaceSubItems(list);
     } catch (e) {
       final defaultList = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
@@ -295,15 +289,35 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         );
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _subItems.clear();
-          _subItems.addAll(list);
-          _isLoading = false;
-        });
-        _recomputeTotal();
-      }
+      _replaceSubItems(list);
     }
+  }
+
+  /// Swaps in a freshly loaded list (UI-20). The replaced controllers are
+  /// disposed after the next frame, once their TextFields use the new ones;
+  /// if the dialog is already gone, the new controllers are disposed instead.
+  void _replaceSubItems(List<_SubCategoryItemDef> list) {
+    if (!mounted) {
+      for (final item in list) {
+        item.controller.dispose();
+      }
+      return;
+    }
+    final replaced = List<_SubCategoryItemDef>.of(_subItems);
+    setState(() {
+      _subItems
+        ..clear()
+        ..addAll(list);
+      _isLoading = false;
+    });
+    _recomputeTotal();
+    if (replaced.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final item in replaced) {
+        item.controller.removeListener(_recomputeTotal);
+        item.controller.dispose();
+      }
+    });
   }
 
   Future<void> _promptAddSubCategory() async {
@@ -312,11 +326,13 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
     final res = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl, amountCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Add Sub-Category for ${widget.categoryName}',
+          context.trArgs('sba_add_sub_for', {'category': widget.categoryName}),
           style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Column(
@@ -325,9 +341,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             TextField(
               controller: nameCtrl,
               style: TextStyle(color: context.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Sub-Category Name',
-                hintText: 'e.g. Fiber Internet, Specialty Coffee',
+              decoration: InputDecoration(
+                labelText: context.tr('sub_category_name'),
+                hintText: context.tr('sba_name_hint'),
               ),
             ),
             const SizedBox(height: 12),
@@ -335,9 +351,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               controller: amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: TextStyle(color: context.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Initial Allocation',
-                prefixText: 'SAR ',
+              decoration: InputDecoration(
+                labelText: context.tr('initial_allocation'),
+                prefixText: '${context.tr('sar')} ',
               ),
             ),
           ],
@@ -345,21 +361,24 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C896), foregroundColor: Colors.black),
-            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
+            child: Text(context.tr('add'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
+      ),
     );
 
+    // Read synchronously after the pop; the controllers are disposed only
+    // when the dialog's exit animation has finished.
     if (res != true) return;
     final name = nameCtrl.text.trim();
     if (name.isEmpty) return;
-    final amount = double.tryParse(amountCtrl.text) ?? 0.0;
+    final amount = parseMoneyInput(amountCtrl.text) ?? 0.0;
     final slug = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-').toLowerCase();
     final subCode = 'sub-$slug';
 
@@ -396,11 +415,13 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     final res = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Rename Sub-Category',
+          context.tr('rename_sub_category'),
           style: GoogleFonts.inter(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Column(
@@ -408,7 +429,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Code: ${item.subCode}',
+              context.trArgs('sba_code', {'code': item.subCode}),
               style: GoogleFonts.inter(color: context.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 12),
@@ -417,8 +438,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               autofocus: true,
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Sub-Category Name',
-                hintText: 'Enter new name',
+                labelText: context.tr('sub_category_name'),
+                hintText: context.tr('sba_enter_new_name'),
                 labelStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
@@ -428,7 +449,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF00C896)),
+                  borderSide: const BorderSide(color: AppThemes.success),
                 ),
               ),
             ),
@@ -437,17 +458,18 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Rename', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('sba_rename'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
       ),
     );
 
@@ -462,6 +484,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         nameEn: newName,
       );
 
+      if (!mounted) return;
       if (resp['status'] == 'success') {
         setState(() {
           item.nameEn = newName;
@@ -470,8 +493,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         if (mounted) {
           AppSnackBar.showSuccess(
             context,
-            'Sub-category renamed to "$newName".',
-            title: 'Renamed',
+            context.trArgs('sba_renamed_to', {'name': newName}),
+            title: context.tr('sba_renamed'),
             duration: const Duration(seconds: 2),
           );
         }
@@ -479,8 +502,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to rename: ${resp['message']}',
-            title: 'Rename Failed',
+            context.trArgs('sba_rename_failed_msg', {'error': resp['message']}),
+            title: context.tr('sba_rename_failed'),
           );
         }
       }
@@ -488,8 +511,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Error renaming: $e',
-          title: 'Rename Error',
+          context.trArgs('sba_rename_failed_msg', {'error': e}),
+          title: context.tr('sba_rename_error'),
         );
       }
     }
@@ -503,17 +526,17 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Remove Sub-Category?',
+          context.tr('sba_remove_title'),
           style: GoogleFonts.inter(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Text(
-          'Are you sure you want to remove "${item.nameEn}"?\n\nThis will remove its allocation from the ${widget.categoryName} budget.',
-          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
+          context.trArgs('sba_remove_confirm', {'name': context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn), 'category': widget.categoryName}),
+          style: GoogleFonts.inter(color: context.textSecondary, fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -521,13 +544,13 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(context.tr('set_remove'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     try {
       final resp = await ApiService.instance.removeSubCategory(
@@ -537,6 +560,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         cycleKey: widget.cycleKey,
       );
 
+      if (!mounted) return;
       if (resp['status'] == 'success') {
         setState(() {
           item.controller.removeListener(_recomputeTotal);
@@ -548,8 +572,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         if (mounted) {
           AppSnackBar.showDelete(
             context,
-            'Removed "${item.nameEn}" from budget.',
-            title: 'Sub-Category Removed',
+            context.trArgs('sba_removed_from_budget', {'name': context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn)}),
+            title: context.tr('sba_removed_title'),
             duration: const Duration(seconds: 3),
           );
         }
@@ -557,8 +581,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         if (mounted) {
           AppSnackBar.showError(
             context,
-            'Failed to remove: ${resp['message']}',
-            title: 'Remove Failed',
+            context.trArgs('sba_remove_failed_msg', {'error': resp['message']}),
+            title: context.tr('sba_remove_failed'),
           );
         }
       }
@@ -566,8 +590,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (mounted) {
         AppSnackBar.showError(
           context,
-          'Error removing: $e',
-          title: 'Remove Error',
+          context.trArgs('sba_remove_failed_msg', {'error': e}),
+          title: context.tr('sba_remove_error'),
         );
       }
     }
@@ -583,7 +607,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       if (_subItems.isNotEmpty) {
         final allocMap = <String, double>{};
         for (final item in _subItems) {
-          final val = double.tryParse(item.controller.text.trim()) ?? 0.0;
+          final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
           allocMap[item.subCode] = val;
         }
 
@@ -599,7 +623,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         }
       } else {
         // Fallback for single category without sub-categories
-        final amount = double.tryParse(_fallbackParentController.text.trim()) ?? 0.0;
+        final amount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
         final cycleKey = widget.cycleKey ?? DateFormat('yyyy-MM').format(DateTime.now());
         final monthStr = '$cycleKey-01';
 
@@ -647,8 +671,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         Navigator.pop(context, true);
         AppSnackBar.showSuccess(
           context,
-          '${widget.categoryName} budget saved (SAR ${_currencyFmt.format(_totalSum)})',
-          title: 'Budget Saved',
+          context.trArgs('sba_budget_saved_msg', {'category': widget.categoryName, 'amount': context.sar(_totalSum)}),
+          title: context.tr('sba_budget_saved'),
         );
       }
     } catch (e) {
@@ -710,7 +734,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${widget.categoryCode} • ${context.tr('cycle')} ${widget.cycleKey ?? "Current"}',
+                          '${context.trCat(widget.categoryCode)} • ${widget.cycleKey != null ? context.cycleLabel(widget.cycleKey!) : context.tr('sba_current')}',
                           style: GoogleFonts.inter(
                             color: context.textSecondary,
                             fontSize: 12,
@@ -720,6 +744,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     onPressed: () => Navigator.pop(context),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   ),
@@ -742,7 +767,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                   ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.4),
+                    color: AppThemes.success.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
@@ -754,7 +779,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           Text(
                             context.tr('total_main_category_budget'),
                             style: GoogleFonts.inter(
-                              color: const Color(0xFF00C896),
+                              color: context.successText,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
@@ -775,13 +800,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                     Flexible(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
+                        alignment: AlignmentDirectional.centerEnd,
                         child: Text(
-                          context.isRtl
-                              ? '${_currencyFmt.format(_totalSum)} ر.س'
-                              : 'SAR ${_currencyFmt.format(_totalSum)}',
+                          context.sar(_totalSum),
                           style: GoogleFonts.inter(
-                            color: Colors.white,
+                            color: context.textPrimary,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
@@ -824,7 +847,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF00C896)),
+                      child: CircularProgressIndicator(color: AppThemes.success),
                     )
                   : _subItems.isEmpty
                       ? SingleChildScrollView(
@@ -833,19 +856,19 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Allocate Budget for ${widget.categoryName}:',
-                                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                context.trArgs('sba_allocate_for', {'category': widget.categoryName}),
+                                style: TextStyle(color: context.textSecondary, fontSize: 14),
                               ),
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _fallbackParentController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                style: const TextStyle(color: Colors.white, fontSize: 16),
+                                style: TextStyle(color: context.textPrimary, fontSize: 16),
                                 decoration: InputDecoration(
                                   hintText: '0.00',
-                                  prefixText: 'SAR ',
-                                  prefixStyle: const TextStyle(
-                                    color: Color(0xFF00C896),
+                                  prefixText: '${context.tr('sar')} ',
+                                  prefixStyle: TextStyle(
+                                    color: context.successText,
                                     fontWeight: FontWeight.bold,
                                   ),
                                   filled: true,
@@ -856,7 +879,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: Color(0xFF00C896)),
+                                    borderSide: const BorderSide(color: AppThemes.success),
                                   ),
                                 ),
                               ),
@@ -871,10 +894,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                             if (i == _subItems.length) {
                               return OutlinedButton.icon(
                                 onPressed: _promptAddSubCategory,
-                                icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF00C896)),
+                                icon: const Icon(Icons.add_rounded, size: 18, color: AppThemes.success),
                                 label: Text(
                                   context.tr('add_custom_sub_category'),
-                                  style: const TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: context.successText, fontSize: 13, fontWeight: FontWeight.bold),
                                 ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -952,9 +975,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                       decoration: InputDecoration(
                                         hintText: '0.00',
                                         hintStyle: const TextStyle(color: Color(0xFF484F58), fontSize: 13),
-                                        prefixText: 'SAR ',
-                                        prefixStyle: const TextStyle(
-                                          color: Color(0xFF00C896),
+                                        prefixText: '${context.tr('sar')} ',
+                                        prefixStyle: TextStyle(
+                                          color: context.successText,
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -971,7 +994,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
-                                          borderSide: const BorderSide(color: Color(0xFF00C896)),
+                                          borderSide: const BorderSide(color: AppThemes.success),
                                         ),
                                       ),
                                     ),
@@ -1012,7 +1035,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1027,9 +1050,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           : FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                context.isRtl
-                                    ? '${context.tr('save')} ${_currencyFmt.format(_totalSum)} ر.س'
-                                    : '${context.tr('save')} SAR ${_currencyFmt.format(_totalSum)}',
+                                '${context.tr('save')} ${context.sar(_totalSum)}',
                                 style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                             ),

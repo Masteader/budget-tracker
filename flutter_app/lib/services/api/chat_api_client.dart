@@ -1,4 +1,5 @@
 import 'base_api_client.dart';
+import 'preview_token.dart';
 
 class ChatApiClient {
   final BaseApiClient baseClient;
@@ -19,6 +20,12 @@ class ChatApiClient {
     String? subCategory,
     String? paidBy,
     String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    String? idempotencyKey,
+    DateTime? occurredAt,
+    String? previewToken,
+    double? amount,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
@@ -33,31 +40,25 @@ class ChatApiClient {
       if (subCategory != null && subCategory.trim().isNotEmpty) 'sub_category': subCategory.trim(),
       if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
       if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
+      if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
+      if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
+      if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      // The amount the user corrected in the confirmation card (UX-12).
+      if (amount != null) 'amount': amount,
+      // Sent back unchanged from the preview (see preview_token.dart).
+      if (previewToken != null && previewToken.isNotEmpty) previewTokenField: previewToken,
     };
 
-    final res = await baseClient.post('/agent/chat-transaction', payload, shouldSign: true);
+    final res = await baseClient.post(
+      '/agent/chat-transaction',
+      payload,
+      shouldSign: true,
+      extraHeaders: idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
+    );
     if (res['status'] == 'error' && (res['message'] as String? ?? '').contains('Failed to connect')) {
       return fallbackDirectCloudChat(message, householdId);
     }
     return res;
-  }
-
-  Future<Map<String, dynamic>> simulatePurchase({
-    required String message,
-    required String householdId,
-    double? customAmount,
-    String? customCategory,
-  }) async {
-    return baseClient.post(
-      '/agent/simulate-purchase',
-      {
-        'message': message,
-        'household_id': householdId,
-        if (customAmount != null) 'amount': customAmount,
-        if (customCategory != null) 'category_code': customCategory,
-      },
-      shouldSign: true,
-    );
   }
 
   Map<String, dynamic> fallbackDirectCloudChat(String message, String householdId) {

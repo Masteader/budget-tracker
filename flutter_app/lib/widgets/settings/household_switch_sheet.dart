@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_membership.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
+import '../../providers/installment_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
@@ -92,6 +95,16 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
         try {
           context.read<BudgetProvider>().init(householdId);
         } catch (_) {}
+        try {
+          context.read<HouseholdRoleProvider>().load(householdId);
+        } catch (_) {}
+        // Bills and plans of the new household (reminders reschedule from them).
+        try {
+          context.read<RecurringBillsProvider>().init(householdId);
+        } catch (_) {}
+        try {
+          context.read<InstallmentProvider>().init(householdId);
+        } catch (_) {}
 
         AppSnackBar.showSuccess(
           context,
@@ -104,7 +117,7 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
       }
     } catch (e) {
       if (mounted) {
-        AppSnackBar.showError(context, e.toString(), title: 'Switch Failed');
+        AppSnackBar.showError(context, e.toString(), title: context.tr('hss_failed'));
       }
     } finally {
       if (mounted) setState(() => _switchingToId = null);
@@ -117,7 +130,7 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
       return Container(
         height: 260,
         alignment: Alignment.center,
-        child: const CircularProgressIndicator(color: Color(0xFF00C896)),
+        child: const CircularProgressIndicator(color: AppThemes.success),
       );
     }
 
@@ -185,10 +198,10 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: AppThemes.success.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF00C896), size: 22),
+                  child: const Icon(Icons.swap_horiz_rounded, color: AppThemes.success, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -232,12 +245,12 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: isActive
-                            ? const Color(0xFF00C896).withValues(alpha: 0.08)
+                            ? AppThemes.success.withValues(alpha: 0.08)
                             : context.cardBg,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isActive
-                              ? const Color(0xFF00C896)
+                              ? AppThemes.success
                               : context.borderColor,
                           width: isActive ? 1.4 : 1.0,
                         ),
@@ -246,7 +259,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                         children: [
                           Icon(
                             isActive ? Icons.radio_button_checked : Icons.radio_button_off,
-                            color: isActive ? const Color(0xFF00C896) : context.textSecondary,
+                            color: isActive ? AppThemes.success : context.textSecondary,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -272,20 +285,20 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: m.isAdmin
-                                            ? const Color(0xFF00C896).withValues(alpha: 0.15)
+                                            ? AppThemes.success.withValues(alpha: 0.15)
                                             : const Color(0xFF58A6FF).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: m.isAdmin ? const Color(0xFF00C896) : const Color(0xFF58A6FF),
+                                          color: m.isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
                                           width: 0.6,
                                         ),
                                       ),
                                       child: Text(
-                                        m.isAdmin ? 'Admin' : 'Member',
+                                        m.isAdmin ? context.tr('admin') : context.tr('member'),
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: m.isAdmin ? const Color(0xFF00C896) : const Color(0xFF58A6FF),
+                                          color: m.isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
                                         ),
                                       ),
                                     ),
@@ -293,7 +306,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                 ),
                                 if (m.inviteCode.isNotEmpty)
                                   Text(
-                                    'Code: ${m.inviteCode}',
+                                    context.trArgs('sba_code', {'code': m.inviteCode}),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.textSecondary,
@@ -307,13 +320,13 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF00C896).withValues(alpha: 0.2),
+                                color: AppThemes.success.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 context.tr('active_badge'),
-                                style: const TextStyle(
-                                  color: Color(0xFF00C896),
+                                style: TextStyle(
+                                  color: context.successText,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -323,7 +336,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                             const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                             ),
                         ],
                       ),
@@ -356,7 +369,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C896),
+                      backgroundColor: AppThemes.success,
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

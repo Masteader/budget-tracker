@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/recurring_bill.dart';
 import '../../models/installment_plan.dart';
@@ -21,7 +19,9 @@ class BudgetApiClient {
       params['as_of_date'] = asOfDate;
     }
     final res = await baseClient.get('/budgets/recurring-bills', queryParams: params);
-    return RecurringBillsSummary.fromMap(res);
+    // UX-01: a failed request is an error, never an empty bill list (which
+    // showed the first-time set-up to a household that has bills).
+    return RecurringBillsSummary.fromMap(ApiRequestException.check(res));
   }
 
   Future<List<RecurringBillCandidate>> fetchRecurringBillCandidates({
@@ -45,7 +45,8 @@ class BudgetApiClient {
     int? dueDay,
     String? customName,
   }) async {
-    await baseClient.post(
+    // A refusal (422: unknown sub_code) throws, so the switch is turned back.
+    final res = await baseClient.post(
       '/budgets/recurring-bills/toggle',
       {
         'household_id': householdId,
@@ -56,6 +57,7 @@ class BudgetApiClient {
         if (customName != null) 'custom_name': customName,
       },
     );
+    ApiRequestException.check(res);
   }
 
   Future<Map<String, dynamic>> fetchSalaryCycleForecast({
@@ -172,7 +174,8 @@ class BudgetApiClient {
       '/households/$householdId/settlement-v2',
       queryParams: params,
     );
-    return SettlementV2Summary.fromMap(res);
+    // UX-01: an error map parsed as a "standard" summary hid the roommate card.
+    return SettlementV2Summary.fromMap(ApiRequestException.check(res));
   }
 
   Future<HouseholdInvite> createRoleInvite({
@@ -187,15 +190,15 @@ class BudgetApiClient {
         if (targetMemberId != null && targetMemberId.isNotEmpty) 'target_member_id': targetMemberId,
       },
     );
-    if (res['invite_code'] != null) {
-      return HouseholdInvite.fromMap(res);
+    // FR-A-11: never invent a code locally; a code the server did not store
+    // can never be redeemed. A refusal (403: admins only) or a network
+    // failure throws [ApiRequestException].
+    ApiRequestException.check(res);
+    final code = res['invite_code'];
+    if (code is! String || code.isEmpty) {
+      throw const ApiRequestException('The server did not return an invite code.');
     }
-    return HouseholdInvite(
-      householdId: householdId,
-      inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
-      role: role,
-      targetMemberId: targetMemberId,
-    );
+    return HouseholdInvite.fromMap(res);
   }
 
   Future<HouseholdInvite> inspectInviteCode({
@@ -330,11 +333,30 @@ class BudgetApiClient {
     return res;
   }
 
-  String getStatementPdfUrl(String householdId, {String? cycleKey}) {
-    final query = cycleKey != null && cycleKey.isNotEmpty
-        ? '?household_id=$householdId&cycle_key=$cycleKey'
-        : '?household_id=$householdId';
-    return '${baseClient.baseUrl}/reports/statement-pdf$query';
+  /// Downloads the monthly statement PDF with the user's JWT (MOB-26).
+  ///
+  /// The backend has no signed-URL endpoint, so the bytes are fetched through
+  /// the authenticated client instead of handing a bare URL to a browser.
+  /// Throws [ApiDownloadException] on failure or when the body is not a PDF.
+  Future<ApiBinaryResponse> downloadStatementPdf(String householdId, {String? cycleKey}) async {
+    final res = await baseClient.getBinary(
+      '/reports/statement-pdf',
+      queryParams: {
+        'household_id': householdId,
+        if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+      },
+      accept: 'application/pdf',
+    );
+    final bytes = res.bytes;
+    final isPdf = bytes.length >= 4 &&
+        bytes[0] == 0x25 && // %
+        bytes[1] == 0x50 && // P
+        bytes[2] == 0x44 && // D
+        bytes[3] == 0x46; // F
+    if (!isPdf) {
+      throw const ApiDownloadException('The server did not return a PDF document.');
+    }
+    return res;
   }
 
   Future<Map<String, dynamic>> addBudgetCategory({
@@ -364,18 +386,11 @@ class BudgetApiClient {
     String householdId,
     String categoryCode,
   ) async {
-    try {
-      final uri = Uri.parse('${baseClient.baseUrl}/budgets/categories/$categoryCode?household_id=$householdId');
-      final response = await http
-          .delete(uri, headers: baseClient.buildHeaders())
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+    return baseClient.delete(
+      '/budgets/categories/${Uri.encodeComponent(categoryCode)}',
+      queryParams: {'household_id': householdId},
+      timeout: const Duration(seconds: 8),
+    );
   }
 
   Future<Map<String, dynamic>> saveSubAllocations({
@@ -438,28 +453,16 @@ class BudgetApiClient {
     required String nameEn,
     String? nameAr,
   }) async {
-    final payload = jsonEncode({
-      'parent_code': parentCode,
-      'sub_code': subCode,
-      'name_en': nameEn,
-      if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
-    });
-
-    try {
-      final response = await http
-          .patch(
-            Uri.parse('${baseClient.baseUrl}/budgets/sub-categories'),
-            headers: baseClient.buildHeaders(),
-            body: payload,
-          )
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+    return baseClient.patch(
+      '/budgets/sub-categories',
+      body: {
+        'parent_code': parentCode,
+        'sub_code': subCode,
+        'name_en': nameEn,
+        if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
+      },
+      timeout: const Duration(seconds: 10),
+    );
   }
 
   Future<Map<String, dynamic>> removeSubCategory({
@@ -468,52 +471,50 @@ class BudgetApiClient {
     required String subCode,
     String? cycleKey,
   }) async {
-    try {
-      final queryParams = {
+    return baseClient.delete(
+      '/budgets/sub-categories',
+      queryParams: {
         'household_id': householdId,
         'parent_code': parentCode,
         'sub_code': subCode,
         if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
-      };
-      final uri = Uri.parse('${baseClient.baseUrl}/budgets/sub-categories')
-          .replace(queryParameters: queryParams);
-      final response = await http
-          .delete(uri, headers: baseClient.buildHeaders())
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-      return {'status': 'error', 'message': 'HTTP ${response.statusCode}: ${response.body}'};
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+      },
+      timeout: const Duration(seconds: 10),
+    );
   }
 
+  /// Throws [ApiRequestException] when the plans could not be loaded (UX-01:
+  /// an empty list read as "all installments cleared").
   Future<List<InstallmentPlan>> fetchInstallments({required String householdId}) async {
-    try {
-      final res = await baseClient.get(
-        '/budgets/installments',
-        queryParams: {'household_id': householdId},
-      );
-      if (res['plans'] is List) {
-        return (res['plans'] as List)
-            .map((e) => InstallmentPlan.fromJson(Map<String, dynamic>.from(e as Map)))
-            .toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
+    final res = ApiRequestException.check(await baseClient.get(
+      '/budgets/installments',
+      queryParams: {'household_id': householdId},
+    ));
+    if (res['plans'] is List) {
+      return (res['plans'] as List)
+          .map((e) => InstallmentPlan.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
     }
+    return [];
   }
 
+  /// Throws [ApiRequestException] when the server refuses the plan (403 for
+  /// another member's transaction, 400, 5xx) or cannot be reached, so callers
+  /// never act on a plan that was not created (FR-A-02).
   Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) async {
-    final res = await baseClient.post('/budgets/installments', planData);
-    return InstallmentPlan.fromJson(res);
+    final res = ApiRequestException.check(await baseClient.post('/budgets/installments', planData));
+    final plan = InstallmentPlan.fromJson(res);
+    if (plan.id.isEmpty) {
+      throw const ApiRequestException('The server did not return the created plan.');
+    }
+    return plan;
   }
 
+  /// The updated plan, or null when the payment was not recorded (FR-A-03).
   Future<InstallmentPlan?> payInstallment(String planId) async {
     try {
       final res = await baseClient.post('/budgets/installments/$planId/pay', {});
+      if (res['status'] == 'error') return null;
       return InstallmentPlan.fromJson(res);
     } catch (_) {
       return null;
@@ -591,7 +592,7 @@ class BudgetApiClient {
         if (uid != null) {
           final res = await client
               .from('household_memberships')
-              .select('household_id, role, households(name, invite_code)')
+              .select('household_id, role, households(name)')
               .eq('user_id', uid);
           final activeHid = (await client
               .from('users')
@@ -605,7 +606,9 @@ class BudgetApiClient {
             return HouseholdMembership(
               householdId: hid,
               householdName: hh['name'] as String? ?? 'Household',
-              inviteCode: hh['invite_code'] as String? ?? '',
+              // The invite code is only ever served by get_user_households()
+              // (admins only); never read it from the households table (DB-17).
+              inviteCode: '',
               role: m['role'] as String? ?? 'member',
               isActive: hid == activeHid,
             );
@@ -614,6 +617,16 @@ class BudgetApiClient {
       } catch (_) {}
     }
     return [];
+  }
+
+  /// Name and (for admins only) invite code of one of the caller's households,
+  /// served by the `get_user_households()` RPC.
+  Future<HouseholdMembership?> fetchHouseholdMembership(String householdId) async {
+    final memberships = await getUserHouseholds();
+    for (final m in memberships) {
+      if (m.householdId == householdId) return m;
+    }
+    return null;
   }
 
   Future<bool> switchActiveHousehold(String householdId) async {

@@ -3,7 +3,8 @@ FastAPI entry point for the Budget Tracker AI microservice.
 
 Architecture:
 - Modular routers under `routes/`
-- JWT & HMAC authentication middleware
+- Supabase JWT authentication (firewall middleware + per-route verification)
+- Optional X-Signature HMAC: checked when present; a stale one next to a valid JWT is logged, not rejected
 - Request body size limiter (DoS protection)
 - Constant-time firewall token middleware
 """
@@ -17,14 +18,15 @@ import time
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()  # Load .env before any other imports that read env vars
 
-from utils import verify_signature as _verify_signature
+from utils import is_production
+from auth import verify_signature_if_present
 from landing_page import get_landing_page_html, get_auth_confirmed_html
 from routes.budgets import router as budgets_router
 from routes.households import router as households_router
@@ -33,6 +35,8 @@ from routes.receipts import router as receipts_router
 from routes.chat import router as chat_router
 from routes.reports import router as reports_router
 from routes.support import router as support_router
+from routes.inquiries import router as inquiries_router
+from routes.nafaqah import router as nafaqah_router
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -51,6 +55,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# ─── Validation errors ───────────────────────────────────────────────────────
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def sanitized_validation_handler(request: Request, exc: RequestValidationError):
+    """
+    Return 422 with location/type/message only. The default handler echoes the offending
+    input back (leaking payload contents) and crashes with a 500 when that input is NaN or
+    Infinity, which cannot be JSON-encoded.
+    """
+    errors = [
+        {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -60,6 +83,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://127.0.0.1:5173",
     "https://budget.fmsco.com.sa",
+    "https://www.budget.fmsco.com.sa",
 ]
 env_origins = os.environ.get("ALLOWED_ORIGINS")
 if env_origins:
@@ -126,7 +150,6 @@ async def request_size_limit_middleware(request: Request, call_next):
 
 # ─── Auth Token & Firewall (OWASP A01 / A02) ───────────────────────────────────
 APP_AUTH_TOKEN = os.environ.get("APP_AUTH_TOKEN", "").strip()
-IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
 
 if not APP_AUTH_TOKEN:
     logger.warning(
@@ -136,9 +159,18 @@ if not APP_AUTH_TOKEN:
     )
 
 
+_API_DOC_PATHS = {"/docs", "/docs/oauth2-redirect", "/openapi.json", "/redoc"}
+
+
 @app.middleware("http")
 async def firewall_token_middleware(request: Request, call_next):
     path = request.url.path
+
+    # Interactive API docs / schema are a development aid only: in production they would hand
+    # an attacker the full route map, so they are hidden unless ENV is explicitly non-production.
+    if path in _API_DOC_PATHS and is_production():
+        from starlette.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     if (
         path in [
@@ -149,11 +181,9 @@ async def firewall_token_middleware(request: Request, call_next):
             "/docs",
             "/openapi.json",
             "/redoc",
-            "/hero-bg.webp",
-            "/hero-bg.jpg",
-            "/hero_glacier.png",
-            "/hero_glacier.jpg",
             "/favicon.svg",
+            # Anonymous waitlist/contact form; protected by validation, honeypot and rate limits.
+            "/public/inquiries",
         ]
         or path.startswith("/assets/")
         or path.startswith("/auth/")
@@ -177,38 +207,80 @@ async def firewall_token_middleware(request: Request, call_next):
     if auth_header.startswith("Bearer "):
         token_str = auth_header[7:].strip()
         try:
-            from auth import _decode_token
-            decoded = _decode_token(token_str)
+            from auth import decode_token
+            # Async: a missing JWKS key is downloaded in a worker thread, which also warms the
+            # cache for the synchronous JWT checks inside the routes.
+            decoded = await decode_token(token_str)
             if decoded and decoded.get("sub"):
                 bearer_valid = True
         except Exception:
             bearer_valid = False
 
+    # The verified per-user Supabase JWT is the credential (current app builds send only that).
+    # X-App-Token is a legacy pass for older builds at this coarse layer ONLY: it is extractable
+    # from the APK, it never identifies a user, and every non-public route verifies the JWT
+    # itself (an invalid Bearer next to a valid X-App-Token still gets 401 from the route).
+    # Missing, invalid or expired credentials answer 401 (not 403) so the client refreshes its
+    # session and retries.
     if is_tunnel_or_proxy and not (token_valid or bearer_valid):
-        logger.warning("Firewall blocked unauthorized public probe from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
+        logger.warning("Firewall blocked unauthenticated request from IP=%s (forwarded=%s) to path=%s", client_host, forwarded_for, path)
         from starlette.responses import JSONResponse
         return JSONResponse(
-            status_code=403,
-            content={"detail": "Forbidden: Untrusted endpoint access."}
+            status_code=401,
+            content={"detail": "Invalid or expired authentication token."},
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return await call_next(request)
 
 
 # ─── HMAC Signature Config ───────────────────────────────────────────────────
+# X-Signature is defense in depth on user routes, never their authentication (the JWT is). An
+# invalid or unverifiable signature next to a valid JWT is logged and the request is served
+# (installed builds sign with the pre-rotation secret); without a valid JWT it is 401
+# (see auth.verify_signature_if_present).
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
 if not WEBHOOK_SECRET:
     logger.warning(
-        "WEBHOOK_SECRET is not configured. "
-        "HMAC signature verification will reject all signed requests. "
-        "Set WEBHOOK_SECRET in environment variables."
+        "WEBHOOK_SECRET is not configured: X-Signature headers cannot be verified. Requests "
+        "with a valid JWT are still served (the signature is logged as ignored); a signed "
+        "request without a valid JWT is rejected. Set WEBHOOK_SECRET in environment variables."
     )
+
+
+def _log_security_configuration() -> None:
+    """Surface dangerous configuration at startup (never logs secret values)."""
+    from supabase_client import describe_supabase_key
+
+    key_info = describe_supabase_key()
+    if key_info["key"]:
+        logger.info("Supabase key: using %s (%s).", key_info["env_var"], key_info["role"])
+        for warning in key_info["warnings"]:
+            logger.warning(warning)
+    else:
+        for env_var, role in key_info["rejected"]:
+            logger.critical(
+                "%s holds a non-privileged Supabase key (role '%s') and is ignored. "
+                "The service needs an sb_secret_ key or a legacy service_role JWT.", env_var, role,
+            )
+        logger.critical(
+            "No privileged Supabase key configured (SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY): "
+            "all database-backed API routes will fail closed."
+        )
+    if not os.environ.get("SUPABASE_JWT_SECRET", "").strip():
+        logger.warning(
+            "SUPABASE_JWT_SECRET is empty: HS256 user tokens are rejected and only ES256 tokens "
+            "verifiable via the project's JWKS are accepted."
+        )
+
+
+_log_security_configuration()
 
 
 # ─── Public Landing & Health Routes ──────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
 async def root_landing_page():
-    """Main public product showcase, feature explanations, and coming soon badges."""
+    """Public landing page: the committed web_app build (static/index.html)."""
     return HTMLResponse(content=get_landing_page_html())
 
 
@@ -225,16 +297,6 @@ if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
-@app.get("/hero_glacier.png", tags=["ops"])
-@app.get("/hero_glacier.jpg", tags=["ops"])
-async def hero_glacier_image():
-    """Serve sharp glacial iceberg background image."""
-    png_path = os.path.join(STATIC_DIR, "hero_glacier.png")
-    if os.path.exists(png_path):
-        return FileResponse(png_path, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Glacier image not found")
-
-
 @app.get("/favicon.svg", tags=["ops"])
 async def favicon_svg():
     """Serve application SVG favicon."""
@@ -244,24 +306,6 @@ async def favicon_svg():
     raise HTTPException(status_code=404, detail="Favicon not found")
 
 
-@app.get("/hero-bg.webp", tags=["ops"])
-async def hero_background_webp():
-    """Serve WebP cinematic background image for legacy landing page fallback."""
-    webp_path = os.path.join(STATIC_DIR, "hero_bg.webp")
-    if os.path.exists(webp_path):
-        return FileResponse(webp_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Background image not found")
-
-
-@app.get("/hero-bg.jpg", tags=["ops"])
-async def hero_background_jpg():
-    """Serve JPEG fallback cinematic background image."""
-    jpg_path = os.path.join(STATIC_DIR, "hero_bg.jpg")
-    if os.path.exists(jpg_path):
-        return FileResponse(jpg_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Background image not found")
-
-
 @app.get("/health", tags=["ops"])
 async def health_check():
     """Liveness probe — returns 200 OK with uptime."""
@@ -269,13 +313,21 @@ async def health_check():
 
 
 # ─── Include Routers ─────────────────────────────────────────────────────────
-app.include_router(budgets_router)
-app.include_router(households_router)
-app.include_router(analytics_router)
-app.include_router(receipts_router)
-app.include_router(chat_router)
-app.include_router(reports_router)
-app.include_router(support_router)
+# Every API route checks a present X-Signature first: ignored with a warning when a valid JWT
+# authenticates the request, 401 when there is no valid JWT.
+_SIGNATURE_CHECK = [Depends(verify_signature_if_present)]
+for _router in (
+    budgets_router,
+    households_router,
+    analytics_router,
+    receipts_router,
+    chat_router,
+    reports_router,
+    support_router,
+    inquiries_router,
+    nafaqah_router,
+):
+    app.include_router(_router, dependencies=_SIGNATURE_CHECK)
 
 # Test helper alias
 from rate_limiter import reset_rate_limiters as _reset_receipt_scan_rate_limits

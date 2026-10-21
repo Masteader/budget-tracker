@@ -131,5 +131,34 @@ void main() {
       expect(find.text('SAR 0.00'), findsOneWidget);
       expect(find.byType(ElevatedButton), findsNothing);
     });
+  
+    testWidgets('Family (Nafaqah) mode shows household Nafaqah, never a 50/50 split', (tester) async {
+      final sampleData = {
+        'mode': 'family_nafaqah',
+        'total_shared_expenses': 950.0,
+        'i_paid_for_partner_100': 0.0,
+        'partner_paid_for_me_100': 0.0,
+        'net_balance': -300.0,
+        'settlement_amount': 300.0,
+        'who_owes': 'me_owes_partner',
+        'recommendation_en': 'You owe your partner SAR 300.00.',
+        'recommendation_ar': 'أنت مدين للشريك بمبلغ 300.00 ريال.',
+        'stc_pay_note': 'Nafaqah',
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PartnerSettlementCard(householdId: 'hh_123', initialData: sampleData),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('50/50'), findsNothing);
+      expect(find.text("Household (husband's Nafaqah): SAR 950.00"), findsOneWidget);
+    });
   });
 }

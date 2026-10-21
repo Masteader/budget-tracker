@@ -6,12 +6,11 @@ import pytest
 from unittest.mock import MagicMock
 from chat_parser import process_chat_transaction, ParsedChatExpense
 
-def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch):
+def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch, fake_supabase):
     """Verify Beit Al Shawarma generates OPEX-DINING with restaurants_dinners subcategory in preview."""
-    from dependents_service import _memory_dependents
-    _memory_dependents["test-household-001"] = [
-        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001"}
-    ]
+    fake_supabase.seed("household_dependents", [
+        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001", "created_at": "2026-10-01T00:00:00+00:00"}
+    ])
 
     mock_parsed = ParsedChatExpense(
         merchant="Beit Al Shawarma",
@@ -43,12 +42,11 @@ def test_shawarma_chat_expense_preview_returns_dining_sub_category(monkeypatch):
     assert res["items"][0]["sub_category"] == "restaurants_dinners"
 
 
-def test_child_attribution_in_chat_expense(monkeypatch):
+def test_child_attribution_in_chat_expense(monkeypatch, fake_supabase):
     """Verify mention of child is reflected in beneficiary field."""
-    from dependents_service import _memory_dependents
-    _memory_dependents["test-household-001"] = [
-        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001"}
-    ]
+    fake_supabase.seed("household_dependents", [
+        {"id": "dep-1", "name": "Sarah", "avatar_icon": "child", "household_id": "test-household-001", "created_at": "2026-10-01T00:00:00+00:00"}
+    ])
 
     mock_parsed = ParsedChatExpense(
         merchant="Nahdi",
@@ -75,11 +73,21 @@ def test_child_attribution_in_chat_expense(monkeypatch):
     assert "Sarah" in res["dependents"]
 
 
-def test_confirm_chat_transaction_preserves_category_sub_category_and_attribution(monkeypatch):
+def _seed_global_codes(fake_supabase, *codes):
+    # A client-chosen category_code must exist in the taxonomy (E2E-03), as it does in the DB.
+    fake_supabase.seed("cost_control_codes", [
+        {"id": f"cc-{c}", "code": c, "category": c, "keywords": [], "is_flexible": False,
+         "household_id": None, "is_system": True}
+        for c in codes
+    ])
+
+
+def test_confirm_chat_transaction_preserves_category_sub_category_and_attribution(monkeypatch, fake_supabase):
     """Verify confirming pending expense persists category_code and sub_category rather than falling back to OPEX-MISC."""
+    _seed_global_codes(fake_supabase, "OPEX-DINING")
     mock_insert = MagicMock(return_value="tx-uuid-1234")
     monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
-    monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items: True)
+    monkeypatch.setattr("chat_parser.enrich_transaction_items", lambda tx_id, items, **kw: True)
     monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)
     monkeypatch.setattr("chat_parser.find_duplicate_candidate", lambda *args, **kwargs: None)
 
@@ -118,13 +126,15 @@ def test_confirm_chat_transaction_preserves_category_sub_category_and_attributio
     kwargs = mock_insert.call_args.kwargs
     assert kwargs["category_code"] == "OPEX-DINING"
     assert kwargs["sub_category"] == "restaurants_dinners"
-    assert kwargs["paid_by"] == "partner"
-    assert kwargs["beneficiary"] == "both"
+    # Attribution is stored as columns (FABLE-LOGIC-03): spent_by = payer, beneficiary_type/id.
+    assert kwargs["spent_by"] == "partner"
+    assert (kwargs["beneficiary_type"], kwargs["beneficiary_id"]) == ("household", "household")
     assert kwargs["items"][0]["sub_category"] == "restaurants_dinners"
 
 
-def test_chat_confirmation_overrides_items_stale_sub_category(monkeypatch):
+def test_chat_confirmation_overrides_items_stale_sub_category(monkeypatch, fake_supabase):
     """Verify that user override_sub_category replaces initial parsed sub_category on line items."""
+    _seed_global_codes(fake_supabase, "OPEX-UTILITIES")
     mock_insert = MagicMock(return_value="tx-zain-001")
     monkeypatch.setattr("chat_parser.insert_transaction", mock_insert)
     monkeypatch.setattr("chat_parser.fetch_budget", lambda *args, **kwargs: None)

@@ -31,6 +31,7 @@ void main() {
               child: InstallmentPlansCard(
                 plans: testPlans,
                 onPayInstallment: (planId) => payTapped = true,
+                now: DateTime.utc(2026, 10, 21, 9),
               ),
             ),
           ),
@@ -44,7 +45,10 @@ void main() {
 
       // Verify payment details
       expect(find.text('SAR 1,852.00 / mo'), findsOneWidget);
-      expect(find.text('Installment 1 of 4 paid'), findsOneWidget);
+      // No next_due_at from the API: monthly on day 27 → next 27 Oct.
+      expect(find.text('Installment 1 of 4 paid · next 27 Oct'), findsOneWidget);
+      // The 21 Oct cycle ends on 26 Oct: nothing of this plan is due before payday.
+      expect(find.text('Nothing due before payday'), findsOneWidget);
 
       // Verify Pay button
       final payBtn = find.widgetWithText(OutlinedButton, 'Record Payment');
@@ -69,7 +73,38 @@ void main() {
 
       expect(find.text('Installments & BNPL'), findsOneWidget);
       expect(find.text('No Active BNPL Installments'), findsOneWidget);
-      expect(find.text('+ Add Installment Plan'), findsOneWidget);
+      expect(find.text('Add Installment Plan'), findsOneWidget);
+    });
+
+    testWidgets('bi-weekly Tabby plan: no "/month", shows the frequency and next due date', (tester) async {
+      final plan = InstallmentPlan.fromJson({
+        'id': 'p2',
+        'household_id': 'hh_1',
+        'merchant': 'Jarir',
+        'provider': 'Tabby',
+        'total_amount': 400,
+        'installment_count': 4,
+        'monthly_amount': 100,
+        'paid_installments': 1,
+        'start_date': '2026-10-15',
+        'status': 'ACTIVE',
+        'frequency': 'biweekly',
+        'next_due_at': '2026-10-29',
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: InstallmentPlansCard(plans: [plan], now: DateTime.utc(2026, 10, 28, 9)),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('SAR 100.00 / 2 wks'), findsOneWidget);
+      expect(find.textContaining('/ mo'), findsNothing);
+      expect(find.text('Installment 1 of 4 paid · next 29 Oct'), findsOneWidget);
+      // 29 Oct, 12 Nov and 26 Nov all fall before the 27 Nov payday.
+      expect(find.text('SAR 300.00 due before payday'), findsOneWidget);
     });
   });
 }

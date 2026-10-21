@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_localizations.dart';
 
 /// Reusable store name input & 'Spent by who?' selector card.
 /// Ensures consistent UX across receipt scanner, chat confirmation, and manual entry.
@@ -9,8 +10,13 @@ class StoreAttributionCard extends StatelessWidget {
   final String selectedSpentBy;
   final ValueChanged<String> onSpentByChanged;
   final ValueChanged<String>? onMerchantChanged;
-  final String title;
+  /// Card title; defaults to the localized "Store & Attribution Details".
+  final String? title;
   final bool compact;
+
+  /// Asks "spent by whom?". A family household hides it: the Nafaqah
+  /// question next to the card already says who paid (UX-03).
+  final bool showSpentBy;
 
   const StoreAttributionCard({
     super.key,
@@ -18,8 +24,9 @@ class StoreAttributionCard extends StatelessWidget {
     required this.selectedSpentBy,
     required this.onSpentByChanged,
     this.onMerchantChanged,
-    this.title = 'Store & Attribution Details',
+    this.title,
     this.compact = false,
+    this.showSpentBy = true,
   });
 
   Widget _buildSpentByOption(
@@ -79,10 +86,10 @@ class StoreAttributionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.storefront_outlined, color: Color(0xFF00C896), size: 18),
+              const Icon(Icons.storefront_outlined, color: AppThemes.success, size: 18),
               const SizedBox(width: 8),
               Text(
-                title,
+                title ?? context.tr('sac_title'),
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: compact ? 12 : 13,
@@ -97,9 +104,9 @@ class StoreAttributionCard extends StatelessWidget {
             style: TextStyle(color: context.textPrimary, fontSize: 13),
             onChanged: onMerchantChanged,
             decoration: InputDecoration(
-              labelText: 'Store Name / Merchant',
+              labelText: context.tr('sac_store_label'),
               labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
-              prefixIcon: const Icon(Icons.store_outlined, color: Color(0xFF00C896), size: 18),
+              prefixIcon: const Icon(Icons.store_outlined, color: AppThemes.success, size: 18),
               filled: true,
               fillColor: context.inputBg,
               contentPadding: EdgeInsets.symmetric(
@@ -116,13 +123,14 @@ class StoreAttributionCard extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF00C896)),
+                borderSide: const BorderSide(color: AppThemes.success),
               ),
             ),
           ),
+          if (showSpentBy) ...[
           SizedBox(height: compact ? 10 : 14),
           Text(
-            'SPENT BY WHO?',
+            context.tr('sac_spent_by_caps'),
             style: GoogleFonts.outfit(
               fontSize: 10,
               letterSpacing: 0.8,
@@ -135,26 +143,27 @@ class StoreAttributionCard extends StatelessWidget {
             children: [
               _buildSpentByOption(context,
                 key: 'me',
-                label: 'Me',
+                label: context.tr('me'),
                 icon: Icons.person_outline,
                 activeColor: const Color(0xFF58A6FF),
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'partner',
-                label: 'Partner',
+                label: context.tr('partner'),
                 icon: Icons.favorite_outline,
                 activeColor: const Color(0xFFBC8CFF),
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'both',
-                label: 'Both (Shared)',
+                label: context.tr('both_shared'),
                 icon: Icons.group_outlined,
-                activeColor: const Color(0xFF00C896),
+                activeColor: AppThemes.success,
               ),
             ],
           ),
+          ],
         ],
       ),
     );

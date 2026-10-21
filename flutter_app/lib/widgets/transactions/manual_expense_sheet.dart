@@ -7,10 +7,22 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/sync_worker.dart' show SyncWorker, kTransactionInsertOperation;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import '../../models/manual_expense_row.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
+import '../../models/household_membership.dart';
 import '../../services/account_service.dart';
+import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../nafaqah/nafaqah_class_selector.dart';
+import 'expense_date_chips.dart';
+import '../../models/nafaqah.dart';
+import '../../models/money.dart';
+import '../../models/category_catalog.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
 class ManualExpenseSheet extends StatefulWidget {
@@ -19,12 +31,36 @@ class ManualExpenseSheet extends StatefulWidget {
   final double? initialAmount;
   final String? initialCategory;
 
+  /// Test seams; default to the API / Supabase / the offline queue.
+  /// [loadMembers] replaces the whole member lookup (rows with `id`,
+  /// `display_name`, `role`, `financial_role`).
+  final Future<List<Map<String, dynamic>>> Function(String householdId)? loadMembers;
+
+  /// `GET /households/{id}/members` (roles per household membership).
+  final Future<HouseholdRoster> Function(String householdId)? loadRoster;
+
+  /// Fallback when the API fails: the caller's own `household_memberships`
+  /// row(s) of this household (RLS shows admins every row). Never
+  /// `users.financial_role`, which belongs to each member's active household.
+  final Future<List<Map<String, dynamic>>> Function(String householdId)? loadOwnMemberships;
+  final Future<void> Function(Map<String, dynamic> row)? insertRow;
+  final Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow;
+  final String? Function()? currentUserId;
+  final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
+
   const ManualExpenseSheet({
     super.key,
     this.householdId,
     this.initialMerchant,
     this.initialAmount,
     this.initialCategory,
+    this.loadMembers,
+    this.loadRoster,
+    this.loadOwnMemberships,
+    this.insertRow,
+    this.enqueueRow,
+    this.currentUserId,
+    this.loadNafaqah,
   });
 
   static Future<void> show(
@@ -61,26 +97,32 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   late String _selectedCategory;
   bool _isSaving = false;
 
+  /// When the expense happened (UX-12): today by default, or a past day.
+  DateTime _occurredAt = DateTime.now();
+  bool _datePicked = false;
+
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
-  String _familyPayer = 'me'; // 'me' (Husband/Provider), 'wife_reimbursable', 'wife_personal'
+  String _familyPayer = 'me'; // 'me' (husband paid), 'wife_reimbursable', 'wife_personal'
+  bool _viewerIsWife = false;
+  List<Map<String, dynamic>> _wives = [];
+  String? _selectedWifeId;
+  String? _husbandName;
+  /// Only the wife, the Nafaqah provider (husband) or an admin classifies a
+  /// family expense; unknown until the members or the summary are loaded.
+  bool _canClassifyNafaqah = false;
+
+  /// The viewer classifies as an admin who is neither spouse: a class then
+  /// names the wife who paid by her member id.
+  bool _adminClassifier = false;
   String? _selectedRoommateId;
   String _roommateSplit = 'all'; // 'all' (equal split) | 'personal'
   List<Map<String, dynamic>> _householdMembers = [];
   List<Account> _accounts = [];
   String? _selectedAccountId;
 
-  static const List<Map<String, String>> _categories = [
-    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
-    {'code': 'OPEX-DINING', 'emoji': '☕ '},
-    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
-    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
-    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
-    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
-    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
-    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
-    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
-    {'code': 'OPEX-MISC', 'emoji': '📦 '},
+  static final List<Map<String, String>> _categories = [
+    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
   ];
 
   @override
@@ -140,19 +182,28 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final hid = widget.householdId;
     if (hid == null || hid.isEmpty) return;
     try {
-      final res = await supabase
-          .from('users')
-          .select('id, display_name, role, financial_role')
-          .eq('household_id', hid);
+      final List<Map<String, dynamic>> list =
+          widget.loadMembers != null ? await widget.loadMembers!(hid) : await _membersOfHousehold(hid);
       if (mounted) {
-        final list = List<Map<String, dynamic>>.from(res);
         final hasPeers = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'peer');
         final hasSpouse = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse');
+        final uid = _currentUserId;
         setState(() {
           _householdMembers = list;
           _isRoommateMode = hasPeers && !hasSpouse;
+          _wives = list.where((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse').toList();
+          _viewerIsWife = _wives.any((w) => w['id'] == uid);
+          final me = list.where((m) => m['id'] == uid).firstOrNull;
+          final myFinancialRole = (me?['financial_role'] as String?)?.toLowerCase();
+          final iAmAdmin = (me?['role'] as String?)?.toLowerCase() == 'admin';
+          _canClassifyNafaqah = _viewerIsWife || myFinancialRole == 'provider' || iAmAdmin;
+          _adminClassifier = _canClassifyNafaqah && !_viewerIsWife && myFinancialRole != 'provider';
+          _selectedWifeId = _viewerIsWife ? uid : (_wives.isNotEmpty ? _wives.first['id'] as String? : null);
+          // The wife records mostly what she paid herself; shared is the default so
+          // her claim is never lost silently (the husband sees and can dispute it).
+          if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
           if (_isRoommateMode && list.isNotEmpty) {
-            final uid = supabase.auth.currentUser?.id;
+            final uid = _currentUserId;
             final myMember = list.firstWhere(
               (m) => m['id'] == uid,
               orElse: () => list.first,
@@ -162,6 +213,105 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         });
       }
     } catch (_) {}
+    await _loadNafaqahContext(hid);
+  }
+
+  /// Members with their financial role in THIS household, from
+  /// `GET /households/{id}/members`. A member whose active household is
+  /// another one keeps the role of this household (a wife stays the wife, a
+  /// roommate elsewhere is not a spouse here). If the API fails, only the
+  /// membership rows the caller may read are used, so a spouse is never
+  /// invented from another household's role.
+  Future<List<Map<String, dynamic>>> _membersOfHousehold(String hid) async {
+    try {
+      final loadRoster = widget.loadRoster ?? ApiService.instance.getHouseholdMembers;
+      final roster = await loadRoster(hid);
+      return [
+        for (final m in roster.members)
+          {'id': m.userId, 'display_name': m.displayName, 'role': m.role, 'financial_role': m.financialRole},
+      ];
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Members API unavailable, using own membership: $e');
+    }
+    final rows = widget.loadOwnMemberships != null
+        ? await widget.loadOwnMemberships!(hid)
+        : List<Map<String, dynamic>>.from(await supabase
+            .from('household_memberships')
+            .select('user_id, role, financial_role')
+            .eq('household_id', hid));
+    return [
+      for (final r in rows)
+        {'id': r['user_id'], 'display_name': null, 'role': r['role'], 'financial_role': r['financial_role']},
+    ];
+  }
+
+  /// The family context from `GET /households/{id}/nafaqah`, the same source as
+  /// the chat, receipt and edit flows (household memberships, not the
+  /// `users.household_id` of each member's *active* household). Offline, the
+  /// member list above stays in effect (FR-A-07).
+  Future<void> _loadNafaqahContext(String hid) async {
+    try {
+      final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+      final summary = await loader(hid);
+      if (!mounted) return;
+      setState(() {
+        if (!summary.isFamily) {
+          _wives = [];
+          _viewerIsWife = false;
+          _selectedWifeId = null;
+          if (_familyPayer != 'me') _familyPayer = 'me';
+          return;
+        }
+        _isRoommateMode = false;
+        _wives = [
+          for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
+        ];
+        _viewerIsWife = summary.callerIsWife;
+        _husbandName = summary.husbandName;
+        // Only the wife, the provider (husband) or an admin records a Nafaqah
+        // class (as in chat, receipts and the edit sheet). `can_set_provider`
+        // is true for household admins.
+        final isSpouse = summary.callerRole == 'husband' || summary.callerRole == 'wife';
+        final isAdmin = summary.canSetProvider ||
+            _householdMembers.any((m) => m['id'] == _currentUserId && (m['role'] as String?)?.toLowerCase() == 'admin');
+        _canClassifyNafaqah = isSpouse || isAdmin;
+        _adminClassifier = _canClassifyNafaqah && !isSpouse;
+        if (!_canClassifyNafaqah) _familyPayer = 'me';
+        final uid = summary.callerUserId ?? _currentUserId;
+        _selectedWifeId = _viewerIsWife ? uid : summary.wives.first.id;
+        if (_viewerIsWife && _familyPayer == 'me') _familyPayer = kWifeReimbursable;
+      });
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Nafaqah context unavailable: $e');
+    }
+  }
+
+  /// The display name of the chosen wife, or null.
+  String? get _selectedWifeName {
+    for (final w in _wives) {
+      if (w['id'] == _selectedWifeId) {
+        final n = (w['display_name'] as String? ?? '').trim();
+        return n.isEmpty ? null : n;
+      }
+    }
+    return null;
+  }
+
+  /// Family household (a member is a spouse): Nafaqah rules, never a split.
+  bool get _hasSpouse => _wives.isNotEmpty;
+
+  String? get _currentUserId =>
+      widget.currentUserId != null ? widget.currentUserId!() : supabase.auth.currentUser?.id;
+
+  /// Best-effort refresh; a missing provider must not turn a saved expense
+  /// into a second (offline) save.
+  void _refreshProviders() {
+    try {
+      context.read<TransactionProvider>().fetchTransactions();
+      context.read<BudgetProvider>().refresh();
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Refresh after save skipped: $e');
+    }
   }
 
   @override
@@ -172,15 +322,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   }
 
   Future<void> _saveExpense() async {
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) _amountCtrl.text = rounded; // show the amount that is stored
+    final amount = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid amount.');
+      AppSnackBar.showError(context, context.tr('ris_invalid_amount'));
       return;
     }
     if (merchant.isEmpty) {
-      AppSnackBar.showError(context, 'Please enter a merchant or item name.');
+      AppSnackBar.showError(context, context.tr('mes_merchant_required'));
       return;
     }
 
@@ -192,94 +344,130 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final String benType;
     final String benId;
     final String spentBy;
+    String? nafaqahClass;
 
     if (_isRoommateMode) {
-      paidBy = _selectedRoommateId ?? supabase.auth.currentUser?.id ?? 'me';
+      paidBy = _selectedRoommateId ?? _currentUserId ?? 'me';
       benType = _roommateSplit == 'all' ? 'all_peers' : 'individual';
       benId = _roommateSplit == 'all' ? 'all_peers' : (_selectedRoommateId ?? 'me');
       spentBy = _roommateSplit == 'all' ? 'both' : 'me';
     } else {
-      if (_familyPayer == 'wife_reimbursable') {
-        paidBy = 'wife';
+      // Family (Islamic Nafaqah): never split between the spouses. The payer is
+      // stored relative to the recorder ('me'), the wife is 'wife' otherwise.
+      // An admin who is neither spouse names the wife by her member id.
+      final wifeSide = _viewerIsWife ? 'me' : (_adminClassifier ? (_selectedWifeId ?? 'wife') : 'wife');
+      if (_familyPayer == kWifeReimbursable) {
+        paidBy = wifeSide;
         benType = 'household';
         benId = 'household';
-        spentBy = 'partner';
-      } else if (_familyPayer == 'wife_personal') {
-        paidBy = 'wife';
+        spentBy = _viewerIsWife ? 'me' : 'partner';
+        nafaqahClass = kWifeReimbursable;
+      } else if (_familyPayer == kWifePersonal) {
+        paidBy = wifeSide;
         benType = 'individual';
-        benId = 'wife';
-        spentBy = 'partner';
+        benId = wifeSide;
+        spentBy = _viewerIsWife ? 'me' : 'partner';
+        nafaqahClass = kWifePersonal;
       } else {
-        paidBy = 'me';
+        paidBy = _viewerIsWife ? 'husband' : 'me';
         benType = 'household';
         benId = 'household';
-        spentBy = 'me';
+        spentBy = _viewerIsWife ? 'partner' : 'me';
       }
     }
 
+    final row = buildManualExpenseRow(
+      id: const Uuid().v4(),
+      householdId: hid,
+      userId: _currentUserId,
+      amount: amount,
+      merchant: merchant,
+      categoryCode: _selectedCategory,
+      spentBy: spentBy,
+      paidBy: paidBy,
+      beneficiaryType: benType,
+      beneficiaryId: benId,
+      accountId: _selectedAccountId,
+      // A day the user chose, else the moment of saving.
+      occurredAt: _datePicked ? _occurredAt : DateTime.now(),
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
+    );
+
+    Object? insertError;
     try {
       // 1. Direct Supabase insert
-      await supabase.from('transactions').insert({
-        'household_id': hid,
-        'amount': amount,
-        'currency': 'SAR',
-        'merchant': merchant,
-        'category_code': _selectedCategory,
-        'spent_by': spentBy,
-        'paid_by': paidBy,
-        'beneficiary_type': benType,
-        'beneficiary_id': benId,
-        'account_id': _selectedAccountId,
-        'source': 'manual',
-        'timestamp': DateTime.now().toIso8601String(),
-        'items': [
-          {'name': merchant, 'price': amount, 'quantity': 1}
-        ],
-      });
+      if (widget.insertRow != null) {
+        await widget.insertRow!(row);
+      } else {
+        await supabase.from('transactions').insert(row);
+      }
+    } catch (e) {
+      insertError = e;
+    }
 
-
-
+    if (insertError == null) {
       if (mounted) {
-        context.read<TransactionProvider>().fetchTransactions();
-        context.read<BudgetProvider>().refresh();
+        _refreshProviders();
         Navigator.pop(context);
         AppSnackBar.showSuccess(
           context,
-          'Recorded SAR ${amount.toStringAsFixed(2)} at $merchant',
-          title: 'Expense Logged',
+          context.trArgs('mes_recorded', {'amount': context.sar(amount), 'merchant': merchant}),
+          title: context.tr('mes_logged_title'),
         );
       }
-    } catch (e) {
+    } else if (SyncWorker.isPermanentInsertError(insertError)) {
+      // FR-A-08: the database rejected the row itself (permissions, a check,
+      // the Nafaqah trigger). Replaying it can never succeed, so say so and
+      // keep the sheet open instead of reporting "saved offline".
+      if (mounted) {
+        setState(() => _isSaving = false);
+        AppSnackBar.showError(
+          context,
+          nafaqahWriteErrorText(context, insertError) ??
+              context.trArgs('mes_failed', {
+                'error': insertError is PostgrestException ? insertError.message : insertError,
+              }),
+        );
+      }
+    } else {
       // 2. Offline fallback queue
       try {
-        await OfflineSyncService.instance.enqueue(
-          endpoint: 'chat',
-          payload: {
-            'message': '$merchant SAR ${amount.toStringAsFixed(2)} in $_selectedCategory',
-            'user_id': supabase.auth.currentUser?.id,
-            'paid_by': paidBy,
-            'beneficiary_type': benType,
-            'beneficiary_id': benId,
-            'spent_by': spentBy,
-          },
-          householdId: hid,
-        );
+        // Replayed verbatim later; the client-generated id makes the replay
+        // idempotent if the insert above actually reached the server.
+        if (widget.enqueueRow != null) {
+          await widget.enqueueRow!(row, hid);
+        } else {
+          await OfflineSyncService.instance.enqueue(
+            endpoint: kTransactionInsertOperation,
+            payload: row,
+            householdId: hid,
+            customId: row['id'] as String,
+          );
+        }
 
         if (mounted) {
-          context.read<TransactionProvider>().fetchTransactions();
-          context.read<BudgetProvider>().refresh();
+          _refreshProviders();
           Navigator.pop(context);
           AppSnackBar.showSuccess(
             context,
-            'Saved offline: SAR ${amount.toStringAsFixed(2)} at $merchant. Will sync automatically.',
-            title: 'Queued Offline',
+            context.trArgs('mes_saved_offline', {'amount': context.sar(amount), 'merchant': merchant}),
+            title: context.tr('mp_queued_offline'),
             icon: Icons.cloud_off_rounded,
           );
         }
       } catch (err) {
+        // MOB-28: the queue write failed, so nothing was saved anywhere; keep
+        // the sheet open with the entered values so the user can retry.
         if (mounted) {
           setState(() => _isSaving = false);
-          AppSnackBar.showError(context, 'Failed to save expense: $err');
+          AppSnackBar.showError(
+            context,
+            context.trArgs('mes_failed', {
+              'error': err is OfflineQueueWriteException ? context.tr('offline_queue_failed') : err,
+            }),
+            title: context.tr('offline_queue_failed_title'),
+          );
         }
       }
     }
@@ -341,6 +529,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded, color: context.textSecondary),
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -348,8 +537,27 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 16),
 
+              // Amount first, focused, decimal keypad (UX-12)
+              TextField(
+                key: const ValueKey('manual_amount'),
+                controller: _amountCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                decoration: InputDecoration(
+                  labelText: context.tr('amount_sar'),
+                  prefixText: '${context.tr('sar')} ',
+                  labelStyle: TextStyle(color: context.textSecondary),
+                  filled: true,
+                  fillColor: context.inputBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Merchant
               TextField(
+                key: const ValueKey('manual_merchant'),
                 controller: _merchantCtrl,
                 style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(
@@ -363,20 +571,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 12),
 
-              // Amount
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-                decoration: InputDecoration(
-                  labelText: context.tr('amount_sar'),
-                  prefixText: 'SAR ',
-                  labelStyle: TextStyle(color: context.textSecondary),
-                  prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF00C896), size: 20),
-                  filled: true,
-                  fillColor: context.inputBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+              // When (UX-12): yesterday's cash purchase is not booked today.
+              ExpenseDateChips(
+                value: _occurredAt,
+                maxDaysBack: 365,
+                onChanged: (d) => setState(() {
+                  _occurredAt = d;
+                  _datePicked = true;
+                }),
               ),
               const SizedBox(height: 12),
 
@@ -431,7 +633,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         children: [
                           Icon(acc.accountType.defaultIcon, size: 16, color: context.electricTeal),
                           const SizedBox(width: 8),
-                          Text('${acc.name} (${acc.currency} ${acc.balance.toStringAsFixed(2)})'),
+                          Text('${acc.name} (${context.money(acc.balance, acc.currency)})'),
                         ],
                       ),
                     );
@@ -449,15 +651,21 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    context.tr('paid_by_label'),
-                    style: TextStyle(
-                      color: context.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      context.tr('paid_by_label'),
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  // A household with a spouse is a family (Nafaqah): there is
+                  // no roommate equal split between the spouses (FR-A-05).
+                  if (!_hasSpouse)
                   Container(
+                    key: const ValueKey('manual_mode_toggle'),
                     decoration: BoxDecoration(
                       color: context.subtleCardBg,
                       borderRadius: BorderRadius.circular(20),
@@ -485,95 +693,42 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 10),
 
-              if (!_isRoommateMode) ...[
-                // Family Islamic Nafaqah options
-                Row(
-                  children: [
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'me',
-                      label: context.tr('payer_nafaqah_me'),
-                      icon: Icons.shield_outlined,
-                      activeColor: const Color(0xFF00C896),
-                      onTap: () => setState(() => _familyPayer = 'me'),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'wife_reimbursable',
-                      label: context.tr('payer_nafaqah_wife_reimbursable'),
-                      icon: Icons.currency_exchange_rounded,
-                      activeColor: const Color(0xFFFFA657),
-                      onTap: () => setState(() => _familyPayer = 'wife_reimbursable'),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSegmentOption(
-                      isSelected: _familyPayer == 'wife_personal',
-                      label: context.tr('payer_nafaqah_wife_personal'),
-                      icon: Icons.shopping_bag_outlined,
-                      activeColor: const Color(0xFF4DE6F7),
-                      onTap: () => setState(() => _familyPayer = 'wife_personal'),
-                    ),
-                  ],
+              if (!_isRoommateMode && _hasSpouse && _canClassifyNafaqah) ...[
+                // Family Islamic Nafaqah: husband's expense, wife's shared
+                // advance (husband reimburses) or wife's personal purchase.
+                NafaqahClassSelector(
+                  value: _familyPayer == 'me' ? null : _familyPayer,
+                  viewerRole: _viewerIsWife ? 'wife' : (_adminClassifier ? 'admin' : 'husband'),
+                  wifeName: _viewerIsWife ? null : _selectedWifeName,
+                  husbandName: _husbandName,
+                  onChanged: (cls) => setState(() => _familyPayer = cls ?? 'me'),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: (_familyPayer == 'wife_reimbursable'
-                            ? const Color(0xFFFFA657)
-                            : _familyPayer == 'wife_personal'
-                                ? const Color(0xFF4DE6F7)
-                                : const Color(0xFF00C896))
-                        .withValues(alpha: context.isDark ? 0.12 : 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: (_familyPayer == 'wife_reimbursable'
-                              ? const Color(0xFFFFA657)
-                              : _familyPayer == 'wife_personal'
-                                  ? const Color(0xFF4DE6F7)
-                                  : const Color(0xFF00C896))
-                          .withValues(alpha: context.isDark ? 0.35 : 0.25),
-                    ),
+                if (_familyPayer != 'me' && !_viewerIsWife && _wives.length > 1) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _wives.map((w) {
+                      final wid = w['id'] as String? ?? '';
+                      final name = (w['display_name'] as String?)?.isNotEmpty == true
+                          ? w['display_name'] as String
+                          : context.tr('wife_spouse_title');
+                      return ChoiceChip(
+                        label: Text(name),
+                        selected: _selectedWifeId == wid,
+                        onSelected: (sel) {
+                          if (sel) setState(() => _selectedWifeId = wid);
+                        },
+                      );
+                    }).toList(),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _familyPayer == 'wife_reimbursable'
-                            ? Icons.info_outline_rounded
-                            : _familyPayer == 'wife_personal'
-                                ? Icons.person_outline_rounded
-                                : Icons.check_circle_outline_rounded,
-                        size: 15,
-                        color: _familyPayer == 'wife_reimbursable'
-                            ? const Color(0xFFFFA657)
-                            : _familyPayer == 'wife_personal'
-                                ? const Color(0xFF4DE6F7)
-                                : const Color(0xFF00C896),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _familyPayer == 'wife_reimbursable'
-                              ? context.tr('nafaqah_wife_reimbursable_hint')
-                              : _familyPayer == 'wife_personal'
-                                  ? context.tr('nafaqah_wife_personal_hint')
-                                  : context.tr('nafaqah_me_hint'),
-                          style: GoogleFonts.outfit(
-                            color: context.textPrimary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else ...[
+                ],
+              ] else if (_isRoommateMode) ...[
                 // Multi-Roommate Living Mode
                 if (_householdMembers.isNotEmpty) ...[
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      'Select Payer:',
+                      context.tr('mes_select_payer'),
                       style: TextStyle(
                         color: context.textSecondary,
                         fontSize: 11,
@@ -589,27 +744,27 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         final mid = m['id'] as String? ?? '';
                         final name = (m['display_name'] as String?)?.isNotEmpty == true
                             ? m['display_name'] as String
-                            : 'Roommate';
+                            : context.tr('role_roommate');
                         final isSelected = _selectedRoommateId == mid;
                         return Padding(
-                          padding: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsetsDirectional.only(end: 8),
                           child: ChoiceChip(
                             label: Text(name),
                             selected: isSelected,
                             onSelected: (sel) {
                               if (sel) setState(() => _selectedRoommateId = mid);
                             },
-                            selectedColor: const Color(0xFF00C896).withValues(alpha: 0.2),
+                            selectedColor: AppThemes.success.withValues(alpha: 0.2),
                             backgroundColor: context.subtleCardBg,
                             labelStyle: TextStyle(
                               color: isSelected
-                                  ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF00A87A))
+                                  ? (context.isDark ? AppThemes.electricTeal : const Color(0xFF00A87A))
                                   : context.textSecondary,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               fontSize: 11.5,
                             ),
                             side: BorderSide(
-                              color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                              color: isSelected ? AppThemes.success : context.borderColor,
                             ),
                           ),
                         );
@@ -624,7 +779,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'all',
                       label: context.tr('roommate_split_all'),
                       icon: Icons.groups_rounded,
-                      activeColor: const Color(0xFF00C896),
+                      activeColor: AppThemes.success,
                       onTap: () => setState(() => _roommateSplit = 'all'),
                     ),
                     const SizedBox(width: 8),
@@ -632,7 +787,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'personal',
                       label: context.tr('roommate_split_personal'),
                       icon: Icons.lock_outline_rounded,
-                      activeColor: const Color(0xFF4DE6F7),
+                      activeColor: AppThemes.iceCyan,
                       onTap: () => setState(() => _roommateSplit = 'personal'),
                     ),
                   ],
@@ -642,14 +797,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: (_roommateSplit == 'all'
-                            ? const Color(0xFF00C896)
-                            : const Color(0xFF4DE6F7))
+                            ? AppThemes.success
+                            : AppThemes.iceCyan)
                         .withValues(alpha: context.isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: (_roommateSplit == 'all'
-                              ? const Color(0xFF00C896)
-                              : const Color(0xFF4DE6F7))
+                              ? AppThemes.success
+                              : AppThemes.iceCyan)
                           .withValues(alpha: context.isDark ? 0.35 : 0.25),
                     ),
                   ),
@@ -658,7 +813,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       Icon(
                         _roommateSplit == 'all' ? Icons.pie_chart_outline_rounded : Icons.lock_outline_rounded,
                         size: 15,
-                        color: _roommateSplit == 'all' ? const Color(0xFF00C896) : const Color(0xFF4DE6F7),
+                        color: _roommateSplit == 'all' ? AppThemes.success : AppThemes.iceCyan,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -682,7 +837,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               // Save Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -726,7 +881,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSelected
-              ? (context.isDark ? const Color(0xFF00C896) : const Color(0xFF00A87A))
+              ? (context.isDark ? AppThemes.success : const Color(0xFF00A87A))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),

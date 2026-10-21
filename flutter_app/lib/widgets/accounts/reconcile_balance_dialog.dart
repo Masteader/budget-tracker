@@ -7,6 +7,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Dialog to reconcile app account balance against actual bank/wallet balance.
 class ReconcileBalanceDialog extends StatefulWidget {
@@ -53,7 +54,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
     super.dispose();
   }
 
-  double get _actualBalance => double.tryParse(_actualBalanceCtrl.text) ?? widget.account.balance;
+  double get _actualBalance => parseMoneyInput(_actualBalanceCtrl.text) ?? widget.account.balance;
   double get _variance => _actualBalance - widget.account.balance;
 
   Future<void> _submitReconciliation() async {
@@ -65,14 +66,14 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
         widget.onReconcileSuccess?.call();
         AppSnackBar.showSuccess(
           context,
-          '${widget.account.name} balance updated to ${widget.account.currency} ${NumberFormat('#,##0.00').format(_actualBalance)}',
+          context.trArgs('rbd_updated_msg', {'name': widget.account.name, 'amount': context.money(_actualBalance, widget.account.currency)}),
           title: context.tr('balance_reconciled'),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, 'Failed to reconcile balance: $e');
+        AppSnackBar.showError(context, context.trArgs('rbd_failed', {'error': e}));
       }
     }
   }
@@ -131,7 +132,7 @@ class _ReconcileBalanceDialogState extends State<ReconcileBalanceDialog> {
                 children: [
                   Text(context.tr('app_balance'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
                   Text(
-                    '${widget.account.currency} ${fmt.format(widget.account.balance)}',
+                    context.money(widget.account.balance, widget.account.currency),
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
                   ),
                 ],

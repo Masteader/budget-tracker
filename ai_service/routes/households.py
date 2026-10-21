@@ -1,4 +1,5 @@
-"""Household management routes: payday, income, rollover rules, savings, invites, dependents, settlement, categories."""
+"""Household management routes: payday, income, rollover rules, savings, invites, dependents, settlement, categories,
+members (admins, financial roles) and the household type."""
 
 from __future__ import annotations
 
@@ -6,7 +7,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from auth import verify_household_access, verify_household_admin_access, get_current_user_id
 from utils import safe_error_response, validate_uuid
@@ -20,6 +21,26 @@ from models import (
     DependentCreateRequest,
     CategoryToggleRequest,
     CustomCategoryCreateRequest,
+    PrimaryAdminTransferRequest,
+    HouseholdTypeUpdateRequest,
+    MemberFinancialRoleUpdateRequest,
+)
+from household_permissions import (
+    HouseholdConflictError,
+    HouseholdPermissionError,
+    InvalidFinancialRoleError,
+    InvalidRoleChangeError,
+    MemberNotFoundError,
+    PermissionDeniedError,
+    assert_invite_role_fits,
+    can_record_settlement,
+    list_members,
+    member_role,
+    promote_member,
+    revoke_admin,
+    set_household_type,
+    set_member_financial_role,
+    transfer_primary_admin,
 )
 from supabase_client import (
     get_household_payday,
@@ -30,6 +51,8 @@ from supabase_client import (
     set_household_rollover_rule,
     get_household_savings_summary,
     create_household_role_invite,
+    InviteRejectedError,
+    InviteTargetNotFound,
     inspect_household_role_invite,
     claim_household_role_invite,
     record_household_reimbursement,
@@ -40,6 +63,14 @@ from dependents_service import (
     delete_household_dependent,
 )
 from settlement_engine import calculate_partner_settlement, calculate_settlement_v2
+from nafaqah_service import (
+    PAYMENT_METHODS as NAFAQAH_PAYMENT_METHODS,
+    NafaqahError,
+    load_family_context,
+    record_reimbursement,
+    resolve_wife_id,
+)
+from routes.nafaqah import nafaqah_http_error
 from salary_cycle import (
     get_household_categories,
     toggle_category_status,
@@ -199,30 +230,36 @@ async def create_household_role_invite_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    target = payload.target_member_id
+    if target is not None:
+        # FABLE2-API-06: a UUID (400) of a dependent of this household (404), checked before
+        # the insert; database refusals are 4xx.
+        target = validate_uuid(target, "target_member_id").strip().lower()
+    try:
+        # D1: no spouse/family invite in a roommates household, no peer invite in a family (409).
+        await asyncio.to_thread(assert_invite_role_fits, household_id, payload.role)
+    except HouseholdConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to create invite.")
     try:
         return await asyncio.to_thread(
             create_household_role_invite,
             household_id,
             payload.role,
-            payload.target_member_id,
+            target,
         )
+    except InviteTargetNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except InviteRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=InviteRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to create invite.")
 
 
+from auth import optional_verified_user_id
 from rate_limiter import default_rate_limiter
-
-
-def get_client_ip(request: Request) -> str:
-    """Extract client IP safely from rightmost X-Forwarded-For hop or client host."""
-    xff = request.headers.get("X-Forwarded-For")
-    if xff:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            return parts[-1]
-    if request.client and request.client.host:
-        return request.client.host
-    return "127.0.0.1"
+from utils import get_client_ip
 
 
 @router.get(
@@ -234,9 +271,13 @@ async def inspect_household_role_invite_endpoint(invite_code: str, request: Requ
     if not invite_code:
         raise HTTPException(status_code=400, detail="invite_code is required.")
 
-    # Rate-limit invite inspection by client IP (rightmost X-Forwarded-For hop)
-    client_ip = get_client_ip(request)
-    await default_rate_limiter.check_rate_limit(f"inspect_invite:{client_ip}", max_requests=20, window_seconds=60)
+    # Rate-limit invite inspection per identity (FABLE-API-03): the verified user, else the client
+    # IP (utils.client_ip_info), under a generous global ceiling, so one proxy address shared by
+    # every visitor cannot lock everyone out.
+    caller = optional_verified_user_id(request)
+    identity = f"user:{caller}" if caller else f"ip:{get_client_ip(request)}"
+    await default_rate_limiter.check_rate_limit(f"inspect_invite:{identity}", max_requests=20, window_seconds=60)
+    await default_rate_limiter.check_rate_limit("inspect_invite:global", max_requests=600, window_seconds=60)
 
     try:
         raw = await asyncio.to_thread(inspect_household_role_invite, invite_code)
@@ -273,6 +314,12 @@ async def claim_household_role_invite_endpoint(
     user_id = get_current_user_id(request)
     try:
         res = await asyncio.to_thread(claim_household_role_invite, invite_code, user_id)
+        if res.get("code") == "rate_limited":
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=res.get("error", "Too many failed join attempts. Please try again later."),
+                headers={"Retry-After": "900"},
+            )
         if res.get("status") != "success":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -294,20 +341,74 @@ async def claim_household_role_invite_endpoint(
 async def record_household_reimbursement_endpoint(
     household_id: str,
     payload: HouseholdReimbursementRequest,
+    request: Request,
     _auth: str = Depends(verify_household_access),
 ):
+    """
+    Roommate/partner households: a settlement transaction between members (unchanged).
+    Family households (Nafaqah): the only debt is the husband's to his wife for her advances, so
+    a repayment to the wife goes to the append-only Nafaqah ledger (overpayment rejected) and any
+    other direction is refused; nothing in a family is split between the spouses.
+    """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    if payload.household_id != household_id:
+        raise HTTPException(status_code=400, detail="Body household_id does not match the URL.")
+    if payload.payer_id.strip().lower() == payload.recipient_id.strip().lower():
+        raise HTTPException(status_code=400, detail="payer_id and recipient_id must differ.")
+    caller = get_current_user_id(request)
+    try:
+        ctx = await asyncio.to_thread(load_family_context, household_id)
+    except Exception as exc:
+        # No fallback: guessing "not a family" would record a split between the spouses.
+        raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+    if ctx.is_family:
+        try:
+            wife_id = resolve_wife_id(ctx, payload.recipient_id)
+        except NafaqahError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="In a family household only the husband's repayments to his wife are recorded.",
+            )
+        method = payload.payment_method.strip().lower()
+        if method not in NAFAQAH_PAYMENT_METHODS:
+            method = "other"
+        try:
+            result = await asyncio.to_thread(
+                record_reimbursement, ctx, caller, wife_id, str(payload.amount), method, payload.notes
+            )
+        except NafaqahError as exc:
+            raise nafaqah_http_error(exc)
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+        return {**result, "mode": "family_nafaqah", "is_settlement": False}
+    # Both parties must be members of this household (the ids are stored on the transaction and
+    # read back by the settlement engines).
+    payer_id = payload.payer_id.strip().lower()
+    recipient_id = payload.recipient_id.strip().lower()
+    if not (ctx.is_member(payer_id) and ctx.is_member(recipient_id)):
+        raise HTTPException(status_code=400, detail="payer_id and recipient_id must be members of this household.")
+    # A settlement attributes a payment to members: either party records it, or an admin (DB-18).
+    try:
+        caller_role = await asyncio.to_thread(member_role, household_id, caller)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to record reimbursement.")
+    if not can_record_settlement(caller, caller_role, payer_id, recipient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the payer, the recipient or a household admin can record this settlement.",
+        )
     try:
         return await asyncio.to_thread(
             record_household_reimbursement,
             household_id=household_id,
-            payer_id=payload.payer_id,
-            recipient_id=payload.recipient_id,
+            payer_id=payer_id,
+            recipient_id=recipient_id,
             amount=payload.amount,
             payment_method=payload.payment_method,
             notes=payload.notes,
+            recorded_by=caller,
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to record reimbursement.")
@@ -380,18 +481,24 @@ async def remove_household_dependent(
 )
 async def household_settlement(
     household_id: str,
-    split_ratio: float = 0.50,
+    request: Request,
+    split_ratio: float = Query(0.50, ge=0.0, le=1.0, allow_inf_nan=False),
     _auth: str = Depends(verify_household_access),
 ):
     """
     Aggregates transactions in the active salary cycle by spent_by ('me', 'partner', 'both').
     Returns net balance, who owes whom, and copyable STC Pay / Urpay / IBAN transfer note.
+    split_ratio applies to roommate/partner households only; married-family households are
+    settled by Nafaqah rules (no 50/50 spousal split).
     """
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    caller_user_id = get_current_user_id(request)
     try:
-        return await asyncio.to_thread(calculate_partner_settlement, household_id, split_ratio=split_ratio)
+        return await asyncio.to_thread(
+            calculate_partner_settlement, household_id, split_ratio=split_ratio, caller_user_id=caller_user_id
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to compute partner settlement.")
 
@@ -482,3 +589,148 @@ async def create_custom_category_endpoint(
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to create custom category.")
+
+
+
+# ─── Members, co-admins and the primary admin (owner decision on DB-16 / DB-18) ──
+
+def _permission_http_error(exc: HouseholdPermissionError) -> HTTPException:
+    if isinstance(exc, HouseholdConflictError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
+    if isinstance(exc, InvalidFinancialRoleError):
+        return HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
+    if isinstance(exc, PermissionDeniedError):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    if isinstance(exc, MemberNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if isinstance(exc, InvalidRoleChangeError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+async def _run_roles(fn, *args, public_message: str):
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except HouseholdPermissionError as exc:
+        raise _permission_http_error(exc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise safe_error_response(exc, public_message=public_message)
+
+
+@router.get(
+    "/households/{household_id}/members",
+    tags=["households"],
+    summary="Members of the household with their roles; the primary admin is listed first.",
+)
+async def list_household_members(
+    household_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(list_members, household_id, caller, public_message="Failed to list members.")
+
+
+@router.post(
+    "/households/{household_id}/members/{member_user_id}/admin",
+    tags=["households"],
+    summary="Make a member an admin (co-admin). Any admin of the household may do this.",
+)
+async def promote_household_member(
+    household_id: str,
+    member_user_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        promote_member, household_id, caller, member_user_id, public_message="Failed to promote member."
+    )
+
+
+@router.delete(
+    "/households/{household_id}/members/{member_user_id}/admin",
+    tags=["households"],
+    summary="Revoke a co-admin. The primary admin and the last admin cannot be demoted.",
+)
+async def revoke_household_admin(
+    household_id: str,
+    member_user_id: str,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        revoke_admin, household_id, caller, member_user_id, public_message="Failed to revoke admin."
+    )
+
+
+@router.post(
+    "/households/{household_id}/primary-admin",
+    tags=["households"],
+    summary="Transfer primary admin to another member (primary admin only).",
+)
+async def transfer_household_primary_admin(
+    household_id: str,
+    payload: PrimaryAdminTransferRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        transfer_primary_admin,
+        household_id,
+        caller,
+        payload.new_primary_user_id,
+        public_message="Failed to transfer primary admin.",
+    )
+
+
+# ─── Household type and members' financial roles (owner decision D1, FABLE2-DB-07) ──
+
+@router.put(
+    "/households/{household_id}/type",
+    tags=["households"],
+    summary="Switch the household between 'family' and 'roommates' (admins).",
+)
+async def update_household_type(
+    household_id: str,
+    payload: HouseholdTypeUpdateRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        set_household_type, household_id, caller, payload.household_type,
+        public_message="Failed to change the household type.",
+    )
+
+
+@router.put(
+    "/households/{household_id}/members/{member_user_id}/financial-role",
+    tags=["households"],
+    summary="Set a member's financial role within the household type (admins).",
+)
+async def update_member_financial_role(
+    household_id: str,
+    member_user_id: str,
+    payload: MemberFinancialRoleUpdateRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    validate_uuid(member_user_id)
+    caller = get_current_user_id(request)
+    return await _run_roles(
+        set_member_financial_role, household_id, caller, member_user_id, payload.financial_role,
+        public_message="Failed to change the member's financial role.",
+    )

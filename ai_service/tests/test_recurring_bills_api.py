@@ -72,14 +72,14 @@ def test_toggle_household_recurring_bill_selects_cycle_columns(monkeypatch):
             "category_code": "OPEX-UTILITIES",
             "cycle_key": "2026-10",
             "month": "2026-10-01",
-            "sub_allocations": {},
+            "sub_allocations": {"ELECTRICITY": 300},  # FABLE2-API-02: a known item
         }
     ]
     mock_sb.table("budgets").update.return_value.eq.return_value.execute.return_value.data = [{"status": "ok"}]
     monkeypatch.setattr("supabase_client.get_client", lambda: mock_sb)
 
     # When cycle_info returns 2026-10
-    monkeypatch.setattr("recurring_detector.get_cycle_for_date", lambda: {"cycle_key": "2026-10"})
+    monkeypatch.setattr("recurring_detector.get_cycle_for_date", lambda *a, **k: {"cycle_key": "2026-10"})
 
     res = recurring_detector.toggle_household_recurring_bill(
         household_id="hh-test",

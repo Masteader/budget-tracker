@@ -2,22 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../models/models.dart';
-import '../../services/api_service.dart';
-import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/models.dart';
+import '../../models/money.dart';
+import '../../models/nafaqah.dart';
+import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
+import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
+import '../nafaqah/wife_allowance_card.dart';
 
+/// Records a roommate settlement payment (used by the roommate card).
+typedef ReimbursementRecorder = Future<Map<String, dynamic>> Function(ReimbursementRecordRequest request);
+
+/// Loads the caller's Nafaqah summary. Defaults to the API; injectable for tests.
+typedef NafaqahSummaryLoader = Future<NafaqahSummary> Function(String householdId);
+
+/// Records a repayment to the wife and returns the outstanding balance after it.
+typedef NafaqahReimbursementRecorder = Future<double> Function({
+  required double amount,
+  required String paymentMethod,
+  required String wifeUserId,
+});
+
+/// Loads one wife's ledger (advances and repayments).
+typedef NafaqahLedgerLoader = Future<NafaqahLedger> Function(String householdId, String wifeUserId);
+
+/// Family mode (Islamic Nafaqah). Shared family expenses are the husband's
+/// responsibility and are never split between the spouses. The card shows what
+/// the husband owes his wife for shared things she paid from her own money,
+/// records partial or full repayments, lists the history, and shows her
+/// personal allowance for the salary cycle. Renders nothing outside family mode;
+/// a failed load is an error with a retry, never "nothing owed" (UX-01).
 class FamilyReimbursementCard extends StatefulWidget {
   final String householdId;
-  final FamilyNafaqahSummary? summary;
+  final NafaqahSummary? summary;
   final VoidCallback? onReimbursed;
+
+  /// Every summary the card loads (first load, retry, after a repayment), so
+  /// the dashboard hero can show what is owed to the wife.
+  final ValueChanged<NafaqahSummary>? onSummaryLoaded;
+  final NafaqahSummaryLoader? loadSummary;
+  final NafaqahReimbursementRecorder? recordReimbursement;
+  final NafaqahLedgerLoader? loadLedger;
+  final AllowanceSetter? setAllowance;
 
   const FamilyReimbursementCard({
     super.key,
     required this.householdId,
     this.summary,
     this.onReimbursed,
+    this.onSummaryLoaded,
+    this.loadSummary,
+    this.recordReimbursement,
+    this.loadLedger,
+    this.setAllowance,
   });
 
   @override
@@ -25,8 +65,10 @@ class FamilyReimbursementCard extends StatefulWidget {
 }
 
 class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
-  FamilyNafaqahSummary? _summary;
+  NafaqahSummary? _summary;
   bool _isLoading = true;
+  bool _failed = false;
+  DateTime? _lastUpdated;
 
   @override
   void initState() {
@@ -42,44 +84,44 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
   @override
   void didUpdateWidget(covariant FamilyReimbursementCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.summary != null) {
+    if (widget.summary != null && widget.summary != oldWidget.summary) {
       _summary = widget.summary;
       _isLoading = false;
+    } else if (widget.householdId != oldWidget.householdId) {
+      // Never show the previous household's ledger while this one loads.
+      _summary = null;
+      _isLoading = true;
+      _failed = false;
+      _loadSummary();
     }
   }
 
   Future<void> _loadSummary() async {
+    final loader = widget.loadSummary ?? ApiService.instance.getNafaqahSummary;
     try {
-      final res = await ApiService.instance.getSettlementV2(widget.householdId);
+      final res = await loader(widget.householdId);
       if (mounted) {
         setState(() {
-          _summary = res.familySummary ?? const FamilyNafaqahSummary();
+          _summary = res;
           _isLoading = false;
+          _failed = false;
+          _lastUpdated = DateTime.now();
         });
+        widget.onSummaryLoaded?.call(res);
       }
     } catch (_) {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _failed = true;
         });
       }
     }
   }
 
-  void _showReimburseDialog(BuildContext context, double totalOwed) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _ReimburseBottomSheet(
-        householdId: widget.householdId,
-        totalOwed: totalOwed,
-        onConfirmed: () {
-          widget.onReimbursed?.call();
-          _loadSummary();
-        },
-      ),
-    );
+  void _retry() {
+    setState(() => _isLoading = _summary == null);
+    _loadSummary();
   }
 
   @override
@@ -96,19 +138,128 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE5A93C)),
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.champagneGold),
           ),
         ),
       );
     }
 
-    final summary = _summary ?? const FamilyNafaqahSummary();
-    final owed = summary.wifeReimbursementOwed;
-    final isSettled = owed <= 0.01;
+    final summary = _summary;
+    if (summary == null && _failed) {
+      return CardErrorState(
+        title: context.tr('family_nafaqah_title'),
+        message: context.tr('load_error_nafaqah'),
+        icon: Icons.family_restroom_rounded,
+        onRetry: _retry,
+      );
+    }
+    if (summary == null || !summary.isFamily) return const SizedBox.shrink();
 
-    final badgeColor = isSettled ? const Color(0xFF00C896) : const Color(0xFFE5A93C);
-    final badgeText = isSettled ? context.tr('all_settled') : context.tr('reimbursement_owed');
-    final badgeIcon = isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded;
+    final wives = summary.callerIsWife
+        ? [summary.primaryWife!]
+        : summary.wives;
+    final showNames = wives.length > 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_failed) ...[
+          CardErrorBanner(lastUpdated: _lastUpdated, onRetry: _retry),
+          const SizedBox(height: 8),
+        ],
+        if (summary.needsProvider) ...[
+          _NoticeBanner(
+            key: const ValueKey('nafaqah_needs_provider'),
+            icon: Icons.person_search_rounded,
+            title: context.tr('nafaqah_provider_missing_title'),
+            message: context.tr(
+              summary.canSetProvider ? 'nafaqah_provider_missing_settings' : 'nafaqah_provider_missing_member',
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        for (var i = 0; i < wives.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _ReimbursementPanel(
+            householdId: widget.householdId,
+            summary: summary,
+            wife: wives[i],
+            showWifeName: showNames,
+            recordReimbursement: widget.recordReimbursement,
+            loadLedger: widget.loadLedger,
+            onReimbursed: () {
+              widget.onReimbursed?.call();
+              _loadSummary();
+            },
+          ),
+          const SizedBox(height: 12),
+          WifeAllowanceCard(
+            householdId: widget.householdId,
+            wife: wives[i],
+            cycleKey: summary.cycleKey,
+            viewerIsWife: summary.callerIsWife,
+            canSet: summary.canSetAllowance && wives[i].id != summary.callerUserId,
+            showWifeName: showNames,
+            setAllowance: widget.setAllowance,
+            onChanged: _loadSummary,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ReimbursementPanel extends StatelessWidget {
+  final String householdId;
+  final NafaqahSummary summary;
+  final NafaqahWife wife;
+  final bool showWifeName;
+  final NafaqahReimbursementRecorder? recordReimbursement;
+  final NafaqahLedgerLoader? loadLedger;
+  final VoidCallback onReimbursed;
+
+  const _ReimbursementPanel({
+    required this.householdId,
+    required this.summary,
+    required this.wife,
+    required this.showWifeName,
+    required this.onReimbursed,
+    this.recordReimbursement,
+    this.loadLedger,
+  });
+
+  void _openReimburseSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ReimburseBottomSheet(
+        householdId: householdId,
+        wifeUserId: wife.id,
+        totalOwed: wife.reimbursement.outstanding,
+        recordReimbursement: recordReimbursement,
+        onConfirmed: onReimbursed,
+      ),
+    );
+  }
+
+  void _openHistory(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _LedgerHistorySheet(householdId: householdId, wifeUserId: wife.id, loadLedger: loadLedger),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gold = context.goldText;
+    final balance = wife.reimbursement;
+    final isSettled = balance.isSettled;
+    final badgeColor = isSettled ? AppThemes.success : gold;
+    final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you') : context.tr('husband_owes_wife');
+    final actionLabel = summary.callerIsWife ? context.tr('nafaqah_confirm_received') : context.tr('reimburse_wife');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -116,132 +267,88 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
         color: context.cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isSettled ? context.borderColor : const Color(0xFFE5A93C).withValues(alpha: 0.35),
+          color: isSettled ? context.borderColor : gold.withValues(alpha: 0.35),
           width: 1.2,
         ),
-        boxShadow: isSettled
-            ? null
-            : [
-                BoxShadow(
-                  color: const Color(0xFFE5A93C).withValues(alpha: 0.07),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: gold.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(Icons.family_restroom_rounded, color: gold, size: 20),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5A93C).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.family_restroom_rounded,
-                        color: Color(0xFFE5A93C),
-                        size: 20,
-                      ),
+                    Text(
+                      showWifeName && (wife.displayName ?? '').isNotEmpty
+                          ? '${context.tr('family_nafaqah_title')} · ${wife.displayName}'
+                          : context.tr('family_nafaqah_title'),
+                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('family_nafaqah_title'),
-                            style: GoogleFonts.outfit(
-                              color: context.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            context.tr('family_nafaqah_subtitle'),
-                            style: TextStyle(
-                              color: context.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      context.tr('family_nafaqah_subtitle'),
+                      style: TextStyle(color: context.textSecondary, fontSize: 11),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(badgeIcon, size: 12, color: badgeColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      badgeText,
-                      style: TextStyle(
+              // Flexible: large system text must not push it off the card (UX-14).
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded,
+                        size: 12,
                         color: badgeColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed'),
+                          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-
-          // Main Balance Display
           if (!isSettled) ...[
+            Text('$owedLabel:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
+            const SizedBox(height: 2),
             Text(
-              '${context.tr('husband_owes_wife')}:',
-              style: TextStyle(color: context.textSecondary, fontSize: 12),
+              context.sar(balance.outstanding),
+              style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w800, color: gold),
             ),
             const SizedBox(height: 2),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '${context.tr('sar')} ${owed.toStringAsFixed(2)}',
-                  style: GoogleFonts.outfit(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFE5A93C),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    context.tr('wife_advanced_household_funds'),
-                    style: TextStyle(color: context.textSecondary, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
+            Text(context.tr('settle_wife_advanced'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
             const SizedBox(height: 12),
           ] else ...[
             Row(
               children: [
-                const Icon(Icons.verified_rounded, color: Color(0xFF00C896), size: 20),
+                const Icon(Icons.verified_rounded, color: AppThemes.success, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.tr('all_nafaqah_settled_desc'),
+                    context.tr('settle_nafaqah_all_settled'),
                     style: TextStyle(color: context.textPrimary, fontSize: 12),
                   ),
                 ),
@@ -249,68 +356,115 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
             ),
             const SizedBox(height: 10),
           ],
-
-          // Attribution pills
+          if (balance.isOverpaid) ...[
+            _NoticeBanner(
+              key: ValueKey('nafaqah_overpaid_${wife.id}'),
+              icon: Icons.warning_amber_rounded,
+              title: context.trArgs('nafaqah_overpaid', {'amount': context.sar(balance.overpaid)}),
+              message: context.tr('nafaqah_overpaid_hint'),
+            ),
+            const SizedBox(height: 10),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
-              _buildPill(
-                context,
-                icon: Icons.child_care_rounded,
-                label: '${context.tr('nafaqah_children')}: ${context.tr('sar')} ${summary.spentOnChildren.toStringAsFixed(2)}',
-                color: const Color(0xFF38BDF8),
+              _Pill(
+                icon: Icons.north_east_rounded,
+                label: context.trArgs('nafaqah_advanced_total', {'amount': context.sar(balance.grossAdvanced)}),
+                color: gold,
               ),
-              _buildPill(
-                context,
-                icon: Icons.favorite_border_rounded,
-                label: '${context.tr('nafaqah_wife')}: ${context.tr('sar')} ${summary.spentOnWife.toStringAsFixed(2)}',
-                color: const Color(0xFFEC4899),
-              ),
-              _buildPill(
-                context,
-                icon: Icons.home_outlined,
-                label: '${context.tr('nafaqah_household')}: ${context.tr('sar')} ${summary.familyGeneralTotal.toStringAsFixed(2)}',
-                color: const Color(0xFF94A3B8),
+              _Pill(
+                icon: Icons.south_west_rounded,
+                label: context.trArgs('nafaqah_reimbursed_total', {'amount': context.sar(balance.reimbursed)}),
+                color: AppThemes.success,
               ),
             ],
           ),
-
-          if (!isSettled) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE5A93C),
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (!isSettled && summary.canRecordReimbursement) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      foregroundColor: AppThemes.deepGlacial,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    label: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _openReimburseSheet(context);
+                    },
+                  ),
                 ),
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: Text(
-                  context.tr('reimburse_wife'),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  _showReimburseDialog(context, owed);
-                },
+                const SizedBox(width: 8),
+              ],
+              TextButton.icon(
+                onPressed: () => _openHistory(context),
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: Text(context.tr('nafaqah_history')),
               ),
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildPill(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
+/// A warning line inside the Nafaqah card (missing provider, overpaid ledger).
+class _NoticeBanner extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _NoticeBanner({super.key, required this.icon, required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.dangerColor;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: context.isDarkMode ? 0.12 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(message, style: TextStyle(color: context.textSecondary, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _Pill({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -323,12 +477,109 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
+          Flexible(
+            child: Text(label, style: TextStyle(color: context.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── History ─────────────────────────────────────────────────────────────────
+
+class _LedgerHistorySheet extends StatefulWidget {
+  final String householdId;
+  final String wifeUserId;
+  final NafaqahLedgerLoader? loadLedger;
+
+  const _LedgerHistorySheet({required this.householdId, required this.wifeUserId, this.loadLedger});
+
+  @override
+  State<_LedgerHistorySheet> createState() => _LedgerHistorySheetState();
+}
+
+class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
+  late final Future<NafaqahLedger> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    final loader = widget.loadLedger ??
+        (String hid, String wifeId) => ApiService.instance.getNafaqahLedger(hid, wifeUserId: wifeId);
+    _future = loader(widget.householdId, widget.wifeUserId);
+  }
+
+  String _methodLabel(BuildContext context, String? method) {
+    const known = {'stc_pay', 'urpay', 'bank_transfer', 'iban', 'cash', 'other'};
+    return context.tr('pay_method_${known.contains(method) ? method : 'other'}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+            context.tr('nafaqah_history_title'),
+            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
+          ),
+          const SizedBox(height: 12),
+          Flexible(
+            child: FutureBuilder<NafaqahLedger>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  );
+                }
+                if (snap.hasError) {
+                  return Text(
+                    context.trArgs('settle_record_failed_msg', {'error': snap.error ?? ''}),
+                    style: TextStyle(color: context.dangerColor, fontSize: 12),
+                  );
+                }
+                final history = snap.data?.history ?? const <NafaqahLedgerEntry>[];
+                if (history.isEmpty) {
+                  return Text(context.tr('nafaqah_history_empty'), style: TextStyle(color: context.textSecondary));
+                }
+                return ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: history.length,
+                  separatorBuilder: (_, __) => Divider(color: context.borderColor, height: 1),
+                  itemBuilder: (context, i) {
+                    final e = history[i];
+                    final color = e.isAdvance ? context.goldText : context.successText;
+                    final title = e.isAdvance
+                        ? context.trArgs('nafaqah_history_advance', {'merchant': e.merchant ?? context.tr('merchant_generic')})
+                        : context.trArgs('nafaqah_history_reimbursement', {'method': _methodLabel(context, e.paymentMethod)});
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(e.isAdvance ? Icons.north_east_rounded : Icons.south_west_rounded, color: color),
+                      title: Text(title, style: TextStyle(color: context.textPrimary, fontSize: 13)),
+                      subtitle: e.timestamp == null
+                          ? null
+                          : Text(l10n.date(e.timestamp!, 'd MMM yyyy'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                      trailing: Text(
+                        '${e.isAdvance ? '+' : '−'}${context.sar(e.amount)}',
+                        style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -337,17 +588,21 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
   }
 }
 
-// ── Bottom Sheet for Recording Reimbursement Payment ────────────────────────
+// ── Record a repayment ──────────────────────────────────────────────────────
 
 class _ReimburseBottomSheet extends StatefulWidget {
   final String householdId;
+  final String wifeUserId;
   final double totalOwed;
   final VoidCallback onConfirmed;
+  final NafaqahReimbursementRecorder? recordReimbursement;
 
   const _ReimburseBottomSheet({
     required this.householdId,
+    required this.wifeUserId,
     required this.totalOwed,
     required this.onConfirmed,
+    this.recordReimbursement,
   });
 
   @override
@@ -371,44 +626,69 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     super.dispose();
   }
 
-  Future<void> _submitSettlement() async {
-    final amt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+  Future<void> _submit() async {
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
+    final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     if (amt <= 0) {
-      AppSnackBar.showError(context, 'Please enter a valid payment amount');
+      AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
+      return;
+    }
+    // Paying back more than is owed would invent a debt for the wife.
+    if ((amt * 100).round() > (widget.totalOwed * 100).round()) {
+      AppSnackBar.showError(
+        context,
+        context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)}),
+        title: context.tr('settle_record_failed'),
+      );
       return;
     }
 
     setState(() => _isSubmitting = true);
-
     try {
-      await ApiService.instance.recordReimbursementPayment(
-        ReimbursementRecordRequest(
-          householdId: widget.householdId,
-          payerId: 'husband',
-          recipientId: 'wife',
-          amount: amt,
-          paymentMethod: _paymentMethod,
-          notes: 'Wife household reimbursement via ${_paymentMethod.toUpperCase()}',
-        ),
-      );
-    } catch (_) {
-      // In tests or offline mode, continue gracefully
+      final record = widget.recordReimbursement ??
+          ({required double amount, required String paymentMethod, required String wifeUserId}) =>
+              ApiService.instance.recordNafaqahReimbursement(
+                widget.householdId,
+                amount: amount,
+                paymentMethod: paymentMethod,
+                wifeUserId: wifeUserId,
+              );
+      await record(amount: amt, paymentMethod: _paymentMethod, wifeUserId: widget.wifeUserId);
+    } catch (e) {
+      // Never report a repayment as recorded when the server rejected it.
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final String message;
+      if (e is NafaqahApiException && e.code == 'overpayment') {
+        message = context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)});
+      } else if (e is NafaqahApiException && e.code == 'forbidden') {
+        message = context.tr('nafaqah_err_forbidden');
+      } else if (e is NafaqahApiException && e.code == 'invalid') {
+        message = context.tr('nafaqah_err_invalid_amount');
+      } else if (nafaqahWriteRefusalOf(e) != null) {
+        message = nafaqahWriteRefusalText(context, nafaqahWriteRefusalOf(e)!);
+      } else {
+        message = context.trArgs('settle_record_failed_msg', {'error': e});
+      }
+      AppSnackBar.showError(context, message, title: context.tr('settle_record_failed'));
+      return;
     }
 
-    if (mounted) {
-      AppSnackBar.showSuccess(
-        context,
-        'Recorded settlement of SAR ${amt.toStringAsFixed(2)} via ${_paymentMethod.toUpperCase()}',
-        title: 'Settlement Recorded',
-        icon: Icons.check_circle_outline,
-      );
-      Navigator.of(context).pop();
-      widget.onConfirmed();
-    }
+    if (!mounted) return;
+    AppSnackBar.showSuccess(
+      context,
+      context.trArgs('settle_recorded_via', {'amount': context.sar(amt), 'method': context.tr('pay_method_$_paymentMethod')}),
+      title: context.tr('settle_recorded_title'),
+      icon: Icons.check_circle_outline,
+    );
+    Navigator.of(context).pop();
+    widget.onConfirmed();
   }
 
   @override
   Widget build(BuildContext context) {
+    final full = widget.totalOwed.toStringAsFixed(2);
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -430,117 +710,74 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                  color: context.borderColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                decoration: BoxDecoration(color: context.borderColor, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              context.tr('settle_wife_reimbursement'),
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: context.textPrimary,
-              ),
+              context.tr('settle_wife_title'),
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
             ),
             const SizedBox(height: 4),
-            Text(
-              context.tr('settle_wife_desc'),
-              style: TextStyle(color: context.textSecondary, fontSize: 12),
-            ),
+            Text(context.tr('settle_wife_desc'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
             const SizedBox(height: 16),
-
-            // Quick Chips
-            Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: Text('${context.tr('full')} (${context.tr('sar')} ${widget.totalOwed.toStringAsFixed(2)})'),
-                  selected: _amountCtrl.text == widget.totalOwed.toStringAsFixed(2),
-                  onSelected: (val) {
-                    if (val) {
-                      setState(() {
-                        _amountCtrl.text = widget.totalOwed.toStringAsFixed(2);
-                      });
-                    }
-                  },
-                ),
-                ChoiceChip(
-                  label: Text('${context.tr('half')} (${context.tr('sar')} ${(widget.totalOwed / 2).toStringAsFixed(2)})'),
-                  selected: _amountCtrl.text == (widget.totalOwed / 2).toStringAsFixed(2),
-                  onSelected: (val) {
-                    if (val) {
-                      setState(() {
-                        _amountCtrl.text = (widget.totalOwed / 2).toStringAsFixed(2);
-                      });
-                    }
-                  },
-                ),
-              ],
+            ChoiceChip(
+              label: Text(context.trArgs('settle_full', {'amount': context.sar(widget.totalOwed)})),
+              selected: _amountCtrl.text == full,
+              onSelected: (val) {
+                if (val) setState(() => _amountCtrl.text = full);
+              },
             ),
             const SizedBox(height: 14),
-
-            // Amount Input Field
             TextField(
+              key: const ValueKey('reimburse_amount_field'),
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: context.tr('payment_amount_sar'),
-                prefixIcon: const Icon(Icons.attach_money_rounded),
+                labelText: context.tr('settle_payment_amount'),
+                prefixIcon: const Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 16),
-
-            // Payment Method Selector
             Text(
-              context.tr('payment_method'),
+              context.tr('settle_payment_method'),
               style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                _buildMethodChip('stc_pay', context.tr('stc_pay_label'), Icons.phone_android_rounded),
-                const SizedBox(width: 8),
-                _buildMethodChip('bank_transfer', context.tr('bank_label'), Icons.account_balance_rounded),
-                const SizedBox(width: 8),
-                _buildMethodChip('cash', context.tr('cash_label'), Icons.payments_rounded),
+                _buildMethodChip('stc_pay', Icons.phone_android_rounded),
+                _buildMethodChip('bank_transfer', Icons.account_balance_rounded),
+                _buildMethodChip('cash', Icons.payments_rounded),
               ],
             ),
             const SizedBox(height: 16),
-
-            // Copy STC Pay note button
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.copy_rounded, size: 16),
-              label: Text(context.tr('copy_stc_pay_note'), style: const TextStyle(fontSize: 12)),
+              label: Text(context.tr('settle_copy_stc_note'), style: const TextStyle(fontSize: 12)),
               onPressed: () async {
-                final amt = _amountCtrl.text;
-                final note = context.tr('nafaqah_reimbursement_note').replaceAll('{amount}', amt);
+                final note = context.trArgs('settle_nafaqah_note', {'amount': _amountCtrl.text});
+                final copiedMsg = context.trArgs('settle_copied_quote', {'text': note});
+                final copiedTitle = context.tr('settle_copied_note');
                 await Clipboard.setData(ClipboardData(text: note));
-                if (context.mounted) {
-                  AppSnackBar.showSuccess(
-                    context,
-                    context.tr('copied_amount_note').replaceAll('{note}', note),
-                    title: context.tr('copied_note'),
-                  );
-                }
+                if (context.mounted) AppSnackBar.showSuccess(context, copiedMsg, title: copiedTitle);
               },
             ),
             const SizedBox(height: 20),
-
-            // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE5A93C),
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppThemes.champagneGold,
+                  foregroundColor: AppThemes.deepGlacial,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -548,14 +785,14 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.deepGlacial),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
-                  context.tr('record_settlement_payment'),
+                  context.tr('settle_record_payment'),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
-                onPressed: _isSubmitting ? null : _submitSettlement,
+                onPressed: _isSubmitting ? null : _submit,
               ),
             ),
           ],
@@ -564,11 +801,11 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
     );
   }
 
-  Widget _buildMethodChip(String id, String label, IconData icon) {
+  Widget _buildMethodChip(String id, IconData icon) {
     final isSelected = _paymentMethod == id;
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? Colors.black : context.textSecondary),
-      label: Text(label),
+      avatar: Icon(icon, size: 14, color: isSelected ? AppThemes.deepGlacial : context.textSecondary),
+      label: Text(context.tr('pay_method_$id')),
       selected: isSelected,
       onSelected: (val) {
         if (val) setState(() => _paymentMethod = id);

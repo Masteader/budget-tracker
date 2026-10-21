@@ -18,27 +18,28 @@ void main() {
       ),
     );
 
-    // Initial step 1: Scanner
-    expect(find.text('AI Invoice & ZATCA Scanner'), findsOneWidget);
+    // UX-28: the core promise first, then the household rules, then the
+    // ways to record an expense.
+    expect(find.text("Know what's left until payday"), findsOneWidget);
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Next'), findsOneWidget);
 
-    // Tap Next through the cards
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text("Nafaqah, the wife's allowance, roommate settling"), findsOneWidget);
+    expect(find.textContaining('50/50'), findsNothing);
+
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Voice & Dialect Chat'), findsOneWidget);
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text('Salary Cycles & Payday (27th)'), findsOneWidget);
+    expect(find.text('AI Invoice & ZATCA Scanner'), findsOneWidget);
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Recurring Bills & Installments'), findsOneWidget);
-
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(find.text('Household & 2D Partner Split'), findsOneWidget);
     expect(find.text('Get Started'), findsOneWidget);
 
     // Tap Get Started

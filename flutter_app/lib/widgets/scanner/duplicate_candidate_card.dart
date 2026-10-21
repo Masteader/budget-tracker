@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_themes.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Card displayed when an invoice matches a recent transaction amount.
 class DuplicateCandidateCard extends StatelessWidget {
@@ -37,7 +38,7 @@ class DuplicateCandidateCard extends StatelessWidget {
               const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
               const SizedBox(width: 8),
               Text(
-                'Matching Transaction Found',
+                context.tr('dcc_title'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.orange),
               ),
             ],
@@ -53,12 +54,12 @@ class DuplicateCandidateCard extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C896),
+                    backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
                   ),
                   onPressed: onEnrich,
                   child: Text(
-                    'Attach $itemCount Items to Transaction',
+                    context.trPlural('dcc_attach', itemCount),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
@@ -68,7 +69,7 @@ class DuplicateCandidateCard extends StatelessWidget {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(foregroundColor: context.textPrimary, side: BorderSide(color: context.borderColor)),
                   onPressed: onLogSeparate,
-                  child: const Text('Log as Separate', style: TextStyle(fontSize: 11)),
+                  child: Text(context.tr('dcc_log_separate'), style: const TextStyle(fontSize: 11)),
                 ),
               ),
             ],
@@ -84,7 +85,7 @@ class DuplicateCandidateCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 6),
                 ),
                 icon: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('Discard Duplicate', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                label: Text(context.tr('dcc_discard'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                 onPressed: onDiscard,
               ),
             ),

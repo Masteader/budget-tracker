@@ -14,16 +14,16 @@
 - **Typography:**
   - Modern sans-serif via Google Fonts (`Outfit`, `Cairo`, or `Tajawal` for Arabic text).
 - **Glassmorphism & Elevation:**
-  - Thin 1px borders with subtle opacity (`Colors.white.withOpacity(0.08)` in dark mode, `Color(0x15000000)` in light mode).
+  - Thin 1px borders with subtle opacity (`Colors.white.withValues(alpha: 0.08)` in dark mode, `Color(0x15000000)` in light mode; `withOpacity` is deprecated).
   - Smooth rounded corners (16px to 24px).
   - Avoid heavy flat drop-shadows; use soft atmospheric glows.
 
 ## 2. Daylight Coastal Exploding Flow (Web Landing Page)
 
 - The web app and marketing portal follow the **Daylight Coastal Exploding Flow** aesthetic:
-  - Vibrant morning coastal palette with local ice sea backdrops and flowing ambient animations.
-  - Interactive live Payday Countdown simulator and income allocation sliders.
-  - Floating cards, glass frosted panels, and interactive feature breakdowns.
+  - Light morning coastal palette (teal on white), one subtle hero visual, no decorative canvas or looping effects.
+  - An illustrative payday countdown card (household payday → real cycle dates, sample amounts, labelled as an example).
+  - Plain, true copy: no invented metrics or claims the code does not back (product review 2026-10-21).
 
 ## 3. Strict Trilingual & RTL Guidelines
 
@@ -34,8 +34,8 @@
   3. `ur` - Urdu (اردو)
 - **Zero Hardcoding Rule:**
   - NEVER hardcode user-facing strings in English, Arabic, or Urdu.
-  - All labels, dialog titles, placeholders, toast notifications, and button text MUST be declared in `flutter_app/lib/l10n/app_localizations.dart` and accessed via `AppLocalizations.of(context).translate('key')`.
-  - In React web app, translations must be handled via `web_app/src/i18n/`.
+  - All labels, dialog titles, placeholders, toast notifications, and button text MUST be declared for `en`, `ar` and `ur` in `flutter_app/lib/l10n/app_localizations.dart` and accessed via `context.tr('key')` / `context.trArgs('key', {...})` (or `AppLocalizations.of(context).get('key')`).
+  - In the React web app, translations live in `web_app/src/i18n/translations.ts`.
 - **RTL Integrity:**
   - Avoid directional hardcoded paddings (e.g., use `EdgeInsetsDirectional` instead of `EdgeInsets.only(left: ...)`).
   - Use `Directionality.of(context)` or `isRTL` helpers to ensure arrows, icons, and progress bars mirror correctly.

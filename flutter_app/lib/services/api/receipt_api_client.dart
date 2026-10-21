@@ -1,4 +1,5 @@
 import 'base_api_client.dart';
+import 'preview_token.dart';
 
 class ReceiptApiClient {
   final BaseApiClient baseClient;
@@ -17,6 +18,15 @@ class ReceiptApiClient {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? paidBy,
+    String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    String? idempotencyKey,
+    DateTime? occurredAt,
+    String? previewToken,
+    double? amount,
+    String? categoryCode,
   }) async {
     final payload = <String, dynamic>{
       'images_base64': imagesBase64,
@@ -29,6 +39,17 @@ class ReceiptApiClient {
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),
       if (spentBy != null && spentBy.trim().isNotEmpty) 'spent_by': spentBy.trim(),
       if (receiptUrl != null && receiptUrl.trim().isNotEmpty) 'receipt_url': receiptUrl.trim(),
+      // Family Nafaqah (same contract as chat): who paid for whom and the confirmed class.
+      if (paidBy != null && paidBy.trim().isNotEmpty) 'paid_by': paidBy.trim(),
+      if (beneficiary != null && beneficiary.trim().isNotEmpty) 'beneficiary': beneficiary.trim(),
+      if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
+      if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
+      if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      // The total and category the user corrected in the review (UX-12).
+      if (amount != null) 'amount': amount,
+      if (categoryCode != null && categoryCode.trim().isNotEmpty) 'category_code': categoryCode.trim(),
+      // Sent back unchanged from the preview (see preview_token.dart).
+      if (previewToken != null && previewToken.isNotEmpty) previewTokenField: previewToken,
     };
 
     return baseClient.post(
@@ -36,6 +57,7 @@ class ReceiptApiClient {
       payload,
       shouldSign: true,
       timeout: const Duration(seconds: 45),
+      extraHeaders: idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
     );
   }
 }

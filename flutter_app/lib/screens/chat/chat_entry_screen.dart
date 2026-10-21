@@ -9,12 +9,20 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api/preview_token.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
+import '../../widgets/chat/pending_expense_confirmation_card.dart' show PendingExpenseEdits;
 import '../../widgets/chat/voice_listening_banner.dart';
+import '../../widgets/chat/voice_language_button.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
+
+/// Key under which a preview keeps the exact text it was parsed from.
+const String _previewMessageKey = 'preview_message';
 
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
@@ -37,15 +45,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   String _selectedLocale = 'ar_SA'; // 'ar_SA' (Saudi Arabic) or 'en_US' (English)
   double _soundLevel = 0.0;
 
-  final List<String> _quickChips = [
-    "Can I buy a 1200 SAR iPad?",
-    "أقدر اشتري ايباد بـ 1200 ريال؟",
-    "Dunkin 19 SAR: 16 latte, 3 donut",
-    "Danube 145 SAR: 2 milk 20, chicken 125",
-    "فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25",
-    "Albaik 28 SAR combo meal",
-    "Aramco 50 SAR 91 fuel",
-  ];
+  /// Example messages in the app language only (UX-18).
+  List<String> _quickChips(BuildContext context) => [for (final k in chatExampleKeys) context.tr(k)];
 
   @override
   void initState() {
@@ -53,13 +54,20 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     _speech = stt.SpeechToText();
     _initSpeech();
     _fetchHousehold();
-    _messages.add(
-      ChatMessage(
-        isUser: false,
-        text: "👋 Hi! You can speak or type your expenses in English or Arabic.\n"
-            "Tap the 🎙️ mic button or try: 'فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25' or 'Dunkin 19 SAR: 16 latte and 3 donut'",
-      ),
-    );
+  }
+
+  bool _welcomeAdded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_welcomeAdded) {
+      _welcomeAdded = true;
+      // Voice recognition and the welcome text follow the app language.
+      final lang = Localizations.maybeLocaleOf(context)?.languageCode;
+      _selectedLocale = lang == 'en' ? 'en_US' : (lang == 'ur' ? 'ur_PK' : 'ar_SA');
+      _messages.add(ChatMessage(isUser: false, text: context.tr('chat_welcome')));
+    }
   }
 
   @override
@@ -121,8 +129,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         } else if (mounted) {
           AppSnackBar.showWarning(
             context,
-            'Microphone permission required for voice entry.',
-            title: 'Permission Required',
+            context.tr('chat_mic_required'),
+            title: context.tr('chat_permission_required'),
           );
         }
         return;
@@ -134,14 +142,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       if (!_speechAvailable && mounted) {
         AppSnackBar.showInfo(
           context,
-          'Speech recognition is initializing or not available on device.',
-          title: 'Speech Recognition',
+          context.tr('chat_speech_unavailable'),
+          title: context.tr('chat_speech_recognition'),
         );
         return;
       }
     }
 
     final initialText = _controller.text.trim();
+    if (!mounted) return;
     setState(() {
       _isListening = true;
     });
@@ -201,30 +210,30 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             const Icon(Icons.mic_off, color: Colors.orange, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Microphone Permission',
-              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              context.tr('chat_mic_permission_title'),
+              style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
         ),
         content: Text(
-          'Microphone access is required to speak your invoice items into the chat. Please tap "Open Settings" to enable Microphone access.',
+          context.tr('chat_mic_permission_desc'),
           style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
+              backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,
             ),
             onPressed: () {
               Navigator.pop(ctx);
               openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(context.tr('open_settings')),
           ),
         ],
       ),
@@ -240,6 +249,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           .select('household_id')
           .eq('id', user.id)
           .single();
+      if (!mounted) return;
       setState(() {
         _householdId = res['household_id'] as String?;
       });
@@ -275,6 +285,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   }) async {
     if (_isListening) {
       await _speech.stop();
+      if (!mounted) return;
       setState(() => _isListening = false);
     }
 
@@ -312,6 +323,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       previewOnly: isPreview,
     );
 
+    if (!mounted) return;
+    var queueOffline = false;
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
@@ -320,15 +333,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Affordability simulation complete.',
+            text: res['message'] ?? context.tr('chat_simulation_complete'),
             simulationData: res,
           ),
         );
       } else if (status == 'pending_confirmation') {
+        // The commit must resend the previewed text with its preview_token.
+        res[_previewMessageKey] = message;
         if (res['is_category_inactive'] == true) {
-          final catCode = res['category_code']?.toString() ?? 'Category';
+          final catCode = res['category_code']?.toString() ?? context.tr('category');
           final amt = (res['amount'] as num?)?.toDouble() ?? 0.0;
-          final store = res['merchant']?.toString() ?? 'Merchant';
+          final store = res['merchant']?.toString() ?? context.tr('merchant_generic');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             InactiveCategoryResolutionDialog.show(
               context: context,
@@ -353,7 +368,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Please confirm the store name and who spent it before adding:',
+            text: res['message'] ?? context.tr('chat_confirm_before_adding'),
             isPendingConfirmation: true,
             pendingData: res,
           ),
@@ -362,7 +377,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Recent matching transaction found.',
+            text: res['message'] ?? context.tr('chat_recent_match'),
             isDuplicatePrompt: true,
             candidateData: res,
           ),
@@ -376,9 +391,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: res['message'] ?? 'Transaction recorded successfully!',
+            text: res['message'] ?? context.tr('chat_tx_recorded'),
             transactionData: {
-              'merchant': res['merchant'] ?? 'Merchant',
+              'merchant': res['merchant'] ?? context.tr('merchant_generic'),
               'amount': (res['amount'] as num?)?.toDouble() ?? 0.0,
               'category_code': res['category_code'],
               'items': parsedItems,
@@ -396,27 +411,36 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             errText.contains('offline') ||
             errText.contains('SocketException') ||
             errText.contains('timeout')) {
-          OfflineSyncService.instance.enqueue(
-            endpoint: 'chat',
-            payload: {'message': message, 'user_id': user?.id},
-            householdId: _householdId!,
-          );
-          _messages.add(
-            ChatMessage(
-              isUser: false,
-              text: '📶 Offline: Stored in local SQLite queue. Will sync automatically when network returns.',
-            ),
-          );
+          // Queued below; the reply depends on whether the write succeeded.
+          queueOffline = true;
         } else {
           _messages.add(
             ChatMessage(
               isUser: false,
-              text: res['message'] ?? 'Could not parse transaction details.',
+              text: res['message'] ?? context.tr('chat_parse_failed'),
             ),
           );
         }
       }
     });
+
+    if (queueOffline) {
+      // MOB-28: only claim "stored offline" when the queue write succeeded.
+      String reply;
+      try {
+        await OfflineSyncService.instance.enqueue(
+          endpoint: 'chat',
+          payload: {'message': message, 'user_id': user?.id},
+          householdId: _householdId!,
+        );
+        reply = mounted ? context.tr('chat_offline_queued') : '';
+      } catch (e) {
+        debugPrint('[ChatEntry] Offline queue write failed: $e');
+        reply = mounted ? context.tr('offline_queue_failed') : '';
+      }
+      if (!mounted) return;
+      setState(() => _messages.add(ChatMessage(isUser: false, text: reply)));
+    }
 
     _scrollToBottom();
   }
@@ -428,6 +452,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     String? subCategory,
     String paidBy,
     String beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    PendingExpenseEdits edits,
   ) async {
     final pending = originalMsg.pendingData;
     if (pending == null || _householdId == null) return;
@@ -435,23 +462,44 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     setState(() => _isLoading = true);
 
     final user = supabase.auth.currentUser;
-    final originalText = pending['original_message'] as String? ??
+    final originalText = pending[_previewMessageKey] as String? ??
+        pending['original_message'] as String? ??
         "$merchant ${(pending['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'} SAR";
 
-    final res = await ApiService.instance.postChatTransaction(
-      message: originalText,
-      householdId: _householdId!,
-      userId: user?.id,
-      allowDuplicate: true,
-      previewOnly: false,
-      merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
-      spentBy: beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both'),
-      categoryCode: categoryCode,
-      subCategory: subCategory,
-      paidBy: paidBy,
-      beneficiary: beneficiary,
+    final householdId = _householdId!;
+    // The preview's token (when the server sends one) is returned unchanged;
+    // an expired token re-runs the preview once (preview_token.dart).
+    final res = await commitWithPreviewToken(
+      token: previewTokenOf(pending),
+      commit: (token) => ApiService.instance.postChatTransaction(
+        message: originalText,
+        householdId: householdId,
+        userId: user?.id,
+        allowDuplicate: true,
+        previewOnly: false,
+        merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
+        spentBy: beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both'),
+        categoryCode: categoryCode,
+        subCategory: subCategory,
+        paidBy: paidBy,
+        beneficiary: beneficiary,
+        nafaqahClass: nafaqahClass,
+        nafaqahSpouseId: nafaqahSpouseId,
+        // The user's corrections travel with the token (UX-12).
+        amount: edits.amount,
+        occurredAt: edits.occurredAt,
+        previewToken: token,
+      ),
+      rePreview: () => ApiService.instance.postChatTransaction(
+        message: originalText,
+        householdId: householdId,
+        userId: user?.id,
+        allowDuplicate: true,
+        previewOnly: true,
+      ),
     );
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
@@ -464,10 +512,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         final idx = _messages.indexOf(originalMsg);
         final confirmedMsg = ChatMessage(
           isUser: false,
-          text: res['message'] ?? 'Transaction recorded successfully!',
+          text: res['message'] ?? context.tr('chat_tx_recorded'),
           transactionData: {
             'merchant': res['merchant'] ?? merchant,
-            'amount': (res['amount'] as num?)?.toDouble() ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
+            'amount': (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
             'category_code': res['category_code'] ?? pending['category_code'],
             'items': parsedItems.isNotEmpty ? parsedItems : (pending['items'] as List? ?? []),
             'spent_by': res['spent_by'] ?? (beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both')),
@@ -487,8 +535,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       } else {
         AppSnackBar.showError(
           context,
-          res['message'] ?? 'Failed to save transaction.',
-          title: 'Save Error',
+          expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('chat_save_failed'),
+          title: context.tr('chat_save_error'),
         );
       }
     });
@@ -505,11 +553,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 18),
+            const Icon(Icons.auto_awesome, color: AppThemes.success, size: 18),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                'AI Transaction Chat',
+                context.tr('chat_title'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -517,74 +565,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ],
         ),
         actions: [
-          // Language selector toggle pill
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: context.chipBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'ar_SA'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'ar_SA' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇸🇦 ع',
-                      style: TextStyle(
-                        color: _selectedLocale == 'ar_SA' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'en_US'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'en_US' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇺🇸 EN',
-                      style: TextStyle(
-                        color: _selectedLocale == 'en_US' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'ur_PK'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'ur_PK' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇵🇰 اردو',
-                      style: TextStyle(
-                        color: _selectedLocale == 'ur_PK' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // The microphone's language (UX-19: one 48 dp control, not three 25 dp pills).
+          VoiceLanguageButton(
+            localeId: _selectedLocale,
+            onChanged: (v) => setState(() => _selectedLocale = v),
           ),
         ],
         backgroundColor: context.cardBg,
@@ -602,8 +586,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
-                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary) {
-                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary);
+                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
+                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits);
                     },
                     onCancelPending: () {
                       setState(() {
@@ -622,7 +606,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         _messages.add(
                           ChatMessage(
                             isUser: false,
-                            text: 'Duplicate expense discarded.',
+                            text: context.tr('chat_duplicate_discarded'),
                           ),
                         );
                       });
@@ -640,11 +624,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      "Magic is happening...",
+                      context.tr('chat_thinking'),
                       style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                     ),
                   ],
@@ -656,14 +640,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _quickChips.length,
+                itemCount: chatExampleKeys.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (ctx, i) {
                   return ActionChip(
                     backgroundColor: context.cardBg,
                     side: BorderSide(color: context.borderColor),
-                    label: Text(_quickChips[i], style: TextStyle(fontSize: 12, color: context.textPrimary)),
-                    onPressed: () => _sendMessage(_quickChips[i]),
+                    label: Text(_quickChips(context)[i], style: TextStyle(fontSize: 13, color: context.textPrimary)),
+                    onPressed: () => _sendMessage(_quickChips(context)[i]),
                   );
                 },
               ),
@@ -690,11 +674,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       controller: _controller,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (v) => _sendMessage(v),
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: _selectedLocale == 'ar_SA'
-                            ? "تحدث أو اكتب: بنده 85 ريال حليب 15..."
-                            : "Speak or type: Dunkin 19 SAR...",
+                        hintText: AppLocalizations(Locale(_selectedLocale.substring(0, 2))).get('chat_input_hint'),
                         hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                         filled: true,
                         fillColor: context.inputBg,
@@ -709,7 +691,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF00C896)),
+                          borderSide: const BorderSide(color: AppThemes.success),
                         ),
                       ),
                     ),
@@ -738,10 +720,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_rounded,
-                        color: _isListening ? Colors.white : const Color(0xFF00C896),
+                        color: _isListening ? Colors.white : AppThemes.success,
                         size: 20,
                       ),
-                      tooltip: _isListening ? 'Stop Listening' : 'Voice Input',
+                      tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
                       onPressed: _toggleListening,
                     ),
                   ),
@@ -749,12 +731,12 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   // Send Button
                   Container(
                     decoration: const BoxDecoration(
-                      color: Color(0xFF00C896),
+                      color: AppThemes.success,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
-                      tooltip: 'Send',
+                      tooltip: context.tr('support_send'),
                       onPressed: () => _sendMessage(_controller.text),
                     ),
                   ),

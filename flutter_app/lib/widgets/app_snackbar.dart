@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_themes.dart';
 
 /// Centralized, premium dark-mode SnackBar design system.
 /// Implements floating toasts with custom iconography, curated color accents,
@@ -21,7 +22,7 @@ class AppSnackBar {
       context,
       message: message,
       title: title,
-      accentColor: const Color(0xFF00C896),
+      accentColor: AppThemes.success,
       icon: icon,
       duration: duration,
       actionLabel: actionLabel,
@@ -205,22 +206,22 @@ class AppSnackBar {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.16),
+                    color: AppThemes.success.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.6),
+                      color: AppThemes.success.withValues(alpha: 0.6),
                       width: 1.1,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.undo_rounded, size: 14, color: Color(0xFF00C896)),
+                      const Icon(Icons.undo_rounded, size: 14, color: AppThemes.success),
                       const SizedBox(width: 4),
                       Text(
                         'UNDO',
                         style: GoogleFonts.outfit(
-                          color: const Color(0xFF00C896),
+                          color: AppThemes.success,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,

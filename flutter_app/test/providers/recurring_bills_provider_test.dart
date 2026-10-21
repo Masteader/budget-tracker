@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/recurring_bill.dart';
+import 'package:budget_tracker/models/transaction_attribution.dart';
 import 'package:budget_tracker/providers/recurring_bills_provider.dart';
 
 void main() {
@@ -45,5 +46,33 @@ void main() {
       expect(provider.summary!.bills.length, equals(1));
       expect(provider.householdId, equals('hh-123'));
     });
+  });
+
+  // FABLE2-APP-06: a paid bill was inserted without source or attribution.
+  test('a bill payment row is a manual entry paid by the recorder for the household', () {
+    const bill = RecurringBillItem(
+      merchant: 'SEC Electricity',
+      normalizedMerchant: 'SEC',
+      categoryCode: 'OPEX-UTILITIES',
+      averageAmount: 420.0,
+      expectedDayOfMonth: 5,
+      status: 'UPCOMING',
+      subCode: 'electricity',
+    );
+    final row = RecurringBillsProvider.buildBillPaymentRow(
+      householdId: 'hh-1',
+      userId: 'u-1',
+      bill: bill,
+      occurredAt: DateTime.utc(2026, 10, 21, 9),
+    );
+    expect(row['source'], 'manual');
+    expect(row['user_id'], 'u-1');
+    expect(row['spent_by'], 'me');
+    expect(row['beneficiary_type'], 'household');
+    expect(row['beneficiary_id'], 'household');
+    expect(row['category_code'], 'OPEX-UTILITIES');
+    expect(row['raw_sms'], 'Manual: SEC Electricity | PaidBy: me | Beneficiary: household | SpentBy: me');
+    expect(storedPayerRef(row), 'me');
+    expect(row.containsKey('paid_by'), isFalse);
   });
 }

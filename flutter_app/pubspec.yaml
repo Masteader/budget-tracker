@@ -30,6 +30,7 @@ dependencies:
 
   # ── Notifications ────────────────────────────────────────────────────────────
   flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4        # Asia/Riyadh for scheduled reminders
 
   # ── Utilities ────────────────────────────────────────────────────────────────
   intl: any
@@ -39,11 +40,14 @@ dependencies:
   shimmer: ^3.0.0         # Loading skeleton screens
   google_fonts: ^6.2.1    # Typography
   image_picker: ^1.1.2    # Camera & gallery invoice receipt scanning
-  shared_preferences: ^2.2.2 # Local channel ingestion preferences
+  shared_preferences: ^2.2.2 # Local app preferences (theme, language, reminders)
   mobile_scanner: ^7.4.2
   permission_handler: ^11.3.1
   speech_to_text: ^7.5.0
   connectivity_plus: ^7.3.1
+  flutter_secure_storage: ^11.2.0
+  share_plus: ^13.3.1
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
@@ -55,3 +59,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+  # Cairo 3.130 (SIL OFL 1.1, assets/fonts/cairo/OFL.txt) for Arabic and Urdu
+  # text (UX-20), from the Google Fonts API (fonts.gstatic.com/s/cairo/v31).
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/cairo/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/cairo/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/cairo/Cairo-Bold.ttf
+          weight: 700

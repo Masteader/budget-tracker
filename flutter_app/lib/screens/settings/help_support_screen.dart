@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/api/support_api_client.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
@@ -12,10 +13,14 @@ class HelpSupportScreen extends StatefulWidget {
   final String? householdId;
   final String? userEmail;
 
+  /// Sends developer inquiries; defaults to [ApiService.instance.support].
+  final SupportApiClient? supportClient;
+
   const HelpSupportScreen({
     super.key,
     this.householdId,
     this.userEmail,
+    this.supportClient,
   });
 
   @override
@@ -31,374 +36,105 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   String _faqQuery = '';
   bool _isSending = false;
-  String _selectedLanguage = 'en';
+  String _selectedLanguage = 'ar';
   bool _languageInitialized = false;
 
-  final List<_SupportMessage> _messages = [
-    const _SupportMessage(
-      isUser: false,
-      text:
-          'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?',
-    ),
-  ];
+  final List<_SupportMessage> _messages = [];
+
+  /// Resolves [key] in the support language chosen on this screen.
+  String _t(String key) => AppLocalizations(Locale(_selectedLanguage)).get(key);
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_languageInitialized) {
       _languageInitialized = true;
-      final code = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
-      if (code == 'en' || code == 'ur' || code == 'ar') {
-        _selectedLanguage = code;
-        _onLanguageChanged(code);
+      final appLang = Localizations.maybeLocaleOf(context)?.languageCode;
+      if (appLang == 'en' || appLang == 'ar' || appLang == 'ur') {
+        _selectedLanguage = appLang!;
       }
+      _messages.add(_SupportMessage(isUser: false, text: _t('support_welcome')));
     }
   }
 
   void _onLanguageChanged(String newLang) {
+    if (_selectedLanguage == newLang) return;
     setState(() {
       _selectedLanguage = newLang;
       if (_messages.length == 1 && !_messages.first.isUser) {
-        String welcome =
-            'Welcome to the Smart Help & Support Center! 👋\nI am your technical assistant. How can I assist you with budget management, salary cycles, or receipt scanning?';
-        if (newLang == 'ar') {
-          welcome =
-              'مرحباً بك في مركز المساعدة والدعم الذكي! 👋\nأنا مساعدك التقني، كيف أقدر أساعدك اليوم في إدارة الميزانية، دورة الرواتب، أو مسح الفواتير؟';
-        } else if (newLang == 'ur') {
-          welcome =
-              'اسمارٹ ہیلپ اور سپورٹ سینٹر میں خوش آمدید! 👋\nمیں آپ کا اسسٹنٹ ہوں۔ آج میں بجٹ، تنخواہ کے سائیکل، یا رسیدوں کے انتظام میں آپ کی کیا مدد کر سکتا ہوں؟';
-        }
-        _messages[0] = _SupportMessage(isUser: false, text: welcome);
+        _messages[0] = _SupportMessage(isUser: false, text: _t('support_welcome'));
       }
     });
   }
 
+  /// Manual fallback address, shown only when in-app delivery fails. In-app
+  /// messages go through POST /support/inquiries, which emails the same inbox.
   static const String developerEmail = 'fmscoinfo@fmsco.com.sa';
 
-  List<_FaqCategory> _getFaqCategories(String lang) {
-    if (lang == 'ar') {
-      return const [
-        _FaqCategory(
-          title: 'دورة الرواتب ويوم الصرف (27)',
-          icon: Icons.calendar_month_rounded,
-          color: Color(0xFFF59E0B),
-          faqs: [
-            _FaqItem(
-              question: 'كيف تعمل دورة الرواتب في هذا التطبيق؟',
-              answer:
-                  'تتم مزامنة دورة الميزانية تلقائياً مع يوم الصرف الحكومي السعودي (27). تبدأ الدورة في 27 وتنتهي في 26 من الشهر التالي لتجنب تشتت المصاريف.',
-            ),
-            _FaqItem(
-              question: 'ماذا يحدث للأموال الفائضة في نهاية الدورة؟',
-              answer:
-                  'أي فائض غير مستهلك يرحّل تلقائياً إلى الدورة التالية كفائض مرحّل أو يضاف إلى مدخرات الأسرة.',
-            ),
-            _FaqItem(
-              question: 'كيف يُحسب معدل الصرف اليومي؟',
-              answer:
-                  'يُقسم رصيدك المتاح على عدد الأيام المتبقية حتى يوم 27، ليوفر حداً يومياً آمناً للإنفاق.',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'مسح الفواتير ورمز الزكاة (ZATCA)',
-          icon: Icons.qr_code_scanner_rounded,
-          color: Color(0xFF00C896),
-          faqs: [
-            _FaqItem(
-              question: 'كيف أمسح الفواتير الورقية والمطبوعة؟',
-              answer:
-                  'اضغط على زر الكاميرا لمسح الإيصالات. يمكنك التقاط صفحات متعددة للفواتير الطويلة أو اختيار صورة من المعرض. يستخرج الذكاء الاصطناعي البنود والضريبة تلقائياً.',
-            ),
-            _FaqItem(
-              question: 'كيف يعمل التحقق من رمز ZATCA QR؟',
-              answer:
-                  'يقوم الماسح بفك تشفير الباركود السعودي الرسمي Base64 TLV في الوقت الفعلي للتحقق من الرقم الضريبي وإجمالي الفاتورة مع الضريبة 15%.',
-            ),
-            _FaqItem(
-              question: 'ماذا يحدث عند مسح فاتورة مكررة؟',
-              answer:
-                  'إذا تطابقت الفاتورة مع معاملة موجودة، تظهر بطاقة حماية التكرار للاختيار بين إثراء المعاملة، أو تسجيلها كمصروف جديد، أو تجاهلها.',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'الفواتير المتكررة واحتياطي الإقامة',
-          icon: Icons.receipt_long_rounded,
-          color: Color(0xFF3B82F6),
-          faqs: [
-            _FaqItem(
-              question: 'كيف أضيف الفواتير الدورية (إيجار، كهرباء، إنترنت)؟',
-              answer:
-                  'من بطاقة الفواتير المتكررة، اضغط على "إدارة الفواتير" لتعيين أي فئة كفاتورة دورية مع تحديد يوم الاستحقاق.',
-            ),
-            _FaqItem(
-              question: 'أين يتم تتبع رسوم الإقامة الشهرية 400 ريال؟',
-              answer:
-                  'يتم تتبع رسوم الإقامة 400 ريال شهرياً كاحتياطي مخصص تحت فئة الخدمات الحكومية (OPEX-GOV)، مما يحمي مصاريفك الأساسية.',
-            ),
-            _FaqItem(
-              question: 'كيف أسجل سداد فاتورة متكررة؟',
-              answer:
-                  'اضغط على زر السداد الأخضر مباشرة من بطاقة لوحة التحكم لتسجيل العملية وتحديث المخصص.',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'خطط الأقساط (تابي وتمارا)',
-          icon: Icons.credit_card_rounded,
-          color: Color(0xFF8B5CF6),
-          faqs: [
-            _FaqItem(
-              question: 'كيف تعمل خطط الأقساط الشهرية (BNPL)؟',
-              answer:
-                  'عند تسجيل مشتروات بالأقساط، يمكنك تتبع الدفعات وتواريخ استحقاقها ونسبة السداد مباشرة من بطاقة لوحة التحكم.',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'المصاريف المشتركة والشركاء',
-          icon: Icons.people_alt_rounded,
-          color: Color(0xFF10B981),
-          faqs: [
-            _FaqItem(
-              question: 'كيف يعمل التوزيع ثنائي الأبعاد للمصاريف؟',
-              answer:
-                  'لكل مصروف، حدد من دفع (أنا أو الشريك) ولمن كان المصروف (لي، للشريك، أو مشترك). يحسب التطبيق صافي التسوية بدقة في نهاية كل دورة.',
-            ),
-            _FaqItem(
-              question: 'كيف أدعو شريكي للانضمام للأسرة؟',
-              answer:
-                  'انتقل إلى الإعدادات ثم إدارة الأسرة وانسخ رمز الدعوة ليستخدمه شريكك عند إنشاء حسابه.',
-            ),
-          ],
-        ),
-      ];
-    }
+  SupportApiClient get _supportClient => widget.supportClient ?? ApiService.instance.support;
 
-    if (lang == 'ur') {
-      return const [
-        _FaqCategory(
-          title: 'تنخواہ کا سائیکل اور یوم ادائیگی (27)',
-          icon: Icons.calendar_month_rounded,
-          color: Color(0xFFF59E0B),
-          faqs: [
-            _FaqItem(
-              question: 'ایپ میں تنخواہ کا سائیکل کیسے کام کرتا ہے؟',
-              answer:
-                  'بجٹ کا سائیکل خود بخود سعودی 27 تاریخ کی تنخواہ کے ساتھ ہم آہنگ ہوتا ہے۔ سائیکل 27 سے شروع ہو کر اگلے ماہ کی 26 تاریخ تک رہتا ہے۔',
-            ),
-            _FaqItem(
-              question: 'سائیکل کے اختتام پر بچ جانے والی رقم کا کیا ہوتا ہے؟',
-              answer:
-                  'غیر خرچ شدہ رقم خود بخود اگلے سائیکل میں سرپلس کے طور پر شامل ہو جاتی ہے یا گھریلو بچت میں جمع ہو جاتی ہے۔',
-            ),
-            _FaqItem(
-              question: 'روزانہ خرچ کی حد کا حساب کیسے لگایا جاتا ہے؟',
-              answer:
-                  'باقی رقم کو 27 تاریخ تک کے دنوں پر تقسیم کر کے روزانہ کی محفوظ حد بتائی جاتی ہے۔',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'رسیدیں اور زکوٰۃ و ٹیکس اسکیننگ',
-          icon: Icons.qr_code_scanner_rounded,
-          color: Color(0xFF00C896),
-          faqs: [
-            _FaqItem(
-              question: 'کاغذی رسیدیں کیسے اسکین کی جاتی ہیں؟',
-              answer:
-                  'کیمرہ اسکینر کے بٹن پر ٹیپ کریں۔ آپ لمبی رسیدوں کے کئی صفحات کی تصاویر لے سکتے ہیں۔ اے آئی اشیاء، وی اے ٹی اور تاجر کی تفصیلات نکال لیتا ہے۔',
-            ),
-            _FaqItem(
-              question: 'سعودی زکوٰۃ و ٹیکس کیو آر کوڈ کی تصدیق کیسے ہوتی ہے؟',
-              answer:
-                  'اسکینر سرکاری ZATCA Base64 TLV بارکوڈ کو فوری ڈی کوڈ کر کے ٹیکس نمبر اور 15% وی اے ٹی کی تصدیق کرتا ہے۔',
-            ),
-            _FaqItem(
-              question: 'ڈپلیکیٹ رسید اسکین ہونے پر کیا ہوتا ہے؟',
-              answer:
-                  'اگر رسید پہلے سے موجود ٹرانزیکشن سے مماثل ہو تو ڈپلیکیٹ ڈیفنس کارڈ ظاہر ہوتا ہے جہاں آپ تفصیلات شامل کر سکتے ہیں یا نئی انٹری بنا سکتے ہیں۔',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'ماہانہ بلز اور اقامہ ریزرو',
-          icon: Icons.receipt_long_rounded,
-          color: Color(0xFF3B82F6),
-          faqs: [
-            _FaqItem(
-              question: 'ماہانہ بلز (کرایہ، بجلی، فائبر) کیسے شامل کریں؟',
-              answer:
-                  'ڈیش بورڈ پر بلز کارڈ میں "بلز کا انتظام" پر ٹیپ کریں اور ماہانہ تاریخ مقرر کریں۔',
-            ),
-            _FaqItem(
-              question: '400 ریال ماہانہ اقامہ فیس کہاں ٹریک ہوتی ہے؟',
-              answer:
-                  '400 ریال اقامہ فیس سرکاری کیٹیگری (OPEX-GOV) کے تحت ایک مخصوص ریزرو کے طور پر رکھی جاتی ہے۔',
-            ),
-            _FaqItem(
-              question: 'بل کی ادائیگی کیسے درج کریں؟',
-              answer:
-                  'ڈیش بورڈ پر کسی بھی بل کے سامنے سبز بٹن دبا کر ادائیگی ریکارڈ کریں۔',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'اقساط کے منصوبے (تابی اور تمارا)',
-          icon: Icons.credit_card_rounded,
-          color: Color(0xFF8B5CF6),
-          faqs: [
-            _FaqItem(
-              question: 'بی این پی ایل اقساط کیسے کام کرتی ہیں؟',
-              answer:
-                  'اقساط پر خریداری درج کرتے وقت آپ بقیہ اقساط، تاریخیں اور ادائیگی کی پیش رفت ڈیش بورڈ پر دیکھ سکتے ہیں۔',
-            ),
-          ],
-        ),
-        _FaqCategory(
-          title: 'گھریلو اخراجات کی تقسیم',
-          icon: Icons.people_alt_rounded,
-          color: Color(0xFF10B981),
-          faqs: [
-            _FaqItem(
-              question: 'اخراجات کی دو طرفہ تقسیم کیسے کام کرتی ہے؟',
-              answer:
-                  'ہر خرچ پر آپ درج کر سکتے ہیں کہ کس نے ادا کیا (میں یا پارٹنر) اور کس کے لیے تھا (میرے لیے، پارٹنر کے لیے، یا دونوں کے لیے)۔ ایپ خالص واجب الادا رقم کا حساب لگاتی ہے۔',
-            ),
-            _FaqItem(
-              question: 'اپنے پارٹنر کو گھرانے میں کیسے مدعو کریں؟',
-              answer:
-                  'سیٹنگز میں جائیں اور اپنا دعوتی کوڈ کاپی کر کے پارٹنر کو بھیجیں۔',
-            ),
-          ],
-        ),
-      ];
-    }
-
-    return const [
-      _FaqCategory(
-        title: 'Salary Cycle & Payday (27th)',
-        icon: Icons.calendar_month_rounded,
-        color: Color(0xFFF59E0B),
-        faqs: [
-          _FaqItem(
-            question: 'How does the salary cycle work in this app?',
-            answer:
-                'The budget cycle is automatically synced with the standard Saudi 27th payday. A monthly cycle starts on the 27th and concludes on the 26th of the following month, preventing mid-month budget misalignment.',
-          ),
-          _FaqItem(
-            question: 'What happens to unspent funds at the end of the cycle?',
-            answer:
-                'Any unspent discretionary funds automatically roll over into the next cycle as surplus carryover or can be credited towards household savings reserves.',
-          ),
-          _FaqItem(
-            question: 'How is the daily allowance pacing calculated?',
-            answer:
-                'Your remaining discretionary budget is divided by the exact number of days remaining until the 27th, providing a safe daily spending limit.',
-          ),
-        ],
-      ),
-      _FaqCategory(
-        title: 'Receipt & ZATCA Scanning',
-        icon: Icons.qr_code_scanner_rounded,
-        color: Color(0xFF00C896),
-        faqs: [
-          _FaqItem(
-            question: 'How do I scan printed paper receipts?',
-            answer:
-                'Tap the green camera scanner button. You can capture multiple receipt pages or pick an invoice image from your photo gallery. Our Gemini Vision model automatically extracts line items, VAT, and merchant details.',
-          ),
-          _FaqItem(
-            question: 'How does Saudi ZATCA QR code verification work?',
-            answer:
-                'Our scanner decodes official Saudi ZATCA Base64 TLV barcodes in real time to verify seller tax identification, invoice timestamps, VAT amounts, and total values.',
-          ),
-          _FaqItem(
-            question: 'What happens when a duplicate invoice is scanned?',
-            answer:
-                'If an invoice matches an existing transaction, you will see a Duplicate Defense card allowing you to Enrich the existing transaction, Log as a separate expense, or Discard.',
-          ),
-        ],
-      ),
-      _FaqCategory(
-        title: 'Recurring Bills & Iqama Reserves',
-        icon: Icons.receipt_long_rounded,
-        color: Color(0xFF3B82F6),
-        faqs: [
-          _FaqItem(
-            question: 'How do I add recurring bills (Rent, Utilities, Fiber)?',
-            answer:
-                'In the Dashboard Recurring Bills card, tap "Manage Bills" to toggle any sub-budget as recurring and configure its monthly due day.',
-          ),
-          _FaqItem(
-            question: 'Where is the 400 SAR monthly Iqama fee tracked?',
-            answer:
-                'The 400 SAR Iqama fee is tracked under the Government (OPEX-GOV) category as a dedicated sub-budget reserve, protecting your essential funds from being spent on general shopping.',
-          ),
-          _FaqItem(
-            question: 'How do I mark a recurring bill as paid?',
-            answer:
-                'Tap the green "Pay" button directly on any pending bill in the Dashboard card to record payment and adjust your reserved funds.',
-          ),
-        ],
-      ),
-      _FaqCategory(
-        title: 'BNPL Installment Plans',
-        icon: Icons.credit_card_rounded,
-        color: Color(0xFF8B5CF6),
-        faqs: [
-          _FaqItem(
-            question: 'How do Tabby and Tamara installment plans work?',
-            answer:
-                'When you log a BNPL purchase, you can view remaining installment payments, due dates, and total payoff progress directly on your dashboard card.',
-          ),
-        ],
-      ),
-      _FaqCategory(
-        title: 'Household & 2D Partner Split',
-        icon: Icons.people_alt_rounded,
-        color: Color(0xFF10B981),
-        faqs: [
-          _FaqItem(
-            question: 'How does 2-Dimensional expense attribution work?',
-            answer:
-                'For every expense, you can track who paid (paid_by: me or partner) and who it was for (beneficiary: me, partner, or both). The app calculates the exact net settlement owed at the end of each cycle.',
-          ),
-          _FaqItem(
-            question: 'How do I invite my partner to my household?',
-            answer:
-                'Go to Settings -> Household & Membership and copy your unique 6-character Household Invite Code. Your partner can enter it upon signing up.',
-          ),
-        ],
-      ),
-    ];
-  }
-
-  List<String> _getQuickChips(String lang) {
-    if (lang == 'ar') {
-      return [
-        'كيف تعمل دورة الرواتب في 27؟',
-        'كيف أضيف رسوم الإقامة 400 ريال؟',
-        'كيف أمسح رمز الزكاة والضريبة؟',
-        'كيف أقسم المصاريف مع الشريك؟',
-      ];
-    }
-    if (lang == 'ur') {
-      return [
-        '27 تاریخ کا تنخواہ سائیکل کیسے کام کرتا ہے؟',
-        '400 ریال اقامہ فیس کیسے شامل کریں؟',
-        'زکوٰۃ و ٹیکس کیو آر کوڈ کیسے اسکین کریں؟',
-        'پارٹنر کے ساتھ اخراجات کیسے تقسیم کریں؟',
-      ];
-    }
-    return [
-      'How does the 27th salary cycle work?',
-      'How to add 400 SAR Iqama fee?',
-      'How to scan a ZATCA QR code?',
-      'How do I split expenses with my partner?',
-    ];
-  }
+  // FAQ content is stored as translation keys and resolved in the language
+  // selected on this screen (defaults to the app locale).
+  static const List<_FaqCategory> _faqCategories = [
+    _FaqCategory(
+      titleKey: 'faq_cat_salary',
+      icon: Icons.calendar_month_rounded,
+      color: Color(0xFFF59E0B),
+      faqs: [
+        _FaqItem(questionKey: 'faq_salary_q1', answerKey: 'faq_salary_a1'),
+        _FaqItem(questionKey: 'faq_salary_q2', answerKey: 'faq_salary_a2'),
+        _FaqItem(questionKey: 'faq_salary_q3', answerKey: 'faq_salary_a3'),
+      ],
+    ),
+    // UX-05: the family rules, from the owner's decision (no spousal split).
+    _FaqCategory(
+      titleKey: 'faq_cat_nafaqah',
+      icon: Icons.family_restroom_rounded,
+      color: AppThemes.champagneGold,
+      faqs: [
+        _FaqItem(questionKey: 'faq_nafaqah_q1', answerKey: 'faq_nafaqah_a1'),
+        _FaqItem(questionKey: 'faq_nafaqah_q2', answerKey: 'faq_nafaqah_a2'),
+        _FaqItem(questionKey: 'faq_nafaqah_q3', answerKey: 'faq_nafaqah_a3'),
+      ],
+    ),
+    _FaqCategory(
+      titleKey: 'faq_cat_receipts',
+      icon: Icons.qr_code_scanner_rounded,
+      color: AppThemes.success,
+      faqs: [
+        _FaqItem(questionKey: 'faq_receipts_q1', answerKey: 'faq_receipts_a1'),
+        _FaqItem(questionKey: 'faq_receipts_q2', answerKey: 'faq_receipts_a2'),
+        _FaqItem(questionKey: 'faq_receipts_q3', answerKey: 'faq_receipts_a3'),
+      ],
+    ),
+    _FaqCategory(
+      titleKey: 'faq_cat_bills',
+      icon: Icons.receipt_long_rounded,
+      color: Color(0xFF3B82F6),
+      faqs: [
+        _FaqItem(questionKey: 'faq_bills_q1', answerKey: 'faq_bills_a1'),
+        _FaqItem(questionKey: 'faq_bills_q2', answerKey: 'faq_bills_a2'),
+        _FaqItem(questionKey: 'faq_bills_q3', answerKey: 'faq_bills_a3'),
+      ],
+    ),
+    _FaqCategory(
+      titleKey: 'faq_cat_bnpl',
+      icon: Icons.credit_card_rounded,
+      color: Color(0xFF8B5CF6),
+      faqs: [
+        _FaqItem(questionKey: 'faq_bnpl_q1', answerKey: 'faq_bnpl_a1'),
+      ],
+    ),
+    _FaqCategory(
+      titleKey: 'faq_cat_household',
+      icon: Icons.people_alt_rounded,
+      color: Color(0xFF10B981),
+      faqs: [
+        _FaqItem(questionKey: 'faq_household_q1', answerKey: 'faq_household_a1'),
+        _FaqItem(questionKey: 'faq_household_q2', answerKey: 'faq_household_a2'),
+      ],
+    ),
+  ];
 
   @override
   void initState() {
@@ -433,8 +169,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
         language: _selectedLanguage,
       );
 
-      final reply = res['reply'] as String? ??
-          'تم استلام استفسارك! للمساعدة الإضافية يرجى التواصل مع المطور.';
+      final reply = res['reply'] as String? ?? _t('support_reply_fallback');
       final escalate = res['escalate_to_developer'] == true;
       final summary = res['summary'] as String?;
 
@@ -451,12 +186,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _messages.add(const _SupportMessage(
+          _messages.add(_SupportMessage(
             isUser: false,
-            text:
-                'تعذر الاتصال بخادم الدعم حالياً. يمكنك نسخ بريد المطور أدناه للتواصل المباشر.',
+            text: _t('support_network_error'),
             isEscalation: true,
-            escalationSummary: 'Network error contacting support agent',
+            escalationSummary: query,
           ));
         });
       }
@@ -480,8 +214,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     });
   }
 
-  void _contactDeveloper(String issueSummary) {
-    final emailText = '''To: $developerEmail
+  /// Plain-text diagnostics for the manual email fallback (copied to the clipboard).
+  String _diagnostics(String issueSummary) => '''To: $developerEmail
 Subject: [Budget Tracker Support] $issueSummary
 
 Issue details:
@@ -492,82 +226,27 @@ Household: ${widget.householdId ?? "N/A"}
 User: ${widget.userEmail ?? "N/A"}
 ''';
 
-    Clipboard.setData(const ClipboardData(text: developerEmail));
-    showDialog(
+  /// Opens the in-app composer that emails the developer through the backend.
+  /// [issueSummary] (an escalation summary) pre-fills the message.
+  Future<void> _contactDeveloper([String? issueSummary]) async {
+    final result = await showDialog<SupportInquiryResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: context.borderColor),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.mail_rounded, color: Color(0xFF00C896), size: 24),
-            const SizedBox(width: 10),
-            Text('Contact Developer',
-                style: GoogleFonts.outfit(
-                    color: context.textPrimary, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Developer email address copied to clipboard:',
-              style: GoogleFonts.outfit(
-                  color: context.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: context.subtleCardBg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: SelectableText(
-                developerEmail,
-                style: GoogleFonts.outfit(
-                    color: const Color(0xFF00C896),
-                    fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Please send an email from your preferred mail client. Your diagnostics information has been prepared.',
-              style: GoogleFonts.outfit(
-                  color: context.textSecondary, fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: emailText));
-              Navigator.pop(ctx);
-              AppSnackBar.showSuccess(
-                context,
-                'Support email & diagnostic info copied to clipboard',
-                title: 'Copied',
-                icon: Icons.copy_rounded,
-              );
-            },
-            child: const Text('Copy Full Diagnostic Info',
-                style: TextStyle(color: Color(0xFF00C896))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
-              foregroundColor: Colors.black,
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Done',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+      builder: (ctx) => _DeveloperInquiryDialog(
+        initialMessage: issueSummary ?? '',
+        locale: _selectedLanguage,
+        householdId: widget.householdId,
+        client: _supportClient,
+        developerEmail: developerEmail,
+        diagnostics: _diagnostics,
       ),
+    );
+    if (!mounted || result == null || !result.isSent) return;
+    AppSnackBar.showSuccess(
+      context,
+      context.trArgs('support_inquiry_sent', {'ref': result.reference ?? '-'}),
+      title: context.tr('support_inquiry_sent_title'),
+      icon: Icons.mark_email_read_rounded,
+      duration: const Duration(seconds: 5),
     );
   }
 
@@ -595,81 +274,30 @@ User: ${widget.userEmail ?? "N/A"}
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  onTap: () => _onLanguageChanged('ar'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLanguage == 'ar' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇸🇦 ع',
-                      style: TextStyle(
-                        color: _selectedLanguage == 'ar' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => _onLanguageChanged('en'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLanguage == 'en' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇺🇸 EN',
-                      style: TextStyle(
-                        color: _selectedLanguage == 'en' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => _onLanguageChanged('ur'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLanguage == 'ur' ? const Color(0xFF00C896) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇵🇰 اردو',
-                      style: TextStyle(
-                        color: _selectedLanguage == 'ur' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ),
+                _buildLanguagePill('ar', '🇸🇦 ع', 'العربية'),
+                _buildLanguagePill('en', '🇺🇸 EN', 'English'),
+                _buildLanguagePill('ur', '🇵🇰 اردو', 'اردو'),
               ],
             ),
           ),
           IconButton(
             icon: const Icon(Icons.play_circle_outline_rounded,
-                color: Color(0xFF00C896)),
-            tooltip: 'Replay App Guide',
+                color: AppThemes.success),
+            tooltip: context.tr('support_replay_guide'),
             onPressed: () => UserGuideWalkthroughDialog.show(context),
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF00C896),
+          indicatorColor: AppThemes.success,
           indicatorWeight: 3,
-          labelColor: const Color(0xFF00C896),
+          labelColor: AppThemes.success,
           unselectedLabelColor: context.textSecondary,
           labelStyle:
               GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(icon: Icon(Icons.menu_book_rounded), text: 'FAQs & Guide'),
-            Tab(icon: Icon(Icons.smart_toy_rounded), text: 'AI Assistant'),
+          tabs: [
+            Tab(icon: const Icon(Icons.menu_book_rounded), text: context.tr('support_tab_faqs')),
+            Tab(icon: const Icon(Icons.smart_toy_rounded), text: context.tr('nav_ai')),
           ],
         ),
       ),
@@ -683,17 +311,51 @@ User: ${widget.userEmail ?? "N/A"}
     );
   }
 
+  /// Language toggle used by the support assistant. Language names are shown
+  /// as endonyms (each in its own script) so they are recognisable in any UI
+  /// language; the pill exposes button/selected semantics for screen readers.
+  Widget _buildLanguagePill(String code, String text, String semanticLabel) {
+    final selected = _selectedLanguage == code;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: () => _onLanguageChanged(code),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 32),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: selected ? AppThemes.success : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: selected ? Colors.black : context.textSecondary,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFaqTab() {
     final query = _faqQuery.toLowerCase();
-    final categories = _getFaqCategories(_selectedLanguage);
-    final filteredCategories = categories.map((cat) {
+    final filteredCategories = _faqCategories.map((cat) {
+      final title = _t(cat.titleKey);
       final matchingFaqs = cat.faqs.where((f) {
-        return f.question.toLowerCase().contains(query) ||
-            f.answer.toLowerCase().contains(query) ||
-            cat.title.toLowerCase().contains(query);
+        return _t(f.questionKey).toLowerCase().contains(query) ||
+            _t(f.answerKey).toLowerCase().contains(query) ||
+            title.toLowerCase().contains(query);
       }).toList();
       return _FaqCategory(
-        title: cat.title,
+        titleKey: cat.titleKey,
         icon: cat.icon,
         color: cat.color,
         faqs: matchingFaqs,
@@ -721,11 +383,11 @@ User: ${widget.userEmail ?? "N/A"}
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.explore_rounded,
-                    color: Color(0xFF00C896), size: 24),
+                    color: AppThemes.success, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -733,7 +395,7 @@ User: ${widget.userEmail ?? "N/A"}
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.tr('interactive_walkthrough'),
+                      context.tr('support_walkthrough_title'),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontWeight: FontWeight.bold,
@@ -742,7 +404,7 @@ User: ${widget.userEmail ?? "N/A"}
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      context.tr('interactive_walkthrough_desc'),
+                      context.tr('support_walkthrough_desc'),
                       style: GoogleFonts.outfit(
                         color: context.textSecondary,
                         fontSize: 12,
@@ -754,7 +416,7 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -763,7 +425,7 @@ User: ${widget.userEmail ?? "N/A"}
                   ),
                 ),
                 onPressed: () => UserGuideWalkthroughDialog.show(context),
-                child: Text(context.tr('replay'),
+                child: Text(context.tr('support_replay'),
                     style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
@@ -777,13 +439,14 @@ User: ${widget.userEmail ?? "N/A"}
           onChanged: (v) => setState(() => _faqQuery = v),
           style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14),
           decoration: InputDecoration(
-            hintText: context.tr('search_help_hint'),
+            hintText: context.tr('support_search_hint'),
             hintStyle:
                 GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
             prefixIcon:
                 Icon(Icons.search_rounded, color: context.textSecondary),
             suffixIcon: _faqQuery.isNotEmpty
                 ? IconButton(
+                    tooltip: context.tr('support_clear_search'),
                     icon: Icon(Icons.clear_rounded,
                         color: context.textSecondary),
                     onPressed: () {
@@ -801,7 +464,7 @@ User: ${widget.userEmail ?? "N/A"}
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF00C896)),
+              borderSide: const BorderSide(color: AppThemes.success),
             ),
           ),
         ),
@@ -823,7 +486,7 @@ User: ${widget.userEmail ?? "N/A"}
               child: ExpansionTile(
                 leading: Icon(cat.icon, color: cat.color, size: 22),
                 title: Text(
-                  cat.title,
+                  _t(cat.titleKey),
                   style: GoogleFonts.outfit(
                     color: context.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -843,16 +506,16 @@ User: ${widget.userEmail ?? "N/A"}
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          faq.question,
+                          _t(faq.questionKey),
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF00C896),
+                            color: context.successText,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          faq.answer,
+                          _t(faq.answerKey),
                           style: GoogleFonts.outfit(
                             color: context.textSecondary,
                             fontSize: 12.5,
@@ -884,10 +547,10 @@ User: ${widget.userEmail ?? "N/A"}
               Row(
                 children: [
                   const Icon(Icons.mail_outline_rounded,
-                      color: Color(0xFF00C896), size: 20),
+                      color: AppThemes.success, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    context.tr('contact_developer'),
+                    context.tr('support_direct_dev'),
                     style: GoogleFonts.outfit(
                       color: context.textPrimary,
                       fontWeight: FontWeight.bold,
@@ -898,7 +561,7 @@ User: ${widget.userEmail ?? "N/A"}
               ),
               const SizedBox(height: 6),
               Text(
-                context.tr('contact_dev_subtitle'),
+                context.tr('support_direct_dev_desc'),
                 style: GoogleFonts.outfit(
                   color: context.textSecondary,
                   fontSize: 12,
@@ -909,16 +572,16 @@ User: ${widget.userEmail ?? "N/A"}
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF00C896),
-                    side: const BorderSide(color: Color(0xFF00C896)),
+                    foregroundColor: AppThemes.success,
+                    side: const BorderSide(color: AppThemes.success),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                   icon: const Icon(Icons.send_rounded, size: 16),
-                  label: Text('Email $developerEmail',
+                  label: Text(context.tr('support_inquiry_send'),
                       style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                  onPressed: () => _contactDeveloper('General Developer Inquiry'),
+                  onPressed: () => _contactDeveloper(),
                 ),
               ),
             ],
@@ -929,7 +592,12 @@ User: ${widget.userEmail ?? "N/A"}
   }
 
   Widget _buildAiChatTab() {
-    final quickChips = _getQuickChips(_selectedLanguage);
+    final quickChips = [
+      _t('support_chip_salary'),
+      _t('support_chip_iqama'),
+      _t('support_chip_zatca'),
+      _t('support_chip_split'),
+    ];
 
     return Column(
       children: [
@@ -949,7 +617,7 @@ User: ${widget.userEmail ?? "N/A"}
                 label: Text(
                   quickChips[idx],
                   style: GoogleFonts.outfit(
-                    color: const Color(0xFF00C896),
+                    color: context.successText,
                     fontSize: 12,
                   ),
                 ),
@@ -979,7 +647,7 @@ User: ${widget.userEmail ?? "N/A"}
                     constraints: const BoxConstraints(maxWidth: 320),
                     decoration: BoxDecoration(
                       color: msg.isUser
-                          ? const Color(0xFF00C896)
+                          ? AppThemes.success
                           : context.cardBg,
                       borderRadius: BorderRadius.circular(14),
                       border: msg.isUser
@@ -1007,7 +675,7 @@ User: ${widget.userEmail ?? "N/A"}
                       decoration: BoxDecoration(
                         color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF00C896)),
+                        border: Border.all(color: AppThemes.success),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1015,10 +683,10 @@ User: ${widget.userEmail ?? "N/A"}
                           Row(
                             children: [
                               const Icon(Icons.engineering_rounded,
-                                  color: Color(0xFF00C896), size: 18),
+                                  color: AppThemes.success, size: 18),
                               const SizedBox(width: 6),
                               Text(
-                                'Escalate to Developer',
+                                context.tr('support_escalate'),
                                 style: GoogleFonts.outfit(
                                   color: context.textPrimary,
                                   fontWeight: FontWeight.bold,
@@ -1029,7 +697,7 @@ User: ${widget.userEmail ?? "N/A"}
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Detected technical query or bug. Tap below to send this directly to the developer email.',
+                            context.tr('support_escalate_desc'),
                             style: GoogleFonts.outfit(
                               color: context.textSecondary,
                               fontSize: 11.5,
@@ -1040,7 +708,7 @@ User: ${widget.userEmail ?? "N/A"}
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 8),
@@ -1048,9 +716,9 @@ User: ${widget.userEmail ?? "N/A"}
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              icon: const Icon(Icons.email_rounded, size: 14),
+                              icon: const Icon(Icons.send_rounded, size: 14),
                               label: Text(
-                                'Send Email to $developerEmail',
+                                context.tr('support_inquiry_send'),
                                 style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
@@ -1082,12 +750,12 @@ User: ${widget.userEmail ?? "N/A"}
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF00C896),
+                    color: AppThemes.success,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Thinking...',
+                  context.tr('support_thinking'),
                   style: GoogleFonts.outfit(
                       color: context.textSecondary, fontSize: 12),
                 ),
@@ -1109,7 +777,7 @@ User: ${widget.userEmail ?? "N/A"}
                   controller: _chatController,
                   style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13.5),
                   decoration: InputDecoration(
-                    hintText: 'Ask anything about Budget Tracker...',
+                    hintText: context.tr('support_chat_hint'),
                     hintStyle: GoogleFonts.outfit(
                         color: context.textSecondary, fontSize: 12.5),
                     filled: true,
@@ -1126,7 +794,7 @@ User: ${widget.userEmail ?? "N/A"}
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF00C896)),
+                      borderSide: const BorderSide(color: AppThemes.success),
                     ),
                   ),
                   onSubmitted: (_) => _sendSupportQuery(),
@@ -1135,12 +803,13 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               IconButton(
                 style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C896),
+                  backgroundColor: AppThemes.success,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                tooltip: context.tr('support_send'),
                 icon: const Icon(Icons.send_rounded, size: 20),
                 onPressed: _isSending ? null : () => _sendSupportQuery(),
               ),
@@ -1167,13 +836,13 @@ class _SupportMessage {
 }
 
 class _FaqCategory {
-  final String title;
+  final String titleKey;
   final IconData icon;
   final Color color;
   final List<_FaqItem> faqs;
 
   const _FaqCategory({
-    required this.title,
+    required this.titleKey,
     required this.icon,
     required this.color,
     required this.faqs,
@@ -1181,11 +850,205 @@ class _FaqCategory {
 }
 
 class _FaqItem {
-  final String question;
-  final String answer;
+  final String questionKey;
+  final String answerKey;
 
   const _FaqItem({
-    required this.question,
-    required this.answer,
+    required this.questionKey,
+    required this.answerKey,
   });
+}
+
+/// Composer that emails the developer via POST /support/inquiries. It reports
+/// success only when the server confirms delivery; on failure it keeps the
+/// text and offers the manual email fallback.
+class _DeveloperInquiryDialog extends StatefulWidget {
+  final String initialMessage;
+  final String locale;
+  final String? householdId;
+  final SupportApiClient client;
+  final String developerEmail;
+  final String Function(String issueSummary) diagnostics;
+
+  const _DeveloperInquiryDialog({
+    required this.initialMessage,
+    required this.locale,
+    required this.householdId,
+    required this.client,
+    required this.developerEmail,
+    required this.diagnostics,
+  });
+
+  @override
+  State<_DeveloperInquiryDialog> createState() => _DeveloperInquiryDialogState();
+}
+
+class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialMessage);
+  bool _sending = false;
+  String? _error;
+  bool _offerFallback = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (_sending) return;
+    if (text.isEmpty) {
+      setState(() {
+        _error = context.tr('support_inquiry_empty');
+        _offerFallback = false;
+      });
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final result = await widget.client.sendSupportInquiry(
+      message: text,
+      locale: widget.locale,
+      householdId: widget.householdId,
+    );
+    if (!mounted) return;
+    if (result.isSent) {
+      Navigator.of(context).pop(result);
+      return;
+    }
+    setState(() {
+      _sending = false;
+      _offerFallback = result.outcome == SupportInquiryOutcome.unavailable ||
+          result.outcome == SupportInquiryOutcome.network;
+      _error = switch (result.outcome) {
+        SupportInquiryOutcome.unauthorized => context.tr('support_inquiry_err_auth'),
+        SupportInquiryOutcome.rateLimited => context.tr('support_inquiry_err_rate'),
+        SupportInquiryOutcome.network => context.tr('support_inquiry_err_network'),
+        _ => context.trArgs('support_inquiry_err_unavailable', {'email': widget.developerEmail}),
+      };
+    });
+  }
+
+  void _copyDiagnostics() {
+    final text = _controller.text.trim();
+    Clipboard.setData(ClipboardData(
+      text: widget.diagnostics(text.isEmpty ? widget.initialMessage : text),
+    ));
+    AppSnackBar.showSuccess(
+      context,
+      context.tr('support_diag_copied'),
+      title: context.tr('set_copied'),
+      icon: Icons.copy_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: context.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: context.borderColor),
+      ),
+      title: Row(
+        children: [
+          const Icon(Icons.mail_rounded, color: AppThemes.success, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(context.tr('support_inquiry_title'),
+                style: GoogleFonts.outfit(
+                    color: context.textPrimary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('support_inquiry_desc'),
+              style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('support-inquiry-message'),
+              controller: _controller,
+              enabled: !_sending,
+              minLines: 4,
+              maxLines: 8,
+              maxLength: SupportApiClient.maxInquiryLength,
+              textInputAction: TextInputAction.newline,
+              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: context.tr('support_inquiry_hint'),
+                filled: true,
+                fillColor: context.subtleCardBg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: context.borderColor),
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 4),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: context.dangerColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.dangerColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: GoogleFonts.outfit(
+                        color: context.textPrimary, fontSize: 12.5, height: 1.4),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (_offerFallback)
+          TextButton(
+            onPressed: _copyDiagnostics,
+            child: Text(context.tr('support_copy_diag'),
+                style: TextStyle(color: context.successText)),
+          ),
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.of(context).pop(),
+          child: Text(context.tr('cancel'),
+              style: TextStyle(color: context.textSecondary)),
+        ),
+        ElevatedButton.icon(
+          key: const ValueKey('support-inquiry-send'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppThemes.success,
+            foregroundColor: Colors.black,
+          ),
+          onPressed: _sending ? null : _send,
+          icon: _sending
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                )
+              : const Icon(Icons.send_rounded, size: 16),
+          label: Text(
+            _sending ? context.tr('support_inquiry_sending') : context.tr('support_inquiry_send'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
 }

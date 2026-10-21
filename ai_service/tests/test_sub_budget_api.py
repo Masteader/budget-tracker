@@ -18,7 +18,8 @@ def test_get_cycles_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert "current_cycle" in data
-    assert data["current_cycle"]["cycle_key"] == "2026-10"
+    from salary_cycle import get_cycle_for_date
+    assert data["current_cycle"]["cycle_key"] == get_cycle_for_date()["cycle_key"]
     assert "cycles" in data
     assert len(data["cycles"]) >= 1
 
@@ -72,7 +73,14 @@ def test_add_and_archive_category(monkeypatch):
     assert del_resp.json()["status"] == "success"
 
 
-def test_add_sub_category_endpoint(monkeypatch):
+def test_add_sub_category_endpoint(monkeypatch, fake_supabase):
+    # New definitions only under a custom category this household owns alone (E2E-05, FABLE-API-04).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities", "keywords": [],
+         "is_flexible": False, "household_id": None, "is_system": True},
+        {"id": "c-cool", "code": "CUSTOM-COOLING", "category": "Cooling", "keywords": [],
+         "is_flexible": False, "household_id": HOUSEHOLD_ID, "is_system": False},
+    ])
     mock_res = {
         "status": "success",
         "category_code": "OPEX-UTILITIES",
@@ -87,6 +95,10 @@ def test_add_sub_category_endpoint(monkeypatch):
         "allocated_amount": 120.0,
         "cycle_key": "2026-10",
     }
+    # Not a new definition under a system category ...
+    assert client.post("/budgets/sub-categories", json=payload, headers=AUTH_HEADERS).status_code == 403
+    # ... but under the household's own custom category.
+    payload["parent_code"] = "CUSTOM-COOLING"
     resp = client.post("/budgets/sub-categories", json=payload, headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
@@ -97,7 +109,12 @@ def test_add_sub_category_endpoint(monkeypatch):
     assert data["sub_allocations"]["sub-district-cooling"] == 120.0
 
 
-def test_rename_and_remove_sub_category(monkeypatch):
+def test_rename_and_remove_sub_category(monkeypatch, fake_supabase):
+    # Renaming is only allowed under a household-owned custom parent category (API-03).
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities", "keywords": [],
+         "is_flexible": False, "household_id": HOUSEHOLD_ID, "is_system": False},
+    ])
     monkeypatch.setattr("routes.budgets.add_sub_category_for_household", lambda **kw: {"status": "success"})
     monkeypatch.setattr("routes.budgets.rename_sub_category", lambda **kw: {"status": "success", "name_en": kw.get("name_en")})
     monkeypatch.setattr("routes.budgets.remove_sub_category_for_household", lambda **kw: {"status": "success"})

@@ -11,12 +11,15 @@ import 'package:flutter/foundation.dart';
 import 'api/base_api_client.dart';
 import 'api/budget_api_client.dart';
 import 'api/chat_api_client.dart';
+import 'api/household_roles_api_client.dart';
+import 'api/nafaqah_api_client.dart';
 import 'api/receipt_api_client.dart';
 import 'api/support_api_client.dart';
 import 'api/transaction_api_client.dart';
 import '../models/recurring_bill.dart';
 import '../models/installment_plan.dart';
 import '../models/models.dart';
+import '../models/nafaqah.dart';
 
 class ApiService {
   ApiService._() : base = BaseApiClient() {
@@ -67,6 +70,12 @@ class ApiService {
     String? subCategory,
     String? paidBy,
     String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    String? idempotencyKey,
+    DateTime? occurredAt,
+    String? previewToken,
+    double? amount,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -81,19 +90,12 @@ class ApiService {
         subCategory: subCategory,
         paidBy: paidBy,
         beneficiary: beneficiary,
-      );
-
-  Future<Map<String, dynamic>> simulatePurchase({
-    required String message,
-    required String householdId,
-    double? customAmount,
-    String? customCategory,
-  }) =>
-      chat.simulatePurchase(
-        message: message,
-        householdId: householdId,
-        customAmount: customAmount,
-        customCategory: customCategory,
+        nafaqahClass: nafaqahClass,
+        nafaqahSpouseId: nafaqahSpouseId,
+        idempotencyKey: idempotencyKey,
+        occurredAt: occurredAt,
+        previewToken: previewToken,
+        amount: amount,
       );
 
   // ── Receipts & Invoices ──────────────────────────────────────────────────
@@ -110,6 +112,15 @@ class ApiService {
     String? merchant,
     String? spentBy,
     String? receiptUrl,
+    String? paidBy,
+    String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    String? idempotencyKey,
+    DateTime? occurredAt,
+    String? previewToken,
+    double? amount,
+    String? categoryCode,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -123,6 +134,15 @@ class ApiService {
       merchant: merchant,
       spentBy: spentBy,
       receiptUrl: receiptUrl,
+      paidBy: paidBy,
+      beneficiary: beneficiary,
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahSpouseId,
+      idempotencyKey: idempotencyKey,
+      occurredAt: occurredAt,
+      previewToken: previewToken,
+      amount: amount,
+      categoryCode: categoryCode,
     );
   }
 
@@ -217,11 +237,70 @@ class ApiService {
   Future<List<HouseholdMembership>> getUserHouseholds() =>
       budget.getUserHouseholds();
 
+  Future<HouseholdMembership?> getHouseholdMembership(String householdId) =>
+      budget.fetchHouseholdMembership(householdId);
+
   Future<bool> switchActiveHousehold(String householdId) =>
       budget.switchActiveHousehold(householdId);
 
   Future<Map<String, dynamic>> recordReimbursementPayment(ReimbursementRecordRequest request) =>
       budget.recordReimbursementPayment(request: request);
+
+  // ── Members, co-admins and the primary admin (DB-16 / DB-18) ───────────────
+  late final HouseholdRolesApiClient roles = HouseholdRolesApiClient(baseClient: base);
+
+  Future<HouseholdRoster> getHouseholdMembers(String householdId) => roles.fetchMembers(householdId);
+
+  Future<HouseholdRoster> promoteHouseholdAdmin(String householdId, String userId) =>
+      roles.promoteToAdmin(householdId, userId);
+
+  Future<HouseholdRoster> revokeHouseholdAdmin(String householdId, String userId) =>
+      roles.revokeAdmin(householdId, userId);
+
+  Future<HouseholdRoster> transferPrimaryAdmin(String householdId, String newPrimaryUserId) =>
+      roles.transferPrimaryAdmin(householdId, newPrimaryUserId);
+
+  Future<String> setHouseholdType(String householdId, String householdType) =>
+      roles.setHouseholdType(householdId, householdType);
+
+  Future<String> setMemberFinancialRole(String householdId, String userId, String financialRole) =>
+      roles.setFinancialRole(householdId, userId, financialRole);
+
+  // ── Family Nafaqah (husband-owes-wife ledger, wife allowance) ──────────────
+  late final NafaqahApiClient nafaqah = NafaqahApiClient(baseClient: base);
+
+  Future<NafaqahSummary> getNafaqahSummary(String householdId, {String? cycleKey}) =>
+      nafaqah.fetchSummary(householdId: householdId, cycleKey: cycleKey);
+
+  Future<NafaqahLedger> getNafaqahLedger(String householdId, {String? wifeUserId}) =>
+      nafaqah.fetchLedger(householdId: householdId, wifeUserId: wifeUserId);
+
+  Future<double> recordNafaqahReimbursement(
+    String householdId, {
+    required double amount,
+    required String paymentMethod,
+    String? wifeUserId,
+    String? notes,
+  }) =>
+      nafaqah.recordReimbursement(
+        householdId: householdId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        wifeUserId: wifeUserId,
+        notes: notes,
+      );
+
+  Future<AllowanceStatus> setWifeAllowance(
+    String householdId, {
+    required double amount,
+    String? wifeUserId,
+    String? cycleKey,
+  }) =>
+      nafaqah.setAllowance(householdId: householdId, amount: amount, wifeUserId: wifeUserId, cycleKey: cycleKey);
+
+  /// Admins choose the household's Nafaqah provider (husband).
+  Future<NafaqahProviderChange> setNafaqahProvider(String householdId, String userId) =>
+      nafaqah.setProvider(householdId: householdId, userId: userId);
 
   Future<List<HouseholdDependent>> getDependents(String householdId) =>
       budget.fetchHouseholdDependents(householdId: householdId);
@@ -304,8 +383,8 @@ class ApiService {
   Future<Map<String, dynamic>> optimizeShoppingBasket(String householdId, List<String> items) =>
       budget.optimizeShoppingBasket(householdId, items);
 
-  String getStatementPdfUrl(String householdId, {String? cycleKey}) =>
-      budget.getStatementPdfUrl(householdId, cycleKey: cycleKey);
+  Future<ApiBinaryResponse> downloadStatementPdf(String householdId, {String? cycleKey}) =>
+      budget.downloadStatementPdf(householdId, cycleKey: cycleKey);
 
   Future<Map<String, dynamic>> addBudgetCategory({
     required String householdId,

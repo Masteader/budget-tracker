@@ -1,0 +1,12 @@
+# Keep secrets, local state and dev tooling out of the image (`COPY . .` copied all of it,
+# including a developer's .env with the Supabase service key).
+.env
+.env.*
+!.env.example
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+tests/
+docker-compose.yml
+Dockerfile
+.dockerignore

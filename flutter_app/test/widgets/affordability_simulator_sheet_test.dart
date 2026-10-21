@@ -79,7 +79,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Check that simulation result displays impact
-      expect(find.textContaining('PlayStation 5 • SAR 2400.00'), findsOneWidget);
+      expect(find.textContaining('PlayStation 5 • SAR 2,400.00'), findsOneWidget);
       expect(find.text('Current Daily'), findsOneWidget);
       expect(find.text('After Purchase'), findsOneWidget);
 

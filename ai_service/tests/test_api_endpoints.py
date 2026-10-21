@@ -18,6 +18,8 @@ from main import app, WEBHOOK_SECRET
 client = TestClient(app)
 SECRET = os.environ.get("WEBHOOK_SECRET", "test_secret_for_ci_only_do_not_use_in_prod")
 HOUSEHOLD_ID = "f860188e-23b5-4749-b180-868c956151a6"
+# Valid 1x1 PNG: uploads must now be real JPEG/PNG/WebP payloads (API-23).
+TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
 def _make_signed_headers(payload: dict) -> dict:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -32,12 +34,12 @@ def test_health():
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-def test_chat_unauthorized_without_signature():
-    payload = {"message": "Dunkin 19 SAR", "household_id": HOUSEHOLD_ID}
+def test_chat_accepts_unsigned_request_from_authenticated_user():
+    """The per-user JWT is the credential; X-Signature is no longer required (client contract).
+    Missing/invalid JWT → 401 is covered with real verification in test_api_audit.py."""
+    payload = {"message": "Dunkin 19 SAR", "household_id": HOUSEHOLD_ID, "preview_only": True}
     response = client.post("/agent/chat-transaction", json=payload)
-    # When WEBHOOK_SECRET is set, requests without valid signature return 401
-    if os.environ.get("WEBHOOK_SECRET"):
-        assert response.status_code == 401
+    assert response.status_code == 200
 
 @patch("chat_parser.parse_chat_expense")
 @patch("chat_parser.insert_transaction")
@@ -83,7 +85,7 @@ def test_chat_transaction_duplicate_candidate(mock_dedup, mock_parse):
         items=[ChatLineItem(name="Ice Latte", quantity=1.0, price=19.0)],
     )
     mock_dedup.return_value = {
-        "id": "tx-sms-111",
+        "id": "tx-receipt-111",
         "merchant": "Dunkin'",
         "amount": 19.0,
         "timestamp": "2026-09-25T14:00:00Z",
@@ -99,7 +101,7 @@ def test_chat_transaction_duplicate_candidate(mock_dedup, mock_parse):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "duplicate_candidate"
-    assert data["candidate_transaction_id"] == "tx-sms-111"
+    assert data["candidate_transaction_id"] == "tx-receipt-111"
 
 @patch("chat_parser.enrich_transaction_items")
 @patch("chat_parser.parse_chat_expense")
@@ -120,14 +122,14 @@ def test_chat_transaction_explicit_enrich(mock_parse, mock_enrich):
     payload = {
         "message": "16 latte, 3 donut",
         "household_id": HOUSEHOLD_ID,
-        "enrich_tx_id": "tx-sms-111",
+        "enrich_tx_id": "tx-receipt-111",
     }
     headers = _make_signed_headers(payload)
     response = client.post("/agent/chat-transaction", content=json.dumps(payload), headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "enriched"
-    assert data["transaction_id"] == "tx-sms-111"
+    assert data["transaction_id"] == "tx-receipt-111"
     assert len(data["items"]) == 2
 
 @patch("receipt_scanner.parse_receipt_image")
@@ -147,7 +149,7 @@ def test_scan_receipt_success(mock_dedup, mock_insert, mock_parse):
     mock_insert.return_value = "tx-receipt-555"
 
     payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": HOUSEHOLD_ID,
         "allow_duplicate": False,
     }
@@ -203,7 +205,7 @@ def test_scan_receipt_with_receipt_url():
     payload = {
         "household_id": HOUSEHOLD_ID,
         "qr_code_raw": "ARxVbml0ZWQgRWxlY3Ryb25pY3MgQ28uIGVYdHJhAg8zMDA0Njg3ODE5MTAwMDMDFDIwMjYtMTAtMDRUMjI6MTk6MzRaBAc3NDA4LjAwBQY5NjYuMjY=",
-        "receipt_url": "https://example.supabase.co/storage/v1/object/public/receipts/hh-123/test.jpg",
+        "receipt_url": f"https://example.supabase.co/storage/v1/object/public/receipts/{HOUSEHOLD_ID}/test.jpg",
         "preview_only": True,
     }
     headers = _make_signed_headers(payload)
@@ -211,7 +213,7 @@ def test_scan_receipt_with_receipt_url():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ("preview", "success")
-    assert data.get("receipt_url") == "hh-123/test.jpg"
+    assert data.get("receipt_url") == f"{HOUSEHOLD_ID}/test.jpg"
     assert data["merchant"] == "United Electronics Co. eXtra"
 
 
@@ -262,7 +264,7 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
 
     target_hh = "a0000000-0000-0000-0000-000000000001"
     payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": target_hh,
         "allow_duplicate": True,
     }
@@ -279,14 +281,24 @@ def test_scan_receipt_rate_limiting_strict(mock_process):
     assert "Rate limit exceeded" in blocked_resp.json()["detail"]
     assert "Retry-After" in blocked_resp.headers
 
-    # Another household should NOT be blocked
+    # The window is keyed by the verified user (API-08): the same user cannot reset it by
+    # switching household_id, while a different user is not affected.
     other_payload = {
-        "image_base64": "fake_base64_data",
+        "image_base64": TINY_PNG_B64,
         "household_id": "b0000000-0000-0000-0000-000000000002",
         "allow_duplicate": True,
     }
     other_headers = _make_signed_headers(other_payload)
-    other_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    same_user_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    assert same_user_resp.status_code == 429
+
+    import routes.receipts as receipts_routes
+    original_user = receipts_routes.get_current_user_id
+    receipts_routes.get_current_user_id = lambda request: "00000000-0000-0000-0000-000000000002"
+    try:
+        other_resp = client.post("/agent/scan-receipt", content=json.dumps(other_payload), headers=other_headers)
+    finally:
+        receipts_routes.get_current_user_id = original_user
     assert other_resp.status_code == 200
 
     _reset_receipt_scan_rate_limits()

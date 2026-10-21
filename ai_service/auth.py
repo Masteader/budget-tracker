@@ -8,19 +8,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Optional
+import threading
+import time
+from typing import List, Optional
 
 from fastapi import HTTPException, Request, status
 from jose import JWTError, jwt
 
-from utils import validate_uuid
-from supabase_client import get_client
+from utils import validate_uuid, verify_signature
+from supabase_client import first_row, get_client
 
 logger = logging.getLogger(__name__)
 
 # Supabase JWT Secret — if unset in dev, will warn and skip crypto verification
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "").strip()
-IS_PRODUCTION = os.environ.get("ENV", "development").lower() == "production"
 
 
 def _check_household_membership(user_household_id: Optional[str], requested_household_id: str) -> None:
@@ -38,103 +39,264 @@ def _check_household_membership(user_household_id: Optional[str], requested_hous
 
 
 _JWKS_CACHE: dict = {}
+# last_success: monotonic time of the last successful JWKS download (0 = never);
+# last_failure: monotonic time of the last failed attempt (0 = none since the last success).
+_JWKS_STATE = {"last_success": 0.0, "last_failure": 0.0}
+# Unknown `kid`s are attacker-controlled: after a successful download never refetch the JWKS
+# more often than this.
+_JWKS_MIN_REFRESH_SECONDS = 60.0
+# After a failed download retry soon (a transient DNS/network error must not lock out ES256
+# verification for a minute), but not on every request while the endpoint is down.
+_JWKS_FAILURE_BACKOFF_SECONDS = 2.0
+_JWKS_FETCH_TIMEOUT_SECONDS = 3.0
+# Serialises downloads across worker threads so a burst of requests causes one fetch.
+_JWKS_FETCH_LOCK = threading.Lock()
+_MAX_TOKEN_LENGTH = 8192
+_INVALID_TOKEN_DETAIL = "Invalid or expired authentication token."
+_monotonic = time.monotonic  # test seam
+
+
+def _reset_jwks_cache() -> None:
+    """Clear cached JWKS keys (tests / key rotation)."""
+    _JWKS_CACHE.clear()
+    _JWKS_STATE["last_success"] = 0.0
+    _JWKS_STATE["last_failure"] = 0.0
+
+
+def _fetch_jwks_document(url: str) -> dict:
+    import json
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS) as resp:
+        return json.loads(resp.read(256 * 1024).decode("utf-8"))
 
 
 def _get_jwk_for_kid(kid: str):
-    """Retrieve and construct a JWK from Supabase JWKS endpoint with in-memory caching."""
-    global _JWKS_CACHE
-    if kid in _JWKS_CACHE:
-        return _JWKS_CACHE[kid]
+    """Return the cached ES256 verification key for ``kid`` (never does network I/O)."""
+    return _JWKS_CACHE.get(kid)
+
+
+def _jwks_refresh_allowed(now: float) -> bool:
+    last_success = _JWKS_STATE["last_success"]
+    last_failure = _JWKS_STATE["last_failure"]
+    if last_success and now - last_success < _JWKS_MIN_REFRESH_SECONDS:
+        return False
+    if last_failure and now - last_failure < _JWKS_FAILURE_BACKOFF_SECONDS:
+        return False
+    return True
+
+
+def _refresh_jwks_for_kid(kid: str) -> None:
+    """
+    Blocking JWKS download; run it in a worker thread (``asyncio.to_thread``), never on the
+    event loop. Only a successful download starts the 60 s throttle: a failure used to stamp
+    the throttle before fetching, so one transient error rejected every ES256 token for a
+    minute. A failure starts the short back-off instead. Known keys stay cached on failure.
+    """
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     if not supabase_url:
-        return None
+        return
+    with _JWKS_FETCH_LOCK:
+        # Another thread may have fetched (or failed) while this one waited for the lock.
+        if kid in _JWKS_CACHE or not _jwks_refresh_allowed(_monotonic()):
+            return
+        try:
+            from jose import jwk
+
+            data = _fetch_jwks_document(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+            keys = {}
+            for k in data.get("keys", []):
+                # Only asymmetric P-256 signing keys are acceptable for the ES256 path.
+                if not k.get("kid") or k.get("kty") != "EC" or k.get("crv", "P-256") != "P-256":
+                    continue
+                if k.get("alg", "ES256") != "ES256":
+                    continue
+                keys[k["kid"]] = jwk.construct(k, algorithm="ES256")
+        except Exception as exc:
+            _JWKS_STATE["last_failure"] = _monotonic()
+            logger.warning("Failed to fetch Supabase JWKS: %s", type(exc).__name__)
+            return
+        # Replace the key set: a key removed from the project's JWKS (revoked) stops verifying.
+        _JWKS_CACHE.clear()
+        _JWKS_CACHE.update(keys)
+        _JWKS_STATE["last_success"] = _monotonic()
+        _JWKS_STATE["last_failure"] = 0.0
+
+
+async def ensure_jwks_for_token(token: str) -> None:
+    """
+    Make sure the verification key for an ES256 token's ``kid`` is cached, downloading the
+    project's JWKS in a worker thread when needed (and allowed by the throttle/back-off).
+    Never raises: verification itself happens in ``_decode_token``.
+    """
+    if not token or len(token) > _MAX_TOKEN_LENGTH:
+        return
     try:
-        import json
-        import urllib.request
-        from jose import jwk
-        req = urllib.request.urlopen(f"{supabase_url}/auth/v1/.well-known/jwks.json", timeout=5)
-        data = json.loads(req.read().decode("utf-8"))
-        for k in data.get("keys", []):
-            if k.get("kid"):
-                _JWKS_CACHE[k["kid"]] = jwk.construct(k)
-        return _JWKS_CACHE.get(kid)
-    except Exception as exc:
-        logger.warning("Failed to fetch Supabase JWKS: %s", exc)
-        return None
+        header = jwt.get_unverified_header(token)
+    except Exception:
+        return
+    kid = header.get("kid")
+    if header.get("alg") != "ES256" or not kid or str(kid) in _JWKS_CACHE:
+        return
+    if not _jwks_refresh_allowed(_monotonic()):
+        return
+    await asyncio.to_thread(_refresh_jwks_for_kid, str(kid))
+
+
+async def decode_token(token: str) -> dict:
+    """Async variant of ``_decode_token`` that fetches a missing JWKS key off the event loop."""
+    await ensure_jwks_for_token(token)
+    return _decode_token(token)
+
+
+def _reject(reason: str, *args) -> HTTPException:
+    logger.info("JWT rejected: " + reason, *args)
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_TOKEN_DETAIL)
 
 
 def _decode_token(token: str) -> dict:
     """
     Decode and validate a Supabase JWT.
     Enforces:
-    1. Signature verification via ES256 (cached JWKS) or HS256 (SUPABASE_JWT_SECRET).
-    2. Audience check: aud must be 'authenticated'.
-    3. Issuer check: iss must be '{SUPABASE_URL}/auth/v1'.
-    4. Fail-closed: rejection on any failure, zero unverified fallback claims.
+    1. Algorithm pinning: only ES256 (key from the project's JWKS, by kid) or HS256
+       (SUPABASE_JWT_SECRET); 'none' and every other alg are rejected before verification.
+    2. Audience 'authenticated', issuer '{SUPABASE_URL}/auth/v1', role 'authenticated'.
+    3. exp, iat and sub are required (a token without exp would never expire).
+    4. Fail-closed: any failure → 401 with a generic detail (reason logged server-side only).
     """
     secret = os.environ.get("SUPABASE_JWT_SECRET", "").strip() or SUPABASE_JWT_SECRET
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    expected_issuer = f"{supabase_url}/auth/v1" if supabase_url else None
+    if not supabase_url:
+        raise _reject("SUPABASE_URL not configured; cannot pin issuer")
+    expected_issuer = f"{supabase_url}/auth/v1"
 
+    if not token or len(token) > _MAX_TOKEN_LENGTH:
+        raise _reject("empty or oversized token")
     try:
         header = jwt.get_unverified_header(token)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Malformed JWT header: {exc}",
-        )
+        raise _reject("malformed header (%s)", type(exc).__name__)
 
-    alg = header.get("alg", "HS256")
+    alg = header.get("alg")
     kid = header.get("kid")
-
-    # 1. Asymmetric ES256 verification via Supabase JWKS
-    if alg == "ES256" and kid:
-        key = _get_jwk_for_kid(kid)
+    if alg == "ES256":
+        if not kid:
+            raise _reject("ES256 token without kid")
+        # Cache only: the JWKS download happens off the event loop in ensure_jwks_for_token
+        # (firewall middleware / decode_token), never in this synchronous path.
+        key = _get_jwk_for_kid(str(kid))
         if not key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unable to fetch or construct verification key for token.",
-            )
-        try:
-            decode_kwargs = {
-                "algorithms": ["ES256"],
-                "audience": "authenticated",
-            }
-            if expected_issuer:
-                decode_kwargs["issuer"] = expected_issuer
-            return jwt.decode(token, key, **decode_kwargs)
-        except JWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired authentication token: {exc}",
-            )
+            raise _reject("no JWKS key for kid")
+        algorithms = ["ES256"]
+    elif alg == "HS256":
+        if not secret:
+            raise _reject("HS256 token but SUPABASE_JWT_SECRET is not configured")
+        key = secret
+        algorithms = ["HS256"]
+    else:
+        raise _reject("algorithm %r is not allowed", alg)
 
-    # 2. Symmetric HS256 verification via SUPABASE_JWT_SECRET
-    if secret and alg == "HS256":
-        try:
-            decode_kwargs = {
-                "algorithms": ["HS256"],
-                "audience": "authenticated",
-            }
-            if expected_issuer:
-                decode_kwargs["issuer"] = expected_issuer
-            return jwt.decode(token, secret, **decode_kwargs)
-        except JWTError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired authentication token: {exc}",
-            )
+    try:
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=algorithms,
+            audience="authenticated",
+            issuer=expected_issuer,
+            options={"require_exp": True, "require_iat": True, "require_sub": True, "leeway": 30},
+        )
+    except JWTError as exc:
+        raise _reject("verification failed (%s)", type(exc).__name__)
 
-    # 3. Fail closed if no key or secret matches
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unauthorized: No valid cryptographic key or secret configured to verify token signature.",
+    if payload.get("role") != "authenticated":
+        raise _reject("role %r is not 'authenticated'", payload.get("role"))
+    return payload
+
+
+
+SIGNATURE_HEADER = "X-Signature"
+_INVALID_SIGNATURE_DETAIL = "Invalid request signature."
+# A stale signature is logged at most once per (route, user) per interval.
+_STALE_SIGNATURE_LOG_INTERVAL_SECONDS = 300.0
+_STALE_SIGNATURE_LOG_MAX_KEYS = 2048
+_STALE_SIGNATURE_LOGGED: dict = {}
+
+
+def _reset_stale_signature_log() -> None:
+    """Forget which stale-signature warnings were emitted (tests)."""
+    _STALE_SIGNATURE_LOGGED.clear()
+
+
+def _user_ref(user_id: str) -> str:
+    """Short, non-reversible reference to a user for logs (never the raw id)."""
+    import hashlib
+
+    return hashlib.sha256(str(user_id).encode("utf-8")).hexdigest()[:12]
+
+
+def _warn_ignored_signature(route: str, user_id: str) -> None:
+    now = _monotonic()
+    key = (route, _user_ref(user_id))
+    last = _STALE_SIGNATURE_LOGGED.get(key)
+    if last is not None and now - last < _STALE_SIGNATURE_LOG_INTERVAL_SECONDS:
+        return
+    if len(_STALE_SIGNATURE_LOGGED) >= _STALE_SIGNATURE_LOG_MAX_KEYS:
+        cutoff = now - _STALE_SIGNATURE_LOG_INTERVAL_SECONDS
+        for stale_key in [k for k, t in _STALE_SIGNATURE_LOGGED.items() if t < cutoff]:
+            _STALE_SIGNATURE_LOGGED.pop(stale_key, None)
+        if len(_STALE_SIGNATURE_LOGGED) >= _STALE_SIGNATURE_LOG_MAX_KEYS:
+            _STALE_SIGNATURE_LOGGED.clear()
+    _STALE_SIGNATURE_LOGGED[key] = now
+    if not os.environ.get("WEBHOOK_SECRET", "").strip():
+        reason = "cannot be verified (WEBHOOK_SECRET is not set)"
+    else:
+        reason = "does not match WEBHOOK_SECRET (app build signing with a rotated secret?)"
+    logger.warning(
+        "Ignoring %s header on %s for user %s: it %s. The request is authenticated by its JWT.",
+        SIGNATURE_HEADER, route, key[1], reason,
     )
 
 
+async def verify_signature_if_present(request: Request) -> None:
+    """
+    Router-wide dependency: X-Signature is defense in depth on user routes, never their
+    authentication (the Supabase JWT is).
 
-def get_current_user_id(request: Request) -> str:
-    """Extract and verify the current authenticated user's ID from Supabase JWT."""
+    - No header, or a valid signature: nothing to do.
+    - Invalid or unverifiable signature (wrong HMAC, malformed, or WEBHOOK_SECRET unset in
+      production) WITH a valid JWT: served, with a rate-limited warning naming the route and a
+      hash of the user id. Compatibility: WEBHOOK_SECRET has been rotated, so every installed
+      app build signs with the old value; rejecting would break all their chat/receipt calls.
+    - Invalid signature WITHOUT a valid JWT: 401 (there is no credential at all).
+
+    Routes where the signature IS the authentication (server-to-server webhooks without a JWT;
+    none today) must call ``utils.verify_signature`` themselves and reject a missing or invalid
+    signature.
+    """
+    signature = request.headers.get(SIGNATURE_HEADER)
+    if signature is None:
+        return
+    body = await request.body()  # cached on the request; the route reads the same bytes
+    if verify_signature(body, signature):
+        return
+
+    claims = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            claims = await decode_token(auth_header[7:].strip())
+        except HTTPException:
+            claims = None
+    if not claims or not claims.get("sub"):
+        logger.info("Rejected request with an invalid %s header and no valid JWT.", SIGNATURE_HEADER)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_SIGNATURE_DETAIL)
+
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path
+    _warn_ignored_signature(route, str(claims["sub"]))
+
+
+def get_verified_claims(request: Request) -> dict:
+    """Return the verified Supabase JWT claims (sub, email, ...) of the caller, or raise 401."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -143,7 +305,12 @@ def get_current_user_id(request: Request) -> str:
         )
 
     token = auth_header[7:].strip()
-    payload = _decode_token(token)
+    return _decode_token(token)
+
+
+def get_current_user_id(request: Request) -> str:
+    """Extract and verify the current authenticated user's ID from Supabase JWT."""
+    payload = get_verified_claims(request)
 
     user_id = payload.get("sub")
     if not user_id:
@@ -154,41 +321,55 @@ def get_current_user_id(request: Request) -> str:
     return str(user_id)
 
 
-def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
-    """Retrieve the user's role and membership in the given household."""
-    client = get_client()
+def optional_verified_user_id(request: Request) -> Optional[str]:
+    """The verified caller's user id when a valid Bearer JWT is present, else None (never raises)."""
     try:
-        res = (
-            client.table("household_memberships")
+        return get_current_user_id(request)
+    except HTTPException:
+        return None
+
+
+def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
+    """
+    Retrieve the user's role and membership in the given household.
+
+    household_memberships is the only source: a missing membership row is a definitive "no
+    access" (a stale users.household_id after removal must not grant it), and a failing query
+    fails closed (None). The former fallback to the legacy users.household_id column on a query
+    error let an infrastructure error widen access (Fable review, section C observation).
+    """
+    try:
+        # limit(1), not maybe_single(): on postgrest-py <= 1.1 a zero-row maybe_single() can raise.
+        return first_row(
+            get_client().table("household_memberships")
             .select("role, household_id")
             .eq("user_id", user_id)
             .eq("household_id", household_id)
-            .maybe_single()
-            .execute()
         )
-        if res and res.data:
-            return res.data
     except Exception as exc:
-        logger.warning("Error querying household_memberships: %s", exc)
+        logger.warning("Membership lookup failed; denying access (fail closed): %s", exc)
+        return None
 
-    # Fallback to users table cache
+
+def get_user_household_ids(user_id: str) -> List[str]:
+    """
+    Every household the user is a member of (household_memberships). Empty when the lookup
+    fails: callers use it to narrow what they return, so it fails closed.
+    """
     try:
-        user_res = (
-            client.table("users")
-            .select("household_id, role")
-            .eq("id", user_id)
-            .maybe_single()
+        rows = (
+            get_client()
+            .table("household_memberships")
+            .select("household_id")
+            .eq("user_id", user_id)
             .execute()
+            .data
+            or []
         )
-        if user_res and user_res.data and user_res.data.get("household_id") == household_id:
-            return {
-                "household_id": household_id,
-                "role": user_res.data.get("role", "member"),
-            }
     except Exception as exc:
-        logger.warning("Error querying users fallback: %s", exc)
-
-    return None
+        logger.warning("Error listing household memberships: %s", exc)
+        return []
+    return sorted({str(r["household_id"]) for r in rows if r.get("household_id")})
 
 
 async def verify_household_access(request: Request, household_id: str) -> str:

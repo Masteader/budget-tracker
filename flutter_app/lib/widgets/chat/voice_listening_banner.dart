@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
+import '../../theme/app_themes.dart';
 
 /// Animated pulse banner displayed when the microphone is recording speech for AI chat.
 class VoiceListeningBanner extends StatelessWidget {
@@ -20,7 +22,7 @@ class VoiceListeningBanner extends StatelessWidget {
     if (!isListening) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      margin: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.redAccent.withValues(alpha: 0.12),
@@ -41,10 +43,9 @@ class VoiceListeningBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              selectedLocale == 'ar_SA'
-                  ? "🎙️ جاري الاستماع باللغة العربية... تحدث الآن"
-                  : "🎙️ Listening in English... Speak your items",
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+              // Shown in the language being recognised (ar/en/ur).
+              AppLocalizations(Locale(selectedLocale.substring(0, 2))).get('vlb_listening'),
+              style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
           InkWell(
@@ -53,12 +54,12 @@ class VoiceListeningBanner extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF00C896),
+                color: AppThemes.success,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                'Done',
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+              child: Text(
+                context.tr('done'),
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
           ),

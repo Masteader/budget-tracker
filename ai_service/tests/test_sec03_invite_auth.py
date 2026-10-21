@@ -8,6 +8,7 @@ Proof tests for SEC-03:
 """
 
 import os
+import time
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
@@ -43,6 +44,8 @@ def create_test_token(user_id: str) -> str:
             "aud": "authenticated",
             "iss": "https://mockproject.supabase.co/auth/v1",
             "role": "authenticated",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
         },
         TEST_SECRET,
         algorithm="HS256",

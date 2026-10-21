@@ -4,11 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../models/nafaqah.dart';
+import '../../providers/household_role_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/sync_worker.dart' show SyncWorker;
+import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../../widgets/zatca_qr_camera_scanner.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/nafaqah/nafaqah_review_section.dart';
 import '../../l10n/app_localizations.dart';
 
 class MultiPageReceiptScannerScreen extends StatefulWidget {
@@ -26,12 +33,55 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
   bool _isProcessing = false;
   String? _errorMessage;
 
-  final List<String> _guideSteps = [
-    'Shot 1: Top header & ZATCA QR code',
-    'Shot 2: Middle line items (overlap with shot 1)',
-    'Shot 3: Bottom subtotal, VAT, and totals',
-    'Shot 4+: Additional continuous segments if needed',
+  // Family (Islamic Nafaqah): this screen saves without a preview, so the
+  // caller's role comes from the Nafaqah summary. Unknown (offline) = the
+  // server applies the same default as chat.
+  NafaqahPreview _nafaqah = const NafaqahPreview();
+  String? _nafaqahClass;
+  String? _nafaqahWifeId;
+  bool _showWifeRequired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNafaqahContext();
+  }
+
+  Future<void> _loadNafaqahContext() async {
+    try {
+      final summary = await ApiService.instance.getNafaqahSummary(widget.householdId);
+      _safeSetState(() {
+        _nafaqah = NafaqahPreview.fromSummary(summary).withAdmin(viewerIsAdminOf(context, widget.householdId));
+        _nafaqahClass = _nafaqah.suggestedClass;
+        _nafaqahWifeId = _nafaqah.defaultSpouseId;
+      });
+    } catch (e) {
+      debugPrint('[MultiPageScanner] Nafaqah context unavailable: $e');
+    }
+  }
+
+  Map<String, String> get _nafaqahFields => _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
+
+  // Translation keys for the per-shot capture guidance.
+  static const List<String> _guideSteps = [
+    'mp_guide_shot1',
+    'mp_guide_shot2',
+    'mp_guide_shot3',
+    'mp_guide_shot4',
   ];
+
+  String? get _currentUserId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
 
   Future<void> _captureShot() async {
     try {
@@ -42,13 +92,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         maxHeight: 1600,
       );
       if (picked != null) {
-        setState(() {
+        _safeSetState(() {
           _capturedShots.add(File(picked.path));
           _errorMessage = null;
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Camera capture error: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_camera_error', {'error': e}));
     }
   }
 
@@ -60,13 +110,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         maxHeight: 1600,
       );
       if (picked.isNotEmpty) {
-        setState(() {
+        _safeSetState(() {
           _capturedShots.addAll(picked.map((x) => File(x.path)));
           _errorMessage = null;
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Gallery error: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_gallery_error', {'error': e}));
     }
   }
 
@@ -76,6 +126,16 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
 
   Future<void> _processAllShots() async {
     if (_capturedShots.isEmpty) return;
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    final nafaqah = _nafaqahFields;
+    // One key for the online attempt and its offline replay: a request that
+    // timed out after the server stored the receipt is not booked twice when
+    // the queue replays it (FR-A-04).
+    final idempotencyKey = const Uuid().v4();
+    final occurredAt = DateTime.now();
 
     setState(() {
       _isProcessing = true;
@@ -93,74 +153,89 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         imagesBase64: base64List,
         householdId: widget.householdId,
         allowDuplicate: false,
+        paidBy: nafaqah['paid_by'],
+        beneficiary: nafaqah['beneficiary'],
+        nafaqahClass: nafaqah['nafaqah_class'],
+        nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+        idempotencyKey: idempotencyKey,
+        occurredAt: occurredAt,
       );
 
-      setState(() => _isProcessing = false);
+      _safeSetState(() => _isProcessing = false);
 
       if (mounted) {
         if (res['status'] == 'success') {
           AppSnackBar.showSuccess(
             context,
-            res['message'] ?? 'Receipt stitched and saved successfully!',
-            title: 'Receipt Saved',
+            res['message'] ?? context.tr('mp_saved_msg'),
+            title: context.tr('mp_saved_title'),
           );
           Navigator.pop(context, true);
-        } else if (res['status'] == 'error') {
-          // If offline, enqueue
-          await OfflineSyncService.instance.enqueue(
-            endpoint: 'receipt',
-            payload: {'images_base64': base64List},
-            householdId: widget.householdId,
-          );
-          if (mounted) {
-            AppSnackBar.showWarning(
-              context,
-              'Saved receipt shots to local offline queue. Will sync automatically once connected.',
-              title: 'Queued Offline',
-              icon: Icons.cloud_off_rounded,
-            );
-            Navigator.pop(context, true);
-          }
+        } else if (SyncWorker.shouldQueueAfterOnlineFailure(res)) {
+          // Offline or a transient server failure; a refusal is shown below.
+          await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg', idempotencyKey: idempotencyKey);
         } else {
-          setState(() {
-            _errorMessage = res['message'] ?? 'Could not parse receipt shots.';
+          _safeSetState(() {
+            _errorMessage = expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('mp_parse_failed');
           });
         }
       }
     } catch (e) {
       // Offline fallback
-      setState(() => _isProcessing = false);
+      _safeSetState(() => _isProcessing = false);
       try {
         final List<String> base64List = [];
         for (final f in _capturedShots) {
           final bytes = await f.readAsBytes();
           base64List.add(base64Encode(bytes));
         }
-        await OfflineSyncService.instance.enqueue(
-          endpoint: 'receipt',
-          payload: {'images_base64': base64List},
-          householdId: widget.householdId,
-        );
-        if (mounted) {
-          AppSnackBar.showWarning(
-            context,
-            'Saved receipt shots to local offline queue.',
-            title: 'Queued Offline',
-            icon: Icons.cloud_off_rounded,
-          );
-          Navigator.pop(context, true);
-        }
+        await _queueOffline(base64List, messageKey: 'mp_queued_offline_short', idempotencyKey: idempotencyKey);
       } catch (_) {
-        setState(() => _errorMessage = 'Failed to process receipt shots: $e');
+        _safeSetState(() => _errorMessage = context.trArgs('mp_process_failed', {'error': e}));
       }
+    }
+  }
+
+  /// Stores the shots in the offline queue and reports "queued" only when the
+  /// write succeeded (MOB-28). On failure the shots stay on screen with an
+  /// error so the user can retry; nothing was stored.
+  Future<void> _queueOffline(List<String> base64List, {required String messageKey, String? idempotencyKey}) async {
+    try {
+      await OfflineSyncService.instance.enqueue(
+        endpoint: 'receipt',
+        payload: {
+          'images_base64': base64List,
+          // Owner of the queued receipt, so another account never replays it (FR-A-09).
+          if (_currentUserId != null) 'user_id': _currentUserId,
+          ..._nafaqahFields,
+        },
+        householdId: widget.householdId,
+        idempotencyKey: idempotencyKey,
+      );
+    } catch (err) {
+      debugPrint('[MultiPageScanner] Offline queue write failed: $err');
+      _safeSetState(() {
+        _isProcessing = false;
+        _errorMessage = context.tr('offline_queue_failed');
+      });
+      return;
+    }
+    if (mounted) {
+      AppSnackBar.showWarning(
+        context,
+        context.tr(messageKey),
+        title: context.tr('mp_queued_offline'),
+        icon: Icons.cloud_off_rounded,
+      );
+      Navigator.pop(context, true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentGuide = _capturedShots.length < _guideSteps.length
-        ? _guideSteps[_capturedShots.length]
-        : 'Ready to stitch and process all shots!';
+        ? context.tr(_guideSteps[_capturedShots.length])
+        : context.tr('mp_ready');
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -168,13 +243,13 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(
-          'Continuous Long Receipt Stitcher',
+          context.tr('mp_title'),
           style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: context.textPrimary),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF00C896)),
-            tooltip: 'Scan ZATCA QR',
+            icon: const Icon(Icons.qr_code_scanner, color: AppThemes.success),
+            tooltip: context.tr('mp_scan_zatca'),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
@@ -192,17 +267,17 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
               decoration: BoxDecoration(
                 color: context.cardBg,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+                border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.auto_awesome, color: Color(0xFF00C896), size: 20),
+                    child: const Icon(Icons.auto_awesome, color: AppThemes.success, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -210,7 +285,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Overlap Shots by ~2-3 Items',
+                          context.tr('mp_overlap_hint'),
                           style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 2),
@@ -259,7 +334,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                               shape: BoxShape.circle,
                               border: Border.all(color: context.borderColor),
                             ),
-                            child: const Icon(Icons.receipt_long_rounded, size: 54, color: Color(0xFF00C896)),
+                            child: const Icon(Icons.receipt_long_rounded, size: 54, color: AppThemes.success),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -289,9 +364,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ),
                           ),
                         ),
-                        Positioned(
+                        PositionedDirectional(
                           top: 12,
-                          left: 16,
+                          start: 16,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
@@ -299,7 +374,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'Latest: Shot #${_capturedShots.length}',
+                              context.trArgs('mp_latest_shot', {'n': _capturedShots.length}),
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ),
@@ -334,9 +409,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                   fit: BoxFit.cover,
                                 ),
                               ),
-                              Positioned(
+                              PositionedDirectional(
                                 top: 2,
-                                left: 2,
+                                start: 2,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
@@ -349,9 +424,9 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                   ),
                                 ),
                               ),
-                              Positioned(
+                              PositionedDirectional(
                                 top: 2,
-                                right: 2,
+                                end: 2,
                                 child: GestureDetector(
                                   onTap: () => _removeShot(i),
                                   child: Container(
@@ -360,13 +435,26 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                                       shape: BoxShape.circle,
                                       color: Colors.redAccent,
                                     ),
-                                    child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                    child: Icon(Icons.close, size: 12, color: Colors.white, semanticLabel: context.tr('a11y_remove_photo')),
                                   ),
                                 ),
                               ),
                             ],
                           );
                         },
+                      ),
+                    ),
+                  if (_capturedShots.isNotEmpty && _nafaqah.canClassify)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 0),
+                      child: NafaqahReviewSection(
+                        key: const ValueKey('multipage_nafaqah_review'),
+                        preview: _nafaqah,
+                        value: _nafaqahClass,
+                        wifeId: _nafaqahWifeId,
+                        showWifeRequired: _showWifeRequired,
+                        onChanged: (cls) => setState(() => _nafaqahClass = cls),
+                        onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
                       ),
                     ),
                   const SizedBox(height: 12),
@@ -384,7 +472,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                             ),
                             icon: const Icon(Icons.add_a_photo_outlined, size: 20),
                             label: Text(
-                              _capturedShots.isEmpty ? context.tr('take_shot_1') : '${context.tr('take_shot_n')}${_capturedShots.length + 1}',
+                              context.trArgs('take_shot_n', {'n': _capturedShots.length + 1}),
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             onPressed: _isProcessing ? null : _captureShot,
@@ -405,7 +493,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
                           Expanded(
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00C896),
+                                backgroundColor: AppThemes.success,
                                 foregroundColor: Colors.black,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

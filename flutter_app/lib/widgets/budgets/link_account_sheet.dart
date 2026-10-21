@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -85,21 +84,20 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
         final acc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
         AppSnackBar.showSuccess(
           context,
-          '${widget.categoryName} linked to ${acc?.name ?? "No Account"}!',
-          title: 'Account Mapped',
+          context.trArgs('las_linked_msg', {'category': widget.categoryName, 'account': acc?.name ?? context.tr('no_account')}),
+          title: context.tr('las_mapped_title'),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppSnackBar.showError(context, 'Failed to link account: $e');
+        AppSnackBar.showError(context, context.trArgs('las_failed', {'error': e}));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       decoration: BoxDecoration(
@@ -152,7 +150,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                           ),
                         ),
                         Text(
-                          '${widget.categoryName} (${context.tr('allocated')}: SAR ${fmt.format(widget.budget.allocatedAmount)})',
+                          '${widget.categoryName} (${context.tr('allocated')}: ${context.sar(widget.budget.allocatedAmount)})',
                           style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -203,7 +201,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                         ),
                       ),
                       subtitle: Text(
-                        '${context.tr('current_balance')}: ${acc.currency} ${fmt.format(acc.balance)} ${!hasEnough ? "(${context.tr('low_balance')})" : ""}',
+                        '${context.tr('current_balance')}: ${context.money(acc.balance, acc.currency)} ${!hasEnough ? "(${context.tr('low_balance')})" : ""}',
                         style: TextStyle(
                           color: !hasEnough ? Colors.orange : context.textSecondary,
                           fontSize: 11,

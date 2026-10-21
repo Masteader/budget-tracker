@@ -21,7 +21,7 @@ void main() {
     );
 
     expect(find.text('Monthly Salary / Income'), findsOneWidget);
-    expect(find.text('12,000.00 SAR'), findsOneWidget);
+    expect(find.text('SAR 12,000.00'), findsOneWidget);
 
     // Tap edit button
     final editButton = find.byIcon(Icons.edit_rounded);
@@ -31,10 +31,10 @@ void main() {
 
     // Verify text field and preset buttons appear
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('15,000 SAR'), findsOneWidget);
+    expect(find.text('SAR 15,000'), findsOneWidget);
 
     // Tap 15,000 SAR preset
-    await tester.tap(find.text('15,000 SAR'));
+    await tester.tap(find.text('SAR 15,000'));
     await tester.pumpAndSettle();
 
     // Tap save button

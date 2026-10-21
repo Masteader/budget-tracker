@@ -3,18 +3,23 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart';
+import '../../services/api_service.dart';
+import '../../widgets/transactions/nafaqah_feed_badge.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import 'package:flutter/services.dart';
-import '../../services/api_service.dart';
+import '../../services/api/base_api_client.dart';
 import '../../services/csv_export_service.dart';
+import '../../services/nafaqah_write_errors.dart';
+import '../../services/statement_pdf_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
@@ -22,9 +27,17 @@ import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
+import '../../models/category_catalog.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
-  const TransactionFeedScreen({super.key});
+  /// The household whose family context words the badges (defaults to the
+  /// active household of the role provider or of the rows).
+  final String? householdId;
+
+  /// `GET /households/{id}/nafaqah` (injectable for tests).
+  final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
+
+  const TransactionFeedScreen({super.key, this.householdId, this.loadNafaqah});
 
   @override
   State<TransactionFeedScreen> createState() => _TransactionFeedScreenState();
@@ -37,19 +50,41 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   String _selectedDatePeriod = 'ALL'; // 'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM'
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
+  bool _exportingPdf = false;
 
-  static const List<Map<String, String>> _categoryRawOptions = [
+  /// Family context (UX-04): whether rows get Nafaqah badges, and the names.
+  FeedFamilyContext _family = const FeedFamilyContext();
+  String? _familyRequestedFor;
+
+  /// Family filter values (UX-04): a [NafaqahBadgeKind] name.
+  static final Set<String> _familyFilterValues = NafaqahBadgeKind.values.map((k) => k.name).toSet();
+
+  void _ensureFamilyContext(String? householdId) {
+    if (householdId == null || householdId.isEmpty || _familyRequestedFor == householdId) return;
+    _familyRequestedFor = householdId;
+    final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+    Future<NafaqahSummary>.sync(() => loader(householdId)).then((summary) {
+      if (mounted && _familyRequestedFor == householdId) {
+        setState(() => _family = FeedFamilyContext.fromSummary(summary));
+      }
+    }).catchError((Object e) {
+      debugPrint('[TransactionFeed] Family context unavailable: $e');
+    });
+  }
+
+  /// A family household: from the Nafaqah summary, or (offline) from a
+  /// classified row.
+  bool _isFamily(List<Transaction> rows) => _family.isFamily || rows.any((t) => t.nafaqahClass != null);
+
+  Widget? _badgeFor(Transaction tx, bool isFamily) {
+    final kind = nafaqahBadgeKind(tx, isFamily: isFamily);
+    if (kind == null) return null;
+    return NafaqahFeedBadge(kind: kind, wifeName: _family.wifeNameFor(tx), viewerIsWife: _family.viewerIsWife);
+  }
+
+  static final List<Map<String, String>> _categoryRawOptions = [
     {'code': 'ALL', 'emoji': ''},
-    {'code': 'OPEX-GROCERY', 'emoji': '🛒 '},
-    {'code': 'OPEX-DINING', 'emoji': '☕ '},
-    {'code': 'OPEX-SHOPPING', 'emoji': '🛍️ '},
-    {'code': 'OPEX-UTILITIES', 'emoji': '⚡ '},
-    {'code': 'OPEX-FUEL', 'emoji': '⛽ '},
-    {'code': 'OPEX-ENTERTAINMENT', 'emoji': '🎮 '},
-    {'code': 'OPEX-HEALTH', 'emoji': '💊 '},
-    {'code': 'CAPEX-EDUCATION', 'emoji': '🎓 '},
-    {'code': 'OPEX-GOV', 'emoji': '🏛️ '},
-    {'code': 'OPEX-MISC', 'emoji': '📦 '},
+    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
   ];
 
   List<Map<String, String>> _getCategoryOptions(BuildContext context) {
@@ -94,8 +129,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       result = result.where((t) => t.categoryCode == _selectedCategoryFilter).toList();
     }
 
-    // 2. Spent By Filter
-    if (_selectedSpentByFilter != 'ALL') {
+    // 2. Spent By Filter (family: the Nafaqah kind)
+    if (_familyFilterValues.contains(_selectedSpentByFilter)) {
+      final family = _isFamily(list);
+      result = result.where((t) => nafaqahBadgeKind(t, isFamily: family)?.name == _selectedSpentByFilter).toList();
+    } else if (_selectedSpentByFilter != 'ALL') {
       result = result
           .where((t) => t.spentBy.toLowerCase() == _selectedSpentByFilter.toLowerCase())
           .toList();
@@ -191,12 +229,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          context.tr('filter_and_sort'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: context.textPrimary,
+                        Flexible(
+                          child: Text(
+                            context.tr('filter_and_sort'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: context.textPrimary,
+                            ),
                           ),
                         ),
                         TextButton(
@@ -205,7 +245,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             setModalState(() {});
                             Navigator.pop(ctx);
                           },
-                          child: Text(context.tr('reset_all'), style: const TextStyle(color: Color(0xFF00C896), fontSize: 13)),
+                          child: Text(context.tr('reset_all'), style: TextStyle(color: context.successText, fontSize: 13)),
                         ),
                       ],
                     ),
@@ -325,7 +365,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                         _buildFilterChip(
                           label: _customDateRange != null
-                              ? '${DateFormat('d MMM').format(_customDateRange!.start)} - ${DateFormat('d MMM').format(_customDateRange!.end)}'
+                              ? '${context.fmtDate(_customDateRange!.start, 'd MMM')} - ${context.fmtDate(_customDateRange!.end, 'd MMM')}'
                               : context.tr('custom_range'),
                           selected: _selectedDatePeriod == 'CUSTOM',
                           icon: Icons.calendar_today,
@@ -343,9 +383,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 return Theme(
                                   data: (context.isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
                                     colorScheme: ColorScheme.fromSeed(
-                                      seedColor: const Color(0xFF00C896),
+                                      seedColor: AppThemes.success,
                                       brightness: context.isDark ? Brightness.dark : Brightness.light,
-                                      primary: const Color(0xFF00C896),
+                                      primary: AppThemes.success,
                                       onPrimary: Colors.black,
                                       surface: context.cardBg,
                                       onSurface: context.textPrimary,
@@ -372,6 +412,46 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     const SizedBox(height: 20),
 
                     // ── WHO SPENT THIS ──
+                    if (_isFamily(context.read<TransactionProvider>().transactions)) ...[
+                      Text(
+                        context.tr('feed_filter_nafaqah_title'),
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w700,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildFilterChip(
+                            label: context.tr('all'),
+                            selected: _selectedSpentByFilter == 'ALL',
+                            onSelected: (_) {
+                              setModalState(() => _selectedSpentByFilter = 'ALL');
+                              setState(() => _selectedSpentByFilter = 'ALL');
+                            },
+                          ),
+                          for (final kind in NafaqahBadgeKind.values)
+                            _buildFilterChip(
+                              label: NafaqahFeedBadge.label(
+                                context,
+                                kind,
+                                wifeName: _family.wifeNames.length == 1 ? _family.wifeNames.values.first : null,
+                                viewerIsWife: _family.viewerIsWife,
+                              ),
+                              selected: _selectedSpentByFilter == kind.name,
+                              onSelected: (_) {
+                                setModalState(() => _selectedSpentByFilter = kind.name);
+                                setState(() => _selectedSpentByFilter = kind.name);
+                              },
+                            ),
+                        ],
+                      ),
+                    ] else ...[
                     Text(
                       context.tr('who_spent_this'),
                       style: GoogleFonts.outfit(
@@ -421,6 +501,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                       ],
                     ),
+                    ],
                     const SizedBox(height: 24),
 
                     // Apply Button
@@ -428,7 +509,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C896),
+                          backgroundColor: AppThemes.success,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -465,10 +546,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         width: (MediaQuery.of(context).size.width - 48) / 2,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C896).withValues(alpha: 0.12) : context.inputBg,
+          color: isSelected ? AppThemes.success.withValues(alpha: 0.12) : context.inputBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+            color: isSelected ? AppThemes.success : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -480,11 +561,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected ? const Color(0xFF00C896) : context.textSecondary,
+                  color: isSelected ? AppThemes.success : context.textSecondary,
                 ),
                 const Spacer(),
                 if (isSelected)
-                  const Icon(Icons.check_circle, size: 16, color: Color(0xFF00C896)),
+                  const Icon(Icons.check_circle, size: 16, color: AppThemes.success),
               ],
             ),
             const SizedBox(height: 6),
@@ -493,7 +574,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? const Color(0xFF00C896) : context.textPrimary,
+                color: isSelected ? AppThemes.success : context.textPrimary,
               ),
             ),
             Text(
@@ -525,18 +606,124 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         ),
       ),
       selected: selected,
-      selectedColor: const Color(0xFF00C896),
+      selectedColor: AppThemes.success,
       backgroundColor: context.cardBg,
       side: BorderSide(
-        color: selected ? const Color(0xFF00C896) : context.borderColor,
+        color: selected ? AppThemes.success : context.borderColor,
       ),
       onSelected: onSelected,
     );
   }
 
+  void _exportCsv(BuildContext context) {
+    final rows = context.read<TransactionProvider>().transactions;
+    if (rows.isEmpty) return;
+    final exportList = rows
+        .map((t) => {
+              'id': t.id,
+              'amount': t.amount,
+              'currency': t.currency,
+              'merchant': t.merchant,
+              'category_code': t.categoryCode,
+              'timestamp': t.timestamp.toIso8601String(),
+              'source': t.source,
+              'spent_by': t.spentBy,
+              'raw_sms': t.rawSms,
+            })
+        .toList();
+    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
+  }
+
+  /// MOB-26: downloads the statement with the user's JWT and opens the system
+  /// share sheet (open in a PDF viewer, save to Files/Drive, send). The old
+  /// flow showed a bare URL that the backend firewall rejected without auth.
+  Future<void> _exportStatementPdf(BuildContext context) async {
+    final user = supabase.auth.currentUser;
+    if (user == null || _exportingPdf) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                context.tr('monthly_statement_pdf'),
+                style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          context.tr('pdf_statement_desc'),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppThemes.success,
+              foregroundColor: Colors.black,
+            ),
+            icon: const Icon(Icons.ios_share_rounded, size: 16),
+            label: Text(context.tr('pdf_download_share'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    setState(() => _exportingPdf = true);
+    AppSnackBar.showInfo(
+      context,
+      context.tr('pdf_preparing_msg'),
+      title: context.tr('pdf_preparing'),
+      icon: Icons.picture_as_pdf_rounded,
+      duration: const Duration(seconds: 20),
+    );
+    try {
+      final prof = await supabase.from('users').select('household_id').eq('id', user.id).single();
+      final hid = prof['household_id'] as String?;
+      if (hid == null) {
+        throw const ApiDownloadException('No active household');
+      }
+      await StatementPdfService().downloadAndShare(hid);
+      if (context.mounted) ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    } catch (e) {
+      debugPrint('[TransactionFeed] Statement PDF export failed: $e');
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          context.tr('pdf_download_failed_msg'),
+          title: context.tr('pdf_download_failed'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingPdf = false);
+    }
+  }
+
   Future<void> _deleteTransaction(BuildContext context, Transaction tx, {bool requireConfirm = false}) async {
     final txProvider = context.read<TransactionProvider>();
     final budgetProvider = context.read<BudgetProvider>();
+    // Undo re-inserts the row with its creator; the server only accepts that
+    // for the user's own transactions (an admin cannot re-create another
+    // member's entry in their name), so undo is offered for those only.
+    String? currentUserId;
+    try {
+      currentUserId = context.read<HouseholdRoleProvider>().currentUserId;
+    } on ProviderNotFoundException {
+      currentUserId = null;
+    }
+    final canUndo = tx.userId != null && tx.userId == currentUserId;
 
     if (requireConfirm) {
       final confirm = await showDialog<bool>(
@@ -545,7 +732,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           backgroundColor: context.cardBg,
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
-            '${context.tr('delete_confirm_prefix')} ${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}?\n${context.tr('budget_will_be_updated')}',
+            context.trArgs('tx_delete_confirm_auto', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
             style: TextStyle(color: context.textSecondary),
           ),
           actions: [
@@ -573,8 +760,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          context.tr('delete_failed'),
-          title: context.tr('delete_transaction'),
+          txProvider.lastNafaqahRefusal != null
+              ? nafaqahWriteRefusalText(context, txProvider.lastNafaqahRefusal!)
+              : (txProvider.lastWriteDenied ? context.tr('perm_tx_admin_only') : context.tr('tx_delete_failed_msg')),
+          title: context.tr('tx_delete_failed'),
         );
       }
       return;
@@ -592,21 +781,22 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     if (context.mounted) {
       AppSnackBar.showDelete(
         context,
-        '${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}',
-        title: context.tr('transaction_removed'),
-        onUndo: () async {
-          await supabase.from('transactions').insert({
-            'household_id': tx.householdId,
-            'amount': tx.amount,
-            'currency': tx.currency,
-            'merchant': tx.merchant,
-            'category_code': tx.categoryCode,
-            'timestamp': tx.timestamp.toIso8601String(),
-            'source': tx.source,
-            'items': tx.items,
-            'receipt_url': tx.receiptUrl,
-            'spent_by': tx.spentBy,
-          });
+        context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
+        title: context.tr('tx_removed'),
+        onUndo: !canUndo ? null : () async {
+          // UI-25: re-insert the exact deleted row (same id, payer,
+          // beneficiary, account, sub-category, receipt...), not a subset.
+          final restored = await txProvider.restoreDeletedTransaction(tx.id);
+          if (!restored) {
+            if (context.mounted) {
+              AppSnackBar.showError(
+                context,
+                context.tr('tx_restore_failed_msg'),
+                title: context.tr('tx_restore_failed'),
+              );
+            }
+            return;
+          }
           await txProvider.fetchTransactions();
           budgetProvider.refresh();
           if (context.mounted) {
@@ -615,8 +805,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
-              '${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}',
-              title: context.tr('transaction_restored'),
+              context.trArgs('tx_restored_msg', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
+              title: context.tr('tx_restored'),
             );
           }
         },
@@ -624,8 +814,21 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     }
   }
 
+  /// The signed-in user's household role; null when no role provider is mounted
+  /// (the server still enforces every rule).
+  HouseholdRoleProvider? _watchRoles(BuildContext context) {
+    try {
+      return context.watch<HouseholdRoleProvider>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final roles = _watchRoles(context);
+    final rows = context.watch<TransactionProvider>().transactions;
+    _ensureFamilyContext(widget.householdId ?? roles?.householdId ?? (rows.isNotEmpty ? rows.first.householdId : null));
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -642,13 +845,13 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 onPressed: _showSortFilterModal,
               ),
               if (_activeFilterCount > 0)
-                Positioned(
-                  right: 8,
+                PositionedDirectional(
+                  end: 8,
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF00C896),
+                      color: AppThemes.success,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -657,6 +860,42 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     ),
                   ),
                 ),
+            ],
+          ),
+          // Export is a secondary action: the ⋯ menu (UX-11).
+          PopupMenuButton<String>(
+            key: const ValueKey('feed_more_menu'),
+            tooltip: context.tr('feed_more_actions'),
+            icon: Icon(Icons.more_vert_rounded, color: context.textPrimary),
+            onSelected: (value) {
+              if (value == 'csv') {
+                _exportCsv(context);
+              } else if (value == 'pdf') {
+                _exportStatementPdf(context);
+              }
+            },
+            itemBuilder: (menuCtx) => [
+              PopupMenuItem(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_outlined, size: 18, color: context.infoText),
+                    const SizedBox(width: 10),
+                    Text(context.tr('export_csv')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'pdf',
+                enabled: !_exportingPdf,
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf_outlined, size: 18, color: context.dangerColor),
+                    const SizedBox(width: 10),
+                    Text(context.tr('export_pdf')),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -685,10 +924,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                       ),
                       selected: isSelected,
-                      selectedColor: const Color(0xFF00C896),
+                      selectedColor: AppThemes.success,
                       backgroundColor: context.cardBg,
                       side: BorderSide(
-                        color: isSelected ? const Color(0xFF00C896) : context.borderColor,
+                        color: isSelected ? AppThemes.success : context.borderColor,
                       ),
                       onSelected: (val) {
                         HapticFeedback.selectionClick();
@@ -712,217 +951,77 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
                     final transactions = _filterAndSort(txProvider.transactions);
                     final visibleTotal = transactions.fold<double>(0.0, (sum, t) => sum + t.amount);
+                    final family = _isFamily(txProvider.transactions);
+                    // Date order: day headers ("Today", "Yesterday", the date); amount order: a flat list.
+                    final byDate = _selectedSort == 'newest' || _selectedSort == 'oldest';
+                    final entries = <Object>[
+                      if (byDate)
+                        for (final g in groupTransactionsByDay(transactions)) ...[g.day, ...g.transactions]
+                      else
+                        ...transactions,
+                    ];
 
                     return Column(
                       children: [
-                        // Quick Sort / Summary sub-bar
+                        // Quick Sort / Summary sub-bar (export lives in the ⋯ menu, UX-11)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.tr("sar")} ${visibleTotal.toStringAsFixed(2)}',
+                                  '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.sar(visibleTotal)}',
                                   style: GoogleFonts.outfit(
                                     color: context.textSecondary,
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              InkWell(
-                                onTap: _showSortFilterModal,
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
-                                          ? const Color(0xFF00C896)
-                                          : context.borderColor,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.swap_vert_rounded,
-                                        size: 14,
-                                        color: _selectedSort != 'newest'
-                                            ? const Color(0xFF00C896)
-                                            : context.textSecondary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _getSortLabel(context),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: _selectedSort != 'newest'
-                                              ? const Color(0xFF00C896)
-                                              : context.textPrimary,
+                              Semantics(
+                                button: true,
+                                child: InkWell(
+                                  key: const ValueKey('feed_sort_button'),
+                                  onTap: _showSortFilterModal,
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: ConstrainedBox(
+                                    // 48 dp tap target around a compact chip (UX-19).
+                                    constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                                    child: Center(
+                                      widthFactor: 1,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: context.chipBg,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
+                                                ? AppThemes.success
+                                                : context.borderColor,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: () {
-                                  if (txProvider.transactions.isNotEmpty) {
-                                    final exportList = txProvider.transactions.map((t) => {
-                                      'id': t.id,
-                                      'amount': t.amount,
-                                      'currency': t.currency,
-                                      'merchant': t.merchant,
-                                      'category_code': t.categoryCode,
-                                      'timestamp': t.timestamp.toIso8601String(),
-                                      'source': t.source,
-                                      'spent_by': t.spentBy,
-                                      'raw_sms': t.rawSms,
-                                    }).toList();
-                                    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: context.borderColor),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.file_download_outlined, size: 14, color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        context.tr('export_csv'),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: () async {
-                                  final user = supabase.auth.currentUser;
-                                  if (user == null) return;
-                                  final prof = await supabase.from('users').select('household_id').eq('id', user.id).single();
-                                  final hid = prof['household_id'] as String?;
-                                  if (hid != null && context.mounted) {
-                                    final pdfUrl = ApiService.instance.getStatementPdfUrl(hid);
-                                    showDialog(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        backgroundColor: context.cardBg,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                        title: Row(
-                                          children: [
-                                            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              context.tr('monthly_statement_pdf'),
-                                              style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                                            ),
-                                          ],
-                                        ),
-                                        content: Column(
+                                        child: Row(
                                           mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              context.tr('pdf_desc'),
-                                              style: TextStyle(color: context.textSecondary, fontSize: 13),
+                                            Icon(
+                                              Icons.swap_vert_rounded,
+                                              size: 16,
+                                              color: _selectedSort != 'newest' ? context.accentText : context.textSecondary,
                                             ),
-                                            const SizedBox(height: 14),
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: context.subtleCardBg,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: context.borderColor),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(Icons.link_rounded, color: Color(0xFF00C896), size: 18),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      pdfUrl,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(color: context.textPrimary, fontSize: 11, fontFamily: 'monospace'),
-                                                    ),
-                                                  ),
-                                                ],
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _getSortLabel(context),
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: _selectedSort != 'newest' ? context.accentText : context.textPrimary,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx),
-                                            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
-                                          ),
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF00C896),
-                                              foregroundColor: Colors.black,
-                                            ),
-                                            icon: const Icon(Icons.copy_rounded, size: 16),
-                                            label: Text(context.tr('copy_pdf_link'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                            onPressed: () async {
-                                              await Clipboard.setData(ClipboardData(text: pdfUrl));
-                                              if (ctx.mounted) {
-                                                Navigator.pop(ctx);
-                                                AppSnackBar.showSuccess(
-                                                  context,
-                                                  context.tr('pdf_copied_desc'),
-                                                  title: context.tr('link_copied'),
-                                                  icon: Icons.picture_as_pdf_rounded,
-                                                );
-                                              }
-                                            },
-                                          ),
-                                        ],
                                       ),
-                                    );
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: context.borderColor),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.picture_as_pdf_outlined, size: 14, color: context.dangerColor),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        context.tr('export_pdf'),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: context.dangerColor,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -940,7 +1039,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                     child: AppEmptyState(
                                       icon: Icons.search_off_rounded,
                                       title: context.tr('no_matching_transactions'),
-                                      message: 'Try adjusting your filters, date range, or category selection to find what you need.',
+                                      message: context.tr('no_matching_tx_desc'),
                                       actionLabel: context.tr('reset_filters'),
                                       onAction: () {
                                         HapticFeedback.lightImpact();
@@ -950,7 +1049,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                                 )
                               : RefreshIndicator(
-                                  color: const Color(0xFF00C896),
+                                  color: AppThemes.success,
                                   onRefresh: () async {
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),
@@ -958,19 +1057,39 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                       context.read<RecurringBillsProvider>().fetchBills(),
                                     ]);
                                   },
-                                  child: ListView.separated(
+                                  child: ListView.builder(
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
-                                    itemCount: transactions.length,
-                                    separatorBuilder: (ctx, _) => const SizedBox(height: 6),
+                                    itemCount: entries.length,
                                     itemBuilder: (ctx, i) {
-                                      final tx = transactions[i];
+                                      final entry = entries[i];
+                                      if (entry is DateTime) {
+                                        return Padding(
+                                          key: const ValueKey('feed_day_header'),
+                                          padding: EdgeInsetsDirectional.only(top: i == 0 ? 4 : 14, bottom: 2, start: 4),
+                                          child: Semantics(
+                                            header: true,
+                                            child: Text(
+                                              feedDayLabel(context, entry),
+                                              style: GoogleFonts.outfit(
+                                                color: context.textSecondary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      final tx = entry as Transaction;
+                                      // Members change only their own entries;
+                                      // admins any entry (DB-18).
+                                      final canModify = roles?.canModify(tx) ?? true;
                                       return Dismissible(
                                         key: Key(tx.id),
-                                        direction: DismissDirection.endToStart,
+                                        direction: canModify ? DismissDirection.endToStart : DismissDirection.none,
                                         background: Container(
-                                          alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.only(right: 20),
+                                          alignment: AlignmentDirectional.centerEnd,
+                                          padding: const EdgeInsetsDirectional.only(end: 20),
                                           decoration: BoxDecoration(
                                             color: Colors.redAccent.withValues(alpha: 0.8),
                                             borderRadius: BorderRadius.circular(16),
@@ -991,7 +1110,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               backgroundColor: context.cardBg,
                                               title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
                                               content: Text(
-                                                '${context.tr('delete_confirm_prefix')} ${context.tr('sar')} ${tx.amount.toStringAsFixed(2)} ${context.tr('at_merchant')} ${context.trMerchant(tx.merchant)}?\n${context.tr('budget_will_be_updated')}',
+                                                context.trArgs('tx_delete_confirm', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
                                                 style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [
@@ -1013,12 +1132,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                         },
                                         onDismissed: (_) => _deleteTransaction(context, tx),
                                         child: TransactionItemBreakdownCard(
-                                          merchant: tx.merchant ?? 'Unknown',
+                                          merchant: tx.merchant ?? context.tr('unknown'),
                                           amount: tx.amount,
                                           currency: tx.currency,
                                           categoryCode: tx.categoryCode,
                                           source: tx.source,
                                           spentBy: tx.spentBy,
+                                          attributionBadge: _badgeFor(tx, family),
+                                          timestamp: tx.timestamp,
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
                                           receiptUrl: tx.receiptUrl,
@@ -1026,7 +1147,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           isInstallment: tx.isInstallment,
                                           installmentBadgeText: tx.installmentBadgeText,
                                           installmentProvider: tx.installmentProvider,
-                                          onEdit: () async {
+                                          lockedNote: canModify ? null : context.tr('perm_tx_locked_note'),
+                                          onEdit: !canModify ? null : () async {
                                             final res = await EditTransactionSheet.show(context, tx);
                                             if (res == 'deleted') {
                                               if (context.mounted) {
@@ -1048,7 +1170,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               }
                                             }
                                           },
-                                          onDelete: () => _deleteTransaction(context, tx, requireConfirm: true),
+                                          onDelete: !canModify ? null : () => _deleteTransaction(context, tx, requireConfirm: true),
                                         ),
                                       );
                                     },

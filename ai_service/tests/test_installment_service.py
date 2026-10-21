@@ -60,10 +60,12 @@ def test_installment_plan_status_transition():
     assert plan.remaining_amount == 0.0
 
 
-def test_installments_api(tmp_path, monkeypatch):
-    import installment_service
-    temp_plans_file = tmp_path / "installment_plans.json"
-    monkeypatch.setattr(installment_service, "FALLBACK_FILE", temp_plans_file)
+def test_installments_api(tmp_path, monkeypatch, fake_supabase):
+    # The payment RPC re-checks that the (mocked) caller is a member (migration 20261020750000).
+    fake_supabase.seed("household_memberships", [{
+        "household_id": "f860188e-23b5-4749-b180-868c956151a6", "user_id": "00000000-0000-0000-0000-000000000001",
+        "role": "admin",
+    }])
 
     from starlette.testclient import TestClient
     from main import app

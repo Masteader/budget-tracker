@@ -42,6 +42,7 @@ async def test_redis_sliding_window_logic():
     mock_pipeline.expire = MagicMock()
     mock_pipeline.execute = AsyncMock(return_value=[0, 1, 4, True])  # count=4 > limit 3
     mock_redis.zrange = AsyncMock(return_value=[("entry", 100.0)])
+    mock_redis.zrem = AsyncMock(return_value=1)  # rejected request is removed from the window
 
     limiter = SlidingWindowRateLimiter(redis_url="redis://localhost:6379/0")
     limiter._redis = mock_redis

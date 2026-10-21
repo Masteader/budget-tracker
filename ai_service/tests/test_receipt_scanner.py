@@ -113,7 +113,7 @@ def test_process_receipt_scan_duplicate_candidate_in_preview(mock_parse, mock_fi
     }
 
     res = process_receipt_scan(
-        images_base64=["fake_image"],
+        images_base64=["iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="],
         household_id="hh-123",
         preview_only=True,
         allow_duplicate=False,

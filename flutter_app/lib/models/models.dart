@@ -1,6 +1,9 @@
 /// Data models for the Budget Tracker app.
 library;
 
+import '../services/salary_cycle_service.dart';
+import 'transaction_attribution.dart';
+
 export 'household_membership.dart';
 
 // ── Transaction ──────────────────────────────────────────────────────────────
@@ -19,14 +22,45 @@ class Transaction {
   final DateTime createdAt;
   final String source;
   final String spentBy; // legacy 'me' | 'partner' | 'both'
-  final String paidBy; // 'me' | 'partner'
-  final String beneficiary; // 'me' | 'partner' | 'both' | child name
+  final String paidBy; // 'me' | 'partner' (relative to the creator)
+  final String beneficiary; // 'me' | 'partner' | 'both' | child name (relative to the creator)
+
+  /// Stored structured beneficiary (`beneficiary_type` / `beneficiary_id`);
+  /// null on rows written before the structured columns.
+  final String? beneficiaryType;
+  final String? beneficiaryId;
+
+  /// The stored payer as the settlement engine reads it ('me', 'partner' or,
+  /// for a manual roommate row, the payer's member id); see [storedPayerRef].
+  final String? payerRef;
+
+  /// The `source` column as stored ([source] is normalised for display). The
+  /// server reads a manual row's payer from its note only when this is 'manual'.
+  final String? storedSource;
   final List<Map<String, dynamic>> items;
   final String? accountId;
   final String? receiptUrl;
   final String? dedupFingerprint;
   final String? qrCodeRaw;
   final String? rawSms;
+
+  /// Creator of the transaction (`transactions.user_id`, bound to the signed-in
+  /// user by the database). Null for legacy rows: only admins may change those.
+  final String? userId;
+
+  /// Family Nafaqah class as stored (`nafaqah_class`: 'wife_reimbursable',
+  /// 'wife_personal' or null) and the wife it names. [hasNafaqahFields] says
+  /// the row was read with these columns (the feed selects every column), so
+  /// a null class is "no class", not "unknown".
+  final String? nafaqahClass;
+  final String? nafaqahSpouseId;
+  final bool hasNafaqahFields;
+
+  /// A settlement transfer between members (`is_settlement`), not an expense.
+  final bool isSettlement;
+
+  /// Ingestion channels a transaction can come from (zero-SMS policy: no SMS channel).
+  static const Set<String> sources = {'chat', 'receipt_scan', 'manual'};
 
   const Transaction({
     required this.id,
@@ -44,12 +78,21 @@ class Transaction {
     this.spentBy = 'both',
     this.paidBy = 'me',
     this.beneficiary = 'both',
+    this.beneficiaryType,
+    this.beneficiaryId,
+    this.payerRef,
+    this.storedSource,
     this.items = const [],
     this.accountId,
     this.receiptUrl,
     this.dedupFingerprint,
     this.qrCodeRaw,
     this.rawSms,
+    this.userId,
+    this.nafaqahClass,
+    this.nafaqahSpouseId,
+    this.hasNafaqahFields = false,
+    this.isSettlement = false,
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -87,9 +130,13 @@ class Transaction {
       }
     }
 
-    // Determine channel source
+    // Determine channel source. Only chat, receipt_scan and manual exist (the app
+    // never reads SMS); any other stored label is shown as a manual entry.
     String detectedSource = map['source'] as String? ?? 'manual';
-    if (detectedSource == 'manual' || detectedSource == 'sms') {
+    if (!Transaction.sources.contains(detectedSource)) {
+      detectedSource = 'manual';
+    }
+    if (detectedSource == 'manual') {
       if (raw.startsWith('Chat:')) {
         detectedSource = 'chat';
       } else if (raw.startsWith('Receipt Scan:')) {
@@ -117,6 +164,31 @@ class Transaction {
     // Determine 2D attribution: paid_by and beneficiary
     String detectedPaidBy = map['paid_by'] as String? ?? '';
     String detectedBeneficiary = map['beneficiary'] as String? ?? '';
+    final storedBenType = map['beneficiary_type'] as String?;
+    final storedBenId = map['beneficiary_id']?.toString();
+    final payerRef = storedPayerRef(map);
+
+    // Structured rows (FABLE2-APP-01): the columns the server reads win over
+    // the free-text note, so the app shows what the settlement engine counts.
+    if (storedBenId != null && storedBenId.trim().isNotEmpty) {
+      final creator = (map['user_id'] as String? ?? '').toLowerCase();
+      if (detectedPaidBy.isEmpty) {
+        detectedPaidBy = (payerRef == 'me' || (creator.isNotEmpty && payerRef == creator)) ? 'me' : 'partner';
+      }
+      if (detectedBeneficiary.isEmpty) {
+        final bid = storedBenId.trim();
+        final low = bid.toLowerCase();
+        if ((storedBenType ?? '').toLowerCase() == 'dependent') {
+          detectedBeneficiary = bid;
+        } else if (kSharedBeneficiaryIds.contains(low)) {
+          detectedBeneficiary = 'both';
+        } else if (low == 'me' || (creator.isNotEmpty && low == creator)) {
+          detectedBeneficiary = 'me';
+        } else {
+          detectedBeneficiary = 'partner';
+        }
+      }
+    }
 
     if (detectedPaidBy.isEmpty) {
       final paidByRegex = RegExp(r'PaidBy:\s*(me|partner)', caseSensitive: false);
@@ -160,6 +232,10 @@ class Transaction {
       spentBy: detectedSpentBy,
       paidBy: detectedPaidBy,
       beneficiary: detectedBeneficiary,
+      beneficiaryType: storedBenType,
+      beneficiaryId: storedBenId,
+      payerRef: payerRef,
+      storedSource: map['source'] as String?,
       items: parsedItems,
       accountId: map['account_id'] as String?,
       receiptUrl: map['receipt_url'] as String?,
@@ -167,6 +243,11 @@ class Transaction {
       qrCodeRaw: map['qr_code_raw'] as String? ??
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
       rawSms: raw,
+      userId: map['user_id'] as String?,
+      nafaqahClass: map['nafaqah_class'] as String?,
+      nafaqahSpouseId: map['nafaqah_spouse_id']?.toString(),
+      hasNafaqahFields: map.containsKey('nafaqah_class'),
+      isSettlement: map['is_settlement'] == true,
     );
   }
 
@@ -221,14 +302,17 @@ class Transaction {
       'created_at': createdAt.toIso8601String(),
       'source': source,
       'spent_by': spentBy,
-      'paid_by': paidBy,
-      'beneficiary': beneficiary,
+      // Only real columns: transactions has no paid_by / beneficiary (the
+      // payer of a manual row is in raw_sms, FABLE2-APP-05).
+      if (beneficiaryType != null) 'beneficiary_type': beneficiaryType,
+      if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       'items': items,
       'account_id': accountId,
       'receipt_url': receiptUrl,
       'dedup_fingerprint': dedupFingerprint,
       'qr_code_raw': qrCodeRaw,
       'raw_sms': rawSms,
+      if (userId != null) 'user_id': userId,
     };
   }
 
@@ -248,12 +332,17 @@ class Transaction {
     String? spentBy,
     String? paidBy,
     String? beneficiary,
+    String? beneficiaryType,
+    String? beneficiaryId,
+    String? payerRef,
+    String? storedSource,
     List<Map<String, dynamic>>? items,
     String? accountId,
     String? receiptUrl,
     String? dedupFingerprint,
     String? qrCodeRaw,
     String? rawSms,
+    String? userId,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -271,12 +360,21 @@ class Transaction {
       spentBy: spentBy ?? this.spentBy,
       paidBy: paidBy ?? this.paidBy,
       beneficiary: beneficiary ?? this.beneficiary,
+      beneficiaryType: beneficiaryType ?? this.beneficiaryType,
+      beneficiaryId: beneficiaryId ?? this.beneficiaryId,
+      payerRef: payerRef ?? this.payerRef,
+      storedSource: storedSource ?? this.storedSource,
       items: items ?? this.items,
       accountId: accountId ?? this.accountId,
       receiptUrl: receiptUrl ?? this.receiptUrl,
       dedupFingerprint: dedupFingerprint ?? this.dedupFingerprint,
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
       rawSms: rawSms ?? this.rawSms,
+      userId: userId ?? this.userId,
+      nafaqahClass: nafaqahClass,
+      nafaqahSpouseId: nafaqahSpouseId,
+      hasNafaqahFields: hasNafaqahFields,
+      isSettlement: isSettlement,
     );
   }
 }
@@ -330,8 +428,39 @@ class Budget {
             const {},
       );
 
-  double get usagePercent =>
-      allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
+  /// Share of the allocation used, clamped to [0, 1]: for progress bars only.
+  /// Show [usageRatio] as the percentage (UX-08: 131% must read 131%).
+  double get usagePercent => usageRatio.clamp(0.0, 1.0);
+
+  /// Spent ÷ allocated, not clamped (1.31 = 131%). Spending with no
+  /// allocation counts as fully used.
+  double get usageRatio {
+    if (allocatedAmount > 0) return spentAmount / allocatedAmount;
+    return spentAmount > 0 ? 1.0 : 0.0;
+  }
+
+  /// Spent more than allocated (by at least one halala).
+  bool get isOverspent => spentAmount - allocatedAmount >= 0.005;
+
+  /// How much more than allocated was spent; 0 within budget.
+  double get overspentAmount => isOverspent ? spentAmount - allocatedAmount : 0.0;
+
+  /// The categories most at risk first: overspent ones (furthest over first),
+  /// then by share used (UX-08).
+  static List<Budget> sortByRisk(Iterable<Budget> budgets) {
+    double overRatio(Budget b) =>
+        b.allocatedAmount > 0 ? b.overspentAmount / b.allocatedAmount : double.infinity;
+    return budgets.toList()
+      ..sort((a, b) {
+        if (a.isOverspent != b.isOverspent) return a.isOverspent ? -1 : 1;
+        if (a.isOverspent) {
+          final byOver = overRatio(b).compareTo(overRatio(a));
+          if (byOver != 0) return byOver;
+          return b.overspentAmount.compareTo(a.overspentAmount);
+        }
+        return b.usageRatio.compareTo(a.usageRatio);
+      });
+  }
 }
 
 // ── Salary Cycle & Sub-Budgets ───────────────────────────────────────────────
@@ -362,11 +491,16 @@ class SalaryCycleInfo {
         isCurrent: map['is_current'] as bool? ?? false,
       );
 
+  /// Calendar-date arithmetic in UTC so a device DST change (23 h / 25 h day)
+  /// cannot shift the count; "today" is the Asia/Riyadh date.
+  static DateTime _asDate(String iso) {
+    final d = DateTime.parse(iso);
+    return DateTime.utc(d.year, d.month, d.day);
+  }
+
   int get daysTotal {
     try {
-      final start = DateTime.parse(cycleStart);
-      final end = DateTime.parse(cycleEnd);
-      return end.difference(start).inDays + 1;
+      return _asDate(cycleEnd).difference(_asDate(cycleStart)).inDays + 1;
     } catch (_) {
       return 30;
     }
@@ -374,9 +508,7 @@ class SalaryCycleInfo {
 
   int get daysElapsed {
     try {
-      final start = DateTime.parse(cycleStart);
-      final now = DateTime.now();
-      final diff = now.difference(start).inDays + 1;
+      final diff = SalaryCycleService.riyadhToday().difference(_asDate(cycleStart)).inDays + 1;
       return diff.clamp(1, daysTotal);
     } catch (_) {
       return 1;

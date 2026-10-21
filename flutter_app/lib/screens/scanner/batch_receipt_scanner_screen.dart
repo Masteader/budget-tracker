@@ -35,6 +35,11 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
   bool _isCapturing = false;
   String? _errorMessage;
 
+  /// setState that is a no-op once the widget is unmounted (async callbacks).
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,10 +65,10 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
     if (!status.isGranted) {
       final req = await Permission.camera.request();
       if (!req.isGranted) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = req.isPermanentlyDenied
-              ? 'Camera permission permanently denied. Enable in Settings.'
-              : 'Camera permission required to capture receipts.';
+              ? context.tr('scan_cam_perm_permanent')
+              : context.tr('scan_cam_perm_needed');
         });
         return;
       }
@@ -87,7 +92,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
         HapticFeedback.lightImpact();
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to capture photo: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
     } finally {
       if (mounted) setState(() => _isCapturing = false);
     }
@@ -120,7 +125,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
         HapticFeedback.lightImpact();
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to pick from gallery: $e');
+      _safeSetState(() => _errorMessage = context.trArgs('mp_gallery_error', {'error': e}));
     }
   }
 
@@ -168,9 +173,10 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
       backgroundColor: const Color(0xFF030D18),
       appBar: AppBar(
         key: const Key('batch_scanner_app_bar'),
-        backgroundColor: const Color(0xFF071C33),
+        backgroundColor: AppThemes.deepGlacial,
         elevation: 0,
         leading: IconButton(
+          tooltip: context.tr('nav_back'),
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -226,7 +232,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: const Color(0xFF071C33).withValues(alpha: 0.5),
+              color: AppThemes.deepGlacial.withValues(alpha: 0.5),
               child: Text(
                 context.tr('batch_scan_desc'),
                 style: GoogleFonts.outfit(
@@ -265,7 +271,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
               child: Container(
                 margin: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF071C33).withValues(alpha: 0.6),
+                  color: AppThemes.deepGlacial.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: context.iceCyan.withValues(alpha: 0.3)),
                 ),
@@ -347,7 +353,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                'Align Receipt Within Frame',
+                                context.tr('brs_align'),
                                 style: GoogleFonts.outfit(
                                   color: Colors.white70,
                                   fontSize: 13,
@@ -382,7 +388,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                             ),
                                           )
-                                        : const Icon(Icons.camera_alt_rounded, color: Color(0xFF051424), size: 26),
+                                        : const Icon(Icons.camera_alt_rounded, color: AppThemes.brandDarkBg, size: 26),
                                   ),
                                 ),
                               ),
@@ -393,7 +399,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                 onPressed: _pickFromGallery,
                                 icon: Icon(Icons.photo_library_rounded, size: 16, color: context.iceCyan),
                                 label: Text(
-                                  'Add from Gallery',
+                                  context.tr('brs_add_gallery'),
                                   style: GoogleFonts.outfit(
                                     color: context.iceCyan,
                                     fontWeight: FontWeight.w600,
@@ -417,7 +423,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
-                color: Color(0xFF071C33),
+                color: AppThemes.deepGlacial,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -428,7 +434,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Captured Receipts (${_queuedImages.length})',
+                        context.trArgs('brs_captured', {'count': _queuedImages.length}),
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -437,7 +443,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                       ),
                       if (_queuedImages.isNotEmpty)
                         Text(
-                          'Ready to process',
+                          context.tr('brs_ready'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             color: context.electricTeal,
@@ -514,9 +520,9 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                               ),
 
                               // Delete Badge
-                              Positioned(
+                              PositionedDirectional(
                                 top: -6,
-                                right: -6,
+                                end: -6,
                                 child: GestureDetector(
                                   key: Key('delete_queue_item_$index'),
                                   onTap: () => _removeAt(index),
@@ -528,10 +534,11 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                       shape: BoxShape.circle,
                                       border: Border.all(color: Colors.white, width: 1.5),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.close_rounded,
                                       size: 14,
                                       color: Colors.white,
+                                      semanticLabel: context.tr('a11y_remove_photo'),
                                     ),
                                   ),
                                 ),
@@ -549,7 +556,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                     onPressed: _queuedImages.isNotEmpty ? _processQueue : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.electricTeal,
-                      foregroundColor: const Color(0xFF051424),
+                      foregroundColor: AppThemes.brandDarkBg,
                       disabledBackgroundColor: Colors.white12,
                       disabledForegroundColor: Colors.white30,
                       padding: const EdgeInsets.symmetric(vertical: 14),

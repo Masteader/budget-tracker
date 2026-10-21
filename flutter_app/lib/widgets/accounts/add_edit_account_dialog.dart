@@ -6,6 +6,7 @@ import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
 
 /// Dialog to create or edit an account.
 class AddEditAccountDialog extends StatefulWidget {
@@ -79,7 +80,7 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
       return;
     }
 
-    final balance = double.tryParse(_balanceCtrl.text) ?? 0.0;
+    final balance = parseMoneyInput(_balanceCtrl.text) ?? 0.0;
     setState(() => _isSubmitting = true);
 
     try {
@@ -111,14 +112,14 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
         widget.onSuccess?.call();
         AppSnackBar.showSuccess(
           context,
-          _isEditing ? 'Account "$name" updated!' : 'Account "$name" created successfully!',
-          title: _isEditing ? 'Account Updated' : 'Account Created',
+          _isEditing ? context.trArgs('aea_updated_msg', {'name': name}) : context.trArgs('aea_created_msg', {'name': name}),
+          title: _isEditing ? context.tr('aea_updated_title') : context.tr('aea_created_title'),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        AppSnackBar.showError(context, 'Failed to save account: $e');
+        AppSnackBar.showError(context, context.trArgs('aea_save_failed', {'error': e}));
       }
     }
   }
@@ -131,12 +132,12 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
       if (mounted) {
         Navigator.pop(context);
         widget.onSuccess?.call();
-        AppSnackBar.showSuccess(context, 'Account archived.');
+        AppSnackBar.showSuccess(context, context.tr('aea_archived'));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        AppSnackBar.showError(context, 'Failed to archive account: $e');
+        AppSnackBar.showError(context, context.trArgs('aea_archive_failed', {'error': e}));
       }
     }
   }

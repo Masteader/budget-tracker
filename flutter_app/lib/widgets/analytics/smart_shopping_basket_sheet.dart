@@ -160,10 +160,10 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                    color: AppThemes.success.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF00C896), size: 20),
+                  child: const Icon(Icons.shopping_cart_outlined, color: AppThemes.success, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -175,11 +175,11 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: context.textPrimary,
                         ),
                       ),
                       Text(
-                        'Compare totals across Panda, Danube, Tamimi & Othaim',
+                        context.tr('basket_compare_desc'),
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           color: context.textSecondary,
@@ -189,6 +189,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                   ),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close, color: context.textSecondary),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
@@ -211,7 +212,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         onSubmitted: _addItem,
                         style: TextStyle(color: context.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'Add item (e.g. Olive Oil, Rice)...',
+                          hintText: context.tr('basket_add_hint'),
                           hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                           filled: true,
                           fillColor: context.inputBg,
@@ -230,7 +231,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     const SizedBox(width: 10),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -249,18 +250,18 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     children: _popularSuggestions.map((sug) {
                       final inBasket = _basketItems.any((i) => i.toLowerCase() == sug.toLowerCase());
                       return Padding(
-                        padding: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsetsDirectional.only(end: 6),
                         child: ActionChip(
                           label: Text(sug),
                           labelStyle: TextStyle(
-                            color: inBasket ? const Color(0xFF00C896) : context.textSecondary,
+                            color: inBasket ? AppThemes.success : context.textSecondary,
                             fontSize: 12,
                           ),
                           backgroundColor: inBasket
-                              ? const Color(0xFF00C896).withValues(alpha: 0.12)
+                              ? AppThemes.success.withValues(alpha: 0.12)
                               : context.chipBg,
                           side: BorderSide(
-                            color: inBasket ? const Color(0xFF00C896) : context.borderColor,
+                            color: inBasket ? AppThemes.success : context.borderColor,
                           ),
                           onPressed: () => _addItem(sug),
                         ),
@@ -287,11 +288,11 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                           const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            'Optimizing basket prices...',
+                            context.tr('basket_optimizing'),
                             style: TextStyle(color: context.textSecondary, fontSize: 13),
                           ),
                         ],
@@ -308,11 +309,11 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Shopping Checklist (${_checkedItems.length}/${_basketItems.length})',
+                      context.trArgs('basket_checklist', {'done': _checkedItems.length, 'total': _basketItems.length}),
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     ),
                     if (_basketItems.isNotEmpty)
@@ -325,7 +326,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                             _optimizationResult = null;
                           });
                         },
-                        child: const Text('Clear All', style: TextStyle(color: Color(0xFFFF6B6B), fontSize: 12)),
+                        child: Text(context.tr('clear_all'), style: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 12)),
                       ),
                   ],
                 ),
@@ -342,7 +343,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     ),
                     child: Center(
                       child: Text(
-                        'Your shopping list is empty.\nAdd items or tap suggestions above to compare prices.',
+                        context.tr('basket_empty'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.5),
                       ),
@@ -359,14 +360,14 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         color: context.chipBg,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isChecked ? const Color(0xFF00C896).withValues(alpha: 0.3) : context.borderColor,
+                          color: isChecked ? AppThemes.success.withValues(alpha: 0.3) : context.borderColor,
                         ),
                       ),
                       child: Row(
                         children: [
                           Checkbox(
                             value: isChecked,
-                            activeColor: const Color(0xFF00C896),
+                            activeColor: AppThemes.success,
                             checkColor: Colors.black,
                             onChanged: (_) => _toggleChecked(item),
                           ),
@@ -381,6 +382,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                             ),
                           ),
                           IconButton(
+                            tooltip: context.tr('a11y_remove_item'),
                             icon: Icon(Icons.remove_circle_outline, color: context.textSecondary, size: 18),
                             onPressed: () => _removeItem(index),
                           ),
@@ -409,7 +411,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
       decoration: BoxDecoration(
         color: context.chipBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+        border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -421,19 +423,19 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                  color: AppThemes.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF00C896)),
+                  border: Border.all(color: AppThemes.success),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.emoji_events, color: Color(0xFF00C896), size: 14),
+                    const Icon(Icons.emoji_events, color: AppThemes.success, size: 14),
                     const SizedBox(width: 4),
                     Text(
-                      'CHEAPEST STORE',
+                      context.tr('basket_cheapest_store'),
                       style: GoogleFonts.outfit(
-                        color: const Color(0xFF00C896),
+                        color: context.successText,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
@@ -443,9 +445,9 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
               ),
               const Spacer(),
               Text(
-                '${cheapestTotal.toStringAsFixed(2)} SAR',
+                context.sar(cheapestTotal),
                 style: GoogleFonts.outfit(
-                  color: const Color(0xFF00C896),
+                  color: context.successText,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -454,8 +456,8 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Complete trip at $cheapestStore saves up to ${singleSavings.toStringAsFixed(2)} SAR vs competitors.',
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            context.trArgs('basket_single_store_saves', {'store': cheapestStore, 'amount': context.sar(singleSavings)}),
+            style: TextStyle(color: context.textPrimary, fontSize: 13),
           ),
 
           const SizedBox(height: 16),
@@ -464,7 +466,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
 
           // Store Breakdown Grid/Row
           Text(
-            'Supermarket Price Comparison',
+            context.tr('basket_price_comparison'),
             style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
@@ -475,15 +477,15 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                 final isWinner = entry.key == cheapestStore;
                 final val = (entry.value as num?)?.toDouble() ?? 0.0;
                 return Container(
-                  margin: const EdgeInsets.only(right: 8),
+                  margin: const EdgeInsetsDirectional.only(end: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isWinner
-                        ? const Color(0xFF00C896).withValues(alpha: 0.1)
+                        ? AppThemes.success.withValues(alpha: 0.1)
                         : context.cardBg,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isWinner ? const Color(0xFF00C896) : context.borderColor,
+                      color: isWinner ? AppThemes.success : context.borderColor,
                     ),
                   ),
                   child: Column(
@@ -492,14 +494,14 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                       Text(
                         entry.key,
                         style: TextStyle(
-                          color: isWinner ? const Color(0xFF00C896) : context.textSecondary,
+                          color: isWinner ? AppThemes.success : context.textSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${val.toStringAsFixed(2)} SAR',
+                        context.sar(val),
                         style: TextStyle(
                           color: isWinner ? (context.isDark ? Colors.white : Colors.black) : context.textSecondary,
                           fontSize: 13,
@@ -531,7 +533,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Multi-Store Split Savings',
+                          context.tr('basket_split_savings'),
                           style: GoogleFonts.outfit(
                             color: const Color(0xFF58A6FF),
                             fontWeight: FontWeight.w600,
@@ -539,7 +541,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                           ),
                         ),
                         Text(
-                          'Splitting items across stores reduces total to ${splitTotal.toStringAsFixed(2)} SAR (saves extra ${splitSavings.toStringAsFixed(2)} SAR).',
+                          context.trArgs('basket_split_desc', {'total': context.sar(splitTotal), 'extra': context.sar(splitSavings)}),
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
                       ],

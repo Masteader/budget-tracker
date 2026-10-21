@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
+
 import '../../models/account.dart';
+import '../../providers/household_role_provider.dart';
 import '../../services/account_service.dart';
+import '../../services/household_permissions.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../models/money.dart';
+
+typedef AccountsLoader = Future<List<Account>> Function(String householdId);
 
 /// Modal bottom sheet for executing an inter-account fund transfer.
+///
+/// Money leaves a shared pool only by a household admin (DB-16): for members,
+/// shared pools are offered as destinations but never as the source.
 class AccountTransferSheet extends StatefulWidget {
   final String householdId;
   final String? prefilledFromAccountId;
   final String? prefilledToAccountId;
   final double? prefilledAmount;
   final VoidCallback? onTransferSuccess;
+
+  /// Role overrides; by default read from [HouseholdRoleProvider].
+  final bool? isAdmin;
+  final String? currentUserId;
+  final AccountsLoader? loadAccounts;
 
   const AccountTransferSheet({
     super.key,
@@ -24,6 +38,9 @@ class AccountTransferSheet extends StatefulWidget {
     this.prefilledToAccountId,
     this.prefilledAmount,
     this.onTransferSuccess,
+    this.isAdmin,
+    this.currentUserId,
+    this.loadAccounts,
   });
 
   static Future<void> show(
@@ -64,6 +81,8 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
   String? _fromAccountId;
   String? _toAccountId;
   List<Account> _accounts = [];
+  List<Account> _sourceAccounts = [];
+  bool _sharedPoolsHidden = false;
   bool _isLoadingAccounts = true;
   bool _isTransferring = false;
 
@@ -90,20 +109,42 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     super.dispose();
   }
 
-  Future<void> _loadAccounts() async {
+  HouseholdRoleProvider? _roles() {
     try {
-      final list = await AccountService.instance.getAccounts(widget.householdId);
+      return context.read<HouseholdRoleProvider>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  Future<void> _loadAccounts() async {
+    final roles = _roles();
+    try {
+      if (widget.isAdmin == null && roles != null && !roles.isLoaded && roles.householdId != null) {
+        await roles.refresh();
+      }
+      final loader = widget.loadAccounts ?? AccountService.instance.getAccounts;
+      final list = await loader(widget.householdId);
+      final isAdmin = widget.isAdmin ?? roles?.isAdmin ?? false;
+      final currentUserId = widget.currentUserId ?? roles?.currentUserId;
+      final sources = HouseholdPermissions.withdrawableAccounts(list, currentUserId: currentUserId, isAdmin: isAdmin);
       if (mounted) {
         setState(() {
           _accounts = list;
+          _sourceAccounts = sources;
+          _sharedPoolsHidden = !isAdmin && list.any(HouseholdPermissions.isSharedPool);
           _isLoadingAccounts = false;
 
-          // If no initial selection, choose the first two accounts
-          if (_fromAccountId == null && list.isNotEmpty) {
-            _fromAccountId = list.first.id;
+          if (_fromAccountId != null && !sources.any((a) => a.id == _fromAccountId)) {
+            _fromAccountId = null;
           }
-          if (_toAccountId == null && list.length > 1) {
-            _toAccountId = list[1].id;
+          // If no initial selection, choose the first allowed source and another destination
+          if (_fromAccountId == null && sources.isNotEmpty) {
+            _fromAccountId = sources.first.id;
+          }
+          if (_toAccountId == null) {
+            final others = list.where((a) => a.id != _fromAccountId);
+            if (others.isNotEmpty) _toAccountId = others.first.id;
           }
         });
       }
@@ -112,8 +153,12 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     }
   }
 
-  double get _amount => double.tryParse(_amountCtrl.text) ?? 0.0;
-  double get _fee => double.tryParse(_feeCtrl.text) ?? 0.0;
+  double get _amount => parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
+  /// The optional fee: empty is 0; a negative or unreadable fee is null
+  /// (FABLE2-APP-07: a negative fee used to credit the source account).
+  double? get _parsedFee =>
+      _feeCtrl.text.trim().isEmpty ? 0.0 : parseMoneyInput(_feeCtrl.text, allowNegative: false);
+  double get _fee => _parsedFee ?? 0.0;
   double get _totalDeduction => _amount + _fee;
 
   Account? get _fromAccount =>
@@ -123,17 +168,22 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
 
   Future<void> _executeTransfer() async {
     if (_fromAccountId == null || _toAccountId == null) {
-      AppSnackBar.showError(context, 'Please select both source and destination accounts.');
+      AppSnackBar.showError(context, context.tr('ats_select_both'));
       return;
     }
 
     if (_fromAccountId == _toAccountId) {
-      AppSnackBar.showError(context, 'Source and destination cannot be the same account.');
+      AppSnackBar.showError(context, context.tr('ats_same_account'));
       return;
     }
 
     if (_amount <= 0.0) {
-      AppSnackBar.showError(context, 'Please enter a valid transfer amount.');
+      AppSnackBar.showError(context, context.tr('ats_invalid_amount'));
+      return;
+    }
+
+    if (_parsedFee == null) {
+      AppSnackBar.showError(context, context.tr('ats_invalid_fee'));
       return;
     }
 
@@ -141,7 +191,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     if (from != null && from.balance < _totalDeduction) {
       AppSnackBar.showError(
         context,
-        'Insufficient balance in ${from.name}. Available: ${from.currency} ${from.balance.toStringAsFixed(2)}',
+        context.trArgs('ats_insufficient', {'account': from.name, 'amount': context.money(from.balance, from.currency)}),
       );
       return;
     }
@@ -164,15 +214,20 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
         widget.onTransferSuccess?.call();
         AppSnackBar.showSuccess(
           context,
-          'Transferred SAR ${_amount.toStringAsFixed(2)} from ${from?.name} to ${_toAccount?.name}!',
-          title: 'Transfer Completed',
+          context.trArgs('ats_done_msg', {'amount': context.sar(_amount), 'from': from?.name, 'to': _toAccount?.name}),
+          title: context.tr('ats_done_title'),
           icon: Icons.swap_horiz_rounded,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isTransferring = false);
-        AppSnackBar.showError(context, 'Transfer failed: $e');
+        AppSnackBar.showError(
+          context,
+          HouseholdPermissions.isPermissionDenied(e)
+              ? context.tr('perm_pool_admin_only')
+              : context.trArgs('ats_failed', {'error': e}),
+        );
       }
     }
   }
@@ -180,7 +235,6 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -236,7 +290,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
 
             if (_isLoadingAccounts)
               const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
-            else if (_accounts.length < 2)
+            else if (_accounts.length < 2 || _sourceAccounts.isEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -264,20 +318,35 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
                 ),
-                items: _accounts.map((acc) {
+                items: _sourceAccounts.map((acc) {
                   return DropdownMenuItem<String>(
                     value: acc.id,
                     child: Row(
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );
                 }).toList(),
                 onChanged: (val) => setState(() => _fromAccountId = val),
               ),
+              if (_sharedPoolsHidden) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.lock_outline_rounded, size: 13, color: context.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        context.tr('perm_pool_hidden_hint'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
 
               // Swap icon indicator
@@ -315,7 +384,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );
@@ -331,7 +400,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                 style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 decoration: InputDecoration(
                   labelText: context.tr('transfer_amount'),
-                  prefixText: 'SAR ',
+                  prefixText: '${context.tr('sar')} ',
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
                   fillColor: context.inputBg,
@@ -352,7 +421,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       style: TextStyle(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         labelText: context.tr('transfer_fee'),
-                        prefixText: 'SAR ',
+                        prefixText: '${context.tr('sar')} ',
                         labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
                         filled: true,
                         fillColor: context.inputBg,
@@ -393,7 +462,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(context.tr('total_deducted_source'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
-                    Text('SAR ${fmt.format(_totalDeduction)}', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(context.sar(_totalDeduction), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                   ],
                 ),
               ),

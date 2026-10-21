@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/recurring_bill.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
 
 /// Interactive dashboard card displaying recurring monthly bills, payment status
 /// in the active salary cycle, reserved fund allowance, and category inclusion settings.
@@ -78,30 +79,27 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     return Consumer<RecurringBillsProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.summary == null) {
-          return Container(
-            height: 110,
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C896)),
-              ),
-            ),
+          return _buildLoading();
+        }
+        final summary = provider.summary;
+        // UX-01: a failed load is an error with a retry, never the set-up
+        // state of a household without bills.
+        if (summary == null && provider.error != null) {
+          return CardErrorState(
+            title: context.tr('recurring_bills'),
+            message: context.tr('load_error_bills'),
+            icon: Icons.repeat_rounded,
+            onRetry: provider.fetchBills,
           );
         }
-
-        final summary = provider.summary;
-        if (summary == null || summary.bills.isEmpty) {
+        if (summary == null) {
+          return _buildLoading();
+        }
+        if (summary.bills.isEmpty) {
           return _buildEmptyOrActionCard();
         }
         final upcomingCount = summary.bills.where((b) => b.isUpcoming || b.isOverdue).length;
@@ -143,14 +141,14 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                         decoration: BoxDecoration(
                           color: summary.reservedAmount > 0
                               ? const Color(0xFFF0883E).withValues(alpha: 0.15)
-                              : const Color(0xFF00C896).withValues(alpha: 0.15),
+                              : AppThemes.success.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.repeat_rounded,
                           color: summary.reservedAmount > 0
                               ? const Color(0xFFF0883E)
-                              : const Color(0xFF00C896),
+                              : AppThemes.success,
                           size: 22,
                         ),
                       ),
@@ -170,13 +168,13 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             const SizedBox(height: 3),
                             Text(
                               summary.reservedAmount > 0
-                                  ? 'SAR ${fmt.format(summary.reservedAmount)} ${context.tr('reserved')} • $upcomingCount ${context.tr('pending')}'
+                                  ? '${context.sar(summary.reservedAmount)} ${context.tr('reserved')} • $upcomingCount ${context.tr('pending')}'
                                   : '${context.tr('all_cleared')} ✓',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: summary.reservedAmount > 0
                                     ? const Color(0xFFF0883E)
-                                    : const Color(0xFF00C896),
+                                    : AppThemes.success,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -199,6 +197,11 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 ),
               ),
 
+              if (provider.error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: CardErrorBanner(lastUpdated: provider.lastUpdated, onRetry: provider.fetchBills),
+                ),
               // Visual Progress Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -213,7 +216,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             if (paidRatio > 0)
                               Expanded(
                                 flex: (paidRatio * 1000).toInt(),
-                                child: Container(color: const Color(0xFF00C896)),
+                                child: Container(color: AppThemes.success),
                               ),
                             if (1.0 - paidRatio > 0)
                               Expanded(
@@ -225,27 +228,46 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // Wrap instead of Row: the three totals overflow on
+                    // narrow phones / large text, especially in Arabic.
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      runSpacing: 4,
                       children: [
                         Text(
-                          '${context.tr('total')}: SAR ${fmt.format(summary.totalRecurringMonthly)}',
+                          '${context.tr('total')}: ${context.sar(summary.totalRecurringMonthly)}',
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
-                        Row(
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00C896), shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${context.tr('paid')} SAR ${fmt.format(summary.paidThisCycle)}',
-                              style: const TextStyle(color: Color(0xFF00C896), fontSize: 11, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppThemes.success, shape: BoxShape.circle)),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
+                                    style: TextStyle(color: context.successText, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${context.tr('reserved')} SAR ${fmt.format(summary.reservedAmount)}',
-                              style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    '${context.tr('reserved')} ${context.sar(summary.reservedAmount)}',
+                                    style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -263,12 +285,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 // Filter Chips
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       _buildFilterChip(0, '${context.tr('all')} (${summary.bills.length})'),
-                      const SizedBox(width: 8),
                       _buildFilterChip(1, '${context.tr('pending')} ($upcomingCount)'),
-                      const SizedBox(width: 8),
                       _buildFilterChip(2, '${context.tr('paid')} ($paidCount)'),
                     ],
                   ),
@@ -280,8 +302,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                     child: Center(
                       child: Text(
                         _selectedFilter == 1
-                            ? 'All recurring bills are paid for this cycle!'
-                            : 'No bills found in this filter.',
+                            ? context.tr('rb_all_paid')
+                            : context.tr('rb_none_in_filter'),
                         style: TextStyle(color: context.textSecondary, fontSize: 12),
                       ),
                     ),
@@ -306,6 +328,25 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      key: const Key('recurring_bills_loading'),
+      height: 110,
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
+        ),
+      ),
     );
   }
 
@@ -338,7 +379,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Set up monthly bills (utilities, iqama fees, rent) to reserve funds.',
+                  context.tr('recurring_bills_empty_desc'),
                   style: TextStyle(fontSize: 11, color: context.textSecondary),
                 ),
               ],
@@ -352,7 +393,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => _showManageRecurringBillsSheet(context),
-            child: const Text('Configure', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            child: Text(context.tr('rb_configure'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -367,16 +408,16 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.chipBg,
+          color: selected ? AppThemes.success.withValues(alpha: 0.2) : context.chipBg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? const Color(0xFF00C896) : Colors.transparent,
+            color: selected ? AppThemes.success : Colors.transparent,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? const Color(0xFF00C896) : context.textSecondary,
+            color: selected ? AppThemes.success : context.textSecondary,
             fontSize: 11,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -386,26 +427,25 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
   }
 
   Future<void> _recordBillPayment(RecurringBillItem bill) async {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Record Bill Payment', style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(context.tr('rb_record_payment_title'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
-          'Confirm payment of SAR ${fmt.format(bill.averageAmount)} for "${bill.merchant}" in this cycle?',
+          context.trArgs('rb_confirm_payment_msg', {'amount': context.sar(bill.averageAmount), 'merchant': bill.merchant}),
           style: TextStyle(color: context.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00C896)),
+            style: FilledButton.styleFrom(backgroundColor: AppThemes.success),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm Paid', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: Text(context.tr('rb_confirm_paid'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -422,15 +462,15 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
         context.read<BudgetProvider>().refresh();
         AppSnackBar.showSuccess(
           context,
-          'Recorded payment for ${bill.merchant}!',
-          title: 'Bill Paid',
+          context.trArgs('rb_recorded_payment', {'merchant': bill.merchant}),
+          title: context.tr('rb_bill_paid'),
         );
       } else {
-        AppSnackBar.showError(context, 'Failed to record payment', title: 'Payment Error');
+        AppSnackBar.showError(context, context.tr('rb_payment_failed'), title: context.tr('rb_payment_error'));
       }
     } catch (e) {
       if (mounted) {
-        AppSnackBar.showError(context, 'Failed to record payment: $e', title: 'Payment Error');
+        AppSnackBar.showError(context, context.trArgs('rb_payment_failed_msg', {'error': e}), title: context.tr('rb_payment_error'));
       }
     }
   }
@@ -462,14 +502,13 @@ class _BillRowItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     Color badgeColor;
     String badgeText;
     IconData badgeIcon;
 
     if (bill.isPaid) {
-      badgeColor = const Color(0xFF00C896);
+      badgeColor = AppThemes.success;
       badgeText = context.tr('paid');
       badgeIcon = Icons.check_circle_rounded;
     } else if (bill.isOverdue) {
@@ -483,6 +522,63 @@ class _BillRowItem extends StatelessWidget {
     }
 
     final billIcon = _getBillIcon(bill.iconKey, bill.merchant, bill.categoryCode);
+    // Under large text the amount and status go under the name instead of
+    // squeezing it off the row (UX-14).
+    final large = MediaQuery.textScalerOf(context).scale(10) > 13;
+    final Widget trailing = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          context.sar(bill.averageAmount),
+          style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 3),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, color: badgeColor, size: 10),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!bill.isPaid) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: onMarkPaid,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppThemes.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppThemes.success.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    context.tr('rb_pay'),
+                    style: TextStyle(color: context.successText, fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -541,61 +637,14 @@ class _BillRowItem extends StatelessWidget {
                   context.trCat(bill.categoryCode),
                   style: TextStyle(color: context.textSecondary, fontSize: 10),
                 ),
+                if (large) ...[
+                  const SizedBox(height: 6),
+                  Align(alignment: AlignmentDirectional.centerStart, child: trailing),
+                ],
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'SAR ${fmt.format(bill.averageAmount)}',
-                style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 3),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(badgeIcon, color: badgeColor, size: 10),
-                        const SizedBox(width: 3),
-                        Text(
-                          badgeText,
-                          style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!bill.isPaid) ...[
-                    const SizedBox(width: 6),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: onMarkPaid,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C896).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.4)),
-                        ),
-                        child: const Text(
-                          'Pay',
-                          style: TextStyle(color: Color(0xFF00C896), fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+          if (!large) trailing,
         ],
       ),
     );
@@ -627,7 +676,6 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -651,17 +699,18 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Manage Recurring Bills',
+                  context.tr('rb_manage_title'),
                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
                 ),
                 IconButton(
+                  tooltip: context.tr('close'),
                   icon: Icon(Icons.close_rounded, color: context.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
             Text(
-              'Toggle which budgeted sub-items (utilities, iqama fees, rent, subscriptions) should be tracked as monthly recurring obligations and reserved from salary.',
+              context.tr('rb_manage_desc'),
               style: TextStyle(fontSize: 12, color: context.textSecondary, height: 1.4),
             ),
             const SizedBox(height: 16),
@@ -670,12 +719,12 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                 future: _futureCandidates,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Color(0xFF00C896)));
+                    return const Center(child: CircularProgressIndicator(color: AppThemes.success));
                   }
                   if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
                     return Center(
                       child: Text(
-                        'No budgeted sub-categories found. Allocate amounts in Budget Management first.',
+                        context.tr('rb_manage_empty'),
                         style: TextStyle(color: context.textSecondary, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
@@ -699,13 +748,13 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: c.isRecurring
-                                ? const Color(0xFF00C896).withValues(alpha: 0.3)
+                                ? AppThemes.success.withValues(alpha: 0.3)
                                 : context.borderColor,
                           ),
                         ),
                         child: Row(
                           children: [
-                            Icon(icon, color: c.isRecurring ? const Color(0xFF00C896) : context.textSecondary, size: 20),
+                            Icon(icon, color: c.isRecurring ? AppThemes.success : context.textSecondary, size: 20),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -720,7 +769,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     ),
                                   ),
                                   Text(
-                                    '${context.trCat(c.categoryCode)} • SAR ${fmt.format(c.allocatedAmount)}',
+                                    '${context.trCat(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
                                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                                   ),
                                 ],
@@ -728,8 +777,8 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                             ),
                             Switch(
                               value: c.isRecurring,
-                              activeThumbColor: const Color(0xFF00C896),
-                              activeTrackColor: const Color(0xFF00C896).withValues(alpha: 0.4),
+                              activeThumbColor: AppThemes.success,
+                              activeTrackColor: AppThemes.success.withValues(alpha: 0.4),
                               onChanged: (val) async {
                                 setState(() {
                                   c.isRecurring = val;
@@ -742,9 +791,15 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     isRecurring: val,
                                   );
                                   widget.onUpdated();
-                                } catch (_) {
+                                } catch (e) {
                                   if (mounted) {
                                     setState(() => c.isRecurring = !val);
+                                    AppSnackBar.showError(
+                                      this.context,
+                                      e is ApiRequestException && e.statusCode == 422
+                                          ? this.context.tr('rb_toggle_invalid')
+                                          : this.context.tr('rb_toggle_failed'),
+                                    );
                                   }
                                 }
                               },

@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
+import '../dispose_on_unmount.dart';
+import '../../models/money.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Card displayed on the dashboard for tracking BNPL installment plans (Tamara, Tabby, etc.).
 class InstallmentPlansCard extends StatefulWidget {
@@ -19,11 +23,15 @@ class InstallmentPlansCard extends StatefulWidget {
   final String? householdId;
   final ValueChanged<String>? onPayInstallment;
 
+  /// Clock for the due dates (tests); defaults to now.
+  final DateTime? now;
+
   const InstallmentPlansCard({
     super.key,
     this.plans,
     this.householdId,
     this.onPayInstallment,
+    this.now,
   });
 
   @override
@@ -31,7 +39,8 @@ class InstallmentPlansCard extends StatefulWidget {
 }
 
 class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
-  late Future<List<InstallmentPlan>> _futurePlans;
+  /// Used only without an [InstallmentProvider]; created on first build.
+  Future<List<InstallmentPlan>>? _futurePlans;
   bool _isExpanded = true;
   TransactionProvider? _txProvider;
 
@@ -76,71 +85,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     super.dispose();
   }
 
-  void _loadPlans() {
-    if (widget.plans != null) {
-      _futurePlans = Future.value(widget.plans);
-    } else if (widget.householdId != null && widget.householdId!.isNotEmpty) {
-      _futurePlans = _fetchPlans(widget.householdId!);
-    } else {
-      _futurePlans = Future.value([]);
-    }
-  }
+  /// Forgets the loaded plans; the next build without a provider loads them again.
+  void _loadPlans() => _futurePlans = null;
 
-  Future<List<InstallmentPlan>> _fetchPlans(String hid) async {
-    try {
-      final apiPlans = await ApiService.instance.getInstallments(hid);
-      if (apiPlans.isNotEmpty) return apiPlans;
-    } catch (_) {}
-
-    // Fallback: Check Supabase transactions for financed purchases
-    try {
-      final rows = await supabase
-          .from('transactions')
-          .select('id, amount, merchant, timestamp, raw_sms, category_code')
-          .eq('household_id', hid)
-          .like('raw_sms', '%Financed via%');
-
-      final result = <InstallmentPlan>[];
-      for (final r in (rows as List)) {
-        final raw = (r['raw_sms'] as String? ?? '');
-        final regex = RegExp(
-          r'Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)\.?\s*(?:Full price:\s*(?:SAR\s*)?([0-9,.]+))?',
-          caseSensitive: false,
-        );
-        final match = regex.firstMatch(raw);
-        final provider = match?.group(1)?.trim() ??
-            (raw.toLowerCase().contains('tamara') ? 'Tamara' : 'Tabby');
-        final paid = int.tryParse(match?.group(2) ?? '1') ?? 1;
-        final count = int.tryParse(match?.group(3) ?? '4') ?? 4;
-        final monthly = (r['amount'] as num?)?.toDouble() ?? 0.0;
-        final totalParsed = match?.group(4) != null
-            ? double.tryParse(match!.group(4)!.replaceAll(',', ''))
-            : null;
-        final total = totalParsed ?? (monthly * count);
-
-        result.add(InstallmentPlan(
-          id: 'plan-${(r['id'] as String).substring(0, 8)}',
-          householdId: hid,
-          merchant: r['merchant'] as String? ?? 'Installment Purchase',
-          provider: provider,
-          totalAmount: total,
-          installmentCount: count,
-          monthlyAmount: monthly > 0 ? monthly : (total / count),
-          paidInstallments: paid,
-          dayOfMonth: 27,
-          startDate: (r['timestamp'] as String? ??
-                  DateTime.now().toIso8601String())
-              .substring(0, 10),
-          status: paid >= count ? 'COMPLETED' : 'ACTIVE',
-          categoryCode: r['category_code'] as String? ?? 'OPEX-SHOPPING',
-          originalTransactionId: r['id'] as String?,
-          notes: raw,
-        ));
-      }
-      if (result.isNotEmpty) return result;
-    } catch (_) {}
-
-    return [];
+  /// Rows from the API only; a failure reaches the FutureBuilder as an error.
+  Future<List<InstallmentPlan>> _fetchPlans() {
+    final hid = widget.householdId;
+    if (hid == null || hid.isEmpty) return Future.value(const []);
+    return ApiService.instance.getInstallments(hid);
   }
 
   @override
@@ -172,11 +124,18 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     final amountCtrl = TextEditingController();
     String selectedProvider = 'Tamara';
     int selectedCount = 4;
+    // null: the default for the provider (Tabby/Tamara "pay in 4" is every
+    // two weeks, the server applies the same rule); set when the user picks.
+    String? chosenFrequency;
+    String frequencyFor() =>
+        chosenFrequency ?? ((selectedProvider == 'Tabby' || selectedProvider == 'Tamara') && selectedCount == 4 ? 'biweekly' : 'monthly');
     bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (dCtx) => StatefulBuilder(
+      builder: (dCtx) => DisposeOnUnmount(
+        disposables: [merchantCtrl, amountCtrl],
+        child: StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: context.cardBg,
           title: Text(
@@ -206,7 +165,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   decoration: InputDecoration(
                     labelText: context.tr('total_price'),
                     labelStyle: TextStyle(color: context.textSecondary),
-                    hintText: 'e.g. 4000',
+                    hintText: '${context.tr('example_prefix')} 4000',
                     hintStyle: TextStyle(color: context.textSecondary),
                   ),
                 ),
@@ -225,15 +184,15 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              p,
+                              p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
+                                color: isSel ? AppThemes.success : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -245,7 +204,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                Text(context.tr('duration'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                Text(context.tr('inst_installment_count'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [3, 4, 6].map((cnt) {
@@ -259,15 +218,50 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF00C896).withValues(alpha: 0.2) : context.inputBg,
-                              border: Border.all(color: isSel ? const Color(0xFF00C896) : context.borderColor),
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '$cnt ${context.tr('months_short')}',
+                              '$cnt',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? const Color(0xFF00C896) : context.textPrimary,
+                                color: isSel ? AppThemes.success : context.textPrimary,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Text(context.tr('inst_frequency'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                const SizedBox(height: 6),
+                Row(
+                  children: ['biweekly', 'monthly'].map((f) {
+                    final isSel = frequencyFor() == f;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: InkWell(
+                          key: ValueKey('inst_frequency_$f'),
+                          onTap: () => setDialogState(() => chosenFrequency = f),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              context.tr(f == 'biweekly' ? 'inst_every_two_weeks' : 'inst_every_month'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isSel ? AppThemes.success : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -288,16 +282,16 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C896),
+                backgroundColor: AppThemes.success,
                 foregroundColor: Colors.black,
               ),
               onPressed: isSubmitting
                   ? null
                   : () async {
                       final merchant = merchantCtrl.text.trim();
-                      final total = double.tryParse(amountCtrl.text);
+                      final total = parseMoneyInput(amountCtrl.text);
                       if (merchant.isEmpty || total == null || total <= 0) {
-                        AppSnackBar.showError(dCtx, 'Please provide valid merchant and total amount.');
+                        AppSnackBar.showError(dCtx, context.tr('inst_invalid_input'));
                         return;
                       }
                       setDialogState(() => isSubmitting = true);
@@ -308,6 +302,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           'provider': selectedProvider,
                           'total_amount': total,
                           'installment_count': selectedCount,
+                          'frequency': frequencyFor(),
                           'paid_installments': 1,
                           'category_code': 'OPEX-SHOPPING',
                           'adjust_original_transaction': false,
@@ -315,11 +310,11 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         };
                         try {
                           await context.read<InstallmentProvider>().createPlan(planData);
-                        } catch (_) {
+                        } on ProviderNotFoundException {
                           await ApiService.instance.createInstallmentPlan(planData);
                         }
                         if (dCtx.mounted) Navigator.pop(dCtx);
-                        setState(() => _loadPlans());
+                        if (mounted) setState(() => _loadPlans());
                         if (context.mounted) {
                           try {
                             context.read<TransactionProvider>().fetchTransactions();
@@ -328,14 +323,17 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           } catch (_) {}
                           AppSnackBar.showSuccess(
                             context,
-                            'Created $selectedProvider installment plan for $merchant',
+                            context.trArgs('inst_created_msg', {'provider': selectedProvider == 'Bank' ? context.tr('bnpl_provider_bank_other') : selectedProvider, 'merchant': merchant}),
                             title: context.tr('plan_active'),
                           );
                         }
                       } catch (e) {
                         setDialogState(() => isSubmitting = false);
                         if (dCtx.mounted) {
-                          AppSnackBar.showError(dCtx, 'Failed to create plan: $e');
+                          AppSnackBar.showError(
+                            dCtx,
+                            nafaqahWriteErrorText(dCtx, e) ?? dCtx.trArgs('inst_create_failed', {'error': e}),
+                          );
                         }
                       }
                     },
@@ -345,6 +343,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -361,29 +360,82 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
       return _buildCardContent(context, widget.plans!, fmt);
     }
 
-    if (installmentProv != null) {
-      return _buildCardContent(context, installmentProv.plans, fmt);
+    final prov = installmentProv;
+    if (prov != null) {
+      // Loading, error and empty are distinct (UX-01): an empty list is shown
+      // only after a successful load.
+      if (prov.error != null && !prov.hasLoaded) return _buildError(context, prov.fetchPlans);
+      if (!prov.hasLoaded) return _buildLoading(context);
+      return _buildCardContent(
+        context,
+        prov.plans,
+        fmt,
+        staleBanner: prov.error == null
+            ? null
+            : CardErrorBanner(lastUpdated: prov.lastUpdated, onRetry: prov.fetchPlans),
+      );
     }
 
     return FutureBuilder<List<InstallmentPlan>>(
-      future: _futurePlans,
+      future: _futurePlans ??= _fetchPlans(),
       builder: (context, snapshot) {
-        final plans = snapshot.data ?? [];
-        return _buildCardContent(context, plans, fmt);
+        if (snapshot.hasError) return _buildError(context, () => setState(_loadPlans));
+        if (snapshot.connectionState != ConnectionState.done) return _buildLoading(context);
+        return _buildCardContent(context, snapshot.data ?? const [], fmt);
       },
     );
+  }
+
+  Widget _buildLoading(BuildContext context) => Container(
+        key: const Key('installments_loading'),
+        height: 88,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: context.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.borderColor),
+        ),
+        child: const Center(
+          child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+
+  Widget _buildError(BuildContext context, VoidCallback onRetry) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: CardErrorState(
+          title: context.tr('installments_bnpl'),
+          message: context.tr('load_error_installments'),
+          icon: Icons.credit_score_rounded,
+          onRetry: onRetry,
+        ),
+      );
+
+  /// "Installment 2 of 4 paid · next 29 Oct" for an active plan.
+  String? _nextDueText(BuildContext context, InstallmentPlan plan, DateTime today) {
+    final next = plan.nextDueDate(today: today);
+    if (next == null) return null;
+    return context.trArgs('inst_paid_next_due', {
+      'paid': plan.paidInstallments,
+      'count': plan.installmentCount,
+      'date': context.fmtDate(next, 'd MMM'),
+    });
   }
 
   Widget _buildCardContent(
     BuildContext context,
     List<InstallmentPlan> plans,
-    NumberFormat fmt,
-  ) {
+    NumberFormat fmt, {
+    Widget? staleBanner,
+  }) {
     final activePlans = plans.where((p) => !p.isCompleted).toList();
-    final totalMonthlyCommitment = activePlans.fold<double>(
-      0.0,
-      (sum, p) => sum + p.monthlyAmount,
-    );
+    // What the installments take before the next payday (both frequencies),
+    // instead of a "/month" total that is wrong for bi-weekly plans.
+    final today = SalaryCycleService.riyadhToday(now: widget.now);
+    final cycleEnd = SalaryCycleService.currentCycle(now: widget.now).end;
+    final dueBeforePayday = activePlans.fold<double>(0.0, (sum, p) {
+      final due = p.dueDates(today: today, max: 12).where((d) => !d.isBefore(today) && !d.isAfter(cycleEnd));
+      return sum + p.installmentAmount * due.length;
+    });
 
     return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -430,13 +482,18 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              activePlans.isEmpty
+                              // UX-25: "all cleared" only when plans exist and all are paid.
+                              plans.isEmpty
+                                  ? context.tr('no_installments')
+                                  : activePlans.isEmpty
                                   ? context.tr('all_installments_cleared')
-                                  : '${context.tr('sar')} ${fmt.format(totalMonthlyCommitment)} / ${context.tr('month')} ${context.tr('scheduled_monthly')}',
+                                  : dueBeforePayday > 0
+                                      ? context.trArgs('inst_due_before_payday', {'amount': context.sar(dueBeforePayday)})
+                                      : context.tr('inst_nothing_due_before_payday'),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: activePlans.isEmpty
-                                    ? const Color(0xFF00C896)
+                                color: activePlans.isEmpty && plans.isNotEmpty
+                                    ? AppThemes.success
                                     : context.textSecondary,
                               ),
                             ),
@@ -454,6 +511,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                 ),
               ),
 
+              if (staleBanner != null)
+                Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 8), child: staleBanner),
               if (_isExpanded) ...[
                 Divider(color: context.borderColor, height: 1),
                 if (plans.isEmpty) ...[
@@ -491,14 +550,14 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 14),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00C896),
+                            backgroundColor: AppThemes.success,
                             foregroundColor: Colors.black,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                           icon: const Icon(Icons.add, size: 16),
                           label: Text(
-                            '+ ${context.tr('add_installment_plan')}',
+                            context.tr('add_installment_plan'),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           onPressed: () => _showAddPlanDialog(context),
@@ -525,7 +584,10 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -547,23 +609,19 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        plan.merchant,
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w600,
-                                          color: context.textPrimary,
-                                          fontSize: 14,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
+                                    Text(
+                                      plan.merchant,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textPrimary,
+                                        fontSize: 14,
                                       ),
                                     ),
                                     Text(
-                                      '${context.tr('sar')} ${fmt.format(plan.monthlyAmount)} / ${context.tr('month')}',
+                                      '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
-                                        color: const Color(0xFF00C896),
+                                        color: context.successText,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -577,29 +635,28 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                     backgroundColor: context.chipBg,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       plan.isCompleted
-                                          ? const Color(0xFF00C896)
+                                          ? AppThemes.success
                                           : providerColor,
                                     ),
                                     minHeight: 6,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                Wrap(
+                                  alignment: WrapAlignment.spaceBetween,
+                                  spacing: 8,
+                                  runSpacing: 2,
                                   children: [
                                     Text(
-                                      context.isArabic
-                                          ? 'تم سداد ${plan.paidInstallments} من ${plan.installmentCount}'
-                                          : context.isUrdu
-                                              ? '${plan.installmentCount} میں سے ${plan.paidInstallments} قسط ادا ہو چکی'
-                                              : 'Installment ${plan.paidInstallments} of ${plan.installmentCount} paid',
+                                      _nextDueText(context, plan, today) ??
+                                          context.trArgs('inst_x_of_y_paid', {'paid': plan.paidInstallments, 'count': plan.installmentCount}),
                                       style: TextStyle(
                                         color: context.textSecondary,
                                         fontSize: 11,
                                       ),
                                     ),
                                     Text(
-                                      '${context.tr('remaining')}: ${context.tr('sar')} ${fmt.format(plan.remainingAmount)}',
+                                      '${context.tr('remaining')}: ${context.sar(plan.remainingAmount)}',
                                       style: TextStyle(
                                         color: context.textPrimary,
                                         fontSize: 11,
@@ -611,7 +668,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                 if (!plan.isCompleted) ...[
                                   const SizedBox(height: 8),
                                   Align(
-                                    alignment: Alignment.centerRight,
+                                    alignment: AlignmentDirectional.centerEnd,
                                     child: OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: context.textPrimary,
@@ -626,13 +683,19 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
                                         } else {
+                                          bool recorded;
                                           try {
-                                            await context.read<InstallmentProvider>().recordPayment(plan.id);
+                                            recorded = await context.read<InstallmentProvider>().recordPayment(plan.id);
                                           } catch (_) {
-                                            await ApiService.instance.payInstallment(plan.id);
+                                            recorded = await ApiService.instance.payInstallment(plan.id) != null;
                                           }
+                                          if (!mounted) return;
                                           setState(() => _loadPlans());
-                                          if (context.mounted) {
+                                          if (!recorded && context.mounted) {
+                                            // FR-A-03: never imply a payment the server did not record.
+                                            AppSnackBar.showError(context, context.tr('rb_payment_failed'));
+                                          }
+                                          if (recorded && context.mounted) {
                                             try {
                                               context.read<TransactionProvider>().fetchTransactions();
                                               context.read<BudgetProvider>().refresh();
@@ -651,13 +714,13 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 4),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF00C896),
+                            foregroundColor: AppThemes.success,
                             side: BorderSide(color: context.borderColor),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
                           icon: const Icon(Icons.add, size: 14),
-                          label: Text('+ ${context.tr('add_installment_plan')}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: Text(context.tr('add_installment_plan'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           onPressed: () => _showAddPlanDialog(context),
                         ),
                       ],

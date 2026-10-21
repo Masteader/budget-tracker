@@ -1,0 +1,213 @@
+# Master Audit & Engineering Report — Budget Tracker
+
+Branch: `audit/claude-comprehensive-review` (base `main` @ `f17eb2b`) · Date: 2026-10-19 (updated 2026-10-20)
+Detailed reports: [`db.md`](db.md) · [`ai_service.md`](ai_service.md) · [`flutter_logic.md`](flutter_logic.md) · [`ui_web.md`](ui_web.md) · Fix log: [`../FIX_LOG.md`](../FIX_LOG.md)
+
+---
+
+## ملخص تنفيذي (بالعربي)
+
+**شو عملنا:** فحصنا المشروع كامل: قاعدة البيانات، وسيرفر الذكاء الاصطناعي، وتطبيق Flutter، وموقع الويب. لقينا حوالي **120 مشكلة**، منها **4 حرجة** وحوالي **30 عالية الخطورة**، وصلّحنا الأغلبية الكبيرة منها، وكل إصلاح معه اختبار بيثبت إنه انحلّ. كل الشغل على فرع منفصل اسمه `audit/claude-comprehensive-review`، وما انلمس `main` ولا قاعدة البيانات الحقيقية ولا السيرفر الحقيقي.
+
+**أخطر الأشياء اللي انحلّت:**
+1. **أسرار السيرفر الحقيقية كانت منشورة بالمستودع العام.** انشالت من الكود، بس **لازم تتغير** لأن تاريخ git بيحتفظ فيها.
+2. **أكواد دعوات العائلات كانت مكشوفة،** وأي حدا كان بيقدر ينضم لأي عائلة أو يعدّل ميزانياتها.
+3. **في أماكن بالسيرفر كانت بتسمح لمستخدم يعدّل بيانات عائلة تانية** (الأقساط، التصنيفات، المصاريف).
+4. **المصاريف المسجّلة بدون إنترنت كانت تضيع،** والحفظ اليدوي كان يفشل دايماً، فمعلومة مين دفع، يعني ديون النفقة، كانت تضيع.
+5. **تقسيم المصاريف بين الزوجين كان 50/50** بالسيرفر، وهاد عكس قواعد النفقة.
+6. **حوالي 760 نص بالتطبيق كانوا مكتوبين مباشرة** (أغلبهم إنجليزي)، وهلق صاروا مترجمين للعربي والإنجليزي والأوردو.
+
+**الجولة التانية (بطلب صاحب المشروع):**
+- **الإيميلات:** كل طلب دعم أو تسجيل VIP بينبعت فعلياً من `fmscoinfo@fmsco.com.sa` (لـ `CONTACT_RECIPIENT_EMAIL`)، وكل إيميل ظاهر للمستخدم صار `fmscoinfo@fmsco.com.sa`.
+- **الرسائل النصية:** انحذف كل شي له علاقة بقراءة SMS أو رسائل البنك، وضلت بس جملة "التطبيق ما بيقرأ رسائلك".
+- **النفقة:** ما في 50/50 بين الزوجين؛ الزوجة لما تدفع على شي مشترك بينسجّل دين على الزوج، ولما تشتري لنفسها بينخصم من ميزانية مصروفها.
+- **تشفير رموز الدخول** بالتطبيق، وإصلاح رسائل "تم الحفظ" الوهمية والتراجع عن الحذف.
+
+**الصلاحيات (قرار صاحب المشروع، للعائلة والسكن المشترك):** العضو بيعدّل أو بيحذف مصاريفه هو بس، والمسؤول (admin) بيعدّل أو بيحذف مصاريف الكل. السحب من الصندوق المشترك للمسؤولين بس. المسؤول بيقدر يعيّن أعضاء كمسؤولين إضافيين ويشيلهم، بس ما حدا منهم بيقدر يشيل المسؤول الرئيسي (صاحب البيت)، والمسؤول الرئيسي بس هو اللي بينقل الملكية.
+
+**الاختبارات:** كلها ناجحة. Flutter: 492 اختبار (كانوا 141). Python: 419 (كان في 11 فاشلين). قاعدة البيانات: 20 من 20 (كانوا 2 بس ناجحين).
+
+**المطلوب من صاحب المشروع قبل النشر** (التفاصيل بالقسم 6):
+1. ✅ `sb_secret` و`WEBHOOK_SECRET` الجديد صاروا على Railway (حسب صاحب المشروع). **باقي يتأكد إنه `APP_AUTH_TOKEN` تغيّر.**
+2. يضيف إعدادات إرسال الإيميل على Railway (Resend أو SMTP، القسم 6.1).
+3. ينشر بالترتيب: قاعدة البيانات، بعدين السيرفر، بعدين نسخة التطبيق الجديدة.
+4. ✅ قرار السؤالين عن طريقة عمل المنتج (DB-16 وDB-18) اتاخد وانطبّق (القسم 6.3).
+5. **خمس ملفات قاعدة بيانات لسا ما انطبّقت على القاعدة الحية**، بالترتيب: `20261020700000` ← `20261020750000` ← `20261020800000` ← `20261020900000` ← `20261021000000` (التصنيفات السعودية وجدولة أقساط تابي وتمارا). الطريقة والرسائل المتوقعة بـ [`live_db_preflight_round3.md`](live_db_preflight_round3.md) (القسم 6 والقسم 3b). السيرفر الجديد بيحتاجهم كلهم قبل ما ينزل.
+6. يضيف على Railway متغيّر `PREVIEW_TOKEN_SECRET` (قيمة عشوائية 32 حرف أو أكثر، مثلاً من `openssl rand -hex 32`)، نفس القيمة على كل نسخ السيرفر. هيك تسجيل المصروف من المحادثة أو الفاتورة بياخد طلب واحد للذكاء الاصطناعي بدل اثنين.
+7. **النسخ الاحتياطي اليومي مأجّل** بقرار صاحب المشروع (بيحتاج خطة Supabase Pro). بس قبل تطبيق الملفات الخمسة لازم ياخد نسخة يدوية وحدة، وهاي مجانية (`pg_dump`، القسم 6.1).
+
+---
+
+## 1. Executive Summary & Health Scorecard
+
+Four parallel reviews (DB, AI service, Flutter logic/security, UI/localization/web) produced ~120 findings, of which 4 were Critical and ~30 High. All Critical findings and the large majority of High findings are fixed on this branch with regression tests; the remainder need owner decisions, owner-side actions on live infrastructure, or tooling not available in the audit sandbox (Android SDK).
+
+Scores are the auditors' qualitative assessment (0–10) of the code as found vs. as left on this branch, assuming the owner actions in §6 are completed.
+
+| Dimension | Before | After | Main drivers |
+|---|---|---|---|
+| **Security** | 3 | 8 | Live secrets in a public repo; RLS disabled on invites; unauthenticated/IDOR API routes; quota failing open; anon key used as service key. |
+| **Reliability / data integrity** | 4 | 8 | Offline chat expenses lost; manual saves always failing; money created by rounding; tests that could not fail; non-hermetic test suite hitting live. |
+| **Architecture** | 5 | 7 | Blocking LLM calls in async server; float money; cycle logic duplicated three times with divergence; migration chain not replayable. |
+| **UI / UX & i18n** | 5 | 8 | ~760 hardcoded strings; Urdu treated as Arabic/English; RTL mirroring gaps; light-mode contrast failures; web form loses signups. |
+
+**Test gates on the final merged branch (verified after merge):**
+
+| Gate | Baseline (`f17eb2b`) | Final |
+|---|---|---|
+| `flutter analyze` | 0 issues | 0 issues |
+| `flutter test` | 141 passed | **492 passed**, 0 failed |
+| `pytest` (ai_service) | 127 passed, **11 failed**, 6 skipped (and non-hermetic: talks to live Supabase when a dev `.env` exists) | **419 passed**, 0 failed; no network, no `.env`, no LLM |
+| DB SQL suites (local Postgres 16, rebuilt from scratch) | 2 passed / 5 failed | **20 / 20 passed** |
+| `web_app` build + lint | pass, 1 lint warning | pass, 0 warnings |
+
+---
+
+## 2. Critical & High Severity Findings
+
+Full root cause, reproduction and test names are in the per-area reports; this is the consolidated view.
+
+### Critical
+
+| ID | Finding | Impact | Fix / Status |
+|---|---|---|---|
+| API-01 | Live `WEBHOOK_SECRET` and an earlier `APP_AUTH_TOKEN` were committed to the **public** repo (tests, dev scripts, runbook, plan docs). The repo's own secret-scanner test only globbed `*.dart` and so never inspected those files. | Anyone can forge server-to-server webhook calls. | Values purged from the tree; scanner now stores SHA-256 digests only and scans py/dart/ts/js/md/json/yaml. **Owner must rotate** (history retains values). |
+| DB-01 | `household_invites` never had RLS enabled; its policies were inert. | Anon key could list every invite code; any user could mint an invite for any household and join it → full household takeover. | Fixed + test 08. |
+| DB-03 | `reallocate_budget` was `SECURITY DEFINER`, executable by PUBLIC, with no auth/household checks. | Any caller could rewrite any household's budgets. | Fixed + test 10. |
+| MOB-01 | Offline chat replay requested only a preview and treated the local fallback as "synced". | Expenses entered offline via chat were silently never stored. | Fixed: replay commits, idempotent. |
+
+### High
+
+| ID | Finding | Status |
+|---|---|---|
+| DB-02 | Self-referencing membership policy → infinite recursion; receipt upload/view and membership reads broken. | Fixed |
+| DB-04 | Anyone could add/move categories in any household. | Fixed |
+| DB-05 | Targeted invites always failed (non-existent column); target member not checked to be in same household. | Fixed |
+| API-02…06 | Unauthenticated installment "pay"; unauthenticated sub-category list/rename (renaming shared definitions for all households); chat/receipt enrich and installment creation could overwrite other households' transactions; members editing system categories. | Fixed |
+| API-07 | Service picked `SUPABASE_SECRET_KEY` without role validation; the configured value is an **anon** JWT, so every DB-backed route ran as anon (403s) and quota checks were silently skipped. | Fixed (startup role validation); **owner must set a real secret key** |
+| API-08 | LLM quota failed open; window keyed by client-supplied household id. | Fixed (fail closed, per-user) |
+| API-14 / MOB-13 | Cycle computed from UTC date (API) and device time + hard-coded 27th (app) → wrong cycle 00:00–03:00 Riyadh on payday and for non-27 paydays. | Fixed; Dart port verified against 109 vectors generated from the DB function |
+| API-16 | `/settlement` split spouses 50/50, contradicting the Nafaqah invariant. | Fixed (Nafaqah applied in family mode; response gains `mode`) |
+| API-19 | Support-chat LLM call blocked the event loop (whole server stalls). | Fixed |
+| API-24 | Test suite non-hermetic: loaded dev `.env` and wrote to live Supabase. | Fixed |
+| API-30 | Backend contract for new client (JWT-only auth, 401 on expiry, idempotency, `client_occurred_at`). | Implemented, backward compatible with old app builds |
+| MOB-02 | Production URLs/keys compiled in as defaults; static `X-App-Token` sent from APK. | Fixed: `--dart-define` required, service-role keys rejected, https enforced in release, JWT only |
+| MOB-03/24 | Manual-expense and batch-receipt inserts used non-existent columns → every online save failed; replay dropped payer → wife-paid Nafaqah debt lost; local-time timestamps shifted by 3h. | Fixed (see §6.2 — verify live columns) |
+| MOB-08 | Expired session received 403 so the app never refreshed. | Fixed (both sides) |
+| MOB-18 | Android backups included tokens/queue/receipts; release signed with debug key. | Fixed; debug APK, release APK and AAB built and the merged manifest inspected (see [`android_build.md`](android_build.md)). Emulator smoke test not run (no KVM) |
+| UI (several) | Payday banner never shown (wrong column `income_type` vs `source_type`, error swallowed); settlement sheets confirmed success on failure; Arabic/Urdu category names collided on code `OPEX-`; Urdu amounts labelled in rupees. | Fixed |
+| WEB-09 | Web waitlist shows success + confetti but sends the email nowhere. | Fixed: VIP and support requests are emailed to the developer via `/public/inquiries` and `/support/inquiries` (needs the email env vars on the deployment) |
+
+---
+
+## 3. Medium & Low Findings (summary)
+
+- **Data integrity:** transfer rounding minted money (1.005 → −1.00/+1.01) and negative income parts (DB-06); clients could write income records directly (DB-07) and relabel `cycle_key` to hide spending (DB-08); float money math in Python (API-18) and Dart (MOB-29, inputs now rounded to halalas; full integer model pending); NaN/Infinity accepted (API-22); ZATCA TLV decoder lenient on truncation/BER lengths (API-15, fixed); Arabic-Indic digits parsed as 0 (MOB-14, fixed in 39 fields).
+- **Zero-SMS policy:** SMS simulators, the legacy SMS LangGraph pipeline, root dev scripts and the `sms` transaction channel (DB default/CHECK, API, app) removed; historical rows kept and relabelled (API-25, fixed).
+- **Offline sync:** stuck rows after app kill, merged identical purchases, retry budget burned by network errors, re-entrant drains, receipt blobs in SQLite (MOB-04/05/09/10/11, fixed).
+- **Security hardening:** Redis limiter correctness and `X-Forwarded-For` spoofing (API-09/10); missing `ENV` treated as dev, API docs public in prod (API-11/29); JWT `exp` not required / no role check / unthrottled JWKS (API-12); stale membership honoured (API-13); receipt path traversal and MIME checks (API-23); receipts bucket without size/type limits (DB-11); search_path not pinned (DB-09); vulnerable `python-jose` (API-28).
+- **Account lifecycle:** sole admin could not delete their account (DB-12).
+- **Household permissions (DB-16 / DB-18, resolved by owner decision; family and roommate alike):** a member creates transactions and edits/deletes only their own; only admins edit or delete another member's (creator bound to `auth.uid()` at insert, immutable, refusals raised as 403). Only admins move money out of a shared pool. Admins promote/revoke co-admins; the primary admin (`households.owner_user_id`) cannot be demoted or removed by a co-admin and alone transfers primary admin; last-admin protections unchanged. Migration `20261020400000_admin_permissions_and_co_admins.sql` + DB test 20; API owner-or-admin checks and `/households/{id}/members`, `/members/{uid}/admin`, `/primary-admin` (`ai_service/tests/test_household_permissions.py`); app hides other members' edit/delete and pool withdrawals for members, adds a Members & Admins section.
+- **Islamic family finance (UI-24, resolved by owner decision; extends API-16/17):** family mode never splits between the spouses. Wife-paid shared expenses are a debt the husband owes her (`nafaqah_class = wife_reimbursable`, append-only `spouse_reimbursements`, partial/full repayment, overpayment rejected); her personal purchases are charged to a per-cycle allowance (`member_allowances`, overspend shown negative); husband-paid shared expenses stay plain expenses. Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + DB test 19; API `/households/{id}/nafaqah*` (`ai_service/tests/test_nafaqah.py`); app family card, allowance card and Nafaqah selector (no "Shared 50/50" in family mode). Roommate mode unchanged.
+- **Tests that could not fail:** DB suites 03/06/07 (DB-14) — note FIX_LOG SEC-06/SEC-08 "verified" entries relied on them.
+- **UI/UX:** 32 RTL mirroring fixes; 22 icon buttons labelled; ~15 white-on-white spots in light mode; brand teal/green text failing contrast replaced by AA tokens; ~25 `mounted`/context-after-await fixes; leaked subscriptions/controllers.
+- **Web:** hardcoded Arabic in English mode, a11y (labels, skip link, focus, reduced motion), multi-MB icon font trimmed, meta/SEO.
+- **Mobile reliability (round 2):** session tokens moved to `flutter_secure_storage` with one-time migration (MOB-19; confirm with a real `flutter build apk`); statement PDF downloaded through the authenticated client (MOB-26); payday/income/rollover saves only report success after the server confirms (MOB-27); offline-queue write failures surface as errors (MOB-28); undo-after-delete restores the full row (UI-25; `installment_plans.original_transaction_id` stays null after undo); 14 dialog controllers disposed after close (UI-20).
+- **Support & VIP email (WEB-09):** `/public/inquiries` and `/support/inquiries` email every request from `MAIL_FROM` (default `Budget Tracker <fmscoinfo@fmsco.com.sa>`) to `CONTACT_RECIPIENT_EMAIL`; all user-facing contact addresses show `fmscoinfo@fmsco.com.sa`.
+- **Performance:** per-row RLS helper evaluation and 7 missing indexes (DB-13: 50k-row query 55 ms → 11 ms).
+
+**Open (not fixed), with reason:**
+
+| ID | Sev | Item | Why open |
+|---|---|---|---|
+| DB-15 | Medium | Migration chain not replayable by Supabase CLI (order, duplicate versions); live has drifted. | Needs fresh baseline from live (owner). Local replay fixed. |
+| DB-17 | Low | Non-admins can read join code via direct table read. | App now uses RPC (MOB-25). A column revoke cannot exempt admins and breaks the household settings screen of released builds for every user; apply after old builds are retired ([`db.md`](db.md#db-17-members-can-read-the-static-join-code-low-still-open)) |
+| API-32 | Medium (suspected) | Cycle rollover vs savings sweep can double-apply. | Needs DB locking function |
+| API-33 | Medium | Local JSON / in-memory fallbacks diverge across containers. | Design change (require Redis/DB) |
+| API-34/35 | Low | Chat category overrides not validated; JWT decoded twice; full scan after insert. | Low priority |
+| MOB-06/12 | Medium | Idempotency/`client_occurred_at`: app + backend done; keys are per-process unless `REDIS_URL` is set. | Set `REDIS_URL` in prod |
+| UI misc | Low | Arabic font not Cairo/Tajawal; 290 remaining hardcoded colors; dead footer links; no Urdu on web; Tailwind via CDN on landing pages. | Low priority |
+
+---
+
+## 4. Architectural Recommendations & Modernization Blueprint
+
+1. **One source of truth for authorization.** Most High findings are one class of bug: the backend uses a privileged Supabase client and re-implements household checks by hand. Prefer forwarding the user's JWT to PostgREST so RLS enforces access, and reserve the secret key for narrow `SECURITY DEFINER` RPCs that check `auth.uid()` membership themselves. This removes the IDOR class instead of patching instances.
+2. **Money as integers end to end.** Store and compute halalas as `bigint` (or keep `numeric(14,2)` with `CHECK` constraints in DB), `Decimal` in Python (done), and a `Money` value type over `int` in Dart (MOB-29). Ban `double` for currency via an analyzer lint.
+3. **Single cycle specification.** `get_saudi_cycle_for_timestamp` is canonical. Keep the 109 vectors as a shared JSON fixture consumed by the SQL, pytest and Flutter suites so the three implementations cannot drift again.
+4. **Replayable migrations.** Re-baseline from live (`supabase db pull`), renumber duplicates, (the owner chose not to use GitHub Actions; run the gate commands in §5 before each release).
+5. **No shared secrets in clients.** Finish the move to JWT-only: after the new backend is live and old builds age out, stop accepting `X-App-Token`. `WEBHOOK_SECRET` is already optional in app builds (MOB-23, resolved): leave it out; a stale signature from an old build is logged and ignored while the JWT is valid.
+6. **Durable idempotency and quotas.** Make Redis mandatory in production (or add an `idempotency_keys` table) so dedup and rate limits hold across instances (API-33, MOB-06/12).
+7. **Domain decisions encoded in schema.** Add `is_tabarru` and household-scoped sub-categories. UI-24 (`transactions.nafaqah_class`, `member_allowances`, `spouse_reimbursements`) and DB-16/DB-18 (creator binding, owner-or-admin writes, admin-only pool withdrawals, co-admins with a protected primary admin) are decided and enforced in the database.
+8. **Mobile hardening.** Tokens are now in `flutter_secure_storage` (MOB-19); certificate/https enforcement already added; build a release APK in CI to validate the Android changes made here.
+9. **Repository hygiene.** SMS/dev simulation scripts, the legacy SMS pipeline and the `sms` transaction channel are deleted (API-25, guarded by tests); keep secrets only in environment/secret managers; keep `.env` out of Docker build context (`.dockerignore` added).
+
+---
+
+## 5. Summary of Verified Code Changes & Tests
+
+All work is on `audit/claude-comprehensive-review` as merged streams (conventional commits; per-commit detail in each report and FIX_LOG):
+
+| Stream | Scope | Key artifacts |
+|---|---|---|
+| Database | 10 new migrations `supabase/migrations/20261020010000_*` … `20261020100000_*` (no shipped migration edited); `supabase/tests/00_local_supabase_stubs.sql`; tests `08_*`–`17_*`; `run_tests.py --psql --rebuild --db` | [`db.md`](db.md) |
+| AI service | Security fixes across routes/auth/quota/storage; Riyadh-time cycles; strict ZATCA decoder; Nafaqah + Decimal settlements; client contract (JWT-only, 401, idempotency, `client_occurred_at`); hermetic test suite; `.dockerignore`; dependency bumps | [`ai_service.md`](ai_service.md) |
+| Flutter logic | Offline sync rewrite (commit-on-replay, idempotent, ordered, crash-safe); config via `--dart-define` only; `SalaryCycleService` parity; Arabic/Urdu digit parsing; auth gate; signed URLs; Android backup/cleartext/signing | [`flutter_logic.md`](flutter_logic.md) |
+| Nafaqah (UI-24) | Migration `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql` + test 19; `nafaqah_service.py`, `routes/nafaqah.py`, chat classification; Flutter family card, wife allowance card, Nafaqah selector | [`ui_web.md`](ui_web.md#ui-24-resolved-owner-decision), rule 02 |
+| Zero-SMS (API-25) | SMS scripts/pipeline deleted; migration `20261020200000_remove_sms_artifacts.sql` + test 18 (`sms` source removed, historical rows relabelled, none deleted) | [`ai_service.md`](ai_service.md) |
+| Email inquiries (WEB-09) | `mail_service.py`, `routes/inquiries.py`; web, both landings and app help center wired; served `ai_service/static` build refreshed | [`ui_web.md`](ui_web.md) |
+| Mobile reliability | MOB-19/26/27/28, UI-20/25 | [`flutter_logic.md`](flutter_logic.md) |
+| UI / i18n / web | ~760 strings localized (1206 keys × en/ar/ur, guard test); 32 RTL fixes; a11y labels; light-mode contrast tokens; lifecycle fixes; web a11y/perf/meta | [`ui_web.md`](ui_web.md) |
+
+Commands to reproduce the gates:
+
+```bash
+# Flutter
+cd flutter_app && flutter analyze && flutter test
+# Python (no .env needed)
+cd ai_service && python -m pytest -q
+# Database (plain Postgres 16; Docker mode remains the default)
+PGHOST=localhost PGPORT=54329 PGUSER=postgres python3 supabase/tests/run_tests.py --psql --rebuild --db bt_audit_tests
+# Web
+cd web_app && npm ci && npm run build && npm run lint
+```
+
+---
+
+## 6. Owner Actions & Release Plan
+
+### 6.1 Before anything else
+1. **Rotate secrets.** Owner reports (2026-10-20) that a new `WEBHOOK_SECRET` is set on Railway and the values shared for the audit are test-only. **Still confirm `APP_AUTH_TOKEN` was rotated** — the old values remain in public git history (gitleaks finds 9 hits in `f17eb2b`).
+2. **Service key.** Owner reports the `sb_secret_…` key is set on Railway. Either `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` works; an `sb_secret_` key wins over a legacy JWT and an anon/publishable value is ignored with a startup warning. Requires `supabase>=2.16.0` (older supabase-py rejects `sb_secret_` keys). The service fails closed without a privileged key, so a wrong value shows up immediately as 500s.
+3. **Check** `SUPABASE_JWT_SECRET`: it is empty, so only ES256 tokens verified against the project JWKS are accepted. If the project still signs user tokens with the legacy HS256 secret, set it or every request returns 401.
+4. **Set** `ENV=production`, `TRUSTED_PROXY_IPS`, and `REDIS_URL` on the production service.
+5. **Email delivery:** set `RESEND_API_KEY` (preferred on Railway, which blocks SMTP ports below the Pro plan; `fmsco.com.sa` verified) or `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD` for the `fmscoinfo@fmsco.com.sa` mailbox. Optional: `CONTACT_RECIPIENT_EMAIL` (default `abedmowafaq@gmail.com`), `MAIL_FROM`. Until set, the forms return a clear error.
+6. **Supabase Auth emails** (sign-up, password reset) are configured in the Supabase dashboard, not in this repo: set Authentication → SMTP Settings → Sender email to `fmscoinfo@fmsco.com.sa` so all mail comes from one address.
+7. **Set** `PREVIEW_TOKEN_SECRET` (32+ random characters, e.g. `openssl rand -hex 32`), the same value on every Railway instance. It signs chat/receipt previews so a confirmed expense is saved without a second LLM call. Without it each process uses a random key (logged as a warning): everything still works, but the saving only applies when the commit reaches the instance that issued the preview.
+8. **Backups.** Scheduled daily backups are deferred by the owner (they need the Supabase Pro plan). This is a known risk: until they exist, a bad write or deletion on live cannot be undone from a daily snapshot. A one-off manual dump before applying the pending migrations is still required and costs nothing: `pg_dump --schema=public --data-only` (plus `--schema-only`) with the database connection string from Dashboard → Connect, stored off the server.
+
+### 6.2 Deployment order
+1. **Database:** follow [`live_db_preflight.md`](live_db_preflight.md).
+   - **✅ Applied to live on 2026-10-20** (owner-approved): read-only data backup taken first; all 14 files applied in order with no errors; part B matched §7 exactly (`budgets_spent_total` 9112.42 and `accounts_balance_total` 360.00 unchanged); the 14 versions are recorded in `supabase_migrations.schema_migrations`. Verified compatible with the currently deployed (pre-audit) backend and app: they always send an explicit `source`, and service-role inserts pass the new creator trigger unchanged.
+   - **Verdict: safe to apply.** Live was compared read-only with the repo, and a faithful local replica of live passed the 14-file batch with the DB suite at 20/20.
+   - **Order:** apply the pre-flight `20261020005000_preflight_live_alignment.sql` first, then the 13 audit migrations `20261020010000` … `20261020400000`. Use the SQL editor, one file per run, in order (§5).
+   - **Before:** run part A of [`live_db_preflight_checks.sql`](live_db_preflight_checks.sql) and note the totals.
+   - **After:** run part B and compare with §7.
+   - **Drift that matters:**
+     - `reallocate_budget` is missing on live; `20261020030000` creates it.
+     - Live-only `households.rollover_rule` is captured by the pre-flight.
+     - Live's `rls_auto_enable()` loses its anon EXECUTE.
+     - All 14 live transactions have no recorded creator and become admin-only (owner decision).
+   - **MOB-03 answered:** live `transactions` has no `paid_by` / `beneficiary` columns.
+   - **Coupling:** `20261020200000` rejects new `source = 'sms'` rows, so ship it with the new app build. `20261020300000` and `20261020400000` go before the backend that calls their RPCs.
+   - **CLI:** do not use `supabase db push` until the DB-15 re-baseline (§5.3).
+   - **Rollback:** [`../rollback/20261020_audit_batch_rollback_snapshot.sql`](../rollback/20261020_audit_batch_rollback_snapshot.sql).
+   - **Pending (rounds 2, 3 and 3b): five files, not yet applied to live.** In order: `20261020700000_fable_db_hardening.sql` → `20261020750000_installment_pay_atomic.sql` → `20261020800000_household_roles_and_nafaqah_integrity.sql` → `20261020900000_household_type_and_round2_fixes.sql` → `20261021000000_saudi_taxonomy_and_bnpl_schedule.sql`. Follow [`live_db_preflight_round3.md`](live_db_preflight_round3.md) §6 for the first four and its "Round 3b" section for the fifth (run its read-only pre-check first: live has one code and four sub-categories the repo does not; on a collision the file aborts cleanly). Never re-run an earlier file after `900000`. Rollbacks: [`../rollback/`](../rollback/) (newest first).
+2. **Backend:** deploy `ai_service` from this branch. The HEAD backend needs all five pending files applied first. It accepts both old app builds (`X-App-Token` at the firewall, plus their JWT) and the new JWT-only client. **Signed requests:** installed builds sign with the pre-rotation `WEBHOOK_SECRET`; with their valid JWT the stale signature is logged (rate limited) and the request is served, so chat and receipts keep working. Only a bad signature without a valid JWT is 401. Older app builds keep working with the permission migration: their inserts without `user_id` are attributed to the signed-in user, and a refused edit, delete or pool transfer comes back as an error the old app already shows (its optimistic delete rolls back) instead of a silent no-op.
+3. **Mobile:** release a new build with all `--dart-define` values (documented in the root `README.md`, "Flutter App (`--dart-define` flags)") and a release keystore (`key.properties`).
+4. **Later:** once old builds are gone, remove `X-App-Token` acceptance and tighten the join-code policy (DB-17). `WEBHOOK_SECRET` is already optional in app builds.
+
+### 6.3 Product decisions needed
+None open. Decided by the owner on 2026-10-20:
+- DB-16 / DB-18: only admins move money out of shared pools and edit or delete other members' transactions; admins can appoint co-admins, who cannot demote the primary admin.
+- Legacy transactions without a recorded creator (`user_id IS NULL`) stay admin-only (no creator is guessed); every new transaction is attributed to the user who entered it.

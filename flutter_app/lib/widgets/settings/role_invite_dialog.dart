@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/models.dart';
+import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
+import '../../services/household_invite_share.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../../l10n/app_localizations.dart';
 
 class RoleInviteDialog extends StatefulWidget {
   final String householdId;
@@ -14,6 +17,15 @@ class RoleInviteDialog extends StatefulWidget {
   final String? targetMemberName;
   final ValueChanged<HouseholdInvite>? onInviteGenerated;
 
+  /// Named in the shared invite message.
+  final String? householdName;
+
+  /// Opens the share sheet (injectable for tests); defaults to the system sheet.
+  final ShareTextLauncher? shareInvite;
+
+  /// Creates the invite on the server; defaults to the API. Injectable for tests.
+  final Future<HouseholdInvite> Function(String householdId, String role, {String? targetMemberId})? createInvite;
+
   const RoleInviteDialog({
     super.key,
     required this.householdId,
@@ -21,6 +33,9 @@ class RoleInviteDialog extends StatefulWidget {
     this.targetMemberId,
     this.targetMemberName,
     this.onInviteGenerated,
+    this.createInvite,
+    this.householdName,
+    this.shareInvite,
   });
 
   @override
@@ -50,24 +65,24 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
   final List<Map<String, dynamic>> _roles = const [
     {
       'id': 'spouse',
-      'title': 'Wife / Spouse',
+      'title': 'wife_spouse_title',
       'icon': Icons.favorite_rounded,
       'color': Color(0xFFE5A93C),
-      'desc': 'Islamic Nafaqah household: husband provides and reimburses wife for household advances.',
+      'desc': 'rid_spouse_desc',
     },
     {
       'id': 'peer',
-      'title': 'Roommate / Flatmate',
+      'title': 'invite_role_peer',
       'icon': Icons.group_outlined,
       'color': Color(0xFF38BDF8),
-      'desc': 'Shared living ledger: multi-roommate pairwise settlement with debt simplification.',
+      'desc': 'rid_peer_desc',
     },
     {
       'id': 'family_member',
-      'title': 'Family Dependent',
+      'title': 'invite_role_family',
       'icon': Icons.child_care_rounded,
       'color': Color(0xFF34D399),
-      'desc': 'Family dependent: personal allowance tracking and individual expense reporting.',
+      'desc': 'rid_family_desc',
     },
   ];
 
@@ -76,20 +91,32 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
 
     HouseholdInvite invite;
     try {
-      invite = await ApiService.instance.createRoleInvite(
+      final create = widget.createInvite ?? ApiService.instance.createRoleInvite;
+      invite = await create(
         widget.householdId,
         _selectedRole,
         targetMemberId: widget.targetMemberId,
       );
-    } catch (_) {
-      // Offline fallback
-      invite = HouseholdInvite(
-        householdId: widget.householdId,
-        inviteCode: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 12)}',
-        role: _selectedRole,
-        targetMemberId: widget.targetMemberId,
-        targetMemberName: widget.targetMemberName,
-      );
+    } catch (e) {
+      // FR-A-11: no invented "offline" code; it could never be redeemed.
+      if (!mounted) return;
+      setState(() => _isGenerating = false);
+      final status = e is ApiRequestException ? e.statusCode : null;
+      final code = e is ApiRequestException ? e.code : null;
+      final String message;
+      if (status == 403) {
+        message = context.tr('rid_admin_only');
+      } else if (code == 'invite_role_mismatch') {
+        message = context.tr('hh_invite_role_mismatch');
+      } else if (status == 400) {
+        message = context.tr('rid_invalid_target');
+      } else if (status == 404) {
+        message = context.tr('rid_target_not_dependent');
+      } else {
+        message = context.trArgs('rid_generate_failed', {'error': e});
+      }
+      AppSnackBar.showError(context, message);
+      return;
     }
 
     if (mounted) {
@@ -98,6 +125,29 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
         _isGenerating = false;
       });
       widget.onInviteGenerated?.call(invite);
+    }
+  }
+
+  Future<void> _shareGeneratedInvite() async {
+    final invite = _generatedInvite;
+    if (invite == null) return;
+    final l = AppLocalizations.of(context);
+    final name = widget.householdName ?? '';
+    try {
+      final launcher = widget.shareInvite;
+      if (launcher != null) {
+        await shareRoleInvite(l, householdName: name, code: invite.inviteCode, role: invite.role, launcher: launcher);
+      } else {
+        await shareRoleInvite(l, householdName: name, code: invite.inviteCode, role: invite.role);
+      }
+    } catch (_) {
+      // No share target (or the sheet failed): copy the same message.
+      await Clipboard.setData(ClipboardData(
+        text: roleInviteShareText(l, householdName: name, code: invite.inviteCode, role: invite.role),
+      ));
+      if (mounted) {
+        AppSnackBar.showInfo(context, context.tr('share_invite_failed'), title: context.tr('set_code_copied'));
+      }
     }
   }
 
@@ -119,12 +169,12 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                      color: AppThemes.success.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.person_add_alt_1_rounded,
-                      color: Color(0xFF00C896),
+                      color: AppThemes.success,
                       size: 20,
                     ),
                   ),
@@ -132,8 +182,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   Expanded(
                     child: Text(
                       widget.targetMemberName != null
-                          ? 'Invite ${widget.targetMemberName}'
-                          : 'Generate Role Invite',
+                          ? context.trArgs('rid_invite_name', {'name': widget.targetMemberName})
+                          : context.tr('rid_generate_role_invite'),
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -146,8 +196,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
               const SizedBox(height: 6),
               Text(
                 widget.targetMemberName != null
-                    ? 'This invite code is linked to ${widget.targetMemberName}\'s profile. When they join, their account is automatically claimed and merged.'
-                    : 'Select the member’s role to configure the correct settlement model automatically.',
+                    ? context.trArgs('rid_linked_desc', {'name': widget.targetMemberName})
+                    : context.tr('rid_select_role_desc'),
                 style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -192,7 +242,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    role['title'] as String,
+                                    context.tr(role['title'] as String),
                                     style: TextStyle(
                                       color: context.textPrimary,
                                       fontWeight: FontWeight.bold,
@@ -201,7 +251,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    role['desc'] as String,
+                                    context.tr(role['desc'] as String),
                                     style: TextStyle(
                                       color: context.textSecondary,
                                       fontSize: 11,
@@ -212,7 +262,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(left: 8, top: 2),
+                              padding: const EdgeInsetsDirectional.only(start: 8, top: 2),
                               child: Icon(
                                 isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                                 color: isSelected ? color : context.textSecondary,
@@ -232,17 +282,18 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+                      child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
+                      key: const ValueKey('rid_generate'),
                       onPressed: _isGenerating ? null : _generateInvite,
                       child: _isGenerating
                           ? const SizedBox(
@@ -250,9 +301,9 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                             )
-                          : const Text(
-                              'Generate Invite Code',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          : Text(
+                              context.tr('rid_generate_code'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                     ),
                   ],
@@ -262,16 +313,16 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00C896).withValues(alpha: 0.08),
+                    color: AppThemes.success.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF00C896).withValues(alpha: 0.3)),
+                    border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
                       Text(
-                        'Invite Code Generated for ${_generatedInvite!.role.toUpperCase()}',
-                        style: const TextStyle(
-                          color: Color(0xFF00C896),
+                        context.trArgs('rid_generated_for', {'role': context.tr(_generatedInvite!.role == 'spouse' ? 'wife_spouse_title' : (_generatedInvite!.role == 'peer' ? 'invite_role_peer' : 'invite_role_family'))}),
+                        style: TextStyle(
+                          color: context.successText,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -288,13 +339,31 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Valid for 7 days. Give this code to join.',
+                        context.tr('rid_valid_7_days'),
                         style: TextStyle(color: context.textSecondary, fontSize: 11),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Share the invite (it names the role), with a copy fallback.
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    key: const ValueKey('rid_share_invite'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppThemes.success,
+                      foregroundColor: AppThemes.onSuccessFill,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: Text(context.tr('share_invite'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: _shareGeneratedInvite,
+                  ),
+                ),
+                const SizedBox(height: 8),
 
                 // Copy Code and Done Buttons
                 Row(
@@ -306,7 +375,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Copy Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: Text(context.tr('copy_code'), style: const TextStyle(fontWeight: FontWeight.bold)),
                         onPressed: () async {
                           await Clipboard.setData(
                             ClipboardData(text: _generatedInvite!.inviteCode),
@@ -314,8 +383,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                           if (context.mounted) {
                             AppSnackBar.showSuccess(
                               context,
-                              'Copied invite code: ${_generatedInvite!.inviteCode}',
-                              title: 'Code Copied',
+                              context.trArgs('rid_copied_code', {'code': _generatedInvite!.inviteCode}),
+                              title: context.tr('set_code_copied'),
                             );
                           }
                         },
@@ -324,12 +393,12 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C896),
+                        backgroundColor: AppThemes.success,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(context.tr('done'), style: const TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],

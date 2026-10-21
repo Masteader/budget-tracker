@@ -8,16 +8,21 @@ Supports:
 
 from __future__ import annotations
 import base64
+import binascii
 import json
 import logging
-import os
+import math
+import re
+import threading
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+from urllib.parse import unquote
 
 import litellm
 from dotenv import load_dotenv
 
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items, compute_zatca_fingerprint
+from nafaqah_service import resolve_expense_nafaqah
 
 from supabase_client import (
     get_client,
@@ -26,10 +31,185 @@ from supabase_client import (
     insert_transaction,
     fetch_budget,
     fetch_flexible_budgets,
+    household_attribution,
     reallocate_budget,
+    category_code_in_taxonomy,
+    UnknownCategoryError,
+)
+
+from chat_parser import resolve_category_in_taxonomy  # noqa: E402
+from preview_token import (  # noqa: E402
+    KIND_RECEIPT,
+    InvalidPreviewToken,
+    PreviewTokenExpired,
+    images_digest,
+    issue_preview_token,
+    text_digest,
+    verify_preview_token,
+)
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
+# Low temperature: the OCR is an extraction, and a preview must read the receipt the way any later
+# parse would (PRODUCT-R6; it was 1.0, so a commit could differ from what the user approved).
+OCR_TEMPERATURE = 0.1
+# Keys of a parsed receipt carried in its preview token (model output is not stored verbatim).
+_TOKEN_RECEIPT_KEYS = (
+    "merchant", "total_amount", "vat_amount", "currency", "date", "category_code",
+    "zatca_qr_raw", "zatca_verified", "items",
 )
 
 logger = logging.getLogger(__name__)
+
+# ─── Upload validation ───────────────────────────────────────────────────────
+MAX_RECEIPT_IMAGES = 8
+MAX_RECEIPT_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_RECEIPT_PIXELS = 40_000_000  # per image; guards PIL decompression bombs during stitching
+# FABLE-API-02: bounds on the stitched receipt. Pages are checked from their headers before any
+# pixel is decoded, decoded in JPEG draft mode and downscaled to STITCH_MAX_WIDTH (legible for
+# OCR) one at a time, so peak memory is about one reduced page plus the canvas.
+MAX_COMBINED_RECEIPT_PIXELS = 100_000_000  # all photos of one receipt (8 x 12 MP phone photos fit)
+STITCH_MAX_WIDTH = 1600
+MAX_STITCHED_HEIGHT = 20_000  # 1600 x 20000 RGB canvas = 96 MB
+# FABLE2-API-03: PNG, WebP and progressive JPEG have no reduced-size decode (draft mode only
+# helps a baseline JPEG), so each such page is decoded at full size: two blank 40 MP WebP pages
+# raised peak RSS by ~680 MiB. Those pages are capped lower, and at most two stitches decode at
+# once in the process. (The app sends <= 1600 px JPEGs, far below every cap.)
+MAX_FULL_DECODE_PIXELS = 12_000_000  # per PNG / WebP / progressive JPEG page
+MAX_COMBINED_FULL_DECODE_PIXELS = 24_000_000  # all such pages of one receipt
+MAX_CONCURRENT_STITCHES = 2
+_STITCH_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_STITCHES)
+
+
+class ReceiptImageTooLarge(ValueError):
+    """The photos of a receipt exceed the pixel or stitched-size limits (HTTP 413)."""
+
+    PUBLIC_MESSAGE = (
+        "Receipt photos are too large: use fewer or smaller photos "
+        f"(at most {MAX_COMBINED_RECEIPT_PIXELS // 1_000_000} megapixels in total)."
+    )
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
+_IMAGE_MAGIC = (
+    (b"\xff\xd8\xff", "jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"RIFF", "webp"),
+)
+_LEGACY_STORAGE_URL_RE = re.compile(
+    r"^https?://[^/]+/storage/v1/object/(?:public|sign|authenticated)/receipts/([^?#]+)(?:[?#].*)?$"
+)
+_RECEIPT_FILE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}\.(?:jpg|jpeg|png|webp|heic)$", re.IGNORECASE)
+
+
+def normalize_receipt_path(receipt_url: Optional[str], household_id: str) -> Optional[str]:
+    """
+    Normalise a client-supplied receipt reference to a storage path inside the caller's
+    household folder ``{household_id}/{file}.{jpg|jpeg|png|webp|heic}``. Legacy public/signed
+    Supabase URLs are converted to that path. Anything else (another household's folder,
+    traversal incl. URL-encoded, absolute paths, foreign URLs, non-image extensions) raises
+    ValueError. Previously the value was stored verbatim on the transaction.
+    """
+    if receipt_url is None or not str(receipt_url).strip():
+        return None
+    value = str(receipt_url).strip()
+    legacy = _LEGACY_STORAGE_URL_RE.match(value)
+    if legacy:
+        value = legacy.group(1)
+    for _ in range(3):  # decode nested percent-encoding (%252e → %2e → .)
+        decoded = unquote(value)
+        if decoded == value:
+            break
+        value = decoded
+    if "://" in value or value.startswith("/") or "\\" in value or ".." in value or "\x00" in value:
+        raise ValueError("receipt_url must be a storage path inside the household folder.")
+    parts = value.split("/")
+    if len(parts) != 2 or parts[0].lower() != str(household_id).lower() or not _RECEIPT_FILE_RE.match(parts[1]):
+        raise ValueError("receipt_url must be a storage path inside the household folder.")
+    return value
+
+
+def _image_header(raw: bytes) -> tuple:
+    """
+    (width, height, full_decode) from the image header only; ValueError for an unreadable image.
+    ``full_decode`` is True when the page cannot be decoded at reduced size (anything but a
+    baseline JPEG: PNG, WebP, progressive JPEG).
+    """
+    import io
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(raw)) as img:  # lazy: reads the header, decodes no pixels
+            progressive = bool(img.info.get("progressive") or img.info.get("progression"))
+            return img.size[0], img.size[1], img.format != "JPEG" or progressive
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        raise ValueError("Receipt photo could not be read as an image.") from exc
+
+
+def _image_dimensions(raw: bytes) -> tuple:
+    """(width, height) from the image header only; ValueError for an unreadable image."""
+    width, height, _ = _image_header(raw)
+    return width, height
+
+
+def _check_pixel_budget(headers: List[tuple]) -> None:
+    """ReceiptImageTooLarge when the pages exceed a per-page or combined pixel limit."""
+    full_total = 0
+    for width, height, full_decode in headers:
+        pixels = width * height
+        if width <= 0 or height <= 0 or pixels > MAX_RECEIPT_PIXELS:
+            raise ReceiptImageTooLarge()
+        if full_decode:
+            if pixels > MAX_FULL_DECODE_PIXELS:
+                raise ReceiptImageTooLarge()
+            full_total += pixels
+    if sum(w * h for w, h, _ in headers) > MAX_COMBINED_RECEIPT_PIXELS:
+        raise ReceiptImageTooLarge()
+    if full_total > MAX_COMBINED_FULL_DECODE_PIXELS:
+        raise ReceiptImageTooLarge()
+
+
+def _stitch_plan(sizes: List[tuple]) -> tuple:
+    """Canvas width and per-page target sizes: every page scaled to one width <= STITCH_MAX_WIDTH."""
+    canvas_width = max(1, min(STITCH_MAX_WIDTH, max(w for w, _ in sizes)))
+    targets = [(canvas_width, max(1, round(h * canvas_width / w))) for w, h in sizes]
+    return canvas_width, targets
+
+
+def validate_receipt_images(images_base64: List[str]) -> None:
+    """
+    Reject too many images, oversized/invalid base64, payloads that are not JPEG/PNG/WebP, and
+    photos whose pixels (each, all together, or the stitched canvas) exceed the limits
+    (ReceiptImageTooLarge, HTTP 413). Only headers are read: nothing is decoded here.
+    """
+    if len(images_base64) > MAX_RECEIPT_IMAGES:
+        raise ValueError(f"A receipt can have at most {MAX_RECEIPT_IMAGES} photos.")
+    headers = []
+    for img in images_base64:
+        data = img.split(",", 1)[1] if isinstance(img, str) and "," in img else img
+        if not isinstance(data, str) or len(data) > (MAX_RECEIPT_IMAGE_BYTES * 4) // 3 + 4:
+            raise ValueError("Receipt photo is too large or malformed.")
+        try:
+            raw = base64.b64decode(data, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("Receipt photo is not valid base64.")
+        if not any(raw.startswith(magic) for magic, _ in _IMAGE_MAGIC):
+            raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
+        if raw.startswith(b"RIFF") and raw[8:12] != b"WEBP":
+            raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
+        headers.append(_image_header(raw))
+    _check_pixel_budget(headers)
+    sizes = [(w, h) for w, h, _ in headers]
+    if len(sizes) > 1 and sum(h for _, h in _stitch_plan(sizes)[1]) > MAX_STITCHED_HEIGHT:
+        raise ReceiptImageTooLarge()
 
 
 def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
@@ -41,38 +221,98 @@ def decode_zatca_tlv(b64_str: str) -> Optional[Dict[str, Any]]:
     Tag 4: Total Amount (with VAT)
     Tag 5: VAT Amount
     """
-    if not b64_str or len(b64_str) < 10:
+    if not b64_str or len(b64_str) < 10 or len(b64_str) > 4096:
+        return None
+    raw = _decode_qr_base64(b64_str)
+    if raw is None:
+        return None
+    # Phase 1 encoders use a single length byte (0-255); some Phase 2 encoders emit BER
+    # long-form lengths (0x81 n / 0x82 hi lo) for values >= 128 bytes. Each interpretation
+    # must parse completely AND yield valid fields before it is accepted.
+    for ber_lengths in (False, True):
+        tags = _parse_tlv(raw, ber_lengths=ber_lengths)
+        result = _interpret_zatca_tags(tags) if tags else None
+        if result:
+            return result
+    logger.debug("ZATCA TLV decode failed: no valid interpretation")
+    return None
+
+
+def _interpret_zatca_tags(tags: Dict[int, bytes]) -> Optional[Dict[str, Any]]:
+    try:
+        seller = tags[1].decode("utf-8").strip() if 1 in tags else None
+        vat_no = tags[2].decode("utf-8").strip() if 2 in tags else None
+        ts = tags[3].decode("utf-8").strip() if 3 in tags else None
+    except UnicodeDecodeError:
+        return None
+    total = _parse_sar_amount(tags.get(4))
+    if not seller or not total:
+        return None
+    return {
+        "seller_name": seller,
+        "vat_number": vat_no,
+        "timestamp": ts,
+        "total_amount": total,
+        "vat_amount": _parse_sar_amount(tags.get(5)),
+    }
+
+
+_B64_STD_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+_B64_URL_RE = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+_SAR_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,6})?$")
+
+
+def _decode_qr_base64(value: str) -> Optional[bytes]:
+    """Strict base64 (standard or URL-safe, padding optional); invalid characters are an error
+    rather than being silently discarded (b64decode's default) and yielding garbage TLV."""
+    text = "".join(value.split())
+    padded = text + "=" * (-len(text) % 4)
+    try:
+        if _B64_STD_RE.match(text):
+            return base64.b64decode(padded, validate=True)
+        if _B64_URL_RE.match(text):
+            return base64.urlsafe_b64decode(padded)
+    except (binascii.Error, ValueError):
+        return None
+    return None
+
+
+def _parse_tlv(raw: bytes, ber_lengths: bool) -> Optional[Dict[int, bytes]]:
+    """Parse the whole buffer as TLV; None on any truncation (the old parser silently accepted
+    short values). The first occurrence of a tag wins."""
+    tags: Dict[int, bytes] = {}
+    idx, n = 0, len(raw)
+    while idx < n:
+        if idx + 2 > n:
+            return None
+        tag = raw[idx]
+        length = raw[idx + 1]
+        idx += 2
+        if ber_lengths and length & 0x80:
+            num = length & 0x7F
+            if num == 0 or num > 2 or idx + num > n:
+                return None
+            length = int.from_bytes(raw[idx: idx + num], "big")
+            idx += num
+        if idx + length > n:
+            return None
+        tags.setdefault(tag, raw[idx: idx + length])
+        idx += length
+    return tags
+
+
+def _parse_sar_amount(value: Optional[bytes]) -> Optional[float]:
+    """Decimal amount in SAR; None for anything non-numeric, negative, NaN/inf or exponent form."""
+    if not value:
         return None
     try:
-        raw = base64.b64decode(b64_str.strip())
-        tags: Dict[int, str] = {}
-        idx = 0
-        while idx < len(raw):
-            tag = raw[idx]
-            if idx + 1 >= len(raw):
-                break
-            length = raw[idx + 1]
-            val = raw[idx + 2 : idx + 2 + length].decode("utf-8", errors="replace")
-            tags[tag] = val
-            idx += 2 + length
-
-        seller = tags.get(1)
-        vat_no = tags.get(2)
-        ts = tags.get(3)
-        total = float(tags.get(4, 0)) if tags.get(4) else None
-        vat_amt = float(tags.get(5, 0)) if tags.get(5) else None
-
-        if seller and total:
-            return {
-                "seller_name": seller,
-                "vat_number": vat_no,
-                "timestamp": ts,
-                "total_amount": total,
-                "vat_amount": vat_amt,
-            }
-    except Exception as e:
-        logger.debug("ZATCA TLV decode failed: %s", e)
-    return None
+        text = value.decode("ascii").strip().replace(",", "")
+    except UnicodeDecodeError:
+        return None
+    if not _SAR_AMOUNT_RE.match(text):
+        return None
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def stitch_images_vertically(images_base64: List[str]) -> bytes:
@@ -101,31 +341,52 @@ def stitch_images_vertically(images_base64: List[str]) -> bytes:
     if len(raw_bytes_list) == 1:
         return raw_bytes_list[0]
 
-    try:
-        pil_images = [Image.open(io.BytesIO(b)).convert("RGB") for b in raw_bytes_list]
-        base_width = pil_images[0].width
-        resized = []
-        total_height = 0
-        for img in pil_images:
-            if img.width != base_width:
-                w_percent = base_width / float(img.width)
-                h_size = int(float(img.height) * float(w_percent))
-                img = img.resize((base_width, h_size), Image.Resampling.LANCZOS)
-            resized.append(img)
-            total_height += img.height
+    # Bounded before decoding (FABLE-API-02 / FABLE2-API-03): callers validate first, this re-checks.
+    headers = [_image_header(b) for b in raw_bytes_list]
+    _check_pixel_budget(headers)
+    canvas_width, targets = _stitch_plan([(w, h) for w, h, _ in headers])
+    total_height = sum(h for _, h in targets)
+    if total_height > MAX_STITCHED_HEIGHT:
+        raise ReceiptImageTooLarge()
 
-        combined = Image.new("RGB", (base_width, total_height))
-        y_offset = 0
-        for img in resized:
-            combined.paste(img, (0, y_offset))
-            y_offset += img.height
+    # At most MAX_CONCURRENT_STITCHES requests decode pages at once in this process.
+    with _STITCH_SLOTS:
+        try:
+            combined = Image.new("RGB", (canvas_width, total_height), (255, 255, 255))
+            y_offset = 0
+            for raw, target in zip(raw_bytes_list, targets):
+                page = _decode_page(raw, target)
+                combined.paste(page, (0, y_offset))
+                y_offset += target[1]
+                del page
 
-        out = io.BytesIO()
-        combined.save(out, format="JPEG", quality=85)
-        return out.getvalue()
-    except Exception as e:
-        logger.warning("Vertical stitching failed, falling back to first image: %s", e)
-        return raw_bytes_list[0]
+            out = io.BytesIO()
+            combined.save(out, format="JPEG", quality=85)
+            return out.getvalue()
+        except Exception as e:
+            logger.warning("Vertical stitching failed, falling back to first image: %s", e)
+            return raw_bytes_list[0]
+
+
+def _decode_page(raw: bytes, target: tuple):
+    """
+    One page decoded and scaled to ``target`` (canvas width) as an RGB image. A baseline JPEG is
+    decoded in draft mode (1/2..1/8 scale when that still covers the target); other formats are
+    decoded at full size (hence their lower pixel caps) and resized before the RGB conversion, so
+    no second full-size copy is made for RGBA / LA pages.
+    """
+    import io
+    from PIL import Image
+
+    with Image.open(io.BytesIO(raw)) as img:
+        img.draft("RGB", target)
+        source = img if img.mode in ("RGB", "RGBA", "L", "LA") else img.convert("RGB")
+        if source.size != target:
+            page = source.resize(target, Image.Resampling.LANCZOS, reducing_gap=3.0)
+        else:
+            page = source.copy()
+        del source
+    return page if page.mode == "RGB" else page.convert("RGB")
 
 
 RECEIPT_PROMPT = """You are an expert financial receipt & invoice analyzer for Saudi Arabia.
@@ -147,8 +408,16 @@ Analyze ALL photos together and extract:
 6. Category code (choose best match):
    - OPEX-GROCERY (supermarket, food, grocery)
    - OPEX-DINING (restaurant, cafe, bakery)
-   - OPEX-FUEL (petrol, transport)
+   - OPEX-FUEL (petrol station, fuel)
+   - OPEX-TRANSPORT (car installment, ride hailing, public transport, car maintenance)
    - OPEX-UTILITIES (bills, telecom)
+   - OPEX-HOUSING (rent, annual rent, housing services)
+   - OPEX-EDUCATION (tuition fees, school transport, school uniforms, books and supplies)
+   - OPEX-DOMESTIC-HELP (maid salary, driver salary, recruitment / visa)
+   - OPEX-FAMILY-SUPPORT (support for parents or relatives)
+   - OPEX-CHARITY (sadaqah, zakat)
+   - OPEX-INSURANCE (car, health, home insurance)
+   - OPEX-REMITTANCE (family remittance, transfer fees)
    - OPEX-SHOPPING (retail, electronics, clothes)
    - OPEX-ENTERTAINMENT (movies, games)
    - OPEX-HEALTH (pharmacy, hospital)
@@ -180,7 +449,7 @@ def parse_receipt_images(
     qr_code_raw: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Call Gemini multimodal vision API with 1 or more receipt images."""
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-3.5-flash-lite")
+    model = litellm_model()
     
     prompt_text = RECEIPT_PROMPT
     if qr_code_raw:
@@ -209,7 +478,7 @@ def parse_receipt_images(
         model=model,
         messages=[{"role": "user", "content": content}],
         response_format={"type": "json_object"},
-        temperature=1.0,
+        temperature=OCR_TEMPERATURE,
     )
 
     result_json = response.choices[0].message.content
@@ -256,6 +525,8 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
     except (ValueError, TypeError):
         raw_total = 0.0
 
+    if not math.isfinite(raw_total):
+        raise ValueError("Receipt total amount is not a finite number.")
     if raw_total < 0:
         raise ValueError(f"Invalid negative receipt total amount: {raw_total}")
     if raw_total > 10_000_000:
@@ -279,13 +550,15 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, TypeError):
             price = 0.0
 
+        if not (math.isfinite(qty) and math.isfinite(price)):
+            raise ValueError("Receipt item quantity and price must be finite numbers.")
         if qty <= 0 or qty > 10_000:
             raise ValueError(f"Invalid receipt item quantity ({qty}). Must be between 0 and 10,000.")
         if price < 0 or price > 10_000_000:
             raise ValueError(f"Invalid receipt item price ({price}). Must be between 0 and 10,000,000 SAR.")
 
         valid_items.append({
-            "name": name or "Item",
+            "name": (name or "Item")[:200],
             "quantity": round(qty, 2),
             "price": round(price, 2),
         })
@@ -302,6 +575,79 @@ def parse_receipt_image(
     return parse_receipt_images([image_base64], qr_code_raw=qr_code_raw)
 
 
+def _receipt_from_preview_token(
+    token: Optional[str],
+    household_id: str,
+    user_id: Optional[str],
+    photos_digest: str,
+    qr_code_raw: Optional[str],
+) -> tuple:
+    """(signed OCR result, previewed QR text) for this request, or (None, None) to parse again."""
+    if token is None:
+        return None, None
+    check = verify_preview_token(token, KIND_RECEIPT, user_id, household_id)  # InvalidPreviewToken
+    if not check.valid:
+        logger.info("Receipt preview token %s: parsing again.", check.status)
+        return None, None
+    if photos_digest and check.binding.get("img") != photos_digest:
+        logger.info("Receipt photos differ from the previewed ones: parsing again.")
+        return None, None
+    if qr_code_raw and check.binding.get("qr") != text_digest(qr_code_raw):
+        logger.info("Receipt QR code differs from the previewed one: parsing again.")
+        return None, None
+    parsed = check.payload.get("parsed")
+    token_qr = check.payload.get("qr")
+    if not isinstance(parsed, dict) or (token_qr is not None and not isinstance(token_qr, str)):
+        raise InvalidPreviewToken("payload no longer valid")
+    return dict(parsed), token_qr
+
+
+def _issue_receipt_token(
+    parsed: Dict[str, Any],
+    qr_code_raw: Optional[str],
+    household_id: str,
+    user_id: Optional[str],
+    photos_digest: str,
+) -> Optional[str]:
+    payload = {
+        "parsed": {k: parsed.get(k) for k in _TOKEN_RECEIPT_KEYS if parsed.get(k) is not None},
+        "qr": qr_code_raw or None,
+    }
+    binding = {"img": photos_digest, "qr": text_digest(qr_code_raw)}
+    return issue_preview_token(KIND_RECEIPT, user_id, household_id, payload, binding)
+
+
+def _store_receipt_photo(household_id: str, tx_id: str, images_base64: List[str]) -> Optional[str]:
+    """
+    Upload the (stitched) photo under the household's folder and link it to the transaction.
+    A failure is logged and leaves the expense without a photo; it never undoes the expense.
+    """
+    import time
+    import uuid
+
+    try:
+        client = get_client()
+        raw_bytes = stitch_images_vertically(images_base64)
+        storage_path = f"{household_id}/{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}.jpg"
+        client.storage.from_("receipts").upload(
+            storage_path,
+            raw_bytes,
+            file_options={"content-type": "image/jpeg", "upsert": "true"},
+        )
+    except Exception as upload_err:
+        logger.warning("Could not upload the receipt photo of transaction %s: %s", tx_id, upload_err)
+        return None
+    try:
+        client.table("transactions").update({"receipt_url": storage_path}).eq("id", tx_id).eq(
+            "household_id", household_id
+        ).execute()
+    except Exception as link_err:
+        logger.warning("Uploaded %s but could not link it to transaction %s: %s", storage_path, tx_id, link_err)
+        return None
+    logger.info("Stored receipt photo (%d shots) at %s for transaction %s", len(images_base64), storage_path, tx_id)
+    return storage_path
+
+
 def process_receipt_scan(
     household_id: str,
     images_base64: Optional[List[str]] = None,
@@ -313,52 +659,69 @@ def process_receipt_scan(
     override_merchant: Optional[str] = None,
     override_spent_by: Optional[str] = None,
     receipt_url: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+    paid_by: Optional[str] = None,
+    beneficiary: Optional[str] = None,
+    override_nafaqah_class: Optional[str] = None,
+    override_nafaqah_spouse_id: Optional[str] = None,
+    preview_token: Optional[str] = None,
+    override_amount: Optional[float] = None,
+    override_category_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
     1. Parse via Gemini Vision across multiple images if photos provided
     2. Decode ZATCA QR code if provided (or if photos omitted)
-    3. Check for duplicate against recent SMS/Chat entries
+    3. Check for duplicate against recent chat/manual entries
     4. Auto-enrich or insert transaction
+
+    Family households (Islamic Nafaqah) are classified exactly like chat expenses: ``paid_by`` /
+    ``beneficiary`` default to the recorder paying for the household ('me' / 'both'), so a
+    receipt the wife scans is her shared advance (``wife_reimbursable``, the husband owes it)
+    unless she chooses her allowance (``wife_personal``) or says her husband paid ('none'). The
+    preview returns the suggestion; the commit stores the class (resolve_expense_nafaqah raises
+    InvalidNafaqahRequest for a contradicting choice or a missing wife).
+
+    One vision call per receipt (PRODUCT-R6): the preview (and a duplicate prompt) returns a signed
+    ``preview_token`` holding the validated OCR result. A commit that sends it back needs no photo
+    and makes no model call; photos sent with it are only stored (they must be the previewed ones,
+    otherwise the receipt is parsed again). A tampered token raises InvalidPreviewToken; an expired
+    or unverifiable one re-parses, or raises PreviewTokenExpired when there is nothing to parse.
+    The photo is uploaded to Storage only after the transaction row exists (PRODUCT-R9).
     """
     images_base64 = images_base64 or []
 
-    # Normalize legacy public or signed URLs to relative storage paths
-    if receipt_url and ("/storage/v1/object/public/receipts/" in receipt_url or "/storage/v1/object/sign/receipts/" in receipt_url):
-        import re
-        receipt_url = re.sub(r'^https?://[^/]+/storage/v1/object/(?:public|sign)/receipts/([^?]+).*$', r'\1', receipt_url)
+    try:
+        receipt_url = normalize_receipt_path(receipt_url, household_id)
+        validate_receipt_images(images_base64)
+    except ReceiptImageTooLarge:
+        raise  # the route answers 413 (FABLE-API-02)
+    except ValueError as invalid:
+        return {"status": "error", "message": str(invalid)}
 
-    # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
-    # IMPORTANT: Only upload when committing/saving (not during preview) and if client hasn't already uploaded
-    if not preview_only and not receipt_url and images_base64:
-        try:
-            import time, uuid
-            client = get_client()
-            raw_bytes = stitch_images_vertically(images_base64)
-            ts = int(time.time() * 1000)
-            u = uuid.uuid4().hex[:8]
-            storage_path = f"{household_id}/{ts}_{u}.jpg"
-            client.storage.from_("receipts").upload(
-                storage_path,
-                raw_bytes,
-                file_options={"content-type": "image/jpeg", "upsert": "true"},
-            )
-            receipt_url = storage_path
-            logger.info("Auto-uploaded receipt photo (stitched %d shots) to storage path: %s", len(images_base64), receipt_url)
-        except Exception as upload_err:
-            logger.warning("Could not auto-upload receipt image: %s", upload_err)
+    photos_digest = images_digest(images_base64)
+    token_parsed, token_qr = _receipt_from_preview_token(
+        preview_token, household_id, user_id, photos_digest, qr_code_raw,
+    )
+    if token_parsed is None and preview_token is not None and not images_base64 and not qr_code_raw:
+        raise PreviewTokenExpired("the preview expired; scan the receipt again")
+    if token_parsed is not None and not qr_code_raw:
+        qr_code_raw = token_qr  # the QR text the preview decoded
 
-    if images_base64:
+    if token_parsed is not None:
+        parsed = token_parsed
+    elif images_base64:
         try:
             if len(images_base64) == 1:
                 parsed = parse_receipt_image(images_base64[0], qr_code_raw=qr_code_raw)
             else:
                 parsed = parse_receipt_images(images_base64, qr_code_raw=qr_code_raw)
         except Exception as exc:
-            logger.error("Failed to parse receipt image(s): %s", exc)
+            # Provider exceptions can carry API URLs, model ids or key fragments: log, don't echo.
+            logger.error("Failed to parse receipt image(s): %s", exc, exc_info=True)
             return {
                 "status": "error",
-                "message": f"Failed to analyze receipt: {str(exc)}",
+                "message": "Failed to analyze receipt. Please try again or enter the expense manually.",
             }
     elif qr_code_raw:
         zatca = decode_zatca_tlv(qr_code_raw)
@@ -403,11 +766,21 @@ def process_receipt_scan(
             "parsed_data": parsed,
         }
 
-    resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")
-    merchant = (override_merchant or parsed.get("merchant") or "Scanned Merchant").strip()
-    spent_by = (override_spent_by or "both").lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # Persist a QR payload only when it is a decodable ZATCA code (<= 4096 characters, enforced by
+    # decode_zatca_tlv): arbitrary client or model text is never stored (FABLE-API-06).
+    resolved_qr = next(
+        (q for q in (qr_code_raw, parsed.get("zatca_qr_raw")) if isinstance(q, str) and decode_zatca_tlv(q)),
+        None,
+    )
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = (
+        sanitize_audit_text(override_merchant or parsed.get("merchant"), MAX_MERCHANT_LENGTH) or "Scanned Merchant"
+    )
+    attributed_paid_by = (paid_by or "me").strip().lower()
+    if attributed_paid_by not in ("me", "partner"):
+        attributed_paid_by = "me"
+    # spent_by is the payer relative to the recorder; the client's legacy spent_by is ignored.
+    spent_by = attributed_paid_by
     total_amount = float(parsed.get("total_amount") or 0.0)
     category_code = parsed.get("category_code") or "OPEX-MISC"
     raw_items = parsed.get("items") or []
@@ -459,9 +832,23 @@ def process_receipt_scan(
             total_amount=total_amount,
         )
 
+    if override_amount is not None:
+        # The user corrected the total in the review (UX-12; validated by the route). The ZATCA
+        # fingerprint above keeps the invoice's own total; a single line follows the correction.
+        if len(items) == 1:
+            items[0]["price"] = override_amount
+            items[0]["quantity"] = 1.0
+        total_amount = override_amount
+
     # Explicit enrichment
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items)
+        success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id, actor_user_id=user_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -473,6 +860,28 @@ def process_receipt_scan(
             "zatca_verified": parsed.get("zatca_verified"),
             "message": f"Successfully attached {len(items)} scanned receipt items to existing transaction.",
         }
+
+    nafaqah = resolve_expense_nafaqah(
+        household_id,
+        user_id,
+        attributed_paid_by,
+        (beneficiary or "both").strip() or "both",
+        override_class=override_nafaqah_class,
+        override_spouse_id=override_nafaqah_spouse_id,
+        attribution_explicit=paid_by is not None or beneficiary is not None,
+        require_spouse=not preview_only,
+    )
+    nafaqah_fields = {
+        "paid_by": nafaqah["paid_by"],
+        "beneficiary": nafaqah["beneficiary"],
+        "household_mode": nafaqah["household_mode"],
+        "recorder_role": nafaqah["recorder_role"],
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+        "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
+        "wives": nafaqah["wives"],
+    }
+    spent_by = nafaqah["paid_by"]
 
     # Deduplication check (evaluated during BOTH preview and save unless allow_duplicate=True)
     candidate = None
@@ -490,6 +899,7 @@ def process_receipt_scan(
         ts_suffix = f" on {cand_ts}" if cand_ts else ""
         return {
             "status": "duplicate_candidate",
+            "preview_token": _issue_receipt_token(parsed, qr_code_raw, household_id, user_id, photos_digest),
             "candidate_transaction_id": candidate["id"],
             "candidate_merchant": candidate.get("merchant"),
             "candidate_amount": candidate.get("amount"),
@@ -512,6 +922,7 @@ def process_receipt_scan(
             "spent_by": spent_by,
             "receipt_url": receipt_url,
             "qr_code_raw": resolved_qr,
+            **nafaqah_fields,
             "message": (
                 f"A transaction of SAR {candidate.get('amount')} at '{candidate.get('merchant')}' "
                 f"was already recorded{ts_suffix}. "
@@ -524,6 +935,15 @@ def process_receipt_scan(
     matched = match_category(merchant, codes)
     if matched:
         category_code = matched.code
+    else:
+        # A model code missing from the taxonomy (a new system code before its migration, or a made
+        # up one) becomes its legacy code / Misc instead of a refused insert (PRODUCT-R4).
+        category_code = resolve_category_in_taxonomy(category_code, codes)
+    if override_category_code is not None and override_category_code.strip():
+        # A category the user chose in the review must exist for this household (as in chat).
+        if category_code_in_taxonomy(household_id, override_category_code.strip()) is False:
+            raise UnknownCategoryError()
+        category_code = override_category_code.strip()
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -539,6 +959,7 @@ def process_receipt_scan(
     if preview_only:
         return {
             "status": "preview",
+            "preview_token": _issue_receipt_token(parsed, qr_code_raw, household_id, user_id, photos_digest),
             "merchant": merchant,
             "amount": total_amount,
             "vat_amount": float(parsed.get("vat_amount") or 0.0),
@@ -550,11 +971,22 @@ def process_receipt_scan(
             "zatca_verified": parsed.get("zatca_verified"),
             "receipt_url": receipt_url,
             "qr_code_raw": resolved_qr,
+            **nafaqah_fields,
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = datetime.now(timezone.utc).date()
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    # A classified expense in a family without a provider is refused here (409 no_provider).
+    attribution = household_attribution(
+        household_id, user_id, nafaqah["paid_by"], nafaqah["beneficiary"], nafaqah["nafaqah_spouse_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+    )
+
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget
     budget = fetch_budget(household_id, category_code, now_date)
@@ -565,14 +997,22 @@ def process_receipt_scan(
         deficit = total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
-    items_summary = ", ".join(f"{it['quantity']}x {it['name']} ({it['price']} SAR)" for it in items[:10])
+    items_summary = ", ".join(
+        f"{it['quantity']}x {sanitize_audit_text(it['name'], 80)} ({it['price']} SAR)" for it in items[:10]
+    )
     if len(items) > 10:
         items_summary += f" ...and {len(items) - 10} more items"
-    audit_text = f"Receipt Scan: {merchant} ({len(items)} items) | Items: [{items_summary}]"
+    # Audit note for humans: the server's tags first, the merchant text defused. Who paid and for
+    # whom are stored in columns (spent_by, beneficiary_type/id) that the settlement engines read.
+    audit_text = build_audit_note(
+        nafaqah["paid_by"], nafaqah["beneficiary"], spent_by,
+        f"Receipt Scan: {merchant} ({len(items)} items)",
+        f"Items: [{items_summary}]",
+    )
 
     tx_id = insert_transaction(
         household_id=household_id,
@@ -586,14 +1026,24 @@ def process_receipt_scan(
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",
         items=items,
-        spent_by=spent_by,
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+        nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         dedup_fingerprint=zatca_fp,
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
+        user_id=user_id,
     )
 
     if items:
-        enrich_transaction_items(tx_id, items)
+        enrich_transaction_items(tx_id, items, household_id=household_id)
+
+    # The photo is stored only now that the row exists (PRODUCT-R9): a parse failure, a duplicate
+    # prompt or a refused insert leaves nothing in Storage.
+    if not receipt_url and images_base64:
+        receipt_url = _store_receipt_photo(household_id, tx_id, images_base64)
 
     return {
         "status": "success",
@@ -606,5 +1056,9 @@ def process_receipt_scan(
         "receipt_url": receipt_url,
         "qr_code_raw": resolved_qr,
         "is_reallocated": is_reallocated,
+        "paid_by": nafaqah["paid_by"],
+        "beneficiary": nafaqah["beneficiary"],
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
         "message": f"Recorded SAR {total_amount:.2f} ({len(items)} items) from scanned receipt ({merchant}).",
     }

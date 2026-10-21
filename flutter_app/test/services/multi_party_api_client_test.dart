@@ -164,6 +164,20 @@ void main() {
       expect(invite.role, equals('spouse'));
     });
 
+    test('createRoleInvite throws instead of inventing a code when refused (FR-A-11)', () async {
+      final mockClient = MockClient((request) async => http.Response(
+            jsonEncode({'detail': 'Forbidden: Admin access required for this household.'}),
+            403,
+            headers: {'content-type': 'application/json'},
+          ));
+      final client = BudgetApiClient(baseClient: BaseApiClient(client: mockClient));
+
+      await expectLater(
+        client.createRoleInvite(householdId: 'hh-1', role: 'spouse'),
+        throwsA(isA<ApiRequestException>().having((e) => e.statusCode, 'statusCode', 403)),
+      );
+    });
+
     test('inspectInviteCode issues GET /households/invites/:code', () async {
       final mockClient = MockClient((request) async {
         if (request.method == 'GET' && request.url.path.endsWith('/households/invites/ABCD1234')) {

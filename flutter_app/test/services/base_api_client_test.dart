@@ -10,11 +10,8 @@ void main() {
       final headers = client.buildHeaders();
 
       expect(headers['Content-Type'], equals('application/json'));
-      if (BaseApiClient.appAuthToken.isNotEmpty) {
-        expect(headers['X-App-Token'], equals(BaseApiClient.appAuthToken));
-      } else {
-        expect(headers.containsKey('X-App-Token'), isFalse);
-      }
+      // MOB-02: no static shared secret is ever sent from the client.
+      expect(headers.containsKey('X-App-Token'), isFalse);
       expect(headers['ngrok-skip-browser-warning'], equals('true'));
       expect(headers.containsKey('X-Signature'), isFalse);
     });

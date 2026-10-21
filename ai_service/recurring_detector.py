@@ -6,6 +6,7 @@ to reserve funds in the active 27th salary cycle.
 """
 
 from __future__ import annotations
+import calendar
 import logging
 import re
 from collections import defaultdict
@@ -14,6 +15,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Set
 
 from salary_cycle import get_cycle_for_date
+
+from utils import riyadh_today  # noqa: E402  (Asia/Riyadh calendar date)
 
 logger = logging.getLogger(__name__)
 
@@ -111,19 +114,35 @@ class RecurringBill:
         return asdict(self)
 
 
+def _due_date_in_cycle(expected_day: int, cycle_start: date, cycle_end: date) -> date:
+    """
+    The date inside [cycle_start, cycle_end] on which a bill due on ``expected_day`` of the month
+    falls. Days on or after the cycle's start day belong to the start month, earlier days to the
+    end month (the old ``>= 27`` test assumed every household is paid on the 27th). The day is
+    clamped to the month's length (a bill due on the 31st is due on Feb 28).
+    """
+    if expected_day >= cycle_start.day:
+        year, month = cycle_start.year, cycle_start.month
+    else:
+        year, month = cycle_end.year, cycle_end.month
+    return date(year, month, max(1, min(int(expected_day), calendar.monthrange(year, month)[1])))
+
+
 def detect_recurring_bills(
     transactions: List[Dict[str, Any]],
     as_of_date: Optional[date] = None,
     budgets: Optional[List[Dict[str, Any]]] = None,
     sub_categories: Optional[List[Dict[str, Any]]] = None,
+    payday_day: int = 27,
 ) -> Dict[str, Any]:
     """
     Combines budget-allocated recurring obligations (utilities, iqama, subscriptions)
     with historical transaction pattern clustering to calculate reserved funds for
-    the active salary cycle.
+    the active salary cycle of a household paid on ``payday_day`` (pass the household's
+    payday; 27 is only the default for callers without a household).
     """
-    now_date = as_of_date or datetime.now(timezone.utc).date()
-    cycle_info = get_cycle_for_date(now_date)
+    now_date = as_of_date or riyadh_today()
+    cycle_info = get_cycle_for_date(now_date, payday_day=payday_day)
     cycle_start = date.fromisoformat(cycle_info["cycle_start"])
     cycle_end = date.fromisoformat(cycle_info["cycle_end"])
     cycle_key = cycle_info["cycle_key"]
@@ -302,10 +321,7 @@ def detect_recurring_bills(
                 paid_amount = matching_tx["amount"]
             else:
                 # Determine due vs overdue based on cycle boundaries
-                if expected_day >= 27:
-                    due_date = date(cycle_start.year, cycle_start.month, min(expected_day, 28))
-                else:
-                    due_date = date(cycle_end.year, cycle_end.month, min(expected_day, 28))
+                due_date = _due_date_in_cycle(expected_day, cycle_start, cycle_end)
 
                 status = "OVERDUE" if now_date > due_date else "UPCOMING"
                 last_paid = None
@@ -378,10 +394,7 @@ def detect_recurring_bills(
         else:
             last_paid = tx_list[-1]["date"].isoformat()
             paid_amount = None
-            if expected_day >= 27:
-                due_date = date(cycle_start.year, cycle_start.month, min(expected_day, 28))
-            else:
-                due_date = date(cycle_end.year, cycle_end.month, min(expected_day, 28))
+            due_date = _due_date_in_cycle(expected_day, cycle_start, cycle_end)
             status = "OVERDUE" if now_date > due_date else "UPCOMING"
 
         detected_bills.append(
@@ -431,10 +444,10 @@ def fetch_household_recurring_bills(
     Fetches transactions, active budget sub-allocations, and category taxonomies
     for a household to compute complete recurring bills and cycle reserves.
     """
-    from supabase_client import get_client
+    from supabase_client import get_client, get_household_payday
     client = get_client()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=180)).isoformat()
-    now_date = as_of_date or datetime.now(timezone.utc).date()
+    now_date = as_of_date or riyadh_today()
 
     # 1. Transactions
     try:
@@ -487,7 +500,29 @@ def fetch_household_recurring_bills(
         as_of_date=now_date,
         budgets=budgets,
         sub_categories=sub_categories,
+        payday_day=get_household_payday(household_id),
     )
+
+
+class UnknownRecurringSubCode(ValueError):
+    """The sub_code of a recurring-bill toggle names no item of that budget (HTTP 422)."""
+
+    PUBLIC_MESSAGE = "sub_code must be a sub-budget of this category."
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
+def _is_known_sub_code(household_id: str, category_code: str, sub_code: str, sub_allocs: Dict[str, Any]) -> bool:
+    """An allocation key of the budget, or a known sub-category of the category for the household."""
+    if not sub_code or sub_code.startswith("_"):
+        return False
+    if sub_code in sub_allocs:
+        return True
+    from salary_cycle import get_sub_categories_for_parent
+
+    known = get_sub_categories_for_parent(category_code, [household_id])
+    return any(s.get("sub_code") == sub_code for s in known)
 
 
 def toggle_household_recurring_bill(
@@ -502,9 +537,9 @@ def toggle_household_recurring_bill(
     Toggles or customizes whether a sub-budget item appears in the Recurring Bills & Reserves card.
     Stores the configuration directly in the budget's sub_allocations JSONB.
     """
-    from supabase_client import get_client
+    from supabase_client import get_client, get_household_payday
     client = get_client()
-    cycle_info = get_cycle_for_date()
+    cycle_info = get_cycle_for_date(payday_day=get_household_payday(household_id))
     cycle_key = cycle_info["cycle_key"]
 
     resp = (
@@ -530,6 +565,11 @@ def toggle_household_recurring_bill(
     b_id = matching[0]["id"]
     sub_allocs = matching[0].get("sub_allocations") or {}
     rec_config = sub_allocs.get("_recurring_config") or {}
+
+    # Only an item of this budget is configured: a member must not grow the admin-only budgets
+    # row with arbitrary keys (FABLE2-API-02).
+    if not _is_known_sub_code(household_id, category_code, sub_code, sub_allocs):
+        raise UnknownRecurringSubCode()
 
     item_cfg = rec_config.get(sub_code) or {}
     item_cfg["enabled"] = is_recurring
@@ -557,9 +597,9 @@ def get_recurring_bill_candidates(household_id: str) -> Dict[str, Any]:
     Lists all available sub-budget items across all categories for the household,
     indicating which are currently configured or detected as recurring bills.
     """
-    from supabase_client import get_client
+    from supabase_client import get_client, get_household_payday
     client = get_client()
-    cycle_info = get_cycle_for_date()
+    cycle_info = get_cycle_for_date(payday_day=get_household_payday(household_id))
     cycle_key = cycle_info["cycle_key"]
 
     # Load active budgets

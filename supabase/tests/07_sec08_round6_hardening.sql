@@ -25,6 +25,9 @@ BEGIN
         (v_attacker_uid, 'attacker@example.com')
     ON CONFLICT (id) DO NOTHING;
 
+    -- Re-runnable: this suite commits, so clear lockout history from earlier runs
+    DELETE FROM public.invite_attempt_log WHERE user_id IN (v_admin_uid, v_member_uid, v_attacker_uid);
+
     -- Setup households
     INSERT INTO public.households (id, name, invite_code) VALUES
         (v_victim_hh, 'Victim Household', 'VICTIM16CHARCODE'),
@@ -54,12 +57,12 @@ BEGIN
 
     -- Setup cost control codes
     IF NOT EXISTS (SELECT 1 FROM public.cost_control_codes WHERE code = 'OPEX-GROCERY' AND household_id IS NULL) THEN
-        INSERT INTO public.cost_control_codes (code, category, household_id, is_system) VALUES
-            ('OPEX-GROCERY', 'Grocery', NULL, true);
+        INSERT INTO public.cost_control_codes (code, category, keywords, household_id, is_system) VALUES
+            ('OPEX-GROCERY', 'Grocery', '{}', NULL, true);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.cost_control_codes WHERE code = 'OPEX-CUSTOM-VICTIM' AND household_id = v_victim_hh) THEN
-        INSERT INTO public.cost_control_codes (code, category, household_id, is_system) VALUES
-            ('OPEX-CUSTOM-VICTIM', 'Custom Victim', v_victim_hh, false);
+        INSERT INTO public.cost_control_codes (code, category, keywords, household_id, is_system) VALUES
+            ('OPEX-CUSTOM-VICTIM', 'Custom Victim', '{}', v_victim_hh, false);
     END IF;
 
     RAISE NOTICE 'Round 6 test fixtures initialized successfully.';
@@ -71,7 +74,6 @@ END $$;
 -- Authenticated users must NOT be able to directly UPDATE balance, household_id,
 -- owner_user_id, or is_shared_pool.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_err text;
@@ -96,7 +98,6 @@ END $$;
 -- TEST 2: Account Transfers Ledger Immutability
 -- Direct client INSERT on public.account_transfers must be blocked.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 BEGIN
     SET LOCAL ROLE authenticated;
@@ -124,7 +125,6 @@ END $$;
 -- TEST 3: Income Records Ledger Immutability
 -- Direct client UPDATE and DELETE on public.income_records must be blocked.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_inc_id UUID;
@@ -132,12 +132,14 @@ DECLARE
 BEGIN
     -- Seed an income record via postgres
     INSERT INTO public.income_records (
-        id, household_id, user_id, account_id, title, base_amount, net_amount
+        id, household_id, user_id, account_id, cycle_key, source_type, title, base_amount, net_amount
     ) VALUES (
         gen_random_uuid(),
         '6086befc-0000-0000-0000-000000000001',
         '22222222-0000-0000-0000-000000000002',
         'aaaa0000-0000-0000-0000-000000000002',
+        '2026-11',
+        'salary',
         'Test Salary',
         5000.00,
         5000.00
@@ -147,16 +149,25 @@ BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
 
-    DELETE FROM public.income_records WHERE id = v_inc_id;
-    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    -- Since audit DB-07 the privilege itself is revoked (permission denied == 0 rows)
+    BEGIN
+        DELETE FROM public.income_records WHERE id = v_inc_id;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_rows := 0;
+    END;
     IF v_rows > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY: Client was able to DELETE income_record!';
     ELSE
         RAISE NOTICE 'PASSED: Client DELETE on income_records blocked (0 rows affected).';
     END IF;
 
-    UPDATE public.income_records SET net_amount = 9999.00 WHERE id = v_inc_id;
-    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    BEGIN
+        UPDATE public.income_records SET net_amount = 9999.00 WHERE id = v_inc_id;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_rows := 0;
+    END;
     IF v_rows > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY: Client was able to UPDATE income_record!';
     ELSE
@@ -171,8 +182,9 @@ END $$;
 -- Transactions referencing an account owned by another user (not shared) or
 -- belonging to another household must be rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_vulnerable boolean := false;
 BEGIN
     -- Member attempts transaction debiting Admin's personal account
     SET LOCAL ROLE authenticated;
@@ -188,10 +200,14 @@ BEGIN
             'aaaa0000-0000-0000-0000-000000000001', -- Admin personal account
             'Unauthorized Debit'
         );
-        RAISE EXCEPTION 'VULNERABILITY: Member debited personal account owned by admin!';
-    EXCEPTION WHEN insufficient_privilege OR check_violation OR integrity_constraint_violation OR raise_exception THEN
+        v_vulnerable := true;
+    EXCEPTION WHEN insufficient_privilege OR check_violation OR integrity_constraint_violation THEN
         RAISE NOTICE 'PASSED: Member blocked from using another user personal account in transaction.';
     END;
+
+    IF v_vulnerable THEN
+        RAISE EXCEPTION 'VULNERABILITY: Member debited personal account owned by admin!';
+    END IF;
 END $$;
 \set ON_ERROR_STOP on
 
@@ -200,12 +216,14 @@ END $$;
 -- TEST 5: NULL Comparison Bug in Financial RPCs
 -- transfer_between_accounts & record_income with NULL household_id
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_state text;
 BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "11111111-0000-0000-0000-000000000001", "role": "authenticated"}';
 
+    v_state := 'accepted';
     BEGIN
         PERFORM public.transfer_between_accounts(
             NULL,
@@ -213,15 +231,15 @@ BEGIN
             'aaaa0000-0000-0000-0000-000000000002',
             100.00
         );
-        RAISE EXCEPTION 'VULNERABILITY: transfer_between_accounts accepted NULL household_id!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLSTATE = '42501' THEN
-            RAISE NOTICE 'PASSED: transfer_between_accounts rejected NULL household_id with 42501.';
-        ELSE
-            RAISE NOTICE 'PASSED (exception %: %)', SQLSTATE, SQLERRM;
-        END IF;
+        v_state := SQLSTATE;
     END;
+    IF v_state IS DISTINCT FROM '42501' THEN
+        RAISE EXCEPTION 'VULNERABILITY: transfer_between_accounts with NULL household_id was not rejected with 42501 (got %)', v_state;
+    END IF;
+    RAISE NOTICE 'PASSED: transfer_between_accounts rejected NULL household_id with 42501.';
 
+    v_state := 'accepted';
     BEGIN
         PERFORM public.record_income(
             NULL,
@@ -231,14 +249,13 @@ BEGIN
             'Test',
             1000.00
         );
-        RAISE EXCEPTION 'VULNERABILITY: record_income accepted NULL household_id!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLSTATE = '42501' THEN
-            RAISE NOTICE 'PASSED: record_income rejected NULL household_id with 42501.';
-        ELSE
-            RAISE NOTICE 'PASSED (exception %: %)', SQLSTATE, SQLERRM;
-        END IF;
+        v_state := SQLSTATE;
     END;
+    IF v_state IS DISTINCT FROM '42501' THEN
+        RAISE EXCEPTION 'VULNERABILITY: record_income with NULL household_id was not rejected with 42501 (got %)', v_state;
+    END IF;
+    RAISE NOTICE 'PASSED: record_income rejected NULL household_id with 42501.';
 END $$;
 \set ON_ERROR_STOP on
 
@@ -248,7 +265,6 @@ END $$;
 -- consume_quota, check_quota_status, and trigger functions must NOT be callable
 -- by authenticated or anon.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 BEGIN
     SET LOCAL ROLE authenticated;
@@ -276,8 +292,9 @@ END $$;
 -- Inserting a transaction or budget with a category code not belonging to the
 -- household or global taxonomy must be rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
+DECLARE
+    v_vulnerable boolean := false;
 BEGIN
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "33333333-0000-0000-0000-000000000003", "role": "authenticated"}';
@@ -291,10 +308,14 @@ BEGIN
             50.00,
             'Cross-Household Category Test'
         );
-        RAISE EXCEPTION 'VULNERABILITY: Transaction accepted category code belonging to another household!';
-    EXCEPTION WHEN foreign_key_violation OR integrity_constraint_violation OR check_violation OR raise_exception THEN
+        v_vulnerable := true;
+    EXCEPTION WHEN foreign_key_violation OR integrity_constraint_violation OR check_violation THEN
         RAISE NOTICE 'PASSED: Cross-household custom category code rejected by validation trigger.';
     END;
+
+    IF v_vulnerable THEN
+        RAISE EXCEPTION 'VULNERABILITY: Transaction accepted category code belonging to another household!';
+    END IF;
 END $$;
 \set ON_ERROR_STOP on
 
@@ -326,13 +347,12 @@ END $$;
 -- TEST 9: Account Hijacking Prevention in claim_household_role_invite
 -- Authenticated caller passing a different p_user_id must be rejected with 42501.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_code text := 'HIJACKTESTCODE01';
 BEGIN
     INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
-    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'family_member', now() + interval '1 day')
     ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
 
     -- Attacker attempts to claim invite on behalf of victim
@@ -357,21 +377,34 @@ END $$;
 -- Calling claim_household_role_invite followed by join_household_by_code as the
 -- same user succeeds; a second user calling join_household_by_code is rejected.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_code text := 'DOUBLECLAIMTEST1';
     v_res jsonb;
-    v_user_a uuid := '22222222-0000-0000-0000-000000000002';
+    v_user_a uuid := '44444444-0000-0000-0000-000000000004';  -- newcomer (not yet a member)
     v_user_b uuid := '33333333-0000-0000-0000-000000000003';
 BEGIN
+    -- Re-runnable (this suite commits): the newcomer starts outside the household.
+    INSERT INTO auth.users (id, email) VALUES (v_user_a, 'newcomer@example.com') ON CONFLICT (id) DO NOTHING;
+    DELETE FROM public.household_memberships WHERE user_id = v_user_a;
+    UPDATE public.users SET household_id = NULL, role = 'member' WHERE id = v_user_a;
+    DELETE FROM public.invite_attempt_log WHERE user_id = v_user_a;
+
     INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
-    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'family_member', now() + interval '1 day')
     ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
 
-    -- 1. User A claims invite via claim_household_role_invite
+    -- 0. An existing member cannot consume it (FABLE-DB-01): refused, invite stays open.
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
+    v_res := public.claim_household_role_invite(v_code);
+    IF (v_res->>'success')::boolean IS TRUE OR v_res->>'code' IS DISTINCT FROM 'already_member' THEN
+        RAISE EXCEPTION 'VULNERABILITY (FABLE-DB-01): an existing member claimed an invite of their household: %', v_res;
+    END IF;
+    RAISE NOTICE 'PASSED: an existing member cannot claim an invite of their own household.';
+
+    -- 1. User A (newcomer) claims invite via claim_household_role_invite
+    SET LOCAL "request.jwt.claims" = '{"sub": "44444444-0000-0000-0000-000000000004", "role": "authenticated"}';
 
     v_res := public.claim_household_role_invite(v_code);
     IF (v_res->>'success')::boolean IS NOT TRUE THEN
@@ -403,7 +436,6 @@ END $$;
 -- Verifies reconcile_account_balance succeeds for authorized owner/admin and
 -- rejects unauthorized members with 42501.
 -- ============================================================================
-\set ON_ERROR_STOP off
 DO $$
 DECLARE
     v_res jsonb;

@@ -28,7 +28,7 @@ void main() {
       final loc = AppLocalizations(const Locale('ur'));
       expect(loc.get('app_title'), 'بجٹ ٹریکر');
       expect(loc.get('nav_dashboard'), 'ڈیش بورڈ');
-      expect(loc.get('recurring_bills'), 'ماہانہ بلز اور ریزرو');
+      expect(loc.get('recurring_bills'), 'باقاعدہ بلز اور ریزرو');
       expect(loc.get('installments_bnpl'), 'اقساط اور بی این پی ایل');
       expect(loc.get('settings_and_permissions'), 'ترتیبات اور اجازتیں');
       expect(loc.get('paid_for_whom'), 'کس کے لیے ادا کیا (بچے اور زیر کفالت)');

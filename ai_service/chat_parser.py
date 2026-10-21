@@ -6,7 +6,7 @@ Extracts merchant, total amount, category, and itemized line items.
 from __future__ import annotations
 import json
 import logging
-import os
+import math
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from dedup_engine import find_duplicate_candidate, enrich_transaction_items
+from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
     fetch_all_cost_control_codes,
     match_category,
@@ -24,7 +25,27 @@ from supabase_client import (
     fetch_budget,
     fetch_flexible_budgets,
     reallocate_budget,
+    category_code_in_taxonomy,
+    household_attribution,
+    UnknownCategoryError,
 )
+
+from preview_token import (  # noqa: E402
+    KIND_CHAT,
+    InvalidPreviewToken,
+    issue_preview_token,
+    text_digest,
+    verify_preview_token,
+)
+from utils import (  # noqa: E402
+    build_audit_note,
+    litellm_model,
+    riyadh_today,
+    riyadh_date_for_timestamp,
+    sanitize_audit_text,
+)
+
+MAX_MERCHANT_LENGTH = 120
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +55,16 @@ class ChatLineItem(BaseModel):
     price: float = Field(..., description="Total price for this item line in SAR")
     sub_category: Optional[str] = Field(None, description="Sub-category code for this specific item")
 
+    @field_validator("name")
+    @classmethod
+    def bound_name(cls, v: str) -> str:
+        return v[:200] if isinstance(v, str) else v
+
     @field_validator("price")
     @classmethod
     def validate_price(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("Item price must be a finite number")
         if v < 0:
             raise ValueError("Item price cannot be negative")
         if v > 10_000_000:
@@ -46,7 +74,7 @@ class ChatLineItem(BaseModel):
     @field_validator("quantity")
     @classmethod
     def validate_quantity(cls, v: float) -> float:
-        if v <= 0:
+        if not math.isfinite(v) or v <= 0:
             return 1.0
         return min(float(v), 10_000.0)
 
@@ -65,15 +93,27 @@ class ParsedChatExpense(BaseModel):
     beneficiary: str = Field("both", description="For whom: 'me', 'partner', 'both', or dependent/child name")
     items: List[ChatLineItem] = Field(default_factory=list, description="Itemized breakdown")
     notes: Optional[str] = None
+    # Heuristic parser only: it could not tell who paid for what (FABLE-LOGIC-07); the preview
+    # asks instead of suggesting a Nafaqah class.
+    attribution_needs_confirmation: bool = False
 
     @field_validator("total_amount")
     @classmethod
     def validate_total_amount(cls, v: float) -> float:
+        # NaN compares False against every bound, so it slipped through the range checks below.
+        if not math.isfinite(v):
+            raise ValueError("Total expense amount must be a finite number")
         if v < 0:
             raise ValueError("Total expense amount cannot be negative")
         if v > 10_000_000:
             raise ValueError("Total expense amount exceeds maximum limit (10,000,000 SAR)")
         return round(float(v), 2)
+
+    @field_validator("beneficiary", "sub_category", "paid_by", "spent_by")
+    @classmethod
+    def bound_short_text(cls, v: Optional[str]) -> Optional[str]:
+        # Model output is not trusted either (FABLE-API-06): short attribution/code fields.
+        return v[:60] if isinstance(v, str) else v
 
     @field_validator("merchant")
     @classmethod
@@ -94,22 +134,33 @@ Parse natural language expense logs into structured financial transactions with 
 Categories and Sub-categories available:
 - OPEX-GROCERY: meat, vegetables_fruit, dairy_eggs, snacks_chips, beverages, pantry_staples, cleaning_household (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim, بنده, العثيم, التميمي, مقاضي)
 - OPEX-DINING: restaurants_dinners, coffee_bakeries, delivery_apps (Albaik, McDonald's, Beit Al Shawarma, Dunkin, Starbucks, Jahez, Hungerstation, Mrsool, البيك, بيت الشاورما, شاورما, بروستد, جاهز, هنقرستيشن)
-- OPEX-FUEL: gas_fuel, car_maintenance, ride_hailing (Aramco, Sahel, SASCO, Aldrees, Uber, Careem, ساسكو, الدريس, بنزين 91, بنزين 95, اوبر)
-- OPEX-UTILITIES: electricity_sec, fiber_internet, mobile_sims, water_municipal, housing_rent (STC, Mobily, Zain, SEC, الكهرباء, المياه, ايجار)
+- OPEX-FUEL: gas_fuel, car_maintenance (Aramco, Sahel, SASCO, Aldrees, ساسكو, الدريس, بنزين 91, بنزين 95, زيت, صيانة السيارة)
+- OPEX-TRANSPORT: car_installment, ride_hailing, public_transport, car_maintenance (Uber, Careem, Bolt, اوبر, كريم, تاكسي, مواصلات, قسط السيارة, ٹیکسی)
+- OPEX-UTILITIES: electricity_sec, fiber_internet, mobile_sims, water_municipal (STC, Mobily, Zain, SEC, الكهرباء, المياه)
+- OPEX-HOUSING: housing_rent, annual_rent, housing_services (ايجار, إيجار, الإيجار, Ejar, rent, کرایہ)
+- OPEX-EDUCATION: tuition_fees, school_transport, school_uniforms, books_supplies (مدرسة, رسوم مدرسية, جامعة, حضانة, school fees, اسکول فیس)
+- OPEX-DOMESTIC-HELP: maid_salary, driver_salary, recruitment_visa (خادمة, شغالة, سائق, سواق, عاملة, مساند, maid, driver, ڈرائیور, ماسی)
+- OPEX-FAMILY-SUPPORT: parents_support, relatives_support (الوالدين, مساعدة الأهل, لأهلي, parents, والدین)
+- OPEX-CHARITY: sadaqah, zakat (صدقة, زكاة, خيرات, تبرع, sadaqah, zakat, صدقہ, زکوٰۃ, خیرات)
+- OPEX-INSURANCE: car_insurance, health_insurance, home_insurance (تأمين, Tameeni, تأميني, Tawuniya, Bupa, insurance, انشورنس, بیمہ)
+- OPEX-REMITTANCE: family_remittance, transfer_fees (حوالة, تحويل للخارج, Western Union, Enjaz, remittance, ترسیل زر)
 - OPEX-SHOPPING: clothing_fashion, electronics_gadgets, home_furniture (Jarir, Extra, Noon, Amazon, Apple, Ikea, جرير, اكسترا, ايكيا)
 - OPEX-HEALTH: prescriptions_meds, clinics_dental (Nahdi, Al Dawaa, Habib, النهدي, الدواء, صيدلية, عيادة)
 - OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming (Muvi, Vox, Netflix, PlayStation, Shahid)
 - OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance).
+Petrol stays OPEX-FUEL (gas_fuel); taxis, Uber/Careem, buses and car installments are OPEX-TRANSPORT.
 
 SAUDI COLLOQUIAL ARABIC & 2D ATTRIBUTION SUPPORT:
 - "paid_by" (who actually paid):
   - "دفعتها أنا / دافعه أنا / ع حسابي / حاسبت" -> "me"
   - "دفعتها زوجتي / حاسبها زوجي / جابته المدام" -> "partner"
 - "beneficiary" (for whom was this expense):
-  - "لي / لي لحالي / ع حسابي الشخصي" -> "me"
+  - "لي / لي لحالي / لنفسي / اشتريت لنفسي / ع حسابي الشخصي" -> "me"
   - "لزوجتي / للشريك" -> "partner"
   - "مقاضي البيت / لنا اثنيننا / مشترك / للبيت" -> "both"
-  - Mention of a child / dependent (e.g. "لسارة", "لفهد", "للأولاد", "حليب سارة", "بامبرز") -> child's name (e.g. "Sarah", "Fahad") or "children".
+  - "للعيال / للأولاد / للأطفال / للبنات" -> "children"
+  - Mention of a specific child / dependent (e.g. "لسارة", "لفهد", "حليب سارة", "بامبرز") -> child's name (e.g. "Sarah", "Fahad").
+- Never split anything between a husband and wife: the app applies the Islamic Nafaqah rules itself from paid_by and beneficiary.
 
 Expense Input examples:
 "عبيت بنزين 91 بـ 60 ريال من ساسكو"
@@ -120,6 +171,25 @@ Expense Input examples:
 
 "شريت حفاضات لسارة بـ 85 ريال من النهدي"
 -> merchant: "Nahdi", total_amount: 85.0, category_code: "OPEX-HEALTH", sub_category: "prescriptions_meds", paid_by: "me", beneficiary: "Sarah", items: [{"name": "حفاضات", "quantity": 1, "price": 85.0, "sub_category": "prescriptions_meds"}]
+
+"دفعت ايجار الشقة 3000 ريال"
+-> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: "housing_rent", paid_by: "me", beneficiary: "both", items: [{"name": "ايجار الشقة", "quantity": 1, "price": 3000.0}]
+
+URDU (اردو) inputs are common among residents; parse them the same way ("میں نے دیا / میں نے خریدا" -> paid_by "me", "بیوی نے دیا" -> paid_by "partner", "گھر کے لیے" -> beneficiary "both", "بچوں کے لیے" -> beneficiary "children"):
+"پانڈا سے گھر کا سودا 250 ریال میں خریدا"
+-> merchant: "Panda", total_amount: 250.0, category_code: "OPEX-GROCERY", sub_category: "pantry_staples", paid_by: "me", beneficiary: "both", items: [{"name": "گھر کا سودا", "quantity": 1, "price": 250.0, "sub_category": "pantry_staples"}]
+"مکان کا کرایہ 3000 ریال دیا"
+-> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: "housing_rent", paid_by: "me", beneficiary: "both", items: [{"name": "مکان کا کرایہ", "quantity": 1, "price": 3000.0}]
+"بچوں کی اسکول فیس 1500 ریال"
+-> merchant: "School", total_amount: 1500.0, category_code: "OPEX-EDUCATION", sub_category: "tuition_fees", paid_by: "me", beneficiary: "children", items: [{"name": "اسکول فیس", "quantity": 1, "price": 1500.0}]
+"پاکستان گھر والوں کو ترسیل زر 1200 ریال"
+-> merchant: "Remittance", total_amount: 1200.0, category_code: "OPEX-REMITTANCE", sub_category: "family_remittance", paid_by: "me", beneficiary: "me", items: [{"name": "ترسیل زر", "quantity": 1, "price": 1200.0}]
+"ڈرائیور کی تنخواہ 1800 ریال"
+-> merchant: "Driver", total_amount: 1800.0, category_code: "OPEX-DOMESTIC-HELP", sub_category: "driver_salary", paid_by: "me", beneficiary: "both", items: [{"name": "ڈرائیور کی تنخواہ", "quantity": 1, "price": 1800.0}]
+"کریم ٹیکسی 35 ریال، بیوی نے دیا"
+-> merchant: "Careem", total_amount: 35.0, category_code: "OPEX-TRANSPORT", sub_category: "ride_hailing", paid_by: "partner", beneficiary: "partner", items: [{"name": "ٹیکسی", "quantity": 1, "price": 35.0}]
+"مسجد کے لیے صدقہ 100 ریال"
+-> merchant: "Sadaqah", total_amount: 100.0, category_code: "OPEX-CHARITY", sub_category: "sadaqah", paid_by: "me", beneficiary: "me", items: [{"name": "صدقہ", "quantity": 1, "price": 100.0}]
 
 Return STRICTLY valid JSON conforming to:
 {
@@ -139,6 +209,229 @@ Return STRICTLY valid JSON conforming to:
   "notes": "..."
 }
 """
+
+# ─── Heuristic attribution vocabulary (FABLE-LOGIC-07) ─────────────────────────
+# Recorder-relative: 'partner' is the other spouse / roommate, 'me' the recorder.
+_PARTNER_PAID_CUES = (
+    "partner paid", "wife paid", "husband paid", "paid by my wife", "paid by my husband", "paid by wife",
+    "paid by husband", "paid by my partner", "paid by partner", "my partner paid",
+    "حاسبتها هي", "دفعتها هي", "دفعتها زوجتي", "دفعته زوجتي", "دفعت زوجتي", "زوجتي دفعت", "زوجتي دفعتها",
+    "حاسبت زوجتي", "حاسبتها زوجتي", "زوجتي حاسبت", "دفعتها المدام", "دفعت المدام", "المدام دفعت",
+    "حاسبت المدام", "المدام حاسبت", "جابته المدام", "جابته زوجتي", "دفعه زوجي", "دفعها زوجي", "دفعته زوجي",
+    "دفع زوجي", "زوجي دفع", "حاسب زوجي", "حاسبه زوجي", "حاسبها زوجي", "زوجي حاسب", "جابه زوجي",
+    "على حساب زوجي", "ع حساب زوجي", "على حساب زوجتي", "ع حساب زوجتي", "على حساب المدام",
+)
+_ME_PAID_CUES = (
+    "i paid", "i spent", "i bought", "bought", "paid", "spent",
+    "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت", "دفعت", "شريت",
+    "اشتريت", "عبيت", "طلبت", "تقضيت", "تقضينا", "طلبنا", "جبت",
+)
+_CHILDREN_CUES = (
+    "for the kids", "for my kids", "for the children", "for my children", "kids'", "children's",
+    "للعيال", "للأولاد", "للاولاد", "للأطفال", "للاطفال", "للبنات",
+)
+_PARTNER_BENEFICIARY_CUES = (
+    "for my wife", "for my husband", "for partner", "for my partner", "for husband", "for wife", "for her",
+    "for him", "لزوجتي", "لزوجي", "للمدام", "للشريك", "فستان زوجتي", "هدية زوجتي", "هدية لزوجتي",
+)
+_PARTNER_PRONOUN_WORDS = {"لها", "له"}
+_ME_BENEFICIARY_CUES = (
+    "for me", "for myself", "bought myself", "my own", "لي لحالي", "شريت لنفسي", "لنفسي", "قهوتي", "ملابسي",
+    "عطري", "جوالي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا",
+)
+_EXTERNAL_BENEFICIARY_CUES = (
+    "gift", "present for", "for my mother", "for my mom", "for my father", "for my dad", "for my sister",
+    "for my brother", "for my friend", "for my parents",
+    "هدية", "هديه", "لأمي", "لامي", "لأبوي", "لابوي", "لأبي", "لابي", "لأختي", "لاختي", "لأخوي", "لاخوي",
+    "لأخي", "لاخي", "لخالتي", "لعمتي", "لصديقتي", "لصديقي", "لأهلي", "لاهلي",
+)
+_SHARED_BENEFICIARY_CUES = (
+    "cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "bill", "both", "we ", "house ",
+    "home ", "rent", "electricity", "water bill", "internet", "milk", "bread", "eggs", "rice", "vegetables",
+    "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت", "فاتورة", "فاتوره", "الكهرباء", "كهرباء",
+    "المياه", "الانترنت", "انترنت", "ايجار", "إيجار", "حليب", "خبز", "بيض", "رز", "خضار", "دجاج",
+    "بنده", "عثيم", "تميمي", "دانوب", "لولو", "كارفور", "بقالة", "سوبرماركت",
+)
+# ─── Household categories added after the product review (PRODUCT-R4) ─────────
+# System categories (cost_control_codes.household_id NULL) created by their own migration. Until
+# that migration is applied a new code is replaced by its legacy code (the DB trigger
+# validate_category_code_exists would refuse the insert otherwise).
+OPEX_HOUSING = "OPEX-HOUSING"
+OPEX_EDUCATION = "OPEX-EDUCATION"
+OPEX_DOMESTIC_HELP = "OPEX-DOMESTIC-HELP"
+OPEX_FAMILY_SUPPORT = "OPEX-FAMILY-SUPPORT"
+OPEX_CHARITY = "OPEX-CHARITY"
+OPEX_TRANSPORT = "OPEX-TRANSPORT"
+OPEX_INSURANCE = "OPEX-INSURANCE"
+OPEX_REMITTANCE = "OPEX-REMITTANCE"
+NEW_SYSTEM_CATEGORY_CODES = (
+    OPEX_HOUSING, OPEX_EDUCATION, OPEX_DOMESTIC_HELP, OPEX_FAMILY_SUPPORT,
+    OPEX_CHARITY, OPEX_TRANSPORT, OPEX_INSURANCE, OPEX_REMITTANCE,
+)
+LEGACY_CATEGORY_FALLBACK = {
+    OPEX_HOUSING: "OPEX-UTILITIES",  # its housing_rent sub-category
+    OPEX_TRANSPORT: "OPEX-FUEL",  # its ride_hailing sub-category
+}
+DEFAULT_CATEGORY_CODE = "OPEX-MISC"
+
+# Checked in this order (the first match wins); English cues match whole words, single Arabic /
+# Urdu words also with a و/ب/ل/ف and ال/لل prefix but never inside another word ("معاملة" is not
+# "عاملة"), phrases as written.
+_NEW_CATEGORY_CUES = (
+    (OPEX_REMITTANCE, (
+        "remittance", "western union", "transfer abroad", "money transfer abroad", "sent money home",
+        "send money home", "enjaz", "tahweel", "حوالة", "حواله", "حوالات", "تحويل للخارج", "تحويل خارجي",
+        "ويسترن يونيون", "انجاز", "إنجاز", "تحويل الراجحي", "ترسیل زر", "ترسیلِ زر", "رقم بھیجی", "پیسے بھیجے",
+    )),
+    (OPEX_CHARITY, (
+        "charity", "donation", "donated", "sadaqah", "sadaqa", "sadaka", "zakat", "zakah",
+        "صدقة", "صدقه", "زكاة", "زكاه", "زكاة المال", "خيرات", "تبرع", "تبرعات", "إحسان",
+        "صدقہ", "زکوٰۃ", "زکات", "زکوة", "خیرات", "خیرات",
+    )),
+    (OPEX_DOMESTIC_HELP, (
+        "maid", "housemaid", "nanny", "driver", "domestic worker", "domestic help", "musaned",
+        "خادمة", "خادمه", "خادمتي", "خادمتنا", "شغالة", "شغاله", "الشغالة", "سائق", "سواق", "سواقنا",
+        "عاملة", "عاملة منزلية", "مربية", "مساند", "ڈرائیور", "ماسی", "نوکرانی", "ملازمہ",
+    )),
+    (OPEX_EDUCATION, (
+        "school", "school fees", "tuition", "university", "college", "nursery", "kindergarten",
+        "مدرسة", "مدرسه", "مدارس", "رسوم مدرسية", "رسوم المدرسة", "جامعة", "جامعه", "حضانة", "روضة",
+        "رسوم دراسية", "اسکول", "اسکول فیس", "سکول", "ٹیوشن", "یونیورسٹی", "فیس",
+    )),
+    (OPEX_INSURANCE, (
+        "insurance", "tameeni", "tawuniya", "bupa", "medgulf",
+        "تأمين", "تامين", "التأمين", "تأميني", "تاميني", "التعاونية", "بوبا",
+        "انشورنس", "بیمہ",
+    )),
+    (OPEX_HOUSING, (
+        "rent", "landlord", "ejar", "housing",
+        "ايجار", "إيجار", "اجار", "أجار", "ايجار الشقة", "إيجار الشقة", "إيجار البيت", "ايجار البيت",
+        "منصة إيجار", "کرایہ", "کرایا", "مکان کا کرایہ",
+    )),
+    (OPEX_FAMILY_SUPPORT, (
+        "parents", "my parents", "family support", "for my family back home",
+        "الوالدين", "للوالدين", "مساعدة الأهل", "مساعدة الاهل", "لأهلي", "لاهلي", "مصروف الوالدة",
+        "مصروف الوالد", "والدین", "گھر والوں", "امی ابو",
+    )),
+    (OPEX_TRANSPORT, (
+        "taxi", "uber", "careem", "bolt", "bus", "metro", "train", "car installment", "car loan",
+        "تاكسي", "اوبر", "أوبر", "كريم", "بولت", "مواصلات", "باص", "مترو", "قطار", "قسط السيارة",
+        "قسط سيارة", "ٹیکسی", "رکشہ",
+    )),
+)
+_ARABIC_LETTER = "\u0600-\u06FF"
+
+# Sub-codes of the new categories (cost_control_sub_categories, migration 20261021000000): the
+# first sub-code whose cues match wins, else the category's default (last entry, no cues).
+NEW_CATEGORY_SUB_CODES = {
+    OPEX_HOUSING: (
+        ("annual_rent", ("annual rent", "yearly rent", "سنوي", "السنوي", "سنويا", "سنة كاملة", "سالانہ")),
+        ("housing_services", ("maintenance", "service charge", "صيانة", "خدمات", "حارس", "مرافق", "مینٹیننس")),
+        ("housing_rent", ()),
+    ),
+    OPEX_EDUCATION: (
+        ("school_transport", ("school bus", "school transport", "باص المدرسة", "باص", "نقل مدرسي", "توصيل المدرسة",
+                              "اسکول وین", "وین")),
+        ("school_uniforms", ("uniform", "uniforms", "زي مدرسي", "الزي المدرسي", "مريول", "یونیفارم")),
+        ("books_supplies", ("books", "stationery", "supplies", "كتب", "قرطاسية", "ادوات مدرسية", "أدوات مدرسية",
+                            "کتابیں", "کاپیاں")),
+        ("tuition_fees", ()),
+    ),
+    OPEX_DOMESTIC_HELP: (
+        ("recruitment_visa", ("recruitment", "visa", "musaned", "استقدام", "تأشيرة", "تاشيرة", "مساند", "ویزا")),
+        ("driver_salary", ("driver", "سائق", "سواق", "سواقنا", "ڈرائیور")),
+        ("maid_salary", ()),
+    ),
+    OPEX_FAMILY_SUPPORT: (
+        ("relatives_support", ("relatives", "my brother", "my sister", "اقارب", "أقارب", "أخوي", "اخوي", "أختي",
+                               "اختي", "لأخي", "لاخي", "خالتي", "عمتي", "رشتہ دار", "بھائی", "بہن")),
+        ("parents_support", ()),
+    ),
+    OPEX_CHARITY: (
+        ("zakat", ("zakat", "zakah", "زكاة", "زكاه", "زكاة المال", "زکوٰۃ", "زکات", "زکوة")),
+        ("sadaqah", ()),
+    ),
+    OPEX_TRANSPORT: (
+        ("car_installment", ("car installment", "car loan", "قسط السيارة", "قسط سيارة", "تمويل السيارة",
+                             "گاڑی کی قسط")),
+        ("public_transport", ("bus", "metro", "train", "باص", "حافلة", "مترو", "قطار", "ٹرین")),
+        ("car_maintenance", ("maintenance", "oil change", "tyres", "صيانة", "زيت", "كفرات", "ورشة",
+                             "گاڑی کی مرمت")),
+        ("ride_hailing", ()),
+    ),
+    OPEX_INSURANCE: (
+        ("health_insurance", ("medical", "health", "bupa", "medgulf", "طبي", "صحي", "بوبا", "میڈیکل", "صحت")),
+        ("home_insurance", ("home insurance", "house insurance", "تأمين المنزل", "تأمين البيت", "تامين المنزل",
+                            "گھر کی انشورنس")),
+        ("car_insurance", ()),
+    ),
+    OPEX_REMITTANCE: (
+        ("transfer_fees", ("transfer fee", "transfer fees", "رسوم التحويل", "رسوم حوالة", "عمولة التحويل",
+                           "عمولة", "ٹرانسفر فیس")),
+        ("family_remittance", ()),
+    ),
+}
+
+
+def _cue_in(text: str, cue: str) -> bool:
+    """Whether ``cue`` occurs in ``text`` as a word (see _NEW_CATEGORY_CUES)."""
+    import re
+
+    if cue.isascii():
+        return re.search(r"\b" + re.escape(cue) + r"\b", text) is not None
+    if " " in cue:
+        return cue in text
+    stem = cue[2:] if cue.startswith("ال") and len(cue) > 4 else cue
+    pattern = rf"(?<![{_ARABIC_LETTER}])(?:[وبلف])?(?:ال|لل)?{re.escape(stem)}(?![{_ARABIC_LETTER}])"
+    return re.search(pattern, text) is not None
+
+
+def new_category_sub_code(category_code: str, text: str) -> Optional[str]:
+    """The sub-code of a new category for the text (its default when no cue matches)."""
+    subs = NEW_CATEGORY_SUB_CODES.get(category_code)
+    if not subs:
+        return None
+    lower = text.lower()
+    for sub_code, cues in subs:
+        if not cues or any(_cue_in(lower, cue) for cue in cues):
+            return sub_code
+    return subs[-1][0]
+
+
+def new_category_for_text(text: str) -> Optional[str]:
+    """One of the new household categories when the text names it, else None."""
+    lower = text.lower()
+    for code, cues in _NEW_CATEGORY_CUES:
+        if any(_cue_in(lower, cue) for cue in cues):
+            return code
+    return None
+
+
+def resolve_category_in_taxonomy(category_code: Optional[str], codes: list) -> str:
+    """
+    The code to store for a parsed (not user-chosen) category: itself when the taxonomy has it,
+    the legacy code for a new system code whose migration is not applied yet, OPEX-MISC for a code
+    the model made up. An empty taxonomy (lookup failed) leaves the decision to the database.
+    """
+    code = (category_code or DEFAULT_CATEGORY_CODE).strip() or DEFAULT_CATEGORY_CODE
+    known = {getattr(c, "code", None) for c in codes or []}
+    if not known or code in known:
+        return code
+    legacy = LEGACY_CATEGORY_FALLBACK.get(code, DEFAULT_CATEGORY_CODE)
+    return legacy if legacy in known else DEFAULT_CATEGORY_CODE
+
+
+# After the "ل" (for) prefix: pronoun suffixes and words that are never a dependent's name.
+_NOT_A_NAME_AFTER_LAM = {
+    "ي", "ه", "ها", "هم", "هن", "هما", "نا", "ك", "كم", "كن", "كي",
+    "حالي", "نفسي", "نفسها", "نفسه", "البيت", "بيت", "لنا", "الزوجة", "المدام", "الزوج", "زوجتي", "زوجي",
+    "لشريك", "شريك", "كل", "الكل", "عيال", "لعيال",
+}
+_WORDS_STARTING_WITH_LAM = {
+    "لبن", "لبنة", "لحم", "لحوم", "ليمون", "لوز", "لابتوب", "لولو", "لاب", "لعبة", "لعب", "لوازم", "ليلة",
+    "لاتيه", "لفة", "لزقة", "لمبة", "لمبات",
+}
+
 
 def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
     """Robust heuristic fallback parser for natural language expense logs and simulation queries."""
@@ -186,24 +479,37 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             notes="Heuristic simulation detection",
         )
 
-    # Attribution 2D: paid_by and beneficiary
+    # Attribution 2D: paid_by and beneficiary (FABLE-LOGIC-07). The other spouse paying is checked
+    # first ("دفعت زوجتي" also contains "دفعت", "paid by my husband" also contains "paid").
+    words = re.findall(r"[\w']+", lower)
     paid_by = "me"
-    if any(k in lower for k in ("partner paid", "wife paid", "husband paid", "حاسبتها هي", "دفعتها زوجتي", "دفعه زوجي", "حاسبت زوجتي", "دفعت زوجتي")):
+    payer_cue = True
+    if any(k in lower for k in _PARTNER_PAID_CUES):
         paid_by = "partner"
-    elif any(k in lower for k in ("i paid", "i spent", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا", "ع حسابي", "على حسابي", "حاسبت انا")):
-        paid_by = "me"
+    elif not any(k in lower for k in _ME_PAID_CUES):
+        payer_cue = False  # nobody said who paid: the recorder, but the preview asks
 
-    beneficiary = "me"
-    if any(k in lower for k in ("for my wife", "for partner", "for husband", "for her", "for him", "لزوجتي", "لزوجي", "للشريك", "فستان زوجتي", "هدية")):
+    beneficiary_cue = True
+    external = False
+    if any(k in lower for k in _CHILDREN_CUES):
+        beneficiary = "children"
+    elif any(k in lower for k in _PARTNER_BENEFICIARY_CUES) or any(w in _PARTNER_PRONOUN_WORDS for w in words):
         beneficiary = "partner"
-    elif any(k in lower for k in ("for me", "for myself", "bought myself", "لي لحالي", "شريت لنفسي", "قهوتي", "ملابسي", "دفعتها انا", "دفعتها أنا", "دفعته انا", "دفعته أنا")):
+    elif any(k in lower for k in _ME_BENEFICIARY_CUES) or "لي" in words:
         beneficiary = "me"
-    elif any(k in lower for k in ("cleaning", "grocery", "groceries", "supermarket", "utilities", "bills", "both", "we ", "house ", "home ", "مقاضي", "اغراض البيت", "لنا", "اثنيننا", "مشترك", "البيت")):
-        beneficiary = "both"
-    elif any(k in lower for k in ("بنده", "عثيم", "تميمي", "دانوب", "لولو", "كارفور", "بقالة", "سوبرماركت")):
+    elif any(k in lower for k in _EXTERNAL_BENEFICIARY_CUES):
+        # A gift / someone outside the household: neither shared nor obviously the recorder's own
+        # allowance. Undetermined: no automatic Nafaqah class, the preview asks.
+        beneficiary = "me"
+        external = True
+    elif any(k in lower for k in _SHARED_BENEFICIARY_CUES):
         beneficiary = "both"
     else:
         beneficiary = "me"
+        beneficiary_cue = False
+    if external:
+        paid_by = "unknown"
+    needs_confirmation = external or not (payer_cue or beneficiary_cue)
 
     # Backward-compatible spent_by
     if beneficiary == "both":
@@ -250,6 +556,11 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         "موبايلي": "Mobily", "mobily": "Mobily",
         "زين": "Zain", "zain": "Zain",
         "الكهرباء": "Electricity Bill", "الكهرب": "Electricity Bill",
+        "western union": "Western Union", "ويسترن يونيون": "Western Union",
+        "tameeni": "Tameeni", "تأميني": "Tameeni", "تاميني": "Tameeni",
+        "tawuniya": "Tawuniya", "التعاونية": "Tawuniya",
+        "bupa": "Bupa", "بوبا": "Bupa",
+        "musaned": "Musaned", "مساند": "Musaned",
     }
     for km, canonical in known_merchants_map.items():
         if km in lower or km in raw:
@@ -322,15 +633,18 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         "Albaik": "OPEX-DINING", "McDonald's": "OPEX-DINING", "Starbucks": "OPEX-DINING", "Dunkin'": "OPEX-DINING",
         "Jahez": "OPEX-DINING", "HungerStation": "OPEX-DINING", "Mrsool": "OPEX-DINING", "Shawermer": "OPEX-DINING", "Barn's": "OPEX-DINING",
         "Panda": "OPEX-GROCERY", "Othaim": "OPEX-GROCERY", "Tamimi": "OPEX-GROCERY", "Danube": "OPEX-GROCERY", "Lulu": "OPEX-GROCERY", "Carrefour": "OPEX-GROCERY",
-        "SASCO": "OPEX-FUEL", "Aldrees": "OPEX-FUEL", "Naft": "OPEX-FUEL", "Sahel": "OPEX-FUEL", "Aramco": "OPEX-FUEL", "Uber": "OPEX-FUEL", "Careem": "OPEX-FUEL",
+        "SASCO": "OPEX-FUEL", "Aldrees": "OPEX-FUEL", "Naft": "OPEX-FUEL", "Sahel": "OPEX-FUEL", "Aramco": "OPEX-FUEL",
+        "Uber": OPEX_TRANSPORT, "Careem": OPEX_TRANSPORT,
+        "Western Union": OPEX_REMITTANCE, "Tameeni": OPEX_INSURANCE, "Tawuniya": OPEX_INSURANCE, "Bupa": OPEX_INSURANCE,
+        "Musaned": OPEX_DOMESTIC_HELP,
         "STC": "OPEX-UTILITIES", "Mobily": "OPEX-UTILITIES", "Zain": "OPEX-UTILITIES", "Electricity Bill": "OPEX-UTILITIES",
         "Nahdi": "OPEX-HEALTH", "Al Dawaa": "OPEX-HEALTH",
         "Jarir": "OPEX-SHOPPING", "Extra": "OPEX-SHOPPING", "Noon": "OPEX-SHOPPING", "Amazon": "OPEX-SHOPPING",
     }
-    cat_code = merchant_category_map.get(merchant)
+    cat_code = merchant_category_map.get(merchant) or new_category_for_text(raw)
     if not cat_code:
         words_list = lower.split()
-        if any(k in lower for k in ("بنزين", "وقود", "محطة", "سولار", "ديزل", "fuel", "gas", "petrol", "taxi")):
+        if any(k in lower for k in ("بنزين", "وقود", "محطة", "سولار", "ديزل", "fuel", "gas", "petrol")):
             cat_code = "OPEX-FUEL"
         elif any(k in lower for k in ("كهرب", "فاتورة كهرب", "مياه", "انترنت", "نت", "utilities", "bill")):
             cat_code = "OPEX-UTILITIES"
@@ -346,8 +660,10 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             cat_code = "OPEX-MISC"
 
     # Derive sub-category
-    sub_cat = None
-    if cat_code == "OPEX-DINING":
+    sub_cat = new_category_sub_code(cat_code, raw)
+    if sub_cat:
+        pass
+    elif cat_code == "OPEX-DINING":
         if any(w in lower for w in ("كافيه", "قهوة", "شاي", "كوفي", "ايس لاتيه", "حلا", "كيك", "دونات", "كرواسون", "مخبز", "coffee", "cafe", "starbucks", "dunkin")):
             sub_cat = "coffee_bakeries"
         elif any(w in lower for w in ("جاهز", "هنقرستيشن", "مرسول", "تويو", "jahez", "hungerstation", "mrsool", "toyou")):
@@ -393,12 +709,18 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         if not getattr(it, "sub_category", None):
             it.sub_category = sub_cat
 
-    # Detect child / dependent name in beneficiary
-    child_match = re.search(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw)
-    if child_match:
-        cand = child_match.group(1).strip()
-        if cand not in ("ي", "حالي", "البيت", "لنا", "الزوجة", "المدام", "الزوج"):
+    # Detect a child / dependent named after the "ل" (for) prefix ("حليب لسارة"), unless an
+    # explicit cue already decided the beneficiary. Pronoun suffixes (لها، له، لي، لنا ...) and
+    # ordinary words starting with ل (لبن، لحم ...) are never names (FABLE-LOGIC-07).
+    if beneficiary == "both" or not beneficiary_cue:
+        for child_match in re.finditer(r'(?:^|\s)ل(?:ـ)?([^\s\d.,!?]+)', raw):
+            cand = child_match.group(1).strip()
+            if cand in _NOT_A_NAME_AFTER_LAM or ("ل" + cand) in _WORDS_STARTING_WITH_LAM or len(cand) < 2:
+                continue
             beneficiary = cand
+            beneficiary_cue = True
+            needs_confirmation = external or not (payer_cue or beneficiary_cue)
+            break
 
     return ParsedChatExpense(
         is_transaction=True,
@@ -412,13 +734,14 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         beneficiary=beneficiary,
         items=items,
         notes="Parsed via robust heuristic fallback",
+        attribution_needs_confirmation=needs_confirmation,
     )
 
 
 def parse_chat_expense(text: str) -> ParsedChatExpense:
     """Call Gemini to extract structured expense information from user chat text, with graceful fallback."""
     text = normalize_arabic_numbers(text)
-    model = os.environ.get("LITELLM_MODEL", "gemini/gemini-2.0-flash")
+    model = litellm_model()
     
     try:
         response = litellm.completion(
@@ -436,6 +759,33 @@ def parse_chat_expense(text: str) -> ParsedChatExpense:
     except Exception as exc:
         logger.warning("LiteLLM completion failed (%s). Using fallback heuristic parser.", exc)
         return _fallback_heuristic_parse(text)
+
+
+def _parsed_from_preview_token(
+    token: Optional[str], household_id: str, user_id: Optional[str], message_digest: str,
+) -> Optional[ParsedChatExpense]:
+    """The signed parse of this message, or None when the caller must run the parser."""
+    if token is None:
+        return None
+    check = verify_preview_token(token, KIND_CHAT, user_id, household_id)  # InvalidPreviewToken
+    if not check.valid:
+        logger.info("Chat preview token %s: re-parsing.", check.status)
+        return None
+    if check.binding.get("m") != message_digest:
+        logger.info("Chat preview token was issued for another message: re-parsing.")
+        return None
+    try:
+        return ParsedChatExpense(**check.payload)
+    except Exception as exc:  # signed by us, so only a format change between releases
+        raise InvalidPreviewToken("payload no longer valid") from exc
+
+
+def _issue_chat_token(
+    parsed: ParsedChatExpense, household_id: str, user_id: Optional[str], message_digest: str,
+) -> Optional[str]:
+    return issue_preview_token(
+        KIND_CHAT, user_id, household_id, parsed.model_dump(mode="json"), {"m": message_digest},
+    )
 
 
 def check_category_active_status(category_code: str, categories_state: dict) -> bool:
@@ -460,11 +810,34 @@ def process_chat_transaction(
     override_sub_category: Optional[str] = None,
     override_paid_by: Optional[str] = None,
     override_beneficiary: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+    override_nafaqah_class: Optional[str] = None,
+    override_nafaqah_spouse_id: Optional[str] = None,
+    preview_token: Optional[str] = None,
+    override_amount: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
+
+    One LLM call per expense (PRODUCT-R6): the preview (and a duplicate prompt) returns a signed
+    ``preview_token`` of the parsed message. A request that sends it back for the same message is
+    served from the signed payload without calling the model; every override below is applied and
+    validated exactly as without a token. An expired or unverifiable token, or one for another
+    message, re-parses; a tampered one raises InvalidPreviewToken (HTTP 422).
+
+    Family households (Islamic Nafaqah): an expense the wife paid is classified as
+    ``wife_reimbursable`` (shared → the husband owes her) or ``wife_personal`` (charged to her
+    allowance). The preview returns the suggestion (and the wives, for a household with several);
+    ``override_nafaqah_class`` is the user's confirmed choice ('wife_reimbursable' |
+    'wife_personal' | 'none') and must agree with an explicit paid_by/beneficiary;
+    ``override_nafaqah_spouse_id`` names the wife when there are several
+    (nafaqah_service.resolve_expense_nafaqah raises InvalidNafaqahRequest otherwise). Nothing is
+    ever split between the spouses, and roommate households are never classified.
     """
-    parsed = parse_chat_expense(message)
+    message_digest = text_digest(message)
+    parsed = _parsed_from_preview_token(preview_token, household_id, user_id, message_digest)
+    if parsed is None:
+        parsed = parse_chat_expense(message)
     if parsed.is_simulation:
         from salary_cycle import simulate_affordability
         sim_amt = parsed.simulated_amount or parsed.total_amount
@@ -501,11 +874,25 @@ def process_chat_transaction(
             "message": "The message does not appear to contain a transaction expense.",
         }
 
+    if override_amount is not None:
+        # The user corrected the amount in the confirmation card (UX-12; validated by the route).
+        # A single line that was the whole amount follows it; an itemised list stays as parsed.
+        if len(parsed.items) == 1 and abs(parsed.items[0].price * (parsed.items[0].quantity or 1) - parsed.total_amount) < 0.005:
+            parsed.items[0].price = override_amount
+            parsed.items[0].quantity = 1.0
+        parsed.total_amount = override_amount
+
     items_dicts = [item.model_dump() for item in parsed.items]
 
     # Explicit enrichment request
     if enrich_tx_id:
-        success = enrich_transaction_items(enrich_tx_id, items_dicts)
+        success = enrich_transaction_items(enrich_tx_id, items_dicts, household_id=household_id, actor_user_id=user_id)
+        if not success:
+            return {
+                "status": "error",
+                "transaction_id": enrich_tx_id,
+                "message": "Transaction to enrich was not found in this household.",
+            }
         return {
             "status": "enriched",
             "transaction_id": enrich_tx_id,
@@ -516,25 +903,46 @@ def process_chat_transaction(
             "message": f"Successfully enriched existing transaction with {len(items_dicts)} items.",
         }
 
-    merchant = (override_merchant or parsed.merchant).strip()
-    spent_by = (override_spent_by or parsed.spent_by).lower()
-    if spent_by not in ("me", "partner", "both"):
-        spent_by = "both"
+    # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
+    merchant = sanitize_audit_text(override_merchant or parsed.merchant, MAX_MERCHANT_LENGTH) or "Unknown Merchant"
 
     # Match or fallback category
     codes = fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
-    category_code = override_category_code or (matched.code if matched else parsed.category_code)
+    if override_category_code is not None and override_category_code != "":
+        # A client-chosen category must exist for this household (global or its own custom
+        # code); otherwise the DB trigger refuses the insert. Answer 422, not 500 (E2E-03).
+        if (
+            not isinstance(override_category_code, str)
+            or not override_category_code.strip()
+            or len(override_category_code) > 100
+            or category_code_in_taxonomy(household_id, override_category_code.strip()) is False
+        ):
+            raise UnknownCategoryError()
+        override_category_code = override_category_code.strip()
+    parsed_category = resolve_category_in_taxonomy(parsed.category_code, codes)
+    category_code = override_category_code or (matched.code if matched else parsed_category)
 
-    sub_category = override_sub_category or getattr(parsed, "sub_category", None)
+    # The parsed sub-category belongs to the parsed code only (not to a legacy fallback).
+    parsed_sub = getattr(parsed, "sub_category", None) if parsed_category == parsed.category_code else None
+    sub_category = override_sub_category or parsed_sub
     if not sub_category and category_code:
         try:
             from salary_cycle import match_sub_category
-            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts)
+            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts, household_id=household_id)
         except Exception:
             pass
 
-    paid_by = (override_paid_by or getattr(parsed, "paid_by", "me")).lower()
+    parsed_paid_by = str(getattr(parsed, "paid_by", "me") or "me").lower()
+    # The heuristic parser could not tell who paid for what (FABLE-LOGIC-07): the preview asks
+    # (attribution_needs_confirmation) and, for 'unknown' (e.g. a gift outside the household),
+    # suggests no Nafaqah class. A commit without an explicit choice records the recorder paying.
+    attribution_explicit = override_paid_by is not None or override_beneficiary is not None
+    needs_confirmation = not attribution_explicit and (
+        parsed_paid_by == "unknown" or bool(getattr(parsed, "attribution_needs_confirmation", False))
+    )
+    paid_by = (override_paid_by or parsed_paid_by).lower()
+    classify_as = "unknown" if (preview_only and paid_by == "unknown" and not attribution_explicit) else None
     if paid_by not in ("me", "partner"):
         paid_by = "me"
 
@@ -544,6 +952,23 @@ def process_chat_transaction(
     for it in items_dicts:
         if override_sub_category or not it.get("sub_category"):
             it["sub_category"] = sub_category
+
+    nafaqah = resolve_expense_nafaqah(
+        household_id,
+        user_id,
+        classify_as or paid_by,
+        beneficiary,
+        override_class=override_nafaqah_class,
+        override_spouse_id=override_nafaqah_spouse_id,
+        attribution_explicit=attribution_explicit,
+        require_spouse=not preview_only,
+    )
+    paid_by, beneficiary = nafaqah["paid_by"], nafaqah["beneficiary"]
+    if paid_by not in ("me", "partner"):
+        paid_by = "me"
+    # spent_by is the payer relative to the recorder ('me' | 'partner'); the client's legacy
+    # spent_by is ignored so the stored columns never contradict paid_by (FABLE-LOGIC-03).
+    spent_by = paid_by
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -566,12 +991,13 @@ def process_chat_transaction(
         available_subs = []
         try:
             from salary_cycle import get_sub_categories_for_parent
-            available_subs = get_sub_categories_for_parent(category_code)
+            available_subs = get_sub_categories_for_parent(category_code, [household_id])
         except Exception as exc:
             logger.debug("Could not fetch sub categories: %s", exc)
 
         return {
             "status": "pending_confirmation",
+            "preview_token": _issue_chat_token(parsed, household_id, user_id, message_digest),
             "merchant": merchant,
             "amount": parsed.total_amount,
             "category_code": category_code,
@@ -582,7 +1008,14 @@ def process_chat_transaction(
             "spent_by": spent_by,
             "paid_by": paid_by,
             "beneficiary": beneficiary,
+            "attribution_needs_confirmation": needs_confirmation,
             "dependents": [d.get("name") for d in dependents if d.get("name")],
+            "household_mode": nafaqah["household_mode"],
+            "recorder_role": nafaqah["recorder_role"],
+            "nafaqah_class": nafaqah["nafaqah_class"],
+            "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+            "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
+            "wives": nafaqah["wives"],
             "items": items_dicts,
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",
@@ -595,6 +1028,7 @@ def process_chat_transaction(
             logger.info("Duplicate candidate found for chat transaction: %s", candidate["id"])
             return {
                 "status": "duplicate_candidate",
+                "preview_token": _issue_chat_token(parsed, household_id, user_id, message_digest),
                 "candidate_transaction_id": candidate["id"],
                 "candidate_merchant": candidate.get("merchant"),
                 "candidate_amount": candidate.get("amount"),
@@ -611,8 +1045,18 @@ def process_chat_transaction(
                 ),
             }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    now_date = datetime.now(timezone.utc).date()
+    # Who paid and for whom, as columns; refused (422) before any budget is touched when
+    # 'partner' names nobody in this household.
+    # A classified expense in a family without a provider is refused here (409 no_provider).
+    attribution = household_attribution(
+        household_id, user_id, paid_by, beneficiary, nafaqah["nafaqah_spouse_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+    )
+
+    # A replayed offline commit carries the client-side event time (validated by the route).
+    event_time = occurred_at or datetime.now(timezone.utc)
+    now_iso = event_time.isoformat()
+    now_date = riyadh_date_for_timestamp(event_time)
 
     # Check budget and reallocate if necessary
     budget = fetch_budget(household_id, category_code, now_date)
@@ -624,16 +1068,19 @@ def process_chat_transaction(
         deficit = parsed.total_amount - budget.remaining_amount
         flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
         if flexible and flexible[0].remaining_amount >= deficit:
-            reallocate_budget(flexible[0].id, budget.id, deficit)
-            is_reallocated = True
-            reallocated_from_id = flexible[0].id
+            if reallocate_budget(flexible[0].id, budget.id, deficit):
+                is_reallocated = True
+                reallocated_from_id = flexible[0].id
 
-    # Format raw text for audit trail
-    items_summary = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} ({it.get('price')} SAR)" for it in items_dicts)
-    audit_text = (
-        f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by} | Items: [{items_summary}]"
-        if items_summary
-        else f"Chat: {message} | PaidBy: {paid_by} | Beneficiary: {beneficiary} | SpentBy: {spent_by}"
+    # Audit note for humans: the server's tags first, the user's text defused (FABLE-API-01).
+    items_summary = ", ".join(
+        f"{it.get('quantity', 1)}x {sanitize_audit_text(it.get('name'), 80)} ({it.get('price')} SAR)"
+        for it in items_dicts
+    )
+    audit_text = build_audit_note(
+        paid_by, beneficiary, spent_by,
+        f"Chat: {sanitize_audit_text(message, 1000)}",
+        f"Items: [{items_summary}]" if items_summary else "",
     )
 
     # Insert transaction
@@ -650,14 +1097,17 @@ def process_chat_transaction(
         reallocated_from_budget_id=reallocated_from_id,
         source="chat",
         items=items_dicts,
-        spent_by=spent_by,
-        paid_by=paid_by,
-        beneficiary=beneficiary,
+        spent_by=attribution["spent_by"],
+        beneficiary_type=attribution["beneficiary_type"],
+        beneficiary_id=attribution["beneficiary_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+        nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
+        user_id=user_id,
     )
 
     # Attach items fallback if needed
     if items_dicts:
-        enrich_transaction_items(tx_id, items_dicts)
+        enrich_transaction_items(tx_id, items_dicts, household_id=household_id)
 
     return {
         "status": "success",
@@ -669,6 +1119,8 @@ def process_chat_transaction(
         "spent_by": spent_by,
         "paid_by": paid_by,
         "beneficiary": beneficiary,
+        "nafaqah_class": nafaqah["nafaqah_class"],
+        "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
         "is_reallocated": is_reallocated,
         "items": items_dicts,
         "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by}).",

@@ -1,7 +1,7 @@
 """
 Deduplication and cross-channel matching engine.
-Prevents double-counting when transactions arrive via SMS, Chat, or Receipt Scans.
-Supports auto-enrichment of existing SMS transactions with line items.
+Prevents double-counting when the same expense arrives via Chat, Receipt/QR scans, or manual entry.
+Supports auto-enrichment of an existing transaction with receipt line items.
 """
 
 import hashlib
@@ -120,14 +120,35 @@ def enrich_transaction_items(
     transaction_id: str,
     items: List[Dict[str, Any]],
     receipt_url: Optional[str] = None,
+    household_id: Optional[str] = None,
+    actor_user_id: Optional[str] = None,
 ) -> bool:
     """
-    Enrich an existing transaction (e.g. from SMS) with itemized breakdown and/or receipt URL.
+    Enrich an existing transaction (e.g. a chat or manual entry) with itemized breakdown and/or receipt URL.
     Does NOT increment budget spent_amount because the expense was already counted!
+
+    When ``household_id`` is given (always the case for request-driven calls), the update is
+    scoped to that household: the service-role client bypasses RLS, so an unscoped
+    ``.eq("id", ...)`` would let any member rewrite another household's transaction.
+    Returns False when no transaction in that household matched.
+
+    ``actor_user_id`` (the verified caller of an explicit enrichment request) must be the
+    transaction's creator or a household admin (DB-18); otherwise PermissionDeniedError is raised.
     """
+    if actor_user_id and household_id:
+        from household_permissions import TransactionNotFoundError, assert_can_modify_transaction
+
+        try:
+            assert_can_modify_transaction(household_id, transaction_id, actor_user_id)
+        except TransactionNotFoundError:
+            logger.warning(
+                "Enrichment refused: transaction %s not found in household %s.", transaction_id, household_id
+            )
+            return False
+
     client = get_client()
     update_data: Dict[str, Any] = {}
-    
+
     # Try updating items column
     if items:
         update_data["items"] = items
@@ -137,19 +158,30 @@ def enrich_transaction_items(
     if not update_data:
         return True
 
+    def _scoped(query):
+        query = query.eq("id", transaction_id)
+        if household_id:
+            query = query.eq("household_id", household_id)
+        return query
+
     try:
-        client.table("transactions").update(update_data).eq("id", transaction_id).execute()
+        res = _scoped(client.table("transactions").update(update_data)).execute()
+        if household_id and not (res is not None and res.data):
+            logger.warning(
+                "Enrichment refused: transaction %s not found in household %s.", transaction_id, household_id
+            )
+            return False
         logger.info("Enriched transaction %s with %d items.", transaction_id, len(items))
         return True
     except Exception as exc:
-        # If columns don't exist yet, append items into raw_sms as audit trail
-        logger.warning("Failed to update items column directly (%s), trying raw_sms fallback.", exc)
+        # If columns don't exist yet, append items to the raw_sms audit-note column
+        logger.warning("Failed to update items column directly (%s), trying audit-note fallback.", exc)
         try:
-            current = client.table("transactions").select("raw_sms").eq("id", transaction_id).single().execute()
-            existing_sms = (current.data or {}).get("raw_sms") or ""
+            current = _scoped(client.table("transactions").select("raw_sms")).single().execute()
+            existing_note = (current.data or {}).get("raw_sms") or ""
             items_str = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} (SAR {it.get('price', 0)})" for it in items)
-            enriched_sms = f"{existing_sms} | Items: [{items_str}]"
-            client.table("transactions").update({"raw_sms": enriched_sms}).eq("id", transaction_id).execute()
+            enriched_note = f"{existing_note} | Items: [{items_str}]"
+            _scoped(client.table("transactions").update({"raw_sms": enriched_note})).execute()
             return True
         except Exception as fallback_exc:
             logger.error("Failed fallback enrichment: %s", fallback_exc)

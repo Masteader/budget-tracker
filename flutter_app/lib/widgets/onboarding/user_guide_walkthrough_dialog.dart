@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../l10n/app_localizations.dart';
 
 class UserGuideWalkthroughDialog extends StatefulWidget {
   final VoidCallback? onDismiss;
@@ -46,46 +47,50 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  // Step texts are translation keys resolved at build time. UX-28: the core
+  // promise (what is left until payday) first, then the household rules,
+  // then the ways to record an expense.
   final List<_WalkthroughStep> _steps = const [
-    _WalkthroughStep(
-      icon: Icons.qr_code_scanner_rounded,
-      gradientColors: [Color(0xFF00C896), Color(0xFF007A5A)],
-      title: 'AI Invoice & ZATCA Scanner',
-      subtitle:
-          'Snap paper receipts with multi-page camera or scan official Saudi ZATCA QR codes for instant itemized extraction and tax breakdown.',
-      tags: ['ZATCA TLV Verified', 'Line-Item Breakdown', 'Duplicate Defense'],
-    ),
-    _WalkthroughStep(
-      icon: Icons.mic_rounded,
-      gradientColors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
-      title: 'Voice & Dialect Chat',
-      subtitle:
-          'Log expenses effortlessly speaking or typing in Saudi colloquial dialect, or ask our AI simulator whether you can afford a new purchase.',
-      tags: ['Saudi Dialect', 'Purchase Simulator', 'Instant Logging'],
-    ),
     _WalkthroughStep(
       icon: Icons.calendar_month_rounded,
       gradientColors: [Color(0xFFF59E0B), Color(0xFFB45309)],
-      title: 'Salary Cycles & Payday (27th)',
-      subtitle:
-          'Stay on top of your financial health with automated salary cycles aligned to the 27th payday, daily allowance pacing, and cycle rollovers.',
-      tags: ['27th Payday Cycle', 'Burn-Rate Forecast', 'Cycle Rollover'],
-    ),
-    _WalkthroughStep(
-      icon: Icons.receipt_long_rounded,
-      gradientColors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-      title: 'Recurring Bills & Installments',
-      subtitle:
-          'Never miss a due date. Reserve funds for Rent, SEC electricity, and Iqama fees with 1-tap payments, plus track Tabby & Tamara installments.',
-      tags: ['1-Tap Bill Pay', 'Iqama & Rent Reserves', 'BNPL Tracking'],
+      title: 'wt3_title',
+      subtitle: 'wt3_desc',
+      tags: ['wt3_tag1', 'wt3_tag2', 'wt3_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.people_alt_rounded,
       gradientColors: [Color(0xFF10B981), Color(0xFF047857)],
-      title: 'Household & 2D Partner Split',
-      subtitle:
-          'Share expenses transparently with your spouse or family. Track who paid vs who benefited with automatic zero-friction monthly settlements.',
-      tags: ['2D Attribution', 'Net Settlements', 'Joint Household'],
+      title: 'wt5_title',
+      subtitle: 'wt5_desc',
+      tags: ['wt5_tag1', 'wt5_tag2', 'wt5_tag3'],
+    ),
+    _WalkthroughStep(
+      icon: Icons.mic_rounded,
+      gradientColors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+      title: 'wt2_title',
+      subtitle: 'wt2_desc',
+      tags: ['wt2_tag1', 'wt2_tag2', 'wt2_tag3'],
+    ),
+    _WalkthroughStep(
+      icon: Icons.qr_code_scanner_rounded,
+      gradientColors: [AppThemes.success, Color(0xFF007A5A)],
+      title: 'wt1_title',
+      subtitle: 'wt1_desc',
+      tags: ['wt1_tag1', 'wt1_tag2', 'wt1_tag3'],
+    ),
+    _WalkthroughStep(
+      icon: Icons.receipt_long_rounded,
+      gradientColors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+      title: 'wt4_title',
+      subtitle: 'wt4_desc',
+      tags: ['wt4_tag1', 'wt4_tag2', 'wt4_tag3'],
     ),
   ];
 
@@ -132,7 +137,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
           children: [
             // Header with Step count and Close button
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -145,7 +150,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                       border: Border.all(color: context.borderColor),
                     ),
                     child: Text(
-                      'Feature ${_currentPage + 1} of ${_steps.length}',
+                      context.trArgs('wt_feature_x_of_y', {'current': _currentPage + 1, 'total': _steps.length}),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -154,6 +159,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('close'),
                     icon: Icon(Icons.close_rounded,
                         color: context.textSecondary, size: 20),
                     onPressed: _finish,
@@ -206,19 +212,19 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
 
                             // Title
                             Text(
-                              step.title,
+                              context.tr(step.title),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 fontSize: 19,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 10),
 
                             // Subtitle
                             Text(
-                              step.subtitle,
+                              context.tr(step.subtitle),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
@@ -244,7 +250,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                                         color: context.borderColor),
                                   ),
                                   child: Text(
-                                    tag,
+                                    context.tr(tag),
                                     style: GoogleFonts.outfit(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w500,
@@ -280,7 +286,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                         height: 7,
                         decoration: BoxDecoration(
                           color: _currentPage == idx
-                              ? const Color(0xFF00C896)
+                              ? AppThemes.success
                               : context.borderColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -295,7 +301,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                       TextButton(
                         onPressed: _finish,
                         child: Text(
-                          'Skip',
+                          context.tr('wt_skip'),
                           style: GoogleFonts.outfit(
                             color: context.textSecondary,
                             fontWeight: FontWeight.w600,
@@ -306,7 +312,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                       const Spacer(),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C896),
+                          backgroundColor: AppThemes.success,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
@@ -321,8 +327,8 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                           children: [
                             Text(
                               _currentPage == _steps.length - 1
-                                  ? 'Get Started'
-                                  : 'Next',
+                                  ? context.tr('wt_get_started')
+                                  : context.tr('wt_next'),
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,

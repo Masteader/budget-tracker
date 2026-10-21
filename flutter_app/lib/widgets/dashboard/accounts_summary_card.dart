@@ -15,7 +15,12 @@ import '../../theme/app_themes.dart';
 class AccountsSummaryCard extends StatefulWidget {
   final String householdId;
 
-  const AccountsSummaryCard({super.key, required this.householdId});
+  /// Hidden until the household has at least this many accounts (the
+  /// dashboard passes 2: with one account it repeats the budget; the Tools
+  /// screen always shows it).
+  final int minAccounts;
+
+  const AccountsSummaryCard({super.key, required this.householdId, this.minAccounts = 1});
 
   @override
   State<AccountsSummaryCard> createState() => _AccountsSummaryCardState();
@@ -75,10 +80,18 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'en_US');
+    final unitSpan = TextSpan(
+      text: context.isRtl ? ' ${context.tr('sar')}' : '${context.tr('sar')} ',
+      style: GoogleFonts.outfit(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: context.electricTeal,
+      ),
+    );
     final isDark = context.isDark;
 
     final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
-    if (accounts.isEmpty) return const SizedBox.shrink();
+    if (accounts.isEmpty || accounts.length < widget.minAccounts) return const SizedBox.shrink();
 
         final totalLiquidity =
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);
@@ -148,7 +161,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                     if (hasDeficit)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        margin: const EdgeInsets.only(right: 6),
+                        margin: const EdgeInsetsDirectional.only(end: 6),
                         decoration: BoxDecoration(
                           color: Colors.redAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
@@ -180,29 +193,29 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                 const SizedBox(height: 14),
 
                 // Total Liquidity Balance
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                // Wrap (not Row) so large accessibility text cannot overflow.
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.end,
                   children: [
-                    Text(
-                      'SAR ',
-                      style: GoogleFonts.outfit(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: context.electricTeal,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          if (!context.isRtl) unitSpan,
+                          TextSpan(
+                            text: fmt.format(totalLiquidity),
+                            style: GoogleFonts.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          if (context.isRtl) unitSpan,
+                        ],
                       ),
                     ),
                     Text(
-                      fmt.format(totalLiquidity),
-                      style: GoogleFonts.outfit(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.tr('across_accounts').replaceAll('{count}', accounts.length.toString()),
+                      context.trPlural('across_accounts', accounts.length),
                       style: TextStyle(
                         fontSize: 12,
                         color: context.textSecondary,
@@ -255,7 +268,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'SAR ${fmt.format(acc.balance)}',
+                              context.sar(acc.balance),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,

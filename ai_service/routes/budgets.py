@@ -5,13 +5,30 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 import logging
+import math
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 
-from auth import verify_household_access
+from auth import (
+    verify_household_access,
+    verify_household_admin_access,
+    get_current_user_id,
+    get_user_household_ids,
+)
+from household_permissions import (
+    PermissionDeniedError,
+    TransactionNotFoundError,
+    assert_can_modify_transaction,
+)
+from nafaqah_service import NafaqahError
+from routes.nafaqah import nafaqah_http_error
+from supabase_client import TransactionRejectedError
 from utils import safe_error_response, validate_uuid
 from models import (
+    MAX_SAR_AMOUNT,
     CategoryCreateRequest,
     SubAllocationsRequest,
     SubCategoryCreateRequest,
@@ -30,13 +47,17 @@ from salary_cycle import (
     remove_sub_category_for_household,
     archive_category_for_household,
     simulate_affordability,
+    SUB_CATEGORY_FORBIDDEN,
+    sub_category_sole_owner,
+    sub_category_write_allowed,
 )
 from recurring_detector import (
+    UnknownRecurringSubCode,
     fetch_household_recurring_bills,
     toggle_household_recurring_bill,
     get_recurring_bill_candidates,
 )
-from installment_service import InstallmentService, InstallmentPlanCreate
+from installment_service import InstallmentPlanCreate, InstallmentService, PlanNotActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +154,8 @@ async def toggle_recurring_bill(
             due_day=req.due_day,
             custom_name=req.custom_name,
         )
+    except UnknownRecurringSubCode as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to toggle recurring bill.")
 
@@ -158,7 +181,7 @@ async def list_recurring_bill_candidates(
 @router.get(
     "/budgets/installments",
     tags=["installments"],
-    summary="List active and completed BNPL installment plans for a household.",
+    summary="List BNPL installment plans (rows of installment_plans: ACTIVE by next_due_at, then the others), with frequency and next_due_at.",
 )
 async def list_installments(
     household_id: str,
@@ -177,7 +200,7 @@ async def list_installments(
 @router.post(
     "/budgets/installments",
     tags=["installments"],
-    summary="Create a new BNPL installment plan (e.g. Tamara/Tabby) and amortize purchase.",
+    summary="Create a BNPL installment plan and amortize the purchase. Optional frequency (monthly / biweekly); default: Tabby/Tamara Pay in 4 biweekly, else monthly.",
 )
 async def create_installment_plan(request: Request):
     try:
@@ -185,17 +208,47 @@ async def create_installment_plan(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
-    household_id = body.get("household_id")
-    if household_id:
-        validate_uuid(household_id)
-        await verify_household_access(request, household_id)
+    caller = get_current_user_id(request)
+    household_id = body.get("household_id") if isinstance(body, dict) else None
+    if not household_id:
+        raise HTTPException(status_code=400, detail="household_id is required.")
+    validate_uuid(household_id)
+    await verify_household_access(request, household_id)
+
+    # Linking (and by default rewriting the amount of) an existing transaction is an edit of it:
+    # only its creator or a household admin may do that (DB-18).
+    original_tx = body.get("original_transaction_id")
+    if original_tx:
+        try:
+            await asyncio.to_thread(assert_can_modify_transaction, household_id, str(original_tx), caller)
+        except TransactionNotFoundError:
+            raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
+        except PermissionDeniedError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except Exception as exc:
+            raise safe_error_response(exc, public_message="Failed to verify the original transaction.")
 
     try:
         req = InstallmentPlanCreate(**body)
+    except ValidationError as exc:
+        # e.g. start_date that is not an ISO date (FABLE-API-09): location/type/message only.
+        raise HTTPException(status_code=422, detail=[
+            {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")} for err in exc.errors()
+        ])
+    try:
         plan = await asyncio.to_thread(InstallmentService.create_plan, req)
         return plan.model_dump()
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
+    except NafaqahError as exc:
+        # The wife-ledger guard refused the adjustment (advance already repaid): 409
+        # ledger_would_be_overpaid; the plan was removed again (FABLE2-API-05).
+        raise nafaqah_http_error(exc)
+    except TransactionRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=TransactionRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
-        raise safe_error_response(exc, status_code=400, public_message="Failed to create installment plan.")
+        # The plan could not be stored: nothing was created and the transaction is unchanged.
+        raise safe_error_response(exc, public_message="Failed to create installment plan.")
 
 
 @router.post(
@@ -203,14 +256,33 @@ async def create_installment_plan(request: Request):
     tags=["installments"],
     summary="Record an installment payment towards a plan.",
 )
-async def pay_installment_endpoint(plan_id: str):
+async def pay_installment_endpoint(plan_id: str, request: Request):
+    caller = get_current_user_id(request)
+    not_found = HTTPException(status_code=404, detail="Installment plan not found.")
     try:
-        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id)
+        UUID(plan_id)
+    except ValueError:
+        raise not_found
+    try:
+        household_id = await asyncio.to_thread(InstallmentService.get_plan_household_id, plan_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to pay installment.")
+    if not household_id:
+        raise not_found
+    await verify_household_access(request, household_id)
+    try:
+        # One atomic conditional increment in the database (FABLE-API-10).
+        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id, household_id, caller)
         if not plan:
             raise HTTPException(status_code=404, detail="Installment plan not found.")
         return plan.model_dump()
     except HTTPException:
         raise
+    except PlanNotActiveError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "plan_not_active", "message": "This installment plan is not active and takes no payments."},
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to pay installment.")
 
@@ -261,7 +333,9 @@ async def add_budget_category(
     request: Request,
     req: CategoryCreateRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    # Budgets and household categories are admin-only, as RLS enforces for direct writes
+    # (budgets_insert_admin / budgets_update_admin, cost_control_codes_insert/update; FR-B-05).
+    await verify_household_admin_access(request, req.household_id)
     try:
         return await asyncio.to_thread(add_category_and_budget, req)
     except Exception as exc:
@@ -277,7 +351,7 @@ async def set_sub_allocations(
     request: Request,
     req: SubAllocationsRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    await verify_household_admin_access(request, req.household_id)
     try:
         return await asyncio.to_thread(
             save_sub_allocations,
@@ -299,7 +373,19 @@ async def add_sub_category(
     request: Request,
     req: SubCategoryCreateRequest,
 ):
-    await verify_household_access(request, req.household_id)
+    await verify_household_admin_access(request, req.household_id)
+    # Definitions are global (no household_id column) and drive keyword matching, so a household
+    # may only define them under a custom category it owns alone; under a system category it can
+    # only allocate to the seeded definitions (E2E-05, FABLE-API-04/05). Every refusal is the same
+    # answer (no oracle on other households' codes).
+    try:
+        allowed = await asyncio.to_thread(
+            sub_category_write_allowed, req.parent_code, req.sub_code, req.household_id
+        )
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to add sub-category.")
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUB_CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(
             add_sub_category_for_household,
@@ -319,9 +405,20 @@ async def add_sub_category(
     tags=["budgets"],
     summary="Get all sub-categories for a parent category code.",
 )
-async def get_sub_categories_route(parent_code: str):
+async def get_sub_categories_route(parent_code: str, request: Request, household_id: Optional[str] = None):
+    """
+    Sub-categories of a system category, or of a custom category of a household the caller
+    belongs to (``household_id`` when given, else any of the caller's households). Another
+    household's custom category yields an empty list, like an unknown code (E2E-05).
+    """
+    user_id = get_current_user_id(request)
+    if household_id:
+        await verify_household_access(request, household_id)
+        household_ids = [household_id]
+    else:
+        household_ids = await asyncio.to_thread(get_user_household_ids, user_id)
     try:
-        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code)
+        sub_cats = await asyncio.to_thread(get_sub_categories_for_parent, parent_code, household_ids)
         return {
             "status": "success",
             "sub_categories": sub_cats,
@@ -335,7 +432,27 @@ async def get_sub_categories_route(parent_code: str):
     tags=["budgets"],
     summary="Rename an existing sub-category.",
 )
-async def rename_sub_category_endpoint(req: SubCategoryRenameRequest):
+async def rename_sub_category_endpoint(req: SubCategoryRenameRequest, request: Request):
+    """
+    Sub-category definitions are not household-scoped in the schema. Renaming is therefore
+    only allowed under a custom category that exactly one household owns, and only by an admin
+    of that household (FABLE-API-05: two households can own the same CUSTOM-… code). System,
+    unknown, shared and foreign codes, and non-admins, all get the same refusal (FABLE-API-08).
+    """
+    get_current_user_id(request)
+    forbidden = HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUB_CATEGORY_FORBIDDEN)
+    try:
+        owner_household_id = await asyncio.to_thread(sub_category_sole_owner, req.parent_code)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to rename sub-category.")
+    if owner_household_id is None:
+        raise forbidden
+    try:
+        await verify_household_admin_access(request, owner_household_id)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            raise
+        raise forbidden
     try:
         return await asyncio.to_thread(
             rename_sub_category,
@@ -358,7 +475,7 @@ async def remove_sub_category_endpoint(
     parent_code: str,
     sub_code: str,
     cycle_key: Optional[str] = None,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id or not parent_code or not sub_code:
         raise HTTPException(status_code=400, detail="household_id, parent_code, and sub_code are required.")
@@ -383,7 +500,7 @@ async def remove_sub_category_endpoint(
 async def delete_budget_category(
     category_code: str,
     household_id: str,
-    _auth: str = Depends(verify_household_access),
+    _auth: str = Depends(verify_household_admin_access),
 ):
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
@@ -408,9 +525,16 @@ async def simulate_purchase_affordability(request: Request):
     except Exception as exc:
         raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
 
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object.")
     household_id = body.get("household_id")
-    target_amount = float(body.get("target_amount") or 0.0)
-    item_name = body.get("item_name") or "Item"
+    try:
+        target_amount = float(body.get("target_amount") or 0.0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="target_amount must be a number.")
+    if not math.isfinite(target_amount) or target_amount < 0 or target_amount > MAX_SAR_AMOUNT:
+        raise HTTPException(status_code=400, detail="target_amount must be between 0 and 10,000,000 SAR.")
+    item_name = str(body.get("item_name") or "Item")[:120]
     category_code = body.get("category_code")
 
     if not household_id:

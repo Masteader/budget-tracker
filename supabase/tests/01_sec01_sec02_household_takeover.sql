@@ -15,6 +15,13 @@ DECLARE
     v_cnt int;
     v_err text;
 BEGIN
+    -- 0. Auth identities (public.users.id references auth.users.id)
+    INSERT INTO auth.users (id, email) VALUES
+        (v_admin_id, 'sec01-admin@test.local'),
+        (v_member_id, 'sec01-member@test.local'),
+        (v_attacker_id, 'sec01-attacker@test.local')
+    ON CONFLICT (id) DO NOTHING;
+
     -- 1. Create clean test households
     DELETE FROM public.household_memberships WHERE household_id IN (v_victim_hh, v_attacker_hh);
     DELETE FROM public.household_invites WHERE household_id IN (v_victim_hh, v_attacker_hh) OR invite_code = 'SECRETINVITE99';
@@ -148,7 +155,12 @@ BEGIN
     PERFORM set_config('role', 'anon', true);
     PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
 
-    SELECT count(*) INTO v_cnt FROM public.household_invites;
+    -- anon has no table privilege at all since audit DB-01 (permission denied == 0 visible)
+    BEGIN
+        SELECT count(*) INTO v_cnt FROM public.household_invites;
+    EXCEPTION WHEN insufficient_privilege THEN
+        v_cnt := 0;
+    END;
     IF v_cnt > 0 THEN
         RAISE EXCEPTION 'VULNERABILITY DETECTED: Anon user can see % household invites!', v_cnt;
     ELSE
