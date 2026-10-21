@@ -100,4 +100,21 @@ void main() {
     expect(twoWives.counterpartOf('h'), isNull);
     expect(twoWives.counterpartOf('w2'), 'h');
   });
+
+  // FABLE2-APP-06: direct fallback inserts store what the API would.
+  group('directInsertAttribution', () {
+    test('defaults to the recorder paying for the household', () {
+      expect(directInsertAttribution(creatorId: _a),
+          {'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': 'household'});
+    });
+    test('follows a Nafaqah choice (husband recording a wife advance)', () {
+      expect(directInsertAttribution(paidBy: 'partner', beneficiary: 'both', creatorId: _a),
+          {'spent_by': 'partner', 'beneficiary_type': 'household', 'beneficiary_id': 'household'});
+      expect(directInsertAttribution(paidBy: 'me', beneficiary: 'me', creatorId: _a),
+          {'spent_by': 'me', 'beneficiary_type': 'individual', 'beneficiary_id': _a});
+    });
+    test("a legacy 'both' payer is never stored in spent_by", () {
+      expect(directInsertAttribution(paidBy: 'both')['spent_by'], 'me');
+    });
+  });
 }

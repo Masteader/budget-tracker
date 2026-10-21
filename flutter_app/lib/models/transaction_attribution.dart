@@ -116,6 +116,18 @@ AttributionColumns attributionColumns({
   return AttributionColumns(spentBy: p, beneficiaryType: ben.type, beneficiaryId: ben.id);
 }
 
+/// `spent_by` / `beneficiary_type` / `beneficiary_id` for an expense the
+/// signed-in user inserts directly when the API is unreachable, exactly as
+/// the API would store it (chat and receipts: the recorder paid for the
+/// household unless the Nafaqah choice's `paid_by` / `beneficiary` say
+/// otherwise; a legacy client `spent_by` is ignored by the server too).
+Map<String, String> directInsertAttribution({String? paidBy, String? beneficiary, String? creatorId}) {
+  var payer = (paidBy ?? 'me').trim().toLowerCase();
+  if (payer != 'me' && payer != 'partner') payer = 'me';
+  final ben = (beneficiary ?? '').trim();
+  return attributionColumns(payer: payer, beneficiary: ben.isEmpty ? 'both' : ben, creatorId: creatorId).toColumns();
+}
+
 /// Tags of a note written before the structured columns: the server-authored
 /// segment (last occurrence, before the trailing item summary).
 Map<String, String> legacyAuditTags(String? rawSms) {

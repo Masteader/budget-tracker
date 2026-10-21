@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -261,18 +262,24 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
         // Attempt saving online transaction
         try {
           final user = Supabase.instance.client.auth.currentUser;
+          final nafaqahFields = _nafaqahRequestFields;
           await Supabase.instance.client.from('transactions').insert({
             'household_id': widget.householdId,
             'user_id': user?.id,
             'merchant': merchant,
             'amount': parsedAmount,
             'category_code': _selectedCategory,
-            'spent_by': _selectedSpentBy,
+            // Who paid and for whom as the receipt API stores them (FABLE2-APP-06).
+            ...directInsertAttribution(
+              paidBy: nafaqahFields['paid_by'],
+              beneficiary: nafaqahFields['beneficiary'],
+              creatorId: user?.id,
+            ),
             'source': 'receipt_scan',
             // `transactions` has no `date`/`vat_amount` columns: an insert
             // naming them always failed and diverted every save offline.
             'timestamp': DateTime.now().toUtc().toIso8601String(),
-            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR | SpentBy: $_selectedSpentBy',
+            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR',
             // Family Nafaqah: the wife's debt or allowance spending (both columns together).
             ..._nafaqah.transactionColumns(
               _nafaqahClass,

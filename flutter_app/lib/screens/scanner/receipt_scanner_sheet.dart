@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/nafaqah.dart';
+import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
@@ -606,44 +607,45 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         auditText += ' | ZATCA QR: $_zatcaQrRaw';
       }
 
-      final baseData = <String, dynamic>{
+      final userId = supabase.auth.currentUser?.id;
+      final nafaqahFields = _nafaqahFields;
+      // The category the scan found (as the API would store it), never a
+      // hard-coded one (FABLE2-APP-06).
+      final categoryCode = (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code'])
+              as String? ??
+          'OPEX-MISC';
+      final row = <String, dynamic>{
         'household_id': widget.householdId,
+        if (userId != null) 'user_id': userId,
         'amount': total,
         'currency': 'SAR',
         'merchant': merchant,
-        'category_code': 'OPEX-GROCERY',
+        'category_code': categoryCode,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
+        'source': 'receipt_scan',
+        'items': items,
+        // Who paid and for whom in the columns the settlement engine reads,
+        // as the receipt API would store them (FABLE2-APP-06).
+        ...directInsertAttribution(
+          paidBy: nafaqahFields['paid_by'],
+          beneficiary: nafaqahFields['beneficiary'],
+          creatorId: userId,
+        ),
         if (receiptUrl != null && receiptUrl.isNotEmpty) 'receipt_url': receiptUrl,
         if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) 'qr_code_raw': _zatcaQrRaw,
-        // Never dropped by the fallbacks below: losing it would erase the
-        // wife's reimbursement debt or her allowance spending.
+        // Losing it would erase the wife's reimbursement debt or her
+        // allowance spending.
         ..._nafaqah.transactionColumns(
           _nafaqahClass,
           chosenWifeId: _nafaqahWifeId,
-          currentUserId: supabase.auth.currentUser?.id,
+          currentUserId: userId,
         ),
       };
 
-      Map<String, dynamic> res;
-      try {
-        res = await supabase.from('transactions').insert({
-          ...baseData,
-          'source': 'receipt_scan',
-          'spent_by': _selectedSpentBy,
-          'items': items,
-        }).select().single();
-      } catch (_) {
-        try {
-          res = await supabase.from('transactions').insert({
-            ...baseData,
-            'source': 'receipt_scan',
-            'spent_by': _selectedSpentBy,
-          }).select().single();
-        } catch (_) {
-          res = await supabase.from('transactions').insert(baseData).select().single();
-        }
-      }
+      // One insert of real columns: the old cascade could store the row
+      // without its attribution.
+      final Map<String, dynamic> res = await supabase.from('transactions').insert(row).select().single();
 
       final txId = res['id'] as String?;
       if (txId != null) {
