@@ -96,7 +96,7 @@ void main() {
 
     final dir = Directionality.of(tester.element(find.byType(MultiRoommateSettlementCard)));
     expect(dir, TextDirection.rtl);
-    expect(find.text('عمر مدين لـ أحمد'), findsOneWidget);
+    expect(find.text('عمر مدين لـأحمد'), findsOneWidget, reason: 'UX-16: no stray space after لـ');
     expect(find.text('50.00 ر.س'), findsOneWidget);
     expect(find.textContaining('SAR'), findsNothing);
   });

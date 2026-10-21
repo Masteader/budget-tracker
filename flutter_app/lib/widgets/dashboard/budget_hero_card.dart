@@ -20,7 +20,8 @@ class BudgetHeroCard extends StatelessWidget {
   /// The household's monthly income; null or 0 falls back to the budgets.
   final double? monthlyIncome;
 
-  /// What is owed between household members, from the viewer's side.
+  /// What is owed between household members, from the viewer's side (the
+  /// wife's dues in family mode, the viewer's roommate balances).
   final List<DueLine> dueLines;
 
   /// Opens the ledger behind [dueLines].
@@ -297,7 +298,13 @@ class BudgetHeroCard extends StatelessWidget {
           // ─── Family / household dues ───────────────────────────────
           for (final due in dueLines) ...[
             const SizedBox(height: 10),
-            _DueRow(text: _dueText(context, due), onTap: onDueTap),
+            _DueRow(
+              text: _dueText(context, due),
+              icon: due.kind == DueKind.owedToWife || due.kind == DueKind.owedToMe
+                  ? Icons.family_restroom_rounded
+                  : Icons.group_outlined,
+              onTap: onDueTap,
+            ),
           ],
           const SizedBox(height: 14),
 
@@ -329,15 +336,20 @@ class BudgetHeroCard extends StatelessWidget {
         });
       case DueKind.owedToMe:
         return context.trArgs('hero_due_owed_to_you', {'amount': amount});
+      case DueKind.iOwe:
+        return context.trArgs('hero_due_you_owe', {'name': due.name ?? '', 'amount': amount});
+      case DueKind.owedByRoommate:
+        return context.trArgs('hero_due_owes_you', {'name': due.name ?? '', 'amount': amount});
     }
   }
 }
 
 class _DueRow extends StatelessWidget {
   final String text;
+  final IconData icon;
   final VoidCallback? onTap;
 
-  const _DueRow({required this.text, this.onTap});
+  const _DueRow({required this.text, required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -352,7 +364,7 @@ class _DueRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.family_restroom_rounded, size: 18, color: AppThemes.champagneGold),
+              Icon(icon, size: 18, color: AppThemes.champagneGold),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

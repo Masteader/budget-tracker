@@ -391,6 +391,19 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   /// The family Nafaqah summary the balances card loaded (hero dues line).
   NafaqahSummary? _nafaqah;
 
+  /// The settlement summary the balances section loaded (roommate dues).
+  SettlementV2Summary? _settlement;
+
+  /// The hero's dues: the viewer's roommate balances (UX-16), else what is
+  /// owed to the wife (UX-07).
+  List<DueLine> _dueLines() {
+    final settlement = _settlement;
+    if (settlement != null && settlement.isRoommateMode) {
+      return roommateDueLines(settlement, supabase.auth.currentUser?.id);
+    }
+    return _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!);
+  }
+
   void _scrollToBalances() {
     final ctx = _balancesKey.currentContext;
     if (ctx != null) {
@@ -432,7 +445,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         budgets: budgets,
         cycle: _selectedCycle,
         monthlyIncome: setup?.monthlyIncome,
-        dueLines: _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!),
+        dueLines: _dueLines(),
         onDueTap: _scrollToBalances,
       ),
       // UX-08: overspent categories right under the hero.
@@ -628,6 +641,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 onNafaqahLoaded: (summary) {
                                   if (mounted) setState(() => _nafaqah = summary);
                                 },
+                                onSettlementLoaded: (summary) {
+                                  if (mounted) setState(() => _settlement = summary);
+                                },
                               ),
                               const SizedBox(height: 16),
                               // Commitments: recurring bills and installments together.
@@ -767,6 +783,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                 setState(() {
                   _setup = null;
                   _nafaqah = null;
+                  _settlement = null;
                   _householdId = _fetchHouseholdId();
                 });
               },

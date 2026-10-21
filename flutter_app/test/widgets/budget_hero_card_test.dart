@@ -126,6 +126,20 @@ void main() {
     expect(find.text('المتبقي حتى الراتب'), findsNothing, reason: 'no income: budget-based label');
   });
 
+  testWidgets('roommates: my balance with each roommate (UX-16)', (tester) async {
+    await tester.pumpWidget(_host(
+      [_budget('OPEX-GROCERY', 3000, 500)],
+      DateTime.utc(2026, 11, 6, 9),
+      dues: const [
+        DueLine(kind: DueKind.iOwe, name: 'Faisal', amount: 198.67),
+        DueLine(kind: DueKind.owedByRoommate, name: 'Imran', amount: 50),
+      ],
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('You owe Faisal SAR 198.67'), findsOneWidget);
+    expect(find.text('Imran owes you SAR 50.00'), findsOneWidget);
+  });
+
   testWidgets('no dues line when nothing is owed', (tester) async {
     await tester.pumpWidget(_host([_budget('OPEX-GROCERY', 3000, 500)], DateTime.utc(2026, 11, 6, 9)));
     await tester.pumpAndSettle();
