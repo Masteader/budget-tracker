@@ -54,24 +54,6 @@ class ChatApiClient {
     return res;
   }
 
-  Future<Map<String, dynamic>> simulatePurchase({
-    required String message,
-    required String householdId,
-    double? customAmount,
-    String? customCategory,
-  }) async {
-    return baseClient.post(
-      '/agent/simulate-purchase',
-      {
-        'message': message,
-        'household_id': householdId,
-        if (customAmount != null) 'amount': customAmount,
-        if (customCategory != null) 'category_code': customCategory,
-      },
-      shouldSign: true,
-    );
-  }
-
   Map<String, dynamic> fallbackDirectCloudChat(String message, String householdId) {
     final lower = message.toLowerCase();
 

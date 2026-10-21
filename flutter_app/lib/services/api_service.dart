@@ -94,19 +94,6 @@ class ApiService {
         occurredAt: occurredAt,
       );
 
-  Future<Map<String, dynamic>> simulatePurchase({
-    required String message,
-    required String householdId,
-    double? customAmount,
-    String? customCategory,
-  }) =>
-      chat.simulatePurchase(
-        message: message,
-        householdId: householdId,
-        customAmount: customAmount,
-        customCategory: customCategory,
-      );
-
   // ── Receipts & Invoices ──────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> scanReceipt({
