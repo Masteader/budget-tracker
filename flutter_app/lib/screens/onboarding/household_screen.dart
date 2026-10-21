@@ -15,6 +15,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/household_join.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/settings/household_type_chooser.dart';
 import '../../l10n/app_localizations.dart';
 
 class HouseholdScreen extends StatefulWidget {
@@ -22,11 +23,15 @@ class HouseholdScreen extends StatefulWidget {
   final WidgetBuilder? destinationBuilder;
   final Future<Map<String, dynamic>> Function(String code)? joinHandler;
 
+  /// Calls `create_household_and_claim` (defaults to `supabase.rpc`).
+  final HouseholdRpc? createRpc;
+
   const HouseholdScreen({
     super.key,
     this.apiService,
     this.destinationBuilder,
     this.joinHandler,
+    this.createRpc,
   });
 
   @override
@@ -40,6 +45,10 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   final _joinCodeCtrl   = TextEditingController();
   bool _loading = false;
   HouseholdInvite? _inspectedInvite;
+
+  /// Family or Roommates: asked when the household is created.
+  String? _householdType;
+  bool _showTypeRequired = false;
 
   ApiService get _api => widget.apiService ?? ApiService.instance;
 
@@ -88,14 +97,18 @@ class _HouseholdScreenState extends State<HouseholdScreen>
   Future<void> _createHousehold() async {
     final name = _createNameCtrl.text.trim();
     if (name.isEmpty) return;
+    final type = _householdType;
+    if (type == null) {
+      setState(() => _showTypeRequired = true);
+      return;
+    }
     setState(() => _loading = true);
     try {
-      Map<String, dynamic> hh;
-      final res = await supabase.rpc(
-        'create_household_and_claim',
-        params: {'p_name': name},
+      final hh = await createHouseholdAndClaim(
+        name: name,
+        householdType: type,
+        rpc: widget.createRpc ?? (fn, params) => supabase.rpc(fn, params: params),
       );
-      hh = checkHouseholdJoinResult(res);
       final householdId = hh['id'] as String;
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
@@ -299,7 +312,8 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                   controller: _tab,
                   children: [
                     // ── Create ───────────────────────────────────────────
-                    Column(
+                    SingleChildScrollView(
+                      child: Column(
                       children: [
                         TextField(
                           controller: _createNameCtrl,
@@ -307,6 +321,12 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                             hintText: context.tr('hh_name_hint'),
                             prefixIcon: const Icon(Icons.home_outlined),
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        HouseholdTypeChooser(
+                          value: _householdType,
+                          showRequired: _showTypeRequired,
+                          onChanged: (type) => setState(() => _householdType = type),
                         ),
                         const SizedBox(height: 24),
                         _BigButton(
@@ -316,6 +336,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
                           onTap: _createHousehold,
                         ),
                       ],
+                    ),
                     ),
 
                     // ── Join ─────────────────────────────────────────────

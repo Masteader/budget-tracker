@@ -80,4 +80,23 @@ void main() {
     expect(find.textContaining('INV'), findsNothing);
     expect(find.text('Generate Invite Code'), findsOneWidget, reason: 'the user can retry');
   });
+
+  // Backend: an invite whose role does not fit the household type is refused
+  // with 409 {"detail": {"code": "invite_role_mismatch"}}.
+  testWidgets('an invite role that does not fit the household type is explained', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoleInviteDialog(
+            householdId: 'hh-role-123',
+            createInvite: (hid, role, {targetMemberId}) async =>
+                throw const ApiRequestException('Server response error (409)', statusCode: 409, code: 'invite_role_mismatch'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Generate Invite Code'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('does not fit the household type'), findsOneWidget);
+  });
 }

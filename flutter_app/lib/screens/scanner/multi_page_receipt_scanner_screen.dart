@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/nafaqah.dart';
 import '../../providers/household_role_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/sync_worker.dart' show SyncWorker;
@@ -175,7 +176,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
           await _queueOffline(base64List, messageKey: 'mp_queued_offline_msg', idempotencyKey: idempotencyKey);
         } else {
           _safeSetState(() {
-            _errorMessage = res['message'] ?? context.tr('mp_parse_failed');
+            _errorMessage = expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('mp_parse_failed');
           });
         }
       }

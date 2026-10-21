@@ -92,11 +92,21 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
       // FR-A-11: no invented "offline" code; it could never be redeemed.
       if (!mounted) return;
       setState(() => _isGenerating = false);
-      final forbidden = e is ApiRequestException && e.statusCode == 403;
-      AppSnackBar.showError(
-        context,
-        forbidden ? context.tr('rid_admin_only') : context.trArgs('rid_generate_failed', {'error': e}),
-      );
+      final status = e is ApiRequestException ? e.statusCode : null;
+      final code = e is ApiRequestException ? e.code : null;
+      final String message;
+      if (status == 403) {
+        message = context.tr('rid_admin_only');
+      } else if (code == 'invite_role_mismatch') {
+        message = context.tr('hh_invite_role_mismatch');
+      } else if (status == 400) {
+        message = context.tr('rid_invalid_target');
+      } else if (status == 404) {
+        message = context.tr('rid_target_not_dependent');
+      } else {
+        message = context.trArgs('rid_generate_failed', {'error': e});
+      }
+      AppSnackBar.showError(context, message);
       return;
     }
 

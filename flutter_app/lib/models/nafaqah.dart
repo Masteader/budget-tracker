@@ -296,6 +296,9 @@ class NafaqahSummary {
   /// The caller is a household admin and may choose the provider.
   final bool canSetProvider;
 
+  /// 'family' | 'roommates' (`household_type`), when the server sends it.
+  final String? householdType;
+
   const NafaqahSummary({
     this.mode = 'not_family',
     this.callerRole,
@@ -309,6 +312,7 @@ class NafaqahSummary {
     this.providerUserId,
     this.needsProvider = false,
     this.canSetProvider = false,
+    this.householdType,
   });
 
   bool get isFamily => mode == 'family_nafaqah' && wives.isNotEmpty;
@@ -341,6 +345,7 @@ class NafaqahSummary {
       providerUserId: map['provider_user_id'] as String?,
       needsProvider: map['needs_provider'] as bool? ?? false,
       canSetProvider: map['can_set_provider'] as bool? ?? false,
+      householdType: map['household_type'] as String?,
     );
   }
 }

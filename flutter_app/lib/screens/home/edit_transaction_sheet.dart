@@ -970,7 +970,11 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       } catch (e) {
                         if (sheetCtx.mounted) {
                           setModalState(() => isProcessing = false);
-                          AppSnackBar.showError(sheetCtx, sheetCtx.trArgs('bnpl_convert_failed_msg', {'error': e}), title: sheetCtx.tr('conversion_failed'));
+                          AppSnackBar.showError(
+                            sheetCtx,
+                            nafaqahWriteErrorText(sheetCtx, e) ?? sheetCtx.trArgs('bnpl_convert_failed_msg', {'error': e}),
+                            title: sheetCtx.tr('conversion_failed'),
+                          );
                         }
                       }
                     },

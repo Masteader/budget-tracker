@@ -366,7 +366,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       _safeSetState(() {
         _isAnalyzing = false;
         if (res['status'] == 'error') {
-          _errorMessage = res['message'] ?? context.tr('scan_analyze_failed');
+          _errorMessage = expenseApiErrorText(context, res) ?? res['message'] ?? context.tr('scan_analyze_failed');
         } else {
           _scanResult = res;
           _applyNafaqahPreview(res);
@@ -512,7 +512,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           // or failing server, or a commit the AI could not re-read (200
           // {"status": "error"}), falls back to the reviewed preview.
           setState(() => _errorMessage =
-              nafaqahWriteErrorText(context, res) ?? res['message'] as String? ?? context.tr('scan_analyze_failed'));
+              expenseApiErrorText(context, res) ?? res['message'] as String? ?? context.tr('scan_analyze_failed'));
         } else {
           await _fallbackSaveToSupabase(allowDuplicate: allowDuplicate, receiptUrl: uploadedReceiptUrl);
         }

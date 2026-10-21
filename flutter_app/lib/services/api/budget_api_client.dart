@@ -43,7 +43,8 @@ class BudgetApiClient {
     int? dueDay,
     String? customName,
   }) async {
-    await baseClient.post(
+    // A refusal (422: unknown sub_code) throws, so the switch is turned back.
+    final res = await baseClient.post(
       '/budgets/recurring-bills/toggle',
       {
         'household_id': householdId,
@@ -54,6 +55,7 @@ class BudgetApiClient {
         if (customName != null) 'custom_name': customName,
       },
     );
+    ApiRequestException.check(res);
   }
 
   Future<Map<String, dynamic>> fetchSalaryCycleForecast({

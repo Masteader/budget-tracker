@@ -619,6 +619,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
         message = context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)});
       } else if (e is NafaqahApiException && e.code == 'forbidden') {
         message = context.tr('nafaqah_err_forbidden');
+      } else if (e is NafaqahApiException && e.code == 'invalid') {
+        message = context.tr('nafaqah_err_invalid_amount');
       } else if (nafaqahWriteRefusalOf(e) != null) {
         message = nafaqahWriteRefusalText(context, nafaqahWriteRefusalOf(e)!);
       } else {

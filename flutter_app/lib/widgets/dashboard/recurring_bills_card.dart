@@ -6,6 +6,7 @@ import '../../models/recurring_bill.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -741,9 +742,15 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                     isRecurring: val,
                                   );
                                   widget.onUpdated();
-                                } catch (_) {
+                                } catch (e) {
                                   if (mounted) {
                                     setState(() => c.isRecurring = !val);
+                                    AppSnackBar.showError(
+                                      this.context,
+                                      e is ApiRequestException && e.statusCode == 422
+                                          ? this.context.tr('rb_toggle_invalid')
+                                          : this.context.tr('rb_toggle_failed'),
+                                    );
                                   }
                                 }
                               },

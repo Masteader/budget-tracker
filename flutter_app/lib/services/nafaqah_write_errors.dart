@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../l10n/app_localizations.dart';
 import '../models/nafaqah.dart';
+import 'api/base_api_client.dart' show ApiRequestException;
 
 /// A transaction write the database (or API) refused for a Nafaqah rule.
 enum NafaqahWriteRefusal {
@@ -26,7 +27,15 @@ enum NafaqahWriteRefusal {
 
 const String _ledgerHint = 'ledger_would_be_overpaid';
 const String _noProviderHint = 'no_nafaqah_provider';
-const Set<String> _notClassifierCodes = {'not_classifier', 'nafaqah_classifier_only', 'nafaqah_classifier_forbidden'};
+// API 403 `nafaqah_classification_forbidden`; PostgREST hint `nafaqah_class_not_allowed`
+// (the others are accepted for robustness).
+const Set<String> _notClassifierCodes = {
+  'nafaqah_classification_forbidden',
+  'nafaqah_class_not_allowed',
+  'not_classifier',
+  'nafaqah_classifier_only',
+  'nafaqah_classifier_forbidden',
+};
 
 bool _isClassifierMessage(String? message) => (message ?? '').toLowerCase().contains('classify a family expense');
 
@@ -47,6 +56,7 @@ NafaqahWriteRefusal? nafaqahWriteRefusalOf(Object? error) {
     }
     return null;
   }
+  if (error is ApiRequestException) return _fromCode(error.code);
   if (error is NafaqahApiException) {
     return _fromCode(error.code) ?? (_isClassifierMessage(error.message) ? NafaqahWriteRefusal.notClassifier : null);
   }
@@ -88,4 +98,19 @@ String nafaqahWriteRefusalText(BuildContext context, NafaqahWriteRefusal refusal
 String? nafaqahWriteErrorText(BuildContext context, Object? error) {
   final refusal = nafaqahWriteRefusalOf(error);
   return refusal == null ? null : nafaqahWriteRefusalText(context, refusal);
+}
+
+/// Localized explanation of a refused chat / receipt request (the API error
+/// map): a Nafaqah refusal, or receipt photos too large for the server
+/// (413: more than 12 MP per page or 24 MP in total). Null otherwise, so the
+/// caller falls back to the server's own message.
+String? expenseApiErrorText(BuildContext context, Object? response) {
+  final nafaqah = nafaqahWriteErrorText(context, response);
+  if (nafaqah != null) return nafaqah;
+  if (response is Map && response['status'] == 'error') {
+    final raw = response['status_code'];
+    final status = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
+    if (status == 413) return context.tr('scan_images_too_large');
+  }
+  return null;
 }

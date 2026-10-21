@@ -250,6 +250,12 @@ class ApiService {
   Future<HouseholdRoster> transferPrimaryAdmin(String householdId, String newPrimaryUserId) =>
       roles.transferPrimaryAdmin(householdId, newPrimaryUserId);
 
+  Future<String> setHouseholdType(String householdId, String householdType) =>
+      roles.setHouseholdType(householdId, householdType);
+
+  Future<String> setMemberFinancialRole(String householdId, String userId, String financialRole) =>
+      roles.setFinancialRole(householdId, userId, financialRole);
+
   // ── Family Nafaqah (husband-owes-wife ledger, wife allowance) ──────────────
   late final NafaqahApiClient nafaqah = NafaqahApiClient(baseClient: base);
 

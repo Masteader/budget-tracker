@@ -171,6 +171,10 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
           previewOnly: true,
         );
 
+        // Photos too large for the server (413) are never parsed: say so.
+        if (mounted && res['status'] == 'error' && res['status_code'] == 413) {
+          AppSnackBar.showError(context, expenseApiErrorText(context, res)!);
+        }
         if (mounted) {
           final merchant = res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
