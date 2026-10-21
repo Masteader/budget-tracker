@@ -15,6 +15,13 @@ import supabase_client
 
 logger = logging.getLogger(__name__)
 
+
+def _sar_half_up(value: Any) -> float:
+    """SAR amount rounded half-up to the halala (Python's round() is half-even on floats)."""
+    from decimal import Decimal, ROUND_HALF_UP
+
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
 # Plans live in public.installment_plans only. The former container-local JSON fallback (used when
 # the insert failed, e.g. for start_date "not-a-date") reported plans as created that no other
 # instance could see and that vanished on redeploy (FABLE-API-09): a failed insert now fails.
@@ -30,14 +37,14 @@ def calculate_installment_terms(
     if installment_count <= 0:
         installment_count = 1
 
-    monthly_amount = round(total_amount / installment_count, 2)
+    monthly_amount = _sar_half_up(total_amount / installment_count)
     # Handle rounding cents on last payment
     paid_installments = 1
     remaining_installments = max(0, installment_count - paid_installments)
-    remaining_amount = round(total_amount - (monthly_amount * paid_installments), 2)
+    remaining_amount = _sar_half_up(total_amount - (monthly_amount * paid_installments))
 
     return {
-        "total_amount": round(total_amount, 2),
+        "total_amount": _sar_half_up(total_amount),
         "installment_count": installment_count,
         "monthly_amount": monthly_amount,
         "paid_installments": paid_installments,
@@ -157,7 +164,7 @@ class InstallmentService:
         # Calculate monthly amount if not provided
         monthly = req.monthly_amount
         if not monthly or monthly <= 0:
-            monthly = round(req.total_amount / max(1, req.installment_count), 2)
+            monthly = _sar_half_up(req.total_amount / max(1, req.installment_count))
 
         plan_id = str(uuid.uuid4())
         plan_dict = {
@@ -165,7 +172,7 @@ class InstallmentService:
             "household_id": req.household_id,
             "merchant": req.merchant,
             "provider": req.provider,
-            "total_amount": round(req.total_amount, 2),
+            "total_amount": _sar_half_up(req.total_amount),
             "installment_count": req.installment_count,
             "monthly_amount": monthly,
             "paid_installments": req.paid_installments,

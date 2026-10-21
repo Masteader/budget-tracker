@@ -467,8 +467,12 @@ def calculate_partner_settlement(
             total_owed_to_me = 0.0
             total_owed_to_partner = nafaqah_balance["outstanding"]
     else:
-        fair_share_me = round(total_shared * split_ratio, 2)
-        fair_share_partner = round(total_shared * (1.0 - split_ratio), 2)
+        # Half-up to the halala, and the partner's share is the rest: the shares always sum to
+        # the total (two independently rounded halves of 0.01 used to make 0.02).
+        shared_halalas = _to_halalas(total_shared)
+        my_halalas = min(shared_halalas, _to_halalas(total_shared * split_ratio))
+        fair_share_me = _to_sar(my_halalas)
+        fair_share_partner = _to_sar(shared_halalas - my_halalas)
 
         # Calculate net debt:
         # What partner owes me:
@@ -484,11 +488,11 @@ def calculate_partner_settlement(
         total_owed_to_partner += settled_to_me
 
     # Net balance: positive = partner owes me, negative = I owe partner
-    net_balance = round(total_owed_to_me - total_owed_to_partner, 2)
+    net_balance = _to_sar(_to_halalas(total_owed_to_me - total_owed_to_partner))  # half-up
 
-    # Roommate splits round to whole riyals; the Nafaqah ledger is exact to the halala, so any
-    # outstanding halala is still shown (the repayment RPC would accept it).
-    settled_below = 0.01 if is_family else 0.5
+    # Settled only below one halala, as in /settlement-v2 and the Nafaqah ledger (a roommate
+    # balance of up to 0.49 SAR used to be reported as settled while v2 showed the debt).
+    settled_below = 0.01
     if abs(net_balance) < settled_below:
         who_owes = "settled"
         settle_amt = 0.0

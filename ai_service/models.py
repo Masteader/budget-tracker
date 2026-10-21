@@ -182,6 +182,12 @@ class HouseholdReimbursementRequest(BaseModel):
     def validate_household_uuid(cls, v: str) -> str:
         return _uuid_validator(v)
 
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        # 422 for sub-halala input (FABLE2-API-04), like the Nafaqah repayment route.
+        return _two_decimals(v)
+
 
 def _two_decimals(v: float) -> float:
     """SAR amounts are numeric(14,2): reject sub-halala precision instead of rounding it away."""

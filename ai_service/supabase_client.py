@@ -1254,11 +1254,12 @@ def record_household_reimbursement(
     category. ``recorded_by`` (the verified caller) is the transaction's creator (DB-18).
     """
     import uuid
-    from decimal import Decimal
+    from decimal import ROUND_HALF_UP, Decimal
 
     tx_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    value = Decimal(str(amount)).quantize(Decimal("0.01"))
+    # The route refuses sub-halala input (422); any other caller rounds half-up like the app.
+    value = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     method = (payment_method or "").strip().upper() or "OTHER"
     # One audit part per tag: a "|" inside the note must not create a second PaidBy tag.
     note_text = " ".join((notes or "").replace("|", "/").split())[:500]
