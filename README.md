@@ -224,8 +224,8 @@ Details and couplings: [`docs/review/audit/MASTER_AUDIT_REPORT.md`](docs/review/
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | with SMTP | Login of the `fmscoinfo@fmsco.com.sa` mailbox (the sender) on its own SMTP server |
 | `SMTP_FROM` | ❌ | Overrides `MAIL_FROM` for SMTP only |
 | `TRUSTED_PROXY_IPS` | ❌ | Proxy IPs whose `X-Forwarded-For` is trusted for per-IP rate limits (default loopback) |
-| `TRUST_PROXY_HEADERS` | ❌ | `1` trusts `X-Forwarded-For` from any peer (the client is the hop the proxies appended), `0` never; unset = on when `RAILWAY_ENVIRONMENT` is set (Railway's edge is the only way in and its addresses are not static) |
-| `TRUSTED_PROXY_HOPS` | ❌ | Proxies appending to `X-Forwarded-For` in front of the app (default `1`, Railway's edge; `2` with a CDN in front) |
+| `TRUST_PROXY_HEADERS` | ❌ | `1` trusts `X-Forwarded-For` from any peer (the client is the hop the proxies appended), `0` never; unset = on when `RAILWAY_ENVIRONMENT` is set (Railway's edge is the only way in and its addresses are not static). **Assumes the service is reachable only through Railway's HTTP edge**: no Railway TCP proxy, no private-network ingress from other services, no public port; otherwise callers choose their own `X-Forwarded-For` (and rate-limit identity), so set `0` |
+| `TRUSTED_PROXY_HOPS` | ❌ | Proxies appending to `X-Forwarded-For` in front of the app (default `1`, Railway's edge; `2` with a CDN in front). Must equal the real hop count: a higher value uses a client-supplied entry |
 | `ALLOWED_ORIGINS` | ❌ | Comma-separated CORS origins; replaces the defaults (localhost dev ports, `https://budget.fmsco.com.sa`, `https://www.budget.fmsco.com.sa`) |
 
 #### Contact, support and VIP early-access email

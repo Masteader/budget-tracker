@@ -504,6 +504,27 @@ def fetch_household_recurring_bills(
     )
 
 
+class UnknownRecurringSubCode(ValueError):
+    """The sub_code of a recurring-bill toggle names no item of that budget (HTTP 422)."""
+
+    PUBLIC_MESSAGE = "sub_code must be a sub-budget of this category."
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
+def _is_known_sub_code(household_id: str, category_code: str, sub_code: str, sub_allocs: Dict[str, Any]) -> bool:
+    """An allocation key of the budget, or a known sub-category of the category for the household."""
+    if not sub_code or sub_code.startswith("_"):
+        return False
+    if sub_code in sub_allocs:
+        return True
+    from salary_cycle import get_sub_categories_for_parent
+
+    known = get_sub_categories_for_parent(category_code, [household_id])
+    return any(s.get("sub_code") == sub_code for s in known)
+
+
 def toggle_household_recurring_bill(
     household_id: str,
     category_code: str,
@@ -544,6 +565,11 @@ def toggle_household_recurring_bill(
     b_id = matching[0]["id"]
     sub_allocs = matching[0].get("sub_allocations") or {}
     rec_config = sub_allocs.get("_recurring_config") or {}
+
+    # Only an item of this budget is configured: a member must not grow the admin-only budgets
+    # row with arbitrary keys (FABLE2-API-02).
+    if not _is_known_sub_code(household_id, category_code, sub_code, sub_allocs):
+        raise UnknownRecurringSubCode()
 
     item_cfg = rec_config.get(sub_code) or {}
     item_cfg["enabled"] = is_recurring

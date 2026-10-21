@@ -43,6 +43,8 @@ from supabase_client import (
     set_household_rollover_rule,
     get_household_savings_summary,
     create_household_role_invite,
+    InviteRejectedError,
+    InviteTargetNotFound,
     inspect_household_role_invite,
     claim_household_role_invite,
     record_household_reimbursement,
@@ -220,13 +222,22 @@ async def create_household_role_invite_endpoint(
     if not household_id:
         raise HTTPException(status_code=400, detail="household_id is required.")
     validate_uuid(household_id)
+    target = payload.target_member_id
+    if target is not None:
+        # FABLE2-API-06: a UUID (400) of a dependent of this household (404), checked before
+        # the insert; database refusals are 4xx.
+        target = validate_uuid(target, "target_member_id").strip().lower()
     try:
         return await asyncio.to_thread(
             create_household_role_invite,
             household_id,
             payload.role,
-            payload.target_member_id,
+            target,
         )
+    except InviteTargetNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except InviteRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=InviteRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to create invite.")
 

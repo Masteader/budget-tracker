@@ -72,7 +72,7 @@ def test_toggle_household_recurring_bill_selects_cycle_columns(monkeypatch):
             "category_code": "OPEX-UTILITIES",
             "cycle_key": "2026-10",
             "month": "2026-10-01",
-            "sub_allocations": {},
+            "sub_allocations": {"ELECTRICITY": 300},  # FABLE2-API-02: a known item
         }
     ]
     mock_sb.table("budgets").update.return_value.eq.return_value.execute.return_value.data = [{"status": "ok"}]

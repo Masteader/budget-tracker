@@ -182,6 +182,12 @@ class HouseholdReimbursementRequest(BaseModel):
     def validate_household_uuid(cls, v: str) -> str:
         return _uuid_validator(v)
 
+    @field_validator("amount")
+    @classmethod
+    def validate_amount_precision(cls, v: float) -> float:
+        # 422 for sub-halala input (FABLE2-API-04), like the Nafaqah repayment route.
+        return _two_decimals(v)
+
 
 def _two_decimals(v: float) -> float:
     """SAR amounts are numeric(14,2): reject sub-halala precision instead of rounding it away."""
@@ -239,8 +245,10 @@ class ShoppingBasketOptimizeRequest(BaseModel):
 
 class RecurringBillToggleRequest(BaseModel):
     household_id: str
-    category_code: str
-    sub_code: str
+    # Bounded like every other code (FABLE2-API-02): a member's key is written into the
+    # admin-only budgets row; sub_code must also name an allocation / sub-category (422).
+    category_code: Code
+    sub_code: Code
     is_recurring: bool = True
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     custom_name: Optional[str] = Field(default=None, max_length=120)

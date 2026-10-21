@@ -110,3 +110,17 @@ produce such names); no backfill of historical rows was run (live is never writt
 `installment_service.list_plans` still reconciles plans from notes mentioning Tamara/Tabby.
 
 **App status (2026-10-21, Flutter handoff):** FABLE-LOGIC-04 provider badge/selector and missing-provider prompt, FABLE-LOGIC-02 `overpaid` display and ledger-guard/no-provider explanations, FABLE-LOGIC-01 manual expense roles per household (members API), FABLE-DB-01 join/claim refusal messages: done in the app. FABLE-LOGIC-09: fixed (`money.dart` parses to integer halalas, half-up). Details in `FIX_LOG.md` ("Fable review — app handoff"). FABLE-LOGIC-03 (app writes of `beneficiary_type/beneficiary_id`) left for the follow-up.
+
+## Status — round 2 backend items (fix round 2026-10-21)
+
+| Finding | Status | Fix | Proof | Commit |
+|---|---|---|---|---|
+| FABLE2-API-01 | Fixed | Constraint/permission refusals of a transaction insert are final (no pruned retries); `no_nafaqah_provider` / `ledger_would_be_overpaid` → 409 `{"detail":{"code":"no_provider"\|"ledger_would_be_overpaid"}}` from chat and receipts; early refusal before budget reallocation when the family needs a provider. | `test_fable_r2_insert_refusals.py`; e2e `test_09::test_api01_*` | `265502e` |
+| FABLE2-LOGIC-01 (backend tolerance) | Fixed | `spent_by='both'` → payer from the note tags; manual-tail regex accepts `\| SubCategory: …`. App-side structured edit writes are the Flutter agent's. | `test_fable_r2_legacy_edit_attribution.py`; e2e `test_09::test_logic01_*` | `8460800` |
+| FABLE2-API-02 | Fixed | Toggle codes ≤ 60 chars; `sub_code` must be a sub-budget of the category (422). | `test_fable_r2_recurring_toggle_bounds.py`; e2e `test_09::test_api02_*` | `2f9b640` |
+| FABLE2-API-03 | Fixed | Full-decode formats capped at 12 MP/page, 24 MP/receipt; 2 concurrent stitches. | `test_fable_r2_receipt_memory.py` | `fb4db86` |
+| FABLE2-API-04 | Fixed | Sub-halala roommate settlement → 422; half-up quantisation. | `test_fable_r2_money_rounding.py`; e2e `test_09::test_api04_*` | `b982db3` |
+| FABLE2-API-05 | Fixed | Refused adjustment deletes the plan, 409 `ledger_would_be_overpaid`. | `test_fable_r2_installment_consistency.py`; e2e `test_09::test_api05_*` | `bbc8cfe` |
+| FABLE2-API-06 | Fixed | Invite target: 400 non-UUID, 404 not a dependent of this household; DB refusals 4xx. | `test_fable_r2_invite_target.py`; e2e `test_09::test_api06_*` | `2523cdc` |
+| O2 | Documented | Ingress assumption of proxy-header trust; hop count must be exact. | — | `5e28ae6` |
+| O4 | Fixed | v1 roommate 'settled' threshold 0.01; shares sum to the total. | `test_fable_r2_money_rounding.py::test_v1_*` | `b982db3` |

@@ -23,6 +23,9 @@ from household_permissions import (
     TransactionNotFoundError,
     assert_can_modify_transaction,
 )
+from nafaqah_service import NafaqahError
+from routes.nafaqah import nafaqah_http_error
+from supabase_client import TransactionRejectedError
 from utils import safe_error_response, validate_uuid
 from models import (
     MAX_SAR_AMOUNT,
@@ -49,6 +52,7 @@ from salary_cycle import (
     sub_category_write_allowed,
 )
 from recurring_detector import (
+    UnknownRecurringSubCode,
     fetch_household_recurring_bills,
     toggle_household_recurring_bill,
     get_recurring_bill_candidates,
@@ -150,6 +154,8 @@ async def toggle_recurring_bill(
             due_day=req.due_day,
             custom_name=req.custom_name,
         )
+    except UnknownRecurringSubCode as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to toggle recurring bill.")
 
@@ -234,6 +240,12 @@ async def create_installment_plan(request: Request):
         return plan.model_dump()
     except PermissionError:
         raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
+    except NafaqahError as exc:
+        # The wife-ledger guard refused the adjustment (advance already repaid): 409
+        # ledger_would_be_overpaid; the plan was removed again (FABLE2-API-05).
+        raise nafaqah_http_error(exc)
+    except TransactionRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=TransactionRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
         # The plan could not be stored: nothing was created and the transaction is unchanged.
         raise safe_error_response(exc, public_message="Failed to create installment plan.")

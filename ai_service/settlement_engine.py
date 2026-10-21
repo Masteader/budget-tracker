@@ -64,8 +64,13 @@ _SHARED_IDS = {"", "household", "all_peers", "all", "both", "shared", "family", 
 _WIFE_TOKENS = ("wife", "spouse")
 _HUSBAND_TOKENS = ("husband", "provider")
 _RELATIVE_TOKENS = ("me", "partner") + _WIFE_TOKENS + _HUSBAND_TOKENS
+# The attribution tail of a client-written note: buildManualExpenseRow() writes
+# "| PaidBy: p | Beneficiary: b | SpentBy: s"; the edit sheet of app builds before the structured
+# columns wrote "| PaidBy: p | Beneficiary: b | SubCategory: c | SpentBy: s" (FABLE2-LOGIC-01).
 _MANUAL_TAIL_RE = re.compile(
-    r"\|\s*PaidBy:\s*([^|]*?)\s*\|\s*Beneficiary:\s*([^|]*?)\s*\|\s*SpentBy:\s*([^|]*?)\s*$", re.IGNORECASE
+    r"\|\s*PaidBy:\s*([^|]*?)\s*\|\s*Beneficiary:\s*([^|]*?)\s*"
+    r"(?:\|\s*SubCategory:\s*[^|]*?\s*)?\|\s*SpentBy:\s*([^|]*?)\s*$",
+    re.IGNORECASE,
 )
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _SETTLEMENT_HEAD_RE = re.compile(r"^\s*Settlement\s*\|\s*PaidBy:\s*([^|]+?)\s*\|", re.IGNORECASE)
@@ -164,18 +169,27 @@ def transaction_attribution(tx: Dict[str, Any]) -> Tuple[str, str]:
     """
     source = str(tx.get("source") or "").strip().lower()
     raw = str(tx.get("raw_sms") or "")
+    tail = _MANUAL_TAIL_RE.search(raw)
     if str(tx.get("beneficiary_id") or "").strip():
         beneficiary = _beneficiary_ref(tx.get("beneficiary_type"), tx.get("beneficiary_id"))
         if source == "manual":
-            tail = _MANUAL_TAIL_RE.search(raw)
             payer = tail.group(1).strip().lower() if tail else "me"
         else:
-            payer = str(tx.get("spent_by") or "me").strip().lower()
+            payer = str(tx.get("spent_by") or "").strip().lower()
             if payer not in ("me", "partner"):
-                payer = "me"
+                # spent_by 'both' (or empty) names no payer: app builds before the structured
+                # columns re-saved edited rows with spent_by 'both' whenever the beneficiary was
+                # 'both' (FABLE2-LOGIC-01). The payer is then the note's tag (the edit sheet's
+                # tail, else the server-authored head), still limited to 'me' / 'partner'.
+                payer = tail.group(1).strip().lower() if tail else _legacy_tags(raw).get("paidby", "")
+                if payer not in ("me", "partner"):
+                    payer = "me"
         return payer or "me", beneficiary
 
     tags = _legacy_tags(raw)
+    if tail:
+        # The edit sheet's tail is the latest attribution, even after " | Items: [...]".
+        tags.update({"paidby": tail.group(1).strip().lower(), "beneficiary": tail.group(2).strip().lower()})
     payer, beneficiary = tags.get("paidby", ""), tags.get("beneficiary", "")
     api_row = source in ("chat", "receipt_scan") or raw.lstrip().startswith(("Chat:", "Receipt Scan:"))
     if api_row and payer not in ("", "me", "partner"):
@@ -453,8 +467,12 @@ def calculate_partner_settlement(
             total_owed_to_me = 0.0
             total_owed_to_partner = nafaqah_balance["outstanding"]
     else:
-        fair_share_me = round(total_shared * split_ratio, 2)
-        fair_share_partner = round(total_shared * (1.0 - split_ratio), 2)
+        # Half-up to the halala, and the partner's share is the rest: the shares always sum to
+        # the total (two independently rounded halves of 0.01 used to make 0.02).
+        shared_halalas = _to_halalas(total_shared)
+        my_halalas = min(shared_halalas, _to_halalas(total_shared * split_ratio))
+        fair_share_me = _to_sar(my_halalas)
+        fair_share_partner = _to_sar(shared_halalas - my_halalas)
 
         # Calculate net debt:
         # What partner owes me:
@@ -470,11 +488,11 @@ def calculate_partner_settlement(
         total_owed_to_partner += settled_to_me
 
     # Net balance: positive = partner owes me, negative = I owe partner
-    net_balance = round(total_owed_to_me - total_owed_to_partner, 2)
+    net_balance = _to_sar(_to_halalas(total_owed_to_me - total_owed_to_partner))  # half-up
 
-    # Roommate splits round to whole riyals; the Nafaqah ledger is exact to the halala, so any
-    # outstanding halala is still shown (the repayment RPC would accept it).
-    settled_below = 0.01 if is_family else 0.5
+    # Settled only below one halala, as in /settlement-v2 and the Nafaqah ledger (a roommate
+    # balance of up to 0.49 SAR used to be reported as settled while v2 showed the debt).
+    settled_below = 0.01
     if abs(net_balance) < settled_below:
         who_owes = "settled"
         settle_amt = 0.0
