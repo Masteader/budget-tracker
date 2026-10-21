@@ -193,7 +193,8 @@ def test_api05_installment_on_unrepaid_advance_still_works(world, db, llm):
 # ─── FABLE2-API-06: invite target validated before the insert ─────────────────
 
 def test_api06_invite_target_must_be_a_dependent_of_this_household(world, db):
-    a = world.roommates("F9a6a", n_members=0)
+    # Family household: spouse / family_member invites fit its type (owner decision D1).
+    a = world.family("F9a6a")
     b = world.family("F9a6b")
     dep = b.admin.api.post(f"/households/{b.id}/dependents", json={"name": "Secret Kid"})
     assert dep.status_code == 200, dep.text
