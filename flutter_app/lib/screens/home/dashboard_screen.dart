@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/household_dues.dart';
+import '../../models/household_setup.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
@@ -21,6 +22,7 @@ import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/over_budget_alerts.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
@@ -334,7 +336,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .single();
     final hid = data['household_id'] as String;
     _fetchCycles(hid);
-    _fetchIncome(hid);
+    _fetchSetup(hid);
     return hid;
   }
 
@@ -380,9 +382,11 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   final GlobalKey _categoriesKey = GlobalKey();
   final GlobalKey _balancesKey = GlobalKey();
 
-  /// The household's monthly income: the hero's base (UX-07). Null until
-  /// loaded or when it cannot be read: the hero then counts the budgets.
-  double? _monthlyIncome;
+  /// First-run checklist data (UX-02): payday, income, members. The income is
+  /// also the hero's base (UX-07); null until loaded.
+  HouseholdSetupData? _setup;
+
+  bool get _isCurrentCycle => _selectedCycle == null || _selectedCycle!.isCurrent;
 
   /// The family Nafaqah summary the balances card loaded (hero dues line).
   NafaqahSummary? _nafaqah;
@@ -394,13 +398,59 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     }
   }
 
-  Future<void> _fetchIncome(String hid) async {
-    try {
-      final income = await ApiService.instance.getHouseholdIncome(hid);
-      if (mounted) setState(() => _monthlyIncome = income);
-    } catch (_) {
-      if (mounted) setState(() => _monthlyIncome = null);
+  Future<void> _fetchSetup(String hid) async {
+    final data = await HouseholdSetupPrefs.load(hid);
+    if (mounted) setState(() => _setup = data);
+  }
+
+  /// The top of the dashboard: the guided setup for a household without
+  /// budgets (UX-02), otherwise the "until payday" hero and the overspent
+  /// categories, plus the checklist while setup steps remain.
+  List<Widget> _buildTop(String hid, List<Budget> budgets) {
+    final setup = _setup;
+    final hasBudgets = budgets.isNotEmpty;
+    if (!hasBudgets && _isCurrentCycle) {
+      if (setup == null) return [AppShimmer.heroCard()];
+      if (setup.roster == null) {
+        return [
+          CardErrorState(
+            title: context.tr('setup_load_error_title'),
+            message: context.tr('load_error_generic'),
+            onRetry: () => _fetchSetup(hid),
+          ),
+        ];
+      }
+      return [HouseholdSetupCard(householdId: hid, data: setup, hasBudgets: false, onChanged: () => _fetchSetup(hid))];
     }
+    final showChecklist = _isCurrentCycle &&
+        setup != null &&
+        setup.isAdmin &&
+        !setup.hidden &&
+        !setup.isComplete(hasBudgets: hasBudgets);
+    return [
+      BudgetHeroCard(
+        budgets: budgets,
+        cycle: _selectedCycle,
+        monthlyIncome: setup?.monthlyIncome,
+        dueLines: _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!),
+        onDueTap: _scrollToBalances,
+      ),
+      // UX-08: overspent categories right under the hero.
+      OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
+      if (showChecklist) ...[
+        const SizedBox(height: 12),
+        HouseholdSetupCard(
+          householdId: hid,
+          data: setup,
+          hasBudgets: true,
+          onChanged: () => _fetchSetup(hid),
+          onHide: () async {
+            await HouseholdSetupPrefs.setHidden(hid);
+            if (mounted) setState(() => _setup = setup.copyWith(hidden: true));
+          },
+        ),
+      ],
+    ];
   }
 
   void _scrollToCategories() {
@@ -474,6 +524,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         context.read<TransactionProvider>().fetchTransactions(),
                         context.read<BudgetProvider>().refresh(),
                         context.read<RecurringBillsProvider>().fetchBills(),
+                        _fetchSetup(hid),
                       ]);
                     } catch (_) {}
                   },
@@ -565,18 +616,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 },
                               ),
                               PaydayCheckinBanner(householdId: hid),
-                              BudgetHeroCard(
-                                budgets: _cycleBudgets(budgetSnap.data!),
-                                cycle: _selectedCycle,
-                                monthlyIncome: _monthlyIncome,
-                                dueLines: _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!),
-                                onDueTap: _scrollToBalances,
-                              ),
-                              // UX-08: overspent categories right under the hero.
-                              OverBudgetAlerts(
-                                budgets: _cycleBudgets(budgetSnap.data!),
-                                onShowAll: _scrollToCategories,
-                              ),
+                              ..._buildTop(hid, _cycleBudgets(budgetSnap.data!)),
                               const SizedBox(height: 12),
                               // Balances only once there are 2+ accounts; the
                               // Tools screen always has them.
@@ -632,13 +672,17 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                             // Most at risk first: overspent, then by share used (UX-08).
                             final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!));
                             if (cycleBudgets.isEmpty) {
+                              // The running cycle's empty state is the setup
+                              // card at the top (UX-02); it no longer points
+                              // "below" at nothing.
+                              if (_isCurrentCycle) return const SliverToBoxAdapter(child: SizedBox.shrink());
                               return SliverToBoxAdapter(
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
                                     title: context.trArgs('no_allocations_for_cycle', {'cycle': _cycleLabel(context)}),
-                                    message: context.tr('budgets_auto_rollover_desc'),
+                                    message: context.tr('dashboard_past_cycle_no_budgets'),
                                   ),
                                 ),
                               );
@@ -721,7 +765,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
               currentHouseholdId: hid,
               onSwitched: () {
                 setState(() {
-                  _monthlyIncome = null;
+                  _setup = null;
                   _nafaqah = null;
                   _householdId = _fetchHouseholdId();
                 });
