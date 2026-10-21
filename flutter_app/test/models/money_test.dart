@@ -92,4 +92,46 @@ void main() {
       expect(roundedMoneyTextIfRounded('abc'), isNull);
     });
   });
+
+  // FABLE2-APP-04: "0,5" was read as 5 SAR (the comma dropped as a grouping
+  // mark), and "999999999999.995" passed the digit check but rounds to an
+  // amount numeric(14,2) cannot hold.
+  group('FABLE2-APP-04 decimal comma, strict grouping, cap after rounding', () {
+    const cases = <String, double?>{
+      '0,5': 0.50,
+      '1,5': 1.50,
+      '12,5': 12.50,
+      '12,50': 12.50,
+      '١,٥': 1.50,
+      '١٢،٥': 12.50, // Arabic comma as the decimal mark
+      ',5': 0.50,
+      '1,234': 1234.0,
+      '12,345': 12345.0,
+      '1,234,567.8': 1234567.80,
+      '1,234.56': 1234.56,
+      '١٬٢٣٤٫٥٦': 1234.56,
+      '١٬٥': null, // the Arabic thousands mark is never a decimal mark
+      '1,,2': null,
+      '1,2,3': null,
+      '12,5.3': null,
+      '1234,567': null, // a first group has at most three digits
+      ',500': null,
+      '1,2345': null,
+      '١٢٣٬٫٥': null,
+      '999999999999.99': 999999999999.99,
+      '999999999999.995': null,
+      '999,999,999,999.994': 999999999999.99,
+    };
+    cases.forEach((input, expected) {
+      test('"$input" -> $expected', () {
+        expect(parseMoneyInput(input), expected);
+      });
+    });
+
+    test('a decimal comma is shown back rounded like a decimal point', () {
+      expect(roundedMoneyTextIfRounded('1,5'), isNull);
+      expect(roundedMoneyTextIfRounded('1,234'), isNull, reason: 'thousands group, nothing rounded');
+      expect(roundedMoneyText('0,5'), '0.50');
+    });
+  });
 }
