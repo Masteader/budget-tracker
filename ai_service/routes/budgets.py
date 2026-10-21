@@ -49,6 +49,7 @@ from salary_cycle import (
     sub_category_write_allowed,
 )
 from recurring_detector import (
+    UnknownRecurringSubCode,
     fetch_household_recurring_bills,
     toggle_household_recurring_bill,
     get_recurring_bill_candidates,
@@ -150,6 +151,8 @@ async def toggle_recurring_bill(
             due_day=req.due_day,
             custom_name=req.custom_name,
         )
+    except UnknownRecurringSubCode as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to toggle recurring bill.")
 

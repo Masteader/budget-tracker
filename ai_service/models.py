@@ -239,8 +239,10 @@ class ShoppingBasketOptimizeRequest(BaseModel):
 
 class RecurringBillToggleRequest(BaseModel):
     household_id: str
-    category_code: str
-    sub_code: str
+    # Bounded like every other code (FABLE2-API-02): a member's key is written into the
+    # admin-only budgets row; sub_code must also name an allocation / sub-category (422).
+    category_code: Code
+    sub_code: Code
     is_recurring: bool = True
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     custom_name: Optional[str] = Field(default=None, max_length=120)
