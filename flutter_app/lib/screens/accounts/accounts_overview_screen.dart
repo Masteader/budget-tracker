@@ -139,7 +139,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
-            icon: const Icon(Icons.add_rounded, color: AppThemes.electricTeal),
+            icon: Icon(Icons.add_rounded, color: context.electricTeal),
             tooltip: context.tr('add_account'),
             onPressed: () {
               AddEditAccountDialog.show(
@@ -151,60 +151,34 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Account>>(
-        stream: AccountService.instance.streamAccounts(widget.householdId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.electricTeal));
-          }
+      body: _buildBody(context, isDark),
+    );
+  }
 
-          final accounts = snapshot.data ?? [];
+  Widget _buildBody(BuildContext context, bool isDark) {
+    if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: context.electricTeal,
+        ),
+      );
+    }
 
-          if (accounts.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppThemes.electricTeal.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.account_balance_wallet_outlined, size: 48, color: AppThemes.electricTeal),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('no_accounts_configured'),
-                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      context.tr('accounts_balances_desc'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: context.textSecondary, fontSize: 13),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        AddEditAccountDialog.show(
-                          context,
-                          householdId: widget.householdId,
-                          onSuccess: () => setState(() {}),
-                        );
-                      },
-                      icon: const Icon(Icons.add_rounded),
-                      label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppThemes.electricTeal,
-                        foregroundColor: AppThemes.brandDarkBg,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
+    final accounts = _cachedAccounts;
+
+    if (accounts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: context.electricTeal.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.account_balance_wallet_outlined, size: 48, color: context.electricTeal),
               ),
@@ -266,8 +240,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           final sharedPools = accounts.where((a) => a.isSharedPool || a.accountType == AccountType.sharedPool).toList();
 
           return RefreshIndicator(
-            onRefresh: _loadCommittedBudgets,
-            color: AppThemes.electricTeal,
+            onRefresh: _refreshAll,
+            color: context.electricTeal,
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [

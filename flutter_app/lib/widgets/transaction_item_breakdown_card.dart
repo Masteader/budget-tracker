@@ -492,7 +492,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '1x $merchant (${currency == 'SAR' ? context.sar(amount) : '$currency ${amount.toStringAsFixed(2)}'})\n${context.tr('no_line_items_desc')}',
+                              '1x ${context.trMerchant(merchant)} (${currency == 'SAR' ? context.sar(amount) : '$currency ${amount.toStringAsFixed(2)}'})\n${context.tr('no_line_items_desc')}',
                               style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),

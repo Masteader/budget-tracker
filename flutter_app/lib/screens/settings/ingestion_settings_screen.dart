@@ -1156,7 +1156,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                   builder: (ctx, count, _) {
                     return Row(
                       children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : AppThemes.success, size: 20),
+                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : context.electricTeal, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -1169,7 +1169,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                         ),
                         if (count > 0)
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: context.electricTeal,
+                              foregroundColor: context.isDark ? Colors.black : Colors.white,
+                            ),
                             onPressed: () => OfflineSyncService.instance.flushQueue(),
                             child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
@@ -1470,10 +1473,10 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
+                  color: context.electricTeal.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: AppThemes.success, size: 20),
+                child: Icon(Icons.language_rounded, color: context.electricTeal, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1617,131 +1620,62 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
     final isGranted = status.isGranted;
     final activeColor = context.electricTeal;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isGranted ? AppThemes.success.withValues(alpha: 0.3) : context.borderColor,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: isGranted ? AppThemes.success.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  color: isGranted ? AppThemes.success : Colors.orange,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isGranted ? activeColor.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: isGranted ? activeColor : Colors.orange,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary),
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 11, color: context.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isGranted ? AppThemes.success.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isGranted ? AppThemes.success : Colors.orange,
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isGranted ? Icons.check_circle : Icons.warning_amber_rounded,
-                      size: 12,
-                      color: isGranted ? AppThemes.success : Colors.orange,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
-                      style: TextStyle(
-                        color: isGranted ? AppThemes.success : Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isGranted ? activeColor.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
+                        style: TextStyle(
+                          color: isGranted ? activeColor : Colors.orange,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (!isGranted) ...[
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: const Icon(Icons.lock_open, size: 15),
-                    label: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    onPressed: onRequest,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.isDarkMode ? const Color(0xFF58A6FF) : const Color(0xFF0969DA),
-                    side: BorderSide(
-                      color: context.isDarkMode
-                          ? const Color(0xFF1F6FEB).withValues(alpha: 0.5)
-                          : const Color(0xFF0969DA).withValues(alpha: 0.4),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.settings_outlined, size: 15),
-                  label: Text(context.tr('set_open_app_settings'), style: const TextStyle(fontSize: 12)),
-                  onPressed: onOpenSettings,
-                ),
-              ),
-              if (testAction != null) ...[
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.textPrimary,
-                    side: BorderSide(color: context.borderColor),
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.visibility, size: 14),
-                  label: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 11)),
-                  onPressed: testAction,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 11, color: context.textSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1758,7 +1692,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               onPressed: onRequest,
-              child: Text(context.tr('grant_access'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              child: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             )
           else if (testAction != null)
             OutlinedButton(
@@ -1771,12 +1705,12 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               onPressed: testAction,
-              child: Text(testLabel ?? 'Test', style: const TextStyle(fontSize: 11)),
+              child: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 11)),
             )
           else
             IconButton(
               icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
-              tooltip: context.tr('open_app_settings'),
+              tooltip: context.tr('set_open_app_settings'),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: onOpenSettings,
@@ -1804,7 +1738,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               color: value ? AppThemes.success.withValues(alpha: 0.12) : context.chipBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 20),
+            child: Icon(icon, color: value ? AppThemes.success : context.textSecondary, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1838,24 +1772,15 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
         setState(() => _dedupPolicy = policy);
         _savePreference('dedup_policy', policy);
       },
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.cardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? AppThemes.success : context.borderColor,
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
               color: isSelected ? AppThemes.success : context.textSecondary,
-              size: 20,
+              size: 18,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1867,7 +1792,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      color: isSelected ? (context.isDark ? const Color(0xFF00E5BF) : const Color(0xFF0F766E)) : context.textPrimary,
+                      color: isSelected ? context.electricTeal : context.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),

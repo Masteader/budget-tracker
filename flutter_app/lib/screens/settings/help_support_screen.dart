@@ -57,20 +57,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_languageInitialized) {
-      _languageInitialized = true;
-      final code = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
-      if (code == 'en' || code == 'ur' || code == 'ar') {
-        _selectedLanguage = code;
-        _onLanguageChanged(code);
-      }
-    }
-  }
-
   void _onLanguageChanged(String newLang) {
+    if (_selectedLanguage == newLang) return;
     setState(() {
       _selectedLanguage = newLang;
       if (_messages.length == 1 && !_messages.first.isUser) {
