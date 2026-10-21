@@ -295,6 +295,10 @@ class ApiService {
   }) =>
       nafaqah.setAllowance(householdId: householdId, amount: amount, wifeUserId: wifeUserId, cycleKey: cycleKey);
 
+  /// Admins choose the household's Nafaqah provider (husband).
+  Future<NafaqahProviderChange> setNafaqahProvider(String householdId, String userId) =>
+      nafaqah.setProvider(householdId: householdId, userId: userId);
+
   Future<List<HouseholdDependent>> getDependents(String householdId) =>
       budget.fetchHouseholdDependents(householdId: householdId);
 

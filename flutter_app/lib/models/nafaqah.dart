@@ -153,18 +153,26 @@ class ReimbursementBalance {
   final double reimbursed;
   final double outstanding;
 
+  /// Repaid more than advanced (an advance was cut or removed after a
+  /// repayment, before the ledger guard existed). Never negative.
+  final double overpaid;
+
   const ReimbursementBalance({
     this.grossAdvanced = 0.0,
     this.reimbursed = 0.0,
     this.outstanding = 0.0,
+    this.overpaid = 0.0,
   });
 
   bool get isSettled => outstanding < 0.005;
+
+  bool get isOverpaid => overpaid >= 0.005;
 
   factory ReimbursementBalance.fromMap(Map<String, dynamic> map) => ReimbursementBalance(
         grossAdvanced: _num(map['gross_advanced']),
         reimbursed: _num(map['reimbursed']),
         outstanding: _num(map['outstanding']),
+        overpaid: _num(map['overpaid']),
       );
 }
 
@@ -241,6 +249,16 @@ class NafaqahSummary {
   final bool canSetAllowance;
   final bool canRecordReimbursement;
 
+  /// `households.nafaqah_provider_user_id` (the husband), as stored.
+  final String? providerUserId;
+
+  /// A family without a valid provider: classified expenses are refused until
+  /// a household admin chooses one.
+  final bool needsProvider;
+
+  /// The caller is a household admin and may choose the provider.
+  final bool canSetProvider;
+
   const NafaqahSummary({
     this.mode = 'not_family',
     this.callerRole,
@@ -251,6 +269,9 @@ class NafaqahSummary {
     this.wives = const [],
     this.canSetAllowance = false,
     this.canRecordReimbursement = false,
+    this.providerUserId,
+    this.needsProvider = false,
+    this.canSetProvider = false,
   });
 
   bool get isFamily => mode == 'family_nafaqah' && wives.isNotEmpty;
@@ -280,8 +301,27 @@ class NafaqahSummary {
           .toList(),
       canSetAllowance: map['can_set_allowance'] as bool? ?? false,
       canRecordReimbursement: map['can_record_reimbursement'] as bool? ?? false,
+      providerUserId: map['provider_user_id'] as String?,
+      needsProvider: map['needs_provider'] as bool? ?? false,
+      canSetProvider: map['can_set_provider'] as bool? ?? false,
     );
   }
+}
+
+/// `PUT /households/{id}/nafaqah/provider`: the new provider and the
+/// refreshed Nafaqah summary from the caller's point of view.
+class NafaqahProviderChange {
+  final String? providerUserId;
+  final String? previousProviderUserId;
+  final NafaqahSummary? summary;
+
+  const NafaqahProviderChange({this.providerUserId, this.previousProviderUserId, this.summary});
+
+  factory NafaqahProviderChange.fromMap(Map<String, dynamic> map) => NafaqahProviderChange(
+        providerUserId: map['provider_user_id'] as String?,
+        previousProviderUserId: map['previous_provider_user_id'] as String?,
+        summary: map['summary'] is Map ? NafaqahSummary.fromMap(Map<String, dynamic>.from(map['summary'] as Map)) : null,
+      );
 }
 
 /// One line of the wife's ledger: an advance she made or a repayment to her.
@@ -333,7 +373,9 @@ class NafaqahLedger {
 }
 
 /// A rejected Nafaqah request. [code] is 'overpayment', 'forbidden',
-/// 'not_family', 'invalid' or 'network'.
+/// 'not_family', 'ledger_would_be_overpaid' (an edit would leave the wife's
+/// ledger repaid beyond her advances), 'no_provider' (the family has no
+/// Nafaqah provider yet), 'invalid' or 'network'.
 class NafaqahApiException implements Exception {
   final String code;
   final String message;
@@ -347,7 +389,8 @@ class NafaqahApiException implements Exception {
     final detailCode = detail is Map ? detail['code'] as String? : null;
     final message = res['message']?.toString() ?? '';
     final String code;
-    if (detailCode == 'overpayment' || detailCode == 'not_family') {
+    const stateCodes = {'overpayment', 'not_family', 'ledger_would_be_overpaid', 'no_provider'};
+    if (stateCodes.contains(detailCode)) {
       code = detailCode!;
     } else if (status == 403) {
       code = 'forbidden';

@@ -65,6 +65,86 @@ void main() {
     expect(NafaqahApiException.fromResponse({'status': 'error', 'message': 'offline'}).code, 'network');
   });
 
+  test('NafaqahSummary parses the explicit provider fields', () {
+    final s = NafaqahSummary.fromMap({
+      'mode': 'family_nafaqah',
+      'caller_role': 'member',
+      'husband': null,
+      'wives': [
+        {'id': 'w1'},
+      ],
+      'provider_user_id': null,
+      'needs_provider': true,
+      'can_set_provider': true,
+    });
+    expect(s.providerUserId, isNull);
+    expect(s.needsProvider, isTrue);
+    expect(s.canSetProvider, isTrue);
+    expect(s.isFamily, isTrue, reason: 'still a family: the card explains the missing provider');
+
+    final legacy = NafaqahSummary.fromMap({'mode': 'family_nafaqah', 'wives': [{'id': 'w1'}]});
+    expect(legacy.needsProvider, isFalse);
+    expect(legacy.canSetProvider, isFalse);
+
+    final set = NafaqahSummary.fromMap({
+      'mode': 'family_nafaqah',
+      'husband': {'id': 'h'},
+      'wives': [{'id': 'w1'}],
+      'provider_user_id': 'h',
+      'needs_provider': false,
+    });
+    expect(set.providerUserId, 'h');
+  });
+
+  test('ReimbursementBalance parses overpaid (repaid more than advanced)', () {
+    final b = ReimbursementBalance.fromMap({'gross_advanced': 100, 'reimbursed': 200, 'outstanding': 0, 'overpaid': 100});
+    expect(b.overpaid, 100);
+    expect(b.isOverpaid, isTrue);
+    expect(b.isSettled, isTrue);
+    final ok = ReimbursementBalance.fromMap({'gross_advanced': 300, 'reimbursed': 100, 'outstanding': 200});
+    expect(ok.overpaid, 0);
+    expect(ok.isOverpaid, isFalse);
+  });
+
+  test('NafaqahApiException maps the ledger guard and missing provider refusals', () {
+    expect(
+      NafaqahApiException.fromResponse({
+        'status': 'error',
+        'status_code': 409,
+        'detail': {'code': 'ledger_would_be_overpaid', 'message': 'x'},
+      }).code,
+      'ledger_would_be_overpaid',
+    );
+    expect(
+      NafaqahApiException.fromResponse({
+        'status': 'error',
+        'status_code': 409,
+        'detail': {'code': 'no_provider', 'message': 'x'},
+      }).code,
+      'no_provider',
+    );
+  });
+
+  test('NafaqahProviderChange parses the PUT provider response', () {
+    final c = NafaqahProviderChange.fromMap({
+      'status': 'success',
+      'household_id': 'hh',
+      'provider_user_id': 'u2',
+      'previous_provider_user_id': 'u1',
+      'summary': {
+        'mode': 'family_nafaqah',
+        'husband': {'id': 'u2'},
+        'wives': [{'id': 'w'}],
+        'provider_user_id': 'u2',
+        'needs_provider': false,
+      },
+    });
+    expect(c.providerUserId, 'u2');
+    expect(c.previousProviderUserId, 'u1');
+    expect(c.summary!.husbandId, 'u2');
+    expect(NafaqahProviderChange.fromMap({'provider_user_id': 'u2'}).summary, isNull);
+  });
+
   test('NafaqahLedger parses history', () {
     final l = NafaqahLedger.fromMap({
       'balance': {'gross_advanced': 300, 'reimbursed': 100, 'outstanding': 200},

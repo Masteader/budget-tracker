@@ -77,6 +77,36 @@ void main() {
     expect(st.isOverspent, isTrue);
   });
 
+  test('setProvider PUTs the chosen member and returns the new summary', () async {
+    final base = _FakeBase()
+      ..response = {
+        'status': 'success',
+        'provider_user_id': 'u2',
+        'previous_provider_user_id': 'u1',
+        'summary': {'mode': 'family_nafaqah', 'husband': {'id': 'u2'}, 'wives': [{'id': 'w'}]},
+      };
+    final change = await NafaqahApiClient(baseClient: base).setProvider(householdId: 'hh', userId: 'u2');
+    expect(base.method, 'PUT');
+    expect(base.path, '/households/hh/nafaqah/provider');
+    expect(base.body, {'user_id': 'u2'});
+    expect(change.providerUserId, 'u2');
+    expect(change.summary!.husbandId, 'u2');
+  });
+
+  test('a refused provider change throws (403 forbidden, 422 invalid)', () async {
+    final base = _FakeBase()..response = {'status': 'error', 'status_code': 403, 'message': 'Household admin required'};
+    final client = NafaqahApiClient(baseClient: base);
+    await expectLater(
+      client.setProvider(householdId: 'hh', userId: 'u2'),
+      throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', 'forbidden')),
+    );
+    base.response = {'status': 'error', 'status_code': 422, 'message': 'A wife cannot be the Nafaqah provider.'};
+    await expectLater(
+      client.setProvider(householdId: 'hh', userId: 'w'),
+      throwsA(isA<NafaqahApiException>().having((e) => e.code, 'code', 'invalid')),
+    );
+  });
+
   test('fetchLedger forwards the wife id', () async {
     final base = _FakeBase()..response = {'balance': {'outstanding': 1}, 'history': []};
     final l = await NafaqahApiClient(baseClient: base).fetchLedger(householdId: 'hh', wifeUserId: 'w');
