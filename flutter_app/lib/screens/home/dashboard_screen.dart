@@ -36,6 +36,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../../widgets/dashboard/app_bottom_nav_bar.dart';
 import '../../widgets/reminder_sync.dart';
+import '../../widgets/lazy_indexed_stack.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
@@ -109,21 +110,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      const _BudgetDashboard(),
-      const TransactionFeedScreen(),
-      const ChatEntryScreen(),
-      const BudgetManagementScreen(),
-      const SettingsScreen(),
-    ];
+    // Built on first visit and kept alive (UX-26): chat, budgets and
+    // settings no longer build and fetch at launch.
+    Widget screen(BuildContext context, int index) {
+      switch (index) {
+        case 0:
+          return const _BudgetDashboard();
+        case 1:
+          return const TransactionFeedScreen();
+        case 2:
+          return const ChatEntryScreen();
+        case 3:
+          return const BudgetManagementScreen();
+        default:
+          return const SettingsScreen();
+      }
+    }
 
     // Local reminders follow this household's payday, bills and plans.
     return ReminderSync(
       child: Scaffold(
         extendBody: true,
-        body: IndexedStack(
+        body: LazyIndexedStack(
           index: _selectedIndex,
-          children: screens,
+          itemCount: 5,
+          itemBuilder: screen,
         ),
         floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
             ? AppSpeedDialFab(householdId: _householdId)
