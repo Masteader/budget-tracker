@@ -41,6 +41,7 @@ void main() {
       expect(isInvalidPreviewToken({'status': 'error', 'status_code': 422, 'detail': {'code': 'other'}}), isFalse);
       expect(isInvalidPreviewToken({'status': 'error', 'status_code': 409, 'detail': {'code': 'invalid_preview_token'}}), isFalse);
       expect(isInvalidPreviewToken({'status': 'success'}), isFalse);
+      expect(isInvalidPreviewToken({'status': 'error', 'status_code': 422, 'detail': {'code': 'preview_token_expired'}}), isTrue);
     });
   });
 

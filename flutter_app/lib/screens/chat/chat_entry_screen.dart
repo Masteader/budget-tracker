@@ -19,6 +19,9 @@ import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 
+/// Key under which a preview keeps the exact text it was parsed from.
+const String _previewMessageKey = 'preview_message';
+
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
 
@@ -340,6 +343,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
       } else if (status == 'pending_confirmation') {
+        // The commit must resend the previewed text with its preview_token.
+        res[_previewMessageKey] = message;
         if (res['is_category_inactive'] == true) {
           final catCode = res['category_code']?.toString() ?? context.tr('category');
           final amt = (res['amount'] as num?)?.toDouble() ?? 0.0;
@@ -461,7 +466,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     setState(() => _isLoading = true);
 
     final user = supabase.auth.currentUser;
-    final originalText = pending['original_message'] as String? ??
+    final originalText = pending[_previewMessageKey] as String? ??
+        pending['original_message'] as String? ??
         "$merchant ${(pending['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'} SAR";
 
     final householdId = _householdId!;
