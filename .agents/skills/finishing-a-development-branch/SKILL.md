@@ -52,13 +52,17 @@ Confirm before merging: merging into the wrong base is expensive to undo.
 
 ## Step 4: Present Options
 
-**Normal repo and named-branch worktree — present exactly these 3 options:**
+> [!IMPORTANT]
+> **Branch Protection & External Audit Rule (Rule 06):**
+> Per [`.agents/rules/06-pr-and-audit-pipeline.md`](.agents/rules/06-pr-and-audit-pipeline.md), merging directly into `main` locally is **STRICTLY DISABLED** until the Pull Request receives explicit `APPROVED` status from the External Argon Auditor. If the base branch is `main`, direct local merge must not be offered or executed without prior audit approval.
+
+**Normal repo and named-branch worktree — present these options:**
 
 ```
 Implementation complete. What would you like to do?
 
-1. Merge back to <base-branch> locally
-2. Push and create a Pull Request
+1. [DISABLED for main until PR Approved] Merge back to <base-branch> locally
+2. Submit for External Argon Audit & Create Pull Request (via submit-for-audit.md)
 3. Keep the branch as-is (I'll handle it later)
 
 Which option?
@@ -69,14 +73,13 @@ Which option?
 ```
 Implementation complete. You're on a detached HEAD (externally managed workspace).
 
-1. Push as new branch and create a Pull Request
+1. Push as new branch and create a Pull Request (via submit-for-audit.md)
 2. Keep as-is (I'll handle it later)
 
 Which option?
 ```
 
-Present the menu exactly as written — concise, with every option coming
-from the list above. Discarding the work happens only in response to your
+Present the menu concise, with options aligned to Rule 06. Discarding the work happens only in response to your
 human partner explicitly asking for it (see "If your human partner asks to
 discard the work" below). Wait for their answer; the integration decision
 is theirs.
@@ -84,6 +87,11 @@ is theirs.
 ## Step 5: Execute Choice
 
 ### Option 1: Merge Locally
+
+> [!CAUTION]
+> **MAIN PROTECTION & AUDIT GATE:**
+> If `<base-branch>` is `main`, local merge is **STRICTLY FORBIDDEN** until the External Argon Auditor has reviewed the diff and given explicit `APPROVED` status on the PR.
+> If approval has NOT yet been granted, you MUST redirect to Option 2 and invoke [`.agent/workflows/submit-for-audit.md`](.agent/workflows/submit-for-audit.md) (or [`.agents/workflows/submit-for-audit.md`](.agents/workflows/submit-for-audit.md)).
 
 ```bash
 # Get main repo root for CWD safety

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -27,11 +29,51 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
+  StreamSubscription<List<Account>>? _accountsSub;
+  List<Account> _cachedAccounts = [];
+  bool _isLoadingAccounts = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCommittedBudgets();
+    _initStream();
+    _refreshAll();
+  }
+
+  void _initStream() {
+    _accountsSub?.cancel();
+    _accountsSub = AccountService.instance.streamAccounts(widget.householdId).listen(
+      (data) {
+        if (mounted) {
+          setState(() {
+            _cachedAccounts = data;
+            _isLoadingAccounts = false;
+          });
+        }
+      },
+      onError: (err) {
+        if (mounted && _cachedAccounts.isEmpty) {
+          setState(() {
+            _isLoadingAccounts = false;
+          });
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountsOverviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.householdId != widget.householdId) {
+      _initStream();
+      _refreshAll();
+    }
+  }
+
+  @override
+  void dispose() {
+    _accountsSub?.cancel();
+    super.dispose();
   }
 
   String get _currentCycleKey {
@@ -50,6 +92,31 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _fetchAccountsDirectly() async {
+    try {
+      final list = await AccountService.instance.getAccounts(widget.householdId);
+      if (mounted) {
+        setState(() {
+          _cachedAccounts = list;
+          _isLoadingAccounts = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && _cachedAccounts.isEmpty) {
+        setState(() {
+          _isLoadingAccounts = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadCommittedBudgets(),
+      _fetchAccountsDirectly(),
+    ]);
   }
 
   @override
@@ -78,7 +145,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               AddEditAccountDialog.show(
                 context,
                 householdId: widget.householdId,
-                onSuccess: () => setState(() {}),
+                onSuccess: _refreshAll,
               );
             },
           ),
@@ -139,9 +206,42 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     ),
                   ],
                 ),
+                child: Icon(Icons.account_balance_wallet_outlined, size: 48, color: context.electricTeal),
               ),
-            );
-          }
+              const SizedBox(height: 16),
+              Text(
+                context.tr('no_accounts_configured'),
+                style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('accounts_balances_desc'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  AddEditAccountDialog.show(
+                    context,
+                    householdId: widget.householdId,
+                    onSuccess: _refreshAll,
+                  );
+                },
+                icon: const Icon(Icons.add_rounded),
+                label: Text(context.tr('add_bank_wallet_cash'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.electricTeal,
+                  foregroundColor: context.scaffoldBg,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
           // Calculate total net assets in SAR baseline
           double totalNetSAR = 0.0;
@@ -330,9 +430,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               ],
             ),
           );
-        },
-      ),
-    );
   }
 
   Widget _buildSectionHeader(String title, int count) {
