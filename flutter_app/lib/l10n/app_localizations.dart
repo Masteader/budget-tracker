@@ -1675,6 +1675,10 @@ class AppLocalizations {
       'offline_receipt_type_amount': 'Type the amount instead',
       'allowance_personal_spending_her': 'Her personal spending this cycle: {amount}',
       'allowance_personal_spending_mine': 'Your personal spending this cycle: {amount}',
+      'invite_share_text': 'Join our household "{household}" on Budget Tracker.\nOpen Budget Tracker → Join Household → enter the code: {code}',
+      'invite_share_subject': 'Invitation to our household on Budget Tracker',
+      'share_invite': 'Share invite',
+      'share_invite_failed': 'Could not open the share sheet. The invite was copied instead.',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -3029,6 +3033,10 @@ class AppLocalizations {
       'offline_receipt_type_amount': 'أدخل المبلغ يدوياً',
       'allowance_personal_spending_her': 'مشترياتها الشخصية في هذه الدورة: {amount}',
       'allowance_personal_spending_mine': 'مشترياتكِ الشخصية في هذه الدورة: {amount}',
+      'invite_share_text': 'انضم إلى منزلنا «{household}» في تطبيق ميزانية الأسرة.\nافتح التطبيق ← الانضمام لمنزل ← أدخل الرمز: {code}',
+      'invite_share_subject': 'دعوة للانضمام إلى منزلنا في ميزانية الأسرة',
+      'share_invite': 'مشاركة الدعوة',
+      'share_invite_failed': 'تعذّر فتح نافذة المشاركة، فنُسخت الدعوة بدلاً من ذلك.',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4383,6 +4391,10 @@ class AppLocalizations {
       'offline_receipt_type_amount': 'رقم خود درج کریں',
       'allowance_personal_spending_her': 'اس سائیکل میں اہلیہ کی ذاتی خریداری: {amount}',
       'allowance_personal_spending_mine': 'اس سائیکل میں آپ کی ذاتی خریداری: {amount}',
+      'invite_share_text': 'بجٹ ٹریکر میں ہمارے گھرانے «{household}» میں شامل ہوں۔\nبجٹ ٹریکر کھولیں ← گھرانے میں شامل ہوں ← یہ کوڈ درج کریں: {code}',
+      'invite_share_subject': 'بجٹ ٹریکر میں ہمارے گھرانے کی دعوت',
+      'share_invite': 'دعوت بھیجیں',
+      'share_invite_failed': 'شیئر کی اسکرین نہیں کھل سکی، اس لیے دعوت کاپی کر لی گئی۔',
     },
   };
 

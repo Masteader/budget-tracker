@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../models/nafaqah.dart' show NafaqahSummary;
 import '../../services/api_service.dart';
 import '../../services/household_join.dart';
+import '../../services/household_invite_share.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
@@ -414,6 +415,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _shareInvite() async {
+    final code = _inviteCode;
+    if (!isShareableInviteCode(code)) return;
+    final l = AppLocalizations.of(context);
+    final name = _householdName ?? '';
+    try {
+      await shareHouseholdInvite(l, householdName: name, code: code!);
+    } catch (_) {
+      // No share target (or the sheet failed): copy the same message.
+      await Clipboard.setData(ClipboardData(text: inviteShareText(l, householdName: name, code: code!)));
+      if (mounted) {
+        AppSnackBar.showInfo(context, context.tr('share_invite_failed'), title: context.tr('set_code_copied'));
+      }
+    }
+  }
+
   Future<void> _confirmLeaveHousehold() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -785,6 +802,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               members: _members,
               dependents: _dependents,
               onCopyInviteCode: _copyInviteCode,
+              onShareInvite: _shareInvite,
               onLeaveHousehold: _confirmLeaveHousehold,
               onSwitchHousehold: _showHouseholdSwitchSheet,
               onCreateHousehold: _showCreateHouseholdDialog,

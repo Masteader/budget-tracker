@@ -111,5 +111,39 @@ void main() {
       await tester.pump();
       expect(createTapped, isTrue);
     });
+
+    testWidgets('Share invite appears for a readable code and calls back', (tester) async {
+      var shared = 0;
+      Widget card(String code) => MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: HouseholdManagementCard(
+                  householdName: 'Riyadh Villa',
+                  inviteCode: code,
+                  userRole: 'admin',
+                  members: const [
+                    {'email': 'owner@example.com', 'role': 'admin'},
+                  ],
+                  onCopyInviteCode: () {},
+                  onShareInvite: () => shared++,
+                  onLeaveHousehold: () {},
+                  onSwitchHousehold: () {},
+                  onCreateHousehold: () {},
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(card('RIYADH01'));
+      expect(find.widgetWithText(OutlinedButton, 'Copy Code'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('share_invite_button')));
+      await tester.pump();
+      expect(shared, 1);
+      expect(find.text('Share invite'), findsOneWidget);
+
+      // Members see a masked code: nothing to share.
+      await tester.pumpWidget(card('--------'));
+      expect(find.byKey(const ValueKey('share_invite_button')), findsNothing);
+    });
   });
 }
