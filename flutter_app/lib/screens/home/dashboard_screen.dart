@@ -358,6 +358,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
+  /// The selected cycle by its dates ("27 Oct – 26 Nov").
+  String _cycleLabel(BuildContext context) {
+    final c = _selectedCycle;
+    final byKey = context.cycleLabel(_currentCycleKey);
+    return c == null ? byKey : context.cycleRangeIso(c.cycleStart, c.cycleEnd, fallback: byKey);
+  }
+
   bool _matchesSelectedCycle(Budget b) {
     final key = _currentCycleKey;
     if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
@@ -699,7 +706,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
-                                    title: context.trArgs('no_allocations_for_cycle', {'cycle': context.cycleMonth(_currentCycleKey)}),
+                                    title: context.trArgs('no_allocations_for_cycle', {'cycle': _cycleLabel(context)}),
                                     message: context.tr('budgets_auto_rollover_desc'),
                                   ),
                                 ),

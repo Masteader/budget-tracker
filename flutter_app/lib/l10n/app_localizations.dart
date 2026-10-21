@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
+import '../services/salary_cycle_service.dart';
+
 class AppLocalizations {
   final Locale locale;
 
@@ -4704,6 +4706,32 @@ class AppLocalizations {
     return date(DateTime(int.parse(m.group(1)!), int.parse(m.group(2)!)), 'MMMM yyyy');
   }
 
+  /// A salary cycle shown by its dates, e.g. "27 Oct – 26 Nov" (Arabic and
+  /// Urdu month names, Western digits). Years are added only when the cycle
+  /// is not entirely in the current (Riyadh) year, e.g. "27 Dec 2026 – 26 Jan 2027".
+  String cycleRange(DateTime start, DateTime end, {DateTime? now}) {
+    final year = SalaryCycleService.riyadhToday(now: now).year;
+    final withYear = start.year != year || end.year != year;
+    final pattern = withYear ? 'd MMM y' : 'd MMM';
+    return '${date(start, pattern)} – ${date(end, pattern)}';
+  }
+
+  /// [cycleRange] for server ISO dates (`cycle_start` / `cycle_end`).
+  String cycleRangeIso(String startIso, String endIso, {String fallback = '', DateTime? now}) {
+    final start = DateTime.tryParse(startIso);
+    final end = DateTime.tryParse(endIso);
+    if (start == null || end == null) return fallback;
+    return cycleRange(start, end, now: now);
+  }
+
+  /// [cycleRange] for a `YYYY-MM` cycle key and the household payday.
+  /// Returns [fallback] (or the key) when the key is not in that format.
+  String cycleLabel(String cycleKey, {int? paydayDay, String fallback = '', DateTime? now}) {
+    final cycle = SalaryCycleService.cycleForKey(cycleKey, paydayDay: paydayDay);
+    if (cycle == null) return fallback.isNotEmpty ? fallback : cycleKey;
+    return cycleRange(cycle.start, cycle.end, now: now);
+  }
+
   /// Looks up [key] and substitutes each `{name}` placeholder with the
   /// matching entry of [args], e.g. `format('across_accounts', {'count': 3})`.
   String format(String key, Map<String, Object?> args) {
@@ -4959,6 +4987,10 @@ extension LocalizationExtension on BuildContext {
       AppLocalizations.of(this).date(date, pattern);
   String cycleMonth(String cycleKey, {String fallback = ''}) =>
       AppLocalizations.of(this).cycleMonth(cycleKey, fallback: fallback);
+  String cycleLabel(String cycleKey, {String fallback = ''}) =>
+      AppLocalizations.of(this).cycleLabel(cycleKey, fallback: fallback);
+  String cycleRangeIso(String startIso, String endIso, {String fallback = ''}) =>
+      AppLocalizations.of(this).cycleRangeIso(startIso, endIso, fallback: fallback);
   String trCat(String codeOrName) => AppLocalizations.of(this).category(codeOrName);
   String trSub(String subCodeOrName, {String? nameAr, String? nameEn}) =>
       AppLocalizations.of(this).subCategory(subCodeOrName, nameAr: nameAr, nameEn: nameEn);

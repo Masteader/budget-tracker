@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Reusable selector bar for switching between salary cycles (payday 27th - 26th).
 class SalaryCycleSelectorBar extends StatelessWidget {
@@ -23,13 +24,19 @@ class SalaryCycleSelectorBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A cycle is named by its dates ("27 Oct – 26 Nov"), never by a month:
+    // with a late payday the cycle mostly lies in the previous month.
+    final fallbackCycle = SalaryCycleService.currentCycle();
+    final fallbackTitle = context.cycleLabel(fallbackCycle.key);
     final titleText = currentCycle != null
-        ? context.cycleMonth(currentCycle!.cycleKey, fallback: currentCycle!.monthName)
-        : context.fmtDate(DateTime.now(), 'MMMM yyyy');
-    final subText = currentCycle != null
-        ? '${currentCycle!.cycleStart.substring(5)} - ${currentCycle!.cycleEnd.substring(5)}'
-        : context.tr('active_salary_cycle');
+        ? context.cycleRangeIso(
+            currentCycle!.cycleStart,
+            currentCycle!.cycleEnd,
+            fallback: context.cycleLabel(currentCycle!.cycleKey, fallback: currentCycle!.monthName),
+          )
+        : fallbackTitle;
     final isCurrent = currentCycle?.isCurrent ?? true;
+    final subText = isCurrent ? context.tr('active_salary_cycle') : context.tr('salary_cycle');
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 8, 20, 12),

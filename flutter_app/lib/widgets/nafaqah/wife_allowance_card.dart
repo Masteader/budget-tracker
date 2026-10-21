@@ -61,7 +61,7 @@ class WifeAllowanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final st = wife.allowance;
     final key = cycleKey ?? st.cycleKey;
-    final cycle = AppLocalizations.of(context).cycleMonth(key, fallback: key);
+    final cycle = AppLocalizations.of(context).cycleLabel(key, fallback: key);
     final remainingColor = st.isOverspent ? context.dangerColor : context.successText;
     final barColor = st.isOverspent ? context.dangerColor : AppThemes.iceCyan;
     final title = viewerIsWife ? context.tr('allowance_title_mine') : context.tr('allowance_title');
@@ -292,7 +292,7 @@ class _AllowanceEditorSheetState extends State<_AllowanceEditorSheet> {
         children: [
           Text(
             context.trArgs('allowance_set_title', {
-              'cycle': AppLocalizations.of(context).cycleMonth(widget.cycleKey, fallback: widget.cycleKey),
+              'cycle': AppLocalizations.of(context).cycleLabel(widget.cycleKey, fallback: widget.cycleKey),
             }),
             style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary),
           ),

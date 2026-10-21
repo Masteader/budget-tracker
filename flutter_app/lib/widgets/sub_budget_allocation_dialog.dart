@@ -734,7 +734,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${widget.categoryCode} • ${context.tr('cycle')} ${widget.cycleKey ?? context.tr('sba_current')}',
+                          '${context.trCat(widget.categoryCode)} • ${widget.cycleKey != null ? context.cycleLabel(widget.cycleKey!) : context.tr('sba_current')}',
                           style: GoogleFonts.inter(
                             color: context.textSecondary,
                             fontSize: 12,

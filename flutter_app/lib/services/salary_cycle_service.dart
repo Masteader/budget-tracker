@@ -149,6 +149,21 @@ class SalaryCycleService {
     );
   }
 
+  /// The cycle named by a `YYYY-MM` [cycleKey] (a longer `YYYY-MM-DD` value
+  /// uses its month), or null when the key is not in that format.
+  static SaudiCycle? cycleForKey(String cycleKey, {int? paydayDay}) {
+    final m = RegExp(r'^(\d{4})-(\d{2})').firstMatch(cycleKey.trim());
+    if (m == null) return null;
+    final year = int.parse(m.group(1)!);
+    final month = int.parse(m.group(2)!);
+    if (month < 1 || month > 12) return null;
+    final payday = normalizePayday(paydayDay ?? _paydayDay);
+    // payday ≤ 15 names the month the cycle starts in (its payday is in it);
+    // payday ≥ 16 names the month it ends in (its 1st is inside the cycle).
+    final day = payday <= 15 ? (payday < daysInMonth(year, month) ? payday : daysInMonth(year, month)) : 1;
+    return cycleForDate(year, month, day, paydayDay: payday);
+  }
+
   /// `cycle_key` for [instant] (defaults to now).
   static String cycleKeyForInstant(DateTime? instant, {int? paydayDay}) =>
       cycleForInstant(instant ?? DateTime.now(), paydayDay: paydayDay).key;
