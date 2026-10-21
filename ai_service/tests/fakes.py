@@ -257,6 +257,7 @@ class FakeSupabaseClient:
         self.rpc_handlers: Dict[str, Callable[[dict], Any]] = {
             "consume_quota": lambda _p: True,
             "pay_installment_plan": self._pay_installment_plan,
+            "recompute_budget_spent": self._recompute_budget_spent,
         }
         self.rpc_calls: List[tuple[str, dict]] = []
         self.storage_objects: Dict[tuple[str, str], bytes] = {}
@@ -289,6 +290,24 @@ class FakeSupabaseClient:
                         row["status"] = "COMPLETED"
                 return [copy.deepcopy(row)]
         return []
+
+    def _recompute_budget_spent(self, params: dict) -> int:
+        """Mirror of public.recompute_budget_spent (migration 20261020800000)."""
+        hid, keys = params.get("p_household_id"), set(params.get("p_cycle_keys") or [])
+        txs = self.tables.get("transactions", [])
+        n = 0
+        for b in self.tables.get("budgets", []):
+            if b.get("household_id") != hid or b.get("cycle_key") not in keys:
+                continue
+            total = sum(
+                float(t.get("amount") or 0) for t in txs
+                if t.get("household_id") == hid and t.get("category_code") == b.get("category_code")
+                and t.get("cycle_key") == b.get("cycle_key") and t.get("nafaqah_class") != "wife_personal"
+                and t.get("is_settlement") is not True
+            )
+            b["spent_amount"] = round(max(0.0, total), 2)
+            n += 1
+        return n
 
     def seed(self, table: str, rows: List[dict]) -> None:
         self.tables.setdefault(table, []).extend(copy.deepcopy(rows))
