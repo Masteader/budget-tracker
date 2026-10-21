@@ -102,18 +102,18 @@ def homes(fake_supabase):
         {"id": OUTSIDER, "household_id": OTHER, "role": "admin", "financial_role": "peer", "display_name": "Omar"},
     ])
     fake_supabase.seed("household_memberships", [
-        {"household_id": ROOM, "user_id": PRIMARY, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"household_id": ROOM, "user_id": CO, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
-        {"household_id": ROOM, "user_id": MEM, "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": PRIMARY, "financial_role": "peer", "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": CO, "financial_role": "peer", "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": MEM, "financial_role": "peer", "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
         # The uncle joined first, but the husband created the household (primary admin).
-        {"household_id": FAMILY, "user_id": UNCLE, "role": "member", "created_at": "2025-12-01T00:00:00+00:00"},
-        {"household_id": FAMILY, "user_id": HUSBAND, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"household_id": FAMILY, "user_id": WIFE, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
-        {"household_id": OTHER, "user_id": OUTSIDER, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"household_id": FAMILY, "user_id": UNCLE, "financial_role": "provider", "role": "member", "created_at": "2025-12-01T00:00:00+00:00"},
+        {"household_id": FAMILY, "user_id": HUSBAND, "financial_role": "provider", "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"household_id": FAMILY, "user_id": WIFE, "financial_role": "spouse", "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"household_id": OTHER, "user_id": OUTSIDER, "financial_role": "peer", "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
     ])
     fake_supabase.seed("households", [
         {"id": ROOM, "payday_day": 27, "owner_user_id": PRIMARY},
-        {"id": FAMILY, "payday_day": 27, "owner_user_id": HUSBAND},
+        {"id": FAMILY, "payday_day": 27, "owner_user_id": HUSBAND, "nafaqah_provider_user_id": HUSBAND},
         {"id": OTHER, "payday_day": 27, "owner_user_id": OUTSIDER},
     ])
     fake_supabase.seed("transactions", [

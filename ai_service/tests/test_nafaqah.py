@@ -96,16 +96,19 @@ def family(fake_supabase):
         {"id": PEER2, "household_id": HH_ROOM, "role": "member", "financial_role": "peer", "display_name": "Saad"},
     ])
     fake_supabase.seed("household_memberships", [
-        {"user_id": HUSBAND, "household_id": HH, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"user_id": WIFE, "household_id": HH, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
-        {"user_id": CHILD, "household_id": HH, "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
-        {"user_id": OUTSIDER, "household_id": HH_OTHER, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"user_id": OUTSIDER_WIFE, "household_id": HH_OTHER, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"user_id": PEER1, "household_id": HH_ROOM, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"user_id": PEER2, "household_id": HH_ROOM, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": HUSBAND, "financial_role": "provider", "household_id": HH, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": WIFE, "financial_role": "spouse", "household_id": HH, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"user_id": CHILD, "financial_role": "family_member", "household_id": HH, "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
+        {"user_id": OUTSIDER, "financial_role": "provider", "household_id": HH_OTHER, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": OUTSIDER_WIFE, "financial_role": "spouse", "household_id": HH_OTHER, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": PEER1, "financial_role": "peer", "household_id": HH_ROOM, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": PEER2, "financial_role": "peer", "household_id": HH_ROOM, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
     ])
     fake_supabase.seed("households", [
-        {"id": HH, "payday_day": 27}, {"id": HH_OTHER, "payday_day": 27}, {"id": HH_ROOM, "payday_day": 27},
+        # The Nafaqah provider is explicit per household (default: the primary admin).
+        {"id": HH, "payday_day": 27, "owner_user_id": HUSBAND, "nafaqah_provider_user_id": HUSBAND},
+        {"id": HH_OTHER, "payday_day": 27, "owner_user_id": OUTSIDER, "nafaqah_provider_user_id": OUTSIDER},
+        {"id": HH_ROOM, "payday_day": 27, "owner_user_id": PEER1, "nafaqah_provider_user_id": PEER1},
     ])
     fake_supabase.seed("transactions", [
         # wife-paid shared (rule 2)
@@ -531,7 +534,7 @@ def test_several_wives_require_an_explicit_wife(family):
     second = "00000000-0000-4000-8000-0000000000aa"
     family.seed("users", [{"id": second, "household_id": HH, "role": "member", "financial_role": "spouse",
                            "display_name": "Mona"}])
-    family.seed("household_memberships", [{"user_id": second, "household_id": HH, "role": "member",
+    family.seed("household_memberships", [{"user_id": second, "financial_role": "spouse", "household_id": HH, "role": "member",
                                            "created_at": "2026-02-01T00:00:00+00:00"}])
     ctx = ns.load_family_context(HH)
     with pytest.raises(ns.InvalidNafaqahRequest):
@@ -769,7 +772,7 @@ SECOND_WIFE = "00000000-0000-4000-8000-0000000000aa"
 def _add_second_wife(fake):
     fake.seed("users", [{"id": SECOND_WIFE, "household_id": HH, "role": "member", "financial_role": "spouse",
                          "display_name": "Mona"}])
-    fake.seed("household_memberships", [{"user_id": SECOND_WIFE, "household_id": HH, "role": "member",
+    fake.seed("household_memberships", [{"user_id": SECOND_WIFE, "financial_role": "spouse", "household_id": HH, "role": "member",
                                          "created_at": "2026-02-01T00:00:00+00:00"}])
 
 
