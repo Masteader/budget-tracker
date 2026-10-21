@@ -63,3 +63,32 @@ Verified sound: cross-household isolation, creator binding and owner-or-admin wr
 | Observation | — | `_get_user_membership` falls back to `users.household_id` when the memberships query errors (fail-open on infra error). | `auth.py:300-331` | Fail closed. |
 
 Verified clean: JWT pinning (alg none, wrong secret/aud/iss/exp, role anon/service_role, kid on HS256, HS256 signed with a cached ES256 key → 401), firewall, no string-built PostgREST filters, no SSRF, receipt path traversal blocked, inquiry e-mail header handling, idempotency keys per user and endpoint; route-by-route authorization holds.
+
+## Status — backend API and money-logic items (fix round 2026-10-21)
+
+Branch `audit/claude-comprehensive-review` (worktree commits below). Regression tests reuse the
+reviewer's reproductions with the assertions inverted; e2e tests run on the real stack
+(`tests/e2e/test_08_fable_api_fixes.py`). Items of section A not listed here (LOGIC-01/02/04/05/06/09)
+and section B are owned by the roles/DB and Flutter work streams.
+
+| ID | Status | Fix | Proof tests | Commit |
+|---|---|---|---|---|
+| FABLE-API-01 | Fixed | Attribution stored structurally on insert (`spent_by` = payer relative to the creator, `beneficiary_type`/`beneficiary_id`); `/settlement` and `/settlement-v2` share `settlement_engine.transaction_attribution`. Legacy rows (`beneficiary_id` NULL) read only the server-authored tag segment (last occurrence before the item summary; chat/receipt payer limited to me/partner); app manual rows read the right-anchored template tail; settlements their `Settlement \| PaidBy:` head. Notes: server tags first, user text without `\|` or tag keywords. | `ai_service/tests/test_fable_attribution.py`; e2e `test_api01_*` | `985c6f4` |
+| FABLE-LOGIC-03 | Fixed | Personal chat/receipt expenses carry `individual/<creator>`; 'partner' must name someone (2-member household or the spouse) or the request is 422; both engines agree. | `test_fable_attribution.py::test_personal_chat_expense_*`, `::test_settlement_and_settlement_v2_agree`; e2e `test_logic03_*` | `985c6f4` |
+| FABLE-LOGIC-08 | Fixed | Receipt total minus Σ line items attributed pro-rata to the items' beneficiaries (largest remainder, halala exact; discounts too); non-member beneficiaries split instead of dropped. | `test_fable_attribution.py::test_pairwise_line_items_*` | `985c6f4` |
+| FABLE-API-02 | Fixed | Header-only checks before decoding: ≤ 40 MP per photo, ≤ 100 MP per receipt, stitched canvas ≤ 20000 px high (413); pages decoded one at a time in JPEG draft mode and downscaled to 1600 px wide. Two 40 MP pages: +0 MiB peak RSS (was +766 MiB); the reviewer's four pages: 413. | `ai_service/tests/test_fable_receipt_limits.py` (subprocess RSS measurement, canvas bounds, route 413) | `996fcdb` |
+| FABLE-API-03 | Fixed | `TRUST_PROXY_HEADERS` (auto-on with `RAILWAY_ENVIRONMENT`) + `TRUSTED_PROXY_HOPS` pick the client hop Railway's edge appends; per-IP inquiry limit only for a real client address, per-e-mail and global limits kept; invite inspection limited per verified user (else IP) under a 600/min global ceiling. | `ai_service/tests/test_fable_client_ip_limits.py`; e2e `test_06::test_public_inquiry_per_ip_limit` | `45f37c0` |
+| FABLE-API-04 | Fixed | No new definitions under system parents via the API (allocation to the seeded ones only); keywords < 3 chars never stored or matched; `match_sub_category` trusts only seeded system definitions and the transaction household's own custom definitions. | `ai_service/tests/test_fable_sub_categories.py`; e2e `test_api04_*` | `9542307` |
+| FABLE-API-05 | Fixed | Definitions/renames under a custom code only when the caller's household is its sole owner (admin). | `test_fable_sub_categories.py::test_colliding_custom_code_*`; e2e `test_api05_api08_*` | `9542307` |
+| FABLE-API-08 | Fixed | One identical 403 text for every refused sub-category write. | `test_fable_sub_categories.py::test_rename_is_not_an_existence_oracle` | `9542307` |
+| FABLE-API-06 | Fixed | 422 for merchant > 120, sub_category/beneficiary/paid_by > 60 (and other overrides) or non-text; `qr_code_raw` ≤ 4096 and stored only when it decodes; model output bounded too. | `ai_service/tests/test_fable_field_limits.py`; e2e `test_api06_*` | `9aa8921` |
+| FABLE-API-07 | Fixed | `_`-prefixed `sub_allocations` keys skipped in totals, ignored in client input, preserved on save. | `ai_service/tests/test_fable_sub_allocations_metadata.py`; e2e `test_api07_*` | `03fbb36` |
+| FABLE-API-09 | Fixed | `start_date` must be an ISO date (422); JSON file fallback removed (a failed insert fails the request); the transaction is adjusted only after the plan is stored. | `ai_service/tests/test_fable_installments.py`; e2e `test_api09_*` | `44f5f24` |
+| FABLE-API-10 | Fixed | New migration `20261020750000_installment_pay_atomic.sql`: `pay_installment_plan()` conditional increment (never beyond the plan), SECURITY DEFINER, pinned search_path, membership check, service_role-only EXECUTE. | `supabase/tests/24_installment_pay_atomic.sql`; `test_fable_installments.py::test_pay_is_one_atomic_rpc_call`; e2e `test_api10_concurrent_payments_each_count_once` (12 concurrent pays) | `44f5f24` |
+| FABLE-LOGIC-07 | Fixed | Fallback classifier: partner-paid cues in both word orders (Arabic/English), bills and grocery items shared, لها/له = partner, pronoun suffixes and ل-words never child names, gifts/relatives outside the household undetermined; preview returns `attribution_needs_confirmation` and no class when undetermined. 15/15 reviewer phrases (was 8/15). | `ai_service/tests/test_fable_classifier.py` | `62e6efa` |
+| Observation (auth) | Fixed | `_get_user_membership` fails closed on a query error (no users.household_id fallback). | `ai_service/tests/test_fable_auth_fail_closed.py` | `60814b6` |
+
+Residual (documented, not changed): legacy chat/receipt rows written before this round whose LLM
+item names contained `| PaidBy:` text could still shadow the server tag (the heuristic parser cannot
+produce such names); no backfill of historical rows was run (live is never written from here).
+`installment_service.list_plans` still reconciles plans from notes mentioning Tamara/Tabby.
