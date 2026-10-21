@@ -73,7 +73,7 @@ void main() {
     );
 
     expect(find.text('Roommate Settlements'), findsOneWidget);
-    expect(find.text('Simplify Debts'), findsOneWidget);
+    expect(find.text('Fewest transfers'), findsOneWidget);
     expect(find.textContaining('Ahmed'), findsWidgets);
     expect(find.textContaining('Tariq'), findsWidgets);
     expect(find.text('+SAR 300.00'), findsOneWidget);

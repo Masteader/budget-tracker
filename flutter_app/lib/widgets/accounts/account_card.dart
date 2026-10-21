@@ -26,6 +26,10 @@ class AccountCard extends StatelessWidget {
     this.onRefresh,
   });
 
+  /// Riyal amounts through the riyal formatter ("1,250.00 ر.س" in Arabic);
+  /// other currencies (USDT…) keep their code (UX-22).
+  String _money(BuildContext context, double amount) => context.money(amount, account.currency);
+
   @override
   Widget build(BuildContext context) {
     final margin = account.calculateMargin(committedBudgets);
@@ -213,9 +217,12 @@ class AccountCard extends StatelessWidget {
                 // If in deficit, show immediate resolution action
                 if (status == AccountCapacityStatus.deficit) ...[
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
+                  // An amber outlined "cover the shortfall" action, not a
+                  // full-width solid red one that reads as destructive (UX-22).
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: const Key('account_cover_deficit'),
                       onPressed: () {
                         AccountTransferSheet.show(
                           context,
@@ -227,13 +234,13 @@ class AccountCard extends StatelessWidget {
                       },
                       icon: const Icon(Icons.bolt_rounded, size: 16),
                       label: Text(
-                        '⚡ ${context.tr("quick_transfer")} ${context.money(-margin, account.currency)}',
+                        context.trArgs('cover_deficit_action', {'amount': _money(context, -margin)}),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
+                        side: BorderSide(color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309), width: 1.4),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),

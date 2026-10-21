@@ -9,7 +9,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../models/household_dues.dart';
+import '../../models/household_setup.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -18,18 +21,22 @@ import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
+import '../../widgets/dashboard/over_budget_alerts.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
-import '../../widgets/dashboard/family_reimbursement_card.dart';
-import '../../widgets/dashboard/multi_roommate_settlement_card.dart';
+import '../../widgets/dashboard/household_balances_section.dart';
+import '../../widgets/card_error_state.dart';
 import '../../widgets/dashboard/accounts_summary_card.dart';
 import '../../widgets/dashboard/payday_checkin_banner.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
+import '../../widgets/dashboard/app_bottom_nav_bar.dart';
 import '../../widgets/reminder_sync.dart';
+import '../../widgets/lazy_indexed_stack.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
@@ -103,192 +110,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      const _BudgetDashboard(),
-      const TransactionFeedScreen(),
-      const ChatEntryScreen(),
-      const BudgetManagementScreen(),
-      const SettingsScreen(),
-    ];
+    // Built on first visit and kept alive (UX-26): chat, budgets and
+    // settings no longer build and fetch at launch.
+    Widget screen(BuildContext context, int index) {
+      switch (index) {
+        case 0:
+          return const _BudgetDashboard();
+        case 1:
+          return const TransactionFeedScreen();
+        case 2:
+          return const ChatEntryScreen();
+        case 3:
+          return const BudgetManagementScreen();
+        default:
+          return const SettingsScreen();
+      }
+    }
 
     // Local reminders follow this household's payday, bills and plans.
     return ReminderSync(
       child: Scaffold(
         extendBody: true,
-        body: IndexedStack(
+        body: LazyIndexedStack(
           index: _selectedIndex,
-          children: screens,
+          itemCount: 5,
+          itemBuilder: screen,
         ),
         floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
             ? AppSpeedDialFab(householdId: _householdId)
             : null,
-        bottomNavigationBar: _buildFloatingBottomNavBar(context),
-      ),
-    );
-  }
-
-  Widget _buildFloatingBottomNavBar(BuildContext context) {
-    final isDark = context.isDark;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      height: 68,
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppThemes.deepGlacial.withValues(alpha: 0.94)
-            : Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isDark
-              ? AppThemes.iceCyan.withValues(alpha: 0.22)
-              : AppThemes.electricTeal.withValues(alpha: 0.35),
-          width: 1.2,
+        bottomNavigationBar: AppBottomNavBar(
+          selectedIndex: _selectedIndex,
+          onSelected: (i) => setState(() => _selectedIndex = i),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.45)
-                : AppThemes.electricTeal.withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-          if (!isDark)
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildNavItem(
-            index: 0,
-            icon: Icons.home_outlined,
-            selectedIcon: Icons.home_rounded,
-            label: context.tr('nav_dashboard'),
-          ),
-          _buildNavItem(
-            index: 1,
-            icon: Icons.receipt_long_outlined,
-            selectedIcon: Icons.receipt_long_rounded,
-            label: context.tr('nav_transactions'),
-          ),
-          _buildCenterAiNavItem(),
-          _buildNavItem(
-            index: 3,
-            icon: Icons.pie_chart_outline_rounded,
-            selectedIcon: Icons.pie_chart_rounded,
-            label: context.tr('nav_budgets'),
-          ),
-          _buildNavItem(
-            index: 4,
-            icon: Icons.person_outline_rounded,
-            selectedIcon: Icons.person_rounded,
-            label: context.tr('nav_settings'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required IconData selectedIcon,
-    required String label,
-  }) {
-    final isSelected = _selectedIndex == index;
-    final isDark = context.isDark;
-    final activeColor = context.accentText;
-    final inactiveColor = context.textMuted;
-
-    return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: EdgeInsets.symmetric(
-                horizontal: isSelected ? 12 : 6,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark
-                        ? AppThemes.electricTeal.withValues(alpha: 0.16)
-                        : AppThemes.electricTeal.withValues(alpha: 0.18))
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                isSelected ? selectedIcon : icon,
-                color: isSelected ? activeColor : inactiveColor,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCenterAiNavItem() {
-    final isSelected = _selectedIndex == 2;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = 2),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppThemes.electricTeal, AppThemes.iceCyan],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppThemes.electricTeal.withValues(alpha: isSelected ? 0.65 : 0.4),
-                  blurRadius: isSelected ? 16 : 10,
-                  spreadRadius: isSelected ? 2 : 0,
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: AppThemes.brandDarkBg,
-              size: 22,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            context.tr('nav_ai'),
-            style: GoogleFonts.outfit(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: isSelected
-                  ? context.accentText
-                  : context.textMuted,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -307,6 +161,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   late Future<String> _householdId;
   List<SalaryCycleInfo> _cycles = [];
   int _currentCycleIndex = 0;
+
+  /// Bumped by "Try again" to subscribe to the budgets stream afresh.
+  int _budgetStreamGeneration = 0;
 
   @override
   void initState() {
@@ -328,6 +185,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .single();
     final hid = data['household_id'] as String;
     _fetchCycles(hid);
+    _fetchSetup(hid);
     return hid;
   }
 
@@ -364,6 +222,104 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     final c = _selectedCycle;
     final byKey = context.cycleLabel(_currentCycleKey);
     return c == null ? byKey : context.cycleRangeIso(c.cycleStart, c.cycleEnd, fallback: byKey);
+  }
+
+  /// The selected cycle's active budgets from the budgets stream.
+  List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows) =>
+      rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
+
+  final GlobalKey _categoriesKey = GlobalKey();
+  final GlobalKey _balancesKey = GlobalKey();
+
+  /// First-run checklist data (UX-02): payday, income, members. The income is
+  /// also the hero's base (UX-07); null until loaded.
+  HouseholdSetupData? _setup;
+
+  bool get _isCurrentCycle => _selectedCycle == null || _selectedCycle!.isCurrent;
+
+  /// The family Nafaqah summary the balances card loaded (hero dues line).
+  NafaqahSummary? _nafaqah;
+
+  /// The settlement summary the balances section loaded (roommate dues).
+  SettlementV2Summary? _settlement;
+
+  /// The hero's dues: the viewer's roommate balances (UX-16), else what is
+  /// owed to the wife (UX-07).
+  List<DueLine> _dueLines() {
+    final settlement = _settlement;
+    if (settlement != null && settlement.isRoommateMode) {
+      return roommateDueLines(settlement, supabase.auth.currentUser?.id);
+    }
+    return _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!);
+  }
+
+  void _scrollToBalances() {
+    final ctx = _balancesKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
+  }
+
+  Future<void> _fetchSetup(String hid) async {
+    final data = await HouseholdSetupPrefs.load(hid);
+    if (mounted) setState(() => _setup = data);
+  }
+
+  /// The top of the dashboard: the guided setup for a household without
+  /// budgets (UX-02), otherwise the "until payday" hero and the overspent
+  /// categories, plus the checklist while setup steps remain.
+  List<Widget> _buildTop(String hid, List<Budget> budgets) {
+    final setup = _setup;
+    final hasBudgets = budgets.isNotEmpty;
+    if (!hasBudgets && _isCurrentCycle) {
+      if (setup == null) return [AppShimmer.heroCard()];
+      if (setup.roster == null) {
+        return [
+          CardErrorState(
+            title: context.tr('setup_load_error_title'),
+            message: context.tr('load_error_generic'),
+            onRetry: () => _fetchSetup(hid),
+          ),
+        ];
+      }
+      return [HouseholdSetupCard(householdId: hid, data: setup, hasBudgets: false, onChanged: () => _fetchSetup(hid))];
+    }
+    final showChecklist = _isCurrentCycle &&
+        setup != null &&
+        setup.isAdmin &&
+        !setup.hidden &&
+        !setup.isComplete(hasBudgets: hasBudgets);
+    return [
+      BudgetHeroCard(
+        budgets: budgets,
+        cycle: _selectedCycle,
+        monthlyIncome: setup?.monthlyIncome,
+        dueLines: _dueLines(),
+        onDueTap: _scrollToBalances,
+      ),
+      // UX-08: overspent categories right under the hero.
+      OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
+      if (showChecklist) ...[
+        const SizedBox(height: 12),
+        HouseholdSetupCard(
+          householdId: hid,
+          data: setup,
+          hasBudgets: true,
+          onChanged: () => _fetchSetup(hid),
+          onHide: () async {
+            await HouseholdSetupPrefs.setHidden(hid);
+            if (mounted) setState(() => _setup = setup.copyWith(hidden: true));
+          },
+        ),
+      ],
+    ];
+  }
+
+  void _scrollToCategories() {
+    final ctx = _categoriesKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
   }
 
   bool _matchesSelectedCycle(Budget b) {
@@ -413,6 +369,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         return Scaffold(
           body: SafeArea(
             child: StreamBuilder<List<Map<String, dynamic>>>(
+              key: ValueKey('budgets-$hid-$_budgetStreamGeneration'),
               stream: supabase
                   .from('budgets')
                   .stream(primaryKey: ['id'])
@@ -429,6 +386,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         context.read<TransactionProvider>().fetchTransactions(),
                         context.read<BudgetProvider>().refresh(),
                         context.read<RecurringBillsProvider>().fetchBills(),
+                        _fetchSetup(hid),
                       ]);
                     } catch (_) {}
                   },
@@ -436,7 +394,19 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                     _buildAppBar(hid),
-                    if (!budgetSnap.hasData)
+                    if (budgetSnap.hasError && !budgetSnap.hasData)
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        sliver: SliverToBoxAdapter(
+                          // UX-01: a failed budget stream is an error, not an endless skeleton.
+                          child: CardErrorState(
+                            title: context.tr('hero_left_until_payday'),
+                            message: context.tr('load_error_budgets'),
+                            onRetry: () => setState(() => _budgetStreamGeneration++),
+                          ),
+                        ),
+                      )
+                    else if (!budgetSnap.hasData)
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         sliver: SliverToBoxAdapter(
@@ -508,29 +478,20 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 },
                               ),
                               PaydayCheckinBanner(householdId: hid),
-                              BudgetHeroCard(
-                                budgets: budgetSnap.data!
-                                    .map(Budget.fromMap)
-                                    .where((b) => b.isActive && _matchesSelectedCycle(b))
-                                    .toList(),
-                                cycle: _selectedCycle,
-                              ),
+                              ..._buildTop(hid, _cycleBudgets(budgetSnap.data!)),
+                              const SizedBox(height: 12),
                               // Balances only once there are 2+ accounts; the
                               // Tools screen always has them.
                               AccountsSummaryCard(householdId: hid, minAccounts: 2),
                               const SizedBox(height: 12),
-                              FutureBuilder<SettlementV2Summary>(
-                                future: ApiService.instance.getSettlementV2(hid),
-                                builder: (context, snap) {
-                                  if (snap.hasData && snap.data!.isRoommateMode) {
-                                    return MultiRoommateSettlementCard(
-                                      householdId: hid,
-                                      summary: snap.data,
-                                    );
-                                  }
-                                  return FamilyReimbursementCard(
-                                    householdId: hid,
-                                  );
+                              HouseholdBalancesSection(
+                                key: _balancesKey,
+                                householdId: hid,
+                                onNafaqahLoaded: (summary) {
+                                  if (mounted) setState(() => _nafaqah = summary);
+                                },
+                                onSettlementLoaded: (summary) {
+                                  if (mounted) setState(() => _settlement = summary);
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -555,21 +516,38 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         ),
                       ),
                       SliverPadding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(24, 4, 20, 8),
+                        sliver: SliverToBoxAdapter(
+                          child: Text(
+                            context.tr('category_budgets_heading'),
+                            key: _categoriesKey,
+                            style: GoogleFonts.outfit(
+                              color: context.textSecondary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         sliver: Builder(
                           builder: (context) {
-                            final cycleBudgets = budgetSnap.data!
-                                .map(Budget.fromMap)
-                                .where((b) => b.isActive && _matchesSelectedCycle(b))
-                                .toList();
+                            // Most at risk first: overspent, then by share used (UX-08).
+                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!));
                             if (cycleBudgets.isEmpty) {
+                              // The running cycle's empty state is the setup
+                              // card at the top (UX-02); it no longer points
+                              // "below" at nothing.
+                              if (_isCurrentCycle) return const SliverToBoxAdapter(child: SizedBox.shrink());
                               return SliverToBoxAdapter(
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 20),
                                   child: AppEmptyState(
                                     icon: Icons.calendar_today_outlined,
                                     title: context.trArgs('no_allocations_for_cycle', {'cycle': _cycleLabel(context)}),
-                                    message: context.tr('budgets_auto_rollover_desc'),
+                                    message: context.tr('dashboard_past_cycle_no_budgets'),
                                   ),
                                 ),
                               );
@@ -652,6 +630,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
               currentHouseholdId: hid,
               onSwitched: () {
                 setState(() {
+                  _setup = null;
+                  _nafaqah = null;
+                  _settlement = null;
                   _householdId = _fetchHouseholdId();
                 });
               },

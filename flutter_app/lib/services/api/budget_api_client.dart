@@ -19,7 +19,9 @@ class BudgetApiClient {
       params['as_of_date'] = asOfDate;
     }
     final res = await baseClient.get('/budgets/recurring-bills', queryParams: params);
-    return RecurringBillsSummary.fromMap(res);
+    // UX-01: a failed request is an error, never an empty bill list (which
+    // showed the first-time set-up to a household that has bills).
+    return RecurringBillsSummary.fromMap(ApiRequestException.check(res));
   }
 
   Future<List<RecurringBillCandidate>> fetchRecurringBillCandidates({
@@ -172,7 +174,8 @@ class BudgetApiClient {
       '/households/$householdId/settlement-v2',
       queryParams: params,
     );
-    return SettlementV2Summary.fromMap(res);
+    // UX-01: an error map parsed as a "standard" summary hid the roommate card.
+    return SettlementV2Summary.fromMap(ApiRequestException.check(res));
   }
 
   Future<HouseholdInvite> createRoleInvite({
@@ -480,21 +483,19 @@ class BudgetApiClient {
     );
   }
 
+  /// Throws [ApiRequestException] when the plans could not be loaded (UX-01:
+  /// an empty list read as "all installments cleared").
   Future<List<InstallmentPlan>> fetchInstallments({required String householdId}) async {
-    try {
-      final res = await baseClient.get(
-        '/budgets/installments',
-        queryParams: {'household_id': householdId},
-      );
-      if (res['plans'] is List) {
-        return (res['plans'] as List)
-            .map((e) => InstallmentPlan.fromJson(Map<String, dynamic>.from(e as Map)))
-            .toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
+    final res = ApiRequestException.check(await baseClient.get(
+      '/budgets/installments',
+      queryParams: {'household_id': householdId},
+    ));
+    if (res['plans'] is List) {
+      return (res['plans'] as List)
+          .map((e) => InstallmentPlan.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
     }
+    return [];
   }
 
   /// Throws [ApiRequestException] when the server refuses the plan (403 for

@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
+import '../card_error_state.dart';
 
 /// Interactive dashboard card displaying recurring monthly bills, payment status
 /// in the active salary cycle, reserved fund allowance, and category inclusion settings.
@@ -82,25 +83,23 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     return Consumer<RecurringBillsProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.summary == null) {
-          return Container(
-            height: 110,
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
-              ),
-            ),
+          return _buildLoading();
+        }
+        final summary = provider.summary;
+        // UX-01: a failed load is an error with a retry, never the set-up
+        // state of a household without bills.
+        if (summary == null && provider.error != null) {
+          return CardErrorState(
+            title: context.tr('recurring_bills'),
+            message: context.tr('load_error_bills'),
+            icon: Icons.repeat_rounded,
+            onRetry: provider.fetchBills,
           );
         }
-
-        final summary = provider.summary;
-        if (summary == null || summary.bills.isEmpty) {
+        if (summary == null) {
+          return _buildLoading();
+        }
+        if (summary.bills.isEmpty) {
           return _buildEmptyOrActionCard();
         }
         final upcomingCount = summary.bills.where((b) => b.isUpcoming || b.isOverdue).length;
@@ -198,6 +197,11 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 ),
               ),
 
+              if (provider.error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: CardErrorBanner(lastUpdated: provider.lastUpdated, onRetry: provider.fetchBills),
+                ),
               // Visual Progress Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -234,20 +238,36 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                           '${context.tr('total')}: ${context.sar(summary.totalRecurringMonthly)}',
                           style: TextStyle(color: context.textSecondary, fontSize: 11),
                         ),
-                        Row(
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppThemes.success, shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
-                              style: TextStyle(color: context.successText, fontSize: 11, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppThemes.success, shape: BoxShape.circle)),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
+                                    style: TextStyle(color: context.successText, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${context.tr('reserved')} ${context.sar(summary.reservedAmount)}',
-                              style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    '${context.tr('reserved')} ${context.sar(summary.reservedAmount)}',
+                                    style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -265,12 +285,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                 // Filter Chips
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       _buildFilterChip(0, '${context.tr('all')} (${summary.bills.length})'),
-                      const SizedBox(width: 8),
                       _buildFilterChip(1, '${context.tr('pending')} ($upcomingCount)'),
-                      const SizedBox(width: 8),
                       _buildFilterChip(2, '${context.tr('paid')} ($paidCount)'),
                     ],
                   ),
@@ -308,6 +328,25 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      key: const Key('recurring_bills_loading'),
+      height: 110,
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
+        ),
+      ),
     );
   }
 
@@ -483,6 +522,63 @@ class _BillRowItem extends StatelessWidget {
     }
 
     final billIcon = _getBillIcon(bill.iconKey, bill.merchant, bill.categoryCode);
+    // Under large text the amount and status go under the name instead of
+    // squeezing it off the row (UX-14).
+    final large = MediaQuery.textScalerOf(context).scale(10) > 13;
+    final Widget trailing = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          context.sar(bill.averageAmount),
+          style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 3),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, color: badgeColor, size: 10),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!bill.isPaid) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: onMarkPaid,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppThemes.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppThemes.success.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    context.tr('rb_pay'),
+                    style: TextStyle(color: context.successText, fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -541,61 +637,14 @@ class _BillRowItem extends StatelessWidget {
                   context.trCat(bill.categoryCode),
                   style: TextStyle(color: context.textSecondary, fontSize: 10),
                 ),
+                if (large) ...[
+                  const SizedBox(height: 6),
+                  Align(alignment: AlignmentDirectional.centerStart, child: trailing),
+                ],
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                context.sar(bill.averageAmount),
-                style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 3),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(badgeIcon, color: badgeColor, size: 10),
-                        const SizedBox(width: 3),
-                        Text(
-                          badgeText,
-                          style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!bill.isPaid) ...[
-                    const SizedBox(width: 6),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: onMarkPaid,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppThemes.success.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppThemes.success.withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          context.tr('rb_pay'),
-                          style: TextStyle(color: context.successText, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+          if (!large) trailing,
         ],
       ),
     );

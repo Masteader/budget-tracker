@@ -10,25 +10,40 @@ class RecurringBillsProvider extends ChangeNotifier {
   RecurringBillsProvider({
     Future<void> Function(Map<String, dynamic> row)? insertRow,
     String? Function()? currentUserId,
+    ApiService? api,
   })  : _insertRow = insertRow,
-        _currentUserId = currentUserId;
+        _currentUserId = currentUserId,
+        _apiOverride = api;
 
   final Future<void> Function(Map<String, dynamic> row)? _insertRow;
   final String? Function()? _currentUserId;
+  final ApiService? _apiOverride;
+
+  ApiService get _api => _apiOverride ?? ApiService.instance;
 
   String? _householdId;
   RecurringBillsSummary? _summary;
   bool _isLoading = false;
   String? _error;
+  DateTime? _lastUpdated;
 
   RecurringBillsSummary? get summary => _summary;
   bool get isLoading => _isLoading;
+
+  /// Set when the last load failed; [summary] then still holds the bills from
+  /// [lastUpdated], if any (UX-01: never shown as "no bills").
   String? get error => _error;
+  DateTime? get lastUpdated => _lastUpdated;
   String? get householdId => _householdId;
 
   /// Initialize provider with active household ID and fetch bills.
   Future<void> init(String householdId) async {
     if (_householdId == householdId && _summary != null) return;
+    if (_householdId != householdId) {
+      // Never show another household's bills while this one loads.
+      _summary = null;
+      _lastUpdated = null;
+    }
     _householdId = householdId;
     await fetchBills();
   }
@@ -43,10 +58,11 @@ class RecurringBillsProvider extends ChangeNotifier {
     }
 
     try {
-      final res = await ApiService.instance.getRecurringBills(_householdId!);
+      final res = await _api.getRecurringBills(_householdId!);
       _summary = res;
       _isLoading = false;
       _error = null;
+      _lastUpdated = DateTime.now();
       notifyListeners();
     } catch (e) {
       _isLoading = false;
@@ -127,6 +143,7 @@ class RecurringBillsProvider extends ChangeNotifier {
     _summary = null;
     _isLoading = false;
     _error = null;
+    _lastUpdated = null;
     notifyListeners();
   }
 

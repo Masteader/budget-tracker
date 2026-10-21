@@ -21,6 +21,11 @@ void main() {
     expect(ar.money(12, 'USD'), '12.00 USD');
     expect(en.money(12, 'USD'), 'USD 12.00');
     expect(ar.money(-859.5, 'SAR'), '-859.50 ر.س');
+    // English puts the sign before the code: "-SAR 859.50", not "SAR -859.50".
+    expect(en.money(-859.5, 'SAR'), '-SAR 859.50');
+    expect(en.sar(-859.5), '-SAR 859.50');
+    expect(en.money(-3, 'USD'), '-USD 3.00');
+    expect(en.money(859.5, 'SAR', signed: true), '+SAR 859.50');
     expect(ar.money(859.5, 'SAR', signed: true), '+859.50 ر.س');
     expect(ar.money(1000, 'SAR', decimals: 0), '1,000 ر.س');
     // Lower-case / blank currency codes are SAR.

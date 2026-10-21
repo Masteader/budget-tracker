@@ -428,8 +428,39 @@ class Budget {
             const {},
       );
 
-  double get usagePercent =>
-      allocatedAmount > 0 ? (spentAmount / allocatedAmount).clamp(0.0, 1.0) : 0.0;
+  /// Share of the allocation used, clamped to [0, 1]: for progress bars only.
+  /// Show [usageRatio] as the percentage (UX-08: 131% must read 131%).
+  double get usagePercent => usageRatio.clamp(0.0, 1.0);
+
+  /// Spent ÷ allocated, not clamped (1.31 = 131%). Spending with no
+  /// allocation counts as fully used.
+  double get usageRatio {
+    if (allocatedAmount > 0) return spentAmount / allocatedAmount;
+    return spentAmount > 0 ? 1.0 : 0.0;
+  }
+
+  /// Spent more than allocated (by at least one halala).
+  bool get isOverspent => spentAmount - allocatedAmount >= 0.005;
+
+  /// How much more than allocated was spent; 0 within budget.
+  double get overspentAmount => isOverspent ? spentAmount - allocatedAmount : 0.0;
+
+  /// The categories most at risk first: overspent ones (furthest over first),
+  /// then by share used (UX-08).
+  static List<Budget> sortByRisk(Iterable<Budget> budgets) {
+    double overRatio(Budget b) =>
+        b.allocatedAmount > 0 ? b.overspentAmount / b.allocatedAmount : double.infinity;
+    return budgets.toList()
+      ..sort((a, b) {
+        if (a.isOverspent != b.isOverspent) return a.isOverspent ? -1 : 1;
+        if (a.isOverspent) {
+          final byOver = overRatio(b).compareTo(overRatio(a));
+          if (byOver != 0) return byOver;
+          return b.overspentAmount.compareTo(a.overspentAmount);
+        }
+        return b.usageRatio.compareTo(a.usageRatio);
+      });
+  }
 }
 
 // ── Salary Cycle & Sub-Budgets ───────────────────────────────────────────────

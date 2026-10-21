@@ -96,7 +96,8 @@ void main() {
   });
 
   test('the bottom navigation does not hard-code the 4.0:1 teal', () {
-    final src = File('lib/screens/home/dashboard_screen.dart').readAsStringSync();
-    expect(src.contains('0xFF008F7A'), isFalse);
+    for (final path in ['lib/screens/home/dashboard_screen.dart', 'lib/widgets/dashboard/app_bottom_nav_bar.dart']) {
+      expect(File(path).readAsStringSync().contains('0xFF008F7A'), isFalse, reason: path);
+    }
   });
 }
