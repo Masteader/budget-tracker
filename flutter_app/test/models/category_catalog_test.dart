@@ -67,5 +67,34 @@ void main() {
       expect(en.category('OPEX-FUEL'), isNot(en.category('OPEX-TRANSPORT')));
       expect(en.category('OPEX-FUEL').toLowerCase().contains('transport'), isFalse);
     });
+
+    test('new sub-codes have Urdu labels (en/ar fall back when the DB sends none)', () {
+      const subCodes = [
+        'housing_rent', 'annual_rent', 'housing_services', 'tuition_fees', 'school_transport',
+        'school_uniforms', 'books_supplies', 'maid_salary', 'driver_salary', 'recruitment_visa',
+        'parents_support', 'relatives_support', 'sadaqah', 'zakat', 'car_installment', 'ride_hailing',
+        'public_transport', 'car_maintenance', 'car_insurance', 'health_insurance', 'home_insurance',
+        'family_remittance', 'transfer_fees',
+      ];
+      for (final lang in ['en', 'ar', 'ur']) {
+        final l = AppLocalizations(Locale(lang));
+        for (final code in subCodes) {
+          final name = l.subCategory(code);
+          expect(name, isNot(code), reason: '$lang $code');
+          if (lang == 'ur') expect(RegExp('[يكىة]').hasMatch(name), isFalse, reason: 'ur $code');
+        }
+      }
+      // A DB Arabic name still wins in Arabic.
+      expect(AppLocalizations(const Locale('ar')).subCategory('zakat', nameAr: 'زكاة المال'), 'زكاة المال');
+    });
+
+    test('labels match the DB contract', () {
+      final en = AppLocalizations(const Locale('en'));
+      final ar = AppLocalizations(const Locale('ar'));
+      expect(en.category('OPEX-EDUCATION'), 'School Costs');
+      expect(en.category('OPEX-CHARITY'), 'Charity & Zakat');
+      expect(ar.category('OPEX-FAMILY-SUPPORT'), 'بر الوالدين ودعم الأسرة');
+      expect(ar.category('OPEX-REMITTANCE'), 'الحوالات الخارجية');
+    });
   });
 }

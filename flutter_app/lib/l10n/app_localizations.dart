@@ -71,28 +71,28 @@ class AppLocalizations {
       'ur': 'رہائش اور کرایہ',
     },
     'OPEX-EDUCATION': {
-      'en': 'School & Education',
-      'ar': 'المدارس والتعليم',
-      'ur': 'اسکول اور تعلیم',
+      'en': 'School Costs',
+      'ar': 'مصاريف المدارس',
+      'ur': 'اسکول کے اخراجات',
     },
     'OPEX-DOMESTIC-HELP': {
-      'en': 'Domestic Help & Driver',
-      'ar': 'العمالة المنزلية والسائق',
-      'ur': 'گھریلو ملازم اور ڈرائیور',
+      'en': 'Domestic Help',
+      'ar': 'العمالة المنزلية',
+      'ur': 'گھریلو ملازمین',
     },
     'OPEX-FAMILY-SUPPORT': {
       'en': 'Family Support',
-      'ar': 'دعم الوالدين والأقارب',
-      'ur': 'والدین اور رشتہ داروں کی مدد',
+      'ar': 'بر الوالدين ودعم الأسرة',
+      'ur': 'خاندان کی کفالت',
     },
     'OPEX-CHARITY': {
-      'en': 'Charity & Sadaqah',
-      'ar': 'الصدقات والتبرعات',
-      'ur': 'صدقہ و خیرات',
+      'en': 'Charity & Zakat',
+      'ar': 'الصدقات والزكاة',
+      'ur': 'صدقہ اور زکوٰۃ',
     },
     'OPEX-TRANSPORT': {
       'en': 'Car & Transport',
-      'ar': 'السيارة والمواصلات',
+      'ar': 'السيارة والنقل',
       'ur': 'گاڑی اور ٹرانسپورٹ',
     },
     'OPEX-INSURANCE': {
@@ -102,8 +102,8 @@ class AppLocalizations {
     },
     'OPEX-REMITTANCE': {
       'en': 'Remittances Abroad',
-      'ar': 'الحوالات إلى الخارج',
-      'ur': 'بیرون ملک رقم کی ترسیل',
+      'ar': 'الحوالات الخارجية',
+      'ur': 'بیرون ملک ترسیلات',
     },
     'OPEX-TESTING': {
       'en': 'Testing Category',
@@ -317,6 +317,97 @@ class AppLocalizations {
       'en': 'General Miscellaneous',
       'ar': 'متنوعات عامة',
       'ur': 'عام متفرقات',
+    },
+    // R4 taxonomy refresh sub-codes (names also come from the DB)
+    'annual_rent': {
+      'en': 'Annual Rent',
+      'ar': 'الإيجار السنوي',
+      'ur': 'سالانہ کرایہ',
+    },
+    'housing_services': {
+      'en': 'Housing Services & Maintenance',
+      'ar': 'خدمات وصيانة السكن',
+      'ur': 'رہائش کی خدمات اور مرمت',
+    },
+    'school_transport': {
+      'en': 'School Transport',
+      'ar': 'النقل المدرسي',
+      'ur': 'اسکول ٹرانسپورٹ',
+    },
+    'school_uniforms': {
+      'en': 'School Uniforms',
+      'ar': 'الزي المدرسي',
+      'ur': 'اسکول یونیفارم',
+    },
+    'maid_salary': {
+      'en': 'Housemaid Salary',
+      'ar': 'راتب العاملة المنزلية',
+      'ur': 'گھریلو ملازمہ کی تنخواہ',
+    },
+    'driver_salary': {
+      'en': 'Driver Salary',
+      'ar': 'راتب السائق',
+      'ur': 'ڈرائیور کی تنخواہ',
+    },
+    'recruitment_visa': {
+      'en': 'Recruitment & Visa Fees',
+      'ar': 'رسوم الاستقدام والتأشيرة',
+      'ur': 'بھرتی اور ویزا فیس',
+    },
+    'parents_support': {
+      'en': 'Support for Parents',
+      'ar': 'بر الوالدين',
+      'ur': 'والدین کی مدد',
+    },
+    'relatives_support': {
+      'en': 'Support for Relatives',
+      'ar': 'دعم الأقارب',
+      'ur': 'رشتہ داروں کی مدد',
+    },
+    'sadaqah': {
+      'en': 'Sadaqah',
+      'ar': 'الصدقات',
+      'ur': 'صدقہ',
+    },
+    'zakat': {
+      'en': 'Zakat',
+      'ar': 'الزكاة',
+      'ur': 'زکوٰۃ',
+    },
+    'car_installment': {
+      'en': 'Car Installment',
+      'ar': 'قسط السيارة',
+      'ur': 'گاڑی کی قسط',
+    },
+    'public_transport': {
+      'en': 'Public Transport',
+      'ar': 'النقل العام',
+      'ur': 'پبلک ٹرانسپورٹ',
+    },
+    'car_insurance': {
+      'en': 'Car Insurance',
+      'ar': 'تأمين السيارة',
+      'ur': 'گاڑی کی انشورنس',
+    },
+    'health_insurance': {
+      'en': 'Health Insurance',
+      'ar': 'التأمين الصحي',
+      'ur': 'ہیلتھ انشورنس',
+    },
+    'home_insurance': {
+      'en': 'Home Insurance',
+      'ar': 'تأمين المنزل',
+      'ur': 'گھر کی انشورنس',
+    },
+    'family_remittance': {
+      'en': 'Family Remittance',
+      'ar': 'حوالة للأهل',
+      'ur': 'گھر والوں کو رقم کی ترسیل',
+    },
+    'transfer_fees': {
+      'en': 'Transfer Fees',
+      'ar': 'رسوم التحويل',
+      'ur': 'ترسیل کی فیس',
     },
   };
 
@@ -1679,6 +1770,14 @@ class AppLocalizations {
       'invite_share_subject': 'Invitation to our household on Budget Tracker',
       'share_invite': 'Share invite',
       'share_invite_failed': 'Could not open the share sheet. The invite was copied instead.',
+      'inst_installment_count': 'Number of installments',
+      'inst_frequency': 'Payment schedule',
+      'inst_every_two_weeks': 'Every 2 weeks',
+      'inst_every_month': 'Monthly',
+      'inst_two_weeks_short': '2 wks',
+      'inst_due_before_payday': '{amount} due before payday',
+      'inst_paid_next_due': 'Installment {paid} of {count} paid · next {date}',
+      'inst_nothing_due_before_payday': 'Nothing due before payday',
     },
     'ar': {
       'app_title': 'ميزانية الأسرة',
@@ -3037,6 +3136,14 @@ class AppLocalizations {
       'invite_share_subject': 'دعوة للانضمام إلى منزلنا في ميزانية الأسرة',
       'share_invite': 'مشاركة الدعوة',
       'share_invite_failed': 'تعذّر فتح نافذة المشاركة، فنُسخت الدعوة بدلاً من ذلك.',
+      'inst_installment_count': 'عدد الأقساط',
+      'inst_frequency': 'جدول السداد',
+      'inst_every_two_weeks': 'كل أسبوعين',
+      'inst_every_month': 'شهرياً',
+      'inst_two_weeks_short': 'أسبوعان',
+      'inst_due_before_payday': '{amount} مستحقة قبل الراتب',
+      'inst_paid_next_due': 'تم سداد القسط {paid} من {count} · القادم {date}',
+      'inst_nothing_due_before_payday': 'لا أقساط مستحقة قبل الراتب',
     },
 'ur': {
       'app_title': 'بجٹ ٹریکر',
@@ -4395,6 +4502,14 @@ class AppLocalizations {
       'invite_share_subject': 'بجٹ ٹریکر میں ہمارے گھرانے کی دعوت',
       'share_invite': 'دعوت بھیجیں',
       'share_invite_failed': 'شیئر کی اسکرین نہیں کھل سکی، اس لیے دعوت کاپی کر لی گئی۔',
+      'inst_installment_count': 'اقساط کی تعداد',
+      'inst_frequency': 'ادائیگی کا شیڈول',
+      'inst_every_two_weeks': 'ہر دو ہفتے',
+      'inst_every_month': 'ماہانہ',
+      'inst_two_weeks_short': '2 ہفتے',
+      'inst_due_before_payday': 'تنخواہ سے پہلے {amount} واجب الادا',
+      'inst_paid_next_due': '{count} میں سے {paid} قسط ادا · اگلی {date}',
+      'inst_nothing_due_before_payday': 'تنخواہ سے پہلے کوئی قسط واجب الادا نہیں',
     },
   };
 

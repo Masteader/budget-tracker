@@ -15,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../dispose_on_unmount.dart';
 import '../../models/money.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Card displayed on the dashboard for tracking BNPL installment plans (Tamara, Tabby, etc.).
 class InstallmentPlansCard extends StatefulWidget {
@@ -22,11 +23,15 @@ class InstallmentPlansCard extends StatefulWidget {
   final String? householdId;
   final ValueChanged<String>? onPayInstallment;
 
+  /// Clock for the due dates (tests); defaults to now.
+  final DateTime? now;
+
   const InstallmentPlansCard({
     super.key,
     this.plans,
     this.householdId,
     this.onPayInstallment,
+    this.now,
   });
 
   @override
@@ -175,6 +180,11 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     final amountCtrl = TextEditingController();
     String selectedProvider = 'Tamara';
     int selectedCount = 4;
+    // null: the default for the provider (Tabby/Tamara "pay in 4" is every
+    // two weeks, the server applies the same rule); set when the user picks.
+    String? chosenFrequency;
+    String frequencyFor() =>
+        chosenFrequency ?? ((selectedProvider == 'Tabby' || selectedProvider == 'Tamara') && selectedCount == 4 ? 'biweekly' : 'monthly');
     bool isSubmitting = false;
 
     showDialog(
@@ -250,7 +260,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                Text(context.tr('duration'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                Text(context.tr('inst_installment_count'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [3, 4, 6].map((cnt) {
@@ -269,7 +279,42 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '$cnt ${context.tr('months_short')}',
+                              '$cnt',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isSel ? AppThemes.success : context.textPrimary,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Text(context.tr('inst_frequency'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                const SizedBox(height: 6),
+                Row(
+                  children: ['biweekly', 'monthly'].map((f) {
+                    final isSel = frequencyFor() == f;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: InkWell(
+                          key: ValueKey('inst_frequency_$f'),
+                          onTap: () => setDialogState(() => chosenFrequency = f),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSel ? AppThemes.success.withValues(alpha: 0.2) : context.inputBg,
+                              border: Border.all(color: isSel ? AppThemes.success : context.borderColor),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              context.tr(f == 'biweekly' ? 'inst_every_two_weeks' : 'inst_every_month'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: isSel ? AppThemes.success : context.textPrimary,
@@ -313,6 +358,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           'provider': selectedProvider,
                           'total_amount': total,
                           'installment_count': selectedCount,
+                          'frequency': frequencyFor(),
                           'paid_installments': 1,
                           'category_code': 'OPEX-SHOPPING',
                           'adjust_original_transaction': false,
@@ -383,16 +429,31 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     );
   }
 
+  /// "Installment 2 of 4 paid · next 29 Oct" for an active plan.
+  String? _nextDueText(BuildContext context, InstallmentPlan plan, DateTime today) {
+    final next = plan.nextDueDate(today: today);
+    if (next == null) return null;
+    return context.trArgs('inst_paid_next_due', {
+      'paid': plan.paidInstallments,
+      'count': plan.installmentCount,
+      'date': context.fmtDate(next, 'd MMM'),
+    });
+  }
+
   Widget _buildCardContent(
     BuildContext context,
     List<InstallmentPlan> plans,
     NumberFormat fmt,
   ) {
     final activePlans = plans.where((p) => !p.isCompleted).toList();
-    final totalMonthlyCommitment = activePlans.fold<double>(
-      0.0,
-      (sum, p) => sum + p.monthlyAmount,
-    );
+    // What the installments take before the next payday (both frequencies),
+    // instead of a "/month" total that is wrong for bi-weekly plans.
+    final today = SalaryCycleService.riyadhToday(now: widget.now);
+    final cycleEnd = SalaryCycleService.currentCycle(now: widget.now).end;
+    final dueBeforePayday = activePlans.fold<double>(0.0, (sum, p) {
+      final due = p.dueDates(today: today, max: 12).where((d) => !d.isBefore(today) && !d.isAfter(cycleEnd));
+      return sum + p.installmentAmount * due.length;
+    });
 
     return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -441,7 +502,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             Text(
                               activePlans.isEmpty
                                   ? context.tr('all_installments_cleared')
-                                  : '${context.sar(totalMonthlyCommitment)} / ${context.tr('month')} ${context.tr('scheduled_monthly')}',
+                                  : dueBeforePayday > 0
+                                      ? context.trArgs('inst_due_before_payday', {'amount': context.sar(dueBeforePayday)})
+                                      : context.tr('inst_nothing_due_before_payday'),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty
@@ -569,7 +632,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       ),
                                     ),
                                     Text(
-                                      '${context.sar(plan.monthlyAmount)} / ${context.tr('month')}',
+                                      '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
                                         color: context.successText,
@@ -597,7 +660,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      context.trArgs('inst_x_of_y_paid', {'paid': plan.paidInstallments, 'count': plan.installmentCount}),
+                                      _nextDueText(context, plan, today) ??
+                                          context.trArgs('inst_x_of_y_paid', {'paid': plan.paidInstallments, 'count': plan.installmentCount}),
                                       style: TextStyle(
                                         color: context.textSecondary,
                                         fontSize: 11,
