@@ -200,8 +200,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final isSelected = _selectedIndex == index;
     final isDark = context.isDark;
-    final activeColor = isDark ? AppThemes.electricTeal : const Color(0xFF008F7A);
-    final inactiveColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+    final activeColor = context.accentText;
+    final inactiveColor = context.textMuted;
 
     return InkWell(
       onTap: () => setState(() => _selectedIndex = index),
@@ -284,8 +284,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               color: isSelected
-                  ? (context.isDark ? AppThemes.electricTeal : const Color(0xFF008F7A))
-                  : (context.isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B)),
+                  ? context.accentText
+                  : context.textMuted,
             ),
           ),
         ],

@@ -271,7 +271,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                           Text(
                             context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
-                              color: isDark ? AppThemes.electricTeal : const Color(0xFF008F7A),
+                              color: context.heroCaption,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.1,
@@ -300,7 +300,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: deficitCount == 0 ? AppThemes.success : Colors.redAccent,
+                                    color: context.heroText,
                                   ),
                                 ),
                               ],
@@ -312,7 +312,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       Text(
                         _hideBalances ? '••••••••' : context.sar(totalNetSAR),
                         style: GoogleFonts.outfit(
-                          color: context.textPrimary,
+                          color: context.heroText,
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),

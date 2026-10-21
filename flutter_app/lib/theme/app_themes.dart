@@ -21,15 +21,26 @@ class AppThemes {
   static const Color successTextLight = Color(0xFF047857); // AA-contrast emerald on light canvas
   static const Color deepGlacial = Color(0xFF071C33);   // Nav & Elevated HUD
 
+  // ─── Light-mode text tokens (UX-06: WCAG AA, ≥4.5:1 on white and the canvas) ─
+  static const Color goldTextLight = Color(0xFF7A5C00);  // owed-to-wife amounts, gold badges
+  static const Color infoTextLight = Color(0xFF0369A1);  // links and "ice cyan" text
+  static const Color warnTextLight = Color(0xFF9A5B00);  // pending / amber text
+  static const Color dangerTextLight = Color(0xFFB91C1C); // errors and deficits
+  static const Color warnTextDark = Color(0xFFFBBF24);
+  static const Color infoTextDark = Color(0xFF38BDF8);
+
+  /// Ink for labels on a [success] (#00C896) fill: 8.8:1. White on it is 2.2:1.
+  static const Color onSuccessFill = Color(0xFF0A0F1D);
+
   // ─── Sovereign Light Theme Tokens (Calm, Anti-Glare Sovereign Fintech) ─────
   static const Color brandLightPrimary = Color(0xFF0F766E);   // Deep Sovereign Coastal Teal (AAA contrast)
-  static const Color brandLightSecondary = Color(0xFF0284C7); // Sovereign Ocean Azure
+  static const Color brandLightSecondary = Color(0xFF0369A1); // Sovereign Ocean Azure (5.9:1 on white)
   static const Color brandLightBg = Color(0xFFF6F8FA);        // Soft Anti-Glare Canvas
   static const Color brandLightCard = Colors.white;
   static const Color brandLightInput = Color(0xFFEDF2F7);     // Balanced Input Fill
   static const Color brandLightBorder = Color(0xFFE2E8F0);    // Crisp Structural Border
   static const Color brandLightText = Color(0xFF0F172A);      // Deep Ink Primary Text
-  static const Color brandLightSubtext = Color(0xFF64748B);   // Slate Secondary Text
+  static const Color brandLightSubtext = Color(0xFF475569);   // Slate Secondary Text (≥6.9:1 on light surfaces)
 
   // ─── Dark Theme ─────────────────────────────────────────────────────────────
   static ThemeData get darkTheme {
@@ -224,15 +235,32 @@ extension ThemeContextExtension on BuildContext {
   Color get borderColor => isDarkMode ? AppThemes.brandDarkBorder : AppThemes.brandLightBorder;
   Color get textPrimary => isDarkMode ? Colors.white : AppThemes.brandLightText;
   Color get textSecondary => isDarkMode ? const Color(0xFF8B949E) : AppThemes.brandLightSubtext;
-  Color get textMuted => isDarkMode ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+  Color get textMuted => isDarkMode ? const Color(0xFF8B949E) : AppThemes.brandLightSubtext;
   Color get chipBg => isDarkMode ? AppThemes.brandDarkInput : const Color(0xFFE2E8F0);
   Color get chipBorder => isDarkMode ? AppThemes.brandDarkBorder : const Color(0xFFCBD5E1);
-  Color get dangerColor => isDarkMode ? const Color(0xFFFF5252) : const Color(0xFFDC2626);
+  Color get dangerColor => isDarkMode ? const Color(0xFFFF5252) : AppThemes.dangerTextLight;
   Color get primaryAccent => isDarkMode ? AppThemes.electricTeal : AppThemes.brandLightPrimary;
   Color get electricTeal => isDarkMode ? AppThemes.electricTeal : AppThemes.brandLightPrimary;
-  Color get iceCyan => isDarkMode ? AppThemes.iceCyan : AppThemes.brandLightSecondary;
-  Color get mintNeon => isDarkMode ? AppThemes.mintNeon : const Color(0xFF059669);
-  Color get champagneGold => AppThemes.champagneGold;
+  Color get iceCyan => isDarkMode ? AppThemes.iceCyan : AppThemes.infoTextLight;
+  Color get mintNeon => isDarkMode ? AppThemes.mintNeon : AppThemes.successTextLight;
+
+  /// Gold for text and icons: the brand gold in dark mode, a deep gold in
+  /// light mode (the brand gold is 2.1:1 on white).
+  Color get champagneGold => isDarkMode ? AppThemes.champagneGold : AppThemes.goldTextLight;
+  Color get goldText => champagneGold;
+
+  /// Link / informational blue for text.
+  Color get infoText => isDarkMode ? AppThemes.infoTextDark : AppThemes.infoTextLight;
+
+  /// Amber for pending / warning text.
+  Color get warnText => isDarkMode ? AppThemes.warnTextDark : AppThemes.warnTextLight;
+
+  /// Label colour on a filled [AppThemes.success] button, in both modes.
+  Color get onAccentFill => AppThemes.onSuccessFill;
+
+  /// Text drawn on [icedHeroGradient] (always a dark gradient).
+  Color get heroText => Colors.white;
+  Color get heroCaption => isDarkMode ? AppThemes.electricTeal : const Color(0xFFCCFBF1);
 
   /// Teal accent for *text and icons*. The electric teal brand colour only
   /// reaches ~1.6:1 contrast on the light canvas, so light mode uses a deeper

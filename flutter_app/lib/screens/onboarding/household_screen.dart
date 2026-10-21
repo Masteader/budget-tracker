@@ -398,14 +398,14 @@ class _BigButton extends StatelessWidget {
         icon: loading
             ? const SizedBox(
                 width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.onSuccessFill))
             : Icon(icon),
         label: Text(label,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         onPressed: loading ? null : onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppThemes.success,
-          foregroundColor: Colors.white,
+          foregroundColor: AppThemes.onSuccessFill,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
