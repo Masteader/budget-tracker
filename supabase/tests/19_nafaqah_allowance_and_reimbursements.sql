@@ -38,6 +38,8 @@ BEGIN
         ('e1aa0000-0000-0000-0000-000000000001', 'Nafaqah Family', 'NAFFAMILYCODE001'),
         ('e1bb0000-0000-0000-0000-000000000001', 'Other Family', 'NAFOTHERCODE0001'),
         ('e1cc0000-0000-0000-0000-000000000001', 'Roommates', 'NAFROOMCODE00001');
+    -- Roommate household (household_type, migration 20261020900000).
+    UPDATE public.households SET household_type = 'roommates' WHERE id = 'e1cc0000-0000-0000-0000-000000000001';
 
     UPDATE public.users SET household_id = 'e1aa0000-0000-0000-0000-000000000001', role = 'admin', financial_role = 'provider'
     WHERE id = 'e1000000-0000-0000-0000-00000000000a';

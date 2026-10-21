@@ -131,6 +131,8 @@ BEGIN
         ('25aa0000-0000-0000-0000-000000000004', 'R25 Payday Y', 'R25PAYDAYY000001', 27),
         ('25aa0000-0000-0000-0000-000000000005', 'R25 Payday Z', 'R25PAYDAYZ000001', 27),
         ('25aa0000-0000-0000-0000-000000000006', 'R25 Payday Y2', 'R25PAYDAYY200001', 27);
+    -- Roommate household (household_type, migration 20261020900000).
+    UPDATE public.households SET household_type = 'roommates' WHERE id = '25aa0000-0000-0000-0000-000000000002';
 
     UPDATE public.users SET household_id = '25aa0000-0000-0000-0000-000000000001', role = 'admin', financial_role = 'provider'
     WHERE id = '25000000-0000-0000-0000-0000000000a1';

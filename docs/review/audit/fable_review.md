@@ -124,3 +124,19 @@ produce such names); no backfill of historical rows was run (live is never writt
 | FABLE2-API-06 | Fixed | Invite target: 400 non-UUID, 404 not a dependent of this household; DB refusals 4xx. | `test_fable_r2_invite_target.py`; e2e `test_09::test_api06_*` | `2523cdc` |
 | O2 | Documented | Ingress assumption of proxy-header trust; hop count must be exact. | — | `5e28ae6` |
 | O4 | Fixed | v1 roommate 'settled' threshold 0.01; shares sum to the total. | `test_fable_r2_money_rounding.py::test_v1_*` | `b982db3` |
+
+## Status — round 3 (owner decisions D1–D3, Fable round-2 DB report; 2026-10-21)
+
+Migration `20261020900000_household_type_and_round2_fixes.sql` (not applied to live), API changes and tests; details in `FIX_LOG.md` ("Round 3").
+
+| ID | Status |
+|---|---|
+| D1 household type | Fixed: `households.household_type` chosen at creation, admin-changeable; roles, joins, invites, provider and settlement mode follow it. |
+| D2 classifier rights | Fixed in DB (client writes) and API (chat/receipt 403 `nafaqah_classification_forbidden`). |
+| D3 wife leaves | Fixed: her ledger in that household is removed; her expenses become ordinary; ledger guard passes only this path. |
+| FABLE2-DB-01 | Fixed: provider never re-defaulted on owner succession. |
+| FABLE2-DB-02 | Fixed: counter CHECK, column grants, ACTIVE-only payments (`plan_not_active`). |
+| FABLE2-DB-05 | Fixed: budget triggers skip settlements. |
+| FABLE2-DB-07 | Fixed: `set_member_financial_role` + `PUT /households/{id}/members/{uid}/financial-role`. |
+
+Follow-ups for other work streams: `settlement_engine.calculate_settlement_v2` should choose the mode from `FamilyContext.settlement_mode` / `household_type` instead of "has peers and no spouse"; `installment_service` should map HINT `plan_not_active` to 409; the app needs the type selector, the financial-role editor and the new refusal codes.

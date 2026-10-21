@@ -100,8 +100,12 @@ class World:
         return user_token(self.gateway_url, user.id, user.email, **extra)
 
     # ── households ──────────────────────────────────────────────────────────
-    def create_household(self, admin: User, name: str) -> Household:
-        res = admin.rpc("create_household_and_claim", {"p_name": name})
+    def create_household(self, admin: User, name: str, household_type: Optional[str] = None) -> Household:
+        """create_household_and_claim as the app calls it; no type = the released app's {p_name} call (family)."""
+        params = {"p_name": name}
+        if household_type:
+            params["p_household_type"] = household_type
+        res = admin.rpc("create_household_and_claim", params)
         assert res.status_code == 200, res.text
         return Household(id=res.json()["id"], name=name, admin=admin)
 
@@ -126,7 +130,7 @@ class World:
 
     def roommates(self, tag: str = "", n_members: int = 2) -> Household:
         admin = self.signup(f"RoomAdmin{tag}")
-        hh = self.create_household(admin, f"Flat {tag or uuid.uuid4().hex[:4]}")
+        hh = self.create_household(admin, f"Flat {tag or uuid.uuid4().hex[:4]}", household_type="roommates")
         for i in range(n_members):
             mate = self.signup(f"Roommate{i + 1}{tag}")
             self.join(mate, hh, self.invite(admin, hh, "peer"))

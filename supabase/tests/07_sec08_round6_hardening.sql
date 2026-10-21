@@ -352,7 +352,7 @@ DECLARE
     v_code text := 'HIJACKTESTCODE01';
 BEGIN
     INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
-    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'family_member', now() + interval '1 day')
     ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
 
     -- Attacker attempts to claim invite on behalf of victim
@@ -391,7 +391,7 @@ BEGIN
     DELETE FROM public.invite_attempt_log WHERE user_id = v_user_a;
 
     INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
-    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
+    VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'family_member', now() + interval '1 day')
     ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
 
     -- 0. An existing member cannot consume it (FABLE-DB-01): refused, invite stays open.

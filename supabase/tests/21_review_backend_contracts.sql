@@ -28,6 +28,8 @@ BEGIN
     INSERT INTO public.households (id, name, invite_code) VALUES
         ('f21a0000-0000-0000-0000-000000000001', 'Review Roommates', 'REVROOMCODE00001'),
         ('f21b0000-0000-0000-0000-000000000001', 'Review Family', 'REVFAMCODE000001');
+    -- Roommate household (household_type, migration 20261020900000).
+    UPDATE public.households SET household_type = 'roommates' WHERE id = 'f21a0000-0000-0000-0000-000000000001';
 
     UPDATE public.users SET household_id = 'f21a0000-0000-0000-0000-000000000001', role = 'admin', financial_role = 'peer'
     WHERE id = 'f2100000-0000-0000-0000-0000000000a1';

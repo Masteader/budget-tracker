@@ -25,6 +25,12 @@ Roles are per household (migration ``20261020800000``, Fable review): who is the
 stays the wife of her family), and the husband is the household's explicit Nafaqah provider
 (``households.nafaqah_provider_user_id``: the primary admin by default, changed by an admin), never
 inferred from user-level roles or admin rights.
+
+Household type (owner decision D1, migration ``20261020900000``): ``households.household_type`` is
+'family' or 'roommates', chosen at creation. Family features (Nafaqah classes, provider, ledger)
+apply only to a 'family' household that has a spouse member; a roommates household never gets them.
+Only the wife herself, the Nafaqah provider or a household admin may classify an expense (D2);
+the database enforces the same rule for client writes.
 """
 
 from __future__ import annotations
@@ -75,6 +81,12 @@ class LedgerWouldBeOverpaid(NafaqahError):
 
 class NoProviderError(NafaqahError):
     """The family household has no Nafaqah provider; an admin must choose one (HTTP 409)."""
+
+
+class NafaqahClassificationForbidden(NafaqahForbidden):
+    """D2: the recorder is not the wife, the Nafaqah provider or a household admin (HTTP 403)."""
+
+    code = "nafaqah_classification_forbidden"
 
 
 class OverpaymentError(NafaqahError):
@@ -186,6 +198,22 @@ def classify_nafaqah(
 
 # ─── Household context ────────────────────────────────────────────────────────
 
+FAMILY = "family"
+ROOMMATES = "roommates"
+HOUSEHOLD_TYPES = (FAMILY, ROOMMATES)
+
+
+def infer_household_type(financial_roles: Iterable[Any]) -> str:
+    """The migration's backfill rule, for rows read before the column exists: any peer -> roommates."""
+    return ROOMMATES if any(_norm(r) == "peer" for r in financial_roles) else FAMILY
+
+
+def normalize_household_type(value: Any, financial_roles: Iterable[Any] = ()) -> str:
+    """households.household_type as stored, or the backfill rule when it is missing/unknown."""
+    norm = _norm(value)
+    return norm if norm in HOUSEHOLD_TYPES else infer_household_type(financial_roles)
+
+
 @dataclass
 class FamilyContext:
     household_id: str
@@ -197,10 +225,29 @@ class FamilyContext:
     # households.nafaqah_provider_user_id as stored (also set in households without a wife).
     provider_user_id: Optional[str] = None
     primary_admin_id: Optional[str] = None
+    # households.household_type: 'family' | 'roommates' (decides the settlement mode).
+    household_type: str = FAMILY
+
+    @property
+    def is_roommates(self) -> bool:
+        return self.household_type == ROOMMATES
 
     @property
     def is_family(self) -> bool:
-        return bool(self.wives)
+        """A 'family' household WITH a wife: the Nafaqah rules apply (never in roommates)."""
+        return self.household_type == FAMILY and bool(self.wives)
+
+    @property
+    def settlement_mode(self) -> str:
+        """'multi_roommate' for a roommates household, else 'family_nafaqah' (spouses never split)."""
+        return "multi_roommate" if self.is_roommates else "family_nafaqah"
+
+    def can_classify(self, user_id: Optional[str]) -> bool:
+        """D2: the wife herself, the Nafaqah provider or a household admin may classify."""
+        if not self.is_member(user_id):
+            return False
+        uid = str(user_id)
+        return self.is_wife(uid) or uid == self.provider_user_id or self.is_admin(uid)
 
     @property
     def needs_provider(self) -> bool:
@@ -232,9 +279,11 @@ class FamilyContext:
 
 
 def _household_roles_row(client, household_id: str) -> Dict[str, Any]:
-    """owner_user_id (primary admin) and nafaqah_provider_user_id of the household."""
+    """owner_user_id (primary admin), nafaqah_provider_user_id and household_type of the household."""
     row = first_row(
-        client.table("households").select("owner_user_id, nafaqah_provider_user_id").eq("id", household_id)
+        client.table("households")
+        .select("owner_user_id, nafaqah_provider_user_id, household_type")
+        .eq("id", household_id)
     )
     return row or {}
 
@@ -245,7 +294,9 @@ def load_family_context(household_id: str) -> FamilyContext:
     IN THIS HOUSEHOLD (``household_memberships.financial_role``). The husband is the household's
     explicit Nafaqah provider (``households.nafaqah_provider_user_id``), as long as the household
     has a wife and he is a non-spouse member; admin rights or a user-level role never make anyone
-    the husband. Errors propagate: callers must not guess "not a family".
+    the husband. ``household_type`` comes from ``households.household_type`` (the migration's
+    backfill rule when the row has none): a roommates household is never a family, whatever the
+    roles say. Errors propagate: callers must not guess "not a family".
     """
     client = get_client()
     memberships = (
@@ -280,14 +331,19 @@ def load_family_context(household_id: str) -> FamilyContext:
             "financial_role": _norm(m.get("financial_role")) or "family_member",
         }
 
-    ordered = sorted(ctx.members.values(), key=lambda m: (m["created_at"], m["id"]))
-    ctx.wives = [
-        {"id": m["id"], "display_name": m["display_name"]}
-        for m in ordered
-        if m["financial_role"] == "spouse"
-    ]
-
     roles = _household_roles_row(client, household_id)
+    ctx.household_type = normalize_household_type(
+        roles.get("household_type"), (m["financial_role"] for m in ctx.members.values())
+    )
+
+    ordered = sorted(ctx.members.values(), key=lambda m: (m["created_at"], m["id"]))
+    if ctx.household_type == FAMILY:
+        ctx.wives = [
+            {"id": m["id"], "display_name": m["display_name"]}
+            for m in ordered
+            if m["financial_role"] == "spouse"
+        ]
+
     owner = str(roles.get("owner_user_id") or "") or None
     provider = str(roles.get("nafaqah_provider_user_id") or "") or None
     ctx.primary_admin_id = owner
@@ -337,8 +393,13 @@ def resolve_expense_nafaqah(
     earlier preview is rejected, never stored against the edited attribution); without one the
     attribution is recomputed from the class. ``override_spouse_id`` names the wife in a
     household with several wives (required on commit when the class needs her); a wife records
-    only for herself. Households without a spouse member are never classified. ``require_spouse``
-    marks a commit: then a failed household lookup raises instead of degrading to "not a family".
+    only for herself. Households without a spouse member (and roommates households) are never
+    classified. ``require_spouse`` marks a commit: then a failed household lookup raises instead
+    of degrading to "not a family".
+    D2: only the wife, the Nafaqah provider (husband) or a household admin may classify. An admin
+    who is neither spouse classifies only by an explicit ``override_class`` (no spouse-relative
+    vocabulary to derive it from); any other member choosing a class gets
+    NafaqahClassificationForbidden (HTTP 403, code ``nafaqah_classification_forbidden``).
     Raises InvalidNafaqahRequest for an unknown or contradicting choice.
     """
     chosen = (_norm(override_class) or None) if override_class is not None else None
@@ -388,10 +449,15 @@ def resolve_expense_nafaqah(
                 "nafaqah_class contradicts paid_by/beneficiary: a debt needs the wife to have paid for "
                 "something shared, the allowance a purchase she paid for herself, 'none' the husband paying."
             )
+    elif chosen not in (None, OVERRIDE_NONE):
+        # D2: an admin may classify explicitly; any other member (e.g. an adult son) may not.
+        if not ctx.can_classify(user_id):
+            raise NafaqahClassificationForbidden(
+                "Only the wife, the Nafaqah provider or a household admin can classify a family expense."
+            )
+        nafaqah_class = chosen
     else:
-        # Other members (e.g. an adult child) have no spouse-relative vocabulary to classify with.
-        if chosen not in (None, OVERRIDE_NONE):
-            raise InvalidNafaqahRequest("Only the husband or a wife can classify a family expense.")
+        # Other members have no spouse-relative vocabulary to classify with.
         nafaqah_class = None
 
     spouse_id: Optional[str] = None
@@ -510,6 +576,12 @@ def _map_db_error(exc: Exception) -> Exception:
         return NoProviderError("This family has no Nafaqah provider: a household admin must choose one.")
     if hint == "provider_is_spouse":
         return InvalidNafaqahRequest("A wife cannot be the Nafaqah provider.")
+    if hint == "nafaqah_class_not_allowed":
+        return NafaqahClassificationForbidden(
+            "Only the wife, the Nafaqah provider or a household admin can classify a family expense."
+        )
+    if hint == "not_family_household":
+        return NotFamilyHousehold("Nafaqah applies to family households only.")
     if code == "P0002":
         return InvalidNafaqahRequest("That user is not a member of this household.")
     if code == "42501" or message.startswith("Forbidden"):
@@ -735,11 +807,12 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
     provider_fields = {
         "provider_user_id": ctx.provider_user_id,
         "needs_provider": ctx.needs_provider,
-        "can_set_provider": ctx.is_admin(caller_id),
+        "can_set_provider": ctx.is_admin(caller_id) and not ctx.is_roommates,
     }
     if not ctx.is_family:
         return {
             "household_id": ctx.household_id,
+            "household_type": ctx.household_type,
             "mode": "not_family",
             "caller_role": role,
             "caller_user_id": caller_id,
@@ -761,6 +834,7 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
         })
     return {
         "household_id": ctx.household_id,
+        "household_type": ctx.household_type,
         "mode": "family_nafaqah",
         "caller_role": role,
         "caller_user_id": caller_id,
@@ -785,6 +859,8 @@ def set_provider(ctx: FamilyContext, actor_id: str, provider_user_id: str) -> Di
     _require_member(ctx, actor_id)
     if not ctx.is_admin(actor_id):
         raise NafaqahForbidden("Only a household admin can choose the Nafaqah provider.")
+    if ctx.is_roommates:
+        raise NotFamilyHousehold("A roommates household has no Nafaqah provider.")
     target = _norm(provider_user_id)
     if not ctx.is_member(target):
         raise InvalidNafaqahRequest("The provider must be a member of this household.")

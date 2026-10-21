@@ -46,9 +46,9 @@ BEGIN
 
     -- FABLE-DB-02: the admin created two invites; one is claimed below.
     INSERT INTO public.household_invites (id, household_id, invite_code, role, created_by, expires_at) VALUES
-        ('dae10000-0000-0000-0000-000000000001', 'daaa0000-0000-0000-0000-000000000001', 'DB12OPEN', 'peer',
+        ('dae10000-0000-0000-0000-000000000001', 'daaa0000-0000-0000-0000-000000000001', 'DB12OPEN', 'family_member',
          'da000000-0000-0000-0000-000000000001', now() + interval '7 days'),
-        ('dae10000-0000-0000-0000-000000000002', 'daaa0000-0000-0000-0000-000000000001', 'DB12USED', 'peer',
+        ('dae10000-0000-0000-0000-000000000002', 'daaa0000-0000-0000-0000-000000000001', 'DB12USED', 'family_member',
          'da000000-0000-0000-0000-000000000001', now() + interval '7 days');
 END $$;
 

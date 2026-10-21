@@ -33,6 +33,8 @@ BEGIN
     INSERT INTO public.households (id, name, invite_code) VALUES
         ('f22a0000-0000-0000-0000-000000000001', 'E2E22 Family', 'E2E22FAMCODE0001'),
         ('f22b0000-0000-0000-0000-000000000001', 'E2E22 Flat', 'E2E22FLATCODE001');
+    -- Roommate household (household_type, migration 20261020900000).
+    UPDATE public.households SET household_type = 'roommates' WHERE id = 'f22b0000-0000-0000-0000-000000000001';
 
     UPDATE public.users SET household_id = 'f22a0000-0000-0000-0000-000000000001', role = 'admin', financial_role = 'provider'
     WHERE id = 'f2200000-0000-0000-0000-0000000000a1';
