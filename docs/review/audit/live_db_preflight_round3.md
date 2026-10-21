@@ -348,3 +348,134 @@ Data impact of a rollback, in addition to round 2 §8:
 - [`live_db_preflight_round3_checks.sql`](live_db_preflight_round3_checks.sql): part A (before) and part B (after). Read-only, SELECT only. Part A was validated on live today and on the replica; part B on the migrated replica, before and after the history INSERT.
 - [`../rollback/20261020_round3_rollback_snapshot.sql`](../rollback/20261020_round3_rollback_snapshot.sql) and [`../rollback/20261020_round2_rollback_snapshot.sql`](../rollback/20261020_round2_rollback_snapshot.sql): the tested rollbacks, unchanged.
 - Scratch tooling (not committed): today's live inventory (with function comments), the replica generator, `build_shaped.sh` / `apply4.sh` / `roundtrip.sh`, the per-household shape query, the row fingerprint and the functional smoke.
+
+## Round 3b: 20261021000000
+
+Date: 2026-10-21 · Branch: `audit/claude-taxonomy-bnpl` from `33399b5` · File: [`supabase/migrations/20261021000000_saudi_taxonomy_and_bnpl_schedule.sql`](../../../supabase/migrations/20261021000000_saudi_taxonomy_and_bnpl_schedule.sql) · Proof test: [`supabase/tests/27_taxonomy_and_bnpl.sql`](../../../supabase/tests/27_taxonomy_and_bnpl.sql) · Rollback: [`../rollback/20261021_taxonomy_bnpl_rollback.sql`](../rollback/20261021_taxonomy_bnpl_rollback.sql)
+
+A fifth pending file, from the product review (R4 Saudi taxonomy, R10 BNPL schedule). **Apply it after the four files above, as file 5**, in its own SQL editor run as `postgres`. Its guard aborts (and changes nothing) when 900000 is not applied yet.
+
+### 3b.1 What it does on live
+
+- **Taxonomy.** It inserts 8 system categories into `cost_control_codes` (`household_id` NULL, `is_system` true, `is_flexible` false): `OPEX-HOUSING`, `OPEX-EDUCATION`, `OPEX-DOMESTIC-HELP`, `OPEX-FAMILY-SUPPORT`, `OPEX-CHARITY`, `OPEX-TRANSPORT`, `OPEX-INSURANCE` and `OPEX-REMITTANCE`. It also inserts 23 system sub-categories under them into `cost_control_sub_categories`.
+  - No existing row is updated or deleted. `OPEX-UTILITIES/housing_rent` stays as it is, because transactions and sub-allocations reference it and sub-categories have no lifecycle column. A second `housing_rent`, with the same names, is added under `OPEX-HOUSING`.
+  - No `household_category_settings` row and no budget row is written. For the 4 households, the new categories appear in the category library as inactive and are budgeted only once an admin activates them or adds a budget.
+  - None of the new top-level keywords overlaps a keyword of the ten seeded codes, so no existing merchant changes category. Test 27 proves this.
+- **BNPL schedule.** `installment_plans` gains:
+  - `frequency text NOT NULL DEFAULT 'monthly'`, with the CHECK `installment_plans_frequency_check` (`monthly`/`biweekly`);
+  - `next_due_at date` (nullable);
+  - the index `idx_installment_plans_next_due` (`WHERE status = 'ACTIVE'`);
+  - the IMMUTABLE helper `installment_next_due_at(date, text, integer, integer, text)`, with a comment. Its EXECUTE goes to `authenticated` and `service_role`, and is revoked from PUBLIC and anon;
+  - the trigger function `installment_plans_schedule()`, which no client may execute, and the trigger `trg_installment_plans_schedule` (BEFORE INSERT / UPDATE of the schedule columns). It keeps `next_due_at` derived, so a client INSERT cannot forge it.
+
+  `pay_installment_plan` is re-created with the same signature, grants (`service_role` only), comment and ACTIVE-only rule, and it now advances `next_due_at`. The client UPDATE column list of 900000 is unchanged: `frequency` and `next_due_at` are not client-writable. Live has 0 plans, so the backfill touches no row.
+- **Locks:** a brief ACCESS EXCLUSIVE on `installment_plans` for the ALTER. It is metadata only, because the default is a constant. ROW EXCLUSIVE on the two category tables.
+
+### 3b.2 Read-only pre-check (run before file 5)
+
+```sql
+SELECT
+  (SELECT count(*) FROM public.cost_control_codes
+    WHERE household_id IS NOT NULL
+      AND code IN ('OPEX-HOUSING','OPEX-EDUCATION','OPEX-DOMESTIC-HELP','OPEX-FAMILY-SUPPORT',
+                   'OPEX-CHARITY','OPEX-TRANSPORT','OPEX-INSURANCE','OPEX-REMITTANCE')) AS household_code_collisions,
+  (SELECT count(*) FROM public.cost_control_sub_categories
+    WHERE parent_code IN ('OPEX-HOUSING','OPEX-EDUCATION','OPEX-DOMESTIC-HELP','OPEX-FAMILY-SUPPORT',
+                          'OPEX-CHARITY','OPEX-TRANSPORT','OPEX-INSURANCE','OPEX-REMITTANCE')) AS subs_under_new_parents,
+  (SELECT count(*) FROM public.cost_control_codes) AS codes,
+  (SELECT count(*) FROM public.cost_control_sub_categories) AS sub_categories,
+  (SELECT count(*) FROM public.installment_plans) AS installment_plans;
+```
+
+Expected values:
+
+- `household_code_collisions` = 0 and `subs_under_new_parents` = 0. Otherwise the guard aborts: rename that household's code, or remove those sub-categories, first.
+- `codes` = 11, `sub_categories` = 27 and `installment_plans` = 0 (part A, §4).
+
+Live has one code and four sub-categories more than the repo seed. Their content was not read, so this query is what tells whether one of them collides.
+
+### 3b.3 Expected output of file 5
+
+"Success. No rows returned", with these notices:
+
+- `guard: 0 installment plan(s) get frequency monthly`
+- `trigger "trg_installment_plans_schedule" for relation "public.installment_plans" does not exist, skipping` (harmless, from `DROP TRIGGER IF EXISTS`)
+- `post-check: 8 system categories, 23 sub-categories; 0 household setting(s) for them`
+
+A re-run is idempotent. It adds the harmless notices `column "frequency" … already exists, skipping`, `column "next_due_at" … already exists, skipping` and `relation "idx_installment_plans_next_due" already exists, skipping`, and it changes nothing (verified with a `pg_dump` diff).
+
+### 3b.4 After file 5: changed part-B expectations
+
+Part B of [`live_db_preflight_round3_checks.sql`](live_db_preflight_round3_checks.sql) keeps every §7 value except these:
+
+| Column | After file 4 (§7) | After file 5 |
+|---|---|---|
+| `public_functions` | 79 | **81** (`installment_next_due_at`, `installment_plans_schedule`) |
+| `function_comments` | `household_primary_admin_id,nafaqah_husband_id,nafaqah_is_spouse_member,pay_installment_plan` | `household_primary_admin_id,installment_next_due_at,nafaqah_husband_id,nafaqah_is_spouse_member,pay_installment_plan` |
+| `table_rows` | as part A | as part A, except `cost_control_codes:19` (11 + 8) and `cost_control_sub_categories:50` (27 + 23) |
+| `installment_auth_update_cols` | 10 columns | unchanged (the same 10 columns; not `frequency` or `next_due_at`) |
+
+Budget, account and transaction totals are unchanged: the file writes no row in those tables.
+
+Additional read-only check:
+
+```sql
+SELECT
+  (SELECT count(*) FROM public.cost_control_codes WHERE household_id IS NULL AND is_system
+     AND code IN ('OPEX-HOUSING','OPEX-EDUCATION','OPEX-DOMESTIC-HELP','OPEX-FAMILY-SUPPORT',
+                  'OPEX-CHARITY','OPEX-TRANSPORT','OPEX-INSURANCE','OPEX-REMITTANCE')) AS new_codes,      -- 8
+  (SELECT column_default FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'installment_plans' AND column_name = 'frequency') AS freq_default, -- 'monthly'::text
+  has_column_privilege('authenticated', 'public.installment_plans', 'next_due_at', 'UPDATE') AS auth_upd_next_due,  -- false
+  has_function_privilege('authenticated', 'public.pay_installment_plan(uuid, uuid, uuid)', 'EXECUTE') AS auth_x_pay; -- false
+```
+
+History, after file 5 succeeds. This is a write, and it is safe to run twice:
+
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+SELECT '20261021000000', 'saudi_taxonomy_and_bnpl_schedule'
+WHERE NOT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261021000000');
+```
+
+Afterwards: `migrations_recorded` 33 and `last_migration` `20261021000000`.
+
+### 3b.5 Deployment and compatibility
+
+The order is the same as in the README: migrations (files 1 to 5), then ai_service, then the app.
+
+- **The HEAD ai_service needs file 5.** It writes `frequency` and `next_due_at` when it creates a plan.
+- **The deployed ai_service (`origin/main`) keeps working after file 5:**
+  - it never names the new columns;
+  - its inserts get `monthly` and a derived `next_due_at`;
+  - it calls `pay_installment_plan` the same way;
+  - extra columns in `select *` are ignored by its Pydantic model.
+- **The deployed app** shows a code it does not know by stripping the `OPEX-` prefix (`AppLocalizations.category`) until its l10n map has the new codes.
+
+### 3b.6 Evidence (local PostgreSQL 16 only; live was not touched)
+
+| Run | Result |
+|---|---|
+| `run_tests.py --psql --rebuild` (full repo chain) | **27/27** |
+| Live-baseline chain (`--rebuild --stop-before 20261020700000`), then `--apply-from 20261020700000` (700000, 750000, 800000, 900000, 21000000 in order), then the suite | **27/27**; notices as in 3b.3 |
+| File 5 on a chain stopped before 900000 | Refused: `guard: apply 20261020700000, 750000, 800000 and 900000 first` |
+| A household code `OPEX-HOUSING` present / a foreign sub-category under `OPEX-CHARITY` | Refused by the guard, nothing applied |
+| Re-run | Idempotent (`pg_dump` of schema and data identical) |
+| Rollback round trip (clean): apply → rollback | Schema **and data** identical to the pre-file-5 database (`pg_dump` diff). Re-apply + suite: 27/27. |
+| Rollback before file 5 / twice | Refused (`does not look applied`) |
+| Rollback while a budget uses `OPEX-HOUSING` | Refused, with counts. After the row is removed: schema identical to pre-file-5 on a database the suite had run on; re-apply + suite 27/27 |
+| ai_service `pytest` / real-stack e2e | Green (see FIX_LOG) |
+
+This round did **not** re-run the live-shaped replica, because its scratch tooling (§10) is not in the repository. Live itself was not touched.
+
+### 3b.7 Rollback order
+
+Run [`../rollback/20261021_taxonomy_bnpl_rollback.sql`](../rollback/20261021_taxonomy_bnpl_rollback.sql) **before** the round-3 rollback (§8). It restores the 900000 `pay_installment_plan`, drops the two columns, the trigger, both functions, the index and the CHECK, and deletes exactly the 8 categories and 23 sub-categories it added.
+
+It refuses to run in three cases:
+
+- while any transaction, budget, household setting, installment plan or household code uses a new category;
+- when file 5 is not applied;
+- when it has already run.
+
+Data impact: bi-weekly plans lose their `frequency`, which can be exported first.
