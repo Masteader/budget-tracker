@@ -8,7 +8,6 @@
 .pytest_cache/
 tests/
 data/*.json
-_build_landing.py
 docker-compose.yml
 Dockerfile
 .dockerignore

@@ -15,7 +15,7 @@
 └───────────────────▲───────────────────┘        │    │ secret key, explicit
                     │ POST /public/inquiries     ▼    ▼ membership/admin checks
 ┌───────────────────┴───────────────────┐  ┌───────────────────────┐
-│ web_app (React/Vite) & landing_page   │  │   Supabase Platform   │
+│ web_app (React/Vite landing page)     │  │   Supabase Platform   │
 └───────────────────────────────────────┘  │ (PostgreSQL + RLS)    │
                                            └───────────────────────┘
 ```
@@ -25,7 +25,7 @@
 | Layer | Technology | Primary Role |
 |---|---|---|
 | **Mobile Client** | Flutter 3.22+, Dart 3.x | Cross-platform mobile app (Android & iOS). Sovereign OS & Iced Ocean HUD design. |
-| **Web Portal / Landing** | React 19, TypeScript, Vite, TailwindCSS | Daylight Coastal RTL web landing page, interactive salary & payday simulator, VIP early-access form. Built into `ai_service/static/`. |
+| **Web Portal / Landing** | React 19, TypeScript, Vite, TailwindCSS | Daylight Coastal RTL web landing page (the only one), payday countdown example, VIP early-access form. Built into `ai_service/static/`. |
 | **AI Microservice** | Python 3.11, FastAPI, Uvicorn, LiteLLM | Receipt OCR and dialect chat agent (model from `LITELLM_MODEL`, Gemini by default), salary cycles, settlements and Nafaqah, recurring bill detector, price tracker, PDF statements, support/inquiry email. |
 | **Database & Storage** | Supabase (PostgreSQL 15+) | Multi-tenant relational storage, Row Level Security (RLS), Supabase Storage (receipt images), Realtime subscriptions. |
 | **Local Offline Cache** | SQLite (`sqflite`) | Local offline transaction buffer and queue with auto-sync on network reconnect. |
@@ -50,7 +50,6 @@ budget-tracker/
 │   ├── tests/           # Hermetic pytest suite
 │   └── main.py          # App entrypoint and middleware pipeline
 ├── web_app/             # Vite + React web portal & landing experience
-├── landing_page/        # Standalone static HTML landing pages
 ├── supabase/            # schema.sql, seed.sql, migrations/, tests/ (SQL suite + run_tests.py)
 ├── tests/e2e/           # End-to-end suite (local services and mocks only)
 └── docs/                # Project documentation hub
@@ -64,5 +63,5 @@ budget-tracker/
 1. **Client to Supabase:** the Flutter app uses Supabase directly with the **publishable (anon) key**; every read and write is governed by Row Level Security, and ledger or role changes go through `SECURITY DEFINER` RPCs.
 2. **Client to AI Backend:** AI and server-side logic (receipt OCR, chat expense extraction, salary cycles, settlements, Nafaqah, PDF statements, support) go to FastAPI with the user's Supabase JWT (`Authorization: Bearer`). `X-Signature` is optional defense in depth.
 3. **Backend to Supabase:** FastAPI uses the **secret / service-role key** (bypasses RLS), so every route re-checks the verified JWT user's household membership and admin rights itself (`auth.verify_household_access`, `household_permissions.py`).
-4. **Web to Backend:** `web_app` and `landing_page` only call the anonymous `POST /public/inquiries` endpoint.
+4. **Web to Backend:** `web_app` only calls the anonymous `POST /public/inquiries` endpoint.
 5. **Deployment order:** database migrations first, then `ai_service`, then the app build.

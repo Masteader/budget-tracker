@@ -1,19 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { MotionConfig } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import { translations, type Language } from './i18n/translations';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
-import { Simulator } from './components/Simulator';
-import { Metrics } from './components/Metrics';
-import { Pillars } from './components/Pillars';
-import { SecurityFortress } from './components/SecurityFortress';
+import { Features } from './components/Features';
+import { Nafaqah } from './components/Nafaqah';
+import { Privacy } from './components/Privacy';
 import { Faq } from './components/Faq';
 import { EarlyAccess } from './components/EarlyAccess';
 import { Footer } from './components/Footer';
 
-export const App: React.FC = () => {
-  const [lang, setLang] = useState<Language>('ar');
+/** Arabic by default; `?lang=en` opens the English page (handy for sharing). */
+function initialLanguage(): Language {
+  try {
+    return new URLSearchParams(window.location.search).get('lang') === 'en' ? 'en' : 'ar';
+  } catch {
+    return 'ar';
+  }
+}
 
+export const App: React.FC = () => {
+  const [lang, setLang] = useState<Language>(initialLanguage);
   const dict = translations[lang];
 
   useEffect(() => {
@@ -23,48 +29,24 @@ export const App: React.FC = () => {
   }, [lang, dict]);
 
   return (
-    // reducedMotion="user": framer-motion skips transform/layout animations
-    // when the OS "reduce motion" setting is on.
-    <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[#faf9ff] text-on-surface antialiased flex flex-col selection:bg-primary-container selection:text-white">
+    <div id="top" className="flex min-h-screen flex-col">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-white focus:text-[#0c2530] focus:shadow-lg"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-ink focus:shadow-lg"
       >
         {dict.a11y.skipToContent}
       </a>
-      {/* 1. Header with dynamic language switch & nav anchors */}
       <Header lang={lang} setLanguage={setLang} dict={dict} />
-
-      {/* 2. Pristine Glacial Hero with 3D Particles & Telemetry HUD */}
-      <Hero dict={dict} />
-
-      {/* 3. Pristine Arctic Content Container */}
-      <main id="main-content" tabIndex={-1} className="bg-[#eaf5f7] relative z-20 pt-8 pb-20 border-t border-[#d2ecf0] focus:outline-none">
-        {/* Interactive Simulator Cockpit */}
-        {/* Keyed by language so the demo inputs (e.g. the AI sample sentence) follow a language switch. */}
-        <Simulator key={lang} dict={dict} lang={lang} />
-
-        {/* Live Telemetry Metrics */}
-        <Metrics dict={dict} />
-
-        {/* 12 Pillars of Financial Governance */}
-        <Pillars dict={dict} />
-
-        {/* Sovereign Privacy Fortress */}
-        <SecurityFortress dict={dict} />
-
-        {/* Frequently Asked Questions Accordion */}
+      <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
+        <Hero dict={dict} lang={lang} />
+        <Features dict={dict} />
+        <Nafaqah dict={dict} />
+        <Privacy dict={dict} />
         <Faq dict={dict} />
-
-        {/* VIP Early Access Waitlist */}
         <EarlyAccess dict={dict} lang={lang} />
       </main>
-
-      {/* 4. Executive Editorial Footer */}
       <Footer dict={dict} />
     </div>
-    </MotionConfig>
   );
 };
 

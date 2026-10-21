@@ -81,7 +81,7 @@ docs/
 - **[2026-10-05: Offline SQLite Sync Engine](superpowers/plans/2026-10-05-offline-sqlite-sync-engine.md)**
 
 ### 🎨 UI, Localization & Web
-- **[2026-10-11: Landing Page Redesign](superpowers/plans/2026-10-11-landing-page-redesign.md)**
+- **[2026-10-11: Landing Page Redesign](superpowers/plans/2026-10-11-landing-page-redesign.md)** (historical: the generated landing it describes was removed; the landing page is `web_app/`)
 - **[2026-10-10: Multilingual Theming Support & Savings](superpowers/plans/2026-10-10-multilingual-theming-support-and-savings.md)**
 - **[2026-10-13: Multilingual L10n & Category Dedup](superpowers/plans/2026-10-13-multilingual-l10n-and-category-dedup.md)**
 - **[2026-10-12: Bugfix — Budgets, Theme, L10n, Installments](superpowers/plans/2026-10-12-bugfix-budgets-theme-l10n-installments.md)**
