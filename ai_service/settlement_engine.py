@@ -64,8 +64,13 @@ _SHARED_IDS = {"", "household", "all_peers", "all", "both", "shared", "family", 
 _WIFE_TOKENS = ("wife", "spouse")
 _HUSBAND_TOKENS = ("husband", "provider")
 _RELATIVE_TOKENS = ("me", "partner") + _WIFE_TOKENS + _HUSBAND_TOKENS
+# The attribution tail of a client-written note: buildManualExpenseRow() writes
+# "| PaidBy: p | Beneficiary: b | SpentBy: s"; the edit sheet of app builds before the structured
+# columns wrote "| PaidBy: p | Beneficiary: b | SubCategory: c | SpentBy: s" (FABLE2-LOGIC-01).
 _MANUAL_TAIL_RE = re.compile(
-    r"\|\s*PaidBy:\s*([^|]*?)\s*\|\s*Beneficiary:\s*([^|]*?)\s*\|\s*SpentBy:\s*([^|]*?)\s*$", re.IGNORECASE
+    r"\|\s*PaidBy:\s*([^|]*?)\s*\|\s*Beneficiary:\s*([^|]*?)\s*"
+    r"(?:\|\s*SubCategory:\s*[^|]*?\s*)?\|\s*SpentBy:\s*([^|]*?)\s*$",
+    re.IGNORECASE,
 )
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _SETTLEMENT_HEAD_RE = re.compile(r"^\s*Settlement\s*\|\s*PaidBy:\s*([^|]+?)\s*\|", re.IGNORECASE)
@@ -164,18 +169,27 @@ def transaction_attribution(tx: Dict[str, Any]) -> Tuple[str, str]:
     """
     source = str(tx.get("source") or "").strip().lower()
     raw = str(tx.get("raw_sms") or "")
+    tail = _MANUAL_TAIL_RE.search(raw)
     if str(tx.get("beneficiary_id") or "").strip():
         beneficiary = _beneficiary_ref(tx.get("beneficiary_type"), tx.get("beneficiary_id"))
         if source == "manual":
-            tail = _MANUAL_TAIL_RE.search(raw)
             payer = tail.group(1).strip().lower() if tail else "me"
         else:
-            payer = str(tx.get("spent_by") or "me").strip().lower()
+            payer = str(tx.get("spent_by") or "").strip().lower()
             if payer not in ("me", "partner"):
-                payer = "me"
+                # spent_by 'both' (or empty) names no payer: app builds before the structured
+                # columns re-saved edited rows with spent_by 'both' whenever the beneficiary was
+                # 'both' (FABLE2-LOGIC-01). The payer is then the note's tag (the edit sheet's
+                # tail, else the server-authored head), still limited to 'me' / 'partner'.
+                payer = tail.group(1).strip().lower() if tail else _legacy_tags(raw).get("paidby", "")
+                if payer not in ("me", "partner"):
+                    payer = "me"
         return payer or "me", beneficiary
 
     tags = _legacy_tags(raw)
+    if tail:
+        # The edit sheet's tail is the latest attribution, even after " | Items: [...]".
+        tags.update({"paidby": tail.group(1).strip().lower(), "beneficiary": tail.group(2).strip().lower()})
     payer, beneficiary = tags.get("paidby", ""), tags.get("beneficiary", "")
     api_row = source in ("chat", "receipt_scan") or raw.lstrip().startswith(("Chat:", "Receipt Scan:"))
     if api_row and payer not in ("", "me", "partner"):
