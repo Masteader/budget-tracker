@@ -256,7 +256,7 @@ Refresh it after changing `web_app/` so the live VIP form posts to the same orig
 ```bash
 cd web_app && npm ci && VITE_API_BASE_URL= npm run build
 rm -rf ../ai_service/static/assets && cp -r dist/assets ../ai_service/static/
-cp dist/index.html ../ai_service/static/
+cp dist/index.html dist/favicon.svg ../ai_service/static/
 ```
 
 ### Web App (`web_app/.env`, Vite)

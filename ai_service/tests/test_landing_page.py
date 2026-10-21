@@ -120,14 +120,26 @@ _FORBIDDEN_PUBLIC_COPY = (
     "توزيع نسبي",
     "سيادي",
     "السيادية",
+    "Sovereign",
     "تُعالج الرسائل النصية",
     "دون موافقة",
     "end-to-end",
     "End-to-End",
     "256-BIT RLS",
+    "AES-256",
     "cryptographic row-level",
     "فك تشفير ميزانياتك",
     "الإجمالي الصافي للفاتورة",
+    "99.4",
+    "٩٩٫٤",
+    "1,500",
+    "Telemetry",
+    "12 Pillars",
+    "Pillars of Financial Governance",
+    "الركائز",
+    "protected roommate aliases",
+    "local salary calculations",
+    "50/50",
 )
 
 
@@ -135,3 +147,30 @@ def test_public_copy_has_no_spousal_split_invented_metrics_or_false_claims():
     text = _served_bundle()
     found = [p for p in _FORBIDDEN_PUBLIC_COPY if p in text]
     assert not found, f"served bundle contains: {found}"
+
+
+def test_served_copy_states_the_real_benefits_in_arabic_and_english():
+    bundle = _served_bundle()
+    for phrase in (
+        "اعرف كم باقي لك لين الراتب",
+        "سجّل مصروفك بالكلام أو بتصوير الفاتورة",
+        "النفقة بين الزوجين واضحة",
+        "قسمة سكن الزملاء بالعدل",
+        "Know what’s left until payday",
+    ):
+        assert phrase in bundle, phrase
+
+
+def test_served_family_story_has_husband_owing_wife_and_her_allowance():
+    bundle = _served_bundle()
+    assert "مستحق لها على الزوج" in bundle
+    assert "Still owed to her by her husband" in bundle
+    assert "من مصروفها الشخصي" in bundle  # her personal purchases come from her allowance
+
+
+def test_served_privacy_section_names_the_ai_processor_and_no_sms():
+    bundle = _served_bundle()
+    assert bundle.count("Google Gemini") >= 2  # ar + en
+    assert "(RLS)" in bundle
+    assert "ما نقرأ رسائلك النصية أبداً" in bundle
+    assert "We never read your SMS" in bundle
