@@ -1012,9 +1012,9 @@ def remove_sub_category_for_household(
     if matching:
         budget_row = matching[0]
         sub_allocs = budget_row.get("sub_allocations") or {}
-        if isinstance(sub_allocs, dict) and sub_code in sub_allocs:
+        if isinstance(sub_allocs, dict) and sub_code in sub_allocs and not is_allocation_metadata_key(sub_code):
             del sub_allocs[sub_code]
-            new_total = round(sum(float(v) for v in sub_allocs.values()), 2)
+            new_total = round(sum(numeric_sub_allocations(sub_allocs).values()), 2)
             client.table("budgets").update({
                 "sub_allocations": sub_allocs,
                 "allocated_amount": new_total,
@@ -1048,6 +1048,26 @@ def remove_sub_category_for_household(
     }
 
 
+def is_allocation_metadata_key(key: Any) -> bool:
+    """``_``-prefixed keys of budgets.sub_allocations hold metadata, not amounts (FABLE-API-07)."""
+    return str(key).startswith("_")
+
+
+def numeric_sub_allocations(sub_allocations: Any) -> Dict[str, float]:
+    """The amount entries of a sub_allocations dict (metadata keys and non-numbers skipped)."""
+    if not isinstance(sub_allocations, dict):
+        return {}
+    out: Dict[str, float] = {}
+    for key, value in sub_allocations.items():
+        if is_allocation_metadata_key(key) or isinstance(value, (dict, list, bool)) or value is None:
+            continue
+        try:
+            out[str(key)] = round(float(value), 2)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def save_sub_allocations(
     household_id: str,
     category_code: str,
@@ -1057,16 +1077,20 @@ def save_sub_allocations(
     """
     Saves sub-category allocations for a category in the specified cycle.
     Automatically sets the parent budget's allocated_amount to the sum of sub-allocations.
+
+    ``_``-prefixed keys are metadata kept in the same JSONB (e.g. ``_recurring_config`` of the
+    recurring bills): they are ignored in the input (clients cannot write them), excluded from
+    the total and preserved from the stored row (FABLE-API-07).
     """
     from supabase_client import get_client
 
     target_key = cycle_key or current_household_cycle(household_id)["cycle_key"]
 
-    clean_sub_allocations = {k: round(float(v), 2) for k, v in sub_allocations.items()}
+    clean_sub_allocations = numeric_sub_allocations(sub_allocations)
     total_allocated = round(sum(clean_sub_allocations.values()), 2)
-    
+
     client = get_client()
-    
+
     res = (
         client.table("budgets")
         .select("*")
@@ -1083,10 +1107,14 @@ def save_sub_allocations(
     
     if matching:
         budget_id = matching[0]["id"]
+        stored = matching[0].get("sub_allocations")
+        metadata = (
+            {k: v for k, v in stored.items() if is_allocation_metadata_key(k)} if isinstance(stored, dict) else {}
+        )
         # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
         update_data = {
             "allocated_amount": total_allocated,
-            "sub_allocations": clean_sub_allocations,
+            "sub_allocations": {**clean_sub_allocations, **metadata},
             "cycle_key": target_key,
             "is_active": True,
         }

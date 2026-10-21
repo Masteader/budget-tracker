@@ -105,6 +105,36 @@ def test_api05_api08_colliding_custom_code_rename_refused_with_one_message(world
     assert len({x.json()["detail"] for x in answers}) == 1
 
 
+# ─── FABLE-API-07: sub_allocations metadata ───────────────────────────────────
+
+def test_api07_recurring_config_survives_sub_category_admin(world, llm):
+    hh = world.roommates("fx07", n_members=1)
+    admin, member = hh.admin, hh.members[0]
+    r = admin.api.post("/budgets/sub-allocations", json={
+        "household_id": hh.id, "category_code": "OPEX-UTILITIES",
+        "sub_allocations": {"electricity_sec": 300, "fiber_internet": 250}})
+    assert r.status_code == 200, r.text
+    r = member.api.post("/budgets/recurring-bills/toggle", json={
+        "household_id": hh.id, "category_code": "OPEX-UTILITIES", "sub_code": "electricity_sec",
+        "is_recurring": True, "due_day": 5})
+    assert r.status_code == 200, r.text
+    r = admin.api.post("/budgets/sub-categories", json={
+        "household_id": hh.id, "parent_code": "OPEX-UTILITIES", "name_en": "Water", "sub_code": "water_municipal",
+        "allocated_amount": 120})
+    assert r.status_code == 200, r.text
+    r = admin.api.delete("/budgets/sub-categories", params={
+        "household_id": hh.id, "parent_code": "OPEX-UTILITIES", "sub_code": "fiber_internet"})
+    assert r.status_code == 200, r.text
+    r = admin.api.post("/budgets/sub-allocations", json={
+        "household_id": hh.id, "category_code": "OPEX-UTILITIES",
+        "sub_allocations": {"electricity_sec": 300, "water_municipal": 120}})
+    assert r.status_code == 200, r.text
+    row = world.db.one("SELECT allocated_amount, sub_allocations FROM public.budgets "
+                       "WHERE household_id = %s AND category_code = 'OPEX-UTILITIES'", (hh.id,))
+    assert float(row["allocated_amount"]) == 420.0
+    assert row["sub_allocations"]["_recurring_config"]["electricity_sec"]["due_day"] == 5
+
+
 # ─── FABLE-API-06: bounded free text ──────────────────────────────────────────
 
 def test_api06_oversized_overrides_refused_and_junk_qr_not_persisted(world, llm):
