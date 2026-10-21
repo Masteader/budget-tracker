@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import re
+import threading
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from urllib.parse import unquote
@@ -56,6 +57,14 @@ MAX_RECEIPT_PIXELS = 40_000_000  # per image; guards PIL decompression bombs dur
 MAX_COMBINED_RECEIPT_PIXELS = 100_000_000  # all photos of one receipt (8 x 12 MP phone photos fit)
 STITCH_MAX_WIDTH = 1600
 MAX_STITCHED_HEIGHT = 20_000  # 1600 x 20000 RGB canvas = 96 MB
+# FABLE2-API-03: PNG, WebP and progressive JPEG have no reduced-size decode (draft mode only
+# helps a baseline JPEG), so each such page is decoded at full size: two blank 40 MP WebP pages
+# raised peak RSS by ~680 MiB. Those pages are capped lower, and at most two stitches decode at
+# once in the process. (The app sends <= 1600 px JPEGs, far below every cap.)
+MAX_FULL_DECODE_PIXELS = 12_000_000  # per PNG / WebP / progressive JPEG page
+MAX_COMBINED_FULL_DECODE_PIXELS = 24_000_000  # all such pages of one receipt
+MAX_CONCURRENT_STITCHES = 2
+_STITCH_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_STITCHES)
 
 
 class ReceiptImageTooLarge(ValueError):
@@ -108,16 +117,44 @@ def normalize_receipt_path(receipt_url: Optional[str], household_id: str) -> Opt
     return value
 
 
-def _image_dimensions(raw: bytes) -> tuple:
-    """(width, height) from the image header only; ValueError for an unreadable image."""
+def _image_header(raw: bytes) -> tuple:
+    """
+    (width, height, full_decode) from the image header only; ValueError for an unreadable image.
+    ``full_decode`` is True when the page cannot be decoded at reduced size (anything but a
+    baseline JPEG: PNG, WebP, progressive JPEG).
+    """
     import io
     from PIL import Image, UnidentifiedImageError
 
     try:
         with Image.open(io.BytesIO(raw)) as img:  # lazy: reads the header, decodes no pixels
-            return img.size
+            progressive = bool(img.info.get("progressive") or img.info.get("progression"))
+            return img.size[0], img.size[1], img.format != "JPEG" or progressive
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise ValueError("Receipt photo could not be read as an image.") from exc
+
+
+def _image_dimensions(raw: bytes) -> tuple:
+    """(width, height) from the image header only; ValueError for an unreadable image."""
+    width, height, _ = _image_header(raw)
+    return width, height
+
+
+def _check_pixel_budget(headers: List[tuple]) -> None:
+    """ReceiptImageTooLarge when the pages exceed a per-page or combined pixel limit."""
+    full_total = 0
+    for width, height, full_decode in headers:
+        pixels = width * height
+        if width <= 0 or height <= 0 or pixels > MAX_RECEIPT_PIXELS:
+            raise ReceiptImageTooLarge()
+        if full_decode:
+            if pixels > MAX_FULL_DECODE_PIXELS:
+                raise ReceiptImageTooLarge()
+            full_total += pixels
+    if sum(w * h for w, h, _ in headers) > MAX_COMBINED_RECEIPT_PIXELS:
+        raise ReceiptImageTooLarge()
+    if full_total > MAX_COMBINED_FULL_DECODE_PIXELS:
+        raise ReceiptImageTooLarge()
 
 
 def _stitch_plan(sizes: List[tuple]) -> tuple:
@@ -135,7 +172,7 @@ def validate_receipt_images(images_base64: List[str]) -> None:
     """
     if len(images_base64) > MAX_RECEIPT_IMAGES:
         raise ValueError(f"A receipt can have at most {MAX_RECEIPT_IMAGES} photos.")
-    sizes = []
+    headers = []
     for img in images_base64:
         data = img.split(",", 1)[1] if isinstance(img, str) and "," in img else img
         if not isinstance(data, str) or len(data) > (MAX_RECEIPT_IMAGE_BYTES * 4) // 3 + 4:
@@ -148,12 +185,9 @@ def validate_receipt_images(images_base64: List[str]) -> None:
             raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
         if raw.startswith(b"RIFF") and raw[8:12] != b"WEBP":
             raise ValueError("Receipt photo must be a JPEG, PNG or WebP image.")
-        width, height = _image_dimensions(raw)
-        if width <= 0 or height <= 0 or width * height > MAX_RECEIPT_PIXELS:
-            raise ReceiptImageTooLarge()
-        sizes.append((width, height))
-    if sum(w * h for w, h in sizes) > MAX_COMBINED_RECEIPT_PIXELS:
-        raise ReceiptImageTooLarge()
+        headers.append(_image_header(raw))
+    _check_pixel_budget(headers)
+    sizes = [(w, h) for w, h, _ in headers]
     if len(sizes) > 1 and sum(h for _, h in _stitch_plan(sizes)[1]) > MAX_STITCHED_HEIGHT:
         raise ReceiptImageTooLarge()
 
@@ -287,36 +321,52 @@ def stitch_images_vertically(images_base64: List[str]) -> bytes:
     if len(raw_bytes_list) == 1:
         return raw_bytes_list[0]
 
-    # Bounded before decoding (FABLE-API-02): callers validate first, this re-checks.
-    sizes = [_image_dimensions(b) for b in raw_bytes_list]
-    if any(w * h > MAX_RECEIPT_PIXELS for w, h in sizes) or sum(w * h for w, h in sizes) > MAX_COMBINED_RECEIPT_PIXELS:
-        raise ReceiptImageTooLarge()
-    canvas_width, targets = _stitch_plan(sizes)
+    # Bounded before decoding (FABLE-API-02 / FABLE2-API-03): callers validate first, this re-checks.
+    headers = [_image_header(b) for b in raw_bytes_list]
+    _check_pixel_budget(headers)
+    canvas_width, targets = _stitch_plan([(w, h) for w, h, _ in headers])
     total_height = sum(h for _, h in targets)
     if total_height > MAX_STITCHED_HEIGHT:
         raise ReceiptImageTooLarge()
 
-    try:
-        combined = Image.new("RGB", (canvas_width, total_height), (255, 255, 255))
-        y_offset = 0
-        for raw, (target_w, target_h) in zip(raw_bytes_list, targets):
-            # One page at a time: JPEG draft mode decodes at 1/2..1/8 scale when that still
-            # covers the target, then the page is resized to the canvas width and released.
-            with Image.open(io.BytesIO(raw)) as img:
-                img.draft("RGB", (target_w, target_h))
-                page = img.convert("RGB")
-            if page.size != (target_w, target_h):
-                page = page.resize((target_w, target_h), Image.Resampling.LANCZOS)
-            combined.paste(page, (0, y_offset))
-            y_offset += target_h
-            del page
+    # At most MAX_CONCURRENT_STITCHES requests decode pages at once in this process.
+    with _STITCH_SLOTS:
+        try:
+            combined = Image.new("RGB", (canvas_width, total_height), (255, 255, 255))
+            y_offset = 0
+            for raw, target in zip(raw_bytes_list, targets):
+                page = _decode_page(raw, target)
+                combined.paste(page, (0, y_offset))
+                y_offset += target[1]
+                del page
 
-        out = io.BytesIO()
-        combined.save(out, format="JPEG", quality=85)
-        return out.getvalue()
-    except Exception as e:
-        logger.warning("Vertical stitching failed, falling back to first image: %s", e)
-        return raw_bytes_list[0]
+            out = io.BytesIO()
+            combined.save(out, format="JPEG", quality=85)
+            return out.getvalue()
+        except Exception as e:
+            logger.warning("Vertical stitching failed, falling back to first image: %s", e)
+            return raw_bytes_list[0]
+
+
+def _decode_page(raw: bytes, target: tuple):
+    """
+    One page decoded and scaled to ``target`` (canvas width) as an RGB image. A baseline JPEG is
+    decoded in draft mode (1/2..1/8 scale when that still covers the target); other formats are
+    decoded at full size (hence their lower pixel caps) and resized before the RGB conversion, so
+    no second full-size copy is made for RGBA / LA pages.
+    """
+    import io
+    from PIL import Image
+
+    with Image.open(io.BytesIO(raw)) as img:
+        img.draft("RGB", target)
+        source = img if img.mode in ("RGB", "RGBA", "L", "LA") else img.convert("RGB")
+        if source.size != target:
+            page = source.resize(target, Image.Resampling.LANCZOS, reducing_gap=3.0)
+        else:
+            page = source.copy()
+        del source
+    return page if page.mode == "RGB" else page.convert("RGB")
 
 
 RECEIPT_PROMPT = """You are an expert financial receipt & invoice analyzer for Saudi Arabia.
