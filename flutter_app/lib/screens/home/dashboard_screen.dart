@@ -32,7 +32,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
-import '../settings/ingestion_settings_screen.dart';
+import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
@@ -110,7 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const TransactionFeedScreen(),
       const ChatEntryScreen(),
       const BudgetManagementScreen(),
-      const IngestionSettingsScreen(),
+      const SettingsScreen(),
     ];
 
     return Scaffold(
