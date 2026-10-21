@@ -818,7 +818,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.tr("sar")} ${visibleTotal.toStringAsFixed(2)}',
+                                  '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.sar(visibleTotal)}',
                                   style: GoogleFonts.outfit(
                                     color: context.textSecondary,
                                     fontSize: 12,

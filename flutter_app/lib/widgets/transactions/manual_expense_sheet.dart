@@ -601,7 +601,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         children: [
                           Icon(acc.accountType.defaultIcon, size: 16, color: context.electricTeal),
                           const SizedBox(width: 8),
-                          Text('${acc.name} (${acc.currency} ${acc.balance.toStringAsFixed(2)})'),
+                          Text('${acc.name} (${context.money(acc.balance, acc.currency)})'),
                         ],
                       ),
                     );

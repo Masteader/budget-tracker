@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -99,7 +98,6 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       decoration: BoxDecoration(
@@ -203,7 +201,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                         ),
                       ),
                       subtitle: Text(
-                        '${context.tr('current_balance')}: ${acc.currency} ${fmt.format(acc.balance)} ${!hasEnough ? "(${context.tr('low_balance')})" : ""}',
+                        '${context.tr('current_balance')}: ${context.money(acc.balance, acc.currency)} ${!hasEnough ? "(${context.tr('low_balance')})" : ""}',
                         style: TextStyle(
                           color: !hasEnough ? Colors.orange : context.textSecondary,
                           fontSize: 11,

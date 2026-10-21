@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
@@ -192,7 +191,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
     if (from != null && from.balance < _totalDeduction) {
       AppSnackBar.showError(
         context,
-        context.trArgs('ats_insufficient', {'account': from.name, 'amount': from.currency == 'SAR' ? context.sar(from.balance) : '${from.currency} ${from.balance.toStringAsFixed(2)}'}),
+        context.trArgs('ats_insufficient', {'account': from.name, 'amount': context.money(from.balance, from.currency)}),
       );
       return;
     }
@@ -236,7 +235,6 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -327,7 +325,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );
@@ -386,7 +384,7 @@ class _AccountTransferSheetState extends State<AccountTransferSheet> {
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );

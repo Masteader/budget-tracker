@@ -4911,6 +4911,19 @@ class AppLocalizations {
     return locale.languageCode == 'en' ? '$unit $number' : '$number $unit';
   }
 
+  /// Formats an amount in any account currency: SAR (or a blank code) goes
+  /// through [sar]; another currency keeps its ISO code, before the number in
+  /// English and after it in Arabic and Urdu. [signed] adds "+" to positive
+  /// amounts (negative ones always carry "-").
+  String money(num amount, String? currency, {int decimals = 2, bool signed = false}) {
+    final code = (currency ?? '').trim().toUpperCase();
+    final plus = signed && amount > 0 ? '+' : '';
+    if (code.isEmpty || code == 'SAR') return '$plus${sar(amount, decimals: decimals)}';
+    final pattern = decimals <= 0 ? '#,##0' : '#,##0.${'0' * decimals}';
+    final number = NumberFormat(pattern, 'en_US').format(amount);
+    return locale.languageCode == 'en' ? '$plus$code $number' : '$plus$number $code';
+  }
+
   /// Formats [date] with an intl [pattern] in the active locale (month and
   /// weekday names localized, ASCII digits kept for consistency with amounts).
   /// Falls back to English when the locale's date symbols are not initialized
@@ -5209,6 +5222,8 @@ extension LocalizationExtension on BuildContext {
       AppLocalizations.of(this).plural(key, count, args);
   String sar(num amount, {int decimals = 2}) =>
       AppLocalizations.of(this).sar(amount, decimals: decimals);
+  String money(num amount, String? currency, {int decimals = 2, bool signed = false}) =>
+      AppLocalizations.of(this).money(amount, currency, decimals: decimals, signed: signed);
   String fmtDate(DateTime date, String pattern) =>
       AppLocalizations.of(this).date(date, pattern);
   String cycleMonth(String cycleKey, {String fallback = ''}) =>

@@ -707,7 +707,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final cycle = _selectedCycle;
     final headerTitle = cycle != null
         ? context.cycleRangeIso(
@@ -935,7 +934,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: -${deficitAccount.currency} ${fmt.format(deficitAmount)}',
+                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: ${context.money(-deficitAmount, deficitAccount.currency)}',
                                         style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                       const SizedBox(height: 2),

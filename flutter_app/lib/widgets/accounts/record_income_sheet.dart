@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -176,7 +175,6 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final fmt = NumberFormat('#,##0.00');
 
     return Container(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -300,7 +298,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
                       children: [
                         Icon(acc.accountType.defaultIcon, size: 18, color: context.electricTeal),
                         const SizedBox(width: 8),
-                        Text('${acc.name} (${acc.currency} ${fmt.format(acc.balance)})', style: TextStyle(color: context.textPrimary)),
+                        Text('${acc.name} (${context.money(acc.balance, acc.currency)})', style: TextStyle(color: context.textPrimary)),
                       ],
                     ),
                   );

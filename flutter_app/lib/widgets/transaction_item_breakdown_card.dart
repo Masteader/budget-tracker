@@ -207,7 +207,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '$currency ${amount.toStringAsFixed(2)}',
+                context.money(amount, currency),
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
@@ -438,7 +438,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    '$currency ${price.toStringAsFixed(2)}',
+                                    context.money(price, currency),
                                     style: GoogleFonts.outfit(
                                       color: context.textPrimary,
                                       fontSize: 13,
@@ -465,7 +465,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '$currency ${amount.toStringAsFixed(2)}',
+                                context.money(amount, currency),
                                 style: GoogleFonts.outfit(
                                   color: context.successText,
                                   fontSize: 13,
@@ -492,7 +492,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '1x ${context.trMerchant(merchant)} (${currency == 'SAR' ? context.sar(amount) : '$currency ${amount.toStringAsFixed(2)}'})\n${context.tr('no_line_items_desc')}',
+                              '1x ${context.trMerchant(merchant)} (${context.money(amount, currency)})\n${context.tr('no_line_items_desc')}',
                               style: TextStyle(color: context.textSecondary, fontSize: 12),
                             ),
                           ),
