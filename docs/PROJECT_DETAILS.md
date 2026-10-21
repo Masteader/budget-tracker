@@ -109,12 +109,20 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 - **Vision OCR:** `POST /agent/scan-receipt` sends receipt pages to the model configured in
   `LITELLM_MODEL` (Gemini by default) and extracts merchant, date, payment method and line items.
 - **Receipt Storage & Viewer:** images in the **private** `receipts` bucket under the household's
-  folder (size and MIME limits), photo strips and a zoomable viewer.
+  folder (size and MIME limits), photo strips and a zoomable viewer. The server uploads a photo
+  only after the transaction row exists (never for a preview, a duplicate prompt or a refused insert).
+- **One model call per expense:** the preview of a chat message or receipt returns a server-signed
+  `preview_token` (HMAC with `PREVIEW_TOKEN_SECRET`, 15 minutes, bound to the user, household and
+  input). A commit that sends it back is saved from the signed result without a second model call;
+  edits go through the same validation. Tampered: 422 `invalid_preview_token`; expired: parsed again
+  (a receipt commit without photos then answers 422 `preview_token_expired`). OCR runs at temperature 0.1.
 - **Duplicate Prevention:** `dedup_engine.py` flags candidates (QR fingerprint, merchant, total, time).
 
 ### 3.5 Conversational AI & Saudi Dialect Voice Logging
 - **Natural Dialect Chat:** `POST /agent/chat-transaction` (LiteLLM) parses phrases such as
-  *"تقضينا من بنده بـ ٢٥٠ ريال من بطاقة الراجحي"*; in family households it also suggests the Nafaqah class.
+  *"تقضينا من بنده بـ ٢٥٠ ريال من بطاقة الراجحي"* (Arabic, English and Urdu); in family households it also
+  suggests the Nafaqah class. Categories include housing, education, domestic help, family support,
+  charity, transport, insurance and remittances (`OPEX-HOUSING` … `OPEX-REMITTANCE`).
 - **Voice Entry:** on-device speech-to-text (`speech_to_text`).
 - **Interactive Action Cards:** `PendingExpenseConfirmationCard`, `PurchaseSimulationCard`
   (`POST /budgets/simulate-affordability`), `DuplicateResolutionCard`.

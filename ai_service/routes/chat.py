@@ -17,6 +17,7 @@ from supabase_client import InvalidAttributionError, TransactionRejectedError, U
 from utils import bounded_text, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from chat_parser import process_chat_transaction
+from preview_token import InvalidPreviewToken
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,11 @@ async def chat_transaction(request: Request):
 
     Replays: an ``Idempotency-Key`` header makes a commit idempotent per user, and
     ``client_occurred_at`` (ISO-8601) is used as the transaction time.
+
+    One LLM call per expense (PRODUCT-R6): the preview (``preview_only``) and a duplicate prompt
+    return ``preview_token``. Sending it back with the same ``message`` (and any edited fields)
+    commits without calling the model. A tampered token, or one issued to another user or
+    household, is 422 ``{"detail": {"code": "invalid_preview_token"}}``; an expired one re-parses.
     """
     user_id = get_current_user_id(request)
     raw_body = await request.body()
@@ -78,6 +84,10 @@ async def chat_transaction(request: Request):
             status_code=422,
             detail="nafaqah_class must be 'wife_reimbursable', 'wife_personal' or 'none'.",
         )
+
+    preview_token = body.get("preview_token")
+    if preview_token is not None and not isinstance(preview_token, str):
+        raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
 
     preview_only = bool(body.get("preview_only", False))
     idem_key = validate_idempotency_key(request.headers.get("Idempotency-Key"))
@@ -117,7 +127,12 @@ async def chat_transaction(request: Request):
             occurred_at=occurred_at,
             override_nafaqah_class=nafaqah_class,
             override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
+            preview_token=preview_token,
         )
+    except InvalidPreviewToken:
+        if use_idempotency:
+            await idempotency_store.release(user_id, "chat-transaction", idem_key)
+        raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
     except NafaqahError as exc:
         # A class contradicting paid_by/beneficiary, or a wife that is not allowed (422).
         if use_idempotency:

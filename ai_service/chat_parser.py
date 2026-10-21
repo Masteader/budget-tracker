@@ -30,6 +30,13 @@ from supabase_client import (
     UnknownCategoryError,
 )
 
+from preview_token import (  # noqa: E402
+    KIND_CHAT,
+    InvalidPreviewToken,
+    issue_preview_token,
+    text_digest,
+    verify_preview_token,
+)
 from utils import (  # noqa: E402
     build_audit_note,
     litellm_model,
@@ -689,6 +696,33 @@ def parse_chat_expense(text: str) -> ParsedChatExpense:
         return _fallback_heuristic_parse(text)
 
 
+def _parsed_from_preview_token(
+    token: Optional[str], household_id: str, user_id: Optional[str], message_digest: str,
+) -> Optional[ParsedChatExpense]:
+    """The signed parse of this message, or None when the caller must run the parser."""
+    if token is None:
+        return None
+    check = verify_preview_token(token, KIND_CHAT, user_id, household_id)  # InvalidPreviewToken
+    if not check.valid:
+        logger.info("Chat preview token %s: re-parsing.", check.status)
+        return None
+    if check.binding.get("m") != message_digest:
+        logger.info("Chat preview token was issued for another message: re-parsing.")
+        return None
+    try:
+        return ParsedChatExpense(**check.payload)
+    except Exception as exc:  # signed by us, so only a format change between releases
+        raise InvalidPreviewToken("payload no longer valid") from exc
+
+
+def _issue_chat_token(
+    parsed: ParsedChatExpense, household_id: str, user_id: Optional[str], message_digest: str,
+) -> Optional[str]:
+    return issue_preview_token(
+        KIND_CHAT, user_id, household_id, parsed.model_dump(mode="json"), {"m": message_digest},
+    )
+
+
 def check_category_active_status(category_code: str, categories_state: dict) -> bool:
     """
     Returns True if category_code is active for the household,
@@ -714,9 +748,16 @@ def process_chat_transaction(
     occurred_at: Optional[datetime] = None,
     override_nafaqah_class: Optional[str] = None,
     override_nafaqah_spouse_id: Optional[str] = None,
+    preview_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
+
+    One LLM call per expense (PRODUCT-R6): the preview (and a duplicate prompt) returns a signed
+    ``preview_token`` of the parsed message. A request that sends it back for the same message is
+    served from the signed payload without calling the model; every override below is applied and
+    validated exactly as without a token. An expired or unverifiable token, or one for another
+    message, re-parses; a tampered one raises InvalidPreviewToken (HTTP 422).
 
     Family households (Islamic Nafaqah): an expense the wife paid is classified as
     ``wife_reimbursable`` (shared → the husband owes her) or ``wife_personal`` (charged to her
@@ -727,7 +768,10 @@ def process_chat_transaction(
     (nafaqah_service.resolve_expense_nafaqah raises InvalidNafaqahRequest otherwise). Nothing is
     ever split between the spouses, and roommate households are never classified.
     """
-    parsed = parse_chat_expense(message)
+    message_digest = text_digest(message)
+    parsed = _parsed_from_preview_token(preview_token, household_id, user_id, message_digest)
+    if parsed is None:
+        parsed = parse_chat_expense(message)
     if parsed.is_simulation:
         from salary_cycle import simulate_affordability
         sim_amt = parsed.simulated_amount or parsed.total_amount
@@ -879,6 +923,7 @@ def process_chat_transaction(
 
         return {
             "status": "pending_confirmation",
+            "preview_token": _issue_chat_token(parsed, household_id, user_id, message_digest),
             "merchant": merchant,
             "amount": parsed.total_amount,
             "category_code": category_code,
@@ -909,6 +954,7 @@ def process_chat_transaction(
             logger.info("Duplicate candidate found for chat transaction: %s", candidate["id"])
             return {
                 "status": "duplicate_candidate",
+                "preview_token": _issue_chat_token(parsed, household_id, user_id, message_digest),
                 "candidate_transaction_id": candidate["id"],
                 "candidate_merchant": candidate.get("merchant"),
                 "candidate_amount": candidate.get("amount"),

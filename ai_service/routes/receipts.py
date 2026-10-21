@@ -17,6 +17,7 @@ from supabase_client import InvalidAttributionError, TransactionRejectedError, U
 from utils import bounded_text, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
+from preview_token import InvalidPreviewToken, PreviewTokenExpired
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,13 @@ async def scan_receipt(request: Request):
     valid JWT is only logged (auth.verify_signature_if_present, applied to every router in main.py).
     Replays: ``Idempotency-Key`` makes a commit idempotent per user; ``client_occurred_at``
     (ISO-8601) is used as the transaction time.
+
+    One vision call per receipt (PRODUCT-R6): the preview (``preview_only``) and a duplicate prompt
+    return ``preview_token``. A commit that sends it back needs neither photos nor QR text and makes
+    no model call (photos sent with it are stored after the insert). A tampered token, or one issued
+    to another user or household, is 422 ``{"detail": {"code": "invalid_preview_token"}}``; an
+    expired one re-parses the photos / QR sent with it, or is 422
+    ``{"detail": {"code": "preview_token_expired"}}`` when the request carries neither.
     """
     user_id = get_current_user_id(request)
     raw_body = await request.body()
@@ -74,8 +82,11 @@ async def scan_receipt(request: Request):
         )
     }
     qr_code_raw = overrides["qr_code_raw"]
+    preview_token = body.get("preview_token")
+    if preview_token is not None and not isinstance(preview_token, str):
+        raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
 
-    if not images_base64 and not qr_code_raw:
+    if not images_base64 and not qr_code_raw and not preview_token:
         raise HTTPException(status_code=400, detail="Either images_base64 or qr_code_raw is required.")
 
     preview_only = bool(body.get("preview_only", False))
@@ -116,7 +127,12 @@ async def scan_receipt(request: Request):
             beneficiary=overrides["beneficiary"],
             override_nafaqah_class=overrides["nafaqah_class"],
             override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
+            preview_token=preview_token,
         )
+    except (InvalidPreviewToken, PreviewTokenExpired) as exc:
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=422, detail={"code": exc.CODE})
     except NafaqahError as exc:
         # Family Nafaqah: unknown or contradicting class, or a wife that is not allowed (422).
         if use_idempotency:

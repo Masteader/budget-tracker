@@ -213,6 +213,7 @@ Details and couplings: [`docs/review/audit/MASTER_AUDIT_REPORT.md`](docs/review/
 | `SUPABASE_JWT_SECRET` | ❌ | Only for legacy HS256 user tokens; without it only ES256 tokens verified via the project JWKS are accepted |
 | `WEBHOOK_SECRET` | ❌ | HMAC key for the optional `X-Signature` check (see Security Notes) |
 | `APP_AUTH_TOKEN` | ❌ | Legacy firewall pass (`X-App-Token`) for old app builds only |
+| `PREVIEW_TOKEN_SECRET` | recommended | HMAC key (≥ 32 characters, same on every instance) signing the `preview_token` of chat/receipt previews, so a confirmed preview is saved without a second LLM call. Unset: a random per-process key and a logged warning; commits reaching another instance (or after a restart) are parsed again. Server only |
 | `REDIS_URL` | ❌ | Shared rate-limit store; without it limits are per process (in memory) |
 | `PORT` | ❌ | HTTP port (default: 8000) |
 | `RELOAD` | ❌ | Hot-reload on file change (default: false) |
