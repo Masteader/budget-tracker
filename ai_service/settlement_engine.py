@@ -583,7 +583,10 @@ def calculate_family_nafaqah(
             # Husband or general household payer
             if ben_id in (wife_id.lower(), "wife", "spouse"):
                 spent_on_wife += amt
-            elif "child" in ben_id or ben_id in ("kids", "children") or ben_type == "individual":
+            elif ben_id in (husband_id.lower(), "husband", "provider"):
+                # The husband's own purchase ('individual'/<his id> since structured attribution).
+                family_general_total += amt
+            elif "child" in ben_id or ben_id in ("kids", "children") or ben_type in ("individual", "dependent"):
                 spent_on_children += amt
             else:
                 family_general_total += amt

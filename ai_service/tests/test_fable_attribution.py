@@ -213,6 +213,20 @@ def test_partner_beneficiary_is_refused_when_ambiguous(api, world_factory):
     assert r.status_code == 422, r.text
 
 
+def test_family_breakdown_reads_structured_beneficiaries():
+    """Family summary: the husband's own purchase is not a child's, a dependent's is."""
+    from settlement_engine import calculate_family_nafaqah
+
+    txs = [
+        {"paid_by": "h", "amount": 50.0, "beneficiary_type": "individual", "beneficiary_id": "h"},
+        {"paid_by": "h", "amount": 30.0, "beneficiary_type": "dependent", "beneficiary_id": "children"},
+        {"paid_by": "h", "amount": 20.0, "beneficiary_type": "individual", "beneficiary_id": "w"},
+        {"paid_by": "h", "amount": 10.0, "beneficiary_type": "household", "beneficiary_id": "household"},
+    ]
+    res = calculate_family_nafaqah(txs, husband_id="h", wife_id="w")
+    assert (res["family_general_total"], res["spent_on_children"], res["spent_on_wife"]) == (60.0, 30.0, 20.0)
+
+
 # ─── FABLE-LOGIC-08: un-itemised receipt remainder is attributed ──────────────
 
 def test_pairwise_line_items_attribute_vat_pro_rata():
