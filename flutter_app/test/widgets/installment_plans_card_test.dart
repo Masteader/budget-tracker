@@ -73,7 +73,7 @@ void main() {
 
       expect(find.text('Installments & BNPL'), findsOneWidget);
       expect(find.text('No Active BNPL Installments'), findsOneWidget);
-      expect(find.text('+ Add Installment Plan'), findsOneWidget);
+      expect(find.text('Add Installment Plan'), findsOneWidget);
     });
 
     testWidgets('bi-weekly Tabby plan: no "/month", shows the frequency and next due date', (tester) async {
