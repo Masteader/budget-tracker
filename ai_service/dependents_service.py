@@ -1,33 +1,42 @@
 """
 Household Dependents Management Service.
-Manages children and dependents for households, supporting both Supabase persistence
-and in-memory fallback cache.
+
+Children and other members without an account (``household_dependents``). The database is the
+only store (product review 4.1): the in-memory fallback cache diverged between API instances and
+vanished on restart, so a failed read or write now raises DependentsUnavailable instead of
+answering from (or "saving" to) process memory.
 """
 
 from __future__ import annotations
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# In-memory storage cache keyed by household_id
-_memory_dependents: Dict[str, List[Dict[str, Any]]] = {}
+
+class DependentsUnavailable(RuntimeError):
+    """household_dependents could not be read or written (database unreachable or refused)."""
+
+    PUBLIC_MESSAGE = "Household members are temporarily unavailable. Please try again."
+
+    def __init__(self, operation: str):
+        super().__init__(f"{self.PUBLIC_MESSAGE} ({operation})")
+        self.operation = operation
 
 
 def get_household_dependents(household_id: str) -> List[Dict[str, Any]]:
-    """Fetches dependents for a household."""
+    """The dependents of a household, oldest first."""
     from supabase_client import get_client
     try:
-        client = get_client()
-        res = client.table("household_dependents").select("*").eq("household_id", household_id).order("created_at").execute()
-        if res.data is not None:
-            return res.data
+        res = (
+            get_client().table("household_dependents").select("*").eq("household_id", household_id)
+            .order("created_at").execute()
+        )
     except Exception as exc:
-        logger.debug("Falling back to local cache for household_dependents (%s)", exc)
-
-    return _memory_dependents.get(household_id, [])
+        logger.error("Could not read household_dependents for %s: %s", household_id, exc)
+        raise DependentsUnavailable("read") from exc
+    return list(res.data or [])
 
 
 def create_household_dependent(
@@ -37,9 +46,8 @@ def create_household_dependent(
     relationship: Optional[str] = "child",
     monthly_allowance: Optional[float] = 0.0,
 ) -> Dict[str, Any]:
-    """Creates a new member/dependent for a household."""
+    """Creates a new member/dependent for a household and returns the stored row."""
     from supabase_client import get_client
-    now_iso = datetime.now(timezone.utc).isoformat()
     record = {
         "id": str(uuid.uuid4()),
         "household_id": household_id,
@@ -47,71 +55,42 @@ def create_household_dependent(
         "avatar_icon": avatar_icon or "child",
         "relationship": relationship or "child",
         "monthly_allowance": round(float(monthly_allowance or 0.0), 2),
-        "linked_user_id": None,
-        "created_at": now_iso,
     }
-
     try:
-        client = get_client()
-        res = client.table("household_dependents").insert({
-            "id": record["id"],
-            "household_id": record["household_id"],
-            "name": record["name"],
-            "avatar_icon": record["avatar_icon"],
-            "relationship": record["relationship"],
-            "monthly_allowance": record["monthly_allowance"],
-        }).execute()
-        if res.data and len(res.data) > 0:
-            record = res.data[0]
+        res = get_client().table("household_dependents").insert(record).execute()
     except Exception as exc:
-        logger.debug("Persisting dependent to local cache (%s)", exc)
-
-    if household_id not in _memory_dependents:
-        _memory_dependents[household_id] = []
-    _memory_dependents[household_id].append(record)
-    return record
+        logger.error("Could not insert a household_dependents row for %s: %s", household_id, exc)
+        raise DependentsUnavailable("create") from exc
+    if res.data:
+        return res.data[0]
+    return {**record, "linked_user_id": None}
 
 
 def delete_household_dependent(household_id: str, dependent_id: str) -> bool:
     """Deletes a dependent from a household."""
     from supabase_client import get_client
     try:
-        client = get_client()
-        client.table("household_dependents").delete().eq("household_id", household_id).eq("id", dependent_id).execute()
+        get_client().table("household_dependents").delete().eq("household_id", household_id).eq(
+            "id", dependent_id
+        ).execute()
     except Exception as exc:
-        logger.debug("Deleting dependent from local cache (%s)", exc)
-
-    if household_id in _memory_dependents:
-        _memory_dependents[household_id] = [
-            d for d in _memory_dependents[household_id] if d.get("id") != dependent_id
-        ]
+        logger.error("Could not delete household_dependents %s: %s", dependent_id, exc)
+        raise DependentsUnavailable("delete") from exc
     return True
 
 
 def link_dependent_user(household_id: str, dependent_id: str, user_id: str) -> Optional[Dict[str, Any]]:
-    """Links a pre-created member/dependent record to a live user account."""
+    """Links a pre-created member/dependent record of ``household_id`` to a live user account."""
     from supabase_client import get_client
-    updated = None
-
     try:
-        client = get_client()
         res = (
-            client.table("household_dependents")
+            get_client().table("household_dependents")
             .update({"linked_user_id": user_id})
             .eq("id", dependent_id)
+            .eq("household_id", household_id)
             .execute()
         )
-        if res.data and len(res.data) > 0:
-            updated = res.data[0]
     except Exception as exc:
-        logger.debug("Linking dependent user in local cache (%s)", exc)
-
-    if household_id in _memory_dependents:
-        for dep in _memory_dependents[household_id]:
-            if dep.get("id") == dependent_id:
-                dep["linked_user_id"] = user_id
-                if not updated:
-                    updated = dep
-                break
-
-    return updated
+        logger.error("Could not link household_dependents %s: %s", dependent_id, exc)
+        raise DependentsUnavailable("link") from exc
+    return res.data[0] if res.data else None

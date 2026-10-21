@@ -640,12 +640,9 @@ def insert_transaction(
         "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s sub_category=%s cycle=%s reallocated=%s source=%s",
         transaction_id, amount, currency, merchant, category_code, sub_category, cycle_key, is_reallocated, source,
     )
-    try:
-        from installment_service import InstallmentService
-        InstallmentService.recalculate_budgets(household_id, cycle_key)
-    except Exception as recalc_err:
-        logger.debug("Background recalculate_budgets on insert failed: %s", recalc_err)
-
+    # budgets.spent_amount is maintained by the transaction triggers (BUG-02, 20261020800000 /
+    # 20261020900000): no recalculation here. It used to read every transaction of the household
+    # on each insert (product review 3.3); POST /budgets/recalculate repairs a cycle on demand.
     return transaction_id
 
 
@@ -734,131 +731,77 @@ def ensure_household_cycle_budgets(
 
 
 # =============================================================================
-# HOUSEHOLD PAYDAY CONFIGURATION
+# HOUSEHOLD SETTINGS (payday, income, rollover rule, savings reserve)
 # =============================================================================
+# The database is the only store (product review 4.1, API-33): the container-local JSON files
+# (household_settings.json / household_invites.json) were ephemeral on Railway and diverged
+# between instances. A failed read or write raises HouseholdSettingsUnavailable; the routes answer
+# with an error instead of serving or "saving" a value no other instance can see.
 
-HOUSEHOLD_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "data", "household_settings.json")
+DEFAULT_PAYDAY_DAY = 27
+
+
+class HouseholdSettingsUnavailable(RuntimeError):
+    """The households row could not be read or written (database unreachable or refused)."""
+
+    PUBLIC_MESSAGE = "Household settings are temporarily unavailable. Please try again."
+
+    def __init__(self, operation: str):
+        super().__init__(f"{self.PUBLIC_MESSAGE} ({operation})")
+        self.operation = operation
+
+
+def _household_row(household_id: str, columns: str, operation: str) -> Optional[dict]:
+    try:
+        return first_row(get_client().table("households").select(columns).eq("id", household_id))
+    except Exception as exc:
+        logger.error("Could not read households.%s for %s: %s", columns, household_id, exc)
+        raise HouseholdSettingsUnavailable(operation) from exc
+
+
+def _update_household(household_id: str, values: dict, operation: str) -> None:
+    try:
+        get_client().table("households").update(values).eq("id", household_id).execute()
+    except Exception as exc:
+        logger.error("Could not update households (%s) for %s: %s", ", ".join(values), household_id, exc)
+        raise HouseholdSettingsUnavailable(operation) from exc
 
 
 def get_household_payday(household_id: str) -> int:
-    """
-    Retrieves the payday day (1-31) for a household.
-    Checks Supabase households.payday_day, falls back to local JSON cache, defaults to 27.
-    """
+    """households.payday_day (1-31); 27 when the household has none (or no id is given)."""
     if not household_id:
-        return 27
-    try:
-        client = get_client()
-        row = first_row(client.table("households").select("payday_day").eq("id", household_id))
-        if row and row.get("payday_day") is not None:
-            return int(row["payday_day"])
-    except Exception:
-        pass
-
-    try:
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                if household_id in settings and "payday_day" in settings[household_id]:
-                    return int(settings[household_id]["payday_day"])
-    except Exception:
-        pass
-
-    return 27
+        return DEFAULT_PAYDAY_DAY
+    row = _household_row(household_id, "payday_day", "read payday")
+    if row and row.get("payday_day") is not None:
+        return int(row["payday_day"])
+    return DEFAULT_PAYDAY_DAY
 
 
 def set_household_payday(household_id: str, payday_day: int) -> int:
-    """
-    Sets the payday day (1-31) for a household.
-    Updates Supabase if column exists, and always caches in household_settings.json.
-    """
+    """Store households.payday_day (clamped to 1-31); the DB trigger re-keys the open cycle."""
     if not household_id:
-        return 27
+        return DEFAULT_PAYDAY_DAY
     payday_day = max(1, min(31, int(payday_day)))
-
-    # 1. Update local storage
-    try:
-        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
-        settings = {}
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        if household_id not in settings:
-            settings[household_id] = {}
-        settings[household_id]["payday_day"] = payday_day
-        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to persist household_settings.json: {e}")
-
-    # 2. Update Supabase
-    try:
-        client = get_client()
-        client.table("households").update({"payday_day": payday_day}).eq("id", household_id).execute()
-    except Exception as e:
-        logger.info(f"Supabase households.payday_day column update skipped (pending migration): {e}")
-
+    _update_household(household_id, {"payday_day": payday_day}, "update payday")
     return payday_day
 
 
 def get_household_income(household_id: str) -> float:
-    """
-    Retrieves the monthly income (SAR) for a household.
-    Checks Supabase households.monthly_income, falls back to local JSON cache, defaults to 0.0.
-    """
+    """households.monthly_income (SAR); 0.0 when unset."""
     if not household_id:
         return 0.0
-    try:
-        client = get_client()
-        row = first_row(client.table("households").select("monthly_income").eq("id", household_id))
-        if row and row.get("monthly_income") is not None:
-            return float(row["monthly_income"])
-    except Exception:
-        pass
-
-    try:
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                if household_id in settings and "monthly_income" in settings[household_id]:
-                    return float(settings[household_id]["monthly_income"])
-    except Exception:
-        pass
-
+    row = _household_row(household_id, "monthly_income", "read income")
+    if row and row.get("monthly_income") is not None:
+        return float(row["monthly_income"])
     return 0.0
 
 
 def set_household_income(household_id: str, monthly_income: float) -> float:
-    """
-    Sets the monthly income (SAR) for a household.
-    Updates Supabase if column exists, and always caches in household_settings.json.
-    """
+    """Store households.monthly_income (SAR, never negative)."""
     if not household_id:
         return 0.0
     monthly_income = max(0.0, float(monthly_income))
-
-    # 1. Update local storage
-    try:
-        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
-        settings = {}
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        if household_id not in settings:
-            settings[household_id] = {}
-        settings[household_id]["monthly_income"] = monthly_income
-        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to persist household_settings.json for income: {e}")
-
-    # 2. Update Supabase
-    try:
-        client = get_client()
-        client.table("households").update({"monthly_income": monthly_income}).eq("id", household_id).execute()
-    except Exception as e:
-        logger.info(f"Supabase households.monthly_income column update skipped: {e}")
-
+    _update_household(household_id, {"monthly_income": monthly_income}, "update income")
     return monthly_income
 
 
@@ -872,173 +815,63 @@ DEFAULT_ROLLOVER_RULE = "send_to_savings"
 
 def get_household_rollover_rule(household_id: str) -> str:
     """
-    Retrieves the rollover rule for a household.
-    Options: 'send_to_savings' (default), 'rollover_to_categories', 'fresh_start'.
+    households.rollover_rule: 'send_to_savings' (default), 'rollover_to_categories' or
+    'fresh_start'.
     """
     if not household_id:
         return DEFAULT_ROLLOVER_RULE
-    try:
-        client = get_client()
-        row = first_row(client.table("households").select("rollover_rule").eq("id", household_id))
-        if row and row.get("rollover_rule") in VALID_ROLLOVER_RULES:
-            return str(row["rollover_rule"])
-    except Exception:
-        pass
-
-    try:
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                if household_id in settings and settings[household_id].get("rollover_rule") in VALID_ROLLOVER_RULES:
-                    return str(settings[household_id]["rollover_rule"])
-    except Exception:
-        pass
-
+    row = _household_row(household_id, "rollover_rule", "read rollover rule")
+    if row and row.get("rollover_rule") in VALID_ROLLOVER_RULES:
+        return str(row["rollover_rule"])
     return DEFAULT_ROLLOVER_RULE
 
 
 def set_household_rollover_rule(household_id: str, rollover_rule: str) -> str:
-    """
-    Sets the rollover rule for a household.
-    Options: 'send_to_savings', 'rollover_to_categories', 'fresh_start'.
-    """
+    """Store households.rollover_rule (an unknown value stores the default)."""
     if not household_id:
         return DEFAULT_ROLLOVER_RULE
-
     rule = rollover_rule if rollover_rule in VALID_ROLLOVER_RULES else DEFAULT_ROLLOVER_RULE
-
-    # 1. Update local storage
-    try:
-        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
-        settings = {}
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        if household_id not in settings:
-            settings[household_id] = {}
-        settings[household_id]["rollover_rule"] = rule
-        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to persist household_settings.json for rollover_rule: {e}")
-
-    # 2. Update Supabase
-    try:
-        client = get_client()
-        client.table("households").update({"rollover_rule": rule}).eq("id", household_id).execute()
-    except Exception as e:
-        logger.info(f"Supabase households.rollover_rule column update skipped (pending migration): {e}")
-
+    _update_household(household_id, {"rollover_rule": rule}, "update rollover rule")
     return rule
 
 
 def add_household_savings_surplus(household_id: str, surplus: float, cycle_key: str) -> float:
     """
-    Sweeps unspent positive cycle surplus into the household's accumulated savings pool.
-    Updates Supabase households table and syncs local cache.
+    Sweep a positive cycle surplus into households.accumulated_savings and return the new total.
+    Raises HouseholdSettingsUnavailable when the household row cannot be read or written.
     """
     if not household_id or surplus <= 0:
         return 0.0
-
-    accumulated: Optional[float] = None
-    # 1. Update Supabase — only authoritative when the household row actually exists;
-    #    otherwise computing from 0 would overwrite the running total kept in the local cache.
-    try:
-        client = get_client()
-        row = first_row(client.table("households").select("accumulated_savings").eq("id", household_id))
-        if row:
-            current_savings = float(row.get("accumulated_savings") or 0.0)
-            accumulated = round(current_savings + float(surplus), 2)
-            client.table("households").update({
-                "accumulated_savings": accumulated,
-                "last_rollover_surplus": round(float(surplus), 2),
-                "last_rollover_cycle": cycle_key,
-            }).eq("id", household_id).execute()
-    except Exception as e:
-        logger.info(f"Supabase update of accumulated_savings skipped: {e}")
-
-    # 2. Update local fallback cache
-    try:
-        os.makedirs(os.path.dirname(HOUSEHOLD_SETTINGS_FILE), exist_ok=True)
-        settings = {}
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        if household_id not in settings:
-            settings[household_id] = {}
-
-        if accumulated is None:
-            accumulated = float(settings[household_id].get("accumulated_savings") or 0.0) + round(surplus, 2)
-        settings[household_id]["accumulated_savings"] = round(accumulated, 2)
-        settings[household_id]["last_rollover_surplus"] = round(surplus, 2)
-        settings[household_id]["last_rollover_cycle"] = cycle_key
-
-        with open(HOUSEHOLD_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to record savings surplus in household_settings.json: {e}")
-
-    return float(accumulated) if accumulated is not None else round(float(surplus), 2)
+    row = _household_row(household_id, "accumulated_savings", "read savings")
+    if not row:
+        raise HouseholdSettingsUnavailable("household not found")
+    accumulated = round(float(row.get("accumulated_savings") or 0.0) + float(surplus), 2)
+    _update_household(household_id, {
+        "accumulated_savings": accumulated,
+        "last_rollover_surplus": round(float(surplus), 2),
+        "last_rollover_cycle": cycle_key,
+    }, "update savings")
+    return accumulated
 
 
 def get_household_savings_summary(household_id: str) -> dict:
-    """
-    Returns accumulated savings surplus and configured rollover rule.
-    Queries Supabase first, falls back to local cache.
-    """
+    """Accumulated savings, the last swept surplus and the rollover rule of a household."""
     rule = get_household_rollover_rule(household_id)
-    accumulated = 0.0
-    last_surplus = 0.0
-    last_cycle = None
-
-    try:
-        client = get_client()
-        row = first_row(
-            client.table("households")
-            .select("accumulated_savings, last_rollover_surplus, last_rollover_cycle")
-            .eq("id", household_id)
-        )
-        if row:
-            if row.get("accumulated_savings") is not None:
-                accumulated = float(row["accumulated_savings"])
-            if row.get("last_rollover_surplus") is not None:
-                last_surplus = float(row["last_rollover_surplus"])
-            last_cycle = row.get("last_rollover_cycle")
-            return {
-                "household_id": household_id,
-                "rollover_rule": rule,
-                "accumulated_savings": round(accumulated, 2),
-                "last_rollover_surplus": round(last_surplus, 2),
-                "last_rollover_cycle": last_cycle,
-            }
-    except Exception:
-        pass
-
-    try:
-        if os.path.exists(HOUSEHOLD_SETTINGS_FILE):
-            with open(HOUSEHOLD_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                if household_id in settings:
-                    accumulated = float(settings[household_id].get("accumulated_savings") or 0.0)
-                    last_surplus = float(settings[household_id].get("last_rollover_surplus") or 0.0)
-                    last_cycle = settings[household_id].get("last_rollover_cycle")
-    except Exception:
-        pass
-
+    row = _household_row(
+        household_id, "accumulated_savings, last_rollover_surplus, last_rollover_cycle", "read savings",
+    ) or {}
     return {
         "household_id": household_id,
         "rollover_rule": rule,
-        "accumulated_savings": round(accumulated, 2),
-        "last_rollover_surplus": round(last_surplus, 2),
-        "last_rollover_cycle": last_cycle,
+        "accumulated_savings": round(float(row.get("accumulated_savings") or 0.0), 2),
+        "last_rollover_surplus": round(float(row.get("last_rollover_surplus") or 0.0), 2),
+        "last_rollover_cycle": row.get("last_rollover_cycle"),
     }
 
 
 # =============================================================================
 # ROLE-BASED HOUSEHOLD INVITES & REIMBURSEMENT TRANSACTIONS
 # =============================================================================
-
-HOUSEHOLD_INVITES_FILE = os.path.join(os.path.dirname(__file__), "data", "household_invites.json")
 
 
 def is_supabase_configured() -> bool:
@@ -1070,12 +903,12 @@ def create_household_role_invite(
     """
     Creates a 16-character invite code for a specific role ('spouse', 'peer', 'family_member').
     Optionally binds the invite code to a pre-created manual member (target_member_id).
-    Persists to Supabase household_invites table when configured, with JSON cache fallback only when offline.
+    Stored in household_invites only (no local file fallback): a failed insert raises.
     """
     import secrets
     from datetime import datetime, timezone, timedelta
 
-    if target_member_id is not None and is_supabase_configured():
+    if target_member_id is not None:
         # FABLE2-API-06: the target must be a dependent (manual member) of this household; the
         # route checked it is a UUID (400). The DB trigger validate_invite_target_member enforces
         # the same rule; checking first answers 404 instead of a refused insert.
@@ -1105,35 +938,19 @@ def create_household_role_invite(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    if is_supabase_configured():
-        client = get_client()
-        try:
-            client.table("household_invites").insert(invite_data).execute()
-        except Exception as exc:
-            # A database refusal is the request's fault (4xx), never a 500 (FABLE2-API-06).
-            from postgrest_compat import db_error_fields
-
-            sqlstate = db_error_fields(exc)["code"]
-            if sqlstate == "23503":
-                raise InviteTargetNotFound() from exc
-            if sqlstate in FINAL_DB_REFUSAL_CODES or sqlstate == "22P02":
-                raise InviteRejectedError(sqlstate) from exc
-            raise
-        return invite_data
-
-    # Local file fallback ONLY when Supabase is not configured
+    client = get_client()
     try:
-        os.makedirs(os.path.dirname(HOUSEHOLD_INVITES_FILE), exist_ok=True)
-        invites = {}
-        if os.path.exists(HOUSEHOLD_INVITES_FILE):
-            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
-                invites = json.load(f)
-        invites[code] = invite_data
-        with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
-            json.dump(invites, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to persist household_invites.json: {e}")
+        client.table("household_invites").insert(invite_data).execute()
+    except Exception as exc:
+        # A database refusal is the request's fault (4xx), never a 500 (FABLE2-API-06).
+        from postgrest_compat import db_error_fields
 
+        sqlstate = db_error_fields(exc)["code"]
+        if sqlstate == "23503":
+            raise InviteTargetNotFound() from exc
+        if sqlstate in FINAL_DB_REFUSAL_CODES or sqlstate == "22P02":
+            raise InviteRejectedError(sqlstate) from exc
+        raise
     return invite_data
 
 
@@ -1142,143 +959,85 @@ def inspect_household_role_invite(invite_code: str) -> dict:
     Retrieves metadata for an invite code: household_id, assigned role, target_member_id, expiry.
     """
     code = invite_code.strip().upper()
-    if is_supabase_configured():
-        try:
-            client = get_client()
-            res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
-            if res and hasattr(res, "data") and res.data:
-                inv = res.data
-                is_valid = True
-                if inv.get("used_by"):
+    # A failed lookup raises (the route answers an error); it is never reported as an invalid code.
+    client = get_client()
+    res = client.table("household_invites").select("*").eq("invite_code", code).maybe_single().execute()
+    if res and hasattr(res, "data") and res.data:
+        inv = res.data
+        is_valid = True
+        if inv.get("used_by"):
+            is_valid = False
+        if inv.get("expires_at"):
+            try:
+                exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
+                if exp < datetime.now(timezone.utc):
                     is_valid = False
-                if inv.get("expires_at"):
-                    try:
-                        exp = datetime.fromisoformat(inv["expires_at"].replace("Z", "+00:00"))
-                        if exp < datetime.now(timezone.utc):
-                            is_valid = False
-                    except Exception:
-                        pass
-                inv["is_valid"] = is_valid
-                target_member_id = inv.get("target_member_id")
-                if target_member_id:
-                    try:
-                        # Only a dependent of the invite's own household is named (FABLE2-API-06).
-                        dep_res = (
-                            client.table("household_dependents").select("name").eq("id", target_member_id)
-                            .eq("household_id", inv.get("household_id")).maybe_single().execute()
-                        )
-                        if dep_res and hasattr(dep_res, "data") and dep_res.data:
-                            inv["target_member_name"] = dep_res.data.get("name")
-                    except Exception as dep_exc:
-                        logger.warning("Could not resolve target_member_name: %s", dep_exc)
-                return inv
-        except Exception as exc:
-            logger.warning("Supabase inspect invite query failed: %s", exc)
-        return {
-            "invite_code": code,
-            "household_id": None,
-            "role": "peer",
-            "target_member_id": None,
-            "target_member_name": None,
-            "is_valid": False,
-        }
-
-    # Fallback ONLY when Supabase is not configured
-    try:
-        if os.path.exists(HOUSEHOLD_INVITES_FILE):
-            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
-                invites = json.load(f)
-                if code in invites:
-                    data = dict(invites[code])
-                    data["is_valid"] = not bool(data.get("used_by"))
-                    return data
-    except Exception:
-        pass
-
+            except Exception:
+                pass
+        inv["is_valid"] = is_valid
+        target_member_id = inv.get("target_member_id")
+        if target_member_id:
+            try:
+                # Only a dependent of the invite's own household is named (FABLE2-API-06).
+                dep_res = (
+                    client.table("household_dependents").select("name").eq("id", target_member_id)
+                    .eq("household_id", inv.get("household_id")).maybe_single().execute()
+                )
+                if dep_res and hasattr(dep_res, "data") and dep_res.data:
+                    inv["target_member_name"] = dep_res.data.get("name")
+            except Exception as dep_exc:
+                logger.warning("Could not resolve target_member_name: %s", dep_exc)
+        return inv
     return {
         "invite_code": code,
         "household_id": None,
         "role": "peer",
         "target_member_id": None,
+        "target_member_name": None,
         "is_valid": False,
     }
 
 
 def claim_household_role_invite(invite_code: str, user_id: str) -> dict:
     """
-    Claims a household invite for a user atomically:
-    1. If Supabase is configured: calls the atomic claim_household_role_invite RPC.
-    2. If Supabase is not configured: claims locally via file cache fallback.
+    Claims a household invite for a user atomically through the claim_household_role_invite RPC
+    (no local file fallback).
     """
     code = invite_code.strip().upper()
 
-    if is_supabase_configured():
-        try:
-            client = get_client()
-            res = client.rpc("claim_household_role_invite", {
-                "p_invite_code": code,
-                "p_user_id": user_id,
-            }).execute()
-            if res and hasattr(res, "data") and isinstance(res.data, dict):
-                data = res.data
-                if not data.get("success"):
-                    message = str(data.get("error") or "Invite code is invalid or expired.")
-                    if "too many failed join attempts" in message.lower():
-                        return {"status": "error", "code": "rate_limited", "error": message}
-                    return {"status": "error", "error": message}
-                return {
-                    "status": "success",
-                    "household_id": data.get("household_id"),
-                    "user_id": user_id,
-                    "linked_member_id": data.get("target_member_id"),
-                    "financial_role": data.get("role"),
-                }
-        except Exception as exc:
-            logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
-            # Never echo raw database errors to the client. The DB lockout (repeated failed
-            # join attempts) is surfaced distinctly so the route can answer 429.
-            if "too many failed join attempts" in str(exc).lower():
-                return {
-                    "status": "error",
-                    "code": "rate_limited",
-                    "error": "Too many failed join attempts. Please try again later.",
-                }
-            return {"status": "error", "error": "Invite code is invalid, expired or could not be claimed."}
-
-    # Fallback ONLY when Supabase is not configured
     try:
-        inv = inspect_household_role_invite(code)
-        if not inv or not inv.get("is_valid", True):
-            return {"status": "error", "error": "Invite code is invalid or expired."}
-        if inv.get("used_by"):
-            return {"status": "error", "error": "Invite code has already been used."}
+        client = get_client()
+        res = client.rpc("claim_household_role_invite", {
+            "p_invite_code": code,
+            "p_user_id": user_id,
+        }).execute()
+    except Exception as exc:
+        logger.error("Supabase claim_household_role_invite RPC error: %s", exc)
+        # Never echo raw database errors to the client. The DB lockout (repeated failed
+        # join attempts) is surfaced distinctly so the route can answer 429.
+        if "too many failed join attempts" in str(exc).lower():
+            return {
+                "status": "error",
+                "code": "rate_limited",
+                "error": "Too many failed join attempts. Please try again later.",
+            }
+        return {"status": "error", "error": "Invite code is invalid, expired or could not be claimed."}
 
-        hid = inv.get("household_id")
-        target_mid = inv.get("target_member_id")
-        role = inv.get("role", "peer")
-
-        if os.path.exists(HOUSEHOLD_INVITES_FILE):
-            with open(HOUSEHOLD_INVITES_FILE, "r", encoding="utf-8") as f:
-                invites = json.load(f)
-            if code in invites and not invites[code].get("used_by"):
-                invites[code]["used_by"] = user_id
-                with open(HOUSEHOLD_INVITES_FILE, "w", encoding="utf-8") as f:
-                    json.dump(invites, f, indent=2)
-            else:
-                return {"status": "error", "error": "Invite code has already been used or expired."}
-
-        return {
-            "status": "success",
-            "household_id": hid,
-            "user_id": user_id,
-            "linked_member_id": target_mid,
-            "financial_role": role,
-        }
-    except Exception as e:
-        logger.error("Failed to claim household invite (fallback): %s", e)
-        return {"status": "error", "error": str(e)}
-
-
+    data = res.data if res is not None and isinstance(getattr(res, "data", None), dict) else None
+    if data is None:
+        return {"status": "error", "error": "Invite code is invalid, expired or could not be claimed."}
+    if not data.get("success"):
+        message = str(data.get("error") or "Invite code is invalid or expired.")
+        if "too many failed join attempts" in message.lower():
+            return {"status": "error", "code": "rate_limited", "error": message}
+        return {"status": "error", "error": message}
+    return {
+        "status": "success",
+        "household_id": data.get("household_id"),
+        "user_id": user_id,
+        "linked_member_id": data.get("target_member_id"),
+        "financial_role": data.get("role"),
+    }
 
 
 def record_household_reimbursement(

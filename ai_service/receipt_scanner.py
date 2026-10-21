@@ -35,6 +35,16 @@ from supabase_client import (
     reallocate_budget,
 )
 
+from chat_parser import resolve_category_in_taxonomy  # noqa: E402
+from preview_token import (  # noqa: E402
+    KIND_RECEIPT,
+    InvalidPreviewToken,
+    PreviewTokenExpired,
+    images_digest,
+    issue_preview_token,
+    text_digest,
+    verify_preview_token,
+)
 from utils import (  # noqa: E402
     build_audit_note,
     litellm_model,
@@ -44,6 +54,14 @@ from utils import (  # noqa: E402
 )
 
 MAX_MERCHANT_LENGTH = 120
+# Low temperature: the OCR is an extraction, and a preview must read the receipt the way any later
+# parse would (PRODUCT-R6; it was 1.0, so a commit could differ from what the user approved).
+OCR_TEMPERATURE = 0.1
+# Keys of a parsed receipt carried in its preview token (model output is not stored verbatim).
+_TOKEN_RECEIPT_KEYS = (
+    "merchant", "total_amount", "vat_amount", "currency", "date", "category_code",
+    "zatca_qr_raw", "zatca_verified", "items",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -388,8 +406,16 @@ Analyze ALL photos together and extract:
 6. Category code (choose best match):
    - OPEX-GROCERY (supermarket, food, grocery)
    - OPEX-DINING (restaurant, cafe, bakery)
-   - OPEX-FUEL (petrol, transport)
+   - OPEX-FUEL (petrol station, fuel)
+   - OPEX-TRANSPORT (car installment, ride hailing, public transport, car maintenance)
    - OPEX-UTILITIES (bills, telecom)
+   - OPEX-HOUSING (rent, annual rent, housing services)
+   - OPEX-EDUCATION (tuition fees, school transport, school uniforms, books and supplies)
+   - OPEX-DOMESTIC-HELP (maid salary, driver salary, recruitment / visa)
+   - OPEX-FAMILY-SUPPORT (support for parents or relatives)
+   - OPEX-CHARITY (sadaqah, zakat)
+   - OPEX-INSURANCE (car, health, home insurance)
+   - OPEX-REMITTANCE (family remittance, transfer fees)
    - OPEX-SHOPPING (retail, electronics, clothes)
    - OPEX-ENTERTAINMENT (movies, games)
    - OPEX-HEALTH (pharmacy, hospital)
@@ -450,7 +476,7 @@ def parse_receipt_images(
         model=model,
         messages=[{"role": "user", "content": content}],
         response_format={"type": "json_object"},
-        temperature=1.0,
+        temperature=OCR_TEMPERATURE,
     )
 
     result_json = response.choices[0].message.content
@@ -547,6 +573,79 @@ def parse_receipt_image(
     return parse_receipt_images([image_base64], qr_code_raw=qr_code_raw)
 
 
+def _receipt_from_preview_token(
+    token: Optional[str],
+    household_id: str,
+    user_id: Optional[str],
+    photos_digest: str,
+    qr_code_raw: Optional[str],
+) -> tuple:
+    """(signed OCR result, previewed QR text) for this request, or (None, None) to parse again."""
+    if token is None:
+        return None, None
+    check = verify_preview_token(token, KIND_RECEIPT, user_id, household_id)  # InvalidPreviewToken
+    if not check.valid:
+        logger.info("Receipt preview token %s: parsing again.", check.status)
+        return None, None
+    if photos_digest and check.binding.get("img") != photos_digest:
+        logger.info("Receipt photos differ from the previewed ones: parsing again.")
+        return None, None
+    if qr_code_raw and check.binding.get("qr") != text_digest(qr_code_raw):
+        logger.info("Receipt QR code differs from the previewed one: parsing again.")
+        return None, None
+    parsed = check.payload.get("parsed")
+    token_qr = check.payload.get("qr")
+    if not isinstance(parsed, dict) or (token_qr is not None and not isinstance(token_qr, str)):
+        raise InvalidPreviewToken("payload no longer valid")
+    return dict(parsed), token_qr
+
+
+def _issue_receipt_token(
+    parsed: Dict[str, Any],
+    qr_code_raw: Optional[str],
+    household_id: str,
+    user_id: Optional[str],
+    photos_digest: str,
+) -> Optional[str]:
+    payload = {
+        "parsed": {k: parsed.get(k) for k in _TOKEN_RECEIPT_KEYS if parsed.get(k) is not None},
+        "qr": qr_code_raw or None,
+    }
+    binding = {"img": photos_digest, "qr": text_digest(qr_code_raw)}
+    return issue_preview_token(KIND_RECEIPT, user_id, household_id, payload, binding)
+
+
+def _store_receipt_photo(household_id: str, tx_id: str, images_base64: List[str]) -> Optional[str]:
+    """
+    Upload the (stitched) photo under the household's folder and link it to the transaction.
+    A failure is logged and leaves the expense without a photo; it never undoes the expense.
+    """
+    import time
+    import uuid
+
+    try:
+        client = get_client()
+        raw_bytes = stitch_images_vertically(images_base64)
+        storage_path = f"{household_id}/{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}.jpg"
+        client.storage.from_("receipts").upload(
+            storage_path,
+            raw_bytes,
+            file_options={"content-type": "image/jpeg", "upsert": "true"},
+        )
+    except Exception as upload_err:
+        logger.warning("Could not upload the receipt photo of transaction %s: %s", tx_id, upload_err)
+        return None
+    try:
+        client.table("transactions").update({"receipt_url": storage_path}).eq("id", tx_id).eq(
+            "household_id", household_id
+        ).execute()
+    except Exception as link_err:
+        logger.warning("Uploaded %s but could not link it to transaction %s: %s", storage_path, tx_id, link_err)
+        return None
+    logger.info("Stored receipt photo (%d shots) at %s for transaction %s", len(images_base64), storage_path, tx_id)
+    return storage_path
+
+
 def process_receipt_scan(
     household_id: str,
     images_base64: Optional[List[str]] = None,
@@ -563,6 +662,7 @@ def process_receipt_scan(
     beneficiary: Optional[str] = None,
     override_nafaqah_class: Optional[str] = None,
     override_nafaqah_spouse_id: Optional[str] = None,
+    preview_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -577,6 +677,13 @@ def process_receipt_scan(
     unless she chooses her allowance (``wife_personal``) or says her husband paid ('none'). The
     preview returns the suggestion; the commit stores the class (resolve_expense_nafaqah raises
     InvalidNafaqahRequest for a contradicting choice or a missing wife).
+
+    One vision call per receipt (PRODUCT-R6): the preview (and a duplicate prompt) returns a signed
+    ``preview_token`` holding the validated OCR result. A commit that sends it back needs no photo
+    and makes no model call; photos sent with it are only stored (they must be the previewed ones,
+    otherwise the receipt is parsed again). A tampered token raises InvalidPreviewToken; an expired
+    or unverifiable one re-parses, or raises PreviewTokenExpired when there is nothing to parse.
+    The photo is uploaded to Storage only after the transaction row exists (PRODUCT-R9).
     """
     images_base64 = images_base64 or []
 
@@ -588,27 +695,18 @@ def process_receipt_scan(
     except ValueError as invalid:
         return {"status": "error", "message": str(invalid)}
 
-    # If client could not upload directly (e.g. Storage RLS restriction), upload server-side using service role
-    # IMPORTANT: Only upload when committing/saving (not during preview) and if client hasn't already uploaded
-    if not preview_only and not receipt_url and images_base64:
-        try:
-            import time, uuid
-            client = get_client()
-            raw_bytes = stitch_images_vertically(images_base64)
-            ts = int(time.time() * 1000)
-            u = uuid.uuid4().hex[:8]
-            storage_path = f"{household_id}/{ts}_{u}.jpg"
-            client.storage.from_("receipts").upload(
-                storage_path,
-                raw_bytes,
-                file_options={"content-type": "image/jpeg", "upsert": "true"},
-            )
-            receipt_url = storage_path
-            logger.info("Auto-uploaded receipt photo (stitched %d shots) to storage path: %s", len(images_base64), receipt_url)
-        except Exception as upload_err:
-            logger.warning("Could not auto-upload receipt image: %s", upload_err)
+    photos_digest = images_digest(images_base64)
+    token_parsed, token_qr = _receipt_from_preview_token(
+        preview_token, household_id, user_id, photos_digest, qr_code_raw,
+    )
+    if token_parsed is None and preview_token is not None and not images_base64 and not qr_code_raw:
+        raise PreviewTokenExpired("the preview expired; scan the receipt again")
+    if token_parsed is not None and not qr_code_raw:
+        qr_code_raw = token_qr  # the QR text the preview decoded
 
-    if images_base64:
+    if token_parsed is not None:
+        parsed = token_parsed
+    elif images_base64:
         try:
             if len(images_base64) == 1:
                 parsed = parse_receipt_image(images_base64[0], qr_code_raw=qr_code_raw)
@@ -789,6 +887,7 @@ def process_receipt_scan(
         ts_suffix = f" on {cand_ts}" if cand_ts else ""
         return {
             "status": "duplicate_candidate",
+            "preview_token": _issue_receipt_token(parsed, qr_code_raw, household_id, user_id, photos_digest),
             "candidate_transaction_id": candidate["id"],
             "candidate_merchant": candidate.get("merchant"),
             "candidate_amount": candidate.get("amount"),
@@ -824,6 +923,10 @@ def process_receipt_scan(
     matched = match_category(merchant, codes)
     if matched:
         category_code = matched.code
+    else:
+        # A model code missing from the taxonomy (a new system code before its migration, or a made
+        # up one) becomes its legacy code / Misc instead of a refused insert (PRODUCT-R4).
+        category_code = resolve_category_in_taxonomy(category_code, codes)
 
     # Check if category is inactive for this household
     is_inactive = False
@@ -839,6 +942,7 @@ def process_receipt_scan(
     if preview_only:
         return {
             "status": "preview",
+            "preview_token": _issue_receipt_token(parsed, qr_code_raw, household_id, user_id, photos_digest),
             "merchant": merchant,
             "amount": total_amount,
             "vat_amount": float(parsed.get("vat_amount") or 0.0),
@@ -918,6 +1022,11 @@ def process_receipt_scan(
 
     if items:
         enrich_transaction_items(tx_id, items, household_id=household_id)
+
+    # The photo is stored only now that the row exists (PRODUCT-R9): a parse failure, a duplicate
+    # prompt or a refused insert leaves nothing in Storage.
+    if not receipt_url and images_base64:
+        receipt_url = _store_receipt_photo(household_id, tx_id, images_base64)
 
     return {
         "status": "success",

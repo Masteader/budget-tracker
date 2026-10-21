@@ -413,86 +413,70 @@ class InstallmentService:
     @classmethod
     def recalculate_budgets(cls, household_id: str, cycle_key: Optional[str] = None) -> None:
         """
-        Recalculates spent_amount for all categories in a household from transactions,
-        scoped to the specified cycle (or current cycle if None).
-        Also ensures budget rows exist for any category that has active transactions.
+        Recompute ``budgets.spent_amount`` of one salary cycle (``cycle_key``, default the current
+        one) from its transactions. The transaction triggers keep the column current, so this is
+        a repair tool (POST /budgets/recalculate, a payday change), never run per insert.
+
+        It calls the SQL function ``recompute_budget_spent(p_household_id, p_cycle_keys)``
+        (migration 20261020800000; SECURITY DEFINER, executable by service_role only), which applies
+        the trigger rules in one statement: settlements and ``wife_personal`` rows are not category
+        spending. When the function is missing (migration not applied yet) the same computation
+        runs here, reading only that cycle's transactions and budget rows. Errors are logged and
+        swallowed: callers treat the recalculation as best effort.
         """
+        from decimal import Decimal
+
         try:
-            sb = supabase_client.get_client()
-            from salary_cycle import get_cycle_for_date, get_cycle_info_for_key
+            from salary_cycle import get_cycle_for_date
             from supabase_client import get_household_payday
 
-            payday_day = get_household_payday(household_id)
-            current_cycle = get_cycle_for_date(payday_day=payday_day)
-            target_key = cycle_key or current_cycle["cycle_key"]
-            cycle_info = get_cycle_info_for_key(target_key, payday_day=payday_day)
+            target_key = cycle_key or get_cycle_for_date(payday_day=get_household_payday(household_id))["cycle_key"]
+            sb = supabase_client.get_client()
+        except Exception as e:
+            logger.warning("Could not recalculate budgets for household %s: %s", household_id, e)
+            return
 
-            # Query transactions in this cycle
-            start_ts = f"{cycle_info['cycle_start']}T00:00:00"
-            end_ts = f"{cycle_info['cycle_end']}T23:59:59"
-            tx_res = (
+        try:
+            sb.rpc("recompute_budget_spent", {"p_household_id": household_id, "p_cycle_keys": [target_key]}).execute()
+            logger.info("Recomputed budgets for household %s cycle %s (SQL)", household_id, target_key)
+            return
+        except Exception as rpc_err:
+            logger.info("recompute_budget_spent unavailable (%s); recalculating cycle %s in Python.", rpc_err, target_key)
+
+        try:
+            tx_rows = (
                 sb.table("transactions")
-                .select("id, category_code, amount, cycle_key, timestamp, is_settlement, nafaqah_class")
+                .select("category_code, amount, is_settlement, nafaqah_class")
                 .eq("household_id", household_id)
+                .eq("cycle_key", target_key)
                 .execute()
+                .data
+                or []
             )
-
-            # Filter by cycle_key or date range
-            spent_by_cat: Dict[str, float] = {}
-            for t in (tx_res.data or []):
+            spent_by_cat: Dict[str, Decimal] = {}
+            for t in tx_rows:
                 if t.get("is_settlement"):
                     continue  # a settlement payment between members is not spending
                 if t.get("nafaqah_class") == "wife_personal":
                     continue  # charged to the wife's allowance only (owner decision, FABLE-LOGIC-06)
-                t_cycle = t.get("cycle_key")
-                t_ts = t.get("timestamp") or ""
-                in_cycle = (t_cycle == target_key) or (not t_cycle and start_ts <= t_ts <= end_ts)
-                if in_cycle:
-                    cat = t.get("category_code") or "OPEX-MISC"
-                    spent_by_cat[cat] = spent_by_cat.get(cat, 0.0) + float(t.get("amount") or 0.0)
+                cat = t.get("category_code")
+                spent_by_cat[cat] = spent_by_cat.get(cat, Decimal("0")) + Decimal(str(t.get("amount") or 0))
 
-            # Fetch existing budgets for this cycle
-            budgets_res = (
+            budget_rows = (
                 sb.table("budgets")
-                .select("*")
+                .select("id, category_code")
                 .eq("household_id", household_id)
+                .eq("cycle_key", target_key)
                 .execute()
+                .data
+                or []
             )
-            all_budgets = budgets_res.data or []
-            cycle_budgets = {
-                b["category_code"]: b for b in all_budgets
-                if (b.get("cycle_key") == target_key or (not b.get("cycle_key") and b.get("month", "")[:7] == target_key))
-            }
-
-            # Update existing budget rows
-            for cat, b in cycle_budgets.items():
-                actual_spent = round(spent_by_cat.get(cat, 0.0), 2)
-                sb.table("budgets").update({
-                    "spent_amount": actual_spent,
-                    "cycle_key": target_key,
-                }).eq("id", b["id"]).execute()
-
-            # For any category with spending that doesn't have a budget row yet, create one!
-            month_str = f"{target_key}-01"
-            for cat, spent in spent_by_cat.items():
-                if cat not in cycle_budgets:
-                    new_budget = {
-                        "household_id": household_id,
-                        "category_code": cat,
-                        "cycle_key": target_key,
-                        "month": month_str,
-                        "allocated_amount": 0.0,
-                        "spent_amount": round(spent, 2),
-                        "is_active": True,
-                        "previous_cycle_delta": 0.0,
-                    }
-                    try:
-                        sb.table("budgets").insert(new_budget).execute()
-                        logger.info("Auto-created budget row for cat=%s cycle=%s spent=%.2f", cat, target_key, spent)
-                    except Exception as ins_err:
-                        logger.warning("Could not auto-insert budget row for cat=%s: %s", cat, ins_err)
-
-            logger.info("Recalculated budgets for household %s cycle %s", household_id, target_key)
+            for b in budget_rows:
+                spent = max(Decimal("0"), spent_by_cat.get(b.get("category_code"), Decimal("0")))
+                sb.table("budgets").update({"spent_amount": float(spent.quantize(Decimal("0.01")))}).eq(
+                    "id", b["id"]
+                ).execute()
+            logger.info("Recalculated budgets for household %s cycle %s (Python)", household_id, target_key)
         except Exception as e:
             logger.warning("Could not recalculate budgets for household %s: %s", household_id, e)
 

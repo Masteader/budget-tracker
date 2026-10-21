@@ -7,7 +7,6 @@
 **/*.py[cod]
 .pytest_cache/
 tests/
-data/*.json
 docker-compose.yml
 Dockerfile
 .dockerignore

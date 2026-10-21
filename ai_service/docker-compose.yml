@@ -20,6 +20,7 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       # ── Security ──────────────────────────────────────────────────────────
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      PREVIEW_TOKEN_SECRET: ${PREVIEW_TOKEN_SECRET:-}
       # ── Server ────────────────────────────────────────────────────────────
       PORT: 8000
       RELOAD: "false"

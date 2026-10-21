@@ -33,7 +33,10 @@ def configure_env(gateway_url: str) -> None:
 
 
 def load_app(data_dir: Path):
-    """Import ``main`` and point the app's local JSON caches at a temp dir (repo files untouched)."""
+    """
+    Import ``main``. ``data_dir`` is a scratch directory for the app (it keeps no local files since
+    the JSON fallbacks were removed; the database is the only store).
+    """
     ai_dir = str(config.AI_SERVICE_DIR)
     if ai_dir not in sys.path:
         sys.path.insert(0, ai_dir)
@@ -41,11 +44,7 @@ def load_app(data_dir: Path):
 
     dotenv.load_dotenv = lambda *a, **k: False  # never read a developer .env during e2e
 
-    import supabase_client
-
     data_dir.mkdir(parents=True, exist_ok=True)
-    supabase_client.HOUSEHOLD_SETTINGS_FILE = str(data_dir / "household_settings.json")
-    supabase_client.HOUSEHOLD_INVITES_FILE = str(data_dir / "household_invites.json")
 
     import main
 

@@ -61,9 +61,8 @@ A full run (rebuild included) takes about two minutes.
 `SUPABASE_JWT_SECRET` = the shared HS256 test secret (also PostgREST's `jwt-secret`),
 `ENV=development`, `REDIS_URL` empty (in-memory limiter + database quota), every provider key
 empty, `LITELLM_LOCAL_MODEL_COST_MAP=True` (litellm otherwise downloads its price map at import).
-`dotenv.load_dotenv` is disabled so a developer `.env` is never read, and the app's local JSON
-caches (`ai_service/data/*.json`) are redirected to a temp directory so the repository is not
-modified.
+`dotenv.load_dotenv` is disabled so a developer `.env` is never read. The app keeps no local
+files (the JSON / in-memory fallbacks were removed; the database is the only store).
 
 ## Layout
 
