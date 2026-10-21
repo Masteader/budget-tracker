@@ -35,6 +35,7 @@ from supabase_client import (
     reallocate_budget,
 )
 
+from chat_parser import resolve_category_in_taxonomy  # noqa: E402
 from preview_token import (  # noqa: E402
     KIND_RECEIPT,
     InvalidPreviewToken,
@@ -405,8 +406,16 @@ Analyze ALL photos together and extract:
 6. Category code (choose best match):
    - OPEX-GROCERY (supermarket, food, grocery)
    - OPEX-DINING (restaurant, cafe, bakery)
-   - OPEX-FUEL (petrol, transport)
+   - OPEX-FUEL (petrol station, fuel)
+   - OPEX-TRANSPORT (car installment, ride hailing, public transport, car maintenance)
    - OPEX-UTILITIES (bills, telecom)
+   - OPEX-HOUSING (rent, annual rent, housing services)
+   - OPEX-EDUCATION (tuition fees, school transport, school uniforms, books and supplies)
+   - OPEX-DOMESTIC-HELP (maid salary, driver salary, recruitment / visa)
+   - OPEX-FAMILY-SUPPORT (support for parents or relatives)
+   - OPEX-CHARITY (sadaqah, zakat)
+   - OPEX-INSURANCE (car, health, home insurance)
+   - OPEX-REMITTANCE (family remittance, transfer fees)
    - OPEX-SHOPPING (retail, electronics, clothes)
    - OPEX-ENTERTAINMENT (movies, games)
    - OPEX-HEALTH (pharmacy, hospital)
@@ -914,6 +923,10 @@ def process_receipt_scan(
     matched = match_category(merchant, codes)
     if matched:
         category_code = matched.code
+    else:
+        # A model code missing from the taxonomy (a new system code before its migration, or a made
+        # up one) becomes its legacy code / Misc instead of a refused insert (PRODUCT-R4).
+        category_code = resolve_category_in_taxonomy(category_code, codes)
 
     # Check if category is inactive for this household
     is_inactive = False

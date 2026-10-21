@@ -135,20 +135,20 @@ Categories and Sub-categories available:
 - OPEX-GROCERY: meat, vegetables_fruit, dairy_eggs, snacks_chips, beverages, pantry_staples, cleaning_household (Tamimi, Danube, Panda, Carrefour, Lulu, Othaim, بنده, العثيم, التميمي, مقاضي)
 - OPEX-DINING: restaurants_dinners, coffee_bakeries, delivery_apps (Albaik, McDonald's, Beit Al Shawarma, Dunkin, Starbucks, Jahez, Hungerstation, Mrsool, البيك, بيت الشاورما, شاورما, بروستد, جاهز, هنقرستيشن)
 - OPEX-FUEL: gas_fuel, car_maintenance (Aramco, Sahel, SASCO, Aldrees, ساسكو, الدريس, بنزين 91, بنزين 95, زيت, صيانة السيارة)
-- OPEX-TRANSPORT: ride-hailing, taxi, public transport, car installment (Uber, Careem, Bolt, اوبر, كريم, تاكسي, مواصلات, قسط السيارة, ٹیکسی)
+- OPEX-TRANSPORT: car_installment, ride_hailing, public_transport, car_maintenance (Uber, Careem, Bolt, اوبر, كريم, تاكسي, مواصلات, قسط السيارة, ٹیکسی)
 - OPEX-UTILITIES: electricity_sec, fiber_internet, mobile_sims, water_municipal (STC, Mobily, Zain, SEC, الكهرباء, المياه)
-- OPEX-HOUSING: rent and housing costs (ايجار, إيجار, الإيجار, Ejar, rent, کرایہ)
-- OPEX-EDUCATION: school and university fees, tuition, nursery (مدرسة, رسوم مدرسية, جامعة, حضانة, school fees, اسکول فیس)
-- OPEX-DOMESTIC-HELP: maid, driver, nanny salaries and recruitment (خادمة, شغالة, سائق, سواق, عاملة, مساند, maid, driver, ڈرائیور, ماسی)
-- OPEX-FAMILY-SUPPORT: money given to parents or relatives (الوالدين, مساعدة الأهل, لأهلي, parents, والدین)
-- OPEX-CHARITY: sadaqah, zakat, donations (صدقة, زكاة, خيرات, تبرع, sadaqah, zakat, صدقہ, زکوٰۃ, خیرات)
-- OPEX-INSURANCE: car, medical, home insurance (تأمين, Tameeni, تأميني, Tawuniya, Bupa, insurance, انشورنس, بیمہ)
-- OPEX-REMITTANCE: money sent abroad (حوالة, تحويل للخارج, Western Union, Enjaz, remittance, ترسیل زر)
+- OPEX-HOUSING: housing_rent, annual_rent, housing_services (ايجار, إيجار, الإيجار, Ejar, rent, کرایہ)
+- OPEX-EDUCATION: tuition_fees, school_transport, school_uniforms, books_supplies (مدرسة, رسوم مدرسية, جامعة, حضانة, school fees, اسکول فیس)
+- OPEX-DOMESTIC-HELP: maid_salary, driver_salary, recruitment_visa (خادمة, شغالة, سائق, سواق, عاملة, مساند, maid, driver, ڈرائیور, ماسی)
+- OPEX-FAMILY-SUPPORT: parents_support, relatives_support (الوالدين, مساعدة الأهل, لأهلي, parents, والدین)
+- OPEX-CHARITY: sadaqah, zakat (صدقة, زكاة, خيرات, تبرع, sadaqah, zakat, صدقہ, زکوٰۃ, خیرات)
+- OPEX-INSURANCE: car_insurance, health_insurance, home_insurance (تأمين, Tameeni, تأميني, Tawuniya, Bupa, insurance, انشورنس, بیمہ)
+- OPEX-REMITTANCE: family_remittance, transfer_fees (حوالة, تحويل للخارج, Western Union, Enjaz, remittance, ترسیل زر)
 - OPEX-SHOPPING: clothing_fashion, electronics_gadgets, home_furniture (Jarir, Extra, Noon, Amazon, Apple, Ikea, جرير, اكسترا, ايكيا)
 - OPEX-HEALTH: prescriptions_meds, clinics_dental (Nahdi, Al Dawaa, Habib, النهدي, الدواء, صيدلية, عيادة)
 - OPEX-ENTERTAINMENT: Movies, cinemas, streaming, gaming (Muvi, Vox, Netflix, PlayStation, Shahid)
 - OPEX-MISC: Anything else that doesn't fit above (house cleaning, maintenance).
-For the new categories (OPEX-TRANSPORT ... OPEX-REMITTANCE) leave sub_category null.
+Petrol stays OPEX-FUEL (gas_fuel); taxis, Uber/Careem, buses and car installments are OPEX-TRANSPORT.
 
 SAUDI COLLOQUIAL ARABIC & 2D ATTRIBUTION SUPPORT:
 - "paid_by" (who actually paid):
@@ -173,23 +173,23 @@ Expense Input examples:
 -> merchant: "Nahdi", total_amount: 85.0, category_code: "OPEX-HEALTH", sub_category: "prescriptions_meds", paid_by: "me", beneficiary: "Sarah", items: [{"name": "حفاضات", "quantity": 1, "price": 85.0, "sub_category": "prescriptions_meds"}]
 
 "دفعت ايجار الشقة 3000 ريال"
--> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: null, paid_by: "me", beneficiary: "both", items: [{"name": "ايجار الشقة", "quantity": 1, "price": 3000.0}]
+-> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: "housing_rent", paid_by: "me", beneficiary: "both", items: [{"name": "ايجار الشقة", "quantity": 1, "price": 3000.0}]
 
 URDU (اردو) inputs are common among residents; parse them the same way ("میں نے دیا / میں نے خریدا" -> paid_by "me", "بیوی نے دیا" -> paid_by "partner", "گھر کے لیے" -> beneficiary "both", "بچوں کے لیے" -> beneficiary "children"):
 "پانڈا سے گھر کا سودا 250 ریال میں خریدا"
 -> merchant: "Panda", total_amount: 250.0, category_code: "OPEX-GROCERY", sub_category: "pantry_staples", paid_by: "me", beneficiary: "both", items: [{"name": "گھر کا سودا", "quantity": 1, "price": 250.0, "sub_category": "pantry_staples"}]
 "مکان کا کرایہ 3000 ریال دیا"
--> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: null, paid_by: "me", beneficiary: "both", items: [{"name": "مکان کا کرایہ", "quantity": 1, "price": 3000.0}]
+-> merchant: "Rent", total_amount: 3000.0, category_code: "OPEX-HOUSING", sub_category: "housing_rent", paid_by: "me", beneficiary: "both", items: [{"name": "مکان کا کرایہ", "quantity": 1, "price": 3000.0}]
 "بچوں کی اسکول فیس 1500 ریال"
--> merchant: "School", total_amount: 1500.0, category_code: "OPEX-EDUCATION", sub_category: null, paid_by: "me", beneficiary: "children", items: [{"name": "اسکول فیس", "quantity": 1, "price": 1500.0}]
+-> merchant: "School", total_amount: 1500.0, category_code: "OPEX-EDUCATION", sub_category: "tuition_fees", paid_by: "me", beneficiary: "children", items: [{"name": "اسکول فیس", "quantity": 1, "price": 1500.0}]
 "پاکستان گھر والوں کو ترسیل زر 1200 ریال"
--> merchant: "Remittance", total_amount: 1200.0, category_code: "OPEX-REMITTANCE", sub_category: null, paid_by: "me", beneficiary: "me", items: [{"name": "ترسیل زر", "quantity": 1, "price": 1200.0}]
+-> merchant: "Remittance", total_amount: 1200.0, category_code: "OPEX-REMITTANCE", sub_category: "family_remittance", paid_by: "me", beneficiary: "me", items: [{"name": "ترسیل زر", "quantity": 1, "price": 1200.0}]
 "ڈرائیور کی تنخواہ 1800 ریال"
--> merchant: "Driver", total_amount: 1800.0, category_code: "OPEX-DOMESTIC-HELP", sub_category: null, paid_by: "me", beneficiary: "both", items: [{"name": "ڈرائیور کی تنخواہ", "quantity": 1, "price": 1800.0}]
+-> merchant: "Driver", total_amount: 1800.0, category_code: "OPEX-DOMESTIC-HELP", sub_category: "driver_salary", paid_by: "me", beneficiary: "both", items: [{"name": "ڈرائیور کی تنخواہ", "quantity": 1, "price": 1800.0}]
 "کریم ٹیکسی 35 ریال، بیوی نے دیا"
--> merchant: "Careem", total_amount: 35.0, category_code: "OPEX-TRANSPORT", sub_category: null, paid_by: "partner", beneficiary: "partner", items: [{"name": "ٹیکسی", "quantity": 1, "price": 35.0}]
+-> merchant: "Careem", total_amount: 35.0, category_code: "OPEX-TRANSPORT", sub_category: "ride_hailing", paid_by: "partner", beneficiary: "partner", items: [{"name": "ٹیکسی", "quantity": 1, "price": 35.0}]
 "مسجد کے لیے صدقہ 100 ریال"
--> merchant: "Sadaqah", total_amount: 100.0, category_code: "OPEX-CHARITY", sub_category: null, paid_by: "me", beneficiary: "me", items: [{"name": "صدقہ", "quantity": 1, "price": 100.0}]
+-> merchant: "Sadaqah", total_amount: 100.0, category_code: "OPEX-CHARITY", sub_category: "sadaqah", paid_by: "me", beneficiary: "me", items: [{"name": "صدقہ", "quantity": 1, "price": 100.0}]
 
 Return STRICTLY valid JSON conforming to:
 {
@@ -321,6 +321,57 @@ _NEW_CATEGORY_CUES = (
 )
 _ARABIC_LETTER = "\u0600-\u06FF"
 
+# Sub-codes of the new categories (cost_control_sub_categories, migration 20261021000000): the
+# first sub-code whose cues match wins, else the category's default (last entry, no cues).
+NEW_CATEGORY_SUB_CODES = {
+    OPEX_HOUSING: (
+        ("annual_rent", ("annual rent", "yearly rent", "سنوي", "السنوي", "سنويا", "سنة كاملة", "سالانہ")),
+        ("housing_services", ("maintenance", "service charge", "صيانة", "خدمات", "حارس", "مرافق", "مینٹیننس")),
+        ("housing_rent", ()),
+    ),
+    OPEX_EDUCATION: (
+        ("school_transport", ("school bus", "school transport", "باص المدرسة", "باص", "نقل مدرسي", "توصيل المدرسة",
+                              "اسکول وین", "وین")),
+        ("school_uniforms", ("uniform", "uniforms", "زي مدرسي", "الزي المدرسي", "مريول", "یونیفارم")),
+        ("books_supplies", ("books", "stationery", "supplies", "كتب", "قرطاسية", "ادوات مدرسية", "أدوات مدرسية",
+                            "کتابیں", "کاپیاں")),
+        ("tuition_fees", ()),
+    ),
+    OPEX_DOMESTIC_HELP: (
+        ("recruitment_visa", ("recruitment", "visa", "musaned", "استقدام", "تأشيرة", "تاشيرة", "مساند", "ویزا")),
+        ("driver_salary", ("driver", "سائق", "سواق", "سواقنا", "ڈرائیور")),
+        ("maid_salary", ()),
+    ),
+    OPEX_FAMILY_SUPPORT: (
+        ("relatives_support", ("relatives", "my brother", "my sister", "اقارب", "أقارب", "أخوي", "اخوي", "أختي",
+                               "اختي", "لأخي", "لاخي", "خالتي", "عمتي", "رشتہ دار", "بھائی", "بہن")),
+        ("parents_support", ()),
+    ),
+    OPEX_CHARITY: (
+        ("zakat", ("zakat", "zakah", "زكاة", "زكاه", "زكاة المال", "زکوٰۃ", "زکات", "زکوة")),
+        ("sadaqah", ()),
+    ),
+    OPEX_TRANSPORT: (
+        ("car_installment", ("car installment", "car loan", "قسط السيارة", "قسط سيارة", "تمويل السيارة",
+                             "گاڑی کی قسط")),
+        ("public_transport", ("bus", "metro", "train", "باص", "حافلة", "مترو", "قطار", "ٹرین")),
+        ("car_maintenance", ("maintenance", "oil change", "tyres", "صيانة", "زيت", "كفرات", "ورشة",
+                             "گاڑی کی مرمت")),
+        ("ride_hailing", ()),
+    ),
+    OPEX_INSURANCE: (
+        ("health_insurance", ("medical", "health", "bupa", "medgulf", "طبي", "صحي", "بوبا", "میڈیکل", "صحت")),
+        ("home_insurance", ("home insurance", "house insurance", "تأمين المنزل", "تأمين البيت", "تامين المنزل",
+                            "گھر کی انشورنس")),
+        ("car_insurance", ()),
+    ),
+    OPEX_REMITTANCE: (
+        ("transfer_fees", ("transfer fee", "transfer fees", "رسوم التحويل", "رسوم حوالة", "عمولة التحويل",
+                           "عمولة", "ٹرانسفر فیس")),
+        ("family_remittance", ()),
+    ),
+}
+
 
 def _cue_in(text: str, cue: str) -> bool:
     """Whether ``cue`` occurs in ``text`` as a word (see _NEW_CATEGORY_CUES)."""
@@ -333,6 +384,18 @@ def _cue_in(text: str, cue: str) -> bool:
     stem = cue[2:] if cue.startswith("ال") and len(cue) > 4 else cue
     pattern = rf"(?<![{_ARABIC_LETTER}])(?:[وبلف])?(?:ال|لل)?{re.escape(stem)}(?![{_ARABIC_LETTER}])"
     return re.search(pattern, text) is not None
+
+
+def new_category_sub_code(category_code: str, text: str) -> Optional[str]:
+    """The sub-code of a new category for the text (its default when no cue matches)."""
+    subs = NEW_CATEGORY_SUB_CODES.get(category_code)
+    if not subs:
+        return None
+    lower = text.lower()
+    for sub_code, cues in subs:
+        if not cues or any(_cue_in(lower, cue) for cue in cues):
+            return sub_code
+    return subs[-1][0]
 
 
 def new_category_for_text(text: str) -> Optional[str]:
@@ -597,8 +660,10 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             cat_code = "OPEX-MISC"
 
     # Derive sub-category
-    sub_cat = None
-    if cat_code == "OPEX-DINING":
+    sub_cat = new_category_sub_code(cat_code, raw)
+    if sub_cat:
+        pass
+    elif cat_code == "OPEX-DINING":
         if any(w in lower for w in ("كافيه", "قهوة", "شاي", "كوفي", "ايس لاتيه", "حلا", "كيك", "دونات", "كرواسون", "مخبز", "coffee", "cafe", "starbucks", "dunkin")):
             sub_cat = "coffee_bakeries"
         elif any(w in lower for w in ("جاهز", "هنقرستيشن", "مرسول", "تويو", "jahez", "hungerstation", "mrsool", "toyou")):

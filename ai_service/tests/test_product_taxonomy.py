@@ -137,3 +137,89 @@ def test_chat_commit_uses_legacy_code_when_new_code_is_missing(fake_supabase):
     fake_supabase.seed("households", [{"id": hh, "payday_day": 27}])
     res = chat_parser.process_chat_transaction(hh, "دفعت ايجار الشقة 3000 ريال", user_id=None, preview_only=True)
     assert res["category_code"] == "OPEX-UTILITIES"
+    assert res["sub_category"] != "annual_rent"  # the new code's sub-code is not kept on the legacy code
+
+
+# Sub-codes of migration 20261021000000 (cost_control_sub_categories).
+SUB_CODES = {
+    "OPEX-HOUSING": {"housing_rent", "annual_rent", "housing_services"},
+    "OPEX-EDUCATION": {"tuition_fees", "school_transport", "school_uniforms", "books_supplies"},
+    "OPEX-DOMESTIC-HELP": {"maid_salary", "driver_salary", "recruitment_visa"},
+    "OPEX-FAMILY-SUPPORT": {"parents_support", "relatives_support"},
+    "OPEX-CHARITY": {"sadaqah", "zakat"},
+    "OPEX-TRANSPORT": {"car_installment", "ride_hailing", "public_transport", "car_maintenance"},
+    "OPEX-INSURANCE": {"car_insurance", "health_insurance", "home_insurance"},
+    "OPEX-REMITTANCE": {"family_remittance", "transfer_fees"},
+}
+
+
+def test_sub_code_table_matches_the_migration():
+    assert {code: {s for s, _ in subs} for code, subs in chat_parser.NEW_CATEGORY_SUB_CODES.items()} == SUB_CODES
+    for code, subs in SUB_CODES.items():
+        line = next(l for l in SYSTEM_PROMPT.splitlines() if l.startswith(f"- {code}:"))
+        for sub in subs:
+            assert sub in line, (code, sub)
+
+
+def test_receipt_prompt_lists_the_new_codes():
+    import receipt_scanner
+
+    for code in NEW_CODES:
+        assert f"- {code} (" in receipt_scanner.RECEIPT_PROMPT, code
+
+
+@pytest.mark.parametrize("text, code, sub", [
+    ("دفعت ايجار الشقة 3000 ريال", "OPEX-HOUSING", "housing_rent"),
+    ("الإيجار السنوي 36000 ريال", "OPEX-HOUSING", "annual_rent"),
+    ("رسوم مدرسية للعيال 4000 ريال", "OPEX-EDUCATION", "tuition_fees"),
+    ("باص المدرسة 300 ريال", "OPEX-EDUCATION", "school_transport"),
+    ("school uniforms 250 sar", "OPEX-EDUCATION", "school_uniforms"),
+    ("كتب وقرطاسية المدرسة 180 ريال", "OPEX-EDUCATION", "books_supplies"),
+    ("راتب الخادمة 1500 ريال", "OPEX-DOMESTIC-HELP", "maid_salary"),
+    ("سائق 1800 ريال", "OPEX-DOMESTIC-HELP", "driver_salary"),
+    ("رسوم استقدام عاملة عبر مساند 9000 ريال", "OPEX-DOMESTIC-HELP", "recruitment_visa"),
+    ("مساعدة الأهل 1000 ريال", "OPEX-FAMILY-SUPPORT", "parents_support"),
+    ("مساعدة الاهل أخوي 500 ريال", "OPEX-FAMILY-SUPPORT", "relatives_support"),
+    ("صدقة 100 ريال", "OPEX-CHARITY", "sadaqah"),
+    ("زكاة المال 2500", "OPEX-CHARITY", "zakat"),
+    ("اوبر للدوام 35 ريال", "OPEX-TRANSPORT", "ride_hailing"),
+    ("قسط السيارة 1900 ريال", "OPEX-TRANSPORT", "car_installment"),
+    ("مترو الرياض مواصلات 20 ريال", "OPEX-TRANSPORT", "public_transport"),
+    ("تأمين السيارة 1200 ريال", "OPEX-INSURANCE", "car_insurance"),
+    ("تأمين طبي بوبا 3000 ريال", "OPEX-INSURANCE", "health_insurance"),
+    ("حوالة للهند 2000 ريال", "OPEX-REMITTANCE", "family_remittance"),
+    ("رسوم التحويل حوالة 25 ريال", "OPEX-REMITTANCE", "transfer_fees"),
+])
+def test_heuristic_sub_codes(text, code, sub):
+    parsed = _fallback_heuristic_parse(text)
+    assert (parsed.category_code, parsed.sub_category) == (code, sub), text
+    assert all(it.sub_category == sub for it in parsed.items)
+
+
+def test_receipt_unknown_model_code_falls_back(fake_supabase, monkeypatch):
+    import json
+    import types
+
+    import litellm
+    import receipt_scanner
+
+    hh = "f860188e-23b5-4749-b180-868c956151a6"
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "f", "code": "OPEX-FUEL", "category": "Fuel", "keywords": [], "is_flexible": False, "household_id": None},
+        {"id": "m", "code": "OPEX-MISC", "category": "Misc", "keywords": [], "is_flexible": True, "household_id": None},
+    ])
+    fake_supabase.seed("households", [{"id": hh, "payday_day": 27}])
+    payload = {"merchant": "Careem", "total_amount": 30.0, "category_code": "OPEX-TRANSPORT",
+               "items": [{"name": "Ride", "quantity": 1, "price": 30.0}]}
+    msg = types.SimpleNamespace(content=json.dumps(payload))
+    monkeypatch.setattr(litellm, "completion",
+                        lambda *a, **k: types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)]))
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (20, 20)).save(buf, "JPEG")
+    res = receipt_scanner.process_receipt_scan(hh, [base64.b64encode(buf.getvalue()).decode()], preview_only=True)
+    assert res["status"] == "preview" and res["category_code"] == "OPEX-FUEL"

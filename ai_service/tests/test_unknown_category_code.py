@@ -132,12 +132,7 @@ def test_chat_commit_maps_a_late_trigger_refusal_to_422(db, monkeypatch):
     assert db.tables.get("transactions", []) == []
 
 
-def test_receipt_commit_with_unknown_category_is_422(db, monkeypatch):
-    # The receipt path has no client override; a code the model invents reaches the trigger.
-    monkeypatch.setattr("receipt_scanner.parse_receipt_image", lambda *_a, **_k: {
-        "merchant": "Zzz Unknown Shop", "total_amount": 30.0, "category_code": "OPEX-INVENTED",
-        "items": [{"name": "thing", "quantity": 1, "price": 30.0}],
-    })
+def _receipt_with_model_code(code):
     import base64
     import io
 
@@ -145,10 +140,34 @@ def test_receipt_commit_with_unknown_category_is_422(db, monkeypatch):
 
     buf = io.BytesIO()
     Image.new("RGB", (4, 4)).save(buf, format="PNG")
-    res = client.post("/agent/scan-receipt", json={
+    return client.post("/agent/scan-receipt", json={
         "household_id": HH, "images_base64": [base64.b64encode(buf.getvalue()).decode()],
         "allow_duplicate": True,
     })
+
+
+def _model_says(monkeypatch, code):
+    monkeypatch.setattr("receipt_scanner.parse_receipt_image", lambda *_a, **_k: {
+        "merchant": "Zzz Unknown Shop", "total_amount": 30.0, "category_code": code,
+        "items": [{"name": "thing", "quantity": 1, "price": 30.0}],
+    })
+
+
+def test_receipt_model_code_outside_the_taxonomy_is_stored_as_misc(db, monkeypatch):
+    # The receipt path has no client category override, so a code the model invents is mapped to
+    # OPEX-MISC (preview and commit alike, PRODUCT-R4) instead of a refusal the user cannot fix.
+    _model_says(monkeypatch, "OPEX-INVENTED")
+    res = _receipt_with_model_code("OPEX-INVENTED")
+    assert res.status_code == 200, res.text
+    assert res.json()["category_code"] == "OPEX-MISC"
+    assert [t["category_code"] for t in db.tables["transactions"]] == ["OPEX-MISC"]
+
+
+def test_receipt_commit_maps_a_late_trigger_refusal_to_422(db, monkeypatch):
+    # The taxonomy lookup was empty / stale: the DB refusal still becomes a 422, never a 500.
+    _model_says(monkeypatch, "OPEX-INVENTED")
+    monkeypatch.setattr("receipt_scanner.resolve_category_in_taxonomy", lambda code, _codes: code)
+    res = _receipt_with_model_code("OPEX-INVENTED")
     assert res.status_code == 422, res.text
     assert res.json()["detail"] == "Unknown category_code: choose one of your household's categories."
     assert db.tables.get("transactions", []) == []
