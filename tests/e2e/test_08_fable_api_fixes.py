@@ -135,6 +135,40 @@ def test_api07_recurring_config_survives_sub_category_admin(world, llm):
     assert row["sub_allocations"]["_recurring_config"]["electricity_sec"]["due_day"] == 5
 
 
+# ─── FABLE-API-09 / FABLE-API-10: installments ────────────────────────────────
+
+def test_api09_invalid_start_date_is_refused_and_transaction_untouched(world, llm):
+    hh = world.roommates("fx09", n_members=0)
+    r = world.chat_commit(hh.admin, hh, llm, merchant="Jarir", amount=1200)
+    assert r.status_code == 200, r.text
+    tx_id = r.json()["transaction_id"]
+    r = hh.admin.api.post("/budgets/installments", json={
+        "household_id": hh.id, "merchant": "Jarir", "provider": "Tamara", "total_amount": 1200,
+        "installment_count": 4, "start_date": "not-a-date", "original_transaction_id": tx_id})
+    assert r.status_code == 422, r.text
+    assert world.db.scalar("SELECT count(*) FROM public.installment_plans WHERE household_id = %s", (hh.id,)) == 0
+    assert float(world.db.scalar("SELECT amount FROM public.transactions WHERE id = %s", (tx_id,))) == 1200.0
+    assert hh.admin.api.get("/budgets/installments", params={"household_id": hh.id}).json()["plans"] == []
+
+
+def test_api10_concurrent_payments_each_count_once(world, llm):
+    from concurrent.futures import ThreadPoolExecutor
+
+    hh = world.roommates("fx10", n_members=1)
+    r = hh.admin.api.post("/budgets/installments", json={
+        "household_id": hh.id, "merchant": "Extra", "provider": "Tabby", "total_amount": 1200,
+        "installment_count": 12, "start_date": "2026-11-01"})
+    assert r.status_code == 200, r.text
+    plan_id = r.json()["id"]
+    payers = [hh.admin, hh.members[0]] * 6  # 12 concurrent payments on a plan with 11 left
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        results = list(pool.map(lambda u: u.api.post(f"/budgets/installments/{plan_id}/pay"), payers))
+    assert all(x.status_code == 200 for x in results), [x.text for x in results if x.status_code != 200]
+    row = world.db.one("SELECT paid_installments, status FROM public.installment_plans WHERE id = %s", (plan_id,))
+    assert row["paid_installments"] == 12 and row["status"] == "COMPLETED", row
+    assert sorted(x.json()["paid_installments"] for x in results) == list(range(2, 13)) + [12]
+
+
 # ─── FABLE-API-06: bounded free text ──────────────────────────────────────────
 
 def test_api06_oversized_overrides_refused_and_junk_qr_not_persisted(world, llm):

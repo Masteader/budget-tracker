@@ -5,21 +5,19 @@ Manages installment plans, monthly payment schedules, and cycle reservations.
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import uuid
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import supabase_client
 
 logger = logging.getLogger(__name__)
 
-# Fallback persistence file if DB table migration has not been applied yet
-FALLBACK_FILE = Path(__file__).parent / "data" / "installment_plans.json"
+# Plans live in public.installment_plans only. The former container-local JSON fallback (used when
+# the insert failed, e.g. for start_date "not-a-date") reported plans as created that no other
+# instance could see and that vanished on redeploy (FABLE-API-09): a failed insert now fails.
 
 
 def calculate_installment_terms(
@@ -64,6 +62,17 @@ class InstallmentPlanCreate(BaseModel):
     original_transaction_id: Optional[str] = Field(None, max_length=64)
     notes: Optional[str] = Field(None, max_length=500)
     adjust_original_transaction: bool = True
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, v: Optional[str]) -> Optional[str]:
+        """An ISO calendar date (YYYY-MM-DD), the type of installment_plans.start_date."""
+        if v is None:
+            return v
+        try:
+            return date.fromisoformat(v.strip()).isoformat()
+        except (AttributeError, ValueError):
+            raise ValueError("start_date must be an ISO date (YYYY-MM-DD)")
 
 
 class InstallmentPlan(BaseModel):
@@ -110,22 +119,6 @@ class InstallmentPlan(BaseModel):
 
 class InstallmentService:
     @staticmethod
-    def _read_fallback_plans() -> List[Dict[str, Any]]:
-        if not FALLBACK_FILE.exists():
-            return []
-        try:
-            with open(FALLBACK_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-
-    @staticmethod
-    def _write_fallback_plans(plans: List[Dict[str, Any]]) -> None:
-        FALLBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(FALLBACK_FILE, "w", encoding="utf-8") as f:
-            json.dump(plans, f, indent=2, ensure_ascii=False)
-
-    @staticmethod
     def transaction_belongs_to_household(tx_id: str, household_id: str) -> bool:
         """True when transaction ``tx_id`` exists inside ``household_id`` (service role bypasses RLS)."""
         try:
@@ -145,17 +138,11 @@ class InstallmentService:
 
     @classmethod
     def get_plan_household_id(cls, plan_id: str) -> Optional[str]:
-        """Resolve the owning household of an installment plan (DB first, then local fallback)."""
-        try:
-            sb = supabase_client.get_client()
-            res = sb.table("installment_plans").select("household_id").eq("id", plan_id).limit(1).execute()
-            if res is not None and res.data:
-                return res.data[0].get("household_id")
-        except Exception as e:
-            logger.debug("Supabase plan lookup failed (%s), using local fallback", e)
-        for p in cls._read_fallback_plans():
-            if p.get("id") == plan_id:
-                return p.get("household_id")
+        """Owning household of an installment plan, None when it does not exist (errors propagate)."""
+        sb = supabase_client.get_client()
+        res = sb.table("installment_plans").select("household_id").eq("id", plan_id).limit(1).execute()
+        if res is not None and res.data:
+            return res.data[0].get("household_id")
         return None
 
     @classmethod
@@ -191,20 +178,13 @@ class InstallmentService:
             "created_at": datetime.now().isoformat(),
         }
 
-        # Try to persist to Supabase
-        persisted = False
-        try:
-            sb = supabase_client.get_client()
-            sb.table("installment_plans").insert(plan_dict).execute()
-            persisted = True
-            logger.info("Persisted installment plan %s to Supabase", plan_id)
-        except Exception as e:
-            logger.warning("Could not persist to Supabase installment_plans (%s), using local fallback", e)
-            plans = cls._read_fallback_plans()
-            plans.append(plan_dict)
-            cls._write_fallback_plans(plans)
+        # Persist. A failure propagates (the request fails): there is no local fallback, and the
+        # original transaction is only adjusted once the plan is stored (FABLE-API-09).
+        sb = supabase_client.get_client()
+        sb.table("installment_plans").insert(plan_dict).execute()
+        logger.info("Persisted installment plan %s to Supabase", plan_id)
 
-        # If original transaction is supplied and adjust is requested, adjust transaction down to monthly amount
+        # Only now: adjust the original transaction down to the monthly amount, if requested.
         if req.original_transaction_id and req.adjust_original_transaction:
             cls._adjust_original_transaction(
                 tx_id=req.original_transaction_id,
@@ -349,27 +329,14 @@ class InstallmentService:
         found_plans: List[InstallmentPlan] = []
         seen_tx_ids = set()
 
-        try:
-            sb = supabase_client.get_client()
-            res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
-            if res.data:
-                for row in res.data:
-                    plan = InstallmentPlan(**row)
-                    found_plans.append(plan)
-                    if plan.original_transaction_id:
-                        seen_tx_ids.add(plan.original_transaction_id)
-        except Exception as e:
-            logger.debug("Supabase installment_plans query failed (%s), using local fallback", e)
-
-        # Fallback to local
-        plans = cls._read_fallback_plans()
-        for p in plans:
-            if p.get("household_id") == household_id:
-                if not any(fp.id == p.get("id") for fp in found_plans):
-                    plan = InstallmentPlan(**p)
-                    found_plans.append(plan)
-                    if plan.original_transaction_id:
-                        seen_tx_ids.add(plan.original_transaction_id)
+        # The database is the only store: a failed query fails the request (FABLE-API-09).
+        sb = supabase_client.get_client()
+        res = sb.table("installment_plans").select("*").eq("household_id", household_id).execute()
+        for row in (res.data or []):
+            plan = InstallmentPlan(**row)
+            found_plans.append(plan)
+            if plan.original_transaction_id:
+                seen_tx_ids.add(plan.original_transaction_id)
 
         # Also reconcile directly from transactions table in Supabase
         try:
@@ -424,37 +391,24 @@ class InstallmentService:
         return found_plans
 
     @classmethod
-    def pay_installment(cls, plan_id: str, household_id: str) -> Optional[InstallmentPlan]:
-        """Record one payment on ``plan_id``, scoped to the caller-verified ``household_id``."""
-        # Try Supabase first
-        try:
-            sb = supabase_client.get_client()
-            res = (
-                sb.table("installment_plans")
-                .select("*")
-                .eq("id", plan_id)
-                .eq("household_id", household_id)
-                .execute()
-            )
-            if res.data and len(res.data) > 0:
-                plan = InstallmentPlan(**res.data[0])
-                plan.record_payment()
-                sb.table("installment_plans").update({
-                    "paid_installments": plan.paid_installments,
-                    "status": plan.status,
-                }).eq("id", plan_id).eq("household_id", household_id).execute()
-                return plan
-        except Exception as e:
-            logger.debug("Supabase pay_installment failed (%s), using local fallback", e)
+    def pay_installment(cls, plan_id: str, household_id: str, actor_user_id: str) -> Optional[InstallmentPlan]:
+        """
+        Record one payment on ``plan_id``, scoped to the caller-verified ``household_id``.
 
-        # Fallback
-        plans = cls._read_fallback_plans()
-        for p in plans:
-            if p.get("id") == plan_id and p.get("household_id") == household_id:
-                plan = InstallmentPlan(**p)
-                plan.record_payment()
-                p["paid_installments"] = plan.paid_installments
-                p["status"] = plan.status
-                cls._write_fallback_plans(plans)
-                return plan
-        return None
+        One atomic conditional increment in the database (RPC pay_installment_plan, migration
+        20261020750000): concurrent payments each count exactly once and never beyond
+        installment_count (FABLE-API-10; the old read-modify-write lost one of two concurrent
+        payments). A paid-up plan is returned unchanged; None when the plan is not in the household.
+        """
+        sb = supabase_client.get_client()
+        res = sb.rpc("pay_installment_plan", {
+            "p_plan_id": plan_id,
+            "p_household_id": household_id,
+            "p_actor_user_id": actor_user_id,
+        }).execute()
+        rows = res.data if res is not None else None
+        if isinstance(rows, dict):
+            rows = [rows]
+        if not rows:
+            return None
+        return InstallmentPlan(**rows[0])

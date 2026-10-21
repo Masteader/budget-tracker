@@ -252,7 +252,10 @@ class FakeStorage:
 class FakeSupabaseClient:
     def __init__(self) -> None:
         self.tables: Dict[str, List[dict]] = {}
-        self.rpc_handlers: Dict[str, Callable[[dict], Any]] = {"consume_quota": lambda _p: True}
+        self.rpc_handlers: Dict[str, Callable[[dict], Any]] = {
+            "consume_quota": lambda _p: True,
+            "pay_installment_plan": self._pay_installment_plan,
+        }
         self.rpc_calls: List[tuple[str, dict]] = []
         self.storage_objects: Dict[tuple[str, str], bytes] = {}
         self.storage = FakeStorage(self)
@@ -264,6 +267,21 @@ class FakeSupabaseClient:
 
     def rpc(self, name: str, params: Optional[dict] = None) -> FakeRpc:
         return FakeRpc(self, name, params or {})
+
+    def _pay_installment_plan(self, params: dict) -> List[dict]:
+        """Mirror of the SQL function (migration 20261020750000): one conditional increment."""
+        members = self.tables.get("household_memberships", [])
+        if not any(m.get("household_id") == params.get("p_household_id")
+                   and m.get("user_id") == params.get("p_actor_user_id") for m in members):
+            raise FakeSchemaError("Only a member of the household can record an installment payment", "42501")
+        for row in self.tables.get("installment_plans", []):
+            if row.get("id") == params.get("p_plan_id") and row.get("household_id") == params.get("p_household_id"):
+                if int(row.get("paid_installments") or 0) < int(row.get("installment_count") or 0):
+                    row["paid_installments"] = int(row.get("paid_installments") or 0) + 1
+                    if row["paid_installments"] >= int(row["installment_count"]):
+                        row["status"] = "COMPLETED"
+                return [copy.deepcopy(row)]
+        return []
 
     def seed(self, table: str, rows: List[dict]) -> None:
         self.tables.setdefault(table, []).extend(copy.deepcopy(rows))

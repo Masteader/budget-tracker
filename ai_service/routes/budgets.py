@@ -7,8 +7,10 @@ from datetime import date
 import logging
 import math
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 
 from auth import (
     verify_household_access,
@@ -222,12 +224,19 @@ async def create_installment_plan(request: Request):
 
     try:
         req = InstallmentPlanCreate(**body)
+    except ValidationError as exc:
+        # e.g. start_date that is not an ISO date (FABLE-API-09): location/type/message only.
+        raise HTTPException(status_code=422, detail=[
+            {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")} for err in exc.errors()
+        ])
+    try:
         plan = await asyncio.to_thread(InstallmentService.create_plan, req)
         return plan.model_dump()
     except PermissionError:
         raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
     except Exception as exc:
-        raise safe_error_response(exc, status_code=400, public_message="Failed to create installment plan.")
+        # The plan could not be stored: nothing was created and the transaction is unchanged.
+        raise safe_error_response(exc, public_message="Failed to create installment plan.")
 
 
 @router.post(
@@ -236,13 +245,22 @@ async def create_installment_plan(request: Request):
     summary="Record an installment payment towards a plan.",
 )
 async def pay_installment_endpoint(plan_id: str, request: Request):
-    get_current_user_id(request)
-    household_id = await asyncio.to_thread(InstallmentService.get_plan_household_id, plan_id)
+    caller = get_current_user_id(request)
+    not_found = HTTPException(status_code=404, detail="Installment plan not found.")
+    try:
+        UUID(plan_id)
+    except ValueError:
+        raise not_found
+    try:
+        household_id = await asyncio.to_thread(InstallmentService.get_plan_household_id, plan_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to pay installment.")
     if not household_id:
-        raise HTTPException(status_code=404, detail="Installment plan not found.")
+        raise not_found
     await verify_household_access(request, household_id)
     try:
-        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id, household_id)
+        # One atomic conditional increment in the database (FABLE-API-10).
+        plan = await asyncio.to_thread(InstallmentService.pay_installment, plan_id, household_id, caller)
         if not plan:
             raise HTTPException(status_code=404, detail="Installment plan not found.")
         return plan.model_dump()
