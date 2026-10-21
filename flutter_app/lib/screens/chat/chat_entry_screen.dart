@@ -9,6 +9,7 @@ import '../../main.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api/preview_token.dart';
 import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
@@ -463,20 +464,34 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     final originalText = pending['original_message'] as String? ??
         "$merchant ${(pending['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'} SAR";
 
-    final res = await ApiService.instance.postChatTransaction(
-      message: originalText,
-      householdId: _householdId!,
-      userId: user?.id,
-      allowDuplicate: true,
-      previewOnly: false,
-      merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
-      spentBy: beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both'),
-      categoryCode: categoryCode,
-      subCategory: subCategory,
-      paidBy: paidBy,
-      beneficiary: beneficiary,
-      nafaqahClass: nafaqahClass,
-      nafaqahSpouseId: nafaqahSpouseId,
+    final householdId = _householdId!;
+    // The preview's token (when the server sends one) is returned unchanged;
+    // an expired token re-runs the preview once (preview_token.dart).
+    final res = await commitWithPreviewToken(
+      token: previewTokenOf(pending),
+      commit: (token) => ApiService.instance.postChatTransaction(
+        message: originalText,
+        householdId: householdId,
+        userId: user?.id,
+        allowDuplicate: true,
+        previewOnly: false,
+        merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
+        spentBy: beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both'),
+        categoryCode: categoryCode,
+        subCategory: subCategory,
+        paidBy: paidBy,
+        beneficiary: beneficiary,
+        nafaqahClass: nafaqahClass,
+        nafaqahSpouseId: nafaqahSpouseId,
+        previewToken: token,
+      ),
+      rePreview: () => ApiService.instance.postChatTransaction(
+        message: originalText,
+        householdId: householdId,
+        userId: user?.id,
+        allowDuplicate: true,
+        previewOnly: true,
+      ),
     );
 
     if (!mounted) return;

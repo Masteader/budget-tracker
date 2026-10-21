@@ -1,4 +1,5 @@
 import 'base_api_client.dart';
+import 'preview_token.dart';
 
 class ChatApiClient {
   final BaseApiClient baseClient;
@@ -23,6 +24,7 @@ class ChatApiClient {
     String? nafaqahSpouseId,
     String? idempotencyKey,
     DateTime? occurredAt,
+    String? previewToken,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
@@ -40,6 +42,8 @@ class ChatApiClient {
       if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
       if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
       if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      // Sent back unchanged from the preview (see preview_token.dart).
+      if (previewToken != null && previewToken.isNotEmpty) previewTokenField: previewToken,
     };
 
     final res = await baseClient.post(

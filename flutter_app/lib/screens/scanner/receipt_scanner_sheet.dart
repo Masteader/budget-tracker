@@ -15,6 +15,7 @@ import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/api/base_api_client.dart' show BaseApiClient;
+import '../../services/api/preview_token.dart';
 import '../../services/offline_receipt_draft.dart';
 import '../../services/offline_queue_manager.dart';
 import '../../services/nafaqah_write_errors.dart';
@@ -527,21 +528,34 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final confirmedMerchant = _merchantController.text.trim();
       final nafaqah = _nafaqahFields;
 
-      final res = await ApiService.instance.scanReceipt(
-        imagesBase64: base64List,
-        qrCodeRaw: _zatcaQrRaw,
-        householdId: widget.householdId,
-        userId: user?.id,
-        allowDuplicate: allowDuplicate,
-        enrichTxId: enrichTxId,
-        merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
-        spentBy: _selectedSpentBy,
-        previewOnly: false,
-        receiptUrl: uploadedReceiptUrl,
-        paidBy: nafaqah['paid_by'],
-        beneficiary: nafaqah['beneficiary'],
-        nafaqahClass: nafaqah['nafaqah_class'],
-        nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+      // The preview's token (when the server sends one) is returned
+      // unchanged; an expired token re-runs the preview once.
+      final res = await commitWithPreviewToken(
+        token: previewTokenOf(_scanResult),
+        commit: (token) => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          allowDuplicate: allowDuplicate,
+          enrichTxId: enrichTxId,
+          merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
+          spentBy: _selectedSpentBy,
+          previewOnly: false,
+          receiptUrl: uploadedReceiptUrl,
+          paidBy: nafaqah['paid_by'],
+          beneficiary: nafaqah['beneficiary'],
+          nafaqahClass: nafaqah['nafaqah_class'],
+          nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+          previewToken: token,
+        ),
+        rePreview: () => ApiService.instance.scanReceipt(
+          imagesBase64: base64List,
+          qrCodeRaw: _zatcaQrRaw,
+          householdId: widget.householdId,
+          userId: user?.id,
+          previewOnly: true,
+        ),
       );
 
       _safeSetState(() => _isAnalyzing = false);
