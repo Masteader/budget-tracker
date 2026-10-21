@@ -786,7 +786,9 @@ def calculate_settlement_v2(
     # No fallback on failure: an empty roster would silently change the household's mode.
     ctx = load_family_context(household_id)
     members = list(ctx.members.values())
-    has_peers = any(m.get("financial_role") == "peer" for m in members)
+    # The stored household type decides the mode (owner decision D1): a flat formed with the
+    # static join code is a roommates household even before anyone has a 'peer' role.
+    is_roommates = ctx.is_roommates
     has_spouse = ctx.is_family
 
     # No fallback on failure: an empty list would report every balance as settled.
@@ -820,7 +822,7 @@ def calculate_settlement_v2(
             continue
         txs.append({**tx, **normalized, "paid_by": payer})
 
-    if has_peers and not has_spouse:
+    if is_roommates:
         peers = [m["id"] for m in members]
         pairwise = calculate_roommate_pairwise_debts(txs, peers)
         simplified = simplify_debts(pairwise)

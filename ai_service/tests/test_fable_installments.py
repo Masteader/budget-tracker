@@ -100,3 +100,17 @@ def test_pay_unknown_or_malformed_plan_is_404(api, w):
     assert api.post("/budgets/installments/not-a-uuid/pay", headers=w.hdr("omar")).status_code == 404
     assert api.post("/budgets/installments/dddddddd-0000-4000-8000-00000000ffff/pay",
                     headers=w.hdr("omar")).status_code == 404
+
+
+def test_pay_on_a_cancelled_plan_is_409_not_500(api, fake_supabase, w):
+    """20261020900000: pay_installment_plan refuses non-ACTIVE plans (22023, HINT plan_not_active);
+    the API answers 409 with a code the app can show, and nothing is counted."""
+    fake_supabase.seed("installment_plans", [{
+        "id": "dddddddd-0000-4000-8000-000000000002", "household_id": w.hid, "merchant": "eXtra",
+        "provider": "Tamara", "total_amount": 300.0, "installment_count": 3, "monthly_amount": 100.0,
+        "paid_installments": 1, "day_of_month": 27, "start_date": "2026-10-01", "status": "CANCELLED",
+    }])
+    r = api.post("/budgets/installments/dddddddd-0000-4000-8000-000000000002/pay", headers=w.hdr("omar"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["code"] == "plan_not_active"
+    assert fake_supabase.tables["installment_plans"][0]["paid_installments"] == 1

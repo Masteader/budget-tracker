@@ -57,7 +57,7 @@ from recurring_detector import (
     toggle_household_recurring_bill,
     get_recurring_bill_candidates,
 )
-from installment_service import InstallmentService, InstallmentPlanCreate
+from installment_service import InstallmentPlanCreate, InstallmentService, PlanNotActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +278,11 @@ async def pay_installment_endpoint(plan_id: str, request: Request):
         return plan.model_dump()
     except HTTPException:
         raise
+    except PlanNotActiveError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "plan_not_active", "message": "This installment plan is not active and takes no payments."},
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to pay installment.")
 

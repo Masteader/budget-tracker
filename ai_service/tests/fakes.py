@@ -12,6 +12,8 @@ and storage.from_(bucket).upload().
 from __future__ import annotations
 
 import copy
+
+from postgrest.exceptions import APIError
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
@@ -276,7 +278,12 @@ class FakeSupabaseClient:
             raise FakeSchemaError("Only a member of the household can record an installment payment", "42501")
         for row in self.tables.get("installment_plans", []):
             if row.get("id") == params.get("p_plan_id") and row.get("household_id") == params.get("p_household_id"):
-                if int(row.get("paid_installments") or 0) < int(row.get("installment_count") or 0):
+                status = str(row.get("status") or "ACTIVE").upper()
+                if status not in ("ACTIVE", "COMPLETED"):
+                    # 20261020900000: a non-ACTIVE plan takes no payments.
+                    raise APIError({"code": "22023", "hint": "plan_not_active", "details": None,
+                                    "message": f"This installment plan is {status} and takes no payments"})
+                if status == "ACTIVE" and int(row.get("paid_installments") or 0) < int(row.get("installment_count") or 0):
                     row["paid_installments"] = int(row.get("paid_installments") or 0) + 1
                     if row["paid_installments"] >= int(row["installment_count"]):
                         row["status"] = "COMPLETED"

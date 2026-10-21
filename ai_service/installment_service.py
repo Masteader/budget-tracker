@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 import supabase_client
+from postgrest_compat import db_error_fields
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,10 @@ class InstallmentPlan(BaseModel):
             self.paid_installments += 1
         if self.paid_installments >= self.installment_count:
             self.status = "COMPLETED"
+
+
+class PlanNotActiveError(Exception):
+    """The plan is neither ACTIVE nor COMPLETED (e.g. CANCELLED): it takes no payments."""
 
 
 class InstallmentService:
@@ -423,11 +428,17 @@ class InstallmentService:
         payments). A paid-up plan is returned unchanged; None when the plan is not in the household.
         """
         sb = supabase_client.get_client()
-        res = sb.rpc("pay_installment_plan", {
-            "p_plan_id": plan_id,
-            "p_household_id": household_id,
-            "p_actor_user_id": actor_user_id,
-        }).execute()
+        try:
+            res = sb.rpc("pay_installment_plan", {
+                "p_plan_id": plan_id,
+                "p_household_id": household_id,
+                "p_actor_user_id": actor_user_id,
+            }).execute()
+        except Exception as exc:
+            # Migration 20261020900000 refuses payments on a non-ACTIVE plan (HINT plan_not_active).
+            if db_error_fields(exc).get("hint") == "plan_not_active":
+                raise PlanNotActiveError(str(plan_id)) from exc
+            raise
         rows = res.data if res is not None else None
         if isinstance(rows, dict):
             rows = [rows]

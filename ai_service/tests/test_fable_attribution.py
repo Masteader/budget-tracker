@@ -269,3 +269,28 @@ def test_sanitize_audit_text(raw, expected):
     from utils import sanitize_audit_text
 
     assert sanitize_audit_text(raw) == expected
+
+
+def test_settlement_v2_mode_follows_the_stored_household_type(api, fake_supabase, world_factory):
+    """FABLE2-LOGIC-02 / owner decision D1: a flat whose members joined with the static code
+    (financial_role 'family_member', no 'peer' yet) is still settled as roommates when the
+    household is stored as type 'roommates'."""
+    w = world_factory({
+        "ahmed": ("admin", "family_member"),
+        "omar": ("member", "family_member"),
+        "saad": ("member", "family_member"),
+    })
+    fake_supabase.tables["households"][0]["household_type"] = "roommates"
+    r = api.post("/agent/chat-transaction",
+                 json={"household_id": w.hid, "message": "Rent 3000 sar", "beneficiary": "both"},
+                 headers=w.hdr("omar"))
+    assert r.status_code == 200, r.text
+
+    body = api.get(f"/households/{w.hid}/settlement-v2", headers=w.hdr("ahmed")).json()
+    assert body["mode"] == "multi_roommate"
+    omar = w.users["omar"]
+    assert _debts(body) == sorted([(w.users["ahmed"], omar, 1000.0), (w.users["saad"], omar, 1000.0)])
+
+    fake_supabase.tables["households"][0]["household_type"] = "family"
+    body = api.get(f"/households/{w.hid}/settlement-v2", headers=w.hdr("ahmed")).json()
+    assert body["mode"] == "family_nafaqah" and body["pairwise_debts"] == []

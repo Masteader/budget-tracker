@@ -71,7 +71,7 @@ def test_own_dependent_is_accepted_and_named(api, fake_supabase, homes):
 
 def test_untargeted_invite_unchanged(api, fake_supabase, homes):
     a, *_ = homes
-    r = api.post(f"/households/{a.hid}/invites", json={"role": "peer"}, headers=a.hdr("ahmed"))
+    r = api.post(f"/households/{a.hid}/invites", json={"role": "family_member"}, headers=a.hdr("ahmed"))
     assert r.status_code == 200 and r.json()["target_member_id"] is None
 
 
