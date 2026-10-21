@@ -63,6 +63,8 @@ def test_stitched_pages_are_downscaled_to_a_bounded_width(big_page):
 def test_stitching_peak_memory_is_bounded(big_page, tmp_path):
     """Measured in a fresh interpreter: the RSS high-water mark gained while stitching two
     40 MP pages (the old code needed ~0.85 GiB for two, ~1.7 GiB for four)."""
+    if sys.platform == "win32":
+        pytest.skip("resource module is Unix-only")
     img_file = tmp_path / "page.b64"
     img_file.write_text(big_page)
     script = textwrap.dedent(f"""
