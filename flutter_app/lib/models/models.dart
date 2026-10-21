@@ -33,6 +33,10 @@ class Transaction {
   /// The stored payer as the settlement engine reads it ('me', 'partner' or,
   /// for a manual roommate row, the payer's member id); see [storedPayerRef].
   final String? payerRef;
+
+  /// The `source` column as stored ([source] is normalised for display). The
+  /// server reads a manual row's payer from its note only when this is 'manual'.
+  final String? storedSource;
   final List<Map<String, dynamic>> items;
   final String? accountId;
   final String? receiptUrl;
@@ -66,6 +70,7 @@ class Transaction {
     this.beneficiaryType,
     this.beneficiaryId,
     this.payerRef,
+    this.storedSource,
     this.items = const [],
     this.accountId,
     this.receiptUrl,
@@ -215,6 +220,7 @@ class Transaction {
       beneficiaryType: storedBenType,
       beneficiaryId: storedBenId,
       payerRef: payerRef,
+      storedSource: map['source'] as String?,
       items: parsedItems,
       accountId: map['account_id'] as String?,
       receiptUrl: map['receipt_url'] as String?,
@@ -310,6 +316,7 @@ class Transaction {
     String? beneficiaryType,
     String? beneficiaryId,
     String? payerRef,
+    String? storedSource,
     List<Map<String, dynamic>>? items,
     String? accountId,
     String? receiptUrl,
@@ -337,6 +344,7 @@ class Transaction {
       beneficiaryType: beneficiaryType ?? this.beneficiaryType,
       beneficiaryId: beneficiaryId ?? this.beneficiaryId,
       payerRef: payerRef ?? this.payerRef,
+      storedSource: storedSource ?? this.storedSource,
       items: items ?? this.items,
       accountId: accountId ?? this.accountId,
       receiptUrl: receiptUrl ?? this.receiptUrl,
