@@ -2,6 +2,8 @@
 
 Date: 2026-10-21 · Branch: `audit/claude-db-preflight-round2` (from `893bd67`) · Method: same as [`live_db_preflight.md`](live_db_preflight.md) §2 and §6 · Checks: [`live_db_preflight_round2_checks.sql`](live_db_preflight_round2_checks.sql) · Rollback: [`../rollback/20261020_round2_rollback_snapshot.sql`](../rollback/20261020_round2_rollback_snapshot.sql)
 
+> Superseded for the apply plan by [round 3](live_db_preflight_round3.md) (2026-10-21), which covers all four pending files (`20261020700000`, `750000`, `800000`, `900000`) on a fresh live inventory. This round's findings for 700000 and 800000 still hold.
+
 This pre-flight covers the two migrations that are not yet applied anywhere:
 
 - `supabase/migrations/20261020700000_fable_db_hardening.sql` (FABLE-DB-02, -04 to -09);
