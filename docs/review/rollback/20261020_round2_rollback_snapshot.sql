@@ -1,7 +1,10 @@
 -- ============================================================================
--- Rollback snapshot for the 20261020 round-2 pair
+-- Rollback snapshot for the 20261020 round-2 files
 --   20261020700000_fable_db_hardening.sql
+--   20261020750000_installment_pay_atomic.sql (section 11, added 2026-10-21)
 --   20261020800000_household_roles_and_nafaqah_integrity.sql
+-- If 20261020900000 is applied, run 20261020_round3_rollback_snapshot.sql
+-- first (this script refuses to run while households.household_type exists).
 -- Snapshot date: 2026-10-21. Generated from a read-only catalog inventory of the
 -- live project taken BEFORE the pair (live then had every migration up to
 -- 20261020600000; definitions and privileges only, no row data).
@@ -33,9 +36,14 @@
 
 BEGIN;
 
--- 0. Refuse to run unless the pair is applied
+-- 0. Refuse to run unless the pair is applied (and round 3 is not)
 DO $$
 BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = 'households'
+                 AND column_name = 'household_type') THEN
+        RAISE EXCEPTION 'rollback: 20261020900000 is applied; run 20261020_round3_rollback_snapshot.sql first';
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_schema = 'public' AND table_name = 'households'
                      AND column_name = 'nafaqah_provider_user_id') THEN
@@ -834,5 +842,9 @@ END $$;
 
 -- 10. Function comment changed by 20261020800000
 COMMENT ON FUNCTION public.nafaqah_husband_id(uuid) IS 'Internal: Nafaqah provider of a family household. Not client-callable (E2E-04); used by SECURITY DEFINER functions.';
+
+-- 11. 20261020750000 (FABLE-API-10): the atomic installment payment RPC. The ai_service
+-- build that calls it must be rolled back too (it records payments only through it).
+DROP FUNCTION IF EXISTS public.pay_installment_plan(uuid, uuid, uuid);
 
 COMMIT;
