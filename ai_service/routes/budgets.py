@@ -42,8 +42,9 @@ from salary_cycle import (
     remove_sub_category_for_household,
     archive_category_for_household,
     simulate_affordability,
-    get_category_owner_households,
-    sub_category_parent_visible,
+    SUB_CATEGORY_FORBIDDEN,
+    sub_category_sole_owner,
+    sub_category_write_allowed,
 )
 from recurring_detector import (
     fetch_household_recurring_bills,
@@ -338,18 +339,18 @@ async def add_sub_category(
     req: SubCategoryCreateRequest,
 ):
     await verify_household_admin_access(request, req.household_id)
-    # Definitions are global (no household_id column), so a household may only add them under a
-    # system category or one of its own custom categories, never under another household's
-    # custom category (E2E-05). Unknown and foreign parents get the same answer (no oracle).
+    # Definitions are global (no household_id column) and drive keyword matching, so a household
+    # may only define them under a custom category it owns alone; under a system category it can
+    # only allocate to the seeded definitions (E2E-05, FABLE-API-04/05). Every refusal is the same
+    # answer (no oracle on other households' codes).
     try:
-        visible = await asyncio.to_thread(sub_category_parent_visible, req.parent_code, [req.household_id])
+        allowed = await asyncio.to_thread(
+            sub_category_write_allowed, req.parent_code, req.sub_code, req.household_id
+        )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to add sub-category.")
-    if not visible:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sub-categories can only be added under a system category or one of this household's own categories.",
-        )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUB_CATEGORY_FORBIDDEN)
     try:
         return await asyncio.to_thread(
             add_sub_category_for_household,
@@ -399,30 +400,24 @@ async def get_sub_categories_route(parent_code: str, request: Request, household
 async def rename_sub_category_endpoint(req: SubCategoryRenameRequest, request: Request):
     """
     Sub-category definitions are not household-scoped in the schema. Renaming is therefore
-    only allowed under a parent category that is a household's own custom category, and only
-    by an admin of that household. Shared/system definitions are read-only for households.
+    only allowed under a custom category that exactly one household owns, and only by an admin
+    of that household (FABLE-API-05: two households can own the same CUSTOM-… code). System,
+    unknown, shared and foreign codes, and non-admins, all get the same refusal (FABLE-API-08).
     """
     get_current_user_id(request)
-    ownership = await asyncio.to_thread(get_category_owner_households, req.parent_code)
-    if ownership["shared"] or not ownership["owners"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Shared system sub-categories cannot be renamed by a household.",
-        )
-    authorized = False
-    for owner_household_id in ownership["owners"]:
-        try:
-            await verify_household_admin_access(request, owner_household_id)
-            authorized = True
-            break
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-                raise
-    if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Admin access to the owning household is required.",
-        )
+    forbidden = HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUB_CATEGORY_FORBIDDEN)
+    try:
+        owner_household_id = await asyncio.to_thread(sub_category_sole_owner, req.parent_code)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to rename sub-category.")
+    if owner_household_id is None:
+        raise forbidden
+    try:
+        await verify_household_admin_access(request, owner_household_id)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            raise
+        raise forbidden
     try:
         return await asyncio.to_thread(
             rename_sub_category,

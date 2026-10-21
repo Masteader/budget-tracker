@@ -584,7 +584,7 @@ def process_chat_transaction(
     if not sub_category and category_code:
         try:
             from salary_cycle import match_sub_category
-            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts)
+            sub_category = match_sub_category(category_code, f"{merchant} {message}", items_dicts, household_id=household_id)
         except Exception:
             pass
 

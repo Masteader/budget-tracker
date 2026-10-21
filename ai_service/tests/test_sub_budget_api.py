@@ -74,10 +74,12 @@ def test_add_and_archive_category(monkeypatch):
 
 
 def test_add_sub_category_endpoint(monkeypatch, fake_supabase):
-    # Sub-categories may only be added under an existing system or own category (E2E-05).
+    # New definitions only under a custom category this household owns alone (E2E-05, FABLE-API-04).
     fake_supabase.seed("cost_control_codes", [
         {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities", "keywords": [],
          "is_flexible": False, "household_id": None, "is_system": True},
+        {"id": "c-cool", "code": "CUSTOM-COOLING", "category": "Cooling", "keywords": [],
+         "is_flexible": False, "household_id": HOUSEHOLD_ID, "is_system": False},
     ])
     mock_res = {
         "status": "success",
@@ -93,6 +95,10 @@ def test_add_sub_category_endpoint(monkeypatch, fake_supabase):
         "allocated_amount": 120.0,
         "cycle_key": "2026-10",
     }
+    # Not a new definition under a system category ...
+    assert client.post("/budgets/sub-categories", json=payload, headers=AUTH_HEADERS).status_code == 403
+    # ... but under the household's own custom category.
+    payload["parent_code"] = "CUSTOM-COOLING"
     resp = client.post("/budgets/sub-categories", json=payload, headers=AUTH_HEADERS)
     assert resp.status_code == 200
     data = resp.json()

@@ -426,26 +426,90 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
     }
 
 
-def match_sub_category(category_code: str, text: str, items: Optional[list] = None) -> Optional[str]:
+# Sub-category definitions seeded by migration 20261002 under the SYSTEM categories. Definitions
+# carry no household column, so under a system parent only these are trusted for keyword matching
+# (FABLE-API-04); households cannot add others there through the API.
+SYSTEM_SUB_CATEGORIES = frozenset({
+    ("OPEX-GROCERY", "meat"), ("OPEX-GROCERY", "vegetables_fruit"), ("OPEX-GROCERY", "dairy_eggs"),
+    ("OPEX-GROCERY", "snacks_chips"), ("OPEX-GROCERY", "beverages"), ("OPEX-GROCERY", "pantry_staples"),
+    ("OPEX-GROCERY", "cleaning_household"),
+    ("OPEX-UTILITIES", "housing_rent"), ("OPEX-UTILITIES", "electricity_sec"), ("OPEX-UTILITIES", "fiber_internet"),
+    ("OPEX-UTILITIES", "mobile_sims"), ("OPEX-UTILITIES", "water_municipal"),
+    ("OPEX-DINING", "restaurants_dinners"), ("OPEX-DINING", "coffee_bakeries"), ("OPEX-DINING", "delivery_apps"),
+    ("OPEX-FUEL", "gas_fuel"), ("OPEX-FUEL", "car_maintenance"), ("OPEX-FUEL", "ride_hailing"),
+    ("OPEX-HEALTH", "prescriptions_meds"), ("OPEX-HEALTH", "clinics_dental"),
+    ("OPEX-SHOPPING", "clothing_fashion"), ("OPEX-SHOPPING", "electronics_gadgets"), ("OPEX-SHOPPING", "home_furniture"),
+})
+MIN_KEYWORD_LENGTH = 3
+# One refusal for every sub-category write a household may not make (unknown parent, system
+# parent, another household's or a shared custom code, not an admin): FABLE-API-05/08, no oracle.
+SUB_CATEGORY_FORBIDDEN = (
+    "Forbidden: sub-categories can only be created or changed under a category that belongs to this household alone."
+)
+
+
+def sub_category_keywords(name: str) -> List[str]:
+    """Matching keywords for a household-defined sub-category: its name, if long enough."""
+    keyword = (name or "").strip().lower()
+    return [keyword] if len(keyword) >= MIN_KEYWORD_LENGTH else []
+
+
+def sub_category_write_allowed(parent_code: str, sub_code: Optional[str], household_id: str) -> bool:
     """
-    Matches merchant, audit-note text, or item descriptions against seeded sub-category keywords.
+    Whether ``household_id`` may define (or allocate to) ``sub_code`` under ``parent_code``: under
+    a system category only the seeded definitions (allocation, no new definition); under a custom
+    category only when this household is its sole owner (codes are unique per household, so two
+    households can own the same CUSTOM-… code and would otherwise edit each other's definitions).
+    """
+    ownership = get_category_owner_households(parent_code)
+    if ownership["shared"]:
+        return bool(sub_code) and (parent_code, sub_code) in SYSTEM_SUB_CATEGORIES
+    return ownership["owners"] == [str(household_id)]
+
+
+def sub_category_sole_owner(parent_code: str) -> Optional[str]:
+    """The one household owning custom ``parent_code``; None for system, unknown or shared codes."""
+    ownership = get_category_owner_households(parent_code)
+    if ownership["shared"] or len(ownership["owners"]) != 1:
+        return None
+    return ownership["owners"][0]
+
+
+def match_sub_category(
+    category_code: str,
+    text: str,
+    items: Optional[list] = None,
+    household_id: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Matches merchant, audit-note text, or item descriptions against sub-category keywords.
+
+    Only trusted definitions are considered (FABLE-API-04): under a system category the seeded
+    ones, under a custom category those of ``household_id`` when it owns the code alone. Keywords
+    shorter than MIN_KEYWORD_LENGTH characters never match.
     """
     from supabase_client import get_client
     client = get_client()
     try:
         subs = client.table("cost_control_sub_categories").select("*").eq("parent_code", category_code).execute().data or []
+        if subs:
+            ownership = get_category_owner_households(category_code)
+            if ownership["shared"]:
+                subs = [s for s in subs if (category_code, s.get("sub_code")) in SYSTEM_SUB_CATEGORIES]
+            elif not (household_id and ownership["owners"] == [str(household_id)]):
+                subs = []
     except Exception:
         return None
-        
+
     search_corpus = (text or "").lower()
     if items:
         for it in items:
             search_corpus += " " + str(it.get("name", "")).lower()
-            
+
     for sub in subs:
         keywords = sub.get("keywords") or []
         for kw in keywords:
-            if kw.lower() in search_corpus:
+            if isinstance(kw, str) and len(kw.strip()) >= MIN_KEYWORD_LENGTH and kw.strip().lower() in search_corpus:
                 return sub["sub_code"]
 
     # Static fallback for essential keywords if DB keywords are incomplete
@@ -862,7 +926,7 @@ def add_sub_category_for_household(
             "sub_code": sub_code,
             "name_en": name_en,
             "name_ar": name_en,
-            "keywords": [name_en.lower()],
+            "keywords": sub_category_keywords(name_en),
         }).execute()
 
 

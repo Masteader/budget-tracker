@@ -65,3 +65,41 @@ def test_logic03_personal_expense_not_split_and_both_engines_agree(world, llm):
     s = omar.api.get(f"/households/{hh.id}/settlement").json()
     assert s["who_owes"] == "partner_owes_me" and s["settlement_amount"] == 50.0, s
     assert s["me_personal_total"] == 15.0
+
+
+# ─── FABLE-API-04 / 05 / 08: sub-category definitions ─────────────────────────
+
+def test_api04_no_planting_under_system_categories_and_no_cross_household_matching(world, llm):
+    a = world.roommates("fx04a", n_members=0)
+    b = world.roommates("fx04b", n_members=0)
+    r = a.admin.api.post("/budgets/sub-categories", json={
+        "household_id": a.id, "parent_code": "OPEX-GROCERY", "name_en": "e", "sub_code": "sub-planted-by-a"})
+    assert r.status_code == 403, r.text
+    # A definition planted before the fix (as on live) is ignored when matching B's receipt.
+    world.db.query(
+        "INSERT INTO public.cost_control_sub_categories (parent_code, sub_code, name_en, name_ar, keywords) "
+        "VALUES ('OPEX-GROCERY', 'sub-planted-old', 'e', 'e', ARRAY['e']) ON CONFLICT DO NOTHING")
+    try:
+        qr = tlv_qr("Panda", "300000000000003", "2026-10-21T10:00:00Z", "115.00", "15.00")
+        r = b.admin.api.post("/agent/scan-receipt", json={"household_id": b.id, "qr_code_raw": qr})
+        assert r.status_code == 200 and r.json()["status"] == "success", r.text
+        tx = world.db.one("SELECT category_code, sub_category FROM public.transactions WHERE household_id = %s", (b.id,))
+        assert tx["category_code"] == "OPEX-GROCERY" and tx["sub_category"] != "sub-planted-old", tx
+    finally:
+        world.db.query("DELETE FROM public.cost_control_sub_categories WHERE sub_code = 'sub-planted-old'")
+
+
+def test_api05_api08_colliding_custom_code_rename_refused_with_one_message(world, llm):
+    a = world.roommates("fx05a", n_members=0)
+    b = world.roommates("fx05b", n_members=0)
+    for hh in (b, a):
+        r = hh.admin.api.post(f"/households/{hh.id}/categories/custom", json={"code": "RENTFX", "category": "Rent"})
+        assert r.status_code == 200, r.text
+    r = b.admin.api.post("/budgets/sub-categories", json={
+        "household_id": b.id, "parent_code": "CUSTOM-RENTFX", "name_en": "Villa Riyadh", "sub_code": "villa"})
+    assert r.status_code == 403, r.text  # two owners: nobody may define under the shared code
+    answers = [a.admin.api.patch("/budgets/sub-categories", json={
+        "parent_code": code, "sub_code": "villa", "name_en": "PWNED by A"}) for code in
+        ("CUSTOM-RENTFX", "CUSTOM-NOPE-FX", "OPEX-GROCERY")]
+    assert {x.status_code for x in answers} == {403}
+    assert len({x.json()["detail"] for x in answers}) == 1
