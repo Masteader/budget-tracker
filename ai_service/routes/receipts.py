@@ -16,7 +16,7 @@ from routes.nafaqah import nafaqah_http_error
 from supabase_client import InvalidAttributionError, UnknownCategoryError
 from utils import safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
-from receipt_scanner import process_receipt_scan
+from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
 
 logger = logging.getLogger(__name__)
@@ -127,6 +127,11 @@ async def scan_receipt(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)
         raise HTTPException(status_code=422, detail=UnknownCategoryError.PUBLIC_MESSAGE)
+    except ReceiptImageTooLarge as exc:
+        # Pixel / stitched-canvas limits, checked from the image headers before decoding.
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=413, detail=str(exc))
     except InvalidAttributionError as exc:
         # paid_by / beneficiary name nobody in this household (a fixed, database-free message).
         if use_idempotency:
