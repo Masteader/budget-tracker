@@ -103,3 +103,27 @@ def test_api05_api08_colliding_custom_code_rename_refused_with_one_message(world
         ("CUSTOM-RENTFX", "CUSTOM-NOPE-FX", "OPEX-GROCERY")]
     assert {x.status_code for x in answers} == {403}
     assert len({x.json()["detail"] for x in answers}) == 1
+
+
+# ─── FABLE-API-06: bounded free text ──────────────────────────────────────────
+
+def test_api06_oversized_overrides_refused_and_junk_qr_not_persisted(world, llm):
+    import base64
+
+    hh = world.roommates("fx06", n_members=0)
+    png = base64.b64encode(base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    )).decode()
+    for extra in ({"qr_code_raw": "Q" * 300_000}, {"merchant": "X" * 100_000}):
+        r = hh.admin.api.post("/agent/scan-receipt", json={"household_id": hh.id, "images_base64": [png], **extra})
+        assert r.status_code == 422, r.text[:200]
+    llm.queue_json({"merchant": "Tamimi", "total_amount": 55.5, "category_code": "OPEX-GROCERY",
+                    "items": [{"name": "milk", "quantity": 1, "price": 55.5}]})
+    r = hh.admin.api.post("/agent/scan-receipt", json={
+        "household_id": hh.id, "images_base64": [png], "qr_code_raw": "Q" * 4000, "merchant": "M" * 120})
+    assert r.status_code == 200 and r.json()["status"] == "success", r.text[:300]
+    row = world.db.one("SELECT qr_code_raw, length(merchant) AS m FROM public.transactions WHERE household_id = %s",
+                       (hh.id,))
+    assert row["qr_code_raw"] is None and row["m"] == 120
+    r = world.chat_commit(hh.admin, hh, llm, merchant="Coffee", amount=16, extra_body={"beneficiary": "B" * 61})
+    assert r.status_code == 422, r.text[:200]

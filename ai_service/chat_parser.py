@@ -48,6 +48,11 @@ class ChatLineItem(BaseModel):
     price: float = Field(..., description="Total price for this item line in SAR")
     sub_category: Optional[str] = Field(None, description="Sub-category code for this specific item")
 
+    @field_validator("name")
+    @classmethod
+    def bound_name(cls, v: str) -> str:
+        return v[:200] if isinstance(v, str) else v
+
     @field_validator("price")
     @classmethod
     def validate_price(cls, v: float) -> float:
@@ -93,6 +98,12 @@ class ParsedChatExpense(BaseModel):
         if v > 10_000_000:
             raise ValueError("Total expense amount exceeds maximum limit (10,000,000 SAR)")
         return round(float(v), 2)
+
+    @field_validator("beneficiary", "sub_category", "paid_by", "spent_by")
+    @classmethod
+    def bound_short_text(cls, v: Optional[str]) -> Optional[str]:
+        # Model output is not trusted either (FABLE-API-06): short attribution/code fields.
+        return v[:60] if isinstance(v, str) else v
 
     @field_validator("merchant")
     @classmethod

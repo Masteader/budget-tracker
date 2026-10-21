@@ -60,6 +60,22 @@ def safe_error_response(
     )
 
 
+def bounded_text(body: dict, field: str, max_length: int) -> Optional[str]:
+    """
+    Optional free-text field of a JSON body: None when absent, else a string of at most
+    ``max_length`` characters, otherwise HTTP 422 (FABLE-API-06: overrides were stored verbatim,
+    up to ~24 MiB per row).
+    """
+    value = body.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(status_code=422, detail=f"{field} must be text.")
+    if len(value) > max_length:
+        raise HTTPException(status_code=422, detail=f"{field} must be at most {max_length} characters.")
+    return value
+
+
 def validate_uuid(value: str, field_name: str = "household_id") -> str:
     """Validate a string is a valid UUID. Raises HTTPException(400) if not."""
     try:

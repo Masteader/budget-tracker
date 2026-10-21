@@ -480,7 +480,7 @@ def validate_ocr_receipt_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"Invalid receipt item price ({price}). Must be between 0 and 10,000,000 SAR.")
 
         valid_items.append({
-            "name": name or "Item",
+            "name": (name or "Item")[:200],
             "quantity": round(qty, 2),
             "price": round(price, 2),
         })
@@ -614,7 +614,12 @@ def process_receipt_scan(
             "parsed_data": parsed,
         }
 
-    resolved_qr = qr_code_raw or parsed.get("zatca_qr_raw")
+    # Persist a QR payload only when it is a decodable ZATCA code (<= 4096 characters, enforced by
+    # decode_zatca_tlv): arbitrary client or model text is never stored (FABLE-API-06).
+    resolved_qr = next(
+        (q for q in (qr_code_raw, parsed.get("zatca_qr_raw")) if isinstance(q, str) and decode_zatca_tlv(q)),
+        None,
+    )
     # The merchant is shown and stored as text: no audit separator or tag keyword (FABLE-API-01).
     merchant = (
         sanitize_audit_text(override_merchant or parsed.get("merchant"), MAX_MERCHANT_LENGTH) or "Scanned Merchant"
