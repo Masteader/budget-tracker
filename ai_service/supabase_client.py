@@ -1047,6 +1047,21 @@ def is_supabase_configured() -> bool:
     return bool(url and describe_supabase_key()["key"])
 
 
+class InviteTargetNotFound(LookupError):
+    """``target_member_id`` is not a dependent of the inviting household (HTTP 404)."""
+
+    PUBLIC_MESSAGE = "target_member_id is not a member profile of this household."
+
+    def __init__(self, message: str = PUBLIC_MESSAGE):
+        super().__init__(message)
+
+
+class InviteRejectedError(TransactionRejectedError):
+    """The database refused the invite insert (403 / 409 / 422, never the database text)."""
+
+    PUBLIC_MESSAGE = "The database rejected this invite."
+
+
 def create_household_role_invite(
     household_id: str,
     role: str,
@@ -1059,6 +1074,23 @@ def create_household_role_invite(
     """
     import secrets
     from datetime import datetime, timezone, timedelta
+
+    if target_member_id is not None and is_supabase_configured():
+        # FABLE2-API-06: the target must be a dependent (manual member) of this household; the
+        # route checked it is a UUID (400). The DB trigger validate_invite_target_member enforces
+        # the same rule; checking first answers 404 instead of a refused insert.
+        res = (
+            get_client()
+            .table("household_dependents")
+            .select("id, household_id")
+            .eq("id", target_member_id)
+            .eq("household_id", household_id)
+            .execute()
+        )
+        data = getattr(res, "data", None)
+        rows = data if isinstance(data, list) else ([data] if data else [])
+        if not any(str(r.get("household_id")) == str(household_id) for r in rows if isinstance(r, dict)):
+            raise InviteTargetNotFound()
 
     code = secrets.token_hex(8).upper()
     expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
@@ -1075,7 +1107,18 @@ def create_household_role_invite(
 
     if is_supabase_configured():
         client = get_client()
-        client.table("household_invites").insert(invite_data).execute()
+        try:
+            client.table("household_invites").insert(invite_data).execute()
+        except Exception as exc:
+            # A database refusal is the request's fault (4xx), never a 500 (FABLE2-API-06).
+            from postgrest_compat import db_error_fields
+
+            sqlstate = db_error_fields(exc)["code"]
+            if sqlstate == "23503":
+                raise InviteTargetNotFound() from exc
+            if sqlstate in FINAL_DB_REFUSAL_CODES or sqlstate == "22P02":
+                raise InviteRejectedError(sqlstate) from exc
+            raise
         return invite_data
 
     # Local file fallback ONLY when Supabase is not configured
@@ -1119,7 +1162,11 @@ def inspect_household_role_invite(invite_code: str) -> dict:
                 target_member_id = inv.get("target_member_id")
                 if target_member_id:
                     try:
-                        dep_res = client.table("household_dependents").select("name").eq("id", target_member_id).maybe_single().execute()
+                        # Only a dependent of the invite's own household is named (FABLE2-API-06).
+                        dep_res = (
+                            client.table("household_dependents").select("name").eq("id", target_member_id)
+                            .eq("household_id", inv.get("household_id")).maybe_single().execute()
+                        )
                         if dep_res and hasattr(dep_res, "data") and dep_res.data:
                             inv["target_member_name"] = dep_res.data.get("name")
                     except Exception as dep_exc:
