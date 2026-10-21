@@ -79,3 +79,5 @@ Fixed on branch `audit/claude-fable-roles-nafaqah` with migration `2026102080000
 | FABLE-LOGIC-06 | Fixed: triggers, SQL recompute, Python recalculation and breakdown skip `wife_personal`. |
 | FABLE-DB-01 | Fixed: invites admin-readable only; members cannot claim invites of their household. |
 | FABLE-DB-03 | Fixed: re-joining never demotes; sync trigger never downgrades an admin. |
+
+**App status (2026-10-21, Flutter handoff):** FABLE-LOGIC-04 provider badge/selector and missing-provider prompt, FABLE-LOGIC-02 `overpaid` display and ledger-guard/no-provider explanations, FABLE-LOGIC-01 manual expense roles per household (members API), FABLE-DB-01 join/claim refusal messages: done in the app. FABLE-LOGIC-09: fixed (`money.dart` parses to integer halalas, half-up). Details in `FIX_LOG.md` ("Fable review — app handoff"). FABLE-LOGIC-03 (app writes of `beneficiary_type/beneficiary_id`) left for the follow-up.
