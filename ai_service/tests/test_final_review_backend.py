@@ -67,15 +67,15 @@ def db(fake_supabase):
         {"id": WIFE, "household_id": FAMILY, "role": "member", "financial_role": "spouse", "display_name": "W"},
     ])
     fake_supabase.seed("household_memberships", [
-        {"household_id": ROOM, "user_id": A, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"household_id": ROOM, "user_id": B, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
-        {"household_id": ROOM, "user_id": C, "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
-        {"household_id": FAMILY, "user_id": HUSBAND, "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"household_id": FAMILY, "user_id": WIFE, "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": A, "financial_role": "peer", "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": B, "financial_role": "peer", "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"household_id": ROOM, "user_id": C, "financial_role": "peer", "role": "member", "created_at": "2026-01-03T00:00:00+00:00"},
+        {"household_id": FAMILY, "user_id": HUSBAND, "financial_role": "provider", "role": "admin", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"household_id": FAMILY, "user_id": WIFE, "financial_role": "spouse", "role": "member", "created_at": "2026-01-02T00:00:00+00:00"},
     ])
     fake_supabase.seed("households", [
-        {"id": ROOM, "name": "Room", "payday_day": 27, "owner_user_id": A},
-        {"id": FAMILY, "name": "Family", "payday_day": 27, "owner_user_id": HUSBAND},
+        {"id": ROOM, "name": "Room", "payday_day": 27, "owner_user_id": A, "nafaqah_provider_user_id": A},
+        {"id": FAMILY, "name": "Family", "payday_day": 27, "owner_user_id": HUSBAND, "nafaqah_provider_user_id": HUSBAND},
     ])
     return fake_supabase
 

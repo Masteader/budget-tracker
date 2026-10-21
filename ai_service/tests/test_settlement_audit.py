@@ -29,9 +29,11 @@ def family(fake_supabase):
     ])
     # household_memberships is authoritative (users.household_id is only the active household).
     fake_supabase.seed("household_memberships", [
-        {"user_id": HUSBAND, "household_id": HH, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
-        {"user_id": WIFE, "household_id": HH, "role": "admin", "created_at": "2026-01-02T00:00:00+00:00"},
+        {"user_id": HUSBAND, "financial_role": "provider", "household_id": HH, "role": "member", "created_at": "2026-01-01T00:00:00+00:00"},
+        {"user_id": WIFE, "financial_role": "spouse", "household_id": HH, "role": "admin", "created_at": "2026-01-02T00:00:00+00:00"},
     ])
+    # The wife administers the household; the husband is the explicit Nafaqah provider.
+    fake_supabase.seed("households", [{"id": HH, "payday_day": 27, "owner_user_id": WIFE, "nafaqah_provider_user_id": HUSBAND}])
     return fake_supabase
 
 

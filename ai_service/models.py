@@ -306,4 +306,14 @@ class PrimaryAdminTransferRequest(BaseModel):
         return _uuid_validator(v)
 
 
+class NafaqahProviderSetRequest(BaseModel):
+    """The household's Nafaqah provider (husband): a non-spouse member, chosen by an admin."""
+    user_id: str = Field(..., description="Member to name as the Nafaqah provider")
+
+    @field_validator("user_id")
+    @classmethod
+    def validate_provider_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
+
+
 

@@ -19,6 +19,12 @@ Money is handled as ``Decimal`` / integer halalas; floats only appear in API res
 Writes go through the SECURITY DEFINER RPCs of migration
 ``20261020300000_nafaqah_wife_allowance_and_reimbursements.sql`` with the verified caller passed
 as ``p_actor_user_id``, so the database re-checks every rule (and serialises repayments).
+
+Roles are per household (migration ``20261020800000``, Fable review): who is the wife comes from
+``household_memberships.financial_role`` of THAT household (a wife who also joins a roommate flat
+stays the wife of her family), and the husband is the household's explicit Nafaqah provider
+(``households.nafaqah_provider_user_id``: the primary admin by default, changed by an admin), never
+inferred from user-level roles or admin rights.
 """
 
 from __future__ import annotations
@@ -61,6 +67,14 @@ class NotFamilyHousehold(NafaqahError):
 
 class InvalidNafaqahRequest(NafaqahError):
     """Malformed amount, cycle key, payment method or a wife outside this household."""
+
+
+class LedgerWouldBeOverpaid(NafaqahError):
+    """An edit/delete of a wife_reimbursable advance would leave the advances below the repayments."""
+
+
+class NoProviderError(NafaqahError):
+    """The family household has no Nafaqah provider; an admin must choose one (HTTP 409)."""
 
 
 class OverpaymentError(NafaqahError):
@@ -176,12 +190,22 @@ def classify_nafaqah(
 class FamilyContext:
     household_id: str
     members: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # The husband: the explicit provider while the household is a family and he is still a
+    # non-spouse member; None otherwise (mirrors public.nafaqah_husband_id()).
     husband_id: Optional[str] = None
     wives: List[Dict[str, Any]] = field(default_factory=list)
+    # households.nafaqah_provider_user_id as stored (also set in households without a wife).
+    provider_user_id: Optional[str] = None
+    primary_admin_id: Optional[str] = None
 
     @property
     def is_family(self) -> bool:
         return bool(self.wives)
+
+    @property
+    def needs_provider(self) -> bool:
+        """A family without a (valid) provider: new classified expenses are refused until set."""
+        return self.is_family and not self.husband_id
 
     def is_member(self, user_id: Optional[str]) -> bool:
         return bool(user_id) and str(user_id) in self.members
@@ -207,17 +231,26 @@ class FamilyContext:
         return member.get("display_name") if member else None
 
 
+def _household_roles_row(client, household_id: str) -> Dict[str, Any]:
+    """owner_user_id (primary admin) and nafaqah_provider_user_id of the household."""
+    row = first_row(
+        client.table("households").select("owner_user_id, nafaqah_provider_user_id").eq("id", household_id)
+    )
+    return row or {}
+
+
 def load_family_context(household_id: str) -> FamilyContext:
     """
-    Members of the household (household_memberships is authoritative) with their financial role.
-    The husband mirrors public.nafaqah_husband_id(): a provider member (financial_role 'provider'
-    or unset), preferring the household's primary admin, then any admin (co-admins included),
-    then the longest-standing membership. Admin rights alone never make a wife the husband.
+    Members of the household (household_memberships is authoritative) with their financial role
+    IN THIS HOUSEHOLD (``household_memberships.financial_role``). The husband is the household's
+    explicit Nafaqah provider (``households.nafaqah_provider_user_id``), as long as the household
+    has a wife and he is a non-spouse member; admin rights or a user-level role never make anyone
+    the husband. Errors propagate: callers must not guess "not a family".
     """
     client = get_client()
     memberships = (
         client.table("household_memberships")
-        .select("user_id, role, created_at")
+        .select("user_id, role, created_at, financial_role")
         .eq("household_id", household_id)
         .execute()
     ).data or []
@@ -226,7 +259,7 @@ def load_family_context(household_id: str) -> FamilyContext:
     if user_ids:
         rows = (
             client.table("users")
-            .select("id, display_name, financial_role")
+            .select("id, display_name")
             .in_("id", user_ids)
             .execute()
         ).data or []
@@ -243,7 +276,8 @@ def load_family_context(household_id: str) -> FamilyContext:
             "role": m.get("role") or "member",
             "created_at": str(m.get("created_at") or ""),
             "display_name": user.get("display_name"),
-            "financial_role": _norm(user.get("financial_role")) or "provider",
+            # NOT NULL in the database; a missing value is never read as 'spouse' or 'provider'.
+            "financial_role": _norm(m.get("financial_role")) or "family_member",
         }
 
     ordered = sorted(ctx.members.values(), key=lambda m: (m["created_at"], m["id"]))
@@ -252,13 +286,14 @@ def load_family_context(household_id: str) -> FamilyContext:
         for m in ordered
         if m["financial_role"] == "spouse"
     ]
-    if ctx.wives:
-        from household_permissions import household_owner_id
 
-        primary = household_owner_id(client, household_id)
-        providers = [m for m in ordered if m["financial_role"] == "provider"]
-        providers.sort(key=lambda m: (m["id"] != primary, m["role"] != "admin", m["created_at"], m["id"]))
-        ctx.husband_id = providers[0]["id"] if providers else None
+    roles = _household_roles_row(client, household_id)
+    owner = str(roles.get("owner_user_id") or "") or None
+    provider = str(roles.get("nafaqah_provider_user_id") or "") or None
+    ctx.primary_admin_id = owner
+    ctx.provider_user_id = provider
+    if ctx.wives and provider and ctx.is_member(provider) and not ctx.is_wife(provider):
+        ctx.husband_id = provider
     return ctx
 
 
@@ -444,6 +479,17 @@ def _resolve_cycle(ctx: FamilyContext, cycle_key: Optional[str]) -> str:
 
 # ─── Database error mapping ───────────────────────────────────────────────────
 
+LEDGER_WOULD_BE_OVERPAID = "ledger_would_be_overpaid"
+
+
+def is_ledger_overpaid_error(exc: Exception) -> bool:
+    """The guard trigger of migration 20261020800000 refused a transaction edit/delete."""
+    fields = db_error_fields(exc)
+    return fields["hint"] == LEDGER_WOULD_BE_OVERPAID or (
+        fields["code"] == "22023" and "ledger overpaid" in fields["message"]
+    )
+
+
 def _map_db_error(exc: Exception) -> Exception:
     """
     Map a refusal of the Nafaqah RPCs to the service's errors. Every RAISE in migration
@@ -456,6 +502,16 @@ def _map_db_error(exc: Exception) -> Exception:
     message, code, hint = fields["message"], fields["code"], fields["hint"]
     if hint == "overpayment" or "exceeds the outstanding balance" in message:
         return OverpaymentError("Reimbursement exceeds the outstanding balance.")
+    if hint == LEDGER_WOULD_BE_OVERPAID or "ledger overpaid" in message:
+        return LedgerWouldBeOverpaid(
+            "This change would leave the wife's reimbursement ledger overpaid: the husband already repaid more."
+        )
+    if hint == "no_nafaqah_provider":
+        return NoProviderError("This family has no Nafaqah provider: a household admin must choose one.")
+    if hint == "provider_is_spouse":
+        return InvalidNafaqahRequest("A wife cannot be the Nafaqah provider.")
+    if code == "P0002":
+        return InvalidNafaqahRequest("That user is not a member of this household.")
     if code == "42501" or message.startswith("Forbidden"):
         return NafaqahForbidden("Not allowed for this household member.")
     if code in ("22023", "23514", "23503"):
@@ -676,6 +732,11 @@ def set_allowance(
 def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] = None) -> Dict[str, Any]:
     """Everything the family Nafaqah card needs, from the caller's point of view."""
     role = ctx.role_of(caller_id)
+    provider_fields = {
+        "provider_user_id": ctx.provider_user_id,
+        "needs_provider": ctx.needs_provider,
+        "can_set_provider": ctx.is_admin(caller_id),
+    }
     if not ctx.is_family:
         return {
             "household_id": ctx.household_id,
@@ -687,6 +748,7 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
             "wives": [],
             "can_set_allowance": False,
             "can_record_reimbursement": False,
+            **provider_fields,
         }
     cycle = _resolve_cycle(ctx, cycle_key)
     wives = []
@@ -709,4 +771,42 @@ def build_summary(ctx: FamilyContext, caller_id: str, cycle_key: Optional[str] =
         "wives": wives,
         "can_set_allowance": can_set_allowance(ctx, caller_id),
         "can_record_reimbursement": can_record_reimbursement(ctx, caller_id),
+        **provider_fields,
+    }
+
+
+# ─── Nafaqah provider (owner decision 2026-10-21) ─────────────────────────────
+
+def set_provider(ctx: FamilyContext, actor_id: str, provider_user_id: str) -> Dict[str, Any]:
+    """
+    A household admin names the Nafaqah provider (husband): a non-spouse member of the household.
+    Goes through public.set_nafaqah_provider with the verified caller, so the database re-checks.
+    """
+    _require_member(ctx, actor_id)
+    if not ctx.is_admin(actor_id):
+        raise NafaqahForbidden("Only a household admin can choose the Nafaqah provider.")
+    target = _norm(provider_user_id)
+    if not ctx.is_member(target):
+        raise InvalidNafaqahRequest("The provider must be a member of this household.")
+    if ctx.members[target].get("financial_role") == "spouse":
+        raise InvalidNafaqahRequest("A wife cannot be the Nafaqah provider.")
+
+    try:
+        res = get_client().rpc(
+            "set_nafaqah_provider",
+            {"p_household_id": ctx.household_id, "p_user_id": target, "p_actor_user_id": actor_id},
+        ).execute()
+    except Exception as exc:
+        mapped = _map_db_error(exc)
+        if mapped is exc:
+            raise
+        raise mapped from exc
+
+    data = res.data if isinstance(getattr(res, "data", None), dict) else {}
+    previous = data.get("previous_provider_user_id", ctx.provider_user_id)
+    return {
+        "status": "success",
+        "household_id": ctx.household_id,
+        "provider_user_id": target,
+        "previous_provider_user_id": str(previous) if previous else None,
     }

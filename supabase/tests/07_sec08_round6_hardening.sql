@@ -381,16 +381,30 @@ DO $$
 DECLARE
     v_code text := 'DOUBLECLAIMTEST1';
     v_res jsonb;
-    v_user_a uuid := '22222222-0000-0000-0000-000000000002';
+    v_user_a uuid := '44444444-0000-0000-0000-000000000004';  -- newcomer (not yet a member)
     v_user_b uuid := '33333333-0000-0000-0000-000000000003';
 BEGIN
+    -- Re-runnable (this suite commits): the newcomer starts outside the household.
+    INSERT INTO auth.users (id, email) VALUES (v_user_a, 'newcomer@example.com') ON CONFLICT (id) DO NOTHING;
+    DELETE FROM public.household_memberships WHERE user_id = v_user_a;
+    UPDATE public.users SET household_id = NULL, role = 'member' WHERE id = v_user_a;
+    DELETE FROM public.invite_attempt_log WHERE user_id = v_user_a;
+
     INSERT INTO public.household_invites (household_id, invite_code, role, expires_at)
     VALUES ('6086befc-0000-0000-0000-000000000001', v_code, 'peer', now() + interval '1 day')
     ON CONFLICT (invite_code) DO UPDATE SET used_by = NULL, expires_at = now() + interval '1 day';
 
-    -- 1. User A claims invite via claim_household_role_invite
+    -- 0. An existing member cannot consume it (FABLE-DB-01): refused, invite stays open.
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claims" = '{"sub": "22222222-0000-0000-0000-000000000002", "role": "authenticated"}';
+    v_res := public.claim_household_role_invite(v_code);
+    IF (v_res->>'success')::boolean IS TRUE OR v_res->>'code' IS DISTINCT FROM 'already_member' THEN
+        RAISE EXCEPTION 'VULNERABILITY (FABLE-DB-01): an existing member claimed an invite of their household: %', v_res;
+    END IF;
+    RAISE NOTICE 'PASSED: an existing member cannot claim an invite of their own household.';
+
+    -- 1. User A (newcomer) claims invite via claim_household_role_invite
+    SET LOCAL "request.jwt.claims" = '{"sub": "44444444-0000-0000-0000-000000000004", "role": "authenticated"}';
 
     v_res := public.claim_household_role_invite(v_code);
     IF (v_res->>'success')::boolean IS NOT TRUE THEN

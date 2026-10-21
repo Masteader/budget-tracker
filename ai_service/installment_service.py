@@ -282,7 +282,7 @@ class InstallmentService:
             end_ts = f"{cycle_info['cycle_end']}T23:59:59"
             tx_res = (
                 sb.table("transactions")
-                .select("id, category_code, amount, cycle_key, timestamp, is_settlement")
+                .select("id, category_code, amount, cycle_key, timestamp, is_settlement, nafaqah_class")
                 .eq("household_id", household_id)
                 .execute()
             )
@@ -292,6 +292,8 @@ class InstallmentService:
             for t in (tx_res.data or []):
                 if t.get("is_settlement"):
                     continue  # a settlement payment between members is not spending
+                if t.get("nafaqah_class") == "wife_personal":
+                    continue  # charged to the wife's allowance only (owner decision, FABLE-LOGIC-06)
                 t_cycle = t.get("cycle_key")
                 t_ts = t.get("timestamp") or ""
                 in_cycle = (t_cycle == target_key) or (not t_cycle and start_ts <= t_ts <= end_ts)

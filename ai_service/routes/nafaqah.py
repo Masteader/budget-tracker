@@ -4,6 +4,9 @@ Family Nafaqah routes: the wife's reimbursement ledger and her personal allowanc
 Every route authenticates the Supabase JWT and checks household membership
 (``verify_household_access``); the acting user is always the JWT subject, never a body field,
 and every wife id is checked to be a spouse member of the URL's household (no IDOR).
+
+The husband is the household's explicit Nafaqah provider (``PUT .../nafaqah/provider``, admins);
+roles are read per household (migration 20261020800000).
 """
 
 from __future__ import annotations
@@ -14,12 +17,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from auth import get_current_user_id, verify_household_access
-from models import NafaqahAllowanceSetRequest, NafaqahReimbursementCreateRequest
+from auth import get_current_user_id, verify_household_access, verify_household_admin_access
+from models import NafaqahAllowanceSetRequest, NafaqahProviderSetRequest, NafaqahReimbursementCreateRequest
 from nafaqah_service import (
     InvalidNafaqahRequest,
+    LedgerWouldBeOverpaid,
     NafaqahError,
     NafaqahForbidden,
+    NoProviderError,
     NotFamilyHousehold,
     OverpaymentError,
     build_summary,
@@ -29,6 +34,7 @@ from nafaqah_service import (
     record_reimbursement,
     resolve_wife_id,
     set_allowance,
+    set_provider,
 )
 from utils import safe_error_response, validate_uuid
 
@@ -40,7 +46,7 @@ _CYCLE_KEY_PATTERN = r"^[0-9]{4}-(0[1-9]|1[0-2])$"
 
 
 def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
-    """Rule violations → 403 (who), 409 (state: not a family / overpayment), 422 (input)."""
+    """Rule violations → 403 (who), 409 (state: not a family / overpayment / ledger / no provider), 422 (input)."""
     if isinstance(exc, NafaqahForbidden):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     if isinstance(exc, OverpaymentError):
@@ -48,6 +54,12 @@ def nafaqah_http_error(exc: NafaqahError) -> HTTPException:
         if exc.outstanding is not None:
             detail["outstanding"] = exc.outstanding
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    if isinstance(exc, LedgerWouldBeOverpaid):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "ledger_would_be_overpaid"}
+        )
+    if isinstance(exc, NoProviderError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "no_provider"})
     if isinstance(exc, NotFamilyHousehold):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(exc), "code": "not_family"})
     if isinstance(exc, InvalidNafaqahRequest):
@@ -179,3 +191,24 @@ async def nafaqah_set_allowance(
         return set_allowance(ctx, caller, wife_id, str(payload.amount), payload.cycle_key)
 
     return await _run(work, public_message="Failed to set the allowance.")
+
+
+@router.put(
+    "/households/{household_id}/nafaqah/provider",
+    tags=["nafaqah"],
+    summary="Choose the household's Nafaqah provider (husband): a non-spouse member (household admins).",
+)
+async def nafaqah_set_provider(
+    household_id: str,
+    payload: NafaqahProviderSetRequest,
+    request: Request,
+    _auth: str = Depends(verify_household_admin_access),
+):
+    validate_uuid(household_id)
+    caller = get_current_user_id(request)
+
+    def work():
+        result = set_provider(load_family_context(household_id), caller, payload.user_id)
+        return {**result, "summary": build_summary(load_family_context(household_id), caller)}
+
+    return await _run(work, public_message="Failed to set the Nafaqah provider.")

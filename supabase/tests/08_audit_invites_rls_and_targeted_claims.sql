@@ -157,6 +157,11 @@ END $$;
 
 -- 6. Targeted invite via claim_household_role_invite (service-role path used by ai_service)
 UPDATE public.household_dependents SET linked_user_id = NULL WHERE id = 'd1de0000-0000-0000-0000-000000000001';
+-- The newcomer leaves again first: an existing member may not claim another
+-- invite of their own household (FABLE-DB-01, test 25).
+DELETE FROM public.household_memberships
+WHERE user_id = 'd1000000-0000-0000-0000-000000000003' AND household_id = 'd1aa0000-0000-0000-0000-000000000001';
+UPDATE public.users SET household_id = NULL, role = 'member' WHERE id = 'd1000000-0000-0000-0000-000000000003';
 INSERT INTO public.household_invites (household_id, invite_code, role, expires_at, target_member_id)
 VALUES ('d1aa0000-0000-0000-0000-000000000001', 'DB05TARGETED0002', 'spouse', now() + interval '1 day',
         'd1de0000-0000-0000-0000-000000000001');

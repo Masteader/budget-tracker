@@ -85,6 +85,7 @@ class HouseholdRoster:
     household_id: str
     primary_admin_id: Optional[str] = None
     members: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    nafaqah_provider_id: Optional[str] = None
 
     def role_of(self, user_id: Optional[str]) -> Optional[str]:
         member = self.members.get(str(user_id or ""))
@@ -114,12 +115,27 @@ def household_owner_id(client, household_id: str) -> Optional[str]:
     return str(owner) if owner else None
 
 
+def household_nafaqah_provider_id(client, household_id: str) -> Optional[str]:
+    """
+    households.nafaqah_provider_user_id (the explicit Nafaqah provider), or None when unset. Only
+    the members list (display) uses this helper; Nafaqah rules read it in load_family_context,
+    where a failure propagates.
+    """
+    try:
+        row = first_row(client.table("households").select("nafaqah_provider_user_id").eq("id", household_id))
+    except Exception as exc:
+        logger.warning("Could not read households.nafaqah_provider_user_id: %s", exc)
+        return None
+    provider = row.get("nafaqah_provider_user_id") if row else None
+    return str(provider) if provider else None
+
+
 def load_roster(household_id: str) -> HouseholdRoster:
     """Members (household_memberships is authoritative), their roles and the primary admin."""
     client = supabase_client.get_client()
     memberships = (
         client.table("household_memberships")
-        .select("user_id, role, created_at")
+        .select("user_id, role, created_at, financial_role")
         .eq("household_id", household_id)
         .execute()
     ).data or []
@@ -128,7 +144,7 @@ def load_roster(household_id: str) -> HouseholdRoster:
     if user_ids:
         rows = (
             client.table("users")
-            .select("id, display_name, financial_role")
+            .select("id, display_name")
             .in_("id", user_ids)
             .execute()
         ).data or []
@@ -145,9 +161,11 @@ def load_roster(household_id: str) -> HouseholdRoster:
             "role": ADMIN if m.get("role") == ADMIN else MEMBER,
             "joined_at": str(m.get("created_at") or ""),
             "display_name": user.get("display_name"),
-            "financial_role": user.get("financial_role"),
+            # The role in THIS household (FABLE-LOGIC-01), not the per-user cache.
+            "financial_role": m.get("financial_role"),
         }
 
+    roster.nafaqah_provider_id = household_nafaqah_provider_id(client, household_id)
     owner = household_owner_id(client, household_id)
     if owner and roster.is_admin(owner):
         roster.primary_admin_id = owner
@@ -223,6 +241,7 @@ def _member_view(roster: HouseholdRoster, member: Dict[str, Any], caller_id: str
         "role": member["role"],
         "financial_role": member.get("financial_role"),
         "is_primary": roster.is_primary(uid),
+        "is_nafaqah_provider": bool(roster.nafaqah_provider_id) and uid == roster.nafaqah_provider_id,
         "is_self": uid == str(caller_id),
         "joined_at": member.get("joined_at") or None,
     }
@@ -244,6 +263,10 @@ def list_members(household_id: str, caller_id: str) -> Dict[str, Any]:
         "caller_is_primary": roster.is_primary(caller_id),
         "can_manage_admins": caller_is_admin,
         "can_transfer_primary": roster.is_primary(caller_id),
+        # The Nafaqah provider (husband) is a separate role from the primary admin; any admin
+        # changes it (PUT /households/{id}/nafaqah/provider) to a non-spouse member.
+        "nafaqah_provider_user_id": roster.nafaqah_provider_id,
+        "can_set_nafaqah_provider": caller_is_admin,
         "members": [_member_view(roster, m, caller_id) for m in ordered],
     }
 

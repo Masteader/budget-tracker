@@ -529,6 +529,8 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
     for tx in txs:
         if tx.get("is_settlement"):
             continue  # a settlement payment between members is not spending
+        if tx.get("nafaqah_class") == "wife_personal":
+            continue  # charged to the wife's allowance only, never a category budget (FABLE-LOGIC-06)
         c_code = tx.get("category_code") or "OPEX-MISC"
         s_code = tx.get("sub_category")
         amt = float(tx.get("amount") or 0.0)
