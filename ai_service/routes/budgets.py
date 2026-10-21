@@ -181,7 +181,7 @@ async def list_recurring_bill_candidates(
 @router.get(
     "/budgets/installments",
     tags=["installments"],
-    summary="List active and completed BNPL installment plans for a household.",
+    summary="List BNPL installment plans (rows of installment_plans: ACTIVE by next_due_at, then the others), with frequency and next_due_at.",
 )
 async def list_installments(
     household_id: str,
@@ -200,7 +200,7 @@ async def list_installments(
 @router.post(
     "/budgets/installments",
     tags=["installments"],
-    summary="Create a new BNPL installment plan (e.g. Tamara/Tabby) and amortize purchase.",
+    summary="Create a BNPL installment plan and amortize the purchase. Optional frequency (monthly / biweekly); default: Tabby/Tamara Pay in 4 biweekly, else monthly.",
 )
 async def create_installment_plan(request: Request):
     try:
