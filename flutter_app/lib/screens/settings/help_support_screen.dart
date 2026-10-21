@@ -86,6 +86,17 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
         _FaqItem(questionKey: 'faq_salary_q3', answerKey: 'faq_salary_a3'),
       ],
     ),
+    // UX-05: the family rules, from the owner's decision (no spousal split).
+    _FaqCategory(
+      titleKey: 'faq_cat_nafaqah',
+      icon: Icons.family_restroom_rounded,
+      color: AppThemes.champagneGold,
+      faqs: [
+        _FaqItem(questionKey: 'faq_nafaqah_q1', answerKey: 'faq_nafaqah_a1'),
+        _FaqItem(questionKey: 'faq_nafaqah_q2', answerKey: 'faq_nafaqah_a2'),
+        _FaqItem(questionKey: 'faq_nafaqah_q3', answerKey: 'faq_nafaqah_a3'),
+      ],
+    ),
     _FaqCategory(
       titleKey: 'faq_cat_receipts',
       icon: Icons.qr_code_scanner_rounded,
