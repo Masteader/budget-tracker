@@ -79,6 +79,25 @@ void main() {
       await tester.pump();
       expect(find.byType(AccountsSummaryCard), findsNothing);
     });
+
+    testWidgets('minAccounts hides the card on the dashboard until there are two accounts', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: [AppLocalizationsDelegate()],
+          home: Scaffold(body: AccountsSummaryCard(householdId: 'h', minAccounts: 2)),
+        ),
+      );
+      await tester.pump();
+      const one = Account(id: 'a1', householdId: 'h', ownerUserId: 'u', name: 'Cash', accountType: AccountType.cash, balance: 100);
+      const two = Account(id: 'a2', householdId: 'h', ownerUserId: 'u', name: 'STC Pay', accountType: AccountType.eWallet, balance: 50);
+      fakeService.emit([one]);
+      await tester.pump();
+      expect(find.text('Accounts & Balances'), findsNothing);
+      fakeService.emit([one, two]);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Accounts & Balances'), findsOneWidget);
+    });
   });
 }
 

@@ -10,10 +10,14 @@ class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;
   final SalaryCycleInfo? cycle;
 
+  /// Clock for tests; defaults to now.
+  final DateTime? now;
+
   const BudgetHeroCard({
     super.key,
     required this.budgets,
     this.cycle,
+    this.now,
   });
 
   @override
@@ -25,8 +29,8 @@ class BudgetHeroCard extends StatelessWidget {
 
     // Cycle arithmetic runs on the Riyadh calendar date with the household
     // payday, whatever the device time zone (parity with the DB cycle_key).
-    final today = SalaryCycleService.riyadhToday();
-    final currentCycle = SalaryCycleService.currentCycle();
+    final today = SalaryCycleService.riyadhToday(now: now);
+    final currentCycle = SalaryCycleService.currentCycle(now: now);
     final fallbackDaysElapsed = today.difference(currentCycle.start).inDays + 1;
 
     final daysTotal = cycle?.daysTotal ?? currentCycle.lengthInDays;
@@ -55,6 +59,14 @@ class BudgetHeroCard extends StatelessWidget {
     final dailyAllowance = daysRemaining > 0 ? (remaining > 0 ? remaining / daysRemaining : 0.0) : 0.0;
     final isBurnCaution = dailyBurn > dailyAllowance && dailyAllowance > 0;
     final spentRatio = totalAllocated > 0 ? (totalSpent / totalAllocated).clamp(0.0, 1.0) : 0.0;
+
+    // When the money left runs out before payday at the current pace (the
+    // forecast the separate salary-cycle panel used to show).
+    DateTime? runOutDate;
+    if (dailyBurn > 0 && remaining > 0) {
+      final daysOfMoney = (remaining / dailyBurn).floor();
+      if (daysOfMoney < daysRemaining) runOutDate = today.add(Duration(days: daysOfMoney));
+    }
 
     final fmt = NumberFormat('#,##0.00', 'en_US');
     final currencyUnit = Padding(
@@ -299,7 +311,7 @@ class BudgetHeroCard extends StatelessWidget {
           ),
 
           // ─── Projected Overbudget Alert (if any) ───────────────────
-          if (projectedSpend > totalAllocated) ...[
+          if (runOutDate != null || projectedSpend > totalAllocated) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -324,7 +336,9 @@ class BudgetHeroCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      context.trArgs('projected_over_budget', {'amount': context.sar(projectedSpend)}),
+                      runOutDate != null
+                          ? context.trArgs('cycle_alert_burn_high', {'date': context.fmtDate(runOutDate, 'd MMM')})
+                          : context.trArgs('projected_over_budget', {'amount': context.sar(projectedSpend)}),
                       style: GoogleFonts.outfit(
                         color: isDark ? const Color(0xFFFFA657) : const Color(0xFFDC2626),
                         fontSize: 11.5,
