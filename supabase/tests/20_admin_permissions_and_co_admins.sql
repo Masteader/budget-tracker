@@ -38,6 +38,9 @@ BEGIN
         ('f2aa0000-0000-0000-0000-000000000001', 'Perm Roommates', 'PERMROOMCODE0001'),
         ('f2bb0000-0000-0000-0000-000000000001', 'Perm Family', 'PERMFAMCODE00001'),
         ('f2cc0000-0000-0000-0000-000000000001', 'Perm Outsider', 'PERMOUTCODE00001');
+    -- Roommate household (household_type, migration 20261020900000).
+    UPDATE public.households SET household_type = 'roommates'
+    WHERE id IN ('f2aa0000-0000-0000-0000-000000000001', 'f2cc0000-0000-0000-0000-000000000001');
 
     UPDATE public.users SET household_id = 'f2aa0000-0000-0000-0000-000000000001', role = 'admin', financial_role = 'peer'
     WHERE id = 'f2000000-0000-0000-0000-0000000000a1';
