@@ -69,8 +69,7 @@ budget-tracker/
 ├── supabase/           # schema.sql, seed.sql, migrations/, tests/ (SQL suite + run_tests.py)
 ├── ai_service/         # Python FastAPI + LiteLLM service (routes/, tests/, static/ = built web_app)
 ├── flutter_app/        # Flutter Android/iOS app (lib/, test/)
-├── web_app/            # React + Vite landing page (VIP early-access form)
-├── landing_page/       # Standalone static HTML landing pages (VIP form posts to /public/inquiries)
+├── web_app/            # React + Vite landing page, the only one (VIP early-access form)
 ├── tests/e2e/          # End-to-end suite
 └── docs/               # Documentation hub: docs/README.md
 ```
@@ -250,7 +249,8 @@ hour; app: 5 per user per hour; 200 per hour overall). Set either `RESEND_API_KE
 variables on the deployment, or every form shows an error.
 
 The page served at `/` is the `web_app` production build committed in `ai_service/static/`
-(`landing_page.py` falls back to the generated `_landing_impl.py` page only when it is missing).
+(`ai_service/landing_page.py` serves a tiny inline fallback page only when `static/index.html` is
+missing; the same module holds the `/auth/confirm` and `/auth/callback` pages).
 Refresh it after changing `web_app/` so the live VIP form posts to the same origin:
 
 ```bash

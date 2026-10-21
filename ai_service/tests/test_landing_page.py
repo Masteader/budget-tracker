@@ -1,119 +1,115 @@
+"""`/` serves the committed web_app build (the only landing page); auth pages stay inline."""
+
+import pathlib
+import re
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
+import landing_page
 from main import app
 
-@pytest.mark.asyncio
-async def test_root_landing_page():
+STATIC = pathlib.Path(__file__).resolve().parent.parent / "static"
+
+
+async def _get(path: str):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.get("/")
-    assert res.status_code == 200
-    assert "text/html" in res.headers["content-type"]
-    html = res.text
-    # Verify core branding and features
-    assert "Budget Tracker" in html
-    assert "ميزانية الأسرة" in html
-    # Verify coming soon badges for all three app stores
-    assert "Google Play" in html
-    assert "App Store" in html
-    assert "AppGallery" in html
-    assert "قريباً" in html
-    # Verify developer email
-    assert "fmscoinfo@fmsco.com.sa" in html
-    # Verify feature descriptions
-    assert "دورة الراتب" in html  # Flexible salary cycle
-    assert "الذكاء الاصطناعي" in html  # AI
-    assert "الادخار" in html  # Savings reserve
+        return await ac.get(path)
+
+
+def _served_bundle() -> str:
+    index = (STATIC / "index.html").read_text(encoding="utf-8")
+    scripts = re.findall(r'src="/assets/(index-[^"]+\.js)"', index)
+    assert scripts, "static/index.html must reference its bundled script"
+    return index + (STATIC / "assets" / scripts[0]).read_text(encoding="utf-8")
+
 
 @pytest.mark.asyncio
-async def test_auth_confirm_landing():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.get("/auth/confirm")
+async def test_root_serves_the_committed_web_app_build():
+    res = await _get("/")
+    assert res.status_code == 200
+    assert "text/html" in res.headers["content-type"]
+    assert res.text == (STATIC / "index.html").read_text(encoding="utf-8")
+    assert '<div id="root"></div>' in res.text
+
+
+@pytest.mark.asyncio
+async def test_bundle_assets_referenced_by_the_build_are_served():
+    index = (STATIC / "index.html").read_text(encoding="utf-8")
+    assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', index)
+    assert assets
+    for asset in assets:
+        res = await _get(asset)
+        assert res.status_code == 200, asset
+
+
+def test_fallback_page_is_used_only_when_the_build_is_missing(monkeypatch, tmp_path):
+    assert landing_page.get_landing_page_html() == (STATIC / "index.html").read_text(encoding="utf-8")
+
+    monkeypatch.setattr(landing_page, "STATIC_INDEX", tmp_path / "missing" / "index.html")
+    html = landing_page.get_landing_page_html()
+    assert html == landing_page.FALLBACK_LANDING_HTML
+    assert 'dir="rtl"' in html
+    assert 'href="mailto:fmscoinfo@fmsco.com.sa"' in html
+    # Self-contained: no third-party scripts, styles or fonts.
+    assert "<script" not in html
+    assert "https://" not in html
+
+
+@pytest.mark.asyncio
+async def test_root_falls_back_inline_when_the_build_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(landing_page, "STATIC_INDEX", tmp_path / "index.html")
+    res = await _get("/")
+    assert res.status_code == 200
+    assert "Budget Tracker" in res.text
+    assert "fmscoinfo@fmsco.com.sa" in res.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/auth/confirm", "/auth/callback"])
+async def test_auth_confirmation_pages(path):
+    res = await _get(path)
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
     html = res.text
     assert "تم تأكيد البريد الإلكتروني بنجاح" in html
-    assert "budgettracker://login" in html
+    assert 'href="budgettracker://login"' in html
     assert "fmscoinfo@fmsco.com.sa" in html
 
-@pytest.mark.asyncio
-async def test_auth_callback_landing():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.get("/auth/callback")
-    assert res.status_code == 200
-    assert "text/html" in res.headers["content-type"]
 
 @pytest.mark.asyncio
-async def test_hero_background_images():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res_webp = await ac.get("/hero-bg.webp")
-        res_jpg = await ac.get("/hero-bg.jpg")
-    assert res_webp.status_code == 200
-    assert "image/webp" in res_webp.headers["content-type"]
-    assert res_jpg.status_code == 200
-    assert "image/jpeg" in res_jpg.headers["content-type"]
+async def test_favicon_is_served():
+    res = await _get("/favicon.svg")
+    assert res.status_code == 200
+    assert "image/svg+xml" in res.headers["content-type"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/hero-bg.webp", "/hero-bg.jpg", "/hero_glacier.png"])
+async def test_removed_legacy_landing_images_are_gone(path):
+    res = await _get(path)
+    assert res.status_code == 404
 
 
 # ── VIP early-access form (WEB-09) ─────────────────────────────────────────────
 
-def _i18n_block(html: str, lang: str) -> str:
-    table = html.split("const T = {", 1)[1]
-    ar_block, en_block = table.split("\n  en: {", 1)
-    return ar_block if lang == "ar" else en_block
-
-
-def test_fallback_landing_has_vip_form_posting_to_inquiries_endpoint():
-    from _landing_impl import LANDING_HTML
-
-    assert 'id="vip-form"' in LANDING_HTML
-    assert "'/public/inquiries'" in LANDING_HTML  # same-origin endpoint
-    assert "vip_early_access" in LANDING_HTML
-    assert 'name="company_website"' in LANDING_HTML  # honeypot
-    assert "res.ok" in LANDING_HTML  # success only on 2xx
-    assert 'href="mailto:fmscoinfo@fmsco.com.sa"' in LANDING_HTML  # fallback kept
-    for lang in ("ar", "en"):
-        block = _i18n_block(LANDING_HTML, lang)
-        for key in ("vipl", "vipb", "vipsend", "vipok", "viperr", "viperr422", "viperr429", "vipnet"):
-            assert f"{key}:" in block, f"{lang}:{key}"
-
-
-def test_build_script_is_in_sync_with_generated_files():
-    """Running _build_landing.py must reproduce the committed files (no silent regressions)."""
-    import pathlib
-
-    import _build_landing
-    import _landing_impl
-
-    assert _build_landing.LANDING_HTML_CONTENT == _landing_impl.LANDING_HTML
-    here = pathlib.Path(_build_landing.__file__).parent
-    assert _build_landing.LANDING_PAGE_PY == (here / "landing_page.py").read_text(encoding="utf-8")
-
-
-
 def test_served_web_bundle_posts_vip_signups_to_same_origin_endpoint():
-    """`/` serves the committed web_app build; it must contain the real VIP submit, not a fake one."""
-    import pathlib
-    import re
-
-    static = pathlib.Path(__file__).resolve().parent.parent / "static"
-    index = (static / "index.html").read_text(encoding="utf-8")
-    scripts = re.findall(r'src="/assets/(index-[^"]+\.js)"', index)
-    assert scripts, "static/index.html must reference its bundled script"
-    bundle = (static / "assets" / scripts[0]).read_text(encoding="utf-8")
+    """The served build must contain the real VIP submit, not a fake one."""
+    bundle = _served_bundle()
     assert "/public/inquiries" in bundle
     assert "vip_early_access" in bundle
+    assert "company_website" in bundle  # honeypot
+    assert "fmscoinfo@fmsco.com.sa" in bundle
     # Built with VITE_API_BASE_URL= (same origin), so no hard-coded production host.
     assert "budget.fmsco.com.sa/public/inquiries" not in bundle
 
 
 # ── Public copy: Nafaqah family mode, privacy and technical claims ─────────────
 
-# Phrases that must never return to the public landing copy (translation QA):
-# a spousal cost split in family mode, "sovereign" (state-backed) wording in
-# Arabic, SMS being processed, and encryption claims the system does not meet.
+# Phrases that must never return to the public landing copy (translation QA, product review
+# §3.5 and "Stop doing"): a spousal cost split in family mode, "sovereign" (state-backed)
+# wording, SMS being processed, invented metrics, and claims the system does not meet.
 _FORBIDDEN_PUBLIC_COPY = (
     "proportional income allocation",
     "salary-weighted",
@@ -135,37 +131,7 @@ _FORBIDDEN_PUBLIC_COPY = (
 )
 
 
-def _served_bundle() -> str:
-    import pathlib
-    import re
-
-    static = pathlib.Path(__file__).resolve().parent.parent / "static"
-    index = (static / "index.html").read_text(encoding="utf-8")
-    script = re.findall(r'src="/assets/(index-[^"]+\.js)"', index)[0]
-    return index + (static / "assets" / script).read_text(encoding="utf-8")
-
-
-@pytest.mark.parametrize("source", ["served_bundle", "fallback_landing"])
-def test_public_copy_has_no_spousal_split_or_false_claims(source):
-    if source == "served_bundle":
-        text = _served_bundle()
-    else:
-        from _landing_impl import LANDING_HTML as text
+def test_public_copy_has_no_spousal_split_invented_metrics_or_false_claims():
+    text = _served_bundle()
     found = [p for p in _FORBIDDEN_PUBLIC_COPY if p in text]
-    assert not found, f"{source} contains: {found}"
-
-
-def test_served_family_demo_shows_husband_owes_wife():
-    bundle = _served_bundle()
-    assert "مستحق لها على الزوج" in bundle
-    assert "Owed back by husband" in bundle
-    assert "من مصروفها الشخصي" in bundle  # her personal purchases come from her allowance
-
-
-def test_fallback_arabic_privacy_matches_english_no_training():
-    from _landing_impl import LANDING_HTML
-
-    ar = _i18n_block(LANDING_HTML, "ar")
-    en = _i18n_block(LANDING_HTML, "en")
-    assert "ولا يُحتفظ بها لتدريب نماذج عامة" in ar
-    assert "not retained for general model training" in en
+    assert not found, f"served bundle contains: {found}"

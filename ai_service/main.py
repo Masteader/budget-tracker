@@ -181,10 +181,6 @@ async def firewall_token_middleware(request: Request, call_next):
             "/docs",
             "/openapi.json",
             "/redoc",
-            "/hero-bg.webp",
-            "/hero-bg.jpg",
-            "/hero_glacier.png",
-            "/hero_glacier.jpg",
             "/favicon.svg",
             # Anonymous waitlist/contact form; protected by validation, honeypot and rate limits.
             "/public/inquiries",
@@ -284,7 +280,7 @@ _log_security_configuration()
 # ─── Public Landing & Health Routes ──────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse, tags=["ops"])
 async def root_landing_page():
-    """Main public product showcase, feature explanations, and coming soon badges."""
+    """Public landing page: the committed web_app build (static/index.html)."""
     return HTMLResponse(content=get_landing_page_html())
 
 
@@ -301,16 +297,6 @@ if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
-@app.get("/hero_glacier.png", tags=["ops"])
-@app.get("/hero_glacier.jpg", tags=["ops"])
-async def hero_glacier_image():
-    """Serve sharp glacial iceberg background image."""
-    png_path = os.path.join(STATIC_DIR, "hero_glacier.png")
-    if os.path.exists(png_path):
-        return FileResponse(png_path, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Glacier image not found")
-
-
 @app.get("/favicon.svg", tags=["ops"])
 async def favicon_svg():
     """Serve application SVG favicon."""
@@ -318,24 +304,6 @@ async def favicon_svg():
     if os.path.exists(fav_path):
         return FileResponse(fav_path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=604800"})
     raise HTTPException(status_code=404, detail="Favicon not found")
-
-
-@app.get("/hero-bg.webp", tags=["ops"])
-async def hero_background_webp():
-    """Serve WebP cinematic background image for legacy landing page fallback."""
-    webp_path = os.path.join(STATIC_DIR, "hero_bg.webp")
-    if os.path.exists(webp_path):
-        return FileResponse(webp_path, media_type="image/webp", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Background image not found")
-
-
-@app.get("/hero-bg.jpg", tags=["ops"])
-async def hero_background_jpg():
-    """Serve JPEG fallback cinematic background image."""
-    jpg_path = os.path.join(STATIC_DIR, "hero_bg.jpg")
-    if os.path.exists(jpg_path):
-        return FileResponse(jpg_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
-    raise HTTPException(status_code=404, detail="Background image not found")
 
 
 @app.get("/health", tags=["ops"])
