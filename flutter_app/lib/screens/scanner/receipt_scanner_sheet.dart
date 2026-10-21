@@ -32,6 +32,7 @@ import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/nafaqah/nafaqah_review_section.dart';
+import '../../widgets/transactions/nafaqah_feed_badge.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
@@ -1372,6 +1373,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           categoryCode: categoryCode,
           source: 'receipt_scan',
           spentBy: _selectedSpentBy,
+          // Family: what the Nafaqah choice makes of it, not "shared" (UX-04).
+          attributionBadge: _nafaqah.isFamily
+              ? NafaqahFeedBadge(
+                  kind: nafaqahBadgeKindForClass(_nafaqahClass),
+                  wifeName: _nafaqah.wifeNameFor(_nafaqahWifeId),
+                  viewerIsWife: _nafaqah.viewerIsWife,
+                )
+              : null,
           items: items,
           initiallyExpanded: true,
         ),

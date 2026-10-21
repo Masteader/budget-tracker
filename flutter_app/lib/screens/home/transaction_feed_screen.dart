@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart';
+import '../../services/api_service.dart';
+import '../../widgets/transactions/nafaqah_feed_badge.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/installment_provider.dart';
@@ -27,7 +30,14 @@ import 'edit_transaction_sheet.dart';
 import '../../models/category_catalog.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
-  const TransactionFeedScreen({super.key});
+  /// The household whose family context words the badges (defaults to the
+  /// active household of the role provider or of the rows).
+  final String? householdId;
+
+  /// `GET /households/{id}/nafaqah` (injectable for tests).
+  final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
+
+  const TransactionFeedScreen({super.key, this.householdId, this.loadNafaqah});
 
   @override
   State<TransactionFeedScreen> createState() => _TransactionFeedScreenState();
@@ -41,6 +51,36 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
   bool _exportingPdf = false;
+
+  /// Family context (UX-04): whether rows get Nafaqah badges, and the names.
+  FeedFamilyContext _family = const FeedFamilyContext();
+  String? _familyRequestedFor;
+
+  /// Family filter values (UX-04): a [NafaqahBadgeKind] name.
+  static final Set<String> _familyFilterValues = NafaqahBadgeKind.values.map((k) => k.name).toSet();
+
+  void _ensureFamilyContext(String? householdId) {
+    if (householdId == null || householdId.isEmpty || _familyRequestedFor == householdId) return;
+    _familyRequestedFor = householdId;
+    final loader = widget.loadNafaqah ?? ApiService.instance.getNafaqahSummary;
+    Future<NafaqahSummary>.sync(() => loader(householdId)).then((summary) {
+      if (mounted && _familyRequestedFor == householdId) {
+        setState(() => _family = FeedFamilyContext.fromSummary(summary));
+      }
+    }).catchError((Object e) {
+      debugPrint('[TransactionFeed] Family context unavailable: $e');
+    });
+  }
+
+  /// A family household: from the Nafaqah summary, or (offline) from a
+  /// classified row.
+  bool _isFamily(List<Transaction> rows) => _family.isFamily || rows.any((t) => t.nafaqahClass != null);
+
+  Widget? _badgeFor(Transaction tx, bool isFamily) {
+    final kind = nafaqahBadgeKind(tx, isFamily: isFamily);
+    if (kind == null) return null;
+    return NafaqahFeedBadge(kind: kind, wifeName: _family.wifeNameFor(tx), viewerIsWife: _family.viewerIsWife);
+  }
 
   static final List<Map<String, String>> _categoryRawOptions = [
     {'code': 'ALL', 'emoji': ''},
@@ -89,8 +129,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       result = result.where((t) => t.categoryCode == _selectedCategoryFilter).toList();
     }
 
-    // 2. Spent By Filter
-    if (_selectedSpentByFilter != 'ALL') {
+    // 2. Spent By Filter (family: the Nafaqah kind)
+    if (_familyFilterValues.contains(_selectedSpentByFilter)) {
+      final family = _isFamily(list);
+      result = result.where((t) => nafaqahBadgeKind(t, isFamily: family)?.name == _selectedSpentByFilter).toList();
+    } else if (_selectedSpentByFilter != 'ALL') {
       result = result
           .where((t) => t.spentBy.toLowerCase() == _selectedSpentByFilter.toLowerCase())
           .toList();
@@ -186,12 +229,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          context.tr('filter_and_sort'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: context.textPrimary,
+                        Flexible(
+                          child: Text(
+                            context.tr('filter_and_sort'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: context.textPrimary,
+                            ),
                           ),
                         ),
                         TextButton(
@@ -367,6 +412,46 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     const SizedBox(height: 20),
 
                     // ── WHO SPENT THIS ──
+                    if (_isFamily(context.read<TransactionProvider>().transactions)) ...[
+                      Text(
+                        context.tr('feed_filter_nafaqah_title'),
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w700,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildFilterChip(
+                            label: context.tr('all'),
+                            selected: _selectedSpentByFilter == 'ALL',
+                            onSelected: (_) {
+                              setModalState(() => _selectedSpentByFilter = 'ALL');
+                              setState(() => _selectedSpentByFilter = 'ALL');
+                            },
+                          ),
+                          for (final kind in NafaqahBadgeKind.values)
+                            _buildFilterChip(
+                              label: NafaqahFeedBadge.label(
+                                context,
+                                kind,
+                                wifeName: _family.wifeNames.length == 1 ? _family.wifeNames.values.first : null,
+                                viewerIsWife: _family.viewerIsWife,
+                              ),
+                              selected: _selectedSpentByFilter == kind.name,
+                              onSelected: (_) {
+                                setModalState(() => _selectedSpentByFilter = kind.name);
+                                setState(() => _selectedSpentByFilter = kind.name);
+                              },
+                            ),
+                        ],
+                      ),
+                    ] else ...[
                     Text(
                       context.tr('who_spent_this'),
                       style: GoogleFonts.outfit(
@@ -416,6 +501,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         ),
                       ],
                     ),
+                    ],
                     const SizedBox(height: 24),
 
                     // Apply Button
@@ -527,6 +613,25 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       ),
       onSelected: onSelected,
     );
+  }
+
+  void _exportCsv(BuildContext context) {
+    final rows = context.read<TransactionProvider>().transactions;
+    if (rows.isEmpty) return;
+    final exportList = rows
+        .map((t) => {
+              'id': t.id,
+              'amount': t.amount,
+              'currency': t.currency,
+              'merchant': t.merchant,
+              'category_code': t.categoryCode,
+              'timestamp': t.timestamp.toIso8601String(),
+              'source': t.source,
+              'spent_by': t.spentBy,
+              'raw_sms': t.rawSms,
+            })
+        .toList();
+    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
   }
 
   /// MOB-26: downloads the statement with the user's JWT and opens the system
@@ -722,6 +827,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final roles = _watchRoles(context);
+    final rows = context.watch<TransactionProvider>().transactions;
+    _ensureFamilyContext(widget.householdId ?? roles?.householdId ?? (rows.isNotEmpty ? rows.first.householdId : null));
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -753,6 +860,42 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                     ),
                   ),
                 ),
+            ],
+          ),
+          // Export is a secondary action: the ⋯ menu (UX-11).
+          PopupMenuButton<String>(
+            key: const ValueKey('feed_more_menu'),
+            tooltip: context.tr('feed_more_actions'),
+            icon: Icon(Icons.more_vert_rounded, color: context.textPrimary),
+            onSelected: (value) {
+              if (value == 'csv') {
+                _exportCsv(context);
+              } else if (value == 'pdf') {
+                _exportStatementPdf(context);
+              }
+            },
+            itemBuilder: (menuCtx) => [
+              PopupMenuItem(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_outlined, size: 18, color: context.infoText),
+                    const SizedBox(width: 10),
+                    Text(context.tr('export_csv')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'pdf',
+                enabled: !_exportingPdf,
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf_outlined, size: 18, color: context.dangerColor),
+                    const SizedBox(width: 10),
+                    Text(context.tr('export_pdf')),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -808,12 +951,21 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
                     final transactions = _filterAndSort(txProvider.transactions);
                     final visibleTotal = transactions.fold<double>(0.0, (sum, t) => sum + t.amount);
+                    final family = _isFamily(txProvider.transactions);
+                    // Date order: day headers ("Today", "Yesterday", the date); amount order: a flat list.
+                    final byDate = _selectedSort == 'newest' || _selectedSort == 'oldest';
+                    final entries = <Object>[
+                      if (byDate)
+                        for (final g in groupTransactionsByDay(transactions)) ...[g.day, ...g.transactions]
+                      else
+                        ...transactions,
+                    ];
 
                     return Column(
                       children: [
-                        // Quick Sort / Summary sub-bar
+                        // Quick Sort / Summary sub-bar (export lives in the ⋯ menu, UX-11)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Row(
                             children: [
                               Expanded(
@@ -821,120 +973,55 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   '${transactions.length} ${transactions.length == 1 ? context.tr("expenses_count_singular") : context.tr("expenses_count_plural")} • ${context.sar(visibleTotal)}',
                                   style: GoogleFonts.outfit(
                                     color: context.textSecondary,
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              InkWell(
-                                onTap: _showSortFilterModal,
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
-                                          ? AppThemes.success
-                                          : context.borderColor,
+                              Semantics(
+                                button: true,
+                                child: InkWell(
+                                  key: const ValueKey('feed_sort_button'),
+                                  onTap: _showSortFilterModal,
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: ConstrainedBox(
+                                    // 48 dp tap target around a compact chip (UX-19).
+                                    constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                                    child: Center(
+                                      widthFactor: 1,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: context.chipBg,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
+                                                ? AppThemes.success
+                                                : context.borderColor,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.swap_vert_rounded,
+                                              size: 16,
+                                              color: _selectedSort != 'newest' ? context.accentText : context.textSecondary,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _getSortLabel(context),
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: _selectedSort != 'newest' ? context.accentText : context.textPrimary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.swap_vert_rounded,
-                                        size: 14,
-                                        color: _selectedSort != 'newest'
-                                            ? AppThemes.success
-                                            : context.textSecondary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _getSortLabel(context),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: _selectedSort != 'newest'
-                                              ? AppThemes.success
-                                              : context.textPrimary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: () {
-                                  if (txProvider.transactions.isNotEmpty) {
-                                    final exportList = txProvider.transactions.map((t) => {
-                                      'id': t.id,
-                                      'amount': t.amount,
-                                      'currency': t.currency,
-                                      'merchant': t.merchant,
-                                      'category_code': t.categoryCode,
-                                      'timestamp': t.timestamp.toIso8601String(),
-                                      'source': t.source,
-                                      'spent_by': t.spentBy,
-                                      'raw_sms': t.rawSms,
-                                    }).toList();
-                                    CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: context.borderColor),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.file_download_outlined, size: 14, color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        context.tr('export_csv'),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: context.isDark ? const Color(0xFF58A6FF) : const Color(0xFF0284C7),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: _exportingPdf ? null : () => _exportStatementPdf(context),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: context.chipBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: context.borderColor),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.picture_as_pdf_outlined, size: 14, color: context.dangerColor),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        context.tr('export_pdf'),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: context.dangerColor,
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ),
@@ -970,13 +1057,30 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                       context.read<RecurringBillsProvider>().fetchBills(),
                                     ]);
                                   },
-                                  child: ListView.separated(
+                                  child: ListView.builder(
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
-                                    itemCount: transactions.length,
-                                    separatorBuilder: (ctx, _) => const SizedBox(height: 6),
+                                    itemCount: entries.length,
                                     itemBuilder: (ctx, i) {
-                                      final tx = transactions[i];
+                                      final entry = entries[i];
+                                      if (entry is DateTime) {
+                                        return Padding(
+                                          key: const ValueKey('feed_day_header'),
+                                          padding: EdgeInsetsDirectional.only(top: i == 0 ? 4 : 14, bottom: 2, start: 4),
+                                          child: Semantics(
+                                            header: true,
+                                            child: Text(
+                                              feedDayLabel(context, entry),
+                                              style: GoogleFonts.outfit(
+                                                color: context.textSecondary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      final tx = entry as Transaction;
                                       // Members change only their own entries;
                                       // admins any entry (DB-18).
                                       final canModify = roles?.canModify(tx) ?? true;
@@ -1034,6 +1138,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           categoryCode: tx.categoryCode,
                                           source: tx.source,
                                           spentBy: tx.spentBy,
+                                          attributionBadge: _badgeFor(tx, family),
+                                          timestamp: tx.timestamp,
                                           items: tx.items,
                                           isReallocated: tx.isReallocated,
                                           receiptUrl: tx.receiptUrl,

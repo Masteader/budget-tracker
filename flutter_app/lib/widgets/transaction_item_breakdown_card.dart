@@ -30,6 +30,13 @@ class TransactionItemBreakdownCard extends StatelessWidget {
   /// change this transaction (another member's entry and the user is no admin).
   final String? lockedNote;
 
+  /// Replaces the roommate "me / partner / shared" badge, e.g. the family
+  /// Nafaqah badge ("Owed to Sara", UX-04).
+  final Widget? attributionBadge;
+
+  /// When set, the row shows its time (the feed groups rows by day, UX-11).
+  final DateTime? timestamp;
+
   const TransactionItemBreakdownCard({
     super.key,
     required this.merchant,
@@ -49,6 +56,8 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     this.onEdit,
     this.onDelete,
     this.lockedNote,
+    this.attributionBadge,
+    this.timestamp,
   });
 
   IconData get _sourceIcon {
@@ -206,12 +215,13 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   ),
                 ),
               ),
+              // Neutral ink: red is kept for real warnings (UX-11).
               Text(
                 context.money(amount, currency),
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
-                  color: context.dangerColor,
+                  color: context.textPrimary,
                 ),
               ),
             ],
@@ -223,6 +233,12 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (timestamp != null)
+                  Text(
+                    context.fmtDate(timestamp!.toLocal(), 'h:mm a'),
+                    key: const ValueKey('tx_row_time'),
+                    style: TextStyle(color: context.textSecondary, fontSize: 12),
+                  ),
                 if (isInstallment)
                   _buildInstallmentBadge(
                     installmentBadgeText ?? context.tr('tib_installment'),
@@ -239,7 +255,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
                 ),
-                _buildSpentByBadge(context, spentBy),
+                attributionBadge ?? _buildSpentByBadge(context, spentBy),
                 if (categoryCode != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -363,7 +379,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        _buildSpentByBadge(context, spentBy, detailed: true),
+                        Flexible(child: attributionBadge ?? _buildSpentByBadge(context, spentBy, detailed: true)),
                       ],
                     ),
                   ),
