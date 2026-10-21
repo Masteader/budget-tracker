@@ -9,7 +9,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../models/household_dues.dart';
 import '../../models/models.dart';
+import '../../models/nafaqah.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -332,6 +334,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .single();
     final hid = data['household_id'] as String;
     _fetchCycles(hid);
+    _fetchIncome(hid);
     return hid;
   }
 
@@ -375,6 +378,30 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
 
   final GlobalKey _categoriesKey = GlobalKey();
+  final GlobalKey _balancesKey = GlobalKey();
+
+  /// The household's monthly income: the hero's base (UX-07). Null until
+  /// loaded or when it cannot be read: the hero then counts the budgets.
+  double? _monthlyIncome;
+
+  /// The family Nafaqah summary the balances card loaded (hero dues line).
+  NafaqahSummary? _nafaqah;
+
+  void _scrollToBalances() {
+    final ctx = _balancesKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
+  }
+
+  Future<void> _fetchIncome(String hid) async {
+    try {
+      final income = await ApiService.instance.getHouseholdIncome(hid);
+      if (mounted) setState(() => _monthlyIncome = income);
+    } catch (_) {
+      if (mounted) setState(() => _monthlyIncome = null);
+    }
+  }
 
   void _scrollToCategories() {
     final ctx = _categoriesKey.currentContext;
@@ -460,7 +487,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         sliver: SliverToBoxAdapter(
                           // UX-01: a failed budget stream is an error, not an endless skeleton.
                           child: CardErrorState(
-                            title: context.tr('cycle_remaining_budget'),
+                            title: context.tr('hero_left_until_payday'),
                             message: context.tr('load_error_budgets'),
                             onRetry: () => setState(() => _budgetStreamGeneration++),
                           ),
@@ -541,6 +568,9 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               BudgetHeroCard(
                                 budgets: _cycleBudgets(budgetSnap.data!),
                                 cycle: _selectedCycle,
+                                monthlyIncome: _monthlyIncome,
+                                dueLines: _nafaqah == null ? const [] : nafaqahDueLines(_nafaqah!),
+                                onDueTap: _scrollToBalances,
                               ),
                               // UX-08: overspent categories right under the hero.
                               OverBudgetAlerts(
@@ -552,7 +582,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               // Tools screen always has them.
                               AccountsSummaryCard(householdId: hid, minAccounts: 2),
                               const SizedBox(height: 12),
-                              HouseholdBalancesSection(householdId: hid),
+                              HouseholdBalancesSection(
+                                key: _balancesKey,
+                                householdId: hid,
+                                onNafaqahLoaded: (summary) {
+                                  if (mounted) setState(() => _nafaqah = summary);
+                                },
+                              ),
                               const SizedBox(height: 16),
                               // Commitments: recurring bills and installments together.
                               Padding(
@@ -685,6 +721,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
               currentHouseholdId: hid,
               onSwitched: () {
                 setState(() {
+                  _monthlyIncome = null;
+                  _nafaqah = null;
                   _householdId = _fetchHouseholdId();
                 });
               },
