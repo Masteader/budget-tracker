@@ -32,6 +32,16 @@ class AppThemes {
   /// Ink for labels on a [success] (#00C896) fill: 8.8:1. White on it is 2.2:1.
   static const Color onSuccessFill = Color(0xFF0A0F1D);
 
+  /// Outfit has no Arabic glyphs: Arabic and Urdu text falls back to the
+  /// bundled Cairo (UX-20) instead of the phone's book face.
+  static const List<String> arabicFallback = ['Cairo'];
+
+  static TextTheme _textTheme(Color color) => GoogleFonts.outfitTextTheme().apply(
+        bodyColor: color,
+        displayColor: color,
+        fontFamilyFallback: arabicFallback,
+      );
+
   // ─── Sovereign Light Theme Tokens (Calm, Anti-Glare Sovereign Fintech) ─────
   static const Color brandLightPrimary = Color(0xFF0F766E);   // Deep Sovereign Coastal Teal (AAA contrast)
   static const Color brandLightSecondary = Color(0xFF0369A1); // Sovereign Ocean Azure (5.9:1 on white)
@@ -60,10 +70,7 @@ class AppThemes {
       colorScheme: colorScheme,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: brandDarkBg,
-      textTheme: GoogleFonts.outfitTextTheme().apply(
-        bodyColor: Colors.white,
-        displayColor: Colors.white,
-      ),
+      textTheme: _textTheme(Colors.white),
       appBarTheme: AppBarTheme(
         backgroundColor: brandDarkBg,
         foregroundColor: Colors.white,
@@ -72,7 +79,7 @@ class AppThemes {
           color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.w600,
-        ),
+        ).copyWith(fontFamilyFallback: arabicFallback),
       ),
       cardTheme: CardThemeData(
         color: brandDarkCard,
@@ -116,7 +123,7 @@ class AppThemes {
           fontSize: 12,
           fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
           color: states.contains(WidgetState.selected) ? iceCyan : const Color(0xFF8B949E),
-        )),
+        ).copyWith(fontFamilyFallback: arabicFallback)),
         iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
           color: states.contains(WidgetState.selected) ? iceCyan : const Color(0xFF8B949E),
         )),
@@ -157,10 +164,7 @@ class AppThemes {
           backgroundColor: WidgetStatePropertyAll(brandLightCard),
         ),
       ),
-      textTheme: GoogleFonts.outfitTextTheme().apply(
-        bodyColor: brandLightText,
-        displayColor: brandLightText,
-      ),
+      textTheme: _textTheme(brandLightText),
       appBarTheme: AppBarTheme(
         backgroundColor: brandLightCard,
         foregroundColor: brandLightText,
@@ -170,7 +174,7 @@ class AppThemes {
           color: brandLightText,
           fontSize: 20,
           fontWeight: FontWeight.w600,
-        ),
+        ).copyWith(fontFamilyFallback: arabicFallback),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: brandLightCard,
@@ -179,7 +183,7 @@ class AppThemes {
           fontSize: 12,
           fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
           color: states.contains(WidgetState.selected) ? brandLightPrimary : brandLightSubtext,
-        )),
+        ).copyWith(fontFamilyFallback: arabicFallback)),
         iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
           color: states.contains(WidgetState.selected) ? brandLightPrimary : brandLightSubtext,
         )),
