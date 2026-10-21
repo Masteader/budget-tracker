@@ -6,9 +6,8 @@ The suite is hermetic:
   from and wrote budget rows to production);
 - every Supabase call goes to an in-memory ``FakeSupabaseClient``;
 - outbound sockets to non-loopback hosts are refused, so an unmocked network call
-  fails fast instead of reaching a real service;
-- local JSON fallback files are redirected to a temp dir so tests never rewrite
-  tracked files under ``ai_service/data``.
+  fails fast instead of reaching a real service.
+The service keeps no local files (the JSON / in-memory fallbacks were removed).
 """
 import os
 import socket
@@ -100,7 +99,7 @@ def block_real_llm_calls(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def fake_supabase(monkeypatch, tmp_path):
-    """Route every get_client() call to a fresh in-memory fake and isolate file fallbacks."""
+    """Route every get_client() call to a fresh in-memory fake."""
     import supabase_client
     import installment_service
 
@@ -108,8 +107,6 @@ def fake_supabase(monkeypatch, tmp_path):
     monkeypatch.setattr(supabase_client, "_client", fake)
     monkeypatch.setattr(supabase_client, "_cached_cost_codes", None)
     monkeypatch.setattr(supabase_client, "_cached_cost_codes_time", None)
-    monkeypatch.setattr(supabase_client, "HOUSEHOLD_SETTINGS_FILE", str(tmp_path / "household_settings.json"))
-    monkeypatch.setattr(supabase_client, "HOUSEHOLD_INVITES_FILE", str(tmp_path / "household_invites.json"))
     from rate_limiter import reset_rate_limiters
     from idempotency import idempotency_store
     reset_rate_limiters()

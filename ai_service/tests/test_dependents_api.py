@@ -10,10 +10,8 @@ from main import app
 client = TestClient(app)
 
 def test_dependents_crud_endpoints(monkeypatch):
-    from dependents_service import _memory_dependents
     household_id = "f860188e-23b5-4749-b180-868c956151a6"
     headers = {"X-App-Token": os.environ.get("APP_AUTH_TOKEN", "test_token_for_ci_only")}
-    _memory_dependents.clear()
 
     storage = []
 
