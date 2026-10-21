@@ -15,6 +15,7 @@ from utils import get_client_ip, is_production, verify_signature
 
 @pytest.fixture()
 def fake_redis_limiter():
+    fakeredis = pytest.importorskip("fakeredis")
     import fakeredis.aioredis
 
     limiter = SlidingWindowRateLimiter(redis_url="redis://fake:6379/0")
@@ -48,6 +49,7 @@ async def test_redis_rejected_requests_do_not_consume_window(fake_redis_limiter)
 
 @pytest.mark.asyncio
 async def test_redis_outage_backs_off_instead_of_reconnecting_every_request(monkeypatch):
+    redis = pytest.importorskip("redis")
     import redis.asyncio as aioredis
 
     attempts = []
@@ -154,7 +156,7 @@ def test_quota_rpc_call_matches_the_consume_quota_sql_signature(fake_supabase):
     for path in sorted(migrations.glob("*.sql")):
         for match in re.finditer(
             r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.consume_quota\s*\((.*?)\)\s*RETURNS\s+(\w+)",
-            path.read_text(), re.IGNORECASE | re.DOTALL,
+            path.read_text(encoding="utf-8"), re.IGNORECASE | re.DOTALL,
         ):
             definitions.append((path.name, match.group(1), match.group(2)))
     assert definitions, "consume_quota must be defined in a migration"
@@ -206,6 +208,7 @@ def test_missing_env_is_treated_as_production(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_idempotency_store_is_shared_across_instances_via_redis(monkeypatch):
+    fakeredis = pytest.importorskip("fakeredis")
     import fakeredis.aioredis
     from idempotency import IdempotencyStore
 
