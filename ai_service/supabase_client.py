@@ -353,6 +353,56 @@ class InvalidAttributionError(ValueError):
     """
 
 
+class TransactionRejectedError(ValueError):
+    """
+    The database refused a transaction write with a constraint or permission error (FABLE2-API-01).
+    Retrying with fewer columns cannot help, so it is raised at once. Routes answer
+    ``status_code`` (403 permission, 409 conflict, 422 otherwise) with ``PUBLIC_MESSAGE``: the
+    database text is never echoed.
+    """
+
+    PUBLIC_MESSAGE = "The database rejected this transaction."
+    _STATUS = {"42501": 403, "23505": 409}
+
+    def __init__(self, sqlstate: str):
+        super().__init__(self.PUBLIC_MESSAGE)
+        self.sqlstate = sqlstate
+
+    @property
+    def status_code(self) -> int:
+        return self._STATUS.get(self.sqlstate, 422)
+
+
+# SQLSTATEs of refusals that a pruned payload cannot fix (check/trigger constraint, invalid
+# parameter, foreign key, row-level security / forbidden, unique violation).
+FINAL_DB_REFUSAL_CODES = frozenset({"23514", "22023", "23503", "42501", "23505"})
+
+
+def final_transaction_db_error(exc: BaseException) -> Optional[Exception]:
+    """
+    The error to raise instead of retrying when ``exc`` is a final database refusal of a
+    transaction write, else None. The Nafaqah triggers' hints map to the service's errors (routes
+    answer 409 ``no_provider`` / ``ledger_would_be_overpaid``); an unknown category code to
+    UnknownCategoryError; any other constraint or permission refusal to TransactionRejectedError.
+    """
+    from nafaqah_service import LedgerWouldBeOverpaid, NoProviderError
+    from postgrest_compat import db_error_fields
+
+    fields = db_error_fields(exc)
+    code, hint = fields["code"], fields["hint"]
+    if hint == "no_nafaqah_provider":
+        return NoProviderError("This family has no Nafaqah provider: a household admin must choose one.")
+    if hint == "ledger_would_be_overpaid":
+        return LedgerWouldBeOverpaid(
+            "This change would leave the wife's reimbursement ledger overpaid: the husband already repaid more."
+        )
+    if is_unknown_category_db_error(exc):
+        return UnknownCategoryError()
+    if code in FINAL_DB_REFUSAL_CODES:
+        return TransactionRejectedError(code)
+    return None
+
+
 def is_unknown_category_db_error(exc: BaseException) -> bool:
     """True for validate_category_code_exists' refusal (SQLSTATE 23503 'Category code ...')."""
     from postgrest_compat import db_error_fields
@@ -390,14 +440,19 @@ def household_attribution(
     paid_by: Optional[str],
     beneficiary: Optional[str],
     spouse_id: Optional[str] = None,
+    nafaqah_class: Optional[str] = None,
 ) -> dict:
     """
     ``{spent_by, beneficiary_type, beneficiary_id}`` for an expense ``user_id`` records in
     ``household_id`` (settlement_engine.structured_attribution against the household roster).
     Raises InvalidAttributionError when 'partner' names nobody. If the roster cannot be read the
     relative token is stored and resolved by the settlement engines when they read the row.
+
+    With a ``nafaqah_class`` to store, a family without a provider is refused here with
+    NoProviderError (HTTP 409 ``no_provider``), before any budget is reallocated: the database
+    trigger would refuse the insert anyway (FABLE2-API-01).
     """
-    from nafaqah_service import load_family_context
+    from nafaqah_service import NoProviderError, load_family_context
     from settlement_engine import structured_attribution
 
     try:
@@ -405,6 +460,8 @@ def household_attribution(
     except Exception as exc:
         logger.warning("Household roster unavailable for attribution (%s); storing relative tokens.", exc)
         ctx = None
+    if nafaqah_class and ctx is not None and getattr(ctx, "needs_provider", False):
+        raise NoProviderError("This family has no Nafaqah provider: a household admin must choose one.")
     return structured_attribution(ctx, user_id, paid_by, beneficiary, spouse_id=spouse_id)
 
 
@@ -528,13 +585,15 @@ def insert_transaction(
     payload.update(nafaqah_fields)
 
 
-    # An unknown category code is the caller's error, never a schema mismatch: retrying with a
-    # pruned payload cannot help, and an unhandled APIError surfaced as a 500 (E2E-03).
+    # A constraint or permission refusal (an unknown category code, E2E-03; a family without a
+    # provider; RLS) is final, never a schema mismatch: retrying with a pruned payload cannot help,
+    # sent the same refused row three times and surfaced as a 500 (FABLE2-API-01).
     try:
         response = client.table("transactions").insert(payload).execute()
     except Exception as exc:
-        if is_unknown_category_db_error(exc):
-            raise UnknownCategoryError() from exc
+        final = final_transaction_db_error(exc)
+        if final is not None:
+            raise final from exc
         logger.warning("Insert with initial payload failed (%s), pruning advanced optional columns.", exc)
         safe_payload = dict(payload)
         safe_payload.pop("qr_code_raw", None)
@@ -542,8 +601,9 @@ def insert_transaction(
         try:
             response = client.table("transactions").insert(safe_payload).execute()
         except Exception as exc3:
-            if is_unknown_category_db_error(exc3):
-                raise UnknownCategoryError() from exc3
+            final = final_transaction_db_error(exc3)
+            if final is not None:
+                raise final from exc3
             logger.warning("Falling back to core payload (preserving sub_category): %s", exc3)
             base_payload = {
                 "household_id": household_id,
@@ -570,8 +630,9 @@ def insert_transaction(
             try:
                 response = client.table("transactions").insert(base_payload).execute()
             except Exception as exc4:
-                if is_unknown_category_db_error(exc4):
-                    raise UnknownCategoryError() from exc4
+                final = final_transaction_db_error(exc4)
+                if final is not None:
+                    raise final from exc4
                 raise
 
     transaction_id = response.data[0]["id"]

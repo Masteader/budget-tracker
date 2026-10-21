@@ -13,7 +13,7 @@ from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import InvalidAttributionError, UnknownCategoryError
+from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
 from utils import bounded_text, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
@@ -147,6 +147,11 @@ async def scan_receipt(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)
         raise HTTPException(status_code=422, detail=str(exc))
+    except TransactionRejectedError as exc:
+        # A final database refusal (constraint / RLS / conflict): 4xx, never the database text.
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=exc.status_code, detail=TransactionRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)

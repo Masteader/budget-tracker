@@ -806,8 +806,10 @@ def process_receipt_scan(
 
     # Who paid and for whom, as columns; refused (422) before any budget is touched when
     # 'partner' names nobody in this household.
+    # A classified expense in a family without a provider is refused here (409 no_provider).
     attribution = household_attribution(
-        household_id, user_id, nafaqah["paid_by"], nafaqah["beneficiary"], nafaqah["nafaqah_spouse_id"]
+        household_id, user_id, nafaqah["paid_by"], nafaqah["beneficiary"], nafaqah["nafaqah_spouse_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
     )
 
     # A replayed offline commit carries the client-side event time (validated by the route).

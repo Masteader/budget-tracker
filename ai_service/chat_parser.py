@@ -782,7 +782,11 @@ def process_chat_transaction(
 
     # Who paid and for whom, as columns; refused (422) before any budget is touched when
     # 'partner' names nobody in this household.
-    attribution = household_attribution(household_id, user_id, paid_by, beneficiary, nafaqah["nafaqah_spouse_id"])
+    # A classified expense in a family without a provider is refused here (409 no_provider).
+    attribution = household_attribution(
+        household_id, user_id, paid_by, beneficiary, nafaqah["nafaqah_spouse_id"],
+        nafaqah_class=nafaqah["nafaqah_class"],
+    )
 
     # A replayed offline commit carries the client-side event time (validated by the route).
     event_time = occurred_at or datetime.now(timezone.utc)
