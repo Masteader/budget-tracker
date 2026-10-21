@@ -51,6 +51,17 @@ class NafaqahApiClient {
     return (_ok(res)['outstanding_after'] as num?)?.toDouble() ?? 0.0;
   }
 
+  /// Chooses the household's Nafaqah provider (husband): a non-spouse member.
+  /// Household admins only; the server answers 403 for anyone else and 422
+  /// for a wife or a non-member.
+  Future<NafaqahProviderChange> setProvider({required String householdId, required String userId}) async {
+    final res = await baseClient.put(
+      '/households/$householdId/nafaqah/provider',
+      body: {'user_id': userId},
+    );
+    return NafaqahProviderChange.fromMap(_ok(res));
+  }
+
   Future<AllowanceStatus> setAllowance({
     required String householdId,
     required double amount,

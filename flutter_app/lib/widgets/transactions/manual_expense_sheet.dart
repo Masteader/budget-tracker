@@ -12,8 +12,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../../models/manual_expense_row.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/account.dart';
+import '../../models/household_membership.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
@@ -27,8 +29,18 @@ class ManualExpenseSheet extends StatefulWidget {
   final double? initialAmount;
   final String? initialCategory;
 
-  /// Test seams; default to Supabase / the offline queue.
+  /// Test seams; default to the API / Supabase / the offline queue.
+  /// [loadMembers] replaces the whole member lookup (rows with `id`,
+  /// `display_name`, `role`, `financial_role`).
   final Future<List<Map<String, dynamic>>> Function(String householdId)? loadMembers;
+
+  /// `GET /households/{id}/members` (roles per household membership).
+  final Future<HouseholdRoster> Function(String householdId)? loadRoster;
+
+  /// Fallback when the API fails: the caller's own `household_memberships`
+  /// row(s) of this household (RLS shows admins every row). Never
+  /// `users.financial_role`, which belongs to each member's active household.
+  final Future<List<Map<String, dynamic>>> Function(String householdId)? loadOwnMemberships;
   final Future<void> Function(Map<String, dynamic> row)? insertRow;
   final Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow;
   final String? Function()? currentUserId;
@@ -41,6 +53,8 @@ class ManualExpenseSheet extends StatefulWidget {
     this.initialAmount,
     this.initialCategory,
     this.loadMembers,
+    this.loadRoster,
+    this.loadOwnMemberships,
     this.insertRow,
     this.enqueueRow,
     this.currentUserId,
@@ -164,16 +178,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final hid = widget.householdId;
     if (hid == null || hid.isEmpty) return;
     try {
-      final List<Map<String, dynamic>> list;
-      if (widget.loadMembers != null) {
-        list = await widget.loadMembers!(hid);
-      } else {
-        final res = await supabase
-            .from('users')
-            .select('id, display_name, role, financial_role')
-            .eq('household_id', hid);
-        list = List<Map<String, dynamic>>.from(res);
-      }
+      final List<Map<String, dynamic>> list =
+          widget.loadMembers != null ? await widget.loadMembers!(hid) : await _membersOfHousehold(hid);
       if (mounted) {
         final hasPeers = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'peer');
         final hasSpouse = list.any((m) => (m['financial_role'] as String?)?.toLowerCase() == 'spouse');
@@ -199,6 +205,35 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       }
     } catch (_) {}
     await _loadNafaqahContext(hid);
+  }
+
+  /// Members with their financial role in THIS household, from
+  /// `GET /households/{id}/members`. A member whose active household is
+  /// another one keeps the role of this household (a wife stays the wife, a
+  /// roommate elsewhere is not a spouse here). If the API fails, only the
+  /// membership rows the caller may read are used, so a spouse is never
+  /// invented from another household's role.
+  Future<List<Map<String, dynamic>>> _membersOfHousehold(String hid) async {
+    try {
+      final loadRoster = widget.loadRoster ?? ApiService.instance.getHouseholdMembers;
+      final roster = await loadRoster(hid);
+      return [
+        for (final m in roster.members)
+          {'id': m.userId, 'display_name': m.displayName, 'role': m.role, 'financial_role': m.financialRole},
+      ];
+    } catch (e) {
+      debugPrint('[ManualExpenseSheet] Members API unavailable, using own membership: $e');
+    }
+    final rows = widget.loadOwnMemberships != null
+        ? await widget.loadOwnMemberships!(hid)
+        : List<Map<String, dynamic>>.from(await supabase
+            .from('household_memberships')
+            .select('user_id, role, financial_role')
+            .eq('household_id', hid));
+    return [
+      for (final r in rows)
+        {'id': r['user_id'], 'display_name': null, 'role': r['role'], 'financial_role': r['financial_role']},
+    ];
   }
 
   /// The family context from `GET /households/{id}/nafaqah`, the same source as
@@ -260,7 +295,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   }
 
   Future<void> _saveExpense() async {
-    final amount = parseMoneyInput(_amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) _amountCtrl.text = rounded; // show the amount that is stored
+    final amount = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     final merchant = _merchantCtrl.text.trim();
 
     if (amount <= 0) {
@@ -358,9 +395,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         setState(() => _isSaving = false);
         AppSnackBar.showError(
           context,
-          context.trArgs('mes_failed', {
-            'error': insertError is PostgrestException ? insertError.message : insertError,
-          }),
+          nafaqahWriteErrorText(context, insertError) ??
+              context.trArgs('mes_failed', {
+                'error': insertError is PostgrestException ? insertError.message : insertError,
+              }),
         );
       }
     } else {

@@ -15,6 +15,7 @@ import '../../providers/transaction_provider.dart';
 import 'package:flutter/services.dart';
 import '../../services/api/base_api_client.dart';
 import '../../services/csv_export_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../services/statement_pdf_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
@@ -662,7 +663,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          txProvider.lastWriteDenied ? context.tr('perm_tx_admin_only') : context.tr('tx_delete_failed_msg'),
+          txProvider.lastNafaqahRefusal != null
+              ? nafaqahWriteRefusalText(context, txProvider.lastNafaqahRefusal!)
+              : (txProvider.lastWriteDenied ? context.tr('perm_tx_admin_only') : context.tr('tx_delete_failed_msg')),
           title: context.tr('tx_delete_failed'),
         );
       }

@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
+import 'package:budget_tracker/services/nafaqah_write_errors.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 const _id = '11111111-1111-1111-1111-111111111111';
 const _receipt = 'https://x.supabase.co/storage/v1/object/sign/receipts/h1/r.jpg?token=t';
@@ -158,6 +160,27 @@ void main() {
 
     expect(await provider.deleteTransaction(_id), isFalse);
     expect(provider.transactions.single.id, _id);
+    expect(deletedReceipts, isEmpty);
+  });
+
+  // FABLE-LOGIC-02: deleting a wife advance that was already repaid is refused
+  // by the ledger guard; the row comes back and the feed can explain why.
+  test('a delete refused by the Nafaqah ledger guard rolls back and is identified', () async {
+    final provider = TransactionProvider(
+      deleteRow: (id) async => throw const PostgrestException(
+        message: 'Nafaqah ledger overpaid',
+        code: '22023',
+        hint: 'ledger_would_be_overpaid',
+      ),
+      insertRow: (row) async {},
+      deleteReceipt: (url) async => deletedReceipts.add(url),
+    );
+    provider.addTransaction(_tx());
+
+    expect(await provider.deleteTransaction(_id), isFalse);
+    expect(provider.transactions.single.id, _id);
+    expect(provider.lastNafaqahRefusal, NafaqahWriteRefusal.ledgerWouldBeOverpaid);
+    expect(provider.lastWriteDenied, isFalse);
     expect(deletedReceipts, isEmpty);
   });
 }

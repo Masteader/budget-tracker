@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../models/models.dart';
 import '../services/household_permissions.dart';
+import '../services/nafaqah_write_errors.dart';
 import '../services/receipt_storage_service.dart';
 
 /// Centralized reactive state provider for all transactions in the household.
@@ -51,6 +52,11 @@ class TransactionProvider extends ChangeNotifier {
   /// of rights (another member's transaction and the user is no admin, DB-18).
   bool _lastWriteDenied = false;
   bool get lastWriteDenied => _lastWriteDenied;
+
+  /// The Nafaqah rule that refused the last failed delete/update, if any (e.g.
+  /// the ledger guard refusing to delete a wife advance already repaid).
+  NafaqahWriteRefusal? _lastNafaqahRefusal;
+  NafaqahWriteRefusal? get lastNafaqahRefusal => _lastNafaqahRefusal;
 
   // Getters
   bool get isLoading => _isLoading;
@@ -265,6 +271,7 @@ class TransactionProvider extends ChangeNotifier {
 
     final removedTx = _transactions.removeAt(existingIdx);
     _lastWriteDenied = false;
+    _lastNafaqahRefusal = null;
     _recomputeFiltered();
     notifyListeners();
 
@@ -282,6 +289,7 @@ class TransactionProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[TransactionProvider] Delete failed, rolling back: $e');
       _lastWriteDenied = HouseholdPermissions.isPermissionDenied(e);
+      _lastNafaqahRefusal = nafaqahWriteRefusalOf(e);
       // Rollback
       _transactions.insert(existingIdx, removedTx);
       _recomputeFiltered();
@@ -388,6 +396,7 @@ class TransactionProvider extends ChangeNotifier {
 
     _transactions[existingIdx] = updated;
     _lastWriteDenied = false;
+    _lastNafaqahRefusal = null;
     _recomputeFiltered();
     notifyListeners();
 
@@ -407,6 +416,7 @@ class TransactionProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[TransactionProvider] Update failed, rolling back: $e');
       _lastWriteDenied = HouseholdPermissions.isPermissionDenied(e);
+      _lastNafaqahRefusal = nafaqahWriteRefusalOf(e);
       _transactions[existingIdx] = original;
       _recomputeFiltered();
       notifyListeners();

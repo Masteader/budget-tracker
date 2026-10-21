@@ -108,3 +108,5 @@ Residual (documented, not changed): legacy chat/receipt rows written before this
 item names contained `| PaidBy:` text could still shadow the server tag (the heuristic parser cannot
 produce such names); no backfill of historical rows was run (live is never written from here).
 `installment_service.list_plans` still reconciles plans from notes mentioning Tamara/Tabby.
+
+**App status (2026-10-21, Flutter handoff):** FABLE-LOGIC-04 provider badge/selector and missing-provider prompt, FABLE-LOGIC-02 `overpaid` display and ledger-guard/no-provider explanations, FABLE-LOGIC-01 manual expense roles per household (members API), FABLE-DB-01 join/claim refusal messages: done in the app. FABLE-LOGIC-09: fixed (`money.dart` parses to integer halalas, half-up). Details in `FIX_LOG.md` ("Fable review — app handoff"). FABLE-LOGIC-03 (app writes of `beneficiary_type/beneficiary_id`) left for the follow-up.

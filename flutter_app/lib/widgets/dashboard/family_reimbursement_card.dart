@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../models/money.dart';
 import '../../models/nafaqah.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/wife_allowance_card.dart';
@@ -128,6 +129,17 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (summary.needsProvider) ...[
+          _NoticeBanner(
+            key: const ValueKey('nafaqah_needs_provider'),
+            icon: Icons.person_search_rounded,
+            title: context.tr('nafaqah_provider_missing_title'),
+            message: context.tr(
+              summary.canSetProvider ? 'nafaqah_provider_missing_settings' : 'nafaqah_provider_missing_member',
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         for (var i = 0; i < wives.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),
           _ReimbursementPanel(
@@ -301,6 +313,15 @@ class _ReimbursementPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
+          if (balance.isOverpaid) ...[
+            _NoticeBanner(
+              key: ValueKey('nafaqah_overpaid_${wife.id}'),
+              icon: Icons.warning_amber_rounded,
+              title: context.trArgs('nafaqah_overpaid', {'amount': context.sar(balance.overpaid)}),
+              message: context.tr('nafaqah_overpaid_hint'),
+            ),
+            const SizedBox(height: 10),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 6,
@@ -346,6 +367,45 @@ class _ReimbursementPanel extends StatelessWidget {
                 label: Text(context.tr('nafaqah_history')),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A warning line inside the Nafaqah card (missing provider, overpaid ledger).
+class _NoticeBanner extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _NoticeBanner({super.key, required this.icon, required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.dangerColor;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: context.isDarkMode ? 0.12 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(message, style: TextStyle(color: context.textSecondary, fontSize: 11)),
+              ],
+            ),
           ),
         ],
       ),
@@ -522,7 +582,9 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   }
 
   Future<void> _submit() async {
-    final amt = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) setState(() => _amountCtrl.text = rounded); // show what is stored
+    final amt = parseMoneyInput(_amountCtrl.text, allowNegative: false) ?? 0.0;
     if (amt <= 0) {
       AppSnackBar.showError(context, context.tr('settle_invalid_amount'));
       return;
@@ -557,6 +619,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
         message = context.trArgs('nafaqah_err_overpayment', {'amount': context.sar(widget.totalOwed)});
       } else if (e is NafaqahApiException && e.code == 'forbidden') {
         message = context.tr('nafaqah_err_forbidden');
+      } else if (nafaqahWriteRefusalOf(e) != null) {
+        message = nafaqahWriteRefusalText(context, nafaqahWriteRefusalOf(e)!);
       } else {
         message = context.trArgs('settle_record_failed_msg', {'error': e});
       }

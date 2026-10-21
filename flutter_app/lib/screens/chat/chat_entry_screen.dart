@@ -10,6 +10,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/voice_listening_banner.dart';
@@ -514,7 +515,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       } else {
         AppSnackBar.showError(
           context,
-          res['message'] ?? context.tr('chat_save_failed'),
+          nafaqahWriteErrorText(context, res) ?? res['message'] ?? context.tr('chat_save_failed'),
           title: context.tr('chat_save_error'),
         );
       }

@@ -13,6 +13,7 @@ import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/ocr/local_ocr_service.dart';
 import '../../services/offline_queue_manager.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../receipt_photo_viewer_dialog.dart';
 import '../app_snackbar.dart';
@@ -279,7 +280,10 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               currentUserId: user?.id,
             ),
           });
-        } catch (_) {
+        } catch (e) {
+          // A Nafaqah rule refused the row (no provider yet): replaying it
+          // offline could never succeed, so explain instead of queueing.
+          if (nafaqahWriteRefusalOf(e) != null) rethrow;
           // If network failed during submit, queue offline
           await OfflineQueueManager().enqueueOrThrow(
             operationType: 'receipt_offline_draft',
@@ -309,10 +313,11 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
       debugPrint('[BatchItemReview] Receipt not saved: $e');
       if (mounted) {
         setState(() => _isSaving = false);
+        final nafaqahError = nafaqahWriteErrorText(context, e);
         AppSnackBar.showError(
           context,
-          context.tr('offline_queue_failed'),
-          title: context.tr('offline_queue_failed_title'),
+          nafaqahError ?? context.tr('offline_queue_failed'),
+          title: nafaqahError != null ? context.tr('action_failed') : context.tr('offline_queue_failed_title'),
         );
       }
       return;

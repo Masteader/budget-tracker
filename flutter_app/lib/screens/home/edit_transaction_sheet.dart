@@ -14,6 +14,7 @@ import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/household_permissions.dart';
+import '../../services/nafaqah_write_errors.dart';
 import '../../services/receipt_storage_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/nafaqah/nafaqah_class_selector.dart';
@@ -22,6 +23,12 @@ import '../../models/money.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
+
+/// Writes [values] to the transaction row (defaults to a Supabase update).
+typedef TransactionRowUpdater = Future<void> Function(String transactionId, Map<String, dynamic> values);
+
+/// Deletes the transaction row (defaults to a Supabase delete).
+typedef TransactionRowRemover = Future<void> Function(String transactionId);
 
 class EditTransactionSheet extends StatefulWidget {
   final Transaction transaction;
@@ -32,6 +39,10 @@ class EditTransactionSheet extends StatefulWidget {
   final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
   final NafaqahFieldsLoader? loadNafaqahFields;
 
+  /// Test seams for the row update / delete; default to Supabase.
+  final TransactionRowUpdater? updateRow;
+  final TransactionRowRemover? deleteRow;
+
   const EditTransactionSheet({
     super.key,
     required this.transaction,
@@ -39,6 +50,8 @@ class EditTransactionSheet extends StatefulWidget {
     this.nafaqah,
     this.loadNafaqah,
     this.loadNafaqahFields,
+    this.updateRow,
+    this.deleteRow,
   });
 
   static Future<String?> show(
@@ -257,8 +270,22 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     });
   }
 
+  Future<void> _updateRow(Map<String, dynamic> values) async {
+    final update = widget.updateRow;
+    if (update != null) return update(widget.transaction.id, values);
+    await supabase.from('transactions').update(values).eq('id', widget.transaction.id);
+  }
+
+  Future<void> _deleteRow() async {
+    final delete = widget.deleteRow;
+    if (delete != null) return delete(widget.transaction.id);
+    await supabase.from('transactions').delete().eq('id', widget.transaction.id);
+  }
+
   Future<void> _saveChanges() async {
-    final amount = parseMoneyInput(_amountCtrl.text);
+    final rounded = roundedMoneyTextIfRounded(_amountCtrl.text);
+    if (rounded != null) _amountCtrl.text = rounded; // show the amount that is stored
+    final amount = parseMoneyInput(_amountCtrl.text, allowNegative: false);
     if (amount == null || amount <= 0) {
       AppSnackBar.showError(context, context.tr('invalid_amount_msg'), title: context.tr('invalid_amount'));
       return;
@@ -287,16 +314,19 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
     try {
       try {
-        await supabase.from('transactions').update({
+        await _updateRow({
           ...basePayload,
           ..._nafaqahPayload(),
           'paid_by': _selectedPaidBy,
           'beneficiary': _selectedBeneficiary,
           'spent_by': derivedSpentBy,
-        }).eq('id', widget.transaction.id);
+        });
       } catch (e) {
         // Another member's transaction and the user is no admin (DB-18): no fallback.
         if (HouseholdPermissions.isPermissionDenied(e)) rethrow;
+        // A Nafaqah rule refused the change (the ledger guard or a missing
+        // provider): the fallback write would be refused the same way.
+        if (nafaqahWriteRefusalOf(e) != null) rethrow;
         // Fallback: update raw_sms with PaidBy and Beneficiary tags
         final raw = widget.transaction.rawSms ?? '';
         final cleanRaw = raw
@@ -306,12 +336,12 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             .replaceAll(RegExp(r'\|\s*SubCategory:\s*([^\s\|]+)', caseSensitive: false), '')
             .trim();
         final newRaw = '$cleanRaw | PaidBy: $_selectedPaidBy | Beneficiary: $_selectedBeneficiary | SubCategory: ${_selectedSubCategory ?? ""} | SpentBy: $derivedSpentBy';
-        await supabase.from('transactions').update({
+        await _updateRow({
           ...basePayload,
           ..._nafaqahPayload(),
           'raw_sms': newRaw,
           'spent_by': derivedSpentBy,
-        }).eq('id', widget.transaction.id);
+        });
       }
 
       if (mounted) {
@@ -327,9 +357,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         setState(() => _isSaving = false);
         AppSnackBar.showError(
           context,
-          HouseholdPermissions.isPermissionDenied(e)
-              ? context.tr('perm_tx_admin_only')
-              : context.trArgs('tx_update_failed_msg', {'error': e}),
+          nafaqahWriteErrorText(context, e) ??
+              (HouseholdPermissions.isPermissionDenied(e)
+                  ? context.tr('perm_tx_admin_only')
+                  : context.trArgs('tx_update_failed_msg', {'error': e})),
           title: context.tr('update_error'),
         );
       }
@@ -365,7 +396,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     setState(() => _isSaving = true);
 
     try {
-      await supabase.from('transactions').delete().eq('id', widget.transaction.id);
+      await _deleteRow();
       // Only after the server accepted the delete: a refused delete keeps its receipt.
       if (widget.transaction.receiptUrl != null && widget.transaction.receiptUrl!.trim().isNotEmpty) {
         ReceiptStorageService().deleteReceiptByUrl(widget.transaction.receiptUrl!);
@@ -383,9 +414,10 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         setState(() => _isSaving = false);
         AppSnackBar.showError(
           context,
-          HouseholdPermissions.isPermissionDenied(e)
-              ? context.tr('perm_tx_admin_only')
-              : context.trArgs('tx_delete_failed_err', {'error': e}),
+          nafaqahWriteErrorText(context, e) ??
+              (HouseholdPermissions.isPermissionDenied(e)
+                  ? context.tr('perm_tx_admin_only')
+                  : context.trArgs('tx_delete_failed_err', {'error': e})),
           title: context.tr('delete_error'),
         );
       }

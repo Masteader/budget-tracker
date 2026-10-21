@@ -13,6 +13,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/household_join.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -94,10 +95,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
         'create_household_and_claim',
         params: {'p_name': name},
       );
-      if (res is Map && res['error'] != null) {
-        throw Exception(res['error']);
-      }
-      hh = Map<String, dynamic>.from(res as Map);
+      hh = checkHouseholdJoinResult(res);
       final householdId = hh['id'] as String;
       if (mounted) {
         context.read<TransactionProvider>().init(householdId);
@@ -138,23 +136,25 @@ class _HouseholdScreenState extends State<HouseholdScreen>
       final uid = _currentUserId;
 
       if (targetMemberId != null && targetMemberId.isNotEmpty) {
+        Map<String, dynamic>? claim;
         try {
-          await _api.claimMemberProfile(code, uid);
+          claim = await _api.claimMemberProfile(code, uid);
         } catch (_) {}
+        // A refused claim (400: already a member of this household, invite
+        // used or invalid) stops here with the server's reason; a network
+        // failure falls through to the join below.
+        if (claim != null) checkInviteClaimResponse(claim);
       }
 
       final Map<String, dynamic> hh;
       if (widget.joinHandler != null) {
-        hh = await widget.joinHandler!(code);
+        hh = checkHouseholdJoinResult(await widget.joinHandler!(code));
       } else {
         final res = await supabase.rpc(
           'join_household_by_code',
           params: {'p_invite_code': code},
         );
-        if (res is Map && res['error'] != null) {
-          throw Exception(res['error']);
-        }
-        hh = Map<String, dynamic>.from(res as Map);
+        hh = checkHouseholdJoinResult(res);
       }
       final householdId = hh['id'] as String;
       if (mounted) {
@@ -188,7 +188,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     } on PostgrestException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError(e.toString());
+      if (mounted) _showError(householdJoinErrorText(context, e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
