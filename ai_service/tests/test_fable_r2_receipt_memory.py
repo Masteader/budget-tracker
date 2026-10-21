@@ -102,6 +102,8 @@ def test_stitch_output_unchanged_for_full_decode_pages():
 def test_stitch_peak_memory_at_the_caps(kind, budget_mib, tmp_path):
     """The reviewer's method: RSS high-water mark gained in a fresh interpreter while stitching
     two pages at the per-page cap (before: 2 x 40 MP WebP +684 MiB, PNG +378, progressive +175)."""
+    if sys.platform == "win32":
+        pytest.skip("resource module is Unix-only")
     page_file = tmp_path / "page.b64"
     page_file.write_text(_b64(kind, (4000, 3000)))
     script = textwrap.dedent(f"""
