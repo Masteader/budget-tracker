@@ -66,7 +66,7 @@ void main() {
       expect(find.textContaining('Deficit'), findsWidgets);
 
       // Verify Quick Transfer button exists for deficit resolution
-      expect(find.textContaining('⚡ Quick Transfer'), findsOneWidget);
+      expect(find.textContaining('Quick transfer to cover the shortfall'), findsOneWidget);
       expect(find.textContaining('700.00'), findsWidgets);
     });
   });
