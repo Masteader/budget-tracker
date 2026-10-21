@@ -77,12 +77,13 @@ void main() {
             body: BatchItemReviewSheet(
               receiptImages: [dummyFile1, dummyFile2],
               householdId: 'hh_test_123',
-              mockInitialParse: (file) => {
+              previewReceipt: (file) async => {
                 'merchant': 'Panda Supermarket',
                 'amount': 45.50,
                 'vat_amount': 6.82,
                 'category_code': 'OPEX-GROCERY',
               },
+              saveReceipt: (_) async {},
               onComplete: (savedCount, totalAmount) {
                 batchFinished = true;
               },
@@ -124,7 +125,8 @@ void main() {
             body: BatchItemReviewSheet(
               receiptImages: [File('test_assets/receipt1.jpg')],
               householdId: 'hh_test_123',
-              mockInitialParse: (_) => parse,
+              previewReceipt: (_) async => parse,
+              saveReceipt: (_) async {},
               onComplete: onComplete,
             ),
           ),
@@ -188,6 +190,37 @@ void main() {
       await tester.tap(find.byKey(const Key('batch_save_next_button')));
       await tester.pumpAndSettle();
       expect(saved, 1);
+    });
+
+    testWidgets('offline: the photo becomes a pending draft with nothing guessed (R8)', (tester) async {
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [AppLocalizationsDelegate()],
+          supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: BatchItemReviewSheet(
+              receiptImages: [File('test_assets/receipt1.jpg')],
+              householdId: 'hh_test_123',
+              previewReceipt: (_) async => {'status': 'error', 'message': 'offline', 'network_error': true},
+              saveReceipt: (r) async => saved = r,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('batch_offline_notice')), findsOneWidget);
+      expect(find.text('Al Othaim Markets'), findsNothing);
+      expect(find.text('85.00'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('batch_save_next_button')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+      expect(saved!['is_offline_draft'], isTrue);
+      expect(saved!['merchant'], '');
+      expect(saved!['amount'], 0.0);
     });
   });
 }

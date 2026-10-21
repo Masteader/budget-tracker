@@ -12,8 +12,8 @@ import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/api/base_api_client.dart' show BaseApiClient;
 import '../../services/api_service.dart';
-import '../../services/ocr/local_ocr_service.dart';
 import '../../services/offline_queue_manager.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
@@ -26,14 +26,20 @@ import '../../models/money.dart';
 class BatchItemReviewSheet extends StatefulWidget {
   final List<File> receiptImages;
   final String householdId;
-  final Map<String, dynamic> Function(File)? mockInitialParse;
+  /// Reads a receipt photo (defaults to the receipt API's preview).
+  final Future<Map<String, dynamic>> Function(File file)? previewReceipt;
+
+  /// Stores one reviewed receipt (defaults to a direct insert, or the
+  /// offline queue when that fails).
+  final Future<void> Function(Map<String, dynamic> receipt)? saveReceipt;
   final void Function(int savedCount, double totalAmount)? onComplete;
 
   const BatchItemReviewSheet({
     super.key,
     required this.receiptImages,
     required this.householdId,
-    this.mockInitialParse,
+    this.previewReceipt,
+    this.saveReceipt,
     this.onComplete,
   });
 
@@ -135,22 +141,6 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
     final file = widget.receiptImages[index];
 
-    // If a mock parser is provided (e.g. in tests)
-    if (widget.mockInitialParse != null) {
-      final res = widget.mockInitialParse!(file);
-      setState(() {
-        _currentIndex = index;
-        _merchantCtrl.text = res['merchant'] as String? ?? context.tr('merchant_generic');
-        _amountCtrl.text = (res['amount'] as num?)?.toStringAsFixed(2) ?? '0.00';
-        _vatCtrl.text = (res['vat_amount'] as num?)?.toStringAsFixed(2) ?? '0.00';
-        _selectedCategory = res['category_code'] as String? ?? 'OPEX-GROCERY';
-        _isAnalyzing = false;
-        _isOfflineDraft = res['is_offline_draft'] as bool? ?? false;
-        _applyNafaqahPreview(res);
-      });
-      return;
-    }
-
     setState(() {
       _currentIndex = index;
       _isAnalyzing = true;
@@ -162,23 +152,18 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
     });
 
     try {
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        final res = await ApiService.instance.scanReceipt(
-          imagesBase64: [base64Image],
-          householdId: widget.householdId,
-          previewOnly: true,
-        );
+      final preview = widget.previewReceipt;
+      if (preview != null || await file.exists()) {
+        final res = preview != null ? await preview(file) : await _previewViaApi(file);
+        // Offline: keep the photo as a draft the server reads later (R8).
+        if (res[BaseApiClient.networkErrorKey] == true) throw const SocketException('offline');
 
         // Photos too large for the server (413) are never parsed: say so.
         if (mounted && res['status'] == 'error' && res['status_code'] == 413) {
           AppSnackBar.showError(context, expenseApiErrorText(context, res)!);
         }
         if (mounted) {
-          final merchant = res['merchant'] as String? ??
-              res['parsed_data']?['merchant'] as String? ??
-              context.tr('store_name');
+          final merchant = res['merchant'] as String? ?? res['parsed_data']?['merchant'] as String? ?? '';
           final amount = (res['amount'] as num?)?.toDouble() ?? 0.0;
           final vat = (res['vat_amount'] as num?)?.toDouble() ?? 0.0;
           final cat = res['category_code'] as String? ?? 'OPEX-GROCERY';
@@ -189,38 +174,45 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             _vatCtrl.text = vat > 0 ? vat.toStringAsFixed(2) : '0.00';
             _selectedCategory = _categories.contains(cat) ? cat : 'OPEX-GROCERY';
             _isAnalyzing = false;
+            _isOfflineDraft = res['is_offline_draft'] as bool? ?? false;
             _applyNafaqahPreview(res);
           });
           return;
         }
       }
     } catch (_) {
-      // Offline fallback
-      if (await file.exists()) {
-        try {
-          final draft = await LocalOcrService.instance.extractDraft(file);
-          if (mounted) {
-            setState(() {
-              _merchantCtrl.text = draft.merchant;
-              _amountCtrl.text = draft.amount > 0 ? draft.amount.toStringAsFixed(2) : '';
-              _vatCtrl.text = draft.vatAmount > 0 ? draft.vatAmount.toStringAsFixed(2) : '0.00';
-              _isOfflineDraft = true;
-              _isAnalyzing = false;
-            });
-            return;
-          }
-        } catch (_) {}
+      // Offline: the photo is saved as a pending draft and read by the
+      // server when back online. Nothing is guessed; the user may type the
+      // amount (R8).
+      if (mounted) {
+        setState(() {
+          _merchantCtrl.text = '';
+          _amountCtrl.text = '';
+          _vatCtrl.text = '';
+          _isOfflineDraft = true;
+          _isAnalyzing = false;
+        });
       }
+      return;
     }
 
     if (mounted) {
       setState(() {
-        _merchantCtrl.text = context.tr('merchant_generic');
-        _amountCtrl.text = '0.00';
-        _vatCtrl.text = '0.00';
+        _merchantCtrl.text = '';
+        _amountCtrl.text = '';
+        _vatCtrl.text = '';
         _isAnalyzing = false;
       });
     }
+  }
+
+  Future<Map<String, dynamic>> _previewViaApi(File file) async {
+    final bytes = await file.readAsBytes();
+    return ApiService.instance.scanReceipt(
+      imagesBase64: [base64Encode(bytes)],
+      householdId: widget.householdId,
+      previewOnly: true,
+    );
   }
 
   Future<void> _saveAndNext() async {
@@ -232,29 +224,33 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
     final parsedAmount = parseMoneyInput(_amountCtrl.text.trim()) ?? 0.0;
     final parsedVat = parseMoneyInput(_vatCtrl.text.trim()) ?? 0.0;
-    final merchant = _merchantCtrl.text.trim().isNotEmpty
-        ? _merchantCtrl.text.trim()
-        : context.tr('store_name');
-
-    if (widget.mockInitialParse != null) {
-      _savedCount++;
-      _totalBatchAmount += parsedAmount;
-      _advanceQueue();
-      return;
-    }
+    final typedMerchant = _merchantCtrl.text.trim();
+    // An offline draft keeps an empty merchant (the server reads it later).
+    final merchant = typedMerchant.isNotEmpty || _isOfflineDraft ? typedMerchant : context.tr('store_name');
 
     setState(() => _isSaving = true);
 
     try {
       final file = widget.receiptImages[_currentIndex];
+      final save = widget.saveReceipt;
 
-      if (_isOfflineDraft) {
+      if (save != null) {
+        await save({
+          'merchant': merchant,
+          'amount': parsedAmount,
+          'vat_amount': parsedVat,
+          'category_code': _selectedCategory,
+          'is_offline_draft': _isOfflineDraft,
+          'image_local_path': file.path,
+          ..._nafaqahRequestFields,
+        });
+      } else if (_isOfflineDraft) {
         await OfflineQueueManager().enqueueOrThrow(
           operationType: 'receipt_offline_draft',
           householdId: widget.householdId,
           payload: {
-            'merchant': merchant,
-            'amount': parsedAmount,
+            if (merchant.isNotEmpty) 'merchant': merchant,
+            if (parsedAmount > 0) 'amount': parsedAmount,
             'vat_amount': parsedVat,
             'category_code': _selectedCategory,
             'spent_by': _selectedSpentBy,
@@ -432,6 +428,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
               ],
             ),
             const SizedBox(height: 8),
+            if (_isOfflineDraft)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  context.tr('offline_receipt_pending_notice'),
+                  key: const ValueKey('batch_offline_notice'),
+                  style: TextStyle(color: context.textSecondary, fontSize: 11.5),
+                ),
+              ),
 
             // Progress Bar
             ClipRRect(
