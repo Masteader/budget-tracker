@@ -65,3 +65,17 @@ Verified sound: cross-household isolation, creator binding and owner-or-admin wr
 | Observation | — | `_get_user_membership` falls back to `users.household_id` when the memberships query errors (fail-open on infra error). | `auth.py:300-331` | Fail closed. |
 
 Verified clean: JWT pinning (alg none, wrong secret/aud/iss/exp, role anon/service_role, kid on HS256, HS256 signed with a cached ES256 key → 401), firewall, no string-built PostgREST filters, no SSRF, receipt path traversal blocked, inquiry e-mail header handling, idempotency keys per user and endpoint; route-by-route authorization holds.
+
+## Status (2026-10-21, roles and Nafaqah integrity)
+
+Fixed on branch `audit/claude-fable-roles-nafaqah` with migration `20261020800000_household_roles_and_nafaqah_integrity.sql` (applies after `20261020700000`), backend changes and tests (SQL test 25, `ai_service/tests/test_nafaqah_household_roles.py`, e2e `test_08`). Not applied to live yet. Details and verification in `FIX_LOG.md` ("Fable review — household roles and Nafaqah integrity").
+
+| ID | Status |
+|---|---|
+| FABLE-LOGIC-01 | Fixed: `household_memberships.financial_role`; helpers, RPCs, API and settlement read the role of that household. |
+| FABLE-LOGIC-02 | Fixed in DB/API: guard trigger (22023 `ledger_would_be_overpaid`, API 409); `overpaid` exposed. App display/handling: Flutter handoff. Installments refusing classified rows: the DB guard now refuses the amount cut; the swallowed error in `installment_service._adjust_original_transaction` belongs to FABLE-API-09. |
+| FABLE-LOGIC-04 | Fixed: explicit `households.nafaqah_provider_user_id`, `set_nafaqah_provider`, `PUT /households/{id}/nafaqah/provider`; family joiners by code are `family_member`. Provider selector in the app: Flutter handoff. |
+| FABLE-LOGIC-05 | Fixed: payday change re-keys the open cycle onward and moves its budgets/allowances. |
+| FABLE-LOGIC-06 | Fixed: triggers, SQL recompute, Python recalculation and breakdown skip `wife_personal`. |
+| FABLE-DB-01 | Fixed: invites admin-readable only; members cannot claim invites of their household. |
+| FABLE-DB-03 | Fixed: re-joining never demotes; sync trigger never downgrades an admin. |
