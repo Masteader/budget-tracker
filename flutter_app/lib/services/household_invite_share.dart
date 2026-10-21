@@ -37,3 +37,36 @@ Future<void> shareHouseholdInvite(
     l.get('invite_share_subject'),
   );
 }
+
+/// The role a role-bound invite joins as ("الزوجة", "Roommate / Flatmate", ...).
+String roleInviteLabel(AppLocalizations l, String role) => l.get(switch (role) {
+      'spouse' || 'wife' => 'wife_spouse_title',
+      'peer' || 'roommate' => 'invite_role_peer',
+      _ => 'invite_role_family',
+    });
+
+/// The message of a role-bound invite: household, the role the code joins
+/// as, the code and the steps to join.
+String roleInviteShareText(
+  AppLocalizations l, {
+  required String householdName,
+  required String code,
+  required String role,
+}) {
+  final name = householdName.trim().isEmpty ? l.get('set_my_household') : householdName.trim();
+  return l.format('role_invite_share_text', {'household': name, 'code': code.trim(), 'role': roleInviteLabel(l, role)});
+}
+
+/// Opens the share sheet with a role-bound invite (injectable for tests).
+Future<void> shareRoleInvite(
+  AppLocalizations l, {
+  required String householdName,
+  required String code,
+  required String role,
+  ShareTextLauncher launcher = _systemShare,
+}) {
+  return launcher(
+    roleInviteShareText(l, householdName: householdName, code: code, role: role),
+    l.get('invite_share_subject'),
+  );
+}

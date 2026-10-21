@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/localized_app.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -272,4 +274,37 @@ void main() {
       expect(find.text('Joined Dashboard Test'), findsOneWidget);
     });
   });
+
+  // UX-17: an empty household name says so instead of doing nothing.
+  testWidgets('creating without a name shows an inline error and creates nothing', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BudgetProvider>.value(value: BudgetProvider()),
+          ChangeNotifierProvider<TransactionProvider>.value(value: TransactionProvider()),
+        ],
+        child: localizedApp(
+          HouseholdScreen(
+            createRpc: (fn, params) async {
+              calls++;
+              return {};
+            },
+          ),
+          scaffold: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final create = find.widgetWithText(ElevatedButton, 'إنشاء منزل');
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+    expect(find.text('اكتب اسم المنزل'), findsOneWidget);
+    expect(calls, 0);
+    await tester.enterText(find.byType(TextField).first, 'بيت أحمد');
+    await tester.pumpAndSettle();
+    expect(find.text('اكتب اسم المنزل'), findsNothing);
+  });
 }
+

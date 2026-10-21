@@ -14,7 +14,9 @@ import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
+import '../../widgets/chat/pending_expense_confirmation_card.dart' show PendingExpenseEdits;
 import '../../widgets/chat/voice_listening_banner.dart';
+import '../../widgets/chat/voice_language_button.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
@@ -43,15 +45,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   String _selectedLocale = 'ar_SA'; // 'ar_SA' (Saudi Arabic) or 'en_US' (English)
   double _soundLevel = 0.0;
 
-  final List<String> _quickChips = [
-    "Can I buy a 1200 SAR iPad?",
-    "أقدر اشتري ايباد بـ 1200 ريال؟",
-    "Dunkin 19 SAR: 16 latte, 3 donut",
-    "Danube 145 SAR: 2 milk 20, chicken 125",
-    "فاتورة بنده 85 ريال: حليب 15 ودجاج 45 وجبنة 25",
-    "Albaik 28 SAR combo meal",
-    "Aramco 50 SAR 91 fuel",
-  ];
+  /// Example messages in the app language only (UX-18).
+  List<String> _quickChips(BuildContext context) => [for (final k in chatExampleKeys) context.tr(k)];
 
   @override
   void initState() {
@@ -459,6 +454,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     String beneficiary,
     String? nafaqahClass,
     String? nafaqahSpouseId,
+    PendingExpenseEdits edits,
   ) async {
     final pending = originalMsg.pendingData;
     if (pending == null || _householdId == null) return;
@@ -489,6 +485,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         beneficiary: beneficiary,
         nafaqahClass: nafaqahClass,
         nafaqahSpouseId: nafaqahSpouseId,
+        // The user's corrections travel with the token (UX-12).
+        amount: edits.amount,
+        occurredAt: edits.occurredAt,
         previewToken: token,
       ),
       rePreview: () => ApiService.instance.postChatTransaction(
@@ -516,7 +515,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           text: res['message'] ?? context.tr('chat_tx_recorded'),
           transactionData: {
             'merchant': res['merchant'] ?? merchant,
-            'amount': (res['amount'] as num?)?.toDouble() ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
+            'amount': (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0,
             'category_code': res['category_code'] ?? pending['category_code'],
             'items': parsedItems.isNotEmpty ? parsedItems : (pending['items'] as List? ?? []),
             'spent_by': res['spent_by'] ?? (beneficiary == 'partner' ? 'partner' : (beneficiary == 'me' ? 'me' : 'both')),
@@ -566,74 +565,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ],
         ),
         actions: [
-          // Language selector toggle pill
-          Container(
-            margin: const EdgeInsetsDirectional.only(end: 12),
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: context.chipBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'ar_SA'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'ar_SA' ? AppThemes.success : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇸🇦 ع',
-                      style: TextStyle(
-                        color: _selectedLocale == 'ar_SA' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'en_US'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'en_US' ? AppThemes.success : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇺🇸 EN',
-                      style: TextStyle(
-                        color: _selectedLocale == 'en_US' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _selectedLocale = 'ur_PK'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _selectedLocale == 'ur_PK' ? AppThemes.success : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      '🇵🇰 اردو',
-                      style: TextStyle(
-                        color: _selectedLocale == 'ur_PK' ? Colors.black : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // The microphone's language (UX-19: one 48 dp control, not three 25 dp pills).
+          VoiceLanguageButton(
+            localeId: _selectedLocale,
+            onChanged: (v) => setState(() => _selectedLocale = v),
           ),
         ],
         backgroundColor: context.cardBg,
@@ -651,8 +586,8 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
-                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
-                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId);
+                    onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
+                      _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits);
                     },
                     onCancelPending: () {
                       setState(() {
@@ -705,14 +640,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _quickChips.length,
+                itemCount: chatExampleKeys.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (ctx, i) {
                   return ActionChip(
                     backgroundColor: context.cardBg,
                     side: BorderSide(color: context.borderColor),
-                    label: Text(_quickChips[i], style: TextStyle(fontSize: 12, color: context.textPrimary)),
-                    onPressed: () => _sendMessage(_quickChips[i]),
+                    label: Text(_quickChips(context)[i], style: TextStyle(fontSize: 13, color: context.textPrimary)),
+                    onPressed: () => _sendMessage(_quickChips(context)[i]),
                   );
                 },
               ),

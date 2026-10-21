@@ -707,7 +707,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00', 'en_US');
     final cycle = _selectedCycle;
     final headerTitle = cycle != null
         ? context.cycleRangeIso(
@@ -935,7 +934,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: -${deficitAccount.currency} ${fmt.format(deficitAmount)}',
+                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: ${context.money(-deficitAmount, deficitAccount.currency)}',
                                         style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                       const SizedBox(height: 2),
@@ -1117,7 +1116,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       style: TextStyle(
                                           fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
                                   const SizedBox(height: 3),
-                                  Row(
+                                  // Wraps on narrow phones (UX-29: it overflowed by 8 px).
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 2,
                                     children: [
                                       Text(
                                         existing != null
@@ -1132,7 +1134,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                         ),
                                       ),
                                       if (existing != null && existing.spentAmount > 0) ...[
-                                        const SizedBox(width: 8),
                                         Text(
                                           '• ${context.tr('spent')}: ${context.sar(existing.spentAmount)}',
                                           style: TextStyle(
@@ -1212,11 +1213,27 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 tooltip: context.tr('edit_budget'),
                                 onPressed: () => _editBudget(staticData, existing, code),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.archive_outlined,
-                                    color: Color(0xFFE3B341), size: 20),
-                                tooltip: context.tr('deactivate_category'),
-                                onPressed: () => _archiveCategory(staticData, code, category),
+                              // Deactivating hides a category: a menu item with the
+                              // existing confirmation, not a gold icon one tap away (UX-29).
+                              PopupMenuButton<String>(
+                                key: const ValueKey('budget_row_menu'),
+                                tooltip: context.tr('feed_more_actions'),
+                                icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
+                                onSelected: (v) {
+                                  if (v == 'deactivate') _archiveCategory(staticData, code, category);
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'deactivate',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.archive_outlined, size: 18, color: context.warnText),
+                                        const SizedBox(width: 10),
+                                        Flexible(child: Text(context.tr('deactivate_category'))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                             Icon(Icons.chevron_right, size: 18, color: context.textSecondary),

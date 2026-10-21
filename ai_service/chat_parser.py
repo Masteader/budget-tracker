@@ -814,6 +814,7 @@ def process_chat_transaction(
     override_nafaqah_class: Optional[str] = None,
     override_nafaqah_spouse_id: Optional[str] = None,
     preview_token: Optional[str] = None,
+    override_amount: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -872,6 +873,14 @@ def process_chat_transaction(
             "status": "non_transactional",
             "message": "The message does not appear to contain a transaction expense.",
         }
+
+    if override_amount is not None:
+        # The user corrected the amount in the confirmation card (UX-12; validated by the route).
+        # A single line that was the whole amount follows it; an itemised list stays as parsed.
+        if len(parsed.items) == 1 and abs(parsed.items[0].price * (parsed.items[0].quantity or 1) - parsed.total_amount) < 0.005:
+            parsed.items[0].price = override_amount
+            parsed.items[0].quantity = 1.0
+        parsed.total_amount = override_amount
 
     items_dicts = [item.model_dump() for item in parsed.items]
 

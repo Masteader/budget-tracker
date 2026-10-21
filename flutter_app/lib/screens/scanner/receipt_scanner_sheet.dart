@@ -32,6 +32,8 @@ import '../../widgets/zatca_status_badge.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/nafaqah/nafaqah_review_section.dart';
+import '../../widgets/transactions/nafaqah_feed_badge.dart';
+import '../../widgets/scanner/receipt_review_editor.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
@@ -72,6 +74,36 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   late final TextEditingController _merchantController;
   String _selectedSpentBy = 'both';
 
+  // UX-12: the scanned total and category, editable before saving.
+  final TextEditingController _reviewAmountCtrl = TextEditingController();
+  String? _reviewCategory;
+  bool _reviewAmountInvalid = false;
+
+  double get _scannedAmount =>
+      ((_zatcaDecoded?['total'] as num?) ??
+              (_scanResult?['amount'] as num?) ??
+              (_scanResult?['parsed_data']?['amount'] as num?) ??
+              0)
+          .toDouble();
+
+  String? get _scannedCategory =>
+      (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String?;
+
+  /// Shows the scanned values in the review fields.
+  void _resetReview() {
+    final amount = _scannedAmount;
+    _reviewAmountCtrl.text = amount > 0 ? amount.toStringAsFixed(2) : '';
+    _reviewCategory = _scannedCategory ?? 'OPEX-MISC';
+    _reviewAmountInvalid = false;
+  }
+
+  ReceiptReviewEdits get _reviewEdits => ReceiptReviewEdits.from(
+        scannedAmount: _scannedAmount,
+        scannedCategory: _scannedCategory,
+        amountText: _reviewAmountCtrl.text,
+        chosenCategory: _reviewCategory,
+      );
+
   // Family (Islamic Nafaqah): the server's suggestion from the preview and the
   // user's choice. A wife's receipt is her shared advance (the husband owes
   // it) or a personal purchase from her allowance; never split.
@@ -106,6 +138,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   @override
   void dispose() {
     _merchantController.dispose();
+    _reviewAmountCtrl.dispose();
     super.dispose();
   }
 
@@ -368,6 +401,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         } else {
           _scanResult = res;
           _applyNafaqahPreview(res);
+          _resetReview();
           final detectedMerchant = _zatcaDecoded?['seller'] as String? ??
               res['merchant'] as String? ??
               res['parsed_data']?['merchant'] as String? ??
@@ -413,6 +447,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ],
             'zatca_verified': _zatcaDecoded,
           };
+          _resetReview();
         });
       }
       return;
@@ -501,6 +536,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       setState(() => _showWifeRequired = true);
       return;
     }
+    final edits = enrichTxId == null ? _reviewEdits : const ReceiptReviewEdits();
+    if (edits.invalid) {
+      setState(() => _reviewAmountInvalid = true);
+      return;
+    }
     setState(() {
       _isAnalyzing = true;
       _errorMessage = null;
@@ -547,6 +587,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           beneficiary: nafaqah['beneficiary'],
           nafaqahClass: nafaqah['nafaqah_class'],
           nafaqahSpouseId: nafaqah['nafaqah_spouse_id'],
+          // The user's corrections travel with the token (UX-12).
+          amount: edits.amount,
+          categoryCode: edits.categoryCode,
           previewToken: token,
         ),
         rePreview: () => ApiService.instance.scanReceipt(
@@ -648,7 +691,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           : (_zatcaDecoded?['seller'] as String? ??
               _scanResult?['merchant'] as String? ??
               context.tr('scan_vat_tax_invoice'));
-      final total = (_zatcaDecoded?['total'] as num?)?.toDouble() ??
+      final edited = _reviewEdits;
+      final total = edited.amount ??
+          (_zatcaDecoded?['total'] as num?)?.toDouble() ??
           (_scanResult?['amount'] as num?)?.toDouble() ??
           0.0;
       final vat = (_zatcaDecoded?['vat'] as num?)?.toDouble() ??
@@ -681,8 +726,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final nafaqahFields = _nafaqahFields;
       // The category the scan found (as the API would store it), never a
       // hard-coded one (FABLE2-APP-06).
-      final categoryCode = (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code'])
-              as String? ??
+      final categoryCode = edited.categoryCode ??
+          (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String? ??
           'OPEX-MISC';
       final row = <String, dynamic>{
         'household_id': widget.householdId,
@@ -1180,6 +1225,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           merchantController: _merchantController,
           selectedSpentBy: _selectedSpentBy,
           onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+          showSpentBy: !_nafaqah.isFamily,
         ),
         if (_nafaqah.canClassify) ...[
           NafaqahReviewSection(
@@ -1320,11 +1366,21 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           ),
         ],
 
+        if (!isSuccess && !isCandidate && _reviewCategory != null)
+          ReceiptReviewEditor(
+            amountController: _reviewAmountCtrl,
+            categoryCode: _reviewCategory!,
+            amountInvalid: _reviewAmountInvalid,
+            onAmountChanged: () => setState(() => _reviewAmountInvalid = false),
+            onCategoryChanged: (c) => setState(() => _reviewCategory = c),
+          ),
+
         if (!isSuccess) ...[
           StoreAttributionCard(
             merchantController: _merchantController,
             selectedSpentBy: _selectedSpentBy,
             onSpentByChanged: (v) => setState(() => _selectedSpentBy = v),
+            showSpentBy: !_nafaqah.isFamily,
           ),
           if (_nafaqah.canClassify) ...[
             NafaqahReviewSection(
@@ -1366,10 +1422,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           merchant: _merchantController.text.trim().isNotEmpty
               ? _merchantController.text.trim()
               : merchant,
-          amount: amount,
-          categoryCode: categoryCode,
+          amount: isSuccess ? amount : (_reviewEdits.amount ?? amount),
+          categoryCode: isSuccess ? categoryCode : (_reviewEdits.categoryCode ?? categoryCode),
           source: 'receipt_scan',
           spentBy: _selectedSpentBy,
+          // Family: what the Nafaqah choice makes of it, not "shared" (UX-04).
+          attributionBadge: _nafaqah.isFamily
+              ? NafaqahFeedBadge(
+                  kind: nafaqahBadgeKindForClass(_nafaqahClass),
+                  wifeName: _nafaqah.wifeNameFor(_nafaqahWifeId),
+                  viewerIsWife: _nafaqah.viewerIsWife,
+                )
+              : null,
           items: items,
           initiallyExpanded: true,
         ),
@@ -1401,7 +1465,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ),
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
             label: Text(
-              context.trPlural('scan_confirm_save_items', items.length, {'amount': context.sar(amount)}),
+              context.trPlural('scan_confirm_save_items', items.length, {'amount': context.sar(_reviewEdits.amount ?? amount)}),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             onPressed: () => _confirmSave(allowDuplicate: false),

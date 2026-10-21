@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
@@ -29,10 +28,7 @@ class AccountCard extends StatelessWidget {
 
   /// Riyal amounts through the riyal formatter ("1,250.00 ر.س" in Arabic);
   /// other currencies (USDT…) keep their code (UX-22).
-  String _money(BuildContext context, double amount) {
-    if (account.currency.toUpperCase() == 'SAR') return context.sar(amount);
-    return '${account.currency} ${NumberFormat('#,##0.00', 'en_US').format(amount)}';
-  }
+  String _money(BuildContext context, double amount) => context.money(amount, account.currency);
 
   @override
   Widget build(BuildContext context) {
@@ -52,18 +48,18 @@ class AccountCard extends StatelessWidget {
         break;
       case AccountCapacityStatus.surplus:
         statusColor = AppThemes.iceCyan;
-        statusLabel = '+${_money(context, margin)} ${context.tr("surplus_buffer_label")}';
+        statusLabel = '${context.money(margin, account.currency, signed: true)} ${context.tr("surplus_buffer_label")}';
         statusIcon = Icons.savings_outlined;
         break;
       case AccountCapacityStatus.deficit:
         statusColor = Colors.redAccent;
-        statusLabel = '${context.tr("deficit_label")}: -${_money(context, -margin)}';
+        statusLabel = '${context.tr("deficit_label")}: ${context.money(margin, account.currency)}';
         statusIcon = Icons.warning_amber_rounded;
         break;
     }
 
-    final displayBalance = hideBalance ? '••••••' : _money(context, account.balance);
-    final displayCommitted = hideBalance ? '••••' : _money(context, committedBudgets);
+    final displayBalance = hideBalance ? '••••••' : context.money(account.balance, account.currency);
+    final displayCommitted = hideBalance ? '••••' : context.money(committedBudgets, account.currency);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

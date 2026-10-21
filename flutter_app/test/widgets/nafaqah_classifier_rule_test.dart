@@ -88,7 +88,7 @@ void main() {
             child: PendingExpenseConfirmationCard(
               pendingData: _preview(),
               isAdmin: isAdmin,
-              onConfirm: (store, cat, sub, paidBy, beneficiary, cls, spouse) =>
+              onConfirm: (store, cat, sub, paidBy, beneficiary, cls, spouse, edits) =>
                   result = [paidBy, beneficiary, cls, spouse],
               onCancel: () {},
             ),
@@ -114,7 +114,7 @@ void main() {
     });
 
     testWidgets('an admin records a wife advance naming her', (tester) async {
-      final r = await confirm(tester, isAdmin: true, tap: 'Shared for family (husband reimburses)');
+      final r = await confirm(tester, isAdmin: true, tap: 'Umm Fahad paid for the home — owed to her');
       expect(r, ['partner', 'both', kWifeReimbursable, 'u-wife']);
     });
   });
@@ -218,8 +218,8 @@ void main() {
       await tester.pump();
       if (!isAdmin) expect(find.byType(NafaqahClassSelector), findsNothing);
       if (tapShared) {
-        await tester.ensureVisible(find.text('Shared for family (husband reimburses)'));
-        await tester.tap(find.text('Shared for family (husband reimburses)'));
+        await tester.ensureVisible(find.text('The wife paid for the home — owed to her'));
+        await tester.tap(find.text('The wife paid for the home — owed to her'));
         await tester.pump();
       }
       await tester.ensureVisible(find.text('Save Changes'));

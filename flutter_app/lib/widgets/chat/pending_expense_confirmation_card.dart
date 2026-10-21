@@ -8,6 +8,17 @@ import '../../models/nafaqah.dart';
 import '../../providers/household_role_provider.dart';
 import '../nafaqah/nafaqah_review_section.dart';
 import '../../models/category_catalog.dart';
+import '../../models/money.dart';
+import '../transactions/expense_date_chips.dart';
+
+/// What the user corrected in the confirmation card (UX-12): the amount when
+/// it differs from the preview (else null) and the date when it is not today
+/// (else null: the server books it now).
+class PendingExpenseEdits {
+  final double? amount;
+  final DateTime? occurredAt;
+  const PendingExpenseEdits({this.amount, this.occurredAt});
+}
 
 /// Confirmed values of a chat expense. [confirmedNafaqahClass] is set in
 /// family mode only: 'wife_reimbursable', 'wife_personal' or 'none' (husband
@@ -22,6 +33,7 @@ typedef PendingExpenseConfirmCallback = void Function(
   String confirmedBeneficiary,
   String? confirmedNafaqahClass,
   String? confirmedNafaqahSpouseId,
+  PendingExpenseEdits edits,
 );
 
 /// Interactive confirmation card embedded within chat bubbles that allows
@@ -49,6 +61,10 @@ class PendingExpenseConfirmationCard extends StatefulWidget {
 
 class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmationCard> {
   late final TextEditingController _merchantController;
+  late final TextEditingController _amountController;
+  late final double _previewAmount;
+  bool _amountInvalid = false;
+  DateTime _occurredAt = DateTime.now();
   late String _selectedCategoryCode;
   late String? _selectedSubCategory;
   late String _selectedPaidBy;
@@ -89,19 +105,35 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       });
 
   void _chooseNafaqah(String? cls) {
-    if (_spouseRole == null) {
-      setState(() => _nafaqahChoice = cls);
-      return;
-    }
+    setState(() => _applyNafaqahChoice(cls));
+  }
+
+  /// Family (UX-03): the Nafaqah choice is the one question. For a spouse it
+  /// sets who paid and for whom, so the confirmed payer / beneficiary always
+  /// classify to the chosen class (the server contract is unchanged).
+  void _applyNafaqahChoice(String? cls) {
+    _nafaqahChoice = cls;
+    if (_spouseRole == null) return;
     final wifeSide = _spouseRole == 'wife' ? 'me' : 'partner';
-    setState(() {
-      _nafaqahChoice = cls;
-      if (cls == kWifePersonal) {
-        _selectedBeneficiary = wifeSide;
-      } else if (cls == kWifeReimbursable && _selectedBeneficiary == wifeSide) {
-        _selectedBeneficiary = 'both';
-      }
-    });
+    final husbandSide = _spouseRole == 'wife' ? 'partner' : 'me';
+    if (cls == kWifePersonal) {
+      _selectedPaidBy = wifeSide;
+      _selectedBeneficiary = wifeSide;
+    } else if (cls == kWifeReimbursable) {
+      _selectedPaidBy = wifeSide;
+      if (_selectedBeneficiary == wifeSide) _selectedBeneficiary = 'both';
+    } else {
+      // The husband paid: an ordinary household expense (also when it was for his wife).
+      _selectedPaidBy = husbandSide;
+    }
+  }
+
+  /// A child the family expense was for (optional), or null.
+  String? _childBeneficiary(List<String> dependents) {
+    for (final d in dependents) {
+      if (d.toLowerCase() == _selectedBeneficiary) return d;
+    }
+    return null;
   }
 
 
@@ -111,6 +143,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     // Empty (with a localized hint) instead of an English placeholder value.
     final defaultMerchant = widget.pendingData['merchant'] as String? ?? '';
     _merchantController = TextEditingController(text: defaultMerchant);
+    _previewAmount = (widget.pendingData['amount'] as num?)?.toDouble() ?? 0.0;
+    _amountController = TextEditingController(text: _previewAmount > 0 ? _previewAmount.toStringAsFixed(2) : '');
 
     _selectedCategoryCode = CategoryCatalog.normalize(widget.pendingData['category_code'] as String?);
 
@@ -134,6 +168,8 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     _nafaqahChoice = (suggested == kWifeReimbursable || suggested == kWifePersonal)
         ? suggested
         : classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary);
+    // Keep who paid / for whom consistent with the (suggested) class.
+    if (_spouseRole != null) _applyNafaqahChoice(_nafaqahChoice);
 
     // Available subcategories from backend preview payload
     final rawSubs = widget.pendingData['available_sub_categories'] as List?;
@@ -172,12 +208,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
   @override
   void dispose() {
     _merchantController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final amount = (widget.pendingData['amount'] as num?)?.toDouble() ?? 0.0;
     final rawItems = widget.pendingData['items'] as List?;
     final items = rawItems != null
         ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
@@ -198,40 +234,61 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Title & Total
+          // Header
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.edit_note_rounded, color: AppThemes.success, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    context.tr('pec_title'),
-                    style: GoogleFonts.outfit(
-                      color: context.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              const Icon(Icons.edit_note_rounded, color: AppThemes.success, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
                 child: Text(
-                  context.sar(amount),
-                  style: TextStyle(
-                    color: context.successText,
+                  context.tr('pec_title'),
+                  style: GoogleFonts.outfit(
+                    color: context.textPrimary,
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+
+          // Amount first, editable (UX-12): a misheard 816 is fixed here, not retyped.
+          TextField(
+            key: const ValueKey('pec_amount'),
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+            onChanged: (_) {
+              if (_amountInvalid) setState(() => _amountInvalid = false);
+            },
+            decoration: InputDecoration(
+              labelText: context.tr('pec_amount_label'),
+              suffixText: context.tr('sar'),
+              errorText: _amountInvalid ? context.tr('pec_amount_invalid') : null,
+              labelStyle: TextStyle(color: context.textSecondary, fontSize: 13),
+              isDense: true,
+              filled: true,
+              fillColor: context.inputBg,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppThemes.success),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ExpenseDateChips(
+            value: _occurredAt,
+            onChanged: (d) => setState(() => _occurredAt = d),
           ),
           const SizedBox(height: 12),
 
@@ -362,7 +419,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
           ),
           const SizedBox(height: 12),
 
-          // ── WHO PAID? ──
+          // ── WHO PAID? / FOR WHOM? (roommates and partners only) ──
+          // A family household answers one Nafaqah question instead (UX-03).
+          if (!_isFamily) ...[
           Text(
             context.tr('pec_who_paid_caps'),
             style: GoogleFonts.outfit(
@@ -382,7 +441,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
               ),
               const SizedBox(width: 8),
               _buildChoiceChip(
-                label: context.tr('partner'),
+                label: context.tr('pec_payer_other'),
                 isSelected: _selectedPaidBy == 'partner',
                 onSelected: () => _setPaidBy('partner'),
               ),
@@ -431,19 +490,40 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             ],
           ),
           const SizedBox(height: 12),
+          ],
 
           // Family: the wife's own money is either a shared advance the husband
           // reimburses or a personal purchase from her allowance (never split).
-          if (_isAdminClassifier ||
-              (_spouseRole != null && classifyNafaqah(_spouseRole, _selectedPaidBy, _selectedBeneficiary) != null)) ...[
+          if (_isAdminClassifier || _spouseRole != null) ...[
             NafaqahReviewSection(
               preview: _nafaqahPreview,
               value: _nafaqahChoice,
               wifeId: _nafaqahWifeId,
-              showHusbandOption: _isAdminClassifier,
               showWifeRequired: _showWifeRequired,
               onChanged: _chooseNafaqah,
               onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Family: optionally, which child it was for (never for a personal purchase).
+          if (_isFamily && dependents.isNotEmpty && _nafaqahChoice != kWifePersonal) ...[
+            Text(
+              context.tr('nafaqah_for_child_optional'),
+              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: context.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: dependents.map((depName) {
+                final selected = _childBeneficiary(dependents) == depName;
+                return _buildChoiceChip(
+                  label: depName,
+                  icon: Icons.child_care_rounded,
+                  isSelected: selected,
+                  onSelected: () => setState(() => _selectedBeneficiary = selected ? 'both' : depName.toLowerCase()),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 12),
           ],
@@ -515,6 +595,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
             children: [
               Expanded(
                 child: ElevatedButton.icon(
+                  key: const ValueKey('pec_confirm'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppThemes.success,
                     foregroundColor: Colors.black,
@@ -527,6 +608,17 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   onPressed: () {
+                    final typed = parseMoneyInput(_amountController.text, allowNegative: false);
+                    if (typed == null || typed <= 0) {
+                      setState(() => _amountInvalid = true);
+                      return;
+                    }
+                    final now = DateTime.now();
+                    final isToday = _occurredAt.year == now.year && _occurredAt.month == now.month && _occurredAt.day == now.day;
+                    final edits = PendingExpenseEdits(
+                      amount: (typed - _previewAmount).abs() < 0.005 ? null : typed,
+                      occurredAt: isToday ? null : _occurredAt,
+                    );
                     // The class follows the confirmed chips (the selector keeps
                     // them in sync), so a stale suggestion is never sent.
                     final derived = _isAdminClassifier
@@ -558,6 +650,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                       _isFamily && derived != null && (_spouseRole == 'husband' || _isAdminClassifier)
                           ? _nafaqahWifeId
                           : null,
+                      edits,
                     );
                   },
                 ),

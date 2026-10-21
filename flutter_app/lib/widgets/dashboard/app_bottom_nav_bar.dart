@@ -58,8 +58,9 @@ class AppBottomNavBar extends StatelessWidget {
     );
   }
 
-  Color _active(BuildContext context) => context.isDark ? AppThemes.electricTeal : const Color(0xFF008F7A);
-  Color _inactive(BuildContext context) => context.isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+  // UX-27: contrast-safe tokens (the hard-coded #008F7A was 4.0:1 in light mode).
+  Color _active(BuildContext context) => context.accentText;
+  Color _inactive(BuildContext context) => context.textMuted;
 
   Widget _label(BuildContext context, String label, bool isSelected, double size, {bool bold = false}) => Text(
         label,

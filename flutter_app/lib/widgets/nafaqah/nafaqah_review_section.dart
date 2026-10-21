@@ -45,7 +45,10 @@ class NafaqahReviewSection extends StatelessWidget {
       children: [
         NafaqahClassSelector(
           value: value,
-          viewerIsWife: preview.viewerIsWife,
+          viewerRole: preview.viewerRole,
+          // The wife is the one recording, or the wife chosen (the only one).
+          wifeName: preview.viewerIsWife ? null : preview.wifeNameFor(wifeId),
+          husbandName: preview.husbandName,
           showHusbandOption: showHusbandOption,
           onChanged: onChanged,
         ),

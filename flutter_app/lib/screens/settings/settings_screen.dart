@@ -22,6 +22,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
+import '../../widgets/settings/settings_section.dart';
 import '../../widgets/settings/household_roles_card.dart';
 import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
@@ -786,14 +787,15 @@ class _SettingsScreenState extends State<SettingsScreen>
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
+          // UX-15: Settings in foldable sections; the everyday ones open,
+          // the rarely used ones folded. Nothing is removed.
           // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
-          _buildSectionHeader(context.tr('set_household_membership')),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('set_manage_shared_budget_group_invite'),
-            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
-          ),
-          const SizedBox(height: 12),
+          SettingsSection(
+            title: context.tr('set_household_membership'),
+            subtitle: context.tr('set_manage_shared_budget_group_invite'),
+            icon: Icons.home_work_outlined,
+            initiallyExpanded: true,
+            children: [
           if (_householdId != null) ...[
             HouseholdManagementCard(
               householdName: _householdName ?? context.tr('set_household'),
@@ -815,22 +817,6 @@ class _SettingsScreenState extends State<SettingsScreen>
               householdId: _householdId!,
               onRolesChanged: _onRolesChanged,
               onNafaqahProviderChanged: _onNafaqahProviderChanged,
-            ),
-            const SizedBox(height: 16),
-            PaydaySettingsCard(
-              initialPayday: _paydayDay,
-              onSavePayday: _savePayday,
-            ),
-            const SizedBox(height: 16),
-            IncomeSettingsCard(
-              initialIncome: _monthlyIncome,
-              onSaveIncome: _saveIncome,
-            ),
-            const SizedBox(height: 16),
-            RolloverSettingsCard(
-              initialRule: _rolloverRule,
-              accumulatedSavings: _accumulatedSavings,
-              onSaveRule: _saveRolloverRule,
             ),
             const SizedBox(height: 16),
             Container(
@@ -942,27 +928,49 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
           ],
-          const SizedBox(height: 28),
+            ],
+          ),
+
+          // ── SALARY & BUDGET CYCLE (payday, income, rollover) ──
+          if (_householdId != null)
+            SettingsSection(
+              title: context.tr('set_salary_section'),
+              subtitle: context.trArgs('set_salary_section_summary', {'day': _paydayDay}),
+              icon: Icons.calendar_month_outlined,
+              children: [
+                PaydaySettingsCard(
+                  initialPayday: _paydayDay,
+                  onSavePayday: _savePayday,
+                ),
+                const SizedBox(height: 16),
+                IncomeSettingsCard(
+                  initialIncome: _monthlyIncome,
+                  onSaveIncome: _saveIncome,
+                ),
+                const SizedBox(height: 16),
+                RolloverSettingsCard(
+                  initialRule: _rolloverRule,
+                  accumulatedSavings: _accumulatedSavings,
+                  onSaveRule: _saveRolloverRule,
+                ),
+              ],
+            ),
 
           // ── APPEARANCE & LANGUAGE ──
-          _buildSectionHeader(context.tr('appearance_language')),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('set_customize_app_theme_system_language'),
-            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
+          SettingsSection(
+            title: context.tr('appearance_language'),
+            subtitle: context.tr('set_customize_app_theme_system_language'),
+            icon: Icons.palette_outlined,
+            initiallyExpanded: true,
+            children: [_buildAppearanceAndLanguageCard()],
           ),
-          const SizedBox(height: 12),
-          _buildAppearanceAndLanguageCard(),
-          const SizedBox(height: 24),
 
           // ── 1. HARDWARE & APP PERMISSIONS ──
-          _buildSectionHeader(context.tr('hardware_permissions')),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('set_check_manage_camera_microphone_access'),
-            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
-          ),
-          const SizedBox(height: 10),
+          SettingsSection(
+            title: context.tr('hardware_permissions'),
+            subtitle: context.tr('set_check_manage_camera_microphone_access'),
+            icon: Icons.verified_user_outlined,
+            children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -1011,18 +1019,16 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 24),
+            ],
+          ),
 
           // ── REMINDERS (local notifications) ──
-          _buildSectionHeader(context.tr('reminders_title')),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('reminders_desc'),
-            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
+          SettingsSection(
+            title: context.tr('reminders_title'),
+            subtitle: context.tr('reminders_desc'),
+            icon: Icons.notifications_none_rounded,
+            children: const [ReminderSettingsCard()],
           ),
-          const SizedBox(height: 10),
-          const ReminderSettingsCard(),
-          const SizedBox(height: 24),
 
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
           if (_householdId != null && _members.length > 1) ...[
@@ -1047,8 +1053,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           ],
 
           // ── DATA EXPORT & OFFLINE QUEUE ──
-          _buildSectionHeader(context.tr('reports_offline_queue')),
-          const SizedBox(height: 10),
+          SettingsSection(
+            title: context.tr('reports_offline_queue'),
+            icon: Icons.table_view_outlined,
+            children: [
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1138,16 +1146,16 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 24),
+            ],
+          ),
 
           // ── HELP & SUPPORT ──
-          _buildSectionHeader(context.tr('set_help_support')),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('set_explore_user_guides_interactive_walkthroughs'),
-            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
-          ),
-          const SizedBox(height: 10),
+          SettingsSection(
+            title: context.tr('set_help_support'),
+            subtitle: context.tr('set_explore_user_guides_interactive_walkthroughs'),
+            icon: Icons.help_outline_rounded,
+            initiallyExpanded: true,
+            children: [
           Card(
             color: context.cardBg,
             elevation: 0,
@@ -1241,7 +1249,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
-          const SizedBox(height: 24),
+            ],
+          ),
+          const SizedBox(height: 12),
 
           // ── 4. HOUSEHOLD & ACCOUNT ──
           _buildSectionHeader(context.tr('set_household_account')),
@@ -1272,34 +1282,51 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 12),
                 ],
                 if (_householdId != null) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.home_outlined, color: context.textSecondary, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          context.trArgs('set_household_short_id', {'id': _householdId!.substring(0, 8)}),
-                          style: TextStyle(color: context.textSecondary, fontSize: 12, fontFamily: 'monospace'),
-                        ),
+                  // The household ID is for support only: folded under "Advanced".
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: const ValueKey('settings_advanced'),
+                      tilePadding: EdgeInsets.zero,
+                      minTileHeight: 48,
+                      shape: const Border(),
+                      collapsedShape: const Border(),
+                      title: Text(
+                        context.tr('set_advanced'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
-                      InkWell(
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: _householdId!));
-                          AppSnackBar.showSuccess(
-                            context,
-                            context.tr('set_household_id_copied_clipboard'),
-                            title: context.tr('set_copied'),
-                            icon: Icons.copy_rounded,
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text(context.tr('set_copy'), style: TextStyle(color: context.successText, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
+                      children: [
+                      Row(
+                        children: [
+                          Icon(Icons.home_outlined, color: context.textSecondary, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.trArgs('set_household_short_id', {'id': _householdId!.substring(0, 8)}),
+                              style: TextStyle(color: context.textSecondary, fontSize: 12, fontFamily: 'monospace'),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: _householdId!));
+                              AppSnackBar.showSuccess(
+                                context,
+                                context.tr('set_household_id_copied_clipboard'),
+                                title: context.tr('set_copied'),
+                                icon: Icons.copy_rounded,
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              child: Text(context.tr('set_copy'), style: TextStyle(color: context.successText, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                 ],
                 SizedBox(
                   width: double.infinity,
@@ -1514,12 +1541,15 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [
               Icon(icon, size: 16, color: isSelected ? Colors.black : textColor),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? Colors.black : textColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected ? Colors.black : textColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -1598,16 +1628,15 @@ class _SettingsScreenState extends State<SettingsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Text(
+                      title,
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
                     ),
-                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -1618,7 +1647,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
                         style: TextStyle(
                           color: isGranted ? activeColor : Colors.orange,
-                          fontSize: 9,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1643,11 +1672,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                 foregroundColor: context.isDark ? Colors.black : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(48, 40),
               ),
               onPressed: onRequest,
-              child: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              child: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             )
           else if (testAction != null)
             OutlinedButton(
@@ -1656,18 +1684,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                 side: BorderSide(color: context.borderColor),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(48, 40),
               ),
               onPressed: testAction,
-              child: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 11)),
+              child: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 12)),
             )
           else
             IconButton(
               icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
               tooltip: context.tr('set_open_app_settings'),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
               onPressed: onOpenSettings,
             ),
         ],

@@ -19,6 +19,7 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
+import 'expense_date_chips.dart';
 import '../../models/nafaqah.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
@@ -96,12 +97,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   late String _selectedCategory;
   bool _isSaving = false;
 
+  /// When the expense happened (UX-12): today by default, or a past day.
+  DateTime _occurredAt = DateTime.now();
+  bool _datePicked = false;
+
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
   String _familyPayer = 'me'; // 'me' (husband paid), 'wife_reimbursable', 'wife_personal'
   bool _viewerIsWife = false;
   List<Map<String, dynamic>> _wives = [];
   String? _selectedWifeId;
+  String? _husbandName;
   /// Only the wife, the Nafaqah provider (husband) or an admin classifies a
   /// family expense; unknown until the members or the summary are loaded.
   bool _canClassifyNafaqah = false;
@@ -261,6 +267,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           for (final w in summary.wives) {'id': w.id, 'display_name': w.displayName},
         ];
         _viewerIsWife = summary.callerIsWife;
+        _husbandName = summary.husbandName;
         // Only the wife, the provider (husband) or an admin records a Nafaqah
         // class (as in chat, receipts and the edit sheet). `can_set_provider`
         // is true for household admins.
@@ -277,6 +284,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     } catch (e) {
       debugPrint('[ManualExpenseSheet] Nafaqah context unavailable: $e');
     }
+  }
+
+  /// The display name of the chosen wife, or null.
+  String? get _selectedWifeName {
+    for (final w in _wives) {
+      if (w['id'] == _selectedWifeId) {
+        final n = (w['display_name'] as String? ?? '').trim();
+        return n.isEmpty ? null : n;
+      }
+    }
+    return null;
   }
 
   /// Family household (a member is a spouse): Nafaqah rules, never a split.
@@ -370,7 +388,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       beneficiaryType: benType,
       beneficiaryId: benId,
       accountId: _selectedAccountId,
-      occurredAt: DateTime.now(),
+      // A day the user chose, else the moment of saving.
+      occurredAt: _datePicked ? _occurredAt : DateTime.now(),
       nafaqahClass: nafaqahClass,
       nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
@@ -518,8 +537,27 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 16),
 
+              // Amount first, focused, decimal keypad (UX-12)
+              TextField(
+                key: const ValueKey('manual_amount'),
+                controller: _amountCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                decoration: InputDecoration(
+                  labelText: context.tr('amount_sar'),
+                  prefixText: '${context.tr('sar')} ',
+                  labelStyle: TextStyle(color: context.textSecondary),
+                  filled: true,
+                  fillColor: context.inputBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Merchant
               TextField(
+                key: const ValueKey('manual_merchant'),
                 controller: _merchantCtrl,
                 style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(
@@ -533,20 +571,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 12),
 
-              // Amount
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-                decoration: InputDecoration(
-                  labelText: context.tr('amount_sar'),
-                  prefixText: '${context.tr('sar')} ',
-                  labelStyle: TextStyle(color: context.textSecondary),
-                  prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success, size: 20),
-                  filled: true,
-                  fillColor: context.inputBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+              // When (UX-12): yesterday's cash purchase is not booked today.
+              ExpenseDateChips(
+                value: _occurredAt,
+                maxDaysBack: 365,
+                onChanged: (d) => setState(() {
+                  _occurredAt = d;
+                  _datePicked = true;
+                }),
               ),
               const SizedBox(height: 12),
 
@@ -601,7 +633,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         children: [
                           Icon(acc.accountType.defaultIcon, size: 16, color: context.electricTeal),
                           const SizedBox(width: 8),
-                          Text('${acc.name} (${acc.currency} ${acc.balance.toStringAsFixed(2)})'),
+                          Text('${acc.name} (${context.money(acc.balance, acc.currency)})'),
                         ],
                       ),
                     );
@@ -666,7 +698,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 // advance (husband reimburses) or wife's personal purchase.
                 NafaqahClassSelector(
                   value: _familyPayer == 'me' ? null : _familyPayer,
-                  viewerIsWife: _viewerIsWife,
+                  viewerRole: _viewerIsWife ? 'wife' : (_adminClassifier ? 'admin' : 'husband'),
+                  wifeName: _viewerIsWife ? null : _selectedWifeName,
+                  husbandName: _husbandName,
                   onChanged: (cls) => setState(() => _familyPayer = cls ?? 'me'),
                 ),
                 if (_familyPayer != 'me' && !_viewerIsWife && _wives.length > 1) ...[

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
+import '../../services/household_invite_share.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
@@ -15,6 +16,12 @@ class RoleInviteDialog extends StatefulWidget {
   final String? targetMemberId;
   final String? targetMemberName;
   final ValueChanged<HouseholdInvite>? onInviteGenerated;
+
+  /// Named in the shared invite message.
+  final String? householdName;
+
+  /// Opens the share sheet (injectable for tests); defaults to the system sheet.
+  final ShareTextLauncher? shareInvite;
 
   /// Creates the invite on the server; defaults to the API. Injectable for tests.
   final Future<HouseholdInvite> Function(String householdId, String role, {String? targetMemberId})? createInvite;
@@ -27,6 +34,8 @@ class RoleInviteDialog extends StatefulWidget {
     this.targetMemberName,
     this.onInviteGenerated,
     this.createInvite,
+    this.householdName,
+    this.shareInvite,
   });
 
   @override
@@ -116,6 +125,29 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
         _isGenerating = false;
       });
       widget.onInviteGenerated?.call(invite);
+    }
+  }
+
+  Future<void> _shareGeneratedInvite() async {
+    final invite = _generatedInvite;
+    if (invite == null) return;
+    final l = AppLocalizations.of(context);
+    final name = widget.householdName ?? '';
+    try {
+      final launcher = widget.shareInvite;
+      if (launcher != null) {
+        await shareRoleInvite(l, householdName: name, code: invite.inviteCode, role: invite.role, launcher: launcher);
+      } else {
+        await shareRoleInvite(l, householdName: name, code: invite.inviteCode, role: invite.role);
+      }
+    } catch (_) {
+      // No share target (or the sheet failed): copy the same message.
+      await Clipboard.setData(ClipboardData(
+        text: roleInviteShareText(l, householdName: name, code: invite.inviteCode, role: invite.role),
+      ));
+      if (mounted) {
+        AppSnackBar.showInfo(context, context.tr('share_invite_failed'), title: context.tr('set_code_copied'));
+      }
     }
   }
 
@@ -261,6 +293,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
+                      key: const ValueKey('rid_generate'),
                       onPressed: _isGenerating ? null : _generateInvite,
                       child: _isGenerating
                           ? const SizedBox(
@@ -313,6 +346,24 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Share the invite (it names the role), with a copy fallback.
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    key: const ValueKey('rid_share_invite'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppThemes.success,
+                      foregroundColor: AppThemes.onSuccessFill,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: Text(context.tr('share_invite'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: _shareGeneratedInvite,
+                  ),
+                ),
+                const SizedBox(height: 8),
 
                 // Copy Code and Done Buttons
                 Row(

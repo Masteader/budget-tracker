@@ -66,6 +66,7 @@ void main() {
     );
     await tester.pumpWidget(_app(binance, 0, const Locale('ar')));
     await tester.pumpAndSettle();
-    expect(find.text('USDT 100.00'), findsOneWidget);
+    // The shared formatter (UX-10): the code after the number in Arabic, like "ر.س".
+    expect(find.text('100.00 USDT'), findsOneWidget);
   });
 }

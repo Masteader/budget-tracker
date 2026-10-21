@@ -81,7 +81,7 @@ void main() {
     expect(find.text("Wife's personal allowance"), findsOneWidget);
     expect(find.text('SAR 1,500.00'), findsOneWidget);
     expect(find.text('SAR 1,700.00'), findsOneWidget);
-    expect(find.text('SAR -200.00'), findsOneWidget);
+    expect(find.text('-SAR 200.00'), findsOneWidget);
     expect(find.text('Over the allowance by SAR 200.00'), findsOneWidget);
     expect(find.text('Change allowance'), findsOneWidget);
   });

@@ -557,7 +557,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           ),
                           icon: const Icon(Icons.add, size: 16),
                           label: Text(
-                            '+ ${context.tr('add_installment_plan')}',
+                            context.tr('add_installment_plan'),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           onPressed: () => _showAddPlanDialog(context),
@@ -720,7 +720,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
                           icon: const Icon(Icons.add, size: 14),
-                          label: Text('+ ${context.tr('add_installment_plan')}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: Text(context.tr('add_installment_plan'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           onPressed: () => _showAddPlanDialog(context),
                         ),
                       ],

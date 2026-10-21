@@ -25,6 +25,8 @@ class ReceiptApiClient {
     String? idempotencyKey,
     DateTime? occurredAt,
     String? previewToken,
+    double? amount,
+    String? categoryCode,
   }) async {
     final payload = <String, dynamic>{
       'images_base64': imagesBase64,
@@ -43,6 +45,9 @@ class ReceiptApiClient {
       if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
       if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
       if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      // The total and category the user corrected in the review (UX-12).
+      if (amount != null) 'amount': amount,
+      if (categoryCode != null && categoryCode.trim().isNotEmpty) 'category_code': categoryCode.trim(),
       // Sent back unchanged from the preview (see preview_token.dart).
       if (previewToken != null && previewToken.isNotEmpty) previewTokenField: previewToken,
     };

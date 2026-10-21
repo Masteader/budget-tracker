@@ -59,3 +59,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+  # Cairo 3.130 (SIL OFL 1.1, assets/fonts/cairo/OFL.txt) for Arabic and Urdu
+  # text (UX-20), from the Google Fonts API (fonts.gstatic.com/s/cairo/v31).
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/cairo/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/cairo/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/cairo/Cairo-Bold.ttf
+          weight: 700

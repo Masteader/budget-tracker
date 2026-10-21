@@ -254,7 +254,7 @@ class _ReimbursementPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const gold = AppThemes.champagneGold;
+    final gold = context.goldText;
     final balance = wife.reimbursement;
     final isSettled = balance.isSettled;
     final badgeColor = isSettled ? AppThemes.success : gold;
@@ -279,7 +279,7 @@ class _ReimbursementPanel extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: gold.withValues(alpha: 0.15), shape: BoxShape.circle),
-                child: const Icon(Icons.family_restroom_rounded, color: gold, size: 20),
+                child: Icon(Icons.family_restroom_rounded, color: gold, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -561,7 +561,7 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
                   separatorBuilder: (_, __) => Divider(color: context.borderColor, height: 1),
                   itemBuilder: (context, i) {
                     final e = history[i];
-                    final color = e.isAdvance ? AppThemes.champagneGold : context.successText;
+                    final color = e.isAdvance ? context.goldText : context.successText;
                     final title = e.isAdvance
                         ? context.trArgs('nafaqah_history_advance', {'merchant': e.merchant ?? context.tr('merchant_generic')})
                         : context.trArgs('nafaqah_history_reimbursement', {'method': _methodLabel(context, e.paymentMethod)});

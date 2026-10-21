@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/widgets/chat/pending_expense_confirmation_card.dart';
+import '../support/localized_app.dart';
 
 void main() {
   testWidgets('renders category, subcategory dropdown and for whom child chips', (tester) async {
@@ -24,7 +25,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {},
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {},
               onCancel: () {},
             ),
           ),
@@ -64,7 +65,7 @@ void main() {
           body: SingleChildScrollView(
             child: PendingExpenseConfirmationCard(
               pendingData: pendingData,
-              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+              onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
                 confirmedStore = store;
                 confirmedCat = cat;
                 confirmedSub = subCat;
@@ -93,7 +94,14 @@ void main() {
     expect(confirmedBeneficiary, equals('both'));
   });
 
-  Map<String, dynamic> familyPreview({String role = 'wife', String paidBy = 'me', String beneficiary = 'both', String? cls}) => {
+  Map<String, dynamic> familyPreview({
+    String role = 'wife',
+    String paidBy = 'me',
+    String beneficiary = 'both',
+    String? cls,
+    List<String> dependents = const [],
+  }) =>
+      {
         'merchant': 'Panda',
         'amount': 180.0,
         'category_code': 'OPEX-GROCERY',
@@ -103,75 +111,129 @@ void main() {
         'available_sub_categories': [
           {'sub_code': 'pantry_staples', 'name_en': 'Pantry Staples', 'name_ar': 'المؤن'},
         ],
-        'dependents': <String>[],
+        'dependents': dependents,
         'household_mode': 'family_nafaqah',
         'recorder_role': role,
         'nafaqah_class': cls,
+        'wives': [
+          {'id': 'wife-1', 'display_name': 'Sara'},
+        ],
       };
 
-  Future<String?> confirmWith(WidgetTester tester, Map<String, dynamic> data, {Future<void> Function()? before}) async {
-    String? confirmed = 'unset';
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: PendingExpenseConfirmationCard(
-            pendingData: data,
-            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) => confirmed = nafaqahClass,
-            onCancel: () {},
-          ),
-        ),
+  /// Everything the card confirmed.
+  Future<Map<String, String?>> confirmAll(WidgetTester tester, Map<String, dynamic> data,
+      {Future<void> Function()? before, String lang = 'en'}) async {
+    final out = <String, String?>{'called': 'no'};
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: data,
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
+          out
+            ..['called'] = 'yes'
+            ..['paid_by'] = paidBy
+            ..['beneficiary'] = beneficiary
+            ..['class'] = nafaqahClass
+            ..['spouse'] = nafaqahSpouseId;
+        },
+        onCancel: () {},
       ),
+      lang: lang,
     ));
-    if (before != null) await before();
-    await tester.tap(find.text('Confirm & Add Expense'));
     await tester.pumpAndSettle();
-    return confirmed;
+    if (before != null) await before();
+    final confirm = find.byKey(const ValueKey('pec_confirm'));
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    return out;
   }
 
-  testWidgets('family: wife-paid shared expense is confirmed as a husband debt, no split', (tester) async {
-    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'));
-    expect(find.text('Shared for family (husband reimburses)'), findsOneWidget);
-    expect(find.text('Personal (from my allowance)'), findsOneWidget);
-    expect(find.text('Husband paid (household expense)'), findsNothing);
+  Future<void> tapOption(WidgetTester tester, String cls) async {
+    final option = find.byKey(ValueKey('nafaqah_option_$cls'));
+    await tester.ensureVisible(option);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+  }
+
+  // UX-03: one Nafaqah question in family mode, worded with real names.
+  testWidgets('family (wife): one question from her point of view, no "who paid / for whom" chips', (tester) async {
+    final r = await confirmAll(tester, familyPreview(cls: 'wife_reimbursable'));
+    expect(find.text('Who paid, and for whom?'), findsOneWidget);
+    expect(find.text('My husband paid'), findsOneWidget);
+    expect(find.text('I paid for the home — he pays me back'), findsOneWidget);
+    expect(find.text('For me personally — from my allowance'), findsOneWidget);
+    expect(find.text('WHO PAID?'), findsNothing);
+    expect(find.text('FOR WHOM?'), findsNothing);
+    expect(find.text('Partner'), findsNothing);
     expect(find.textContaining('50/50'), findsNothing);
-    expect(cls, 'wife_reimbursable');
+    expect(r['class'], 'wife_reimbursable');
+    expect(r['paid_by'], 'me');
+    expect(r['beneficiary'], 'both');
+    expect(r['spouse'], isNull);
   });
 
-  testWidgets('family: the wife can mark it personal (charged to her allowance)', (tester) async {
-    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'), before: () async {
-      await tester.tap(find.text('Personal (from my allowance)'));
+  testWidgets('family (wife): the personal option charges her allowance', (tester) async {
+    final r = await confirmAll(tester, familyPreview(cls: 'wife_reimbursable'),
+        before: () => tapOption(tester, 'wife_personal'));
+    expect(r['class'], 'wife_personal');
+    expect(r['paid_by'], 'me');
+    expect(r['beneficiary'], 'me');
+  });
+
+  testWidgets('family (wife): "my husband paid" is an ordinary household expense', (tester) async {
+    final r = await confirmAll(tester, familyPreview(cls: 'wife_reimbursable'),
+        before: () => tapOption(tester, 'husband'));
+    expect(r['class'], 'none');
+    expect(r['paid_by'], 'partner');
+  });
+
+  testWidgets('family (husband): options name the wife; default is his household expense', (tester) async {
+    final r = await confirmAll(tester, familyPreview(role: 'husband', paidBy: 'me'));
+    expect(find.text('I paid (household expense)'), findsOneWidget);
+    expect(find.text('Sara paid for the home — I pay her back'), findsOneWidget);
+    expect(find.text("Sara's personal purchase — from her allowance"), findsOneWidget);
+    expect(find.text('Partner'), findsNothing);
+    expect(r['class'], 'none');
+    expect(r['paid_by'], 'me');
+  });
+
+  testWidgets('family (husband): records what Sara paid for herself', (tester) async {
+    final r = await confirmAll(tester, familyPreview(role: 'husband', paidBy: 'me'),
+        before: () => tapOption(tester, 'wife_personal'));
+    expect(r['class'], 'wife_personal');
+    expect(r['paid_by'], 'partner');
+    expect(r['beneficiary'], 'partner');
+    expect(r['spouse'], 'wife-1');
+  });
+
+  testWidgets('family (husband, Arabic): real names, never "الشريك"', (tester) async {
+    await confirmAll(tester, familyPreview(role: 'husband', paidBy: 'partner', cls: 'wife_reimbursable'), lang: 'ar');
+    expect(find.text('مين دفع، ولمين؟'), findsOneWidget);
+    expect(find.text('Sara دفعت للبيت — أردّها لها'), findsOneWidget);
+    expect(find.textContaining('الشريك'), findsNothing);
+    expect(find.text('للشريك'), findsNothing);
+  });
+
+  testWidgets('family: an optional child chip keeps the class and names the child', (tester) async {
+    final r = await confirmAll(tester, familyPreview(cls: 'wife_reimbursable', dependents: ['Fahad']), before: () async {
+      await tester.ensureVisible(find.text('Fahad'));
+      await tester.tap(find.text('Fahad'));
       await tester.pumpAndSettle();
     });
-    expect(cls, 'wife_personal');
+    expect(r['class'], 'wife_reimbursable');
+    expect(r['beneficiary'], 'fahad');
   });
 
-  testWidgets('family: husband-paid expense needs no choice and is never a debt', (tester) async {
-    final cls = await confirmWith(tester, familyPreview(role: 'husband', paidBy: 'me'));
-    expect(find.text('Shared for family (husband reimburses)'), findsNothing);
-    expect(cls, 'none');
-  });
-
-  testWidgets('family: husband records what his wife paid for herself', (tester) async {
-    final cls = await confirmWith(tester, familyPreview(role: 'husband', paidBy: 'partner', beneficiary: 'partner'));
-    expect(find.text('Personal (from her allowance)'), findsOneWidget);
-    expect(cls, 'wife_personal');
-  });
-
-  testWidgets('roommates: no Nafaqah class is sent', (tester) async {
+  testWidgets('roommates: "who paid / for whom" chips stay, the payer chip is a payer label', (tester) async {
     final data = familyPreview()..['household_mode'] = 'not_family';
-    final cls = await confirmWith(tester, data);
-    expect(find.text('Shared for family (husband reimburses)'), findsNothing);
-    expect(cls, isNull);
-  });
-
-  // External review (Gemini) HIGH 4: the class follows the edited chips, and a
-  // husband with several wives says which wife paid.
-  testWidgets('family: editing "who paid" after a debt suggestion sends no stale class', (tester) async {
-    final cls = await confirmWith(tester, familyPreview(cls: 'wife_reimbursable'), before: () async {
-      await tester.tap(find.text('Partner').first); // who paid: my husband
+    final r = await confirmAll(tester, data, before: () async {
+      await tester.tap(find.text('The other person paid'));
       await tester.pumpAndSettle();
     });
-    expect(cls, 'none');
+    expect(find.text('WHO PAID?'), findsOneWidget);
+    expect(find.text('Who paid, and for whom?'), findsNothing);
+    expect(r['class'], isNull);
+    expect(r['paid_by'], 'partner');
   });
 
   testWidgets('family: a husband with several wives must choose the wife', (tester) async {
@@ -189,7 +251,7 @@ void main() {
         body: SingleChildScrollView(
           child: PendingExpenseConfirmationCard(
             pendingData: data,
-            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) {
+            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
               calls++;
               cls = nafaqahClass;
               spouse = nafaqahSpouseId;
@@ -201,14 +263,18 @@ void main() {
     ));
     expect(find.text('Which wife paid?'), findsOneWidget);
 
-    await tester.tap(find.text('Confirm & Add Expense'));
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
     await tester.pumpAndSettle();
     expect(calls, 0);
     expect(find.text('Choose which wife paid before saving.'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('nafaqah_wife_wife-2')));
     await tester.tap(find.byKey(const ValueKey('nafaqah_wife_wife-2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Confirm & Add Expense'));
+    expect(find.text('Mona paid for the home — I pay her back'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
     await tester.pumpAndSettle();
     expect(calls, 1);
     expect(cls, 'wife_reimbursable');
@@ -216,20 +282,88 @@ void main() {
   });
 
   testWidgets('family: a wife never sends a spouse id', (tester) async {
-    String? spouse = 'unset';
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: PendingExpenseConfirmationCard(
-            pendingData: familyPreview(cls: 'wife_reimbursable'),
-            onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId) => spouse = nafaqahSpouseId,
-            onCancel: () {},
-          ),
-        ),
+    final r = await confirmAll(tester, familyPreview(cls: 'wife_reimbursable'));
+    expect(r['spouse'], isNull);
+  });
+
+  // UX-12: the amount can be corrected before saving.
+  testWidgets('the amount is editable and the corrected amount is confirmed', (tester) async {
+    double? confirmed;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => confirmed = edits.amount,
+        onCancel: () {},
       ),
+      lang: 'en',
     ));
-    await tester.tap(find.text('Confirm & Add Expense'));
     await tester.pumpAndSettle();
-    expect(spouse, isNull);
+    final field = find.byKey(const ValueKey('pec_amount'));
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).controller!.text, '180.00');
+    await tester.enterText(field, '186');
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(confirmed, 186.0);
+  });
+
+  testWidgets('an unchanged amount is confirmed as null (nothing to override)', (tester) async {
+    double? confirmed = -1;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => confirmed = edits.amount,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+  });
+
+  testWidgets('an invalid amount blocks the confirmation', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => calls++,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('pec_amount')), '0');
+    await tester.ensureVisible(find.byKey(const ValueKey('pec_confirm')));
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(calls, 0);
+    expect(find.text('Enter an amount greater than 0.'), findsOneWidget);
+  });
+
+  testWidgets('a date other than today is confirmed; today sends none', (tester) async {
+    DateTime? when = DateTime(2000);
+    await tester.pumpWidget(localizedApp(
+      PendingExpenseConfirmationCard(
+        pendingData: familyPreview()..['household_mode'] = 'not_family',
+        onConfirm: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) => when = edits.occurredAt,
+        onCancel: () {},
+      ),
+      lang: 'en',
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    expect(when, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('expense_date_yesterday')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pec_confirm')));
+    await tester.pumpAndSettle();
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    expect(when?.day, yesterday.day);
+    expect(when?.month, yesterday.month);
   });
 }

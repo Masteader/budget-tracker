@@ -25,6 +25,7 @@ class ChatApiClient {
     String? idempotencyKey,
     DateTime? occurredAt,
     String? previewToken,
+    double? amount,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
@@ -42,6 +43,8 @@ class ChatApiClient {
       if (nafaqahClass != null && nafaqahClass.isNotEmpty) 'nafaqah_class': nafaqahClass,
       if (nafaqahSpouseId != null && nafaqahSpouseId.isNotEmpty) 'nafaqah_spouse_id': nafaqahSpouseId,
       if (occurredAt != null) 'client_occurred_at': occurredAt.toUtc().toIso8601String(),
+      // The amount the user corrected in the confirmation card (UX-12).
+      if (amount != null) 'amount': amount,
       // Sent back unchanged from the preview (see preview_token.dart).
       if (previewToken != null && previewToken.isNotEmpty) previewTokenField: previewToken,
     };

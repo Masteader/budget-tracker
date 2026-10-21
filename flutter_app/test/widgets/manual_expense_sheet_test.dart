@@ -64,6 +64,37 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // UX-12: amount first (focused, decimal keypad, no "\$" icon) and a date row.
+  testWidgets('the amount comes first, is focused and has no dollar icon', (tester) async {
+    await openSheet(tester, members: [_peerA, _peerB], currentUser: 'u-a');
+    final amount = find.byKey(const ValueKey('manual_amount'));
+    final merchant = find.byKey(const ValueKey('manual_merchant'));
+    expect(tester.getTopLeft(amount).dy, lessThan(tester.getTopLeft(merchant).dy));
+    expect(tester.widget<TextField>(amount).autofocus, isTrue);
+    expect(tester.widget<TextField>(amount).keyboardType, const TextInputType.numberWithOptions(decimal: true));
+    expect(find.byIcon(Icons.attach_money_rounded), findsNothing);
+  });
+
+  testWidgets("yesterday's purchase is booked yesterday", (tester) async {
+    Map<String, dynamic>? saved;
+    await openSheet(tester, members: [_peerA, _peerB], currentUser: 'u-a', insertRow: (row) async => saved = row);
+    await tester.ensureVisible(find.byKey(const ValueKey('expense_date_yesterday')));
+    await tester.tap(find.byKey(const ValueKey('expense_date_yesterday')));
+    await tester.pump();
+    await tapSave(tester);
+    final at = DateTime.parse(saved!['timestamp'] as String).toLocal();
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    expect([at.year, at.month, at.day], [yesterday.year, yesterday.month, yesterday.day]);
+  });
+
+  testWidgets('without a date choice the expense is booked now', (tester) async {
+    Map<String, dynamic>? saved;
+    await openSheet(tester, members: [_peerA, _peerB], currentUser: 'u-a', insertRow: (row) async => saved = row);
+    await tapSave(tester);
+    final at = DateTime.parse(saved!['timestamp'] as String);
+    expect(DateTime.now().toUtc().difference(at).inMinutes.abs(), lessThan(2));
+  });
+
   // FR-A-05: a family household (spouse member) never offers the roommate
   // equal split between the spouses.
   testWidgets('family household: Nafaqah choice only, no roommate split toggle', (tester) async {
@@ -169,6 +200,40 @@ void main() {
 
     expect(saved?['nafaqah_class'], kWifeReimbursable);
     expect(saved?['nafaqah_spouse_id'], 'u-wife');
+  });
+
+  // UX-03: the one Nafaqah question names the spouses.
+  testWidgets('the family question names the wife for the husband and the husband for the wife', (tester) async {
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'husband',
+        callerUserId: 'u-husband',
+        husbandName: 'Abu Fahad',
+        wives: [NafaqahWife(id: 'u-wife', displayName: 'Umm Fahad')],
+      ),
+    );
+    expect(find.text('Umm Fahad paid for the home — I pay her back'), findsOneWidget);
+    expect(find.text("Umm Fahad's personal purchase — from her allowance"), findsOneWidget);
+  });
+
+  testWidgets('the wife sees her husband by name', (tester) async {
+    await openSheet(
+      tester,
+      members: [_husband, _wife],
+      currentUser: 'u-wife',
+      nafaqah: const NafaqahSummary(
+        mode: 'family_nafaqah',
+        callerRole: 'wife',
+        callerUserId: 'u-wife',
+        husbandName: 'Abu Fahad',
+        wives: [NafaqahWife(id: 'u-wife', displayName: 'Umm Fahad')],
+      ),
+    );
+    expect(find.text('Abu Fahad paid'), findsOneWidget);
+    expect(find.text('For me personally — from my allowance'), findsOneWidget);
   });
 
   // Roles come from GET /households/{id}/members (the role in THIS household),

@@ -154,8 +154,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('batch_nafaqah_review')), findsOneWidget);
-      expect(find.text('Shared for family (husband reimburses)'), findsOneWidget);
-      expect(find.text('Personal (from my allowance)'), findsOneWidget);
+      expect(find.text('I paid for the home — he pays me back'), findsOneWidget);
+      expect(find.text('For me personally — from my allowance'), findsOneWidget);
       expect(find.textContaining('50/50'), findsNothing);
     });
 

@@ -20,6 +20,21 @@ void main() {
       );
     });
 
+    test('a role invite names the role, the household, the code and the steps', () {
+      for (final lang in ['en', 'ar', 'ur']) {
+        final l = AppLocalizations(Locale(lang));
+        for (final role in ['spouse', 'peer', 'family_member']) {
+          final text = roleInviteShareText(l, householdName: 'Villa 7', code: 'ABCD1234', role: role);
+          expect(text, contains('Villa 7'), reason: '$lang $role');
+          expect(text, contains('ABCD1234'), reason: '$lang $role');
+          expect(text, contains(roleInviteLabel(l, role)), reason: '$lang $role');
+          expect(text, contains(l.get('join_household')), reason: '$lang $role');
+          expect(text, isNot(contains('{')), reason: '$lang $role');
+        }
+      }
+      expect(roleInviteLabel(AppLocalizations(const Locale('ar')), 'spouse'), 'الزوجة');
+    });
+
     test('a blank household name falls back to a generic one', () {
       final l = AppLocalizations(const Locale('en'));
       expect(inviteShareText(l, householdName: '  ', code: 'ABCD1234'), contains(l.get('set_my_household')));

@@ -69,6 +69,11 @@ class NafaqahPreview {
   final String? suggestedSpouseId;
   final List<NafaqahWife> wives;
 
+  /// The husband's (provider's) display name when known, so a family entry
+  /// says "Ahmed paid" instead of "the husband" (UX-03). Optional: the chat
+  /// and receipt previews may not carry it.
+  final String? husbandName;
+
   /// The recorder is a household admin. Owner rule: only the wife, the
   /// Nafaqah provider (husband) or an admin may classify a family expense as
   /// wife_reimbursable / wife_personal.
@@ -81,6 +86,7 @@ class NafaqahPreview {
     this.suggestedSpouseId,
     this.wives = const [],
     this.callerIsAdmin = false,
+    this.husbandName,
   });
 
   bool get _isSpouse => recorderRole == 'wife' || recorderRole == 'husband';
@@ -92,6 +98,20 @@ class NafaqahPreview {
   bool get isAdminClassifier => canClassify && !_isSpouse;
 
   bool get viewerIsWife => recorderRole == 'wife';
+
+  /// 'wife', 'husband' or 'admin': whose point of view the Nafaqah question takes.
+  String get viewerRole => viewerIsWife ? 'wife' : (recorderRole == 'husband' ? 'husband' : 'admin');
+
+  /// The display name of the wife [wifeId] names (else the only wife), or null.
+  String? wifeNameFor(String? wifeId) {
+    NafaqahWife? wife;
+    for (final w in wives) {
+      if (wifeId != null && w.id == wifeId) wife = w;
+    }
+    wife ??= wives.length == 1 ? wives.first : null;
+    final name = (wife?.displayName ?? '').trim();
+    return name.isEmpty ? null : name;
+  }
 
   /// The husband (or an admin) in a family with several wives says which wife paid.
   bool get needsWifeChoice => canClassify && !viewerIsWife && wives.length > 1;
@@ -112,6 +132,7 @@ class NafaqahPreview {
         suggestedSpouseId: suggestedSpouseId,
         wives: wives,
         callerIsAdmin: callerIsAdmin || isAdmin,
+        husbandName: husbandName,
       );
 
   /// Fields for `/agent/scan-receipt` or `/agent/chat-transaction`: who paid
@@ -163,6 +184,7 @@ class NafaqahPreview {
       wives: summary.wives,
       // `can_set_provider` is true for household admins.
       callerIsAdmin: summary.canSetProvider,
+      husbandName: summary.husbandName,
     );
   }
 
@@ -175,6 +197,7 @@ class NafaqahPreview {
       suggestedClass: (cls == kWifeReimbursable || cls == kWifePersonal) ? cls : null,
       suggestedSpouseId: data['nafaqah_spouse_id'] as String?,
       callerIsAdmin: data['caller_is_admin'] == true || data['can_classify'] == true,
+      husbandName: (data['husband'] is Map ? (data['husband'] as Map)['display_name'] : data['husband_name']) as String?,
       wives: (data['wives'] as List? ?? const [])
           .whereType<Map>()
           .map((w) => NafaqahWife.fromMap(Map<String, dynamic>.from(w)))

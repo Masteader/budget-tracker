@@ -33,6 +33,8 @@ from supabase_client import (
     fetch_flexible_budgets,
     household_attribution,
     reallocate_budget,
+    category_code_in_taxonomy,
+    UnknownCategoryError,
 )
 
 from chat_parser import resolve_category_in_taxonomy  # noqa: E402
@@ -663,6 +665,8 @@ def process_receipt_scan(
     override_nafaqah_class: Optional[str] = None,
     override_nafaqah_spouse_id: Optional[str] = None,
     preview_token: Optional[str] = None,
+    override_amount: Optional[float] = None,
+    override_category_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -828,6 +832,14 @@ def process_receipt_scan(
             total_amount=total_amount,
         )
 
+    if override_amount is not None:
+        # The user corrected the total in the review (UX-12; validated by the route). The ZATCA
+        # fingerprint above keeps the invoice's own total; a single line follows the correction.
+        if len(items) == 1:
+            items[0]["price"] = override_amount
+            items[0]["quantity"] = 1.0
+        total_amount = override_amount
+
     # Explicit enrichment
     if enrich_tx_id:
         success = enrich_transaction_items(enrich_tx_id, items, household_id=household_id, actor_user_id=user_id)
@@ -927,6 +939,11 @@ def process_receipt_scan(
         # A model code missing from the taxonomy (a new system code before its migration, or a made
         # up one) becomes its legacy code / Misc instead of a refused insert (PRODUCT-R4).
         category_code = resolve_category_in_taxonomy(category_code, codes)
+    if override_category_code is not None and override_category_code.strip():
+        # A category the user chose in the review must exist for this household (as in chat).
+        if category_code_in_taxonomy(household_id, override_category_code.strip()) is False:
+            raise UnknownCategoryError()
+        category_code = override_category_code.strip()
 
     # Check if category is inactive for this household
     is_inactive = False
