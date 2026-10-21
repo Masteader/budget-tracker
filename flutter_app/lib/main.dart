@@ -22,6 +22,8 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
 import 'services/household_resolver.dart';
+import 'services/notifications/reminder_preferences.dart';
+import 'services/notifications/reminder_service.dart';
 import 'services/offline_sync_service.dart';
 import 'services/receipt_storage_service.dart';
 import 'services/salary_cycle_service.dart';
@@ -54,6 +56,9 @@ Future<void> main() async {
 
   // Household payday for client-side salary-cycle arithmetic.
   await SalaryCycleService.loadCachedPayday();
+
+  // Per-type reminder switches (local).
+  await ReminderPreferences.instance.load();
 
   // Offline SQLite Queue & Sync Engine
   OfflineSyncService.instance.initialize();
@@ -181,7 +186,11 @@ class _AuthGateState extends State<AuthGate> {
         context.read<TransactionProvider>().reset();
         context.read<BudgetProvider>().reset();
         context.read<HouseholdRoleProvider>().reset();
+        context.read<RecurringBillsProvider>().reset();
+        context.read<InstallmentProvider>().reset();
         ReceiptStorageService.clearSignedUrlCache();
+        // Another account may sign in next: no reminder of this household stays.
+        ReminderService.instance.cancelAll();
       }
     });
   }
@@ -198,6 +207,9 @@ class _AuthGateState extends State<AuthGate> {
         context.read<TransactionProvider>().init(householdId);
         context.read<BudgetProvider>().init(householdId);
         context.read<HouseholdRoleProvider>().load(householdId);
+        // Bills and plans feed the reminders even before their cards build.
+        context.read<RecurringBillsProvider>().init(householdId);
+        context.read<InstallmentProvider>().init(householdId);
       }
     });
   }

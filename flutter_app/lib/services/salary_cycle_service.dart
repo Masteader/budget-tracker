@@ -14,6 +14,7 @@
 ///   payday ≥ 16 it is labelled by the following month (27 Oct → '2026-11').
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A salary cycle: inclusive [start] and [end] calendar dates (UTC-midnight
@@ -66,7 +67,13 @@ class SalaryCycleService {
   /// synchronous callers use the household's real payday, not a hardcoded 27.
   static int _paydayDay = defaultPaydayDay;
   static int get paydayDay => _paydayDay;
-  static set paydayDay(int value) => _paydayDay = normalizePayday(value);
+  static set paydayDay(int value) {
+    _paydayDay = normalizePayday(value);
+    paydayListenable.value = _paydayDay;
+  }
+
+  /// Notifies when the household payday changes (reminders reschedule).
+  static final ValueNotifier<int> paydayListenable = ValueNotifier<int>(defaultPaydayDay);
 
   /// Loads the cached household payday (written by the payday settings card).
   static Future<int> loadCachedPayday() async {

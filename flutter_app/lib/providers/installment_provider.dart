@@ -130,6 +130,15 @@ class InstallmentProvider extends ChangeNotifier {
     }
   }
 
+  /// Forgets the household's plans (sign-out).
+  void reset() {
+    _householdId = null;
+    _plans = [];
+    _isLoading = false;
+    _error = null;
+    notifyListeners();
+  }
+
   /// Testing helper
   @visibleForTesting
   void setPlansForTesting(List<InstallmentPlan> testPlans, {String? householdId}) {

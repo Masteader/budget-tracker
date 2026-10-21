@@ -29,6 +29,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
+import '../../widgets/reminder_sync.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
@@ -110,16 +111,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const SettingsScreen(),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: screens,
+    // Local reminders follow this household's payday, bills and plans.
+    return ReminderSync(
+      child: Scaffold(
+        extendBody: true,
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: screens,
+        ),
+        floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
+            ? AppSpeedDialFab(householdId: _householdId)
+            : null,
+        bottomNavigationBar: _buildFloatingBottomNavBar(context),
       ),
-      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 1)
-          ? AppSpeedDialFab(householdId: _householdId)
-          : null,
-      bottomNavigationBar: _buildFloatingBottomNavBar(context),
     );
   }
 

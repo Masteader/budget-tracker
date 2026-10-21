@@ -26,6 +26,7 @@ import '../../widgets/settings/household_roles_card.dart';
 import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
+import '../../widgets/settings/reminder_settings_card.dart';
 import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
@@ -1010,6 +1011,17 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
+          const SizedBox(height: 24),
+
+          // ── REMINDERS (local notifications) ──
+          _buildSectionHeader(context.tr('reminders_title')),
+          const SizedBox(height: 6),
+          Text(
+            context.tr('reminders_desc'),
+            style: GoogleFonts.outfit(fontSize: 12, color: context.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          const ReminderSettingsCard(),
           const SizedBox(height: 24),
 
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
