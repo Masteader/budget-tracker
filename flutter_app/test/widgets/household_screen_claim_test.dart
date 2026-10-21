@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'dart:convert';
+import 'dart:io' show SocketException;
 
 import 'package:budget_tracker/screens/onboarding/household_screen.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
@@ -153,6 +154,121 @@ void main() {
       expect(claimCalled, isTrue);
       expect(claimedCode, equals('FATIMA01'));
       expect(claimedUid, isNotNull);
+      expect(find.text('Joined Dashboard Test'), findsOneWidget);
+    });
+  });
+
+  // FABLE-DB-01: an existing member cannot take an invite of their household;
+  // the server's reason is shown instead of a generic failure.
+  group('HouseholdScreen join refusals', () {
+    Future<void> pumpJoin(
+      WidgetTester tester, {
+      required MockClient client,
+      required Future<Map<String, dynamic>> Function(String code) joinHandler,
+      String code = 'FATIMA01',
+    }) async {
+      final apiService = ApiService(budget: BudgetApiClient(baseClient: BaseApiClient(client: client)));
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<BudgetProvider>.value(value: BudgetProvider()),
+            ChangeNotifierProvider<TransactionProvider>.value(value: TransactionProvider()),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizationsDelegate()],
+            supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+            locale: const Locale('en'),
+            home: HouseholdScreen(
+              apiService: apiService,
+              joinHandler: joinHandler,
+              destinationBuilder: (_) => const Scaffold(body: Text('Joined Dashboard Test')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Tab).last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, code);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Join Household'));
+      await tester.pumpAndSettle();
+    }
+
+    MockClient inviteClient({http.Response Function(http.Request request)? onClaim, bool targeted = true}) =>
+        MockClient((request) async {
+          if (request.url.path.contains('/claim') && request.method == 'POST') {
+            return onClaim?.call(request) ?? http.Response(jsonEncode({'status': 'success'}), 200);
+          }
+          if (request.url.path.endsWith('/FATIMA01')) {
+            return http.Response(
+              jsonEncode({
+                'invite_code': 'FATIMA01',
+                'role': 'spouse',
+                'target_member_id': targeted ? 'dep-fatima' : null,
+                'target_member_name': targeted ? 'Fatima' : null,
+                'is_valid': true,
+              }),
+              200,
+            );
+          }
+          return http.Response('{"error": "not found"}', 404);
+        });
+
+    testWidgets('join_household_by_code already_member is shown, nothing is joined', (tester) async {
+      await pumpJoin(
+        tester,
+        client: inviteClient(targeted: false),
+        joinHandler: (_) async => {
+          'success': false,
+          'error': 'You are already a member of this household',
+          'code': 'already_member',
+        },
+      );
+
+      expect(find.text('You are already a member of this household.'), findsOneWidget);
+      expect(find.text('Joined Dashboard Test'), findsNothing);
+      expect(find.textContaining('Exception'), findsNothing);
+    });
+
+    testWidgets('a claim refused with 400 shows the server reason and stops before joining', (tester) async {
+      var joinCalls = 0;
+      await pumpJoin(
+        tester,
+        client: inviteClient(
+          onClaim: (_) => http.Response(jsonEncode({'detail': 'Invalid, expired, or already used invite code'}), 400),
+        ),
+        joinHandler: (_) async {
+          joinCalls++;
+          return {'id': 'hh-123', 'name': 'Household'};
+        },
+      );
+
+      expect(joinCalls, 0);
+      expect(find.text('Invalid, expired, or already used invite code'), findsOneWidget);
+      expect(find.text('Joined Dashboard Test'), findsNothing);
+    });
+
+    testWidgets('a claim refused because the user is already a member is localized', (tester) async {
+      await pumpJoin(
+        tester,
+        client: inviteClient(
+          onClaim: (_) => http.Response(jsonEncode({'detail': 'You are already a member of this household'}), 400),
+        ),
+        joinHandler: (_) async => {'id': 'hh-123', 'name': 'Household'},
+      );
+
+      expect(find.text('You are already a member of this household.'), findsOneWidget);
+      expect(find.text('Joined Dashboard Test'), findsNothing);
+    });
+
+    testWidgets('a claim that never reached the server still lets the join decide', (tester) async {
+      await pumpJoin(
+        tester,
+        client: inviteClient(onClaim: (_) => throw const SocketException('offline')),
+        joinHandler: (_) async => {'id': 'hh-123', 'name': 'Household'},
+      );
+
       expect(find.text('Joined Dashboard Test'), findsOneWidget);
     });
   });

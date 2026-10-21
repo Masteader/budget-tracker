@@ -9,6 +9,7 @@ import '../onboarding/household_screen.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart' show NafaqahSummary;
 import '../../services/api_service.dart';
+import '../../services/household_join.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/family_reimbursement_card.dart';
@@ -556,9 +557,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
               Navigator.pop(ctx);
               try {
                 final res = await supabase.rpc('join_household_by_code', params: {'p_invite_code': code});
-                if (res is Map && res['error'] != null) {
-                  throw Exception(res['error']);
-                }
+                checkHouseholdJoinResult(res);
                 if (mounted) {
                   AppSnackBar.showSuccess(
                     context,
@@ -571,7 +570,7 @@ class _IngestionSettingsScreenState extends State<IngestionSettingsScreen>
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    context.trArgs('set_failed_join', {'error': e}),
+                    context.trArgs('set_failed_join', {'error': householdJoinErrorText(context, e)}),
                     title: context.tr('set_join_error'),
                   );
                 }
