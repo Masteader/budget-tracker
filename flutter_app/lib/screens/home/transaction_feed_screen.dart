@@ -634,7 +634,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           backgroundColor: context.cardBg,
           title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
           content: Text(
-            context.trArgs('tx_delete_confirm_auto', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
+            context.trArgs('tx_delete_confirm_auto', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
             style: TextStyle(color: context.textSecondary),
           ),
           actions: [
@@ -681,7 +681,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     if (context.mounted) {
       AppSnackBar.showDelete(
         context,
-        context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+        context.trArgs('tx_amount_at_merchant', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
         title: context.tr('tx_removed'),
         onUndo: !canUndo ? null : () async {
           // UI-25: re-insert the exact deleted row (same id, payer,
@@ -705,7 +705,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           if (context.mounted) {
             AppSnackBar.showSuccess(
               context,
-              context.trArgs('tx_restored_msg', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('merchant_generic')}),
+              context.trArgs('tx_restored_msg', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
               title: context.tr('tx_restored'),
             );
           }
@@ -1011,7 +1011,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                               backgroundColor: context.cardBg,
                                               title: Text(context.tr('delete_transaction'), style: TextStyle(color: context.textPrimary)),
                                               content: Text(
-                                                context.trArgs('tx_delete_confirm', {'amount': context.sar(tx.amount), 'merchant': tx.merchant ?? context.tr('unknown')}),
+                                                context.trArgs('tx_delete_confirm', {'amount': context.sar(tx.amount), 'merchant': context.trMerchant(tx.merchant)}),
                                                 style: TextStyle(color: context.textSecondary),
                                               ),
                                               actions: [

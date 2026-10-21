@@ -69,7 +69,9 @@ void main() {
 
       // Card is now rendered with total liquidity
       expect(find.text('Accounts & Balances'), findsOneWidget);
-      expect(find.text('SAR 15,400.00'), findsOneWidget);
+      // Shown twice: the total-liquidity headline (one Text.rich so the
+      // unit can sit on the locale-appropriate side) and the account pill.
+      expect(find.text('SAR 15,400.00'), findsNWidgets(2));
       expect(find.text('Al Rajhi Main'), findsOneWidget);
 
       // Verify clean unmount / cancellation of StreamSubscription without throwing
