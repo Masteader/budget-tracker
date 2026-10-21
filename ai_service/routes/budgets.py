@@ -23,6 +23,9 @@ from household_permissions import (
     TransactionNotFoundError,
     assert_can_modify_transaction,
 )
+from nafaqah_service import NafaqahError
+from routes.nafaqah import nafaqah_http_error
+from supabase_client import TransactionRejectedError
 from utils import safe_error_response, validate_uuid
 from models import (
     MAX_SAR_AMOUNT,
@@ -237,6 +240,12 @@ async def create_installment_plan(request: Request):
         return plan.model_dump()
     except PermissionError:
         raise HTTPException(status_code=404, detail="Original transaction not found in this household.")
+    except NafaqahError as exc:
+        # The wife-ledger guard refused the adjustment (advance already repaid): 409
+        # ledger_would_be_overpaid; the plan was removed again (FABLE2-API-05).
+        raise nafaqah_http_error(exc)
+    except TransactionRejectedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=TransactionRejectedError.PUBLIC_MESSAGE)
     except Exception as exc:
         # The plan could not be stored: nothing was created and the transaction is unchanged.
         raise safe_error_response(exc, public_message="Failed to create installment plan.")

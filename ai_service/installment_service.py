@@ -191,16 +191,32 @@ class InstallmentService:
         sb.table("installment_plans").insert(plan_dict).execute()
         logger.info("Persisted installment plan %s to Supabase", plan_id)
 
-        # Only now: adjust the original transaction down to the monthly amount, if requested.
+        # Only now: adjust the original transaction down to the monthly amount, if requested. A
+        # refused adjustment (e.g. the wife-ledger guard: the advance was already repaid) removes
+        # the plan again and fails the request: never a stored plan next to an unchanged
+        # transaction reported as success (FABLE2-API-05).
         if req.original_transaction_id and req.adjust_original_transaction:
-            cls._adjust_original_transaction(
-                tx_id=req.original_transaction_id,
-                household_id=req.household_id,
-                monthly_amount=monthly,
-                total_amount=req.total_amount,
-                provider=req.provider,
-                installment_count=req.installment_count,
-            )
+            try:
+                cls._adjust_original_transaction(
+                    tx_id=req.original_transaction_id,
+                    household_id=req.household_id,
+                    monthly_amount=monthly,
+                    total_amount=req.total_amount,
+                    provider=req.provider,
+                    installment_count=req.installment_count,
+                )
+            except Exception as exc:
+                logger.warning("Adjusting transaction %s refused; removing plan %s: %s",
+                               req.original_transaction_id, plan_id, exc)
+                try:
+                    sb.table("installment_plans").delete().eq("id", plan_id).eq(
+                        "household_id", req.household_id).execute()
+                except Exception as cleanup_exc:  # noqa: BLE001 - the original error is what matters
+                    logger.error("Could not remove installment plan %s: %s", plan_id, cleanup_exc)
+                final = supabase_client.final_transaction_db_error(exc)
+                if final is not None:
+                    raise final from exc
+                raise
 
         return InstallmentPlan(**plan_dict)
 
@@ -214,37 +230,34 @@ class InstallmentService:
         provider: str,
         installment_count: int,
     ) -> None:
-        """Adjusts the first transaction to reflect the first installment payment rather than entire purchase."""
-        try:
-            sb = supabase_client.get_client()
-            note_suffix = f" [Financed via {provider}: Installment 1 of {installment_count}. Full price: SAR {total_amount:,.2f}]"
-            
-            # Fetch existing transaction
-            tx = (
-                sb.table("transactions")
-                .select("raw_sms, household_id")
-                .eq("id", tx_id)
-                .eq("household_id", household_id)
-                .single()
-                .execute()
-            )
-            raw_sms = (tx.data.get("raw_sms") or "") + note_suffix
+        """
+        Adjusts the first transaction to reflect the first installment payment rather than the
+        entire purchase. Errors propagate (create_plan removes the plan again).
+        """
+        sb = supabase_client.get_client()
+        note_suffix = f" [Financed via {provider}: Installment 1 of {installment_count}. Full price: SAR {total_amount:,.2f}]"
 
-            sb.table("transactions").update({
-                "amount": monthly_amount,
-                "raw_sms": raw_sms,
-            }).eq("id", tx_id).eq("household_id", household_id).execute()
+        # Fetch existing transaction
+        tx = (
+            sb.table("transactions")
+            .select("raw_sms, household_id")
+            .eq("id", tx_id)
+            .eq("household_id", household_id)
+            .single()
+            .execute()
+        )
+        raw_sms = (tx.data.get("raw_sms") or "") + note_suffix
 
-            logger.info(
-                "Adjusted original transaction %s from %s to monthly installment %s",
-                tx_id, total_amount, monthly_amount
-            )
+        sb.table("transactions").update({
+            "amount": monthly_amount,
+            "raw_sms": raw_sms,
+        }).eq("id", tx_id).eq("household_id", household_id).execute()
 
-        except Exception as e:
-            logger.warning("Failed to adjust original transaction %s: %s", tx_id, e)
-            return
-        # Previously a @staticmethod referencing `cls` here: the NameError was swallowed by the
-        # except above, so budgets were never recalculated after the amount changed.
+        logger.info(
+            "Adjusted original transaction %s from %s to monthly installment %s",
+            tx_id, total_amount, monthly_amount
+        )
+        # recalculate_budgets logs and swallows its own errors: the adjustment itself succeeded.
         cls.recalculate_budgets(household_id)
 
     @classmethod
