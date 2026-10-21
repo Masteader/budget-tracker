@@ -20,8 +20,8 @@ class CategoryBudgetCard extends StatelessWidget {
   });
 
   Color get _barColor {
-    if (budget.usagePercent >= 1.0) return Colors.redAccent;
-    if (budget.usagePercent >= 0.8) return Colors.orange;
+    if (budget.isOverspent || budget.usageRatio >= 1.0) return Colors.redAccent;
+    if (budget.usageRatio >= 0.8) return Colors.orange;
     return AppThemes.success;
   }
 
@@ -105,7 +105,8 @@ class CategoryBudgetCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${(budget.usagePercent * 100).toStringAsFixed(0)}%',
+                        // Not clamped: 131% reads 131% (UX-08); only the bar is.
+                        '${(budget.usageRatio * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           color: _barColor,
                           fontWeight: FontWeight.w700,
@@ -142,6 +143,21 @@ class CategoryBudgetCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (budget.isOverspent) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: context.dangerColor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        context.trArgs('over_by_amount', {'amount': context.sar(budget.overspentAmount)}),
+                        style: TextStyle(color: context.dangerColor, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (subCategories.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(

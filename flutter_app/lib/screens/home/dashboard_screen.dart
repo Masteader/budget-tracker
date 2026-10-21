@@ -18,6 +18,7 @@ import '../../services/api_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
+import '../../widgets/dashboard/over_budget_alerts.dart';
 import '../../widgets/dashboard/recurring_bills_card.dart';
 import '../../widgets/dashboard/installment_plans_card.dart';
 import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
@@ -369,6 +370,19 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return c == null ? byKey : context.cycleRangeIso(c.cycleStart, c.cycleEnd, fallback: byKey);
   }
 
+  /// The selected cycle's active budgets from the budgets stream.
+  List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows) =>
+      rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
+
+  final GlobalKey _categoriesKey = GlobalKey();
+
+  void _scrollToCategories() {
+    final ctx = _categoriesKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
+  }
+
   bool _matchesSelectedCycle(Budget b) {
     final key = _currentCycleKey;
     if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
@@ -525,12 +539,15 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               ),
                               PaydayCheckinBanner(householdId: hid),
                               BudgetHeroCard(
-                                budgets: budgetSnap.data!
-                                    .map(Budget.fromMap)
-                                    .where((b) => b.isActive && _matchesSelectedCycle(b))
-                                    .toList(),
+                                budgets: _cycleBudgets(budgetSnap.data!),
                                 cycle: _selectedCycle,
                               ),
+                              // UX-08: overspent categories right under the hero.
+                              OverBudgetAlerts(
+                                budgets: _cycleBudgets(budgetSnap.data!),
+                                onShowAll: _scrollToCategories,
+                              ),
+                              const SizedBox(height: 12),
                               // Balances only once there are 2+ accounts; the
                               // Tools screen always has them.
                               AccountsSummaryCard(householdId: hid, minAccounts: 2),
@@ -558,13 +575,26 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         ),
                       ),
                       SliverPadding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(24, 4, 20, 8),
+                        sliver: SliverToBoxAdapter(
+                          child: Text(
+                            context.tr('category_budgets_heading'),
+                            key: _categoriesKey,
+                            style: GoogleFonts.outfit(
+                              color: context.textSecondary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         sliver: Builder(
                           builder: (context) {
-                            final cycleBudgets = budgetSnap.data!
-                                .map(Budget.fromMap)
-                                .where((b) => b.isActive && _matchesSelectedCycle(b))
-                                .toList();
+                            // Most at risk first: overspent, then by share used (UX-08).
+                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!));
                             if (cycleBudgets.isEmpty) {
                               return SliverToBoxAdapter(
                                 child: Padding(
