@@ -333,35 +333,22 @@ def _get_user_membership(user_id: str, household_id: str) -> Optional[dict]:
     """
     Retrieve the user's role and membership in the given household.
 
-    household_memberships is authoritative. The legacy users.household_id column is consulted
-    only when the memberships query itself fails (pre-migration databases); a missing membership
-    row is a definitive "no access" (a stale users.household_id after removal must not grant it).
+    household_memberships is the only source: a missing membership row is a definitive "no
+    access" (a stale users.household_id after removal must not grant it), and a failing query
+    fails closed (None). The former fallback to the legacy users.household_id column on a query
+    error let an infrastructure error widen access (Fable review, section C observation).
     """
-    client = get_client()
     try:
-        # limit(1), not maybe_single(): on postgrest-py <= 1.1 a zero-row maybe_single() can raise,
-        # which used to send a non-member down the users.household_id fallback below (API-13).
+        # limit(1), not maybe_single(): on postgrest-py <= 1.1 a zero-row maybe_single() can raise.
         return first_row(
-            client.table("household_memberships")
+            get_client().table("household_memberships")
             .select("role, household_id")
             .eq("user_id", user_id)
             .eq("household_id", household_id)
         )
     except Exception as exc:
-        logger.warning("Error querying household_memberships: %s", exc)
-
-    # Fallback to users table cache (memberships table unavailable)
-    try:
-        user_row = first_row(client.table("users").select("household_id, role").eq("id", user_id))
-        if user_row and user_row.get("household_id") == household_id:
-            return {
-                "household_id": household_id,
-                "role": user_row.get("role", "member"),
-            }
-    except Exception as exc:
-        logger.warning("Error querying users fallback: %s", exc)
-
-    return None
+        logger.warning("Membership lookup failed; denying access (fail closed): %s", exc)
+        return None
 
 
 def get_user_household_ids(user_id: str) -> List[str]:
