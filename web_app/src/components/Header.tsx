@@ -5,6 +5,7 @@ interface HeaderProps {
   lang: Language;
   setLanguage: (lang: Language) => void;
   dict: TranslationDictionary;
+  onOpenAuth?: (tab: 'signin' | 'signup') => void;
 }
 
 export const Logo: React.FC<{ className?: string }> = ({ className = 'w-9 h-9' }) => (
@@ -16,7 +17,7 @@ export const Logo: React.FC<{ className?: string }> = ({ className = 'w-9 h-9' }
   </svg>
 );
 
-export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
+export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict, onOpenAuth }) => {
   const other: Language = lang === 'ar' ? 'en' : 'ar';
   const links = [
     { href: '#features', label: dict.nav.features },
@@ -55,6 +56,13 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict }) => {
             className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink transition-colors hover:border-teal hover:text-teal"
           >
             {other === 'en' ? 'English' : 'العربية'}
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenAuth?.('signin')}
+            className="rounded-lg border border-teal/40 bg-teal/5 px-3.5 py-2 text-sm font-bold text-teal transition-all hover:bg-teal hover:text-white"
+          >
+            {dict.auth.signIn}
           </button>
           <a
             href="#early-access"

@@ -8,6 +8,7 @@ import { Privacy } from './components/Privacy';
 import { Faq } from './components/Faq';
 import { EarlyAccess } from './components/EarlyAccess';
 import { Footer } from './components/Footer';
+import { AuthModal } from './components/auth/AuthModal';
 
 /** Arabic by default; `?lang=en` opens the English page (handy for sharing). */
 function initialLanguage(): Language {
@@ -20,6 +21,8 @@ function initialLanguage(): Language {
 
 export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(initialLanguage);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authInitialTab, setAuthInitialTab] = useState<'signin' | 'signup'>('signin');
   const dict = translations[lang];
 
   useEffect(() => {
@@ -27,6 +30,11 @@ export const App: React.FC = () => {
     document.documentElement.lang = lang;
     document.title = dict.a11y.pageTitle;
   }, [lang, dict]);
+
+  const handleOpenAuth = (tab: 'signin' | 'signup') => {
+    setAuthInitialTab(tab);
+    setAuthModalOpen(true);
+  };
 
   return (
     <div id="top" className="flex min-h-screen flex-col">
@@ -36,7 +44,12 @@ export const App: React.FC = () => {
       >
         {dict.a11y.skipToContent}
       </a>
-      <Header lang={lang} setLanguage={setLang} dict={dict} />
+      <Header
+        lang={lang}
+        setLanguage={setLang}
+        dict={dict}
+        onOpenAuth={handleOpenAuth}
+      />
       <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         <Hero dict={dict} lang={lang} />
         <Features dict={dict} />
@@ -46,6 +59,13 @@ export const App: React.FC = () => {
         <EarlyAccess dict={dict} lang={lang} />
       </main>
       <Footer dict={dict} />
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialTab={authInitialTab}
+        dict={dict}
+      />
     </div>
   );
 };

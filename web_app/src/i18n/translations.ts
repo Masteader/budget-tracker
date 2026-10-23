@@ -122,6 +122,61 @@ export interface TranslationDictionary {
     rights: string;
     contact: string;
   };
+  auth: {
+    signIn: string;
+    signUp: string;
+    signOut: string;
+    email: string;
+    password: string;
+    displayName: string;
+    signInTitle: string;
+    signUpTitle: string;
+    submitSignIn: string;
+    submitSignUp: string;
+    noAccount: string;
+    hasAccount: string;
+    loading: string;
+    errorGeneric: string;
+    close: string;
+  };
+  portal: {
+    dashboard: string;
+    transactions: string;
+    budgets: string;
+    householdDefault: string;
+    cycleEndsIn: string;
+    days: string;
+    salaryDay: string;
+    totalBalance: string;
+    totalIncome: string;
+    totalSpent: string;
+    installmentsTitle: string;
+    recurringBillsTitle: string;
+    recentTransactions: string;
+    viewAll: string;
+    newTransaction: string;
+    category: string;
+    amount: string;
+    description: string;
+    date: string;
+    save: string;
+    cancel: string;
+    type: string;
+    expense: string;
+    income: string;
+    searchPlaceholder: string;
+    allCategories: string;
+    budgetsTitle: string;
+    budgetLimit: string;
+    spent: string;
+    remaining: string;
+    wifeAllowanceTitle: string;
+    wifeAllowanceSubtitle: string;
+    subAllocationsTitle: string;
+    noData: string;
+    activePlans: string;
+    monthlyDue: string;
+  };
   a11y: {
     pageTitle: string;
     skipToContent: string;
@@ -311,6 +366,61 @@ export const translations: Record<Language, TranslationDictionary> = {
       rights: 'جميع الحقوق محفوظة.',
       contact: 'تواصل معنا',
     },
+    auth: {
+      signIn: 'تسجيل الدخول',
+      signUp: 'إنشاء حساب جديد',
+      signOut: 'تسجيل الخروج',
+      email: 'البريد الإلكتروني',
+      password: 'كلمة المرور',
+      displayName: 'الاسم أو اللقب',
+      signInTitle: 'تسجيل الدخول إلى حسابك',
+      signUpTitle: 'إنشاء حساب جديد للأسرة',
+      submitSignIn: 'دخول',
+      submitSignUp: 'إنشاء الحساب والبدء',
+      noAccount: 'ليس لديك حساب بعد؟ سجّل الآن',
+      hasAccount: 'لديك حساب بالفعل؟ سجّل دخولك',
+      loading: 'جارٍ التحقق...',
+      errorGeneric: 'حدث خطأ في المصادقة. يرجى التأكد من البيانات والمحاولة مجدداً.',
+      close: 'إغلاق',
+    },
+    portal: {
+      dashboard: 'لوحة التحكم',
+      transactions: 'سجل العمليات',
+      budgets: 'الميزانيات والبنود',
+      householdDefault: 'المنزل',
+      cycleEndsIn: 'ينتهي الشهر المالي بعد',
+      days: 'أيام',
+      salaryDay: 'يوم الراتب',
+      totalBalance: 'الرصيد المتبقي',
+      totalIncome: 'إجمالي الدخل',
+      totalSpent: 'إجمالي المصروفات',
+      installmentsTitle: 'الأقساط وخطط الدفع النشطة (تمارا، تابي، بنوك)',
+      recurringBillsTitle: 'الفواتير والالتزامات الدورية القادمة',
+      recentTransactions: 'آخر العمليات المسجلة',
+      viewAll: 'عرض الكل',
+      newTransaction: 'إضافة عملية جديدة',
+      category: 'التصنيف',
+      amount: 'المبلغ',
+      description: 'الوصف أو المحل',
+      date: 'التاريخ',
+      save: 'حفظ',
+      cancel: 'إلغاء',
+      type: 'نوع العملية',
+      expense: 'مصروف',
+      income: 'دخل',
+      searchPlaceholder: 'بحث في العمليات...',
+      allCategories: 'جميع التصنيفات',
+      budgetsTitle: 'مخصصات الميزانية الشهرية',
+      budgetLimit: 'المخصص المعتمد',
+      spent: 'المصروف',
+      remaining: 'المتبقي',
+      wifeAllowanceTitle: 'مصروف الزوجة الشخصي',
+      wifeAllowanceSubtitle: 'مخصص دوري محمي وفق أحكام النفقة الشرعية',
+      subAllocationsTitle: 'التخصيصات الفرعية للأبناء والبنود',
+      noData: 'لا توجد بيانات مسجلة حتى الآن.',
+      activePlans: 'خطة نشطة',
+      monthlyDue: 'القسط الشهري',
+    },
     a11y: {
       pageTitle: 'Budget Tracker | اعرف كم باقي لك لين الراتب',
       skipToContent: 'تخطَّ إلى المحتوى الرئيسي',
@@ -494,6 +604,61 @@ export const translations: Record<Language, TranslationDictionary> = {
     footer: {
       rights: 'All rights reserved.',
       contact: 'Contact us',
+    },
+    auth: {
+      signIn: 'Sign In',
+      signUp: 'Create Account',
+      signOut: 'Sign Out',
+      email: 'Email address',
+      password: 'Password',
+      displayName: 'Name or nickname',
+      signInTitle: 'Sign in to your account',
+      signUpTitle: 'Create a household account',
+      submitSignIn: 'Sign In',
+      submitSignUp: 'Create Account & Start',
+      noAccount: "Don't have an account? Sign up now",
+      hasAccount: 'Already have an account? Sign in',
+      loading: 'Authenticating...',
+      errorGeneric: 'Authentication error. Please verify your details and try again.',
+      close: 'Close',
+    },
+    portal: {
+      dashboard: 'Dashboard',
+      transactions: 'Transactions',
+      budgets: 'Budgets & Allocations',
+      householdDefault: 'Household',
+      cycleEndsIn: 'Financial cycle ends in',
+      days: 'days',
+      salaryDay: 'Payday',
+      totalBalance: 'Net Balance',
+      totalIncome: 'Total Income',
+      totalSpent: 'Total Spent',
+      installmentsTitle: 'Active Installment & BNPL Plans (Tamara, Tabby, Banks)',
+      recurringBillsTitle: 'Upcoming Recurring Bills & Commitments',
+      recentTransactions: 'Recent Transactions',
+      viewAll: 'View All',
+      newTransaction: 'New Transaction',
+      category: 'Category',
+      amount: 'Amount',
+      description: 'Description or Merchant',
+      date: 'Date',
+      save: 'Save',
+      cancel: 'Cancel',
+      type: 'Type',
+      expense: 'Expense',
+      income: 'Income',
+      searchPlaceholder: 'Search transactions...',
+      allCategories: 'All Categories',
+      budgetsTitle: 'Monthly Budget Allocations',
+      budgetLimit: 'Approved Budget',
+      spent: 'Spent',
+      remaining: 'Remaining',
+      wifeAllowanceTitle: "Wife's Personal Allowance",
+      wifeAllowanceSubtitle: 'Protected periodic allowance adhering to Nafaqah rules',
+      subAllocationsTitle: 'Sub-allocations for Dependents & Categories',
+      noData: 'No records found yet.',
+      activePlans: 'active plan(s)',
+      monthlyDue: 'Monthly due',
     },
     a11y: {
       pageTitle: 'Budget Tracker | Know what’s left until payday',
