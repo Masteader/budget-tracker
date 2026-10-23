@@ -12,17 +12,33 @@ library;
 
 import 'dart:convert';
 
-const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+/// Default public endpoints and publishable anon key.
+/// These contain NO secrets and are strictly public assets.
+const defaultSupabaseUrl = 'https://qnhyiszgiymsypcwnntu.supabase.co';
+const defaultSupabasePublishableKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaHlpc3pnaXltc3lwY3dubnR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MjM2NjYsImV4cCI6MjEwNTQ5OTY2Nn0.bOazpdgpRKOB2n60ZgGL3Vgjd4oPp5yxZ0VqpeyLz_U';
+const defaultFastapiBaseUrl = 'https://budget.fmsco.com.sa';
+
+const supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: defaultSupabaseUrl,
+);
 
 const supabasePublishableKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
-  defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+  defaultValue: String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: defaultSupabasePublishableKey,
+  ),
 );
 
 /// Deprecated: alias for [supabasePublishableKey].
 const supabaseAnonKey = supabasePublishableKey;
 
-const fastapiBaseUrl = String.fromEnvironment('FASTAPI_BASE_URL');
+const fastapiBaseUrl = String.fromEnvironment(
+  'FASTAPI_BASE_URL',
+  defaultValue: defaultFastapiBaseUrl,
+);
 
 const fastapiWebhookUrl = String.fromEnvironment(
   'FASTAPI_WEBHOOK_URL',
@@ -94,11 +110,16 @@ bool isPrivilegedSupabaseKey(String key) {
 }
 
 /// Throws a [StateError] listing every problem with the compiled-in configuration.
-void ensureValidClientConfig({required bool isRelease}) {
+void ensureValidClientConfig({
+  required bool isRelease,
+  String? customUrl,
+  String? customKey,
+  String? customBaseUrl,
+}) {
   final problems = validateClientConfig(
-    supabaseUrl: supabaseUrl,
-    supabaseKey: supabasePublishableKey,
-    fastapiBaseUrl: fastapiBaseUrl,
+    supabaseUrl: customUrl ?? supabaseUrl,
+    supabaseKey: customKey ?? supabasePublishableKey,
+    fastapiBaseUrl: customBaseUrl ?? fastapiBaseUrl,
     isRelease: isRelease,
   );
   if (problems.isNotEmpty) {

@@ -17,6 +17,8 @@ build/
 **/local.properties
 **/android/.gradle/
 *.lock
+**/dart_defines.json
+!**/dart_defines.example.json
 
 # OS & Editor
 .DS_Store

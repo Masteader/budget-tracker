@@ -27,6 +27,7 @@ import 'services/notifications/reminder_service.dart';
 import 'services/offline_sync_service.dart';
 import 'services/receipt_storage_service.dart';
 import 'services/salary_cycle_service.dart';
+import 'errors/config_error_app.dart';
 import 'services/secure_session_storage.dart';
 import 'supabase_config.dart';
 import 'theme/app_themes.dart';
@@ -34,36 +35,58 @@ import 'theme/app_themes.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Fail fast with an explicit list of missing/invalid --dart-define flags
-  // rather than starting against an unknown or production backend.
-  ensureValidClientConfig(isRelease: kReleaseMode);
+  try {
+    // Fail fast with an explicit list of missing/invalid --dart-define flags
+    // rather than starting against an unknown or production backend.
+    ensureValidClientConfig(isRelease: kReleaseMode);
 
-  // Lock to portrait
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // Lock to portrait
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  // Supabase
-  // MOB-19: the session (refresh token) lives in the Keystore/Keychain, not
-  // in plaintext SharedPreferences; an existing session is migrated once.
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabasePublishableKey,
-    authOptions: FlutterAuthClientOptions(
-      localStorage: SecureSessionLocalStorage(
-        persistSessionKey: SecureSessionLocalStorage.sessionKeyFor(supabaseUrl),
+    // Supabase
+    // MOB-19: the session (refresh token) lives in the Keystore/Keychain, not
+    // in plaintext SharedPreferences; an existing session is migrated once.
+    try {
+      Supabase.instance.client;
+    } catch (_) {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        publishableKey: supabasePublishableKey,
+        authOptions: FlutterAuthClientOptions(
+          localStorage: SecureSessionLocalStorage(
+            persistSessionKey: SecureSessionLocalStorage.sessionKeyFor(supabaseUrl),
+          ),
+        ),
+      );
+    }
+
+    // Household payday for client-side salary-cycle arithmetic.
+    await SalaryCycleService.loadCachedPayday();
+
+    // Per-type reminder switches (local).
+    await ReminderPreferences.instance.load();
+
+    // Offline SQLite Queue & Sync Engine
+    OfflineSyncService.instance.initialize();
+
+    runApp(const BudgetTrackerApp());
+  } catch (error, stackTrace) {
+    debugPrint('Fatal Budget Tracker startup initialization error: $error\n$stackTrace');
+    final problems = validateClientConfig(
+      supabaseUrl: supabaseUrl,
+      supabaseKey: supabasePublishableKey,
+      fastapiBaseUrl: fastapiBaseUrl,
+      isRelease: kReleaseMode,
+    );
+    runApp(
+      ConfigErrorApp(
+        error: error,
+        stackTrace: stackTrace,
+        problems: problems,
+        onRetry: () => main(),
       ),
-    ),
-  );
-
-  // Household payday for client-side salary-cycle arithmetic.
-  await SalaryCycleService.loadCachedPayday();
-
-  // Per-type reminder switches (local).
-  await ReminderPreferences.instance.load();
-
-  // Offline SQLite Queue & Sync Engine
-  OfflineSyncService.instance.initialize();
-
-  runApp(const BudgetTrackerApp());
+    );
+  }
 }
 
 final supabase = Supabase.instance.client;

@@ -1,0 +1,5 @@
+{
+  "SUPABASE_URL": "https://<your-project-ref>.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "<your-anon-publishable-key>",
+  "FASTAPI_BASE_URL": "https://budget.fmsco.com.sa"
+}

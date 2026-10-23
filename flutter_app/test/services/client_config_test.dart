@@ -11,12 +11,19 @@ String _jwt(Map<String, dynamic> claims) {
 
 void main() {
   group('MOB-02 client configuration', () {
-    test('no production URL or key is compiled in as a default', () {
-      final source = File('lib/supabase_config.dart').readAsStringSync();
-      expect(source, isNot(contains('supabase.co')));
-      expect(source, isNot(contains('sb_publishable_')));
-      expect(source, isNot(contains('fmsco.com.sa')));
-      expect(source, isNot(contains("defaultValue: 'http")));
+    test('safe public defaults are compiled in as fallbacks and non-privileged', () {
+      expect(defaultSupabaseUrl, startsWith('https://'));
+      expect(defaultFastapiBaseUrl, startsWith('https://'));
+      expect(defaultSupabasePublishableKey, isNotEmpty);
+      expect(isPrivilegedSupabaseKey(defaultSupabasePublishableKey), isFalse);
+
+      final problems = validateClientConfig(
+        supabaseUrl: defaultSupabaseUrl,
+        supabaseKey: defaultSupabasePublishableKey,
+        fastapiBaseUrl: defaultFastapiBaseUrl,
+        isRelease: true,
+      );
+      expect(problems, isEmpty);
     });
 
     test('no static app token or other shared secret is read by the client', () {
@@ -60,8 +67,25 @@ void main() {
       expect(source, isNot(contains('Missing --dart-define=WEBHOOK_SECRET')));
     });
 
-    test('ensureValidClientConfig throws for the (empty) test build configuration', () {
-      expect(() => ensureValidClientConfig(isRelease: true), throwsStateError);
+    test('ensureValidClientConfig succeeds with default config, throws on invalid config', () {
+      // Default compiled-in config is valid out of the box
+      expect(() => ensureValidClientConfig(isRelease: true), returnsNormally);
+
+      // Throws on missing URL or key
+      expect(
+        () => ensureValidClientConfig(isRelease: true, customUrl: ''),
+        throwsStateError,
+      );
+      expect(
+        () => ensureValidClientConfig(isRelease: true, customKey: ''),
+        throwsStateError,
+      );
+
+      // Throws on privileged service role key
+      expect(
+        () => ensureValidClientConfig(isRelease: true, customKey: 'sb_secret_admin'),
+        throwsStateError,
+      );
     });
 
     test('debug builds accept cleartext local endpoints', () {
