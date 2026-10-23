@@ -221,13 +221,13 @@ def _persist_inquiry(
         client = get_client()
         client.table("inquiries").insert({
             "reference": reference,
-            "inquiry_type": inquiry_type,
+            "type": inquiry_type,
             "email": email,
             "name": name,
             "message": message,
             "locale": locale,
             "source": source,
-            "delivery_status": "pending",
+            "status": "captured",
         }).execute()
         return True
     except Exception as exc:
@@ -239,11 +239,10 @@ def _update_inquiry_status(reference: str, status: str, provider: Optional[str] 
     try:
         client = get_client()
         update_data: dict[str, str] = {
-            "delivery_status": status,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "status": status,
         }
         if provider:
-            update_data["mail_provider"] = provider
+            update_data["delivery_provider"] = provider
         client.table("inquiries").update(update_data).eq("reference", reference).execute()
     except Exception as exc:
         logger.warning("Failed to update inquiry status for ref=%s: %s", reference, exc)
@@ -279,7 +278,6 @@ async def _deliver(
     except mail_service.MailNotConfiguredError as exc:
         logger.error("Inquiry ref=%s (%s) NOT delivered: %s", reference, inquiry_type, exc)
         if is_lead_capture:
-            _update_inquiry_status(reference, status="pending")
             return {"status": "captured", "reference": reference}
         raise not_configured
     except Exception as exc:
