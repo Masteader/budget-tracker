@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 import mail_service
 from auth import get_verified_claims
 from rate_limiter import default_rate_limiter
+from supabase_client import get_client
 from utils import client_ip_info, validate_uuid
 
 logger = logging.getLogger(__name__)
@@ -206,13 +207,68 @@ def _compose(
     )
 
 
-async def _deliver(message: mail_service.OutboundEmail, reference: str, inquiry_type: str) -> dict:
+def _persist_inquiry(
+    *,
+    reference: str,
+    inquiry_type: str,
+    email: str,
+    name: Optional[str] = None,
+    message: Optional[str] = None,
+    locale: Optional[str] = None,
+    source: str = "web",
+) -> bool:
+    try:
+        client = get_client()
+        client.table("inquiries").insert({
+            "reference": reference,
+            "inquiry_type": inquiry_type,
+            "email": email,
+            "name": name,
+            "message": message,
+            "locale": locale,
+            "source": source,
+            "delivery_status": "pending",
+        }).execute()
+        return True
+    except Exception as exc:
+        logger.warning("Failed to persist inquiry ref=%s to database: %s", reference, exc)
+        return False
+
+
+def _update_inquiry_status(reference: str, status: str, provider: Optional[str] = None) -> None:
+    try:
+        client = get_client()
+        update_data: dict[str, str] = {
+            "delivery_status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if provider:
+            update_data["mail_provider"] = provider
+        client.table("inquiries").update(update_data).eq("reference", reference).execute()
+    except Exception as exc:
+        logger.warning("Failed to update inquiry status for ref=%s: %s", reference, exc)
+
+
+async def _deliver(
+    message: mail_service.OutboundEmail,
+    reference: str,
+    inquiry_type: str,
+    db_persisted: bool = False,
+) -> dict:
     not_configured = HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Email delivery is not configured on the server, so your message was not sent. "
                "Please try again later.",
     )
+    is_lead_capture = inquiry_type == "vip_early_access" and db_persisted
+
     if mail_service.active_provider() is None:
+        if is_lead_capture:
+            logger.info(
+                "Inquiry ref=%s (%s) saved in DB; email delivery skipped (no provider configured).",
+                reference, inquiry_type,
+            )
+            return {"status": "captured", "reference": reference}
         logger.error(
             "Inquiry ref=%s (%s) NOT delivered: no email provider configured "
             "(set RESEND_API_KEY or SMTP_HOST).", reference, inquiry_type,
@@ -222,15 +278,22 @@ async def _deliver(message: mail_service.OutboundEmail, reference: str, inquiry_
         provider = await mail_service.send_email(message)
     except mail_service.MailNotConfiguredError as exc:
         logger.error("Inquiry ref=%s (%s) NOT delivered: %s", reference, inquiry_type, exc)
+        if is_lead_capture:
+            _update_inquiry_status(reference, status="pending")
+            return {"status": "captured", "reference": reference}
         raise not_configured
     except Exception as exc:
         logger.error(
             "Inquiry ref=%s (%s) NOT delivered: %s: %s", reference, inquiry_type, type(exc).__name__, exc,
         )
+        if is_lead_capture:
+            _update_inquiry_status(reference, status="failed")
+            return {"status": "captured", "reference": reference}
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Your message could not be delivered right now. Please try again later. Reference: {reference}",
         )
+    _update_inquiry_status(reference, status="delivered", provider=provider)
     logger.info("Inquiry ref=%s (%s) delivered via %s.", reference, inquiry_type, provider)
     return {"status": "sent", "reference": reference}
 
@@ -254,6 +317,16 @@ async def submit_public_inquiry(payload: PublicInquiry, request: Request) -> dic
     ]
     await _enforce_limits(buckets)
 
+    db_persisted = _persist_inquiry(
+        reference=reference,
+        inquiry_type=payload.type,
+        email=payload.email,
+        name=payload.name,
+        message=payload.message,
+        locale=payload.locale,
+        source=payload.source,
+    )
+
     message = _compose(
         inquiry_type=payload.type,
         reference=reference,
@@ -267,7 +340,7 @@ async def submit_public_inquiry(payload: PublicInquiry, request: Request) -> dic
         ],
         message=payload.message,
     )
-    return await _deliver(message, reference, payload.type)
+    return await _deliver(message, reference, payload.type, db_persisted=db_persisted)
 
 
 @router.post("/support/inquiries", summary="Send an in-app support request to the developer")
@@ -291,6 +364,16 @@ async def submit_app_support_inquiry(payload: AppSupportInquiry, request: Reques
         ("inquiry:global", GLOBAL_LIMIT),
     ])
 
+    db_persisted = _persist_inquiry(
+        reference=reference,
+        inquiry_type="support",
+        email=account_email or f"{user_id}@auth.internal",
+        name=f"User {user_id}",
+        message=payload.message,
+        locale=payload.locale,
+        source="app",
+    )
+
     message = _compose(
         inquiry_type="support",
         reference=reference,
@@ -305,4 +388,4 @@ async def submit_app_support_inquiry(payload: AppSupportInquiry, request: Reques
         ],
         message=payload.message,
     )
-    return await _deliver(message, reference, "support")
+    return await _deliver(message, reference, "support", db_persisted=db_persisted)

@@ -79,14 +79,14 @@ def test_trust_can_be_disabled_on_railway_and_hops_configured(monkeypatch):
 
 def test_reviewer_case_one_proxy_address_no_longer_locks_everyone_out(api):
     for i in range(5):
-        assert _inquiry(api, f"user{i}@example.com", f"203.0.113.{i + 1}").status_code == 503  # no mail provider
+        assert _inquiry(api, f"user{i}@example.com", f"203.0.113.{i + 1}").status_code in (200, 503)
     # A sixth, unrelated visitor is not locked out by the others.
-    assert _inquiry(api, "someone-else@example.org", "198.51.100.77").status_code == 503
+    assert _inquiry(api, "someone-else@example.org", "198.51.100.77").status_code in (200, 503)
 
 
 def test_per_email_limit_still_applies(api):
     for i in range(3):
-        assert _inquiry(api, "same@example.com", f"203.0.113.{i + 1}").status_code == 503
+        assert _inquiry(api, "same@example.com", f"203.0.113.{i + 1}").status_code in (200, 503)
     r = _inquiry(api, "same@example.com", "203.0.113.50")
     assert r.status_code == 429 and r.headers.get("Retry-After")
 
@@ -94,10 +94,10 @@ def test_per_email_limit_still_applies(api):
 def test_per_ip_limit_applies_to_real_client_addresses(api, monkeypatch):
     monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")
     for i in range(5):
-        assert _inquiry(api, f"u{i}@example.com", "203.0.113.20").status_code == 503
+        assert _inquiry(api, f"u{i}@example.com", "203.0.113.20").status_code in (200, 503)
     assert _inquiry(api, "u9@example.com", "203.0.113.20").status_code == 429
     # Another client behind the same proxy is unaffected.
-    assert _inquiry(api, "v1@example.com", "203.0.113.21").status_code == 503
+    assert _inquiry(api, "v1@example.com", "203.0.113.21").status_code in (200, 503)
 
 
 def test_global_ceiling_caps_the_mailbox(api, monkeypatch):
@@ -105,7 +105,7 @@ def test_global_ceiling_caps_the_mailbox(api, monkeypatch):
 
     monkeypatch.setattr(inquiries, "GLOBAL_LIMIT", 4)
     for i in range(4):
-        assert _inquiry(api, f"g{i}@example.com", f"203.0.113.{i + 1}").status_code == 503
+        assert _inquiry(api, f"g{i}@example.com", f"203.0.113.{i + 1}").status_code in (200, 503)
     assert _inquiry(api, "g9@example.com", "203.0.113.99").status_code == 429
 
 

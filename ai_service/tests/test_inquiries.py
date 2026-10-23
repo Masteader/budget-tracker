@@ -242,7 +242,7 @@ def test_rate_limiter_failure_fails_closed(client, mailer, monkeypatch):
 
 def test_missing_provider_returns_503_and_never_pretends_success(client, no_provider, caplog):
     with caplog.at_level("ERROR"):
-        res = client.post(PUBLIC_URL, json={"type": "vip_early_access", "email": "a@example.com"})
+        res = client.post(PUBLIC_URL, json={"type": "support", "email": "a@example.com", "message": "Help needed with app"})
     assert res.status_code == 503
     assert "not configured" in res.json()["detail"].lower()
     assert "sent" not in res.json().get("status", "")
@@ -252,7 +252,7 @@ def test_missing_provider_returns_503_and_never_pretends_success(client, no_prov
 
 def test_provider_failure_returns_502_with_sanitized_detail(client, mailer):
     mailer.side_effect = mail_service.MailDeliveryError("SMTP 535 auth failed for user owner@internal")
-    res = client.post(PUBLIC_URL, json={"type": "vip_early_access", "email": "a@example.com"})
+    res = client.post(PUBLIC_URL, json={"type": "support", "email": "a@example.com", "message": "Help needed with app"})
     assert res.status_code == 502
     assert "owner@internal" not in res.text
     assert "535" not in res.text

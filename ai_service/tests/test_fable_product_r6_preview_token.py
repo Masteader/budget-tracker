@@ -136,7 +136,11 @@ def test_token_for_another_kind_user_or_household_is_invalid(args):
         pt.verify_preview_token(tok, *args)
 
 
-@pytest.mark.parametrize("bad", ["", "nope", "pt1.a.b", "pt2.a.b.c", None, 42, "pt1." + "x" * (pt.MAX_PREVIEW_TOKEN_LENGTH)])
+@pytest.mark.parametrize(
+    "bad",
+    ["", "nope", "pt1.a.b", "pt2.a.b.c", None, 42, "pt1." + "x" * (pt.MAX_PREVIEW_TOKEN_LENGTH)],
+    ids=["empty", "nope", "wrong_parts", "wrong_version", "none", "number", "too_long"],
+)
 def test_malformed_tokens_are_invalid(bad):
     with pytest.raises(pt.InvalidPreviewToken):
         pt.verify_preview_token(bad, "chat", "u1", "h1")
