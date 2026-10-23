@@ -93,7 +93,7 @@ export const PortalHeader: React.FC<PortalHeaderProps> = ({
           <button
             type="button"
             onClick={() => signOut()}
-            className="rounded-lg border border-red-200 bg-red-50/50 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 hover:text-red-800 transition-colors"
+            className="rounded-lg border border-red-200 bg-red-50 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 hover:text-red-800 transition-colors"
             title={dict.auth.signOut}
           >
             {dict.auth.signOut}
