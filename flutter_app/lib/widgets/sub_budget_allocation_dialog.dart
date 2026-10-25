@@ -56,6 +56,57 @@ class SubBudgetAllocationDialog extends StatefulWidget {
     );
   }
 
+  static const Map<String, List<Map<String, String>>> kDefaultSubCategoriesCatalog = {
+    'OPEX-UTILITIES': [
+      {'sub_code': 'housing_rent', 'name_en': 'Housing Rent', 'name_ar': 'إيجار السكن'},
+      {'sub_code': 'electricity_sec', 'name_en': 'Electricity (SEC)', 'name_ar': 'فاتورة الكهرباء'},
+      {'sub_code': 'fiber_internet', 'name_en': 'Home Fiber Internet', 'name_ar': 'الإنترنت المنزلي'},
+      {'sub_code': 'mobile_sims', 'name_en': 'Mobile SIMs & Data', 'name_ar': 'باقات الجوال والاتصالات'},
+      {'sub_code': 'water_municipal', 'name_en': 'Water & Municipal Bills', 'name_ar': 'المياه والخدمات البلدية'},
+    ],
+    'OPEX-DINING': [
+      {'sub_code': 'restaurants_dinners', 'name_en': 'Restaurants & Meals', 'name_ar': 'المطاعم والوجبات'},
+      {'sub_code': 'coffee_bakeries', 'name_en': 'Coffee & Bakeries', 'name_ar': 'القهوة والمخابز'},
+      {'sub_code': 'delivery_apps', 'name_en': 'Delivery Apps', 'name_ar': 'تطبيقات التوصيل'},
+    ],
+    'OPEX-GROCERY': [
+      {'sub_code': 'meat', 'name_en': 'Meat & Poultry', 'name_ar': 'اللحوم والدواجن'},
+      {'sub_code': 'vegetables_fruit', 'name_en': 'Fresh Produce & Fruits', 'name_ar': 'الخضار والفواكه'},
+      {'sub_code': 'dairy_eggs', 'name_en': 'Dairy & Eggs', 'name_ar': 'الألبان والبيض'},
+      {'sub_code': 'snacks_chips', 'name_en': 'Snacks, Chips & Sweets', 'name_ar': 'الشيبس والسناكات والحلويات'},
+      {'sub_code': 'beverages', 'name_en': 'Beverages & Water', 'name_ar': 'المشروبات والمياه'},
+      {'sub_code': 'pantry_staples', 'name_en': 'Pantry & Staples', 'name_ar': 'التموين والمؤن'},
+      {'sub_code': 'cleaning_household', 'name_en': 'Cleaning Supplies', 'name_ar': 'المنظفات ومستلزمات المنزل'},
+    ],
+    'OPEX-FUEL': [
+      {'sub_code': 'gas_fuel', 'name_en': 'Gasoline & Fuel', 'name_ar': 'بنزين ووقود'},
+      {'sub_code': 'car_maintenance', 'name_en': 'Car Maintenance & Oil', 'name_ar': 'صيانة وتغيير الزيت'},
+      {'sub_code': 'ride_hailing', 'name_en': 'Ride Hailing (Uber/Bolt)', 'name_ar': 'تطبيقات النقل والتوصيل'},
+    ],
+    'OPEX-HEALTH': [
+      {'sub_code': 'prescriptions_meds', 'name_en': 'Prescriptions & Medicines', 'name_ar': 'الأدوية والوصفات'},
+      {'sub_code': 'clinics_dental', 'name_en': 'Clinics & Dental', 'name_ar': 'العيادات والأسنان'},
+    ],
+    'OPEX-SHOPPING': [
+      {'sub_code': 'clothing_fashion', 'name_en': 'Clothing & Fashion', 'name_ar': 'الملابس والأزياء'},
+      {'sub_code': 'electronics_gadgets', 'name_en': 'Electronics & Gadgets', 'name_ar': 'الإلكترونيات والتقنية'},
+      {'sub_code': 'home_furniture', 'name_en': 'Home Goods & Furniture', 'name_ar': 'الأثاث والمفروشات'},
+    ],
+    'OPEX-ENTERTAINMENT': [
+      {'sub_code': 'cinema_outings', 'name_en': 'Cinema & Outings', 'name_ar': 'سينما ونزهات'},
+      {'sub_code': 'gaming_subscriptions', 'name_en': 'Gaming & Subscriptions', 'name_ar': 'ألعاب واشتراكات'},
+      {'sub_code': 'events_activities', 'name_en': 'Events & Activities', 'name_ar': 'فعاليات وأنشطة'},
+    ],
+    'CAPEX-EDUCATION': [
+      {'sub_code': 'tuition_fees', 'name_en': 'Tuition Fees', 'name_ar': 'رسوم دراسية'},
+      {'sub_code': 'books_supplies', 'name_en': 'Books & Supplies', 'name_ar': 'كتب ومستلزمات'},
+    ],
+    'OPEX-EDUCATION': [
+      {'sub_code': 'tuition_fees', 'name_en': 'Tuition Fees', 'name_ar': 'رسوم دراسية'},
+      {'sub_code': 'books_supplies', 'name_en': 'Books & Supplies', 'name_ar': 'كتب ومستلزمات'},
+    ],
+  };
+
   @override
   State<SubBudgetAllocationDialog> createState() =>
       _SubBudgetAllocationDialogState();
@@ -122,53 +173,6 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     });
   }
 
-  static const Map<String, List<Map<String, String>>> kDefaultSubCategoriesCatalog = {
-  'OPEX-UTILITIES': [
-    {'sub_code': 'housing_rent', 'name_en': 'Housing Rent', 'name_ar': 'إيجار السكن'},
-    {'sub_code': 'electricity_sec', 'name_en': 'Electricity (SEC)', 'name_ar': 'فاتورة الكهرباء'},
-    {'sub_code': 'fiber_internet', 'name_en': 'Home Fiber Internet', 'name_ar': 'الإنترنت المنزلي'},
-    {'sub_code': 'mobile_sims', 'name_en': 'Mobile SIMs & Data', 'name_ar': 'باقات الجوال والاتصالات'},
-    {'sub_code': 'water_municipal', 'name_en': 'Water & Municipal Bills', 'name_ar': 'المياه والخدمات البلدية'},
-  ],
-  'OPEX-DINING': [
-    {'sub_code': 'restaurants_dinners', 'name_en': 'Restaurants & Meals', 'name_ar': 'المطاعم والوجبات'},
-    {'sub_code': 'coffee_bakeries', 'name_en': 'Coffee & Bakeries', 'name_ar': 'القهوة والمخابز'},
-    {'sub_code': 'delivery_apps', 'name_en': 'Delivery Apps', 'name_ar': 'تطبيقات التوصيل'},
-  ],
-  'OPEX-GROCERY': [
-    {'sub_code': 'meat', 'name_en': 'Meat & Poultry', 'name_ar': 'اللحوم والدواجن'},
-    {'sub_code': 'vegetables_fruit', 'name_en': 'Fresh Produce & Fruits', 'name_ar': 'الخضار والفواكه'},
-    {'sub_code': 'dairy_eggs', 'name_en': 'Dairy & Eggs', 'name_ar': 'الألبان والبيض'},
-    {'sub_code': 'snacks_chips', 'name_en': 'Snacks, Chips & Sweets', 'name_ar': 'الشيبس والسناكات والحلويات'},
-    {'sub_code': 'beverages', 'name_en': 'Beverages & Water', 'name_ar': 'المشروبات والمياه'},
-    {'sub_code': 'pantry_staples', 'name_en': 'Pantry & Staples', 'name_ar': 'التموين والمؤن'},
-    {'sub_code': 'cleaning_household', 'name_en': 'Cleaning Supplies', 'name_ar': 'المنظفات ومستلزمات المنزل'},
-  ],
-  'OPEX-FUEL': [
-    {'sub_code': 'gas_fuel', 'name_en': 'Gasoline & Fuel', 'name_ar': 'بنزين ووقود'},
-    {'sub_code': 'car_maintenance', 'name_en': 'Car Maintenance & Oil', 'name_ar': 'صيانة وتغيير الزيت'},
-    {'sub_code': 'ride_hailing', 'name_en': 'Ride Hailing (Uber/Bolt)', 'name_ar': 'تطبيقات النقل والتوصيل'},
-  ],
-  'OPEX-HEALTH': [
-    {'sub_code': 'prescriptions_meds', 'name_en': 'Prescriptions & Medicines', 'name_ar': 'الأدوية والوصفات'},
-    {'sub_code': 'clinics_dental', 'name_en': 'Clinics & Dental', 'name_ar': 'العيادات والأسنان'},
-  ],
-  'OPEX-SHOPPING': [
-    {'sub_code': 'clothing_fashion', 'name_en': 'Clothing & Fashion', 'name_ar': 'الملابس والأزياء'},
-    {'sub_code': 'electronics_gadgets', 'name_en': 'Electronics & Gadgets', 'name_ar': 'الإلكترونيات والتقنية'},
-    {'sub_code': 'home_furniture', 'name_en': 'Home Goods & Furniture', 'name_ar': 'الأثاث والمفروشات'},
-  ],
-  'OPEX-ENTERTAINMENT': [
-    {'sub_code': 'cinema_outings', 'name_en': 'Cinema & Outings', 'name_ar': 'سينما ونزهات'},
-    {'sub_code': 'gaming_subscriptions', 'name_en': 'Gaming & Subscriptions', 'name_ar': 'ألعاب واشتراكات'},
-    {'sub_code': 'events_activities', 'name_en': 'Events & Activities', 'name_ar': 'فعاليات وأنشطة'},
-  ],
-  'CAPEX-EDUCATION': [
-    {'sub_code': 'tuition_fees', 'name_en': 'Tuition Fees', 'name_ar': 'رسوم دراسية'},
-    {'sub_code': 'books_supplies', 'name_en': 'Books & Supplies', 'name_ar': 'كتب ومستلزمات'},
-  ],
-};
-
   Future<void> _loadSubCategories() async {
     try {
       // 1. Fetch sub-categories from backend API (uses service-role key, bypassing RLS)
@@ -199,7 +203,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
         if (rawDefs.isEmpty) {
           rawDefs = List<Map<String, String>>.from(
-            kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [],
+            SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [],
           );
         }
       }
@@ -268,7 +272,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
       _replaceSubItems(list);
     } catch (e) {
-      final defaultList = kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
+      final defaultList = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
       final list = defaultList.map((row) {
         final code = row['sub_code']!;

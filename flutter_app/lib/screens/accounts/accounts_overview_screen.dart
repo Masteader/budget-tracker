@@ -127,20 +127,32 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
+        foregroundColor: context.textPrimary,
+        iconTheme: IconThemeData(color: context.textPrimary),
         title: Text(
           context.tr('accounts_balances'),
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 20),
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            color: context.textPrimary,
+          ),
         ),
         backgroundColor: context.scaffoldBg,
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(_hideBalances ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+            icon: Icon(
+              _hideBalances ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              color: context.textPrimary,
+            ),
             tooltip: _hideBalances ? context.tr('show_balances') : context.tr('hide_balances'),
             onPressed: () => setState(() => _hideBalances = !_hideBalances),
           ),
           IconButton(
-            icon: Icon(Icons.add_rounded, color: context.electricTeal),
+            icon: Icon(
+              Icons.add_rounded,
+              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+            ),
             tooltip: context.tr('add_account'),
             onPressed: () {
               AddEditAccountDialog.show(

@@ -1289,7 +1289,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             ),
                           ),
                         ],
-                        if (existing != null) ...[
                           const SizedBox(height: 8),
                           InkWell(
                             onTap: staticData.isAdmin
@@ -1297,8 +1296,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       context,
                                       householdId: staticData.householdId,
                                       budget: existing,
+                                      categoryCode: code,
+                                      cycleKey: _currentCycleKey,
                                       categoryName: context.trCat(code),
-                                      onMapped: () => setState(() {}),
+                                      onMapped: () {
+                                        setState(() {
+                                          _staticFuture = _loadStaticData();
+                                        });
+                                      },
                                     )
                                 : null,
                             borderRadius: BorderRadius.circular(6),
@@ -1344,7 +1349,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               ),
                             ),
                           ),
-                        ],
                         if (subCategories.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Wrap(

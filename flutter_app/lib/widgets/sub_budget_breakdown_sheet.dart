@@ -4,6 +4,7 @@ import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../main.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import 'sub_budget_allocation_dialog.dart';
@@ -107,6 +108,78 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
           matched = item;
           break;
         }
+      }
+
+      // Fetch the latest budget row for this household & cycle to get any saved subAllocations
+      Map<String, double> dbSubAllocs = {};
+      try {
+        var query = supabase
+            .from('budgets')
+            .select('sub_allocations, allocated_amount, spent_amount, remaining_amount, previous_cycle_delta')
+            .eq('household_id', widget.householdId)
+            .eq('category_code', widget.categoryCode);
+        if (widget.cycleKey != null && widget.cycleKey!.isNotEmpty) {
+          query = query.eq('cycle_key', widget.cycleKey!);
+        }
+        final bData = await query.maybeSingle();
+        if (bData != null && bData['sub_allocations'] is Map) {
+          final map = bData['sub_allocations'] as Map<String, dynamic>;
+          dbSubAllocs = map.map((k, v) => MapEntry(k, (v as num).toDouble()));
+        }
+      } catch (_) {}
+
+      // Fallback CategoryBreakdownItem if API returned no matching item
+      matched ??= CategoryBreakdownItem(
+        categoryCode: widget.categoryCode,
+        categoryName: widget.categoryCode,
+        allocatedAmount: widget.allocatedAmount,
+        spentAmount: widget.spentAmount,
+        remainingAmount: widget.allocatedAmount - widget.spentAmount,
+        previousCycleDelta: widget.previousCycleDelta,
+        subCategories: const [],
+      );
+
+      // Merge any configured sub-allocations from the database into matched.subCategories
+      if (dbSubAllocs.isNotEmpty) {
+        final existingCodes = matched.subCategories.map((s) => s.subCode).whereType<String>().toSet();
+        final updatedSubs = List<SubCategoryBreakdownItem>.from(matched.subCategories);
+
+        for (final entry in dbSubAllocs.entries) {
+          if (entry.key != 'other' && !existingCodes.contains(entry.key)) {
+            String name = entry.key.replaceAll('_', ' ');
+            name = name.isNotEmpty ? name[0].toUpperCase() + name.substring(1) : entry.key;
+            final catalog = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode];
+            if (catalog != null) {
+              final found = catalog.where((c) => c['sub_code'] == entry.key).firstOrNull;
+              if (found != null && found['name_en'] != null) {
+                name = found['name_en']!;
+              }
+            }
+            updatedSubs.add(SubCategoryBreakdownItem(
+              subCode: entry.key,
+              name: name,
+              allocatedAmount: entry.value,
+              spentAmount: 0.0,
+              transactionCount: 0,
+            ));
+          }
+        }
+
+        // If we now have specific sub-categories, filter out empty "other" (0 spent, 0 allocated)
+        final hasSpecific = updatedSubs.any((s) => s.subCode != null && s.subCode != 'other');
+        final filteredSubs = hasSpecific
+            ? updatedSubs.where((s) => !(s.subCode == 'other' && s.spentAmount == 0 && s.allocatedAmount == 0)).toList()
+            : updatedSubs;
+
+        matched = CategoryBreakdownItem(
+          categoryCode: matched.categoryCode,
+          categoryName: matched.categoryName,
+          allocatedAmount: matched.allocatedAmount,
+          spentAmount: matched.spentAmount,
+          remainingAmount: matched.remainingAmount,
+          previousCycleDelta: matched.previousCycleDelta,
+          subCategories: filteredSubs,
+        );
       }
 
       if (mounted) {
@@ -312,7 +385,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           Text(
                             context.sar(allocated),
                             style: GoogleFonts.outfit(
-                              color: context.successText,
+                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -327,7 +400,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: prevDelta > 0
-                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.15) : const Color(0xFF4A0E1E).withValues(alpha: 0.1))
                             : Colors.redAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -339,7 +412,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 ? Icons.arrow_downward_rounded
                                 : Icons.arrow_upward_rounded,
                             color: prevDelta > 0
-                                ? const Color(0xFF10B981)
+                                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
                                 : Colors.redAccent,
                             size: 14,
                           ),
@@ -350,7 +423,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 : '-${context.sar(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
-                                  ? const Color(0xFF10B981)
+                                  ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
                                   : Colors.redAccent,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -379,7 +452,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 Text(
                   '${context.tr('allocated')} & ${context.tr('spent')}',
                   style: GoogleFonts.inter(
-                    color: context.successText,
+                    color: context.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -445,7 +518,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         } else if (item.spentAmount > item.allocatedAmount * 0.85) {
           progressColor = Colors.orangeAccent;
         } else {
-          progressColor = const Color(0xFF10B981);
+          progressColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
         }
 
         return Container(

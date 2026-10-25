@@ -255,6 +255,8 @@ User: ${widget.userEmail ?? "N/A"}
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
+        foregroundColor: context.textPrimary,
+        iconTheme: IconThemeData(color: context.textPrimary),
         backgroundColor: context.cardBg,
         elevation: 0,
         title: Text(

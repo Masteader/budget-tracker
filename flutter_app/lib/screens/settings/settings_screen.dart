@@ -773,6 +773,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
+        foregroundColor: context.textPrimary,
+        iconTheme: IconThemeData(color: context.textPrimary),
         title: Text(context.tr('settings_and_permissions'), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary)),
         backgroundColor: context.scaffoldBg,
         elevation: 0,

@@ -216,7 +216,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             if (paidRatio > 0)
                               Expanded(
                                 flex: (paidRatio * 1000).toInt(),
-                                child: Container(color: context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669)),
+                                child: Container(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
                               ),
                             if (1.0 - paidRatio > 0)
                               Expanded(
@@ -250,7 +250,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+                                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -259,7 +259,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                                   child: Text(
                                     '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
                                     style: TextStyle(
-                                      color: context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+                                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -531,7 +531,7 @@ class _BillRowItem extends StatelessWidget {
     IconData badgeIcon;
 
     if (bill.isPaid) {
-      badgeColor = context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
+      badgeColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
       badgeText = context.tr('paid');
       badgeIcon = Icons.check_circle_rounded;
     } else if (bill.isOverdue) {

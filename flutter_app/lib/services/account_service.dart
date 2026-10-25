@@ -162,6 +162,40 @@ class AccountService {
     }).eq('id', budgetId);
   }
 
+  /// Link a budget category to an account, creating the budget row if one doesn't exist yet.
+  Future<void> linkCategoryAccount({
+    required String householdId,
+    required String categoryCode,
+    required String cycleKey,
+    required String? accountId,
+  }) async {
+    final existing = await _client
+        .from('budgets')
+        .select('id')
+        .eq('household_id', householdId)
+        .eq('category_code', categoryCode)
+        .eq('cycle_key', cycleKey)
+        .maybeSingle();
+
+    if (existing != null) {
+      await _client.from('budgets').update({
+        'account_id': accountId,
+      }).eq('id', existing['id']);
+    } else {
+      await _client.from('budgets').insert({
+        'household_id': householdId,
+        'category_code': categoryCode,
+        'cycle_key': cycleKey,
+        'month': '${cycleKey.length >= 7 ? cycleKey.substring(0, 7) : cycleKey}-01',
+        'allocated_amount': 0.0,
+        'spent_amount': 0.0,
+        'remaining_amount': 0.0,
+        'account_id': accountId,
+        'is_active': true,
+      });
+    }
+  }
+
   /// Get total committed budgets per account for a cycle.
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async {
     final res = await _client

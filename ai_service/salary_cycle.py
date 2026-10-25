@@ -678,12 +678,26 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
         other_sp = cat_sub_spending.get((c_code, "other"), {"spent": 0.0, "count": 0})
         for (c, sc), data in cat_sub_spending.items():
             if c == c_code and sc != "other" and sc not in used_sub_codes:
+                used_sub_codes.add(sc)
                 sub_items.append({
                     "sub_code": sc,
                     "name": sc.replace("_", " ").title(),
                     "allocated_amount": float(sub_allocs.get(sc, 0.0)),
                     "spent_amount": round(data["spent"], 2),
                     "transaction_count": data["count"],
+                })
+
+        # Include any configured sub_allocations defined in the budget even with zero spending
+        for sc, alloc_val in sub_allocs.items():
+            if sc != "other" and sc not in used_sub_codes:
+                used_sub_codes.add(sc)
+                sp_data = cat_sub_spending.get((c_code, sc), {"spent": 0.0, "count": 0})
+                sub_items.append({
+                    "sub_code": sc,
+                    "name": sc.replace("_", " ").title(),
+                    "allocated_amount": float(alloc_val or 0.0),
+                    "spent_amount": round(sp_data["spent"], 2),
+                    "transaction_count": sp_data["count"],
                 })
 
         if other_sp["spent"] > 0 or other_sp["count"] > 0 or not sub_items:

@@ -58,15 +58,17 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
+        foregroundColor: context.textPrimary,
+        iconTheme: IconThemeData(color: context.textPrimary),
         backgroundColor: context.cardBg,
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.analytics_outlined, color: AppThemes.success, size: 22),
+            Icon(Icons.analytics_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 22),
             const SizedBox(width: 8),
             Text(
               context.tr('grocery_price_intelligence'),
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 17),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 17, color: context.textPrimary),
             ),
           ],
         ),

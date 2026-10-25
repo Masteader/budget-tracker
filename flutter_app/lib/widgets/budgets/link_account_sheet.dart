@@ -11,14 +11,18 @@ import '../app_snackbar.dart';
 /// Modal bottom sheet to map a budget category to a specific payment account.
 class LinkAccountSheet extends StatefulWidget {
   final String householdId;
-  final Budget budget;
+  final Budget? budget;
+  final String? categoryCode;
+  final String? cycleKey;
   final String categoryName;
   final VoidCallback? onMapped;
 
   const LinkAccountSheet({
     super.key,
     required this.householdId,
-    required this.budget,
+    this.budget,
+    this.categoryCode,
+    this.cycleKey,
     required this.categoryName,
     this.onMapped,
   });
@@ -26,7 +30,9 @@ class LinkAccountSheet extends StatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required String householdId,
-    required Budget budget,
+    Budget? budget,
+    String? categoryCode,
+    String? cycleKey,
     required String categoryName,
     VoidCallback? onMapped,
   }) {
@@ -37,6 +43,8 @@ class LinkAccountSheet extends StatefulWidget {
       builder: (_) => LinkAccountSheet(
         householdId: householdId,
         budget: budget,
+        categoryCode: categoryCode ?? budget?.categoryCode,
+        cycleKey: cycleKey ?? budget?.cycleKey,
         categoryName: categoryName,
         onMapped: onMapped,
       ),
@@ -56,7 +64,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
   @override
   void initState() {
     super.initState();
-    _selectedAccountId = widget.budget.accountId;
+    _selectedAccountId = widget.budget?.accountId;
     _loadAccounts();
   }
 
@@ -77,7 +85,16 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
   Future<void> _saveLink() async {
     setState(() => _isSaving = true);
     try {
-      await AccountService.instance.linkBudgetAccount(widget.budget.id, _selectedAccountId);
+      if (widget.budget != null && widget.budget!.id.isNotEmpty) {
+        await AccountService.instance.linkBudgetAccount(widget.budget!.id, _selectedAccountId);
+      } else if (widget.categoryCode != null && widget.cycleKey != null) {
+        await AccountService.instance.linkCategoryAccount(
+          householdId: widget.householdId,
+          categoryCode: widget.categoryCode!,
+          cycleKey: widget.cycleKey!,
+          accountId: _selectedAccountId,
+        );
+      }
       if (mounted) {
         Navigator.pop(context);
         widget.onMapped?.call();
@@ -150,7 +167,9 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                           ),
                         ),
                         Text(
-                          '${widget.categoryName} (${context.tr('allocated')}: ${context.sar(widget.budget.allocatedAmount)})',
+                          widget.budget != null
+                              ? '${widget.categoryName} (${context.tr('allocated')}: ${context.sar(widget.budget!.allocatedAmount)})'
+                              : widget.categoryName,
                           style: TextStyle(color: context.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -173,18 +192,19 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
               else
                 ..._accounts.map((acc) {
                   final isSelected = _selectedAccountId == acc.id;
-                  final hasEnough = acc.balance >= widget.budget.allocatedAmount;
+                  final hasEnough = widget.budget == null || acc.balance >= widget.budget!.allocatedAmount;
+                  final selectColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? context.electricTeal.withValues(alpha: 0.1)
+                          ? selectColor.withValues(alpha: 0.1)
                           : context.inputBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected
-                            ? context.electricTeal
+                            ? selectColor
                             : context.borderColor,
                         width: isSelected ? 1.5 : 1.0,
                       ),
@@ -192,7 +212,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                     child: ListTile(
                       dense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      leading: Icon(acc.accountType.defaultIcon, color: isSelected ? context.electricTeal : context.textSecondary),
+                      leading: Icon(acc.accountType.defaultIcon, color: isSelected ? selectColor : context.textSecondary),
                       title: Text(
                         acc.name,
                         style: TextStyle(
