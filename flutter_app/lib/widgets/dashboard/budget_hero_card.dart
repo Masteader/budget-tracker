@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_dues.dart';
@@ -85,7 +84,7 @@ class BudgetHeroCard extends StatelessWidget {
     );
 
     final cautionColor = isDark ? const Color(0xFFFFA657) : const Color(0xFFB45309);
-    final okColor = isDark ? VelvetBurgundyColors.emeraldSafe : const Color(0xFF047857);
+    final okColor = isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight;
     final Color verdictColor;
     final IconData verdictIcon;
     final String verdictText;

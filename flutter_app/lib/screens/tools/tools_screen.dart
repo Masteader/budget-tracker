@@ -41,7 +41,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_affordability',
         icon: Icons.calculate_outlined,
-        color: AppThemes.champagneGold,
+        color: context.champagneGold,
         title: context.tr('affordability_simulator'),
         subtitle: context.tr('tool_affordability_desc'),
         onTap: () => AffordabilitySimulatorSheet.show(context, householdId: householdId),
@@ -49,7 +49,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_accounts',
         icon: Icons.account_balance_wallet_outlined,
-        color: AppThemes.iceCyan,
+        color: context.accentText,
         title: context.tr('accounts_balances'),
         subtitle: context.tr('tool_accounts_desc'),
         onTap: () => _push(context, AccountsOverviewScreen(householdId: householdId)),
@@ -57,7 +57,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_record_income',
         icon: Icons.savings_rounded,
-        color: AppThemes.success,
+        color: context.accentText,
         title: context.tr('record_income'),
         subtitle: context.tr('tool_record_income_desc'),
         onTap: () => RecordIncomeSheet.show(context, householdId: householdId),
@@ -65,7 +65,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_transfer',
         icon: Icons.swap_horiz_rounded,
-        color: AppThemes.iceCyan,
+        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
         title: context.tr('transfer_funds'),
         subtitle: context.tr('tool_transfer_desc'),
         onTap: () => AccountTransferSheet.show(context, householdId: householdId),
@@ -73,7 +73,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_batch_scan',
         icon: Icons.dynamic_feed_rounded,
-        color: AppThemes.electricTeal,
+        color: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
         title: context.tr('batch_scan_receipts'),
         subtitle: context.tr('tool_batch_scan_desc'),
         onTap: () => _push(context, BatchReceiptScannerScreen(householdId: householdId)),
@@ -81,7 +81,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_price_tracker',
         icon: Icons.trending_up_rounded,
-        color: AppThemes.mintNeon,
+        color: context.champagneGold,
         title: context.tr('price_tracker'),
         subtitle: context.tr('tool_price_tracker_desc'),
         onTap: () => _push(context, GroceryPriceIntelligenceScreen(householdId: householdId)),
@@ -89,7 +89,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_smart_basket',
         icon: Icons.shopping_basket_outlined,
-        color: AppThemes.mintNeon,
+        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
         title: context.tr('smart_basket_optimizer'),
         subtitle: context.tr('tool_smart_basket_desc'),
         onTap: () => SmartShoppingBasketSheet.show(context, householdId: householdId),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
@@ -95,13 +94,13 @@ class CategoryBudgetCard extends StatelessWidget {
                                       ? const Color(0xFF3B0C18)
                                       : VelvetBurgundyColors.coralDangerBgLight)
                                   : (isDark
-                                      ? const Color(0xFF063326)
-                                      : VelvetBurgundyColors.emeraldSafeBgLight),
+                                      ? const Color(0xFF381423)
+                                      : VelvetBurgundyColors.rosePillLight),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: budget.isOverspent
                                     ? VelvetBurgundyColors.coralDanger.withValues(alpha: 0.5)
-                                    : VelvetBurgundyColors.emeraldSafe.withValues(alpha: 0.5),
+                                    : (isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight),
                                 width: 1.0,
                               ),
                             ),
@@ -110,7 +109,7 @@ class CategoryBudgetCard extends StatelessWidget {
                               style: GoogleFonts.outfit(
                                 color: budget.isOverspent
                                     ? (isDark ? const Color(0xFFFF8FA2) : VelvetBurgundyColors.coralDangerTextLight)
-                                    : (isDark ? const Color(0xFF6EE7B7) : VelvetBurgundyColors.emeraldSafeTextLight),
+                                    : (isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                               ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),

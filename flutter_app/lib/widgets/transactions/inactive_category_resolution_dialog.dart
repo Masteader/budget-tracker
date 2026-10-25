@@ -110,7 +110,8 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
         FilledButton(
           onPressed: onReactivate,
           style: FilledButton.styleFrom(
-            backgroundColor: AppThemes.success,
+            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+            foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(40),
           ),
           child: Text(context.tr('icr_reactivate')),

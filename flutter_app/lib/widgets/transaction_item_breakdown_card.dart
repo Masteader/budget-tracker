@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/theme/velvet_burgundy_theme.dart';
 import '../core/widgets/three_d_surface_card.dart';
 import '../core/widgets/three_d_icon_puck.dart';
 import '../services/zatca_decoder.dart';
@@ -99,21 +98,21 @@ class TransactionItemBreakdownCard extends StatelessWidget {
 
     switch (who.toLowerCase()) {
       case 'partner':
-        bg = const Color(0xFFA371F7).withValues(alpha: 0.16);
-        fg = const Color(0xFFBC8CFF);
+        bg = (context.isDark ? const Color(0xFF5E1327) : const Color(0xFFFDF2F4));
+        fg = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42);
         icon = Icons.favorite_outline;
         label = detailed ? context.tr('paid_by_partner') : context.tr('partner');
         break;
       case 'me':
-        bg = const Color(0xFF1F6FEB).withValues(alpha: 0.16);
-        fg = const Color(0xFF58A6FF);
+        bg = (context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB));
+        fg = context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E);
         icon = Icons.person_outline;
         label = detailed ? context.tr('paid_by_me') : context.tr('me');
         break;
       case 'both':
       default:
-        bg = (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.16);
-        fg = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+        bg = (context.isDark ? const Color(0xFF2E1520) : const Color(0xFFF2ECEE));
+        fg = context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF59454C);
         icon = Icons.people_alt_outlined;
         label = detailed ? context.tr('both_shared') : context.tr('both');
         break;
@@ -144,19 +143,21 @@ class TransactionItemBreakdownCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInstallmentBadge(String label, String provider) {
+  Widget _buildInstallmentBadge(BuildContext context, String label, String provider) {
     final isTamara = provider.toLowerCase().contains('tamara');
     final isTabby = provider.toLowerCase().contains('tabby');
     final color = isTamara
-        ? const Color(0xFFFF6B6B)
-        : (isTabby ? const Color(0xFF00E676) : const Color(0xFF58A6FF));
+        ? const Color(0xFFE11D48)
+        : (isTabby
+            ? const Color(0xFFD97706)
+            : (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 0.8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -196,7 +197,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
               isSquircle: true,
               icon: _sourceIcon,
               iconSize: 20,
-              iconColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+              iconColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : Colors.white,
             ),
           title: Row(
             children: [
@@ -236,6 +237,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   ),
                 if (isInstallment)
                   _buildInstallmentBadge(
+                    context,
                     installmentBadgeText ?? context.tr('tib_installment'),
                     installmentProvider ?? 'Tamara',
                   ),

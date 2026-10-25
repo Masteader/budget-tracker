@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/velvet_burgundy_theme.dart';
+export '../core/theme/velvet_burgundy_theme.dart';
 
 class AppThemes {
   AppThemes._();

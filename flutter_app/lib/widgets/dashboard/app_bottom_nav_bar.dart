@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 

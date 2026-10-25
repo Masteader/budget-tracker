@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../theme/app_themes.dart';
 
 import '../transaction_item_breakdown_card.dart';

@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../l10n/app_localizations.dart';

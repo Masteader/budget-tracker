@@ -123,7 +123,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               ),
               if (!_isEditing)
                 IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 18, color: AppThemes.success),
+                  icon: Icon(Icons.edit_rounded, size: 18, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
                   tooltip: context.tr('isc_edit'),
                   onPressed: () => setState(() => _isEditing = true),
                 ),
@@ -150,7 +150,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                   Text(
                     currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
                     style: GoogleFonts.outfit(
-                      color: currentIncome > 0 ? AppThemes.success : subtextColor,
+                      color: currentIncome > 0 ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)) : subtextColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -167,7 +167,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               decoration: InputDecoration(
                 labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
-                prefixIcon: const Icon(Icons.attach_money_rounded, color: AppThemes.success),
+                prefixIcon: Icon(Icons.attach_money_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
                 suffixText: context.tr('sar'),
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
                 filled: true,

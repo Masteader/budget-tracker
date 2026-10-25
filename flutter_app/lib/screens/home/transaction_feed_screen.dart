@@ -26,7 +26,6 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import 'edit_transaction_sheet.dart';
 import '../../models/category_catalog.dart';
 

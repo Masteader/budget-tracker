@@ -153,7 +153,10 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
               child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () => Navigator.pop(dCtx, true),
               child: Text(context.tr('roles_transfer_confirm')),
             ),
@@ -245,7 +248,10 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
             ),
             ElevatedButton(
               key: const ValueKey('household_type_save'),
-              style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () => Navigator.pop(dCtx, picked),
               child: Text(context.tr('hh_type_save')),
             ),
@@ -555,7 +561,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       color = context.champagneGold;
     } else if (m.isAdmin) {
       label = context.tr('admin');
-      color = context.successText;
+      color = context.accentText;
     } else {
       label = context.tr('member');
       color = context.textSecondary;
@@ -591,7 +597,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
           Icon(
             m.isPrimary ? Icons.workspace_premium_rounded : (m.isAdmin ? Icons.shield_outlined : Icons.person_outline_rounded),
             size: 18,
-            color: m.isPrimary ? context.champagneGold : (m.isAdmin ? context.successText : context.textSecondary),
+            color: m.isPrimary ? context.champagneGold : (m.isAdmin ? context.accentText : context.textSecondary),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -612,7 +618,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
                     if (!roster.isRoommateHousehold && roster.nafaqahProvider?.userId == m.userId)
                       _chip(context.tr('nafaqah_provider_badge'), context.champagneGold),
                     if (_financialRoleKey(m.financialRole) != null)
-                      _chip(context.tr(_financialRoleKey(m.financialRole)!), context.iceCyan),
+                      _chip(context.tr(_financialRoleKey(m.financialRole)!), context.accentText),
                   ],
                 ),
               ],
@@ -652,7 +658,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         children: [
           Row(
             children: [
-              const Icon(Icons.admin_panel_settings_outlined, color: AppThemes.success, size: 20),
+              Icon(Icons.admin_panel_settings_outlined, color: context.accentText, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

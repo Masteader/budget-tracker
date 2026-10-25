@@ -264,7 +264,7 @@ class _ReimbursementPanel extends StatelessWidget {
     final gold = context.goldText;
     final balance = wife.reimbursement;
     final isSettled = balance.isSettled;
-    final badgeColor = isSettled ? AppThemes.success : gold;
+    final badgeColor = isSettled ? context.accentText : gold;
     final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you') : context.tr('husband_owes_wife');
     final actionLabel = summary.callerIsWife ? context.tr('nafaqah_confirm_received') : context.tr('reimburse_wife');
 
@@ -350,7 +350,7 @@ class _ReimbursementPanel extends StatelessWidget {
           ] else ...[
             Row(
               children: [
-                const Icon(Icons.verified_rounded, color: AppThemes.success, size: 20),
+                Icon(Icons.verified_rounded, color: context.accentText, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -383,7 +383,7 @@ class _ReimbursementPanel extends StatelessWidget {
               _Pill(
                 icon: Icons.south_west_rounded,
                 label: context.trArgs('nafaqah_reimbursed_total', {'amount': context.sar(balance.reimbursed)}),
-                color: AppThemes.success,
+                color: context.accentText,
               ),
             ],
           ),

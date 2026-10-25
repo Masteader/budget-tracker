@@ -65,10 +65,14 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.15),
+                    color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.document_scanner_outlined, color: AppThemes.success, size: 22),
+                  child: Icon(
+                    Icons.document_scanner_outlined,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    size: 22,
+                  ),
                 ),
                 title: Text(
                   context.tr('scan_receipt'),

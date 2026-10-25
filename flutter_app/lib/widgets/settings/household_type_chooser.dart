@@ -116,7 +116,7 @@ class HouseholdTypeChooser extends StatelessWidget {
           type: kHouseholdTypeRoommates,
           icon: Icons.group_outlined,
           descKey: 'hh_type_roommates_desc',
-          color: AppThemes.success,
+          color: context.accentText,
         ),
         if (showRequired && value == null) ...[
           const SizedBox(height: 6),

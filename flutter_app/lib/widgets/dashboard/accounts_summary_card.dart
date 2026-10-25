@@ -87,7 +87,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
       style: GoogleFonts.outfit(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: context.electricTeal,
+        color: context.accentText,
       ),
     );
     final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
@@ -239,7 +239,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                             Icon(
                               acc.accountType.defaultIcon,
                               size: 14,
-                              color: isNeg ? Colors.redAccent : context.electricTeal,
+                              color: isNeg ? Colors.redAccent : context.accentText,
                             ),
                             const SizedBox(width: 6),
                             Text(
@@ -256,7 +256,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: isNeg ? Colors.redAccent : context.electricTeal,
+                                color: isNeg ? Colors.redAccent : context.accentText,
                               ),
                             ),
                           ],

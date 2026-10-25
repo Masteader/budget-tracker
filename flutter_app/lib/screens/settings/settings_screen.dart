@@ -833,12 +833,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: context.electricTeal.withValues(alpha: 0.15),
+                      color: context.isDark ? const Color(0xFF381423) : VelvetBurgundyColors.rosePillLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.account_balance_wallet_rounded,
-                      color: context.electricTeal,
+                      color: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
                       size: 24,
                     ),
                   ),
@@ -879,8 +879,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: context.electricTeal,
-                      foregroundColor: context.scaffoldBg,
+                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
@@ -86,19 +85,21 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? const Color(0xFF063326)
-                                : VelvetBurgundyColors.emeraldSafeBgLight,
+                                ? const Color(0xFF381423)
+                                : VelvetBurgundyColors.rosePillLight,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: VelvetBurgundyColors.emeraldSafe.withValues(alpha: 0.5),
+                              color: isDark
+                                  ? VelvetBurgundyColors.roseBorderDark
+                                  : VelvetBurgundyColors.roseBorderLight,
                             ),
                           ),
                           child: Text(
                             context.tr('active_badge'),
                             style: GoogleFonts.outfit(
                               color: isDark
-                                  ? const Color(0xFF6EE7B7)
-                                  : VelvetBurgundyColors.emeraldSafeTextLight,
+                                  ? VelvetBurgundyColors.roseGoldGlow
+                                  : VelvetBurgundyColors.primaryLight,
                               fontSize: 9.5,
                               fontWeight: FontWeight.w800,
                             ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),

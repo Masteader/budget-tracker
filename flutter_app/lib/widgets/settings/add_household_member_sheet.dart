@@ -170,12 +170,12 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.15),
+                    color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.person_add_alt_1_rounded,
-                    color: AppThemes.success,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                     size: 22,
                   ),
                 ),
@@ -242,7 +242,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppThemes.success),
+                  borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
                 ),
               ),
               onChanged: (_) {
@@ -369,7 +369,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppThemes.success),
+                  borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
                 ),
               ),
             ),
@@ -407,8 +407,8 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               child: ElevatedButton.icon(
                 key: const Key('add_member_submit_button'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppThemes.success,
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
@@ -416,7 +416,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check_rounded, size: 18),
                 label: Text(

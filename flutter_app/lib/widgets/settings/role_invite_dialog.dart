@@ -169,12 +169,12 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppThemes.success.withValues(alpha: 0.15),
+                      color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.person_add_alt_1_rounded,
-                      color: AppThemes.success,
+                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                       size: 20,
                     ),
                   ),
@@ -288,8 +288,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppThemes.success,
-                        foregroundColor: Colors.black,
+                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -299,7 +299,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : Text(
                               context.tr('rid_generate_code'),
@@ -313,16 +313,16 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.08),
+                    color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
+                    border: Border.all(color: context.isDark ? const Color(0xFF5E1327) : const Color(0xFFE598B0)),
                   ),
                   child: Column(
                     children: [
                       Text(
                         context.trArgs('rid_generated_for', {'role': context.tr(_generatedInvite!.role == 'spouse' ? 'wife_spouse_title' : (_generatedInvite!.role == 'peer' ? 'invite_role_peer' : 'invite_role_family'))}),
                         style: TextStyle(
-                          color: context.successText,
+                          color: context.accentText,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -353,8 +353,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                   child: ElevatedButton.icon(
                     key: const ValueKey('rid_share_invite'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: AppThemes.onSuccessFill,
+                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -393,8 +393,8 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppThemes.success,
-                        foregroundColor: Colors.black,
+                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),

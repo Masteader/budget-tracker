@@ -43,7 +43,6 @@ import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
-import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../core/widgets/widgets.dart';
 import '../chat/chat_entry_screen.dart';
 import '../tools/tools_screen.dart';
@@ -674,7 +673,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                 ),
               ),
               child: Text(
-                'ذكي',
+                context.isArabic ? 'ذكي' : 'Smart',
                 style: GoogleFonts.outfit(
                   color: VelvetBurgundyColors.roseGold,
                   fontSize: 9.5,
@@ -711,7 +710,6 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
             size: 38,
             isWhiteSurface: true,
             icon: Icons.notifications_rounded,
-            badge: '3',
             iconSize: 20,
             onTap: () {
               Navigator.push(
