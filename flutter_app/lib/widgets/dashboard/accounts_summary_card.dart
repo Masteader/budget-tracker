@@ -9,6 +9,8 @@ import '../../models/account.dart';
 import '../../screens/accounts/accounts_overview_screen.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 
 /// Dashboard summary card displaying total liquidity across all accounts
 /// and horizontal account pills. Tapping navigates to AccountsOverviewScreen.
@@ -88,8 +90,6 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
         color: context.electricTeal,
       ),
     );
-    final isDark = context.isDark;
-
     final accounts = _cachedAccounts.where((a) => !a.isArchived).toList();
     if (accounts.isEmpty || accounts.length < widget.minAccounts) return const SizedBox.shrink();
 
@@ -98,56 +98,40 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
 
         final hasDeficit = accounts.any((a) => a.balance < 0);
 
-        return InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AccountsOverviewScreen(householdId: widget.householdId),
-              ),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: hasDeficit
-                    ? Colors.redAccent.withValues(alpha: 0.4)
-                    : context.borderColor,
-                width: hasDeficit ? 1.5 : 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: isDark
-                      ? Colors.black.withValues(alpha: 0.2)
-                      : context.electricTeal.withValues(alpha: 0.05),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
+        return ThreeDSurfaceCard(
+          borderRadius: 20.0,
+          padding: EdgeInsets.zero,
+          customBorder: Border.all(
+            color: hasDeficit
+                ? Colors.redAccent.withValues(alpha: 0.4)
+                : context.borderColor,
+            width: hasDeficit ? 1.5 : 1.0,
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AccountsOverviewScreen(householdId: widget.householdId),
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Row: Title + Chevron
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: context.electricTeal.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Row: Title + Chevron
+                  Row(
+                    children: [
+                      const ThreeDIconPuck(
+                        icon: Icons.account_balance_wallet_rounded,
+                        size: 38,
+                        isSquircle: true,
+                        isRoseGold: true,
                       ),
-                      child: Icon(
-                        Icons.account_balance_wallet_rounded,
-                        color: context.electricTeal,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                      const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         context.tr('accounts_balances'),
@@ -284,6 +268,7 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
               ],
             ),
           ),
-        );
+        ),
+      );
   }
 }

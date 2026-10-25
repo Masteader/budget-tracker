@@ -11,6 +11,7 @@ import '../../widgets/accounts/account_card.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../../widgets/accounts/add_edit_account_dialog.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
+import '../../core/widgets/three_d_surface_card.dart';
 import '../../services/salary_cycle_service.dart';
 
 /// Screen displaying all user accounts, live balances, budget capacity statuses, and quick transfers.
@@ -246,21 +247,15 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [
                 // 1. Total Net Assets Card
-                Container(
+                ThreeDSurfaceCard(
+                  borderRadius: 22.0,
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: context.icedHeroGradient,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppThemes.electricTeal.withValues(alpha: isDark ? 0.3 : 0.5),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDark ? Colors.black.withValues(alpha: 0.3) : AppThemes.electricTeal.withValues(alpha: 0.1),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                  customGradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF2A0D18), const Color(0xFF1B070E)]
+                        : [const Color(0xFF4A0E1E), const Color(0xFF2A050E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +266,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                           Text(
                             context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
-                              color: context.heroCaption,
+                              color: const Color(0xFFE598B0),
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.1,
@@ -281,26 +276,31 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: deficitCount == 0
-                                  ? AppThemes.success.withValues(alpha: 0.15)
-                                  : Colors.redAccent.withValues(alpha: 0.15),
+                                  ? const Color(0xFF00A87A).withValues(alpha: 0.2)
+                                  : Colors.redAccent.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: deficitCount == 0
+                                    ? const Color(0xFF00A87A).withValues(alpha: 0.4)
+                                    : Colors.redAccent.withValues(alpha: 0.4),
+                              ),
                             ),
                             child: Row(
                               children: [
                                 Icon(
                                   deficitCount == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                                   size: 13,
-                                  color: deficitCount == 0 ? AppThemes.success : Colors.redAccent,
+                                  color: deficitCount == 0 ? const Color(0xFF00E599) : Colors.redAccent,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   deficitCount == 0
                                       ? context.tr('funded')
                                       : '$deficitCount ${context.tr("deficit_label")}',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: context.heroText,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -312,9 +312,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       Text(
                         _hideBalances ? '••••••••' : context.sar(totalNetSAR),
                         style: GoogleFonts.outfit(
-                          color: context.heroText,
+                          color: Colors.white,
                           fontSize: 28,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -333,10 +333,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.savings_rounded, size: 16),
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppThemes.success,
-                                foregroundColor: AppThemes.brandDarkBg,
+                                backgroundColor: const Color(0xFFE598B0),
+                                foregroundColor: const Color(0xFF2A050E),
+                                elevation: 2,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
                             ),
                           ),
@@ -353,10 +354,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                               label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppThemes.electricTeal,
-                                foregroundColor: AppThemes.brandDarkBg,
+                                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
                             ),
                           ),

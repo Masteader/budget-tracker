@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -46,28 +48,22 @@ class HouseholdManagementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAdmin = userRole.toLowerCase() == 'admin';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor),
-      ),
+    return ThreeDSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: Name & Role Badge
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.home_work_rounded, color: AppThemes.success, size: 22),
+              const ThreeDIconPuck(
+                icon: Icons.home_work_rounded,
+                size: 46,
+                iconColor: Colors.white,
+                isSquircle: true,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,18 +88,18 @@ class HouseholdManagementCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: isAdmin
-                      ? AppThemes.success.withValues(alpha: 0.15)
+                      ? const Color(0xFF4A0E1E).withValues(alpha: 0.1)
                       : const Color(0xFF58A6FF).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
+                    color: isAdmin ? const Color(0xFF4A0E1E) : const Color(0xFF58A6FF),
                     width: 0.8,
                   ),
                 ),
                 child: Text(
                   isAdmin ? context.tr('admin') : context.tr('member'),
                   style: TextStyle(
-                    color: isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
+                    color: isAdmin ? const Color(0xFF4A0E1E) : const Color(0xFF58A6FF),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),

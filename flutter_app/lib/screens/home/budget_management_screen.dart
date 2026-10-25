@@ -20,6 +20,9 @@ import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../models/money.dart';
 
@@ -705,6 +708,35 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     );
   }
 
+  IconData _categoryIconFor(String code) {
+    final c = code.toLowerCase();
+    if (c.contains('food') || c.contains('groc') || c.contains('مطاعم') || c.contains('بقالة')) {
+      return Icons.shopping_basket_rounded;
+    }
+    if (c.contains('house') || c.contains('rent') || c.contains('إيجار') || c.contains('سكن')) {
+      return Icons.home_rounded;
+    }
+    if (c.contains('util') || c.contains('bill') || c.contains('كهرباء') || c.contains('فواتير')) {
+      return Icons.bolt_rounded;
+    }
+    if (c.contains('trans') || c.contains('car') || c.contains('سيارة') || c.contains('بنزين')) {
+      return Icons.directions_car_rounded;
+    }
+    if (c.contains('health') || c.contains('صحة') || c.contains('علاج')) {
+      return Icons.medical_services_rounded;
+    }
+    if (c.contains('entertain') || c.contains('ترفيه') || c.contains('قهوة') || c.contains('cafe')) {
+      return Icons.local_cafe_rounded;
+    }
+    if (c.contains('shop') || c.contains('تسوق') || c.contains('ملابس')) {
+      return Icons.local_mall_rounded;
+    }
+    if (c.contains('nafaqah') || c.contains('نفقة') || c.contains('family') || c.contains('عائلة')) {
+      return Icons.family_restroom_rounded;
+    }
+    return Icons.folder_open_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cycle = _selectedCycle;
@@ -809,9 +841,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           floatingActionButton: staticData.isAdmin
               ? FloatingActionButton.extended(
                   onPressed: () => _showAddCategoryDialog(staticData),
-                  icon: const Icon(Icons.add_rounded, color: Colors.black),
-                  label: Text(context.tr('add_category'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                  backgroundColor: AppThemes.success,
+                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  label: Text(context.tr('add_category'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  backgroundColor: const Color(0xFF4A0E1E),
                 )
               : null,
           body: StreamBuilder<List<Map<String, dynamic>>>(
@@ -969,109 +1001,116 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               ],
                             ),
                           ),
-                        Container(
+                        ThreeDSurfaceCard(
                           margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.cardBg,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isOverAllocated
-                              ? Colors.redAccent.withValues(alpha: 0.6)
-                              : context.borderColor,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          padding: const EdgeInsets.all(18),
+                          borderRadius: 20,
+                          customBorder: isOverAllocated
+                              ? Border.all(color: Colors.redAccent.withValues(alpha: 0.6), width: 1.5)
+                              : null,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    '${context.tr('total_allocated')} ($headerTitle)',
-                                    style: TextStyle(color: context.textSecondary, fontSize: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${context.tr('total_allocated')} ($headerTitle)',
+                                        style: TextStyle(color: context.textSecondary, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        context.sar(totalAllocated),
+                                        style: GoogleFonts.outfit(
+                                          color: const Color(0xFF4A0E1E),
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    context.sar(totalAllocated),
-                                    style: TextStyle(
-                                      color: context.successText,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          '${setCodes.length}/${staticData.allCodes.length} ${context.tr('set')}',
+                                          style: GoogleFonts.outfit(
+                                            color: const Color(0xFF4A0E1E),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
-                              Builder(
-                                builder: (context) {
-                                  final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
-                                  return Text(
-                                    '${setCodes.length}/${staticData.allCodes.length} ${context.tr('set')}',
-                                    style: TextStyle(color: context.textSecondary, fontSize: 13),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                          if (hasIncome) ...[
-                            const SizedBox(height: 12),
-                            Divider(color: context.borderColor, height: 1),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
+                              if (hasIncome) ...[
+                                const SizedBox(height: 14),
+                                Divider(color: context.borderColor.withValues(alpha: 0.5), height: 1),
+                                const SizedBox(height: 12),
                                 Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Icon(
-                                      isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
-                                      size: 16,
-                                      color: isOverAllocated ? Colors.redAccent : AppThemes.success,
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
+                                          size: 17,
+                                          color: isOverAllocated ? Colors.redAccent : const Color(0xFF2E7D32),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          isOverAllocated ? context.tr('overallocated_by') : context.tr('savings_reserve_label'),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isOverAllocated ? Colors.redAccent : context.textSecondary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 6),
                                     Text(
-                                      isOverAllocated ? context.tr('overallocated_by') : context.tr('savings_reserve_label'),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isOverAllocated ? Colors.redAccent : context.textSecondary,
-                                        fontWeight: FontWeight.w600,
+                                      isOverAllocated
+                                          ? '-${context.sar(-savingsReserve)}'
+                                          : '+${context.sar(savingsReserve)}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: isOverAllocated ? Colors.redAccent : const Color(0xFF2E7D32),
                                       ),
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 4),
                                 Text(
                                   isOverAllocated
-                                      ? '-${context.sar(-savingsReserve)}'
-                                      : '+${context.sar(savingsReserve)}',
+                                      ? context.trArgs('allocations_exceed_salary', {'amount': context.sar(income)})
+                                      : context.tr('protected_buffer_desc'),
                                   style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: isOverAllocated ? Colors.redAccent : AppThemes.success,
+                                    fontSize: 11,
+                                    color: isOverAllocated
+                                        ? Colors.redAccent.withValues(alpha: 0.8)
+                                        : context.textSecondary,
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              isOverAllocated
-                                  ? context.trArgs('allocations_exceed_salary', {'amount': context.sar(income)})
-                                  : context.tr('protected_buffer_desc'),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isOverAllocated
-                                    ? Colors.redAccent.withValues(alpha: 0.8)
-                                    : context.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }
 
                 final code = staticData.allCodes[i - 1]['code'] as String;
                 final category = staticData.allCodes[i - 1]['category'] as String;
@@ -1082,62 +1121,73 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     .where((a) => a.id == existing?.accountId)
                     .firstOrNull;
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    SubBudgetBreakdownSheet.show(
-                      context,
-                      householdId: staticData.householdId,
-                      categoryCode: code,
-                      cycleKey: _currentCycleKey,
-                      allocatedAmount: existing?.allocatedAmount ?? 0.0,
-                      spentAmount: existing?.spentAmount ?? 0.0,
-                      previousCycleDelta: existing?.previousCycleDelta ?? 0.0,
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: context.cardBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: context.borderColor),
-                    ),
+                final allocated = existing?.allocatedAmount ?? 0.0;
+                final spent = existing?.spentAmount ?? 0.0;
+                final ratio = (allocated > 0) ? (spent / allocated).clamp(0.0, 1.0) : 0.0;
+                final isExceeded = spent > allocated && allocated > 0;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ThreeDSurfaceCard(
+                    padding: const EdgeInsets.all(14),
+                    borderRadius: 18,
+                    onTap: () {
+                      SubBudgetBreakdownSheet.show(
+                        context,
+                        householdId: staticData.householdId,
+                        categoryCode: code,
+                        cycleKey: _currentCycleKey,
+                        allocatedAmount: allocated,
+                        spentAmount: spent,
+                        previousCycleDelta: existing?.previousCycleDelta ?? 0.0,
+                      );
+                    },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
+                            ThreeDIconPuck(
+                              icon: _categoryIconFor(code),
+                              size: 44,
+                              iconColor: Colors.white,
+                              isSquircle: true,
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(context.trCat(code),
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
-                                  const SizedBox(height: 3),
-                                  // Wraps on narrow phones (UX-29: it overflowed by 8 px).
+                                  Text(
+                                    context.trCat(code),
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      color: context.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
                                   Wrap(
                                     spacing: 8,
                                     runSpacing: 2,
                                     children: [
                                       Text(
                                         existing != null
-                                            ? context.sar(existing.allocatedAmount)
+                                            ? context.sar(allocated)
                                             : context.tr('not_set'),
-                                        style: TextStyle(
+                                        style: GoogleFonts.outfit(
                                           color: existing != null
-                                              ? AppThemes.success
+                                              ? const Color(0xFF4A0E1E)
                                               : context.textSecondary,
                                           fontSize: 13,
-                                          fontWeight: existing != null ? FontWeight.bold : FontWeight.normal,
+                                          fontWeight: existing != null ? FontWeight.w700 : FontWeight.normal,
                                         ),
                                       ),
-                                      if (existing != null && existing.spentAmount > 0) ...[
+                                      if (existing != null && spent > 0) ...[
                                         Text(
-                                          '• ${context.tr('spent')}: ${context.sar(existing.spentAmount)}',
-                                          style: TextStyle(
-                                            color: existing.spentAmount > existing.allocatedAmount && existing.allocatedAmount > 0
+                                          '• ${context.tr('spent')}: ${context.sar(spent)}',
+                                          style: GoogleFonts.outfit(
+                                            color: isExceeded
                                                 ? Colors.redAccent
                                                 : context.textSecondary,
                                             fontSize: 12,
@@ -1147,62 +1197,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ],
                                     ],
                                   ),
-                                  if (existing != null) ...[
-                                    const SizedBox(height: 5),
-                                    InkWell(
-                                      onTap: staticData.isAdmin
-                                          ? () => LinkAccountSheet.show(
-                                                context,
-                                                householdId: staticData.householdId,
-                                                budget: existing,
-                                                categoryName: context.trCat(code),
-                                                onMapped: () => setState(() {}),
-                                              )
-                                          : null,
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: mappedAccount != null
-                                              ? AppThemes.success.withValues(alpha: 0.1)
-                                              : context.chipBg,
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: mappedAccount != null
-                                                ? context.electricTeal.withValues(alpha: 0.3)
-                                                : context.borderColor,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              mappedAccount != null
-                                                  ? Icons.account_balance_wallet_outlined
-                                                  : Icons.link_off_outlined,
-                                              size: 11,
-                                              color: mappedAccount != null
-                                                  ? context.electricTeal
-                                                  : context.textSecondary,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              mappedAccount != null
-                                                  ? mappedAccount.name
-                                                  : context.tr('link_account'),
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                                color: mappedAccount != null
-                                                    ? context.electricTeal
-                                                    : context.textSecondary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -1213,8 +1207,6 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 tooltip: context.tr('edit_budget'),
                                 onPressed: () => _editBudget(staticData, existing, code),
                               ),
-                              // Deactivating hides a category: a menu item with the
-                              // existing confirmation, not a gold icon one tap away (UX-29).
                               PopupMenuButton<String>(
                                 key: const ValueKey('budget_row_menu'),
                                 tooltip: context.tr('feed_more_actions'),
@@ -1239,6 +1231,93 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                           ],
                         ),
+                        if (existing != null && allocated > 0) ...[
+                          const SizedBox(height: 12),
+                          // 3D Recessed Progress Track
+                          Container(
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: context.borderColor.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Stack(
+                                  children: [
+                                    Container(
+                                      width: constraints.maxWidth * ratio,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: isExceeded
+                                              ? const [Colors.redAccent, Colors.red]
+                                              : const [Color(0xFF8A1E38), Color(0xFF4A0E1E)],
+                                        ),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                        if (existing != null) ...[
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: staticData.isAdmin
+                                ? () => LinkAccountSheet.show(
+                                      context,
+                                      householdId: staticData.householdId,
+                                      budget: existing,
+                                      categoryName: context.trCat(code),
+                                      onMapped: () => setState(() {}),
+                                    )
+                                : null,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: mappedAccount != null
+                                    ? const Color(0xFF4A0E1E).withValues(alpha: 0.08)
+                                    : context.chipBg,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: mappedAccount != null
+                                      ? const Color(0xFFE598B0).withValues(alpha: 0.4)
+                                      : context.borderColor,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    mappedAccount != null
+                                        ? Icons.account_balance_wallet_outlined
+                                        : Icons.link_off_outlined,
+                                    size: 12,
+                                    color: mappedAccount != null
+                                        ? const Color(0xFF4A0E1E)
+                                        : context.textSecondary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    mappedAccount != null
+                                        ? mappedAccount.name
+                                        : context.tr('link_account'),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: mappedAccount != null
+                                          ? const Color(0xFF4A0E1E)
+                                          : context.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                         if (subCategories.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Wrap(

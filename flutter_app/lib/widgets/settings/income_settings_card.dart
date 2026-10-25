@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -74,39 +76,28 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final cardColor = context.cardBg;
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
 
     final currentIncome = parseMoneyInput(_incomeCtrl.text) ?? widget.initialIncome;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
+    return ThreeDSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: Icon + Title + Current Income Badge
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.payments_rounded,
-                  color: AppThemes.success,
-                  size: 22,
-                ),
+              const ThreeDIconPuck(
+                icon: Icons.payments_rounded,
+                size: 46,
+                iconColor: Colors.white,
+                isSquircle: true,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +105,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                     Text(
                       context.tr('isc_title'),
                       style: GoogleFonts.outfit(
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: textColor,
                       ),
@@ -231,8 +222,8 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppThemes.success,
-                    foregroundColor: Colors.black,
+                    backgroundColor: const Color(0xFF4A0E1E),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: _saving ? null : _handleSave,
@@ -240,7 +231,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : Text(context.tr('save_income'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),

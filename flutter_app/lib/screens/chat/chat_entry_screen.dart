@@ -636,18 +636,37 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
               ),
             // Quick suggestions chips
             SizedBox(
-              height: 40,
+              height: 42,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 itemCount: chatExampleKeys.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (ctx, i) {
-                  return ActionChip(
-                    backgroundColor: context.cardBg,
-                    side: BorderSide(color: context.borderColor),
-                    label: Text(_quickChips(context)[i], style: TextStyle(fontSize: 13, color: context.textPrimary)),
-                    onPressed: () => _sendMessage(_quickChips(context)[i]),
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.05),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ActionChip(
+                      backgroundColor: context.cardBg,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(color: context.borderColor.withValues(alpha: 0.8)),
+                      ),
+                      label: Text(
+                        _quickChips(context)[i],
+                        style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: context.textPrimary),
+                      ),
+                      onPressed: () => _sendMessage(_quickChips(context)[i]),
+                    ),
                   );
                 },
               ),
@@ -662,10 +681,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             const SizedBox(height: 8),
             // Input bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: context.cardBg,
-                border: Border(top: BorderSide(color: context.borderColor)),
+                border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.7))),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF4A0E1E).withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -674,24 +700,24 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       controller: _controller,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (v) => _sendMessage(v),
-                      style: TextStyle(color: context.textPrimary, fontSize: 14),
+                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: AppLocalizations(Locale(_selectedLocale.substring(0, 2))).get('chat_input_hint'),
                         hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
                         filled: true,
                         fillColor: context.inputBg,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: context.borderColor),
+                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.6)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: context.borderColor),
+                          borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.6)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppThemes.success),
+                          borderSide: const BorderSide(color: Color(0xFF4A0E1E), width: 1.5),
                         ),
                       ),
                     ),
@@ -715,12 +741,18 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                                 spreadRadius: 2,
                               ),
                             ]
-                          : null,
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                     ),
                     child: IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_rounded,
-                        color: _isListening ? Colors.white : AppThemes.success,
+                        color: _isListening ? Colors.white : const Color(0xFF4A0E1E),
                         size: 20,
                       ),
                       tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
@@ -728,14 +760,27 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // Send Button
+                  // 3D Send Button
                   Container(
-                    decoration: const BoxDecoration(
-                      color: AppThemes.success,
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF6C162F), Color(0xFF4A0E1E), Color(0xFF2A050E)],
+                      ),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 19),
                       tooltip: context.tr('support_send'),
                       onPressed: () => _sendMessage(_controller.text),
                     ),

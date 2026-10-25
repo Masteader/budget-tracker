@@ -8,6 +8,7 @@ import '../../widgets/analytics/smart_shopping_basket_sheet.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/widgets/three_d_surface_card.dart';
 
 class GroceryPriceIntelligenceScreen extends StatefulWidget {
   final String householdId;
@@ -82,11 +83,16 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppThemes.success,
-        icon: const Icon(Icons.shopping_basket_rounded, color: Colors.black),
+        backgroundColor: const Color(0xFF4A0E1E),
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: const Color(0xFFE598B0).withValues(alpha: 0.4), width: 1.5),
+        ),
+        icon: const Icon(Icons.shopping_basket_rounded, color: Color(0xFFE598B0)),
         label: Text(
           context.tr('shopping_list'),
-          style: GoogleFonts.outfit(color: Colors.black, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         onPressed: () {
           HapticFeedback.mediumImpact();
@@ -129,7 +135,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppThemes.success),
+                  borderSide: const BorderSide(color: Color(0xFFE598B0)),
                 ),
               ),
             ),
@@ -147,11 +153,20 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 final f = _quickFilters[i];
                 final isSelected = _selectedChip == f;
                 return ChoiceChip(
-                  label: Text(f == 'All' ? context.tr('all') : f, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : context.textPrimary)),
+                  label: Text(
+                    f == 'All' ? context.tr('all') : f,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? Colors.white : context.textPrimary,
+                    ),
+                  ),
                   selected: isSelected,
-                  selectedColor: AppThemes.success,
+                  selectedColor: const Color(0xFF4A0E1E),
                   backgroundColor: context.cardBg,
-                  side: BorderSide(color: isSelected ? AppThemes.success : context.borderColor),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFFE598B0) : context.borderColor,
+                  ),
                   onSelected: (val) {
                     HapticFeedback.selectionClick();
                     setState(() => _selectedChip = f);
@@ -205,13 +220,9 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
 
     final isInflationHigh = inflationPct > 0.0;
 
-    return Container(
+    return ThreeDSurfaceCard(
+      borderRadius: 20.0,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

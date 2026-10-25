@@ -43,6 +43,8 @@ import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
+import '../../core/theme/velvet_burgundy_theme.dart';
+import '../../core/widgets/widgets.dart';
 import '../chat/chat_entry_screen.dart';
 import '../tools/tools_screen.dart';
 import 'budget_management_screen.dart';
@@ -299,6 +301,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       ),
       // UX-08: overspent categories right under the hero.
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
+      const SizedBox(height: 12),
+      _QuickAccessStrip(
+        onAccountsTap: _scrollToBalances,
+        onNafaqahTap: _scrollToBalances,
+        onBillsTap: () {},
+        onSmartBasketTap: () => ToolsScreen.open(context, householdId: hid),
+      ),
       if (showChecklist) ...[
         const SizedBox(height: 12),
         HouseholdSetupCard(
@@ -586,77 +595,204 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   }
 
   Widget _buildAppBar(String hid) {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: context.scaffoldBg,
-      elevation: 0,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: AppThemes.electricTeal.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
+    return SliverToBoxAdapter(
+      child: VelvetWaveHeader(
+        height: 120,
+        leading: ThreeDIconPuck(
+          key: const Key('tools_appbar_button'),
+          size: 38,
+          isWhiteSurface: true,
+          icon: Icons.grid_view_rounded,
+          iconSize: 20,
+          onTap: () => ToolsScreen.open(context, householdId: hid),
+        ),
+        titleWidget: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [VelvetBurgundyColors.roseGold, VelvetBurgundyColors.accentRose],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.shield_rounded, color: Colors.white, size: 16),
             ),
-            child: const Icon(Icons.waves_rounded, color: AppThemes.electricTeal, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              context.tr('app_title'),
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                'ذكي',
+                style: GoogleFonts.outfit(
+                  color: VelvetBurgundyColors.roseGold,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ThreeDIconPuck(
+            key: const Key('switch_household_appbar_button'),
+            size: 38,
+            isWhiteSurface: true,
+            icon: Icons.swap_horiz_rounded,
+            iconSize: 20,
+            onTap: () {
+              HouseholdSwitchSheet.show(
+                context,
+                currentHouseholdId: hid,
+                onSwitched: () {
+                  setState(() {
+                    _setup = null;
+                    _nafaqah = null;
+                    _settlement = null;
+                    _householdId = _fetchHouseholdId();
+                  });
+                },
+              );
+            },
           ),
           const SizedBox(width: 8),
-          Text(
-            context.tr('app_title'),
-            style: GoogleFonts.outfit(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: context.textPrimary,
-            ),
+          ThreeDIconPuck(
+            size: 38,
+            isWhiteSurface: true,
+            icon: Icons.notifications_rounded,
+            badge: '3',
+            iconSize: 20,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HelpSupportScreen(householdId: hid),
+                ),
+              );
+            },
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          key: const Key('tools_appbar_button'),
-          icon: const Icon(Icons.grid_view_rounded, color: AppThemes.electricTeal),
-          tooltip: context.tr('tools_title'),
-          onPressed: () => ToolsScreen.open(context, householdId: hid),
-        ),
-        IconButton(
-          key: const Key('switch_household_appbar_button'),
-          icon: const Icon(Icons.swap_horiz_rounded, color: AppThemes.electricTeal),
-          tooltip: context.tr('switch_household'),
-          onPressed: () {
-            HouseholdSwitchSheet.show(
-              context,
-              currentHouseholdId: hid,
-              onSwitched: () {
-                setState(() {
-                  _setup = null;
-                  _nafaqah = null;
-                  _settlement = null;
-                  _householdId = _fetchHouseholdId();
-                });
-              },
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.help_outline_rounded, color: AppThemes.electricTeal),
-          tooltip: context.tr('help_support'),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => HelpSupportScreen(householdId: hid),
+    );
+  }
+}
+
+class _QuickAccessStrip extends StatelessWidget {
+  final VoidCallback onAccountsTap;
+  final VoidCallback onNafaqahTap;
+  final VoidCallback onBillsTap;
+  final VoidCallback onSmartBasketTap;
+
+  const _QuickAccessStrip({
+    required this.onAccountsTap,
+    required this.onNafaqahTap,
+    required this.onBillsTap,
+    required this.onSmartBasketTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'وصول سريع',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
               ),
-            );
-          },
+              Text(
+                'عرض الكل',
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.accentRose,
+                ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+              ),
+            ],
+          ),
         ),
-        IconButton(
-          icon: Icon(Icons.logout_rounded, color: context.textSecondary),
-          tooltip: context.tr('sign_out'),
-          onPressed: () => supabase.auth.signOut(),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              _buildMiniPill(context, '💳', 'الحسابات (3)', onAccountsTap),
+              const SizedBox(width: 8),
+              _buildMiniPill(context, '⚖️', 'مصروف الزوجة (420)', onNafaqahTap),
+              const SizedBox(width: 8),
+              _buildMiniPill(context, '📅', 'الفواتير (4)', onBillsTap),
+              const SizedBox(width: 8),
+              _buildMiniPill(context, '🛒', 'السلة الذكية', onSmartBasketTap),
+            ],
+          ),
         ),
       ],
     );
   }
+
+  Widget _buildMiniPill(
+    BuildContext context,
+    String iconEmoji,
+    String title,
+    VoidCallback onTap,
+  ) {
+    final isDark = context.isDark;
+
+    return ThreeDSurfaceCard(
+      borderRadius: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(iconEmoji, style: const TextStyle(fontSize: 13)),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : VelvetBurgundyColors.primaryLight,
+            ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

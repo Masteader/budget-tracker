@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/theme/velvet_burgundy_theme.dart';
+import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_dues.dart';
 import '../../models/models.dart';
@@ -9,10 +11,9 @@ import '../../models/payday_outlook.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 
-/// The dashboard's one "until payday" hero (UX-07): how much is left until
-/// payday, one daily figure, one verdict and, in family mode, what is owed to
-/// the wife. All figures come from [PaydayOutlook]; no other card on the
-/// dashboard computes a pace or a verdict.
+/// The dashboard's 3D "until payday" hero card (UX-07):
+/// Refactored to match Stitch Screen 1 (3D ceramic squircle card,
+/// layered burgundy/rose-gold circular gauge dial, and status badges).
 class BudgetHeroCard extends StatelessWidget {
   final List<Budget> budgets;
   final SalaryCycleInfo? cycle;
@@ -84,7 +85,7 @@ class BudgetHeroCard extends StatelessWidget {
     );
 
     final cautionColor = isDark ? const Color(0xFFFFA657) : const Color(0xFFB45309);
-    final okColor = isDark ? AppThemes.mintNeon : const Color(0xFF047857);
+    final okColor = isDark ? VelvetBurgundyColors.emeraldSafe : const Color(0xFF047857);
     final Color verdictColor;
     final IconData verdictIcon;
     final String verdictText;
@@ -104,17 +105,13 @@ class BudgetHeroCard extends StatelessWidget {
     }
 
     final share = outlook.spentShare;
-    final barColor = share > 0.9
-        ? const Color(0xFFFF5252)
-        : (share > 0.75 ? const Color(0xFFFFA657) : (isDark ? AppThemes.electricTeal : AppThemes.success));
-
     final currencyUnit = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Text(
         context.tr('sar'),
         style: GoogleFonts.outfit(
-          color: isDark ? AppThemes.electricTeal : const Color(0xFF00A887),
-          fontSize: 18,
+          color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.accentRose,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -126,134 +123,153 @@ class BudgetHeroCard extends StatelessWidget {
         label: context.tr('allocated'),
         value: context.sar(outlook.totalAllocated, decimals: 0),
         icon: Icons.account_balance_wallet_outlined,
-        accentColor: isDark ? AppThemes.iceCyan : const Color(0xFF0284C7),
+        accentColor: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
       ),
       _StatCapsule(
         label: context.tr('spent'),
         value: context.sar(outlook.totalSpent, decimals: 0),
         icon: Icons.payments_outlined,
-        accentColor: isDark ? AppThemes.electricTeal : const Color(0xFF059669),
+        accentColor: isDark ? const Color(0xFFF472B6) : VelvetBurgundyColors.accentRose,
       ),
     ];
 
     final Widget titleText = Text(
       title,
       style: GoogleFonts.outfit(
-        color: isDark ? Colors.white.withValues(alpha: 0.75) : const Color(0xFF475569),
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-      ),
+        color: isDark ? Colors.white70 : const Color(0xFF64748B),
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+      ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
     );
+
     final Widget badge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F2642) : const Color(0xFFE6FAF6),
-        borderRadius: BorderRadius.circular(20),
+        color: isDark
+            ? const Color(0xFF381423)
+            : VelvetBurgundyColors.rosePillLight,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? AppThemes.iceCyan.withValues(alpha: 0.2) : AppThemes.electricTeal.withValues(alpha: 0.4),
+          color: isDark
+              ? VelvetBurgundyColors.roseBorderDark
+              : VelvetBurgundyColors.roseBorderLight,
         ),
       ),
       child: Text(
         context.trPlural('days_to_payday_badge', daysUntilPayday),
         style: GoogleFonts.outfit(
-          color: isDark ? Colors.white70 : const Color(0xFF065F54),
-          fontSize: 11,
+          color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+          fontSize: 10.5,
           fontWeight: FontWeight.w700,
-        ),
+        ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
       ),
     );
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? AppThemes.deepGlacial : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark
-              ? AppThemes.iceCyan.withValues(alpha: 0.28)
-              : AppThemes.electricTeal.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppThemes.electricTeal.withValues(alpha: isDark ? 0.08 : 0.12),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.35)
-                : const Color(0xFF0F172A).withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? const [Color(0xFF0D2542), AppThemes.brandDarkBg]
-              : const [Colors.white, Color(0xFFF0FDF9)],
-        ),
-      ),
+    return ThreeDSurfaceCard(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── What this is + days to payday ─────────────────────────
-          // Under large text the badge goes under the title (UX-14).
-          if (stackTiles) ...[
-            titleText,
-            const SizedBox(height: 6),
-            badge,
-          ] else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: titleText),
-                const SizedBox(width: 8),
-                badge,
-              ],
-            ),
-          const SizedBox(height: 6),
+          // ─── Header: Info + Dial Gauge (or stacked under large text) ─
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Main content (Title, big amount, status badge)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (stackTiles) ...[
+                      titleText,
+                      const SizedBox(height: 4),
+                      badge,
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(child: titleText),
+                          const SizedBox(width: 6),
+                          badge,
+                        ],
+                      ),
+                    const SizedBox(height: 6),
 
-          // ─── The one big number ────────────────────────────────────
-          // Scales down instead of overflowing on narrow screens or with
-          // large text. Arabic/Urdu put the unit after the number.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: AlignmentDirectional.centerStart,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                if (!context.isRtl) currencyUnit,
-                Text(
-                  fmt.format(outlook.left),
-                  style: GoogleFonts.outfit(
-                    color: outlook.verdict == PaydayVerdict.overspent
-                        ? context.dangerColor
-                        : (isDark ? Colors.white : const Color(0xFF0F172A)),
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+                    // Big Number
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          if (!context.isRtl) currencyUnit,
+                          Text(
+                            fmt.format(outlook.left),
+                            style: GoogleFonts.outfit(
+                              color: outlook.verdict == PaydayVerdict.overspent
+                                  ? context.dangerColor
+                                  : (isDark ? Colors.white : VelvetBurgundyColors.primaryLight),
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          if (context.isRtl) currencyUnit,
+                        ],
+                      ),
+                    ),
+                    Text(baseLine, style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                  ],
+                ),
+              ),
+
+              // 3D Circular Ring Gauge Dial (Stitch Screen 1)
+              const SizedBox(width: 14),
+              _DialGauge3D(
+                spentShare: share,
+                daysRemaining: daysUntilPayday,
+                isDark: isDark,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ─── 3D Recessed Progress Groove ───────────────────────────
+          Container(
+            height: 7,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF14050B) : const Color(0xFFF0E6E9),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isDark ? const Color(0x33FFD2E1) : const Color(0xFFE8DEE1),
+                width: 0.8,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: FractionallySizedBox(
+                alignment: AlignmentDirectional.centerStart,
+                widthFactor: share.clamp(0.0, 1.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: share > 0.9
+                          ? [
+                              const Color(0xFFF59E0B),
+                              VelvetBurgundyColors.coralDanger,
+                              const Color(0xFF991B1B),
+                            ]
+                          : [
+                              VelvetBurgundyColors.roseGold,
+                              VelvetBurgundyColors.accentRose,
+                              VelvetBurgundyColors.primaryLight,
+                            ],
+                    ),
                   ),
                 ),
-                if (context.isRtl) currencyUnit,
-              ],
-            ),
-          ),
-          Text(baseLine, style: TextStyle(color: context.textSecondary, fontSize: 12)),
-          const SizedBox(height: 12),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              height: 6,
-              child: LinearProgressIndicator(
-                value: share.clamp(0.0, 1.0),
-                backgroundColor: isDark ? const Color(0xFF0F2642) : const Color(0xFFE2E8F0),
-                valueColor: AlwaysStoppedAnimation<Color>(barColor),
               ),
             ),
           ),
@@ -271,16 +287,19 @@ class BudgetHeroCard extends StatelessWidget {
                         key: const Key('hero_daily_figure'),
                         style: GoogleFonts.outfit(
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          fontSize: 14,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w700,
-                        ),
+                        ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                       ),
               ),
               const SizedBox(width: 8),
               Text(
-                // Not clamped: 131% reads 131% (UX-08).
                 context.trArgs('percent_spent', {'percent': (share * 100).round()}),
-                style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                style: GoogleFonts.outfit(
+                  color: context.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -294,7 +313,11 @@ class BudgetHeroCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   verdictText,
-                  style: GoogleFonts.outfit(color: verdictColor, fontSize: 12.5, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.outfit(
+                    color: verdictColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                 ),
               ),
             ],
@@ -350,6 +373,106 @@ class BudgetHeroCard extends StatelessWidget {
   }
 }
 
+/// 3D Ceramic Circular Ring Gauge Dial (from Stitch Screen 1).
+class _DialGauge3D extends StatelessWidget {
+  final double spentShare;
+  final int daysRemaining;
+  final bool isDark;
+
+  const _DialGauge3D({
+    required this.spentShare,
+    required this.daysRemaining,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (spentShare * 100).clamp(0, 999).round();
+
+    return Container(
+      width: 82,
+      height: 82,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: isDark
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2E101D), Color(0xFF19060E)],
+              )
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFF7F9), Color(0xFFF2DCE2)],
+              ),
+        boxShadow: [
+          BoxShadow(
+            color: (isDark ? Colors.black : const Color(0xFF4A0E1E))
+                .withValues(alpha: isDark ? 0.4 : 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: isDark
+              ? VelvetBurgundyColors.roseBorderDark
+              : VelvetBurgundyColors.roseBorderLight,
+          width: 1.2,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Circular Progress Track
+          SizedBox(
+            width: 68,
+            height: 68,
+            child: CircularProgressIndicator(
+              value: spentShare.clamp(0.0, 1.0),
+              strokeWidth: 6,
+              backgroundColor: isDark ? const Color(0xFF14050B) : const Color(0xFFF5EEF0),
+              valueColor: AlwaysStoppedAnimation(
+                isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+              ),
+            ),
+          ),
+          // Inner percentage & days pill
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$percent%',
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : VelvetBurgundyColors.primaryLight,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.only(top: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF5E1327) : VelvetBurgundyColors.primaryLight,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '$daysRemaining d',
+                  style: GoogleFonts.outfit(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DueRow extends StatelessWidget {
   final String text;
   final IconData icon;
@@ -359,23 +482,41 @@ class _DueRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     return Material(
-      color: AppThemes.champagneGold.withValues(alpha: context.isDark ? 0.12 : 0.10),
-      borderRadius: BorderRadius.circular(12),
+      color: isDark
+          ? const Color(0xFF2E1520)
+          : const Color(0xFFFFF7F9),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: isDark
+              ? VelvetBurgundyColors.roseBorderDark
+              : VelvetBurgundyColors.roseBorderLight,
+        ),
+      ),
       child: InkWell(
         key: const Key('hero_due_line'),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: AppThemes.champagneGold),
+              Icon(
+                icon,
+                size: 18,
+                color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.accentRose,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   text,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.outfit(
+                    color: context.textPrimary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                 ),
               ),
               if (onTap != null)
@@ -411,17 +552,19 @@ class _StatCapsule extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0B1E34) : Colors.white,
+        color: isDark ? const Color(0xFF19060E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: accentColor.withValues(alpha: isDark ? 0.22 : 0.35),
+          color: isDark
+              ? VelvetBurgundyColors.roseBorderDark
+              : VelvetBurgundyColors.roseBorderLight,
           width: 1,
         ),
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+                  color: const Color(0xFF4A0E1E).withValues(alpha: 0.04),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -441,14 +584,13 @@ class _StatCapsule extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     color: isDark ? Colors.white60 : const Color(0xFF64748B),
                     fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
+                    fontWeight: FontWeight.w600,
+                  ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 5),
-          // The value is never cut off (UX-14): it scales down if it must.
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: AlignmentDirectional.centerStart,
@@ -458,7 +600,7 @@ class _StatCapsule extends StatelessWidget {
               style: GoogleFonts.outfit(
                 color: isDark ? Colors.white : const Color(0xFF0F172A),
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),

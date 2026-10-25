@@ -7,6 +7,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
+import '../../core/widgets/velvet_wave_header.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
 import '../../widgets/analytics/smart_shopping_basket_sheet.dart';
@@ -95,27 +98,33 @@ class ToolsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
-      appBar: AppBar(
-        title: Text(
-          context.tr('tools_title'),
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: context.textPrimary),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 32),
-        children: [
-          Text(
-            context.tr('tools_desc'),
-            style: GoogleFonts.outfit(fontSize: 12.5, color: context.textSecondary),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: VelvetWaveHeader(
+              title: context.tr('tools_title'),
+              subtitle: context.tr('tools_desc'),
+              height: 140,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          // The balances summary (on the dashboard only with 2+ accounts).
-          AccountsSummaryCard(householdId: householdId),
-          const SizedBox(height: 12),
-          for (final tool in tools) ...[
-            _ToolTile(tool: tool),
-            const SizedBox(height: 10),
-          ],
+          SliverPadding(
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 32),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // The balances summary (on the dashboard only with 2+ accounts).
+                AccountsSummaryCard(householdId: householdId),
+                const SizedBox(height: 14),
+                for (final tool in tools) ...[
+                  _ToolTile(tool: tool),
+                  const SizedBox(height: 12),
+                ],
+              ]),
+            ),
+          ),
         ],
       ),
     );
@@ -147,30 +156,24 @@ class _ToolTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.cardBg,
-      borderRadius: BorderRadius.circular(16),
+    return ThreeDSurfaceCard(
+      borderRadius: 18.0,
+      padding: EdgeInsets.zero,
       child: InkWell(
         key: ValueKey(tool.key),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         onTap: tool.onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.borderColor),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: tool.color.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(tool.icon, color: tool.color, size: 20),
+              ThreeDIconPuck(
+                icon: tool.icon,
+                size: 42,
+                isSquircle: true,
+                iconColor: tool.color,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,10 +183,10 @@ class _ToolTile extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                        fontSize: 14.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       tool.subtitle,
                       style: TextStyle(color: context.textSecondary, fontSize: 11.5),

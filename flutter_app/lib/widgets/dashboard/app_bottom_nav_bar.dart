@@ -1,116 +1,169 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 
-/// The floating bottom navigation of the home screen: dashboard, feed, the
-/// AI assistant in the middle, budgets and settings. Above
-/// [hideLabelsAboveTextScale] the labels give way to icons (with tooltips and
-/// semantic labels) so large system text cannot overflow the bar (UX-14).
+/// Floating Glassmorphic Bottom Navigation Dock:
+/// Features a frosted glass capsule (30px radius, blur 24px, 1.5px specular rim),
+/// active dot indicators, and an elevated 3D Velvet Burgundy center orb.
+/// Above [hideLabelsAboveTextScale] the labels give way to icons so large
+/// system text cannot overflow the bar (UX-14).
 class AppBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
   static const double hideLabelsAboveTextScale = 1.3;
 
-  const AppBottomNavBar({super.key, required this.selectedIndex, required this.onSelected});
+  const AppBottomNavBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
     final showLabels = MediaQuery.textScalerOf(context).scale(10) / 10 <= hideLabelsAboveTextScale;
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      height: 68,
-      decoration: BoxDecoration(
-        color: isDark ? AppThemes.deepGlacial.withValues(alpha: 0.94) : Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isDark
-              ? AppThemes.iceCyan.withValues(alpha: 0.22)
-              : AppThemes.electricTeal.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.45) : AppThemes.electricTeal.withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-          if (!isDark)
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-        ],
-      ),
-      child: Row(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      height: 72,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
         children: [
-          _item(context, 0, Icons.home_outlined, Icons.home_rounded, context.tr('nav_dashboard'), showLabels),
-          _item(context, 1, Icons.receipt_long_outlined, Icons.receipt_long_rounded, context.tr('nav_transactions'), showLabels),
-          _centerAi(context, showLabels),
-          _item(context, 3, Icons.pie_chart_outline_rounded, Icons.pie_chart_rounded, context.tr('nav_budgets'), showLabels),
-          _item(context, 4, Icons.person_outline_rounded, Icons.person_rounded, context.tr('nav_settings'), showLabels),
+          // Frosted Glass Capsule
+          ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                height: 66,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E0B12).withValues(alpha: 0.82)
+                      : Colors.white.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.18)
+                        : Colors.white.withValues(alpha: 0.95),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.65)
+                          : const Color(0xFF4A0E1E).withValues(alpha: 0.14),
+                      blurRadius: 36,
+                      offset: const Offset(0, 18),
+                      spreadRadius: -4,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFF4A0E1E).withValues(alpha: 0.06),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    _item(context, 0, Icons.home_outlined, Icons.home_rounded, context.tr('nav_dashboard'), showLabels),
+                    _item(context, 1, Icons.receipt_long_outlined, Icons.receipt_long_rounded, context.tr('nav_transactions'), showLabels),
+                    _centerOrb(context, showLabels),
+                    _item(context, 3, Icons.pie_chart_outline_rounded, Icons.pie_chart_rounded, context.tr('nav_budgets'), showLabels),
+                    _item(context, 4, Icons.person_outline_rounded, Icons.person_rounded, context.tr('nav_settings'), showLabels),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Elevated Center 3D Burgundy Orb
+          Positioned(
+            top: -10,
+            child: _ElevatedCenterOrb(
+              isDark: isDark,
+              isSelected: selectedIndex == 2,
+              onPressed: () => onSelected(2),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // UX-27: contrast-safe tokens (the hard-coded #008F7A was 4.0:1 in light mode).
-  Color _active(BuildContext context) => context.accentText;
-  Color _inactive(BuildContext context) => context.textMuted;
+  Color _activeColor(BuildContext context) {
+    return context.isDark
+        ? VelvetBurgundyColors.roseGoldGlow
+        : VelvetBurgundyColors.primaryLight;
+  }
 
-  Widget _label(BuildContext context, String label, bool isSelected, double size, {bool bold = false}) => Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.outfit(
-          fontSize: size,
-          fontWeight: isSelected || bold ? FontWeight.w700 : FontWeight.w500,
-          color: isSelected ? _active(context) : _inactive(context),
-        ),
-      );
+  Color _inactiveColor(BuildContext context) {
+    return context.isDark
+        ? const Color(0xFF8E757F)
+        : const Color(0xFF9E8E94);
+  }
 
-  Widget _item(BuildContext context, int index, IconData icon, IconData selectedIcon, String label, bool showLabels) {
+  Widget _item(
+    BuildContext context,
+    int index,
+    IconData outline,
+    IconData filled,
+    String label,
+    bool showLabels,
+  ) {
     final isSelected = selectedIndex == index;
-    final isDark = context.isDark;
+    final active = _activeColor(context);
+    final inactive = _inactiveColor(context);
+
     return Expanded(
-      child: Semantics(
-        label: label,
-        selected: isSelected,
-        button: true,
-        excludeSemantics: true,
-        child: Tooltip(
-          message: label,
+      child: Tooltip(
+        message: label,
+        child: Semantics(
+          label: label,
+          selected: isSelected,
+          button: true,
           child: InkWell(
             key: Key('nav_item_$index'),
             onTap: () => onSelected(index),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
+            splashColor: active.withValues(alpha: 0.1),
+            highlightColor: Colors.transparent,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: EdgeInsets.symmetric(horizontal: isSelected ? 12 : 6, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppThemes.electricTeal.withValues(alpha: isDark ? 0.16 : 0.18)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    isSelected ? selectedIcon : icon,
-                    color: isSelected ? _active(context) : _inactive(context),
-                    size: 22,
-                  ),
+                Icon(
+                  isSelected ? filled : outline,
+                  color: isSelected ? active : inactive,
+                  size: 22,
                 ),
                 if (showLabels) ...[
                   const SizedBox(height: 2),
-                  _label(context, label, isSelected, 10),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? active : inactive,
+                    ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+                  ),
                 ],
+                const SizedBox(height: 2),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: isSelected ? 4 : 0,
+                  height: isSelected ? 4 : 0,
+                  decoration: BoxDecoration(
+                    color: isSelected ? active : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
               ],
             ),
           ),
@@ -119,49 +172,85 @@ class AppBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _centerAi(BuildContext context, bool showLabels) {
-    final isSelected = selectedIndex == 2;
-    final label = context.tr('nav_ai');
-    return Expanded(
-      child: Semantics(
-        label: label,
-        selected: isSelected,
-        button: true,
-        excludeSemantics: true,
-        child: Tooltip(
-          message: label,
-          child: GestureDetector(
-            key: const Key('nav_item_2'),
-            onTap: () => onSelected(2),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppThemes.electricTeal, AppThemes.iceCyan],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppThemes.electricTeal.withValues(alpha: isSelected ? 0.65 : 0.4),
-                        blurRadius: isSelected ? 16 : 10,
-                        spreadRadius: isSelected ? 2 : 0,
-                      ),
+  Widget _centerOrb(BuildContext context, bool showLabels) {
+    // Spacer in the row so the elevated orb has breathing room
+    return const SizedBox(width: 58);
+  }
+}
+
+class _ElevatedCenterOrb extends StatefulWidget {
+  final bool isDark;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  const _ElevatedCenterOrb({
+    required this.isDark,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  @override
+  State<_ElevatedCenterOrb> createState() => _ElevatedCenterOrbState();
+}
+
+class _ElevatedCenterOrbState extends State<_ElevatedCenterOrb> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const Key('nav_center_ai'),
+      onTap: widget.onPressed,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.90 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: widget.isDark
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF6E162F), Color(0xFF29040D)],
+                  )
+                : const RadialGradient(
+                    center: Alignment(-0.35, -0.35),
+                    radius: 0.85,
+                    colors: [
+                      Color(0xFF8A243D),
+                      Color(0xFF571324),
+                      Color(0xFF25030A),
                     ],
                   ),
-                  child: const Icon(Icons.auto_awesome, color: AppThemes.brandDarkBg, size: 22),
-                ),
-                if (showLabels) ...[
-                  const SizedBox(height: 2),
-                  _label(context, label, isSelected, 9.5, bold: true),
-                ],
-              ],
+            boxShadow: [
+              BoxShadow(
+                color: (widget.isDark ? Colors.black : const Color(0xFF4A0E1E))
+                    .withValues(alpha: widget.isDark ? 0.75 : 0.55),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+                spreadRadius: -2,
+              ),
+              BoxShadow(
+                color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: Colors.white.withValues(alpha: widget.isDark ? 0.35 : 0.5),
+              width: 2.0,
+            ),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.add_rounded,
+              color: Colors.white,
+              size: 28,
             ),
           ),
         ),

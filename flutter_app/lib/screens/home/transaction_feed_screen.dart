@@ -26,6 +26,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/transaction_item_breakdown_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
+import '../../core/theme/velvet_burgundy_theme.dart';
 import 'edit_transaction_sheet.dart';
 import '../../models/category_catalog.dart';
 
@@ -919,15 +920,18 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                         opt['label']!,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? Colors.black : context.textPrimary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          color: isSelected ? Colors.white : context.textPrimary,
+                          fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
                         ),
                       ),
                       selected: isSelected,
-                      selectedColor: AppThemes.success,
+                      selectedColor: context.isDark ? VelvetBurgundyColors.primaryDark : VelvetBurgundyColors.primaryLight,
                       backgroundColor: context.cardBg,
                       side: BorderSide(
-                        color: isSelected ? AppThemes.success : context.borderColor,
+                        color: isSelected
+                            ? (context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.primaryLight)
+                            : (context.isDark ? const Color(0x33FFD2E1) : VelvetBurgundyColors.roseBorderLight),
                       ),
                       onSelected: (val) {
                         HapticFeedback.selectionClick();

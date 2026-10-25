@@ -102,11 +102,11 @@ class _LoginScreenState extends State<LoginScreen>
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: context.isDark
-                ? const [AppThemes.brandDarkBg, Color(0xFF091C31)]
-                : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
+                ? const [Color(0xFF1E0B12), Color(0xFF110509)]
+                : const [Color(0xFFF8F3F5), Color(0xFFF2E6EB)],
           ),
         ),
         child: SafeArea(
@@ -120,22 +120,25 @@ class _LoginScreenState extends State<LoginScreen>
                   children: [
                     // Logo
                     Container(
-                      width: 80, height: 80,
+                      width: 84, height: 84,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [AppThemes.electricTeal, AppThemes.iceCyan],
+                          colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.5), width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: AppThemes.electricTeal.withValues(alpha: 0.25),
-                            blurRadius: 18,
-                            offset: const Offset(0, 6),
+                            color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                       ),
                       child: const Icon(Icons.account_balance_wallet_rounded,
-                          color: AppThemes.brandDarkBg, size: 40),
+                          color: Color(0xFFE598B0), size: 42),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -229,29 +232,44 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 20),
 
                           // Submit button
-                          SizedBox(
+                          Container(
                             width: double.infinity,
                             height: 52,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
                             child: ElevatedButton(
                               onPressed: _loading ? null : _submit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppThemes.electricTeal,
-                                foregroundColor: AppThemes.brandDarkBg,
-                                elevation: 0,
+                                backgroundColor: Colors.transparent,
+                                foregroundColor: Colors.white,
+                                shadowColor: Colors.transparent,
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14)),
+                                    borderRadius: BorderRadius.circular(16)),
                               ),
                               child: _loading
                                   ? const SizedBox(
                                       width: 22,
                                       height: 22,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: AppThemes.brandDarkBg),
+                                          strokeWidth: 2.5, color: Colors.white),
                                     )
                                   : Text(
                                       _isLogin ? context.tr('auth_sign_in') : context.tr('auth_create_account'),
-                                      style: const TextStyle(
-                                          fontSize: 16, fontWeight: FontWeight.w700),
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
                                     ),
                             ),
                           ),

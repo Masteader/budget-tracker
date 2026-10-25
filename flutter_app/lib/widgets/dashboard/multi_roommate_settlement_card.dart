@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
+import '../../core/theme/velvet_burgundy_theme.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../../models/money.dart';
@@ -163,25 +166,9 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
 
     final isAllSettled = activeDebts.isEmpty;
 
-    return Container(
+    return ThreeDSurfaceCard(
+      borderRadius: 22,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isAllSettled
-              ? context.borderColor
-              : AppThemes.iceCyan.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -192,20 +179,11 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
               Expanded(
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppThemes.iceCyan.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppThemes.iceCyan.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.group_outlined,
-                        color: AppThemes.iceCyan,
-                        size: 20,
-                      ),
+                    const ThreeDIconPuck(
+                      size: 40,
+                      isRoseGold: true,
+                      icon: Icons.group_outlined,
+                      iconSize: 20,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -218,13 +196,14 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                               color: context.textPrimary,
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                            ),
+                            ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                           ),
                           Text(
                             context.tr('roommate_settlements_subtitle'),
                             style: TextStyle(
                               color: context.textSecondary,
                               fontSize: 11,
+                              fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
                             ),
                           ),
                         ],
@@ -244,16 +223,19 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 child: Text(
                   context.tr('simplify_debts'),
                   style: TextStyle(
-                    color: _simplifyDebts ? context.accentText : context.textSecondary,
+                    color: _simplifyDebts
+                        ? (context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight)
+                        : context.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
+                    fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
                   ),
                 ),
               ),
               Switch(
                 value: _simplifyDebts,
-                activeThumbColor: AppThemes.electricTeal,
-                activeTrackColor: AppThemes.electricTeal.withValues(alpha: 0.3),
+                activeThumbColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+                activeTrackColor: (context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight).withValues(alpha: 0.3),
                 onChanged: (val) {
                   setState(() => _simplifyDebts = val);
                 },
@@ -385,10 +367,10 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: context.chipBg,
+                    color: context.isDark ? const Color(0xFF14060C) : const Color(0xFFFAF5F7),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: AppThemes.iceCyan.withValues(alpha: 0.15),
+                      color: context.isDark ? const Color(0x33FFD2E1) : VelvetBurgundyColors.roseBorderLight,
                     ),
                   ),
                   child: Row(
@@ -404,13 +386,16 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                                 color: context.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
+                                fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               context.sar(debt.amount),
                               style: GoogleFonts.outfit(
-                                color: AppThemes.iceCyan,
+                                color: context.isDark
+                                    ? VelvetBurgundyColors.roseGoldGlow
+                                    : VelvetBurgundyColors.primaryLight,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -421,7 +406,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                       // 1-Click WhatsApp Settle Share Action
                       IconButton(
                         tooltip: context.tr('settle_share_whatsapp'),
-                        icon: const Icon(Icons.share_rounded, size: 18, color: AppThemes.electricTeal),
+                        icon: Icon(
+                          Icons.share_rounded,
+                          size: 18,
+                          color: context.isDark
+                              ? VelvetBurgundyColors.roseGoldGlow
+                              : VelvetBurgundyColors.primaryLight,
+                        ),
                         onPressed: () {
                           HapticFeedback.selectionClick();
                           final text = context.trArgs('settle_whatsapp_msg', {'from': debt.fromName, 'amount': context.sar(debt.amount), 'to': debt.toName});
@@ -437,11 +428,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                       const SizedBox(width: 4),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppThemes.electricTeal,
-                          foregroundColor: AppThemes.brandDarkBg,
+                          backgroundColor: context.isDark
+                              ? VelvetBurgundyColors.primaryDark
+                              : VelvetBurgundyColors.primaryLight,
+                          foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         child: Text(
                           context.tr('settle_now'),
@@ -697,16 +690,18 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF38BDF8),
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.isDark
+                      ? VelvetBurgundyColors.primaryDark
+                      : VelvetBurgundyColors.primaryLight,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(

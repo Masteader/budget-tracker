@@ -316,13 +316,13 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                     height: 270,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: AppThemes.iceCyan.withValues(alpha: 0.85),
+                        color: const Color(0xFFE598B0).withValues(alpha: 0.85),
                         width: 2.5,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: AppThemes.electricTeal.withValues(alpha: 0.25),
+                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
                           blurRadius: 24,
                           spreadRadius: 2,
                         ),
@@ -338,14 +338,14 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppThemes.deepGlacial.withValues(alpha: 0.85),
+                          color: const Color(0xFF1E0B12).withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
+                          border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.35)),
                         ),
                         child: Text(
                           context.tr('zq_target'),
                           style: GoogleFonts.outfit(
-                            color: AppThemes.iceCyan,
+                            color: const Color(0xFFE598B0),
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.0,
@@ -368,15 +368,15 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                             gradient: const LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                AppThemes.electricTeal,
-                                AppThemes.iceCyan,
-                                AppThemes.electricTeal,
+                                Color(0xFFFF4D6D),
+                                Color(0xFFE598B0),
+                                Color(0xFFFF4D6D),
                                 Colors.transparent,
                               ],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppThemes.iceCyan.withValues(alpha: 0.85),
+                                color: const Color(0xFFFF4D6D).withValues(alpha: 0.85),
                                 blurRadius: 10,
                                 spreadRadius: 1.5,
                               ),
@@ -397,9 +397,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: AppThemes.deepGlacial.withValues(alpha: 0.92),
+                color: const Color(0xFF1E0B12).withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppThemes.iceCyan.withValues(alpha: 0.3)),
+                border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.4),

@@ -512,10 +512,21 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFA657).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.edit_note_rounded, color: Color(0xFFFFA657), size: 22),
+                    child: const Icon(Icons.edit_note_rounded, color: Color(0xFFE598B0), size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -523,7 +534,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       context.tr('manual_log'),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -543,15 +554,60 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 controller: _amountCtrl,
                 autofocus: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w700, fontSize: 20),
                 decoration: InputDecoration(
                   labelText: context.tr('amount_sar'),
                   prefixText: '${context.tr('sar')} ',
+                  prefixStyle: GoogleFonts.outfit(color: const Color(0xFFE598B0), fontWeight: FontWeight.w700, fontSize: 18),
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
                   fillColor: context.inputBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: context.borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: Color(0xFFE598B0), width: 1.8),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 8),
+
+              // Quick increment chips
+              Wrap(
+                spacing: 8,
+                children: [10, 50, 100].map((inc) {
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      final current = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+                      final updated = current + inc;
+                      setState(() {
+                        _amountCtrl.text = updated % 1 == 0 ? updated.toInt().toString() : updated.toStringAsFixed(2);
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: context.isDark ? const Color(0xFF2D121B) : const Color(0xFFFBF1F4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE598B0).withValues(alpha: 0.35),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        '+$inc ${context.tr('sar')}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 12),
 
@@ -835,31 +891,49 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               const SizedBox(height: 20),
 
               // Save Button
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppThemes.success,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                onPressed: _isSaving ? null : _saveExpense,
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.check_rounded, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            context.tr('record_expense'),
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ],
-                      ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: _isSaving ? null : _saveExpense,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_rounded, size: 20, color: Color(0xFFE598B0)),
+                            const SizedBox(width: 8),
+                            Text(
+                              context.tr('record_expense'),
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                ),
               ),
             ],
           ),

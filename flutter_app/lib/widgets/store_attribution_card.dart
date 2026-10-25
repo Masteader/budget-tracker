@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/widgets/three_d_surface_card.dart';
 import '../l10n/app_localizations.dart';
 
 /// Reusable store name input & 'Spent by who?' selector card.
@@ -73,14 +74,10 @@ class StoreAttributionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ThreeDSurfaceCard(
       margin: EdgeInsets.only(bottom: compact ? 8 : 14),
-      padding: EdgeInsets.all(compact ? 12 : 14),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.borderColor),
-      ),
+      padding: EdgeInsets.all(compact ? 12 : 16),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

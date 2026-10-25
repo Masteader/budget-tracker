@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../app_snackbar.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
@@ -78,32 +80,22 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor),
-      ),
+    return ThreeDSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: Icon + Title + Current Selection Badge
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.calendar_month_rounded,
-                  color: AppThemes.success,
-                  size: 22,
-                ),
+              const ThreeDIconPuck(
+                icon: Icons.calendar_month_rounded,
+                size: 46,
+                iconColor: Colors.white,
+                isSquircle: true,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,10 +244,11 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             height: 44,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppThemes.success,
-                foregroundColor: Colors.black,
+                backgroundColor: const Color(0xFF4A0E1E),
+                foregroundColor: Colors.white,
+                elevation: 3,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: _saving
@@ -264,7 +257,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.black,
+                        color: Colors.white,
                       ),
                     )
                   : const Icon(Icons.check_rounded, size: 18),
@@ -291,15 +284,15 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: AppThemes.success.withValues(alpha: 0.25),
+      selectedColor: const Color(0xFF4A0E1E).withValues(alpha: 0.15),
       backgroundColor: context.scaffoldBg,
       labelStyle: TextStyle(
-        color: isSelected ? AppThemes.success : context.textPrimary,
+        color: isSelected ? const Color(0xFF4A0E1E) : context.textPrimary,
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? AppThemes.success : context.borderColor,
+        color: isSelected ? const Color(0xFF4A0E1E) : context.borderColor,
       ),
       onSelected: (_) {
         setState(() => _selectedDay = day);

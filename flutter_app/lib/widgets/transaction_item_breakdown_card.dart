@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/theme/velvet_burgundy_theme.dart';
+import '../core/widgets/three_d_surface_card.dart';
+import '../core/widgets/three_d_icon_puck.dart';
 import '../services/zatca_decoder.dart';
 import '../services/receipt_storage_service.dart';
 import '../theme/app_themes.dart';
@@ -175,34 +178,26 @@ class TransactionItemBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isReallocated ? Colors.orange.withValues(alpha: 0.5) : context.borderColor,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: ThreeDSurfaceCard(
+        borderRadius: 20,
+        padding: EdgeInsets.zero,
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             initiallyExpanded: initiallyExpanded,
-            iconColor: AppThemes.success,
+            iconColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
             collapsedIconColor: context.textSecondary,
             shape: const Border(),
             collapsedShape: const Border(),
-            leading: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppThemes.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+            leading: ThreeDIconPuck(
+              size: 42,
+              isSquircle: true,
+              icon: _sourceIcon,
+              iconSize: 20,
+              iconColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
             ),
-            child: Icon(_sourceIcon, color: AppThemes.success, size: 20),
-          ),
           title: Row(
             children: [
               Expanded(

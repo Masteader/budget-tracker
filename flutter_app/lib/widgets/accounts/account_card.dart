@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../theme/app_themes.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import 'account_transfer_sheet.dart';
 import 'reconcile_balance_dialog.dart';
 
@@ -61,24 +63,15 @@ class AccountCard extends StatelessWidget {
     final displayBalance = hideBalance ? '••••••' : context.money(account.balance, account.currency);
     final displayCommitted = hideBalance ? '••••' : context.money(committedBudgets, account.currency);
 
-    return Container(
+    return ThreeDSurfaceCard(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: status == AccountCapacityStatus.deficit
-              ? Colors.redAccent.withValues(alpha: 0.6)
-              : context.borderColor,
-          width: status == AccountCapacityStatus.deficit ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0xFF0F172A).withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+      borderRadius: 20.0,
+      padding: EdgeInsets.zero,
+      customBorder: Border.all(
+        color: status == AccountCapacityStatus.deficit
+            ? Colors.redAccent.withValues(alpha: 0.6)
+            : context.borderColor,
+        width: status == AccountCapacityStatus.deficit ? 1.5 : 1.0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,13 +81,11 @@ class AccountCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(account.accountType.defaultIcon, color: statusColor, size: 22),
+                ThreeDIconPuck(
+                  icon: account.accountType.defaultIcon,
+                  size: 42,
+                  isSquircle: true,
+                  iconColor: statusColor,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

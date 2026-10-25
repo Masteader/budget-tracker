@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/velvet_burgundy_theme.dart';
 import '../../theme/app_themes.dart';
 
 import '../transaction_item_breakdown_card.dart';
@@ -56,18 +57,36 @@ class ChatMessageBubble extends StatelessWidget {
         alignment: AlignmentDirectional.centerEnd,
         child: Container(
           margin: const EdgeInsetsDirectional.only(bottom: 12, start: 40),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1F6FEB),
-            borderRadius: BorderRadiusDirectional.only(
-              topStart: Radius.circular(16),
-              topEnd: Radius.circular(16),
-              bottomStart: Radius.circular(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: context.isDark
+                  ? const [Color(0xFF7A1934), VelvetBurgundyColors.primaryDark, Color(0xFF380814)]
+                  : const [Color(0xFF6C162F), VelvetBurgundyColors.primaryLight, VelvetBurgundyColors.primaryDarkMaroon],
+            ),
+            borderRadius: const BorderRadiusDirectional.only(
+              topStart: Radius.circular(18),
+              topEnd: Radius.circular(18),
+              bottomStart: Radius.circular(18),
+              bottomEnd: Radius.circular(4),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (context.isDark ? Colors.black : const Color(0xFF4A0E1E)).withValues(alpha: context.isDark ? 0.5 : 0.28),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: Colors.white.withValues(alpha: context.isDark ? 0.25 : 0.35),
+              width: 1.0,
             ),
           ),
           child: Text(
             message.text,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -83,17 +102,27 @@ class ChatMessageBubble extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: context.cardBg,
+                color: context.isDark ? const Color(0xFF1E0B12) : Colors.white,
                 borderRadius: const BorderRadiusDirectional.only(
-                  topStart: Radius.circular(16),
-                  topEnd: Radius.circular(16),
-                  bottomEnd: Radius.circular(16),
+                  topStart: Radius.circular(18),
+                  topEnd: Radius.circular(18),
+                  bottomEnd: Radius.circular(18),
+                  bottomStart: Radius.circular(4),
                 ),
-                border: Border.all(color: context.borderColor),
+                border: Border.all(
+                  color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (context.isDark ? Colors.black : const Color(0xFF4A0E1E)).withValues(alpha: context.isDark ? 0.4 : 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Text(
                 message.text,
-                style: TextStyle(color: context.textPrimary, fontSize: 14, height: 1.4),
+                style: TextStyle(color: context.textPrimary, fontSize: 14, height: 1.4, fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
               ),
             ),
             if (message.simulationData != null) ...[

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/widgets/three_d_surface_card.dart';
 
 class SmartShoppingBasketSheet extends StatefulWidget {
   final String householdId;
@@ -160,10 +161,14 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.shopping_cart_outlined, color: AppThemes.success, size: 20),
+                  child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFFE598B0), size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -231,12 +236,16 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     const SizedBox(width: 10),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppThemes.success,
+                        backgroundColor: const Color(0xFF4A0E1E),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: const Color(0xFFE598B0).withValues(alpha: 0.3)),
+                        ),
                       ),
                       onPressed: () => _addItem(_itemInputCtrl.text),
-                      child: const Icon(Icons.add, color: Colors.black, size: 20),
+                      child: const Icon(Icons.add, color: Color(0xFFE598B0), size: 20),
                     ),
                   ],
                 ),
@@ -407,12 +416,8 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
     final splitTotal = (splitOpt['split_total'] as num?)?.toDouble() ?? 0.0;
     final splitSavings = (splitOpt['extra_savings_vs_single_store'] as num?)?.toDouble() ?? 0.0;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.chipBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppThemes.success.withValues(alpha: 0.3)),
-      ),
+    return ThreeDSurfaceCard(
+      borderRadius: 18.0,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

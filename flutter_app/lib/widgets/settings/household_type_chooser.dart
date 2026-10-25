@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_membership.dart';
 import '../../theme/app_themes.dart';
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 
 /// Family (Islamic Nafaqah) or Roommates, chosen when a household is created
 /// and changed later by an admin. Two selectable cards; RTL-safe.
@@ -36,46 +38,54 @@ class HouseholdTypeChooser extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      child: InkWell(
-        key: ValueKey('household_type_$type'),
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => onChanged(type),
-        child: Container(
-          padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.12) : context.subtleCardBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: selected ? color : context.borderColor, width: selected ? 1.5 : 1),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: selected ? color : context.textSecondary, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr(labelKey(type)),
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(context.tr(descKey), style: TextStyle(fontSize: 11.5, color: context.textSecondary)),
-                  ],
+      child: ThreeDSurfaceCard(
+        borderRadius: 16.0,
+        padding: EdgeInsets.zero,
+        customBorder: Border.all(
+          color: selected ? color : context.borderColor,
+          width: selected ? 1.8 : 1.0,
+        ),
+        child: InkWell(
+          key: ValueKey('household_type_$type'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => onChanged(type),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ThreeDIconPuck(
+                  icon: icon,
+                  size: 40,
+                  isSquircle: true,
+                  iconColor: selected ? color : context.textSecondary,
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                color: selected ? color : context.textSecondary,
-                size: 18,
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr(labelKey(type)),
+                        style: GoogleFonts.outfit(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(context.tr(descKey), style: TextStyle(fontSize: 11.5, color: context.textSecondary)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  color: selected ? color : context.textSecondary,
+                  size: 20,
+                ),
+              ],
+            ),
           ),
         ),
       ),

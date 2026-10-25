@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import '../../core/widgets/three_d_surface_card.dart';
+import '../../core/widgets/three_d_icon_puck.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/models.dart';
 import '../../models/money.dart';
@@ -261,27 +262,26 @@ class _ReimbursementPanel extends StatelessWidget {
     final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you') : context.tr('husband_owes_wife');
     final actionLabel = summary.callerIsWife ? context.tr('nafaqah_confirm_received') : context.tr('reimburse_wife');
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSettled ? context.borderColor : gold.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
+    return ThreeDSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
+      customBorder: Border.all(
+        color: isSettled ? context.borderColor : gold.withValues(alpha: 0.35),
+        width: 1.2,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: gold.withValues(alpha: 0.15), shape: BoxShape.circle),
-                child: Icon(Icons.family_restroom_rounded, color: gold, size: 20),
+              ThreeDIconPuck(
+                icon: Icons.family_restroom_rounded,
+                size: 44,
+                iconColor: gold,
+                isRoseGold: true,
+                isSquircle: true,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

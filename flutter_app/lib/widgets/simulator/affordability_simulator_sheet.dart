@@ -402,31 +402,49 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   const SizedBox(height: 16),
 
                   // Simulate Button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    onPressed: _isSimulating ? null : _simulate,
-                    child: _isSimulating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.flash_on_rounded, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                context.tr('simulate'),
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                            ],
-                          ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _isSimulating ? null : _simulate,
+                      child: _isSimulating
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.flash_on_rounded, size: 20, color: Color(0xFFE598B0)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  context.tr('simulate'),
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
 
                   // Result Card
