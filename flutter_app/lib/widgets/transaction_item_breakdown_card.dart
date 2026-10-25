@@ -150,7 +150,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         ? const Color(0xFFE11D48)
         : (isTabby
             ? const Color(0xFFD97706)
-            : (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)));
+            : context.accentText);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -257,17 +257,17 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.12) : const Color(0xFF4A0E1E).withValues(alpha: 0.08),
+                      color: context.accentText.withValues(alpha: context.isDark ? 0.12 : 0.08),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.25) : const Color(0xFFE598B0).withValues(alpha: 0.35),
+                        color: context.accentText.withValues(alpha: context.isDark ? 0.25 : 0.35),
                         width: 0.7,
                       ),
                     ),
                     child: Text(
                       context.trCat(categoryCode!),
                       style: TextStyle(
-                        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                        color: context.accentText,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -329,10 +329,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.14) : const Color(0xFF4A0E1E).withValues(alpha: 0.08),
+                        color: context.accentText.withValues(alpha: context.isDark ? 0.14 : 0.08),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.35) : const Color(0xFF4A0E1E).withValues(alpha: 0.3),
+                          color: context.accentText.withValues(alpha: context.isDark ? 0.35 : 0.3),
                           width: 0.8,
                         ),
                       ),
@@ -342,13 +342,13 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           Icon(
                             Icons.qr_code_2_rounded,
                             size: 11,
-                            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                            color: context.accentText,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             context.tr('tib_zatca_qr'),
                             style: TextStyle(
-                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                              color: context.accentText,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
@@ -446,7 +446,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                     width: 6,
                                     height: 6,
                                     decoration: BoxDecoration(
-                                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                      color: context.accentText,
                                       borderRadius: BorderRadius.circular(3),
                                     ),
                                   ),
@@ -491,7 +491,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Text(
                                 context.money(amount, currency),
                                 style: GoogleFonts.outfit(
-                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                  color: context.accentText,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -631,7 +631,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             fontSize: 11,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w700,
-                            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                            color: context.accentText,
                           ),
                         ),
                         InkWell(
@@ -649,7 +649,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                               Icon(
                                 Icons.copy_rounded,
                                 size: 12,
-                                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                color: context.accentText,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -657,7 +657,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                 style: GoogleFonts.outfit(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                  color: context.accentText,
                                 ),
                               ),
                             ],
@@ -798,7 +798,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
           children: [
             Icon(
               Icons.qr_code_2_rounded,
-              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
               size: 24,
             ),
             const SizedBox(width: 8),
@@ -838,7 +838,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                   Text(
                     context.trArgs('tib_total_vat', {'total': context.sar(num.tryParse('${decoded['total']}') ?? 0), 'vat': context.sar(num.tryParse('${decoded['vat'] ?? 0}') ?? 0)}),
                     style: GoogleFonts.outfit(
-                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                      color: context.accentText,
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                     ),
@@ -874,12 +874,12 @@ class TransactionItemBreakdownCard extends StatelessWidget {
             icon: Icon(
               Icons.copy_rounded,
               size: 14,
-              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
             ),
             label: Text(
               context.tr('copy_base64'),
               style: TextStyle(
-                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                color: context.accentText,
               ),
             ),
             onPressed: () {
