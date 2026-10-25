@@ -9,7 +9,7 @@ class AppEmptyState extends StatelessWidget {
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
-  final Color accentColor;
+  final Color? accentColor;
 
   const AppEmptyState({
     super.key,
@@ -18,11 +18,12 @@ class AppEmptyState extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
-    this.accentColor = AppThemes.success,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveAccent = accentColor ?? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E));
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
@@ -38,11 +39,11 @@ class AppEmptyState extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
+              color: effectiveAccent.withValues(alpha: 0.12),
               shape: BoxShape.circle,
-              border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+              border: Border.all(color: effectiveAccent.withValues(alpha: 0.3)),
             ),
-            child: Icon(icon, size: 36, color: accentColor),
+            child: Icon(icon, size: 36, color: effectiveAccent),
           ),
           const SizedBox(height: 16),
           Text(
@@ -69,8 +70,8 @@ class AppEmptyState extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onAction,
               style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: Colors.black,
+                backgroundColor: effectiveAccent,
+                foregroundColor: effectiveAccent == const Color(0xFFF0A3BC) ? const Color(0xFF1E0B12) : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),

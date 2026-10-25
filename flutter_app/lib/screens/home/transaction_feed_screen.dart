@@ -246,7 +246,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                             setModalState(() {});
                             Navigator.pop(ctx);
                           },
-                          child: Text(context.tr('reset_all'), style: TextStyle(color: context.successText, fontSize: 13)),
+                          child: Text(
+                            context.tr('reset_all'),
+                            style: TextStyle(
+                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -384,10 +391,10 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 return Theme(
                                   data: (context.isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
                                     colorScheme: ColorScheme.fromSeed(
-                                      seedColor: AppThemes.success,
+                                      seedColor: const Color(0xFF4A0E1E),
                                       brightness: context.isDark ? Brightness.dark : Brightness.light,
-                                      primary: AppThemes.success,
-                                      onPrimary: Colors.black,
+                                      primary: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                      onPrimary: Colors.white,
                                       surface: context.cardBg,
                                       onSurface: context.textPrimary,
                                     ),
@@ -510,8 +517,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppThemes.success,
-                          foregroundColor: Colors.black,
+                          backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                          foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -547,10 +554,14 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         width: (MediaQuery.of(context).size.width - 48) / 2,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? AppThemes.success.withValues(alpha: 0.12) : context.inputBg,
+          color: isSelected
+              ? (context.isDark ? const Color(0xFF5E1327).withValues(alpha: 0.35) : const Color(0xFF4A0E1E).withValues(alpha: 0.1))
+              : context.inputBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppThemes.success : context.borderColor,
+            color: isSelected
+                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -562,11 +573,17 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected ? AppThemes.success : context.textSecondary,
+                  color: isSelected
+                      ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                      : context.textSecondary,
                 ),
                 const Spacer(),
                 if (isSelected)
-                  const Icon(Icons.check_circle, size: 16, color: AppThemes.success),
+                  Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -575,7 +592,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? AppThemes.success : context.textPrimary,
+                color: isSelected
+                    ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                    : context.textPrimary,
               ),
             ),
             Text(
@@ -596,21 +615,27 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   }) {
     return ChoiceChip(
       avatar: icon != null
-          ? Icon(icon, size: 14, color: selected ? Colors.black : context.textSecondary)
+          ? Icon(
+              icon,
+              size: 14,
+              color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textSecondary,
+            )
           : null,
       label: Text(
         label,
         style: TextStyle(
           fontSize: 12,
           fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          color: selected ? Colors.black : context.textPrimary,
+          color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
         ),
       ),
       selected: selected,
-      selectedColor: AppThemes.success,
+      selectedColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
       backgroundColor: context.cardBg,
       side: BorderSide(
-        color: selected ? AppThemes.success : context.borderColor,
+        color: selected
+            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E))
+            : context.borderColor,
       ),
       onSelected: onSelected,
     );
@@ -670,8 +695,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
             ),
             icon: const Icon(Icons.ios_share_rounded, size: 16),
             label: Text(context.tr('pdf_download_share'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -851,13 +876,17 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppThemes.success,
+                    decoration: BoxDecoration(
+                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                       shape: BoxShape.circle,
                     ),
                     child: Text(
                       '$_activeFilterCount',
-                      style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: context.isDark ? Colors.black : Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -1001,7 +1030,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(
                                             color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
-                                                ? AppThemes.success
+                                                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
                                                 : context.borderColor,
                                           ),
                                         ),
@@ -1053,7 +1082,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                                 )
                               : RefreshIndicator(
-                                  color: AppThemes.success,
+                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                                   onRefresh: () async {
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),

@@ -57,7 +57,7 @@ class CategoryCatalog {
     'OPEX-FAMILY-SUPPORT': CategoryVisual('👪 ', Icons.family_restroom, Color(0xFFFB923C)),
     'OPEX-CHARITY': CategoryVisual('🤲 ', Icons.volunteer_activism_outlined, Color(0xFF22C55E)),
     'OPEX-INSURANCE': CategoryVisual('🛡️ ', Icons.shield_outlined, Color(0xFF64748B)),
-    'OPEX-REMITTANCE': CategoryVisual('💸 ', Icons.currency_exchange, Color(0xFF00E5BF)),
+    'OPEX-REMITTANCE': CategoryVisual('💸 ', Icons.currency_exchange, Color(0xFF10B981)),
     'OPEX-GOV': CategoryVisual('🏛️ ', Icons.account_balance_outlined, Color(0xFF78716C)),
     'OPEX-MISC': _fallback,
   };

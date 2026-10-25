@@ -83,7 +83,7 @@ class StoreAttributionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.storefront_outlined, color: AppThemes.success, size: 18),
+              Icon(Icons.storefront_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 18),
               const SizedBox(width: 8),
               Text(
                 title ?? context.tr('sac_title'),
@@ -103,7 +103,7 @@ class StoreAttributionCard extends StatelessWidget {
             decoration: InputDecoration(
               labelText: context.tr('sac_store_label'),
               labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
-              prefixIcon: const Icon(Icons.store_outlined, color: AppThemes.success, size: 18),
+              prefixIcon: Icon(Icons.store_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 18),
               filled: true,
               fillColor: context.inputBg,
               contentPadding: EdgeInsets.symmetric(
@@ -120,7 +120,7 @@ class StoreAttributionCard extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppThemes.success),
+                borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
               ),
             ),
           ),
@@ -156,7 +156,7 @@ class StoreAttributionCard extends StatelessWidget {
                 key: 'both',
                 label: context.tr('both_shared'),
                 icon: Icons.group_outlined,
-                activeColor: AppThemes.success,
+                activeColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
               ),
             ],
           ),

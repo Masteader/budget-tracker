@@ -134,7 +134,7 @@ class AppSnackBar {
       SnackBar(
         elevation: 8,
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: const Color(0xFF1E0B12),
         duration: duration,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -206,22 +206,22 @@ class AppSnackBar {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.16),
+                    color: const Color(0xFFF0A3BC).withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: AppThemes.success.withValues(alpha: 0.6),
+                      color: const Color(0xFFF0A3BC).withValues(alpha: 0.6),
                       width: 1.1,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.undo_rounded, size: 14, color: AppThemes.success),
+                      const Icon(Icons.undo_rounded, size: 14, color: Color(0xFFF0A3BC)),
                       const SizedBox(width: 4),
                       Text(
                         'UNDO',
                         style: GoogleFonts.outfit(
-                          color: AppThemes.success,
+                          color: const Color(0xFFF0A3BC),
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,

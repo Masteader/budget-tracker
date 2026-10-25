@@ -43,7 +43,13 @@ class OverBudgetAlerts extends StatelessWidget {
                   style: GoogleFonts.outfit(color: danger, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
-              TextButton(onPressed: onShowAll, child: Text(context.tr('show_all'))),
+              TextButton(
+                onPressed: onShowAll,
+                style: TextButton.styleFrom(
+                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                ),
+                child: Text(context.tr('show_all')),
+              ),
             ],
           ),
           for (final b in over.take(limit))

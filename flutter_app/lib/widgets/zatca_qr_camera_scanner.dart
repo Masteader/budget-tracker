@@ -105,7 +105,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: AppThemes.electricTeal),
+            Icon(Icons.qr_code_2_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
             const SizedBox(width: 8),
             Text(
               context.tr('zq_manual_title'),
@@ -144,8 +144,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.electricTeal,
-              foregroundColor: AppThemes.brandDarkBg,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: Colors.white,
             ),
             onPressed: () {
               final raw = textCtrl.text.trim();
@@ -221,8 +221,8 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppThemes.electricTeal,
-                  foregroundColor: AppThemes.brandDarkBg,
+                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -410,7 +410,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_scanner, color: AppThemes.electricTeal, size: 22),
+                  const Icon(Icons.qr_code_scanner, color: Color(0xFFF0A3BC), size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

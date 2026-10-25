@@ -41,15 +41,17 @@ class ExpenseDateChips extends StatelessWidget {
 
     Widget chip(String key, String label, bool selected, VoidCallback onTap, {IconData? icon}) => ChoiceChip(
           key: ValueKey(key),
-          avatar: icon == null ? null : Icon(icon, size: 16, color: selected ? AppThemes.onSuccessFill : context.textSecondary),
+          avatar: icon == null
+              ? null
+              : Icon(icon, size: 16, color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textSecondary),
           label: Text(label),
           selected: selected,
           showCheckmark: false,
-          selectedColor: AppThemes.success,
+          selectedColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
           labelStyle: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? AppThemes.onSuccessFill : context.textPrimary,
+            color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
           ),
           onSelected: (_) => onTap(),
         );

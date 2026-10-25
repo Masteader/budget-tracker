@@ -24,12 +24,13 @@ void main() {
       expect(record.toMap()[PaydayCheckinBanner.sourceTypeColumn], 'salary');
     });
 
-    test('payday window covers 25th..31st and 1st..3rd only', () {
-      expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 10, 25)), isTrue);
+    test('payday window covers 27th..31st and 1st..3rd only', () {
+      expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 10, 27)), isTrue);
       expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 10, 31)), isTrue);
       expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 11, 3)), isTrue);
       expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 11, 4)), isFalse);
-      expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 11, 24)), isFalse);
+      expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 10, 25)), isFalse);
+      expect(PaydayCheckinBanner.isPaydayWindow(DateTime(2026, 11, 26)), isFalse);
     });
 
     testWidgets('shows in payday window when no salary was logged', (tester) async {

@@ -150,7 +150,10 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.category_outlined, color: AppThemes.success),
+                  Icon(
+                    Icons.category_outlined,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     context.tr('category_library'),
@@ -158,6 +161,10 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                   ),
                   const Spacer(),
                   FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                    ),
                     onPressed: widget.onAddCustom,
                     icon: const Icon(Icons.add, size: 18),
                     label: Text(context.tr('cls_custom')),
@@ -167,8 +174,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
             ),
             // TabBar
             TabBar(
-              indicatorColor: AppThemes.success,
-              labelColor: AppThemes.success,
+              indicatorColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              labelColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
               unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               tabs: [
                 Tab(text: context.trArgs('cls_active_tab', {'count': _activeCategories.length})),
@@ -191,8 +198,12 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                             final isBusy = _processingCodes.contains(item.code);
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: AppThemes.success.withValues(alpha: 0.15),
-                                child: const Icon(Icons.check_circle, color: AppThemes.success, size: 20),
+                                backgroundColor: (context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669)).withValues(alpha: 0.15),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  color: context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+                                  size: 20,
+                                ),
                               ),
                               title: Text(
                                 item.name,
@@ -252,7 +263,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: AppThemes.success.withValues(alpha: 0.15),
+                                        color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -260,7 +271,7 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: context.successText,
+                                          color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                                         ),
                                       ),
                                     ),
@@ -284,7 +295,8 @@ class _CategoryLibrarySheetState extends State<CategoryLibrarySheet> {
                                       onPressed: () => _confirmActivate(item),
                                       style: FilledButton.styleFrom(
                                         visualDensity: VisualDensity.compact,
-                                        backgroundColor: AppThemes.success,
+                                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                                        foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
                                       ),
                                       child: Text(context.tr('activate')),
                                     ),

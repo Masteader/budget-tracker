@@ -67,20 +67,21 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
       const SnackBar(
         content: Text('Diagnostic report copied to clipboard'),
         duration: Duration(seconds: 2),
-        backgroundColor: Color(0xFF00E5BF),
+        backgroundColor: Color(0xFF5E1327),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    const bgDark = Color(0xFF0A0F1D);
-    const surfaceDark = Color(0xFF161F30);
-    const borderDark = Color(0xFF22334F);
-    const tealAccent = Color(0xFF00E5BF);
+    const bgDark = Color(0xFF110509);
+    const surfaceDark = Color(0xFF1E0B12);
+    const borderDark = Color(0x33FFD2E1);
+    const roseAccent = Color(0xFFF0A3BC);
+    const burgundyPrimary = Color(0xFF5E1327);
     const errorRed = Color(0xFFFF5C5C);
     const textPrimary = Color(0xFFF1F5F9);
-    const textSecondary = Color(0xFF94A3B8);
+    const textSecondary = Color(0xFFC5A0AA);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -88,7 +89,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: bgDark,
         colorScheme: const ColorScheme.dark(
-          primary: tealAccent,
+          primary: roseAccent,
           surface: surfaceDark,
           error: errorRed,
         ),
@@ -200,7 +201,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                           label: 'Supabase URL',
                           value: supabaseUrl.isEmpty ? 'Missing' : supabaseUrl,
                           isValid: supabaseUrl.isNotEmpty && supabaseUrl.startsWith('https://'),
-                          tealAccent: tealAccent,
+                          roseAccent: roseAccent,
                           errorRed: errorRed,
                         ),
                         const Divider(color: borderDark, height: 16),
@@ -213,7 +214,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                                   : 'Publishable Anon (Valid)'),
                           isValid: supabasePublishableKey.isNotEmpty &&
                               !isPrivilegedSupabaseKey(supabasePublishableKey),
-                          tealAccent: tealAccent,
+                          roseAccent: roseAccent,
                           errorRed: errorRed,
                         ),
                         const Divider(color: borderDark, height: 16),
@@ -221,7 +222,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                           label: 'FastAPI Backend',
                           value: fastapiBaseUrl.isEmpty ? 'Missing' : fastapiBaseUrl,
                           isValid: fastapiBaseUrl.isNotEmpty && fastapiBaseUrl.startsWith('https://'),
-                          tealAccent: tealAccent,
+                          roseAccent: roseAccent,
                           errorRed: errorRed,
                         ),
                       ],
@@ -321,11 +322,11 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                               icon: Icon(
                                 _showStackTrace ? Icons.expand_less : Icons.expand_more,
                                 size: 18,
-                                color: tealAccent,
+                                color: roseAccent,
                               ),
                               label: Text(
                                 _showStackTrace ? 'Hide Stack Trace' : 'View Stack Trace',
-                                style: const TextStyle(color: tealAccent, fontSize: 13),
+                                style: const TextStyle(color: roseAccent, fontSize: 13),
                               ),
                             ),
                             if (_showStackTrace)
@@ -360,8 +361,8 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                         child: OutlinedButton.icon(
                           onPressed: () => _copyToClipboard(context),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: _copied ? tealAccent : textPrimary,
-                            side: BorderSide(color: _copied ? tealAccent : borderDark),
+                            foregroundColor: _copied ? roseAccent : textPrimary,
+                            side: BorderSide(color: _copied ? roseAccent : borderDark),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -380,8 +381,8 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
                           child: ElevatedButton.icon(
                             onPressed: widget.onRetry,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: tealAccent,
-                              foregroundColor: bgDark,
+                              backgroundColor: burgundyPrimary,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
@@ -410,7 +411,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
     required String label,
     required String value,
     required bool isValid,
-    required Color tealAccent,
+    required Color roseAccent,
     required Color errorRed,
   }) {
     return Row(
@@ -418,7 +419,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
       children: [
         Icon(
           isValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
-          color: isValid ? tealAccent : errorRed,
+          color: isValid ? roseAccent : errorRed,
           size: 18,
         ),
         const SizedBox(width: 8),

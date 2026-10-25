@@ -377,7 +377,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.settings_suggest_rounded, color: AppThemes.success),
+            Icon(Icons.settings_suggest_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
             const SizedBox(width: 8),
             Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
@@ -390,8 +390,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.open_in_new, size: 16),
             label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -541,8 +541,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: Colors.white,
             ),
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
@@ -620,8 +620,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: Colors.white,
             ),
             child: Text(context.tr('create'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
@@ -913,8 +913,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: Colors.black,
+                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      foregroundColor: Colors.white,
                     ),
                     onPressed: () {
                       Navigator.push(
@@ -1031,26 +1031,41 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
 
           // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
-          if (_householdId != null && _members.length > 1) ...[
-            _buildSectionHeader(context.tr('partner_settlement')),
-            const SizedBox(height: 10),
-            FutureBuilder<SettlementV2Summary>(
-              future: ApiService.instance.getSettlementV2(_householdId!),
-              builder: (context, snap) {
-                if (snap.hasData && snap.data!.isRoommateMode) {
-                  return MultiRoommateSettlementCard(
-                    householdId: _householdId!,
-                    summary: snap.data,
-                  );
-                }
-                return FamilyReimbursementCard(
-                  key: ValueKey('family-nafaqah-$_nafaqahRevision'),
-                  householdId: _householdId!,
-                );
-              },
+          if (_householdId != null && _members.length > 1)
+            SettingsSection(
+              title: context.tr('partner_settlement'),
+              subtitle: context.tr('partner_settlement_desc'),
+              icon: Icons.handshake_outlined,
+              children: [
+                FutureBuilder<SettlementV2Summary>(
+                  future: ApiService.instance.getSettlementV2(_householdId!),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+                      return Container(
+                        height: 90,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
+                    if (snap.hasData && snap.data!.isRoommateMode) {
+                      return MultiRoommateSettlementCard(
+                        householdId: _householdId!,
+                        summary: snap.data,
+                      );
+                    }
+                    return FamilyReimbursementCard(
+                      key: ValueKey('family-nafaqah-$_nafaqahRevision'),
+                      householdId: _householdId!,
+                      emptyPlaceholder: _buildNoWifeSettlementPlaceholder(context),
+                    );
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-          ],
 
           // ── DATA EXPORT & OFFLINE QUEUE ──
           SettingsSection(
@@ -1069,7 +1084,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.table_view_rounded, color: AppThemes.success, size: 20),
+                    Icon(Icons.table_view_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1082,9 +1097,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: context.chipBg,
-                        foregroundColor: AppThemes.success,
-                        side: const BorderSide(color: AppThemes.success),
+                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       ),
                       onPressed: () async {
@@ -1170,10 +1184,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppThemes.success.withValues(alpha: 0.15),
+                      color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.menu_book_rounded, color: AppThemes.success, size: 20),
+                    child: Icon(Icons.menu_book_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
                   ),
                   title: Text(
                     context.tr('set_app_guide_tutorial'),
@@ -1351,6 +1365,60 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Widget _buildNoWifeSettlementPlaceholder(BuildContext context) {
+    final isDark = context.isDark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: (isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.family_restroom_rounded,
+              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr('nafaqah_no_wife_configured_title'),
+                  style: GoogleFonts.outfit(
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.tr('nafaqah_no_wife_configured_desc'),
+                  style: TextStyle(
+                    color: context.textSecondary,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
@@ -1371,7 +1439,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
-    const activeBg = AppThemes.success;
+    final activeBg = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1389,10 +1457,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppThemes.success.withValues(alpha: 0.15),
+                  color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.palette_rounded, color: AppThemes.success, size: 20),
+                child: Icon(Icons.palette_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1539,14 +1607,18 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: isSelected ? Colors.black : textColor),
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected ? (context.isDark ? const Color(0xFF1E0B12) : Colors.white) : textColor,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isSelected ? Colors.black : textColor,
+                    color: isSelected ? (context.isDark ? const Color(0xFF1E0B12) : Colors.white) : textColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),

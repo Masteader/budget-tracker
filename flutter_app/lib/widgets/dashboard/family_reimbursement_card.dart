@@ -48,6 +48,7 @@ class FamilyReimbursementCard extends StatefulWidget {
   final NafaqahReimbursementRecorder? recordReimbursement;
   final NafaqahLedgerLoader? loadLedger;
   final AllowanceSetter? setAllowance;
+  final Widget? emptyPlaceholder;
 
   const FamilyReimbursementCard({
     super.key,
@@ -59,6 +60,7 @@ class FamilyReimbursementCard extends StatefulWidget {
     this.recordReimbursement,
     this.loadLedger,
     this.setAllowance,
+    this.emptyPlaceholder,
   });
 
   @override
@@ -154,12 +156,16 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
         onRetry: _retry,
       );
     }
-    if (summary == null || !summary.isFamily) return const SizedBox.shrink();
+    if (summary == null || !summary.isFamily) return widget.emptyPlaceholder ?? const SizedBox.shrink();
 
     final wives = summary.callerIsWife
         ? [summary.primaryWife!]
         : summary.wives;
     final showNames = wives.length > 1;
+
+    if (wives.isEmpty && !summary.needsProvider && !_failed) {
+      return widget.emptyPlaceholder ?? const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

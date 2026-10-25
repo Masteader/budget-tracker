@@ -281,7 +281,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 final isPositive = balance > 0.01;
                 final isNegative = balance < -0.01;
                 final color = isPositive
-                    ? AppThemes.electricTeal
+                    ? const Color(0xFF10B981)
                     : (isNegative ? const Color(0xFFFF6B6B) : context.textSecondary);
 
                 final sign = isPositive ? '+' : (isNegative ? '-' : '');
@@ -326,13 +326,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppThemes.electricTeal.withValues(alpha: 0.08),
+                color: const Color(0xFF10B981).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.2)),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: AppThemes.electricTeal, size: 20),
+                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(

@@ -365,7 +365,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppThemes.success, foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+            ),
             child: Text(context.tr('add'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -449,7 +452,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppThemes.success),
+                  borderSide: BorderSide(
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                  ),
                 ),
               ),
             ),
@@ -463,8 +468,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.success,
-              foregroundColor: Colors.black,
+              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
             ),
             child: Text(context.tr('sba_rename'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -761,13 +766,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: context.isDark ? const [Color(0xFF0F2D24), Color(0xFF161B22)] : const [Color(0xFFE6F9F2), Color(0xFFF1F5F9)],
+                    colors: context.isDark
+                        ? const [Color(0xFF380C18), Color(0xFF1E0B12)]
+                        : const [Color(0xFFFDF2F4), Color(0xFFF8F3F5)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: AppThemes.success.withValues(alpha: 0.4),
+                    color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.35),
                   ),
                 ),
                 child: Row(
@@ -779,7 +786,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                           Text(
                             context.tr('total_main_category_budget'),
                             style: GoogleFonts.inter(
-                              color: context.successText,
+                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
@@ -846,8 +853,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             // Scrollable Content
             Expanded(
               child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppThemes.success),
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                      ),
                     )
                   : _subItems.isEmpty
                       ? SingleChildScrollView(
@@ -879,7 +888,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: AppThemes.success),
+                                    borderSide: BorderSide(
+                                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -894,10 +905,18 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                             if (i == _subItems.length) {
                               return OutlinedButton.icon(
                                 onPressed: _promptAddSubCategory,
-                                icon: const Icon(Icons.add_rounded, size: 18, color: AppThemes.success),
+                                icon: Icon(
+                                  Icons.add_rounded,
+                                  size: 18,
+                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                ),
                                 label: Text(
                                   context.tr('add_custom_sub_category'),
-                                  style: TextStyle(color: context.successText, fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -994,7 +1013,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(10),
-                                          borderSide: const BorderSide(color: AppThemes.success),
+                                          borderSide: BorderSide(
+                                            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1035,17 +1056,20 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppThemes.success,
-                        foregroundColor: Colors.black,
+                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                        foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
                       child: _isSaving
-                          ? const SizedBox(
-                              height: 18,
+                          ? SizedBox(
                               width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                              ),
                             )
                           : FittedBox(
                               fit: BoxFit.scaleDown,

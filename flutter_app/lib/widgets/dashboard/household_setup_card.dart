@@ -122,7 +122,10 @@ class HouseholdSetupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.cardBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.4), width: 1.2),
+        border: Border.all(
+          color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.25) : const Color(0xFFE598B0).withValues(alpha: 0.35),
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,7 +150,13 @@ class HouseholdSetupCard extends StatelessWidget {
                 ),
               ),
               if (hasBudgets && onHide != null)
-                TextButton(onPressed: onHide, child: Text(context.tr('setup_hide'))),
+                TextButton(
+                  onPressed: onHide,
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                  ),
+                  child: Text(context.tr('setup_hide')),
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -157,7 +166,9 @@ class HouseholdSetupCard extends StatelessWidget {
               value: steps.isEmpty ? 0 : done / steps.length,
               minHeight: 5,
               backgroundColor: context.chipBg,
-              valueColor: const AlwaysStoppedAnimation(AppThemes.success),
+              valueColor: AlwaysStoppedAnimation(
+                context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -242,7 +253,9 @@ class HouseholdSetupCard extends StatelessWidget {
           children: [
             Icon(
               isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-              color: isDone ? AppThemes.success : context.textSecondary,
+              color: isDone
+                  ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                  : context.textSecondary,
               size: 22,
             ),
             const SizedBox(width: 10),
@@ -261,6 +274,9 @@ class HouseholdSetupCard extends StatelessWidget {
             if (step == SetupStep.payday && !isDone)
               TextButton(
                 key: const Key('setup_confirm_payday'),
+                style: TextButton.styleFrom(
+                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                ),
                 onPressed: () async {
                   await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
                   onChanged();
@@ -543,8 +559,8 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
         ElevatedButton(
           onPressed: _saving ? null : _create,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppThemes.success,
-            foregroundColor: AppThemes.deepGlacial,
+            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+            foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

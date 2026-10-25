@@ -21,17 +21,18 @@ class ZatcaStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppThemes.electricTeal.withValues(alpha: 0.12),
+        color: accentColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppThemes.electricTeal.withValues(alpha: 0.35)),
+        border: Border.all(color: accentColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.verified_rounded, color: AppThemes.electricTeal, size: 20),
+          Icon(Icons.verified_rounded, color: accentColor, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

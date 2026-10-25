@@ -42,7 +42,7 @@ class AccountService {
     String currency = 'SAR',
     double initialBalance = 0.0,
     bool isSharedPool = false,
-    String colorHex = '#00E5BF',
+    String colorHex = '#F0A3BC',
     String iconName = 'account_balance_rounded',
   }) async {
     final userId = _client.auth.currentUser?.id ?? '';

@@ -187,11 +187,14 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.15),
+                    color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.pie_chart_outline_rounded,
-                      color: AppThemes.success, size: 22),
+                  child: Icon(
+                    Icons.pie_chart_outline_rounded,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -218,7 +221,11 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: AppThemes.success, size: 20),
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    size: 20,
+                  ),
                   tooltip: context.tr('edit_allocations'),
                   onPressed: () async {
                     Budget? existing;
@@ -320,7 +327,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: prevDelta > 0
-                            ? AppThemes.success.withValues(alpha: 0.12)
+                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
                             : Colors.redAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -332,7 +339,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 ? Icons.arrow_downward_rounded
                                 : Icons.arrow_upward_rounded,
                             color: prevDelta > 0
-                                ? AppThemes.success
+                                ? const Color(0xFF10B981)
                                 : Colors.redAccent,
                             size: 14,
                           ),
@@ -343,7 +350,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 : '-${context.sar(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
-                                  ? AppThemes.success
+                                  ? const Color(0xFF10B981)
                                   : Colors.redAccent,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -438,7 +445,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         } else if (item.spentAmount > item.allocatedAmount * 0.85) {
           progressColor = Colors.orangeAccent;
         } else {
-          progressColor = AppThemes.success;
+          progressColor = const Color(0xFF10B981);
         }
 
         return Container(

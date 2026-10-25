@@ -49,6 +49,8 @@ import '../chat/chat_entry_screen.dart';
 import '../tools/tools_screen.dart';
 import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
+import '../accounts/accounts_overview_screen.dart';
+import '../../services/account_service.dart';
 import '../../services/salary_cycle_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -188,7 +190,15 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     final hid = data['household_id'] as String;
     _fetchCycles(hid);
     _fetchSetup(hid);
+    _fetchAccountsCount(hid);
     return hid;
+  }
+
+  Future<void> _fetchAccountsCount(String hid) async {
+    try {
+      final accounts = await AccountService.instance.getAccounts(hid);
+      if (mounted) setState(() => _accountsCount = accounts.length);
+    } catch (_) {}
   }
 
   Future<void> _fetchCycles(String hid) async {
@@ -232,6 +242,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
   final GlobalKey _categoriesKey = GlobalKey();
   final GlobalKey _balancesKey = GlobalKey();
+  final GlobalKey _commitmentsKey = GlobalKey();
+  int? _accountsCount;
 
   /// First-run checklist data (UX-02): payday, income, members. The income is
   /// also the hero's base (UX-07); null until loaded.
@@ -257,6 +269,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
 
   void _scrollToBalances() {
     final ctx = _balancesKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+    }
+  }
+
+  void _scrollToCommitments() {
+    final ctx = _commitmentsKey.currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
     }
@@ -302,11 +321,17 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       // UX-08: overspent categories right under the hero.
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
       const SizedBox(height: 12),
-      _QuickAccessStrip(
-        onAccountsTap: _scrollToBalances,
+      QuickAccessStrip(
+        accountsCount: _accountsCount,
+        wifeAllowance: _nafaqah?.primaryWife?.allowance.allocated,
+        billsCount: context.watch<RecurringBillsProvider>().summary?.bills.length,
+        onAccountsTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => AccountsOverviewScreen(householdId: hid)),
+        ),
         onNafaqahTap: _scrollToBalances,
-        onBillsTap: () {},
+        onBillsTap: _scrollToCommitments,
         onSmartBasketTap: () => ToolsScreen.open(context, householdId: hid),
+        onViewAllTap: () => ToolsScreen.open(context, householdId: hid),
       ),
       if (showChecklist) ...[
         const SizedBox(height: 12),
@@ -386,7 +411,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   .order('category_code'),
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
-                  color: AppThemes.electricTeal,
+                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                   backgroundColor: context.cardBg,
                   onRefresh: () async {
                     try {
@@ -396,6 +421,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         context.read<BudgetProvider>().refresh(),
                         context.read<RecurringBillsProvider>().fetchBills(),
                         _fetchSetup(hid),
+                        _fetchAccountsCount(hid),
                       ]);
                     } catch (_) {}
                   },
@@ -506,6 +532,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               const SizedBox(height: 16),
                               // Commitments: recurring bills and installments together.
                               Padding(
+                                key: _commitmentsKey,
                                 padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
                                 child: Text(
                                   context.tr('commitments'),
@@ -701,18 +728,48 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   }
 }
 
-class _QuickAccessStrip extends StatelessWidget {
+class QuickAccessStrip extends StatelessWidget {
+  final int? accountsCount;
+  final double? wifeAllowance;
+  final int? billsCount;
   final VoidCallback onAccountsTap;
   final VoidCallback onNafaqahTap;
   final VoidCallback onBillsTap;
   final VoidCallback onSmartBasketTap;
+  final VoidCallback onViewAllTap;
 
-  const _QuickAccessStrip({
+  const QuickAccessStrip({
+    super.key,
+    this.accountsCount,
+    this.wifeAllowance,
+    this.billsCount,
     required this.onAccountsTap,
     required this.onNafaqahTap,
     required this.onBillsTap,
     required this.onSmartBasketTap,
+    required this.onViewAllTap,
   });
+
+  String _accountsLabel(BuildContext context) {
+    if (accountsCount != null && accountsCount! > 0) {
+      return '${context.tr('quick_accounts')} ($accountsCount)';
+    }
+    return context.tr('quick_accounts');
+  }
+
+  String _wifeAllowanceLabel(BuildContext context) {
+    if (wifeAllowance != null && wifeAllowance! > 0) {
+      return '${context.tr('quick_wife_allowance')} (${context.sar(wifeAllowance!)})';
+    }
+    return context.tr('quick_wife_allowance');
+  }
+
+  String _billsLabel(BuildContext context) {
+    if (billsCount != null && billsCount! > 0) {
+      return '${context.tr('quick_bills')} ($billsCount)';
+    }
+    return context.tr('quick_bills');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -727,20 +784,27 @@ class _QuickAccessStrip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'وصول سريع',
+                context.tr('quick_access'),
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: context.textPrimary,
                 ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
               ),
-              Text(
-                'عرض الكل',
-                style: GoogleFonts.outfit(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.accentRose,
-                ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+              InkWell(
+                onTap: onViewAllTap,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    context.tr('show_all'),
+                    style: GoogleFonts.outfit(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.accentRose,
+                    ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+                  ),
+                ),
               ),
             ],
           ),
@@ -751,13 +815,13 @@ class _QuickAccessStrip extends StatelessWidget {
           physics: const BouncingScrollPhysics(),
           child: Row(
             children: [
-              _buildMiniPill(context, '💳', 'الحسابات (3)', onAccountsTap),
+              _buildMiniPill(context, '💳', _accountsLabel(context), onAccountsTap),
               const SizedBox(width: 8),
-              _buildMiniPill(context, '⚖️', 'مصروف الزوجة (420)', onNafaqahTap),
+              _buildMiniPill(context, '⚖️', _wifeAllowanceLabel(context), onNafaqahTap),
               const SizedBox(width: 8),
-              _buildMiniPill(context, '📅', 'الفواتير (4)', onBillsTap),
+              _buildMiniPill(context, '📅', _billsLabel(context), onBillsTap),
               const SizedBox(width: 8),
-              _buildMiniPill(context, '🛒', 'السلة الذكية', onSmartBasketTap),
+              _buildMiniPill(context, '🛒', context.tr('quick_smart_basket'), onSmartBasketTap),
             ],
           ),
         ),

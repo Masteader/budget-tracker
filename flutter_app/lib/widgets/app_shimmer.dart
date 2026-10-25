@@ -14,8 +14,8 @@ class AppShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: isDark ? const Color(0xFF161B22) : const Color(0xFFE2E8F0),
-      highlightColor: isDark ? const Color(0xFF262C36) : const Color(0xFFF8FAFC),
+      baseColor: isDark ? const Color(0xFF1E0B12) : const Color(0xFFE2E8F0),
+      highlightColor: isDark ? const Color(0xFF2C101B) : const Color(0xFFFDF8FA),
       child: child,
     );
   }

@@ -130,7 +130,9 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
       return Container(
         height: 260,
         alignment: Alignment.center,
-        child: const CircularProgressIndicator(color: AppThemes.success),
+        child: CircularProgressIndicator(
+          color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+        ),
       );
     }
 
@@ -198,10 +200,14 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppThemes.success.withValues(alpha: 0.15),
+                    color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.swap_horiz_rounded, color: AppThemes.success, size: 22),
+                  child: Icon(
+                    Icons.swap_horiz_rounded,
+                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -245,12 +251,12 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: isActive
-                            ? AppThemes.success.withValues(alpha: 0.08)
+                            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.12) : const Color(0xFF4A0E1E).withValues(alpha: 0.08))
                             : context.cardBg,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isActive
-                              ? AppThemes.success
+                              ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
                               : context.borderColor,
                           width: isActive ? 1.4 : 1.0,
                         ),
@@ -259,7 +265,9 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                         children: [
                           Icon(
                             isActive ? Icons.radio_button_checked : Icons.radio_button_off,
-                            color: isActive ? AppThemes.success : context.textSecondary,
+                            color: isActive
+                                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                : context.textSecondary,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -285,11 +293,13 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: m.isAdmin
-                                            ? AppThemes.success.withValues(alpha: 0.15)
-                                            : const Color(0xFF58A6FF).withValues(alpha: 0.15),
+                                            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.18) : const Color(0xFF4A0E1E).withValues(alpha: 0.1))
+                                            : (context.isDark ? const Color(0xFFC7AEB6).withValues(alpha: 0.15) : const Color(0xFF7A152E).withValues(alpha: 0.08)),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: m.isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
+                                          color: m.isAdmin
+                                              ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                              : (context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E)),
                                           width: 0.6,
                                         ),
                                       ),
@@ -298,7 +308,9 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: m.isAdmin ? AppThemes.success : const Color(0xFF58A6FF),
+                                          color: m.isAdmin
+                                              ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                              : (context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E)),
                                         ),
                                       ),
                                     ),
@@ -320,23 +332,26 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: AppThemes.success.withValues(alpha: 0.2),
+                                color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 context.tr('active_badge'),
                                 style: TextStyle(
-                                  color: context.successText,
+                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
                           if (isSwitching)
-                            const SizedBox(
+                            SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                              ),
                             ),
                         ],
                       ),
@@ -369,8 +384,8 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppThemes.success,
-                      foregroundColor: Colors.black,
+                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),

@@ -35,8 +35,9 @@ class PaydayCheckinBanner extends StatefulWidget {
   /// banner never appeared.
   static const String sourceTypeColumn = 'source_type';
 
-  /// Whether [now] falls in the typical Saudi payday window (25th to 3rd).
-  static bool isPaydayWindow(DateTime now) => now.day >= 25 || now.day <= 3;
+  /// Whether [now] falls in the typical Saudi payday window (27th to 3rd).
+  /// Saudi public/private salary deposits occur on the 27th of the month.
+  static bool isPaydayWindow(DateTime now) => now.day >= 27 || now.day <= 3;
 
   /// Default lookup against Supabase.
   static Future<bool> supabaseSalaryLookup(String householdId, DateTime since) async {
@@ -102,19 +103,19 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
-              ? [const Color(0xFF0F3B2E), const Color(0xFF092822)]
-              : [const Color(0xFFE6FAF5), const Color(0xFFD4F8ED)],
+              ? [const Color(0xFF4A0E1E), const Color(0xFF2A050E)]
+              : [const Color(0xFFFFF1F4), const Color(0xFFFCEEF2)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: context.electricTeal.withValues(alpha: 0.4),
+          color: isDark ? const Color(0x40F0A3BC) : const Color(0xFFF2DCE2),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: context.electricTeal.withValues(alpha: 0.1),
+            color: const Color(0xFF4A0E1E).withValues(alpha: isDark ? 0.35 : 0.08),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -125,12 +126,12 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: context.electricTeal.withValues(alpha: 0.2),
+              color: isDark ? const Color(0xFF5E1327) : const Color(0xFFFCEEF2),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.celebration_rounded,
-              color: context.electricTeal,
+              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
               size: 20,
             ),
           ),
@@ -169,11 +170,11 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.electricTeal,
-              foregroundColor: context.scaffoldBg,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              backgroundColor: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              foregroundColor: isDark ? const Color(0xFF1E040B) : Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               minimumSize: const Size(48, 40),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
             child: Text(

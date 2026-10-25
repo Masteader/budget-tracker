@@ -45,7 +45,7 @@ class VelvetBurgundyColors {
 
   // ─── Text Ink Tokens ─────────────────────────────────────────────────────────
   static const Color textPrimaryLight = Color(0xFF1E040B);
-  static const Color textSecondaryLight = Color(0xFF7E6C72);
+  static const Color textSecondaryLight = Color(0xFF6F5E64);
   static const Color textPrimaryDark = Color(0xFFFDF8FA);
   static const Color textSecondaryDark = Color(0xFFC7AEB6);
 }
@@ -150,6 +150,22 @@ class VelvetBurgundyTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: VelvetBurgundyColors.surfaceLight,
+        indicatorColor: VelvetBurgundyColors.rosePillLight,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
+          color: states.contains(WidgetState.selected)
+              ? VelvetBurgundyColors.primaryLight
+              : VelvetBurgundyColors.textSecondaryLight,
+        ).copyWith(fontFamilyFallback: arabicFallback)),
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? VelvetBurgundyColors.primaryLight
+              : VelvetBurgundyColors.textSecondaryLight,
+        )),
+      ),
       dividerColor: VelvetBurgundyColors.roseBorderLight,
     );
   }
@@ -239,6 +255,22 @@ class VelvetBurgundyTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: VelvetBurgundyColors.surfaceDark,
+        indicatorColor: VelvetBurgundyColors.primaryDark.withValues(alpha: 0.35),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.bold : FontWeight.normal,
+          color: states.contains(WidgetState.selected)
+              ? VelvetBurgundyColors.roseGoldGlow
+              : VelvetBurgundyColors.textSecondaryDark,
+        ).copyWith(fontFamilyFallback: arabicFallback)),
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? VelvetBurgundyColors.roseGoldGlow
+              : VelvetBurgundyColors.textSecondaryDark,
+        )),
       ),
       dividerColor: VelvetBurgundyColors.roseBorderDark,
     );

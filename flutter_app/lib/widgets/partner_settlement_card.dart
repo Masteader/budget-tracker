@@ -56,11 +56,14 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: context.borderColor),
         ),
-        child: const Center(
+        child: Center(
           child: SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.success),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+            ),
           ),
         ),
       );
@@ -79,12 +82,12 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     final stcNote = _data!['stc_pay_note'] as String? ?? context.tr('psc_household_settlement');
     final recEn = _data!['recommendation_en'] as String? ?? '';
 
-    Color badgeColor = AppThemes.success;
+    Color badgeColor = const Color(0xFF10B981);
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String statusTitle = context.tr('psc_balanced');
 
     if (whoOwes == 'partner_owes_me') {
-      badgeColor = AppThemes.success;
+      badgeColor = const Color(0xFF10B981);
       badgeIcon = Icons.arrow_downward_rounded;
       statusTitle = context.tr('psc_partner_owes_you');
     } else if (whoOwes == 'me_owes_partner') {
@@ -262,9 +265,8 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.chipBg,
-                  foregroundColor: AppThemes.success,
-                  side: const BorderSide(color: AppThemes.success),
+                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
