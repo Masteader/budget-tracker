@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:budget_tracker/screens/auth/forgot_password_screen.dart';
 
 void main() {
@@ -120,6 +122,59 @@ void main() {
       expect(verifiedEmail, equals('test@domain.com'));
       expect(verifiedToken, equals('654321'));
       expect(verifiedPass, equals('newpassword123'));
+    });
+
+    testWidgets('Transitions to Step 3 automatically on AuthChangeEvent.passwordRecovery and updates password', (tester) async {
+      final authStreamController = StreamController<AuthState>.broadcast();
+      String? updatedPassword;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ForgotPasswordScreen(
+            initialEmail: 'recovery@domain.com',
+            authStates: authStreamController.stream,
+            onUpdatePassword: (newPass) async {
+              updatedPassword = newPass;
+            },
+          ),
+        ),
+      );
+
+      expect(find.text('Reset Password'), findsOneWidget);
+
+      // Deep link recovery event received
+      authStreamController.add(
+        AuthState(
+          AuthChangeEvent.passwordRecovery,
+          Session(
+            accessToken: 'dummy-token',
+            tokenType: 'bearer',
+            user: const User(
+              id: 'u-1',
+              appMetadata: {},
+              userMetadata: {},
+              aud: 'authenticated',
+              createdAt: '2026-01-01',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Step 3 (Set New Password with no OTP field) is now active
+      expect(find.text('Set New Password'), findsNWidgets(2)); // Title header and button
+      expect(find.byType(TextFormField), findsNWidgets(2)); // New password & Confirm password only
+
+      final textFields = find.byType(TextFormField);
+      await tester.enterText(textFields.at(0), 'securePass999');
+      await tester.enterText(textFields.at(1), 'securePass999');
+
+      await tester.tap(find.byType(ElevatedButton));
+      await tester.pumpAndSettle();
+
+      expect(updatedPassword, equals('securePass999'));
+
+      await authStreamController.close();
     });
   });
 }

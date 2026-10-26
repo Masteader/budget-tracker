@@ -19,6 +19,7 @@ import 'providers/recurring_bills_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/update_password_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
 import 'services/household_resolver.dart';
@@ -153,6 +154,7 @@ class AuthGate extends StatefulWidget {
   final WidgetBuilder? loginBuilder;
   final WidgetBuilder? onboardingBuilder;
   final WidgetBuilder? homeBuilder;
+  final WidgetBuilder? recoveryBuilder;
   final void Function(BuildContext context, String householdId)? onHouseholdReady;
   final void Function(BuildContext context)? onSignedOut;
 
@@ -163,6 +165,7 @@ class AuthGate extends StatefulWidget {
     this.loginBuilder,
     this.onboardingBuilder,
     this.homeBuilder,
+    this.recoveryBuilder,
     this.onHouseholdReady,
     this.onSignedOut,
   });
@@ -179,6 +182,7 @@ class _AuthGateState extends State<AuthGate> {
   String? _userId;
   Future<String?>? _householdFuture;
   String? _initializedHouseholdId;
+  bool _inPasswordRecovery = false;
 
   void _ensureLookup(String userId) {
     if (_userId == userId && _householdFuture != null) return;
@@ -242,11 +246,38 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<AuthState>(
       stream: _authStates,
       builder: (context, snapshot) {
+        final authEvent = snapshot.data?.event;
         final session = snapshot.data?.session;
 
         if (session == null) {
+          _inPasswordRecovery = false;
           _handleSignedOut(context);
           return (widget.loginBuilder ?? (_) => const LoginScreen())(context);
+        }
+
+        if (authEvent == AuthChangeEvent.passwordRecovery) {
+          _inPasswordRecovery = true;
+        } else if (authEvent == AuthChangeEvent.userUpdated || authEvent == AuthChangeEvent.signedOut) {
+          _inPasswordRecovery = false;
+        }
+
+        if (_inPasswordRecovery) {
+          return (widget.recoveryBuilder ??
+              (_) => UpdatePasswordScreen(
+                    onPasswordUpdated: () {
+                      if (mounted) {
+                        setState(() => _inPasswordRecovery = false);
+                      }
+                    },
+                    onCancel: () async {
+                      try {
+                        await supabase.auth.signOut();
+                      } catch (_) {}
+                      if (mounted) {
+                        setState(() => _inPasswordRecovery = false);
+                      }
+                    },
+                  ))(context);
         }
 
         _ensureLookup(session.user.id);

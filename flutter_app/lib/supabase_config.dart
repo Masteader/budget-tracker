@@ -50,6 +50,12 @@ const authRedirectUrl = String.fromEnvironment(
   defaultValue: fastapiBaseUrl,
 );
 
+/// Deep link redirect target for Supabase password recovery.
+const authResetRedirectUrl = String.fromEnvironment(
+  'AUTH_RESET_REDIRECT_URL',
+  defaultValue: 'budgettracker://reset-password',
+);
+
 /// Optional HMAC key for the `X-Signature` header. When provided with
 /// `--dart-define=WEBHOOK_SECRET=...` POST requests are signed; when it is
 /// missing they are sent unsigned and the app still starts normally.

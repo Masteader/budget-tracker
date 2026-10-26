@@ -62,11 +62,33 @@ AUTH_CONFIRM_HTML = f"""<!DOCTYPE html>
 <body>
   <div class="card">
     <div class="ring" aria-hidden="true">✓</div>
-    <h1>تم تأكيد البريد الإلكتروني بنجاح</h1>
-    <p>حسابك مفعّل وجاهز. ارجع للتطبيق وسجّل دخولك.</p>
-    <a href="budgettracker://login" class="btn">فتح التطبيق</a>
+    <h1 id="title">تم تأكيد البريد الإلكتروني بنجاح</h1>
+    <p id="desc">حسابك مفعّل وجاهز. ارجع للتطبيق وسجّل دخولك.</p>
+    <a id="action-btn" href="budgettracker://login" class="btn">فتح التطبيق</a>
     <div class="sub">مشكلة؟ تواصل معنا على <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a></div>
   </div>
+  <script>
+    (function() {{
+      try {{
+        var hash = window.location.hash || '';
+        var search = window.location.search || '';
+        var isRecovery = hash.indexOf('type=recovery') !== -1 || search.indexOf('type=recovery') !== -1;
+        if (isRecovery) {{
+          document.title = 'إعادة تعيين كلمة المرور | Budget Tracker';
+          var h1 = document.getElementById('title');
+          var desc = document.getElementById('desc');
+          var btn = document.getElementById('action-btn');
+          if (h1) h1.textContent = 'استعادة كلمة المرور';
+          if (desc) desc.textContent = 'تم التحقق من رابط الاستعادة. اضغط على الزر أدناه لفتح التطبيق وتعيين كلمة المرور الجديدة.';
+          if (btn) {{
+            btn.textContent = 'فتح التطبيق لتعيين كلمة المرور';
+            btn.href = 'budgettracker://reset-password' + (hash || search);
+            window.location.href = btn.href;
+          }}
+        }}
+      }} catch (_) {{}}
+    }})();
+  </script>
 </body>
 </html>"""
 
