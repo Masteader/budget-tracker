@@ -79,6 +79,7 @@ class ChatLineItem(BaseModel):
         return min(float(v), 10_000.0)
 
 class ParsedChatExpense(BaseModel):
+    intent: str = Field("transaction", description="'transaction' | 'simulation' | 'app_guidance' | 'off_topic'")
     is_transaction: bool = Field(True, description="Whether the text represents a financial expense to record")
     is_simulation: bool = Field(False, description="Whether the user is asking an affordability simulation question like 'Can I buy a 1200 SAR iPad?' or 'أقدر اشتري ايباد بـ 1200 ريال؟'")
     simulated_amount: Optional[float] = Field(None, description="Simulated purchase price in SAR")
@@ -193,6 +194,7 @@ URDU (اردو) inputs are common among residents; parse them the same way ("م�
 
 Return STRICTLY valid JSON conforming to:
 {
+  "intent": "transaction" | "simulation" | "app_guidance" | "off_topic",
   "is_transaction": true,
   "is_simulation": false,
   "simulated_amount": null,
@@ -208,6 +210,11 @@ Return STRICTLY valid JSON conforming to:
   "items": [{"name": "...", "quantity": 1, "price": 0.0, "sub_category": "..."}],
   "notes": "..."
 }
+RULES FOR INTENT:
+- 'transaction': financial expense to record (buying items, food, bills, rent, services, etc.)
+- 'simulation': asking about affordability/purchasing power ('Can I buy an iPad?', 'أقدر اشتري ايباد؟')
+- 'app_guidance': questions about the app, features, setup, payday settings, Nafaqah rules, envelopes ('كيف اضبط الراتب؟', 'what is nafaqah?', 'how to use')
+- 'off_topic': casual chit-chat, jokes, bedtime stories, weather, coding, or unrelated non-financial conversation ('tell me a story', 'what is the weather?', 'كيف حالك')
 """
 
 # ─── Heuristic attribution vocabulary (FABLE-LOGIC-07) ─────────────────────────
@@ -466,6 +473,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             cat_code = "OPEX-GROCERY"
 
         return ParsedChatExpense(
+            intent="simulation",
             is_transaction=False,
             is_simulation=True,
             simulated_amount=sim_amt,
@@ -478,6 +486,41 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             items=[],
             notes="Heuristic simulation detection",
         )
+
+    # Off-topic banter check (checked first to catch weather, stories, jokes, chit-chat)
+    offtopic_cues = [
+        "story", "joke", "weather", "dragon", "poem", "python", "javascript", "code", "quicksort",
+        "who are you", "what are you", "how are you", "hello", "hi", "hey", "tell me",
+        "قصة", "حكاية", "نكتة", "الطقس", "جو اليوم", "برمج", "كود", "من انت", "مين انت", "كيف حالك",
+        "اخبارك", "شخبارك", "صباح الخير", "مساء الخير", "سوالف", "سالفة", "دردش", "سولف"
+    ]
+    if any(k in lower for k in offtopic_cues) and not any(k in lower for k in ("بـ", "ب ", "sar", "ريال", "دفعت", "شريت")):
+        return ParsedChatExpense(
+            intent="off_topic",
+            is_transaction=False,
+            is_simulation=False,
+            notes="Heuristic off-topic detection",
+        )
+
+    # App guidance check
+    guidance_cues = [
+        "كيف اضبط", "كيف اغير", "كيف اسوي", "كيف اسجل", "كيف اضيف", "كيف اشغل", "طريقة", "شرح التطبيق",
+        "وش هي النفقة", "ما هي النفقة", "ماهي النفقة", "وش هو التطبيق", "ما هو التطبيق", "ماهو التطبيق",
+        "النفقة", "الرواتب", "دورة الراتب", "الحسابات", "محفظة", "توفير",
+        "كيف استخدم", "how to use", "how do i", "explain nafaqah", "explain envelopes", "explain payday",
+        "what is nafaqah", "what is payday", "what is an envelope", "tutorial", "payday", "nafaqah",
+        "مساعدة في التطبيق", "ابغى اعرف عن التطبيق", "علمني عن التطبيق", "الميزانية كيف", "envelope",
+        "كيف اقسم", "شرح", "تعليمات"
+    ]
+    if any(k in lower for k in guidance_cues) and not any(k in lower for k in ("بـ", "ب ", "sar", "ريال", "دفعت", "شريت")):
+        return ParsedChatExpense(
+            intent="app_guidance",
+            is_transaction=False,
+            is_simulation=False,
+            notes="Heuristic app guidance detection",
+        )
+
+
 
     # Attribution 2D: paid_by and beneficiary (FABLE-LOGIC-07). The other spouse paying is checked
     # first ("دفعت زوجتي" also contains "دفعت", "paid by my husband" also contains "paid").
@@ -722,7 +765,16 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             needs_confirmation = external or not (payer_cue or beneficiary_cue)
             break
 
+    if total_amount == 0.0 and (merchant == "Unknown Merchant" or not items):
+        return ParsedChatExpense(
+            intent="off_topic",
+            is_transaction=False,
+            is_simulation=False,
+            notes="No financial transaction detected in text",
+        )
+
     return ParsedChatExpense(
+        intent="transaction",
         is_transaction=True,
         merchant=merchant,
         total_amount=total_amount,
@@ -736,6 +788,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         notes="Parsed via robust heuristic fallback",
         attribution_needs_confirmation=needs_confirmation,
     )
+
 
 
 def parse_chat_expense(text: str) -> ParsedChatExpense:
@@ -755,7 +808,17 @@ def parse_chat_expense(text: str) -> ParsedChatExpense:
         )
         content = response.choices[0].message.content
         data = json.loads(content)
-        return ParsedChatExpense(**data)
+        parsed = ParsedChatExpense(**data)
+        if parsed.intent == "off_topic":
+            parsed.is_transaction = False
+            parsed.is_simulation = False
+        elif parsed.intent == "simulation":
+            parsed.is_simulation = True
+            parsed.is_transaction = False
+        elif parsed.intent == "app_guidance":
+            parsed.is_transaction = False
+            parsed.is_simulation = False
+        return parsed
     except Exception as exc:
         logger.warning("LiteLLM completion failed (%s). Using fallback heuristic parser.", exc)
         return _fallback_heuristic_parse(text)
@@ -866,6 +929,20 @@ def process_chat_transaction(
             "post_purchase_remaining": sim_res["post_purchase_remaining"],
             "current_daily_allowance": sim_res["current_daily_allowance"],
             "post_purchase_daily_allowance": sim_res["post_purchase_daily_allowance"],
+        }
+
+    if parsed.intent == "off_topic":
+        return {
+            "status": "off_topic",
+            "intent": "off_topic",
+            "message": "Off-topic chit-chat detected.",
+        }
+
+    if parsed.intent == "app_guidance":
+        return {
+            "status": "app_guidance",
+            "intent": "app_guidance",
+            "message": "App guidance requested.",
         }
 
     if not parsed.is_transaction:

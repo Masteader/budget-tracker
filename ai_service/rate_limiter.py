@@ -260,3 +260,70 @@ async def check_api_quota(
 def reset_rate_limiters() -> None:
     """Reset in-memory rate limiter histories for testing."""
     default_rate_limiter._memory_history.clear()
+    reset_offtopic_strikes()
+
+
+OFFTOPIC_STRIKE_WINDOW_SECONDS = 3600  # 1 hour sliding window
+OFFTOPIC_LOCKOUT_SECONDS = 900          # 15 minutes lockout
+MAX_OFFTOPIC_STRIKES = 3
+
+_offtopic_strikes: dict[str, list[dict]] = {}
+_offtopic_lockouts: dict[str, float] = {}
+
+
+def is_chat_locked_out(user_id: Optional[str]) -> tuple[bool, int]:
+    """
+    Check if the user is currently locked out from AI chat.
+    Returns (is_locked, remaining_seconds).
+    """
+    if not user_id:
+        return False, 0
+    now = time.time()
+    lockout_until = _offtopic_lockouts.get(user_id, 0.0)
+    if now < lockout_until:
+        return True, max(1, int(lockout_until - now))
+    if user_id in _offtopic_lockouts:
+        del _offtopic_lockouts[user_id]
+    return False, 0
+
+
+def record_offtopic_strike(
+    user_id: Optional[str],
+    message: Optional[str] = None,
+) -> tuple[int, bool, int]:
+    """
+    Record an off-topic chit-chat strike for the user within a 1-hour sliding window.
+    Returns (current_strikes, is_locked_out, retry_after_seconds).
+    """
+    if not user_id:
+        return 1, False, 0
+    now = time.time()
+    cutoff = now - OFFTOPIC_STRIKE_WINDOW_SECONDS
+
+    history = _offtopic_strikes.get(user_id, [])
+    valid_entries = [entry for entry in history if entry.get("timestamp", 0) > cutoff]
+    valid_entries.append({"timestamp": now, "message": (message or "")[:1000]})
+    _offtopic_strikes[user_id] = valid_entries
+
+    strikes = len(valid_entries)
+    if strikes >= MAX_OFFTOPIC_STRIKES:
+        _offtopic_lockouts[user_id] = now + OFFTOPIC_LOCKOUT_SECONDS
+        return strikes, True, OFFTOPIC_LOCKOUT_SECONDS
+
+    return strikes, False, 0
+
+
+def get_offtopic_history(user_id: str) -> list[dict]:
+    """Retrieve recorded off-topic messages for reporting/auditing."""
+    return list(_offtopic_strikes.get(user_id, []))
+
+
+def reset_offtopic_strikes(user_id: Optional[str] = None) -> None:
+    """Reset off-topic strikes and lockouts (for test cleanup)."""
+    if user_id:
+        _offtopic_strikes.pop(user_id, None)
+        _offtopic_lockouts.pop(user_id, None)
+    else:
+        _offtopic_strikes.clear()
+        _offtopic_lockouts.clear()
+

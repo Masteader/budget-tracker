@@ -15,7 +15,7 @@ from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
 from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
 from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
-from rate_limiter import check_api_quota
+from rate_limiter import check_api_quota, is_chat_locked_out, record_offtopic_strike
 from chat_parser import process_chat_transaction
 from preview_token import InvalidPreviewToken
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
@@ -25,7 +25,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Results that represent a finished request and are safe to return again on replay.
-REPLAYABLE_STATUSES = {"success", "enriched", "duplicate_candidate", "simulation", "non_transactional"}
+REPLAYABLE_STATUSES = {
+    "success", "enriched", "duplicate_candidate", "simulation", "non_transactional",
+    "off_topic_warning", "app_guidance",
+}
 
 
 @router.post(
@@ -54,6 +57,18 @@ async def chat_transaction(request: Request):
     (positive, at most 10,000,000, rounded to halalas; 422 otherwise).
     """
     user_id = get_current_user_id(request)
+    locked, retry_after = is_chat_locked_out(user_id)
+    if locked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "chat_locked_out",
+                "message": "Chat access is temporarily suspended due to repeated off-topic use. Please resume financial tracking in 15 minutes.",
+                "message_ar": "تم تعليق استخدام المحادثة مؤقتاً لمدة 15 دقيقة بسبب الاستخدام المتكرر خارج نطاق التطبيق. يرجى العودة لتسجيل المصاريف لاحقاً.",
+                "retry_after_seconds": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
     raw_body = await request.body()
     try:
         body = json.loads(raw_body.decode("utf-8"))
@@ -174,6 +189,31 @@ async def chat_transaction(request: Request):
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)
         raise safe_error_response(exc, public_message="Failed to process chat transaction.")
+
+    if isinstance(result, dict) and (result.get("status") == "off_topic" or result.get("intent") == "off_topic"):
+        strikes, is_locked, retry_after = record_offtopic_strike(user_id, message)
+        if is_locked:
+            if use_idempotency:
+                await idempotency_store.release(user_id, "chat-transaction", idem_key)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": "chat_locked_out",
+                    "message": "Chat access is temporarily suspended due to repeated off-topic use. Please resume financial tracking in 15 minutes.",
+                    "message_ar": "تم تعليق استخدام المحادثة مؤقتاً لمدة 15 دقيقة بسبب الاستخدام المتكرر خارج نطاق التطبيق. تنبيه 3 من 3.",
+                    "retry_after_seconds": retry_after,
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
+        warning_ar = f"عذراً، هذا المساعد مخصص فقط لتسجيل المصاريف، محاكاة القدرة المالية، والدعم الفني للتطبيق. تنبيه {strikes} من 3."
+        warning_en = f"Sorry, this assistant is strictly reserved for recording expenses, affordability simulations, and app support. Warning {strikes} of 3."
+        result = {
+            "status": "off_topic_warning",
+            "strikes": strikes,
+            "max_strikes": 3,
+            "message": warning_ar,
+            "message_en": warning_en,
+        }
 
     if use_idempotency:
         if isinstance(result, dict) and result.get("status") in REPLAYABLE_STATUSES:
