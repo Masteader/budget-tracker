@@ -47,6 +47,7 @@ class ManualExpenseSheet extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow;
   final String? Function()? currentUserId;
   final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
+  final Future<List<Account>> Function(String householdId)? loadAccounts;
 
   const ManualExpenseSheet({
     super.key,
@@ -61,6 +62,7 @@ class ManualExpenseSheet extends StatefulWidget {
     this.enqueueRow,
     this.currentUserId,
     this.loadNafaqah,
+    this.loadAccounts,
   });
 
   static Future<void> show(
@@ -143,15 +145,18 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final hid = widget.householdId;
     if (hid == null || hid.isEmpty) return;
     try {
-      final list = await AccountService.instance.getAccounts(hid);
+      final list = widget.loadAccounts != null
+          ? await widget.loadAccounts!(hid)
+          : await AccountService.instance.getAccounts(hid);
       if (mounted) {
         setState(() {
           _accounts = list;
         });
         await _updateDefaultAccountForCategory(_selectedCategory);
         if (_selectedAccountId == null && list.isNotEmpty && mounted) {
+          final defaultAcc = list.where((a) => a.accountType.isOperatingPool).firstOrNull ?? list.first;
           setState(() {
-            _selectedAccountId = list.first.id;
+            _selectedAccountId = defaultAcc.id;
           });
         }
       }
@@ -334,6 +339,23 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     if (merchant.isEmpty) {
       AppSnackBar.showError(context, context.tr('mes_merchant_required'));
       return;
+    }
+
+    // Zero-Balance Overdraft Guard: prevent spending more than available account balance.
+    if (_selectedAccountId != null && _accounts.isNotEmpty) {
+      final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
+      if (selectedAcc != null && amount > selectedAcc.balance) {
+        AppSnackBar.showError(
+          context,
+          context.trArgs('insufficient_funds_msg', {
+            'account': selectedAcc.name,
+            'balance': context.sar(selectedAcc.balance),
+            'amount': context.sar(amount),
+          }),
+          title: context.tr('insufficient_funds_title'),
+        );
+        return;
+      }
     }
 
     setState(() => _isSaving = true);
