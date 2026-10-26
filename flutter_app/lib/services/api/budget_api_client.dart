@@ -393,6 +393,28 @@ class BudgetApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> replaceBudgetCategory({
+    required String householdId,
+    required String oldCode,
+    required String newName,
+    String? newCode,
+    String? cycleKey,
+  }) async {
+    final res = await baseClient.post(
+      '/budgets/categories/replace',
+      {
+        'household_id': householdId,
+        'old_code': oldCode,
+        'new_name': newName,
+        if (newCode != null && newCode.isNotEmpty) 'new_code': newCode,
+        if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+      },
+      shouldSign: false,
+      timeout: const Duration(seconds: 10),
+    );
+    return ApiRequestException.check(res);
+  }
+
   Future<Map<String, dynamic>> saveSubAllocations({
     required String householdId,
     required String categoryCode,

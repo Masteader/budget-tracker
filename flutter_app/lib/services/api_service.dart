@@ -406,6 +406,21 @@ class ApiService {
   Future<Map<String, dynamic>> archiveBudgetCategory(String householdId, String categoryCode) =>
       budget.archiveBudgetCategory(householdId, categoryCode);
 
+  Future<Map<String, dynamic>> replaceCategory({
+    required String householdId,
+    required String oldCode,
+    required String newName,
+    String? newCode,
+    String? cycleKey,
+  }) =>
+      budget.replaceBudgetCategory(
+        householdId: householdId,
+        oldCode: oldCode,
+        newName: newName,
+        newCode: newCode,
+        cycleKey: cycleKey,
+      );
+
   Future<Map<String, dynamic>> saveSubAllocations({
     required String householdId,
     required String categoryCode,

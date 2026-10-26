@@ -10,6 +10,7 @@ import '../../services/api_service.dart';
 import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
 import '../../widgets/categories/category_library_sheet.dart';
+import '../../widgets/categories/category_lifecycle_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/app_shimmer.dart';
@@ -803,43 +804,81 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     String currentName,
     bool isSystem,
   ) async {
-    if (isSystem) {
-      await showDialog<void>(
+    // 1. Query past expenses associated with this category in this household
+    int txCount = 0;
+    try {
+      final countRes = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('household_id', staticData.householdId)
+          .eq('category_code', categoryCode)
+          .count();
+      txCount = countRes.count;
+    } catch (_) {
+      txCount = 0;
+    }
+
+    if (!mounted) return;
+
+    if (txCount > 0) {
+      // 2. Transactions exist: Show CategoryLifecycleDialog offering Replace vs Rename
+      await CategoryLifecycleDialog.show(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: context.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.info_outline_rounded, color: context.accentText, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  context.tr('cannot_rename_system_cat'),
-                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            context.tr('cannot_rename_system_cat_desc'),
-            style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: context.primaryButtonBg,
-                foregroundColor: context.primaryButtonFg,
-              ),
-              child: Text(context.tr('close'), style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
+        categoryCode: categoryCode,
+        currentName: currentName,
+        transactionCount: txCount,
+        onConfirm: (action, newName) async {
+          if (newName.isEmpty || newName == currentName) return;
+          try {
+            if (action == CategoryLifecycleAction.replaceAndArchive) {
+              await ApiService.instance.replaceCategory(
+                householdId: staticData.householdId,
+                oldCode: categoryCode,
+                newName: newName,
+              );
+              if (mounted) {
+                setState(() {
+                  _staticFuture = _loadStaticData();
+                });
+                AppSnackBar.showSuccess(
+                  context,
+                  context.trArgs('category_replaced_msg', {'name': newName}),
+                  title: context.tr('category_renamed'),
+                );
+              }
+            } else {
+              // Rename Only
+              await supabase
+                  .from('cost_control_codes')
+                  .update({'category': newName})
+                  .eq('code', categoryCode)
+                  .eq('household_id', staticData.householdId);
+              if (mounted) {
+                setState(() {
+                  _staticFuture = _loadStaticData();
+                });
+                AppSnackBar.showSuccess(
+                  context,
+                  context.trArgs('category_renamed_msg', {'name': newName}),
+                  title: context.tr('category_renamed'),
+                );
+              }
+            }
+          } catch (e) {
+            if (mounted) {
+              AppSnackBar.showError(
+                context,
+                context.trArgs('category_rename_failed_msg', {'error': e.toString()}),
+                title: context.tr('category_rename_failed'),
+              );
+            }
+          }
+        },
       );
       return;
     }
 
+    // 3. Zero transactions: Direct simple rename or replace if system category
     final nameCtrl = TextEditingController(text: currentName);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -884,11 +923,19 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     if (newName.isEmpty || newName == currentName) return;
 
     try {
-      await supabase
-          .from('cost_control_codes')
-          .update({'category': newName})
-          .eq('code', categoryCode)
-          .eq('household_id', staticData.householdId);
+      if (isSystem || !categoryCode.startsWith('CUSTOM-')) {
+        await ApiService.instance.replaceCategory(
+          householdId: staticData.householdId,
+          oldCode: categoryCode,
+          newName: newName,
+        );
+      } else {
+        await supabase
+            .from('cost_control_codes')
+            .update({'category': newName})
+            .eq('code', categoryCode)
+            .eq('household_id', staticData.householdId);
+      }
 
       if (mounted) {
         setState(() {
