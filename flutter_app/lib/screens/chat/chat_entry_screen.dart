@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,6 +21,10 @@ import '../../widgets/chat/voice_language_button.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
+import '../accounts/accounts_overview_screen.dart';
+import '../home/budget_management_screen.dart';
+import '../settings/settings_screen.dart';
+import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 
 /// Key under which a preview keeps the exact text it was parsed from.
 const String _previewMessageKey = 'preview_message';
@@ -37,6 +42,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   String? _householdId;
+
+  // 15-Minute Strike 3 Lockout countdown state
+  int _lockoutRemainingSeconds = 0;
+  Timer? _lockoutTimer;
 
   // Speech-to-text state
   late final stt.SpeechToText _speech;
@@ -72,12 +81,68 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
 
   @override
   void dispose() {
+    _lockoutTimer?.cancel();
     if (_isListening) {
       _speech.stop();
     }
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _startLockoutCountdown(int seconds) {
+    _lockoutTimer?.cancel();
+    setState(() {
+      _lockoutRemainingSeconds = seconds;
+    });
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_lockoutRemainingSeconds <= 1) {
+        timer.cancel();
+        setState(() {
+          _lockoutRemainingSeconds = 0;
+        });
+      } else {
+        setState(() {
+          _lockoutRemainingSeconds -= 1;
+        });
+      }
+    });
+  }
+
+  void _handleGuidanceAction(String actionId) {
+    switch (actionId) {
+      case 'open_tutor':
+        UserGuideWalkthroughDialog.show(context);
+        break;
+      case 'open_payday':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        );
+        break;
+      case 'open_budgets':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const BudgetManagementScreen()),
+        );
+        break;
+      case 'open_accounts':
+        if (_householdId != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => AccountsOverviewScreen(householdId: _householdId!)),
+          );
+        }
+        break;
+      case 'open_roles':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -283,6 +348,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     String? enrichTxId,
     bool previewOnly = true,
   }) async {
+    if (_lockoutRemainingSeconds > 0) return;
     if (_isListening) {
       await _speech.stop();
       if (!mounted) return;
@@ -328,8 +394,60 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     setState(() {
       _isLoading = false;
       final status = res['status'] as String? ?? 'error';
+      final isLockout = res['status_code'] == 429 ||
+          (res['detail'] is Map && res['detail']['code'] == 'chat_locked_out') ||
+          res['code'] == 'chat_locked_out';
 
-      if (status == 'simulation') {
+      if (isLockout) {
+        int retrySeconds = 900;
+        if (res['detail'] is Map && res['detail']['retry_after_seconds'] != null) {
+          retrySeconds = (res['detail']['retry_after_seconds'] as num).toInt();
+        } else if (res['retry_after_seconds'] != null) {
+          retrySeconds = (res['retry_after_seconds'] as num).toInt();
+        }
+        _startLockoutCountdown(retrySeconds);
+        final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
+        final lockMsg = (res['detail'] is Map && lang == 'ar' && res['detail']['message_ar'] != null)
+            ? res['detail']['message_ar'] as String
+            : (res['message']?.toString() ??
+                context.trArgs('chat_locked_out_banner', {
+                  'minutes': '${retrySeconds ~/ 60}',
+                  'seconds': '${retrySeconds % 60}',
+                }));
+        _messages.add(
+          ChatMessage(
+            isUser: false,
+            text: lockMsg,
+            isOffTopicWarning: true,
+          ),
+        );
+      } else if (status == 'off_topic_warning') {
+        final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
+        final warningMsg = (lang == 'ar' ? res['message'] : res['message_en']) ??
+            res['message'] ??
+            context.trArgs('chat_offtopic_warning', {
+              'current': '${res['strikes'] ?? 1}',
+              'max': '${res['max_strikes'] ?? 3}',
+            });
+        _messages.add(
+          ChatMessage(
+            isUser: false,
+            text: warningMsg.toString(),
+            isOffTopicWarning: true,
+          ),
+        );
+      } else if (status == 'app_guidance') {
+        final actions = (res['actions'] as List?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _messages.add(
+          ChatMessage(
+            isUser: false,
+            text: res['message'] ?? '',
+            guidanceActions: actions,
+          ),
+        );
+      } else if (status == 'simulation') {
         _messages.add(
           ChatMessage(
             isUser: false,
@@ -586,6 +704,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   final msg = _messages[idx];
                   return ChatMessageBubble(
                     message: msg,
+                    onActionTap: _handleGuidanceAction,
                     onConfirmPending: (store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits) {
                       _confirmPendingExpense(msg, store, cat, subCat, paidBy, beneficiary, nafaqahClass, nafaqahSpouseId, edits);
                     },
@@ -634,6 +753,38 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   ],
                 ),
               ),
+            if (_lockoutRemainingSeconds > 0)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: context.isDark ? const Color(0xFF3B1D16) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: context.isDark ? Colors.red.shade900 : Colors.red.shade300,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_clock_rounded, color: Colors.redAccent, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        context.trArgs('chat_locked_out_banner', {
+                          'minutes': '${_lockoutRemainingSeconds ~/ 60}',
+                          'seconds': '${_lockoutRemainingSeconds % 60}',
+                        }),
+                        style: TextStyle(
+                          color: context.isDark ? const Color(0xFFFECACA) : const Color(0xFF991B1B),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // Quick suggestions chips
             SizedBox(
               height: 42,
@@ -665,7 +816,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         _quickChips(context)[i],
                         style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: context.textPrimary),
                       ),
-                      onPressed: () => _sendMessage(_quickChips(context)[i]),
+                      onPressed: _lockoutRemainingSeconds > 0 ? null : () => _sendMessage(_quickChips(context)[i]),
                     ),
                   );
                 },
@@ -698,12 +849,18 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      enabled: _lockoutRemainingSeconds == 0,
                       textInputAction: TextInputAction.send,
-                      onSubmitted: (v) => _sendMessage(v),
+                      onSubmitted: _lockoutRemainingSeconds > 0 ? null : (v) => _sendMessage(v),
                       style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: AppLocalizations(Locale(_selectedLocale.substring(0, 2))).get('chat_input_hint'),
-                        hintStyle: TextStyle(color: context.textSecondary, fontSize: 13),
+                        hintText: _lockoutRemainingSeconds > 0
+                            ? context.tr('chat_locked_out_input_placeholder')
+                            : AppLocalizations(Locale(_selectedLocale.substring(0, 2))).get('chat_input_hint'),
+                        hintStyle: TextStyle(
+                          color: _lockoutRemainingSeconds > 0 ? Colors.red.shade400 : context.textSecondary,
+                          fontSize: 13,
+                        ),
                         filled: true,
                         fillColor: context.inputBg,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -752,11 +909,13 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_rounded,
-                        color: _isListening ? Colors.white : context.primaryButtonBg,
+                        color: _lockoutRemainingSeconds > 0
+                            ? context.textSecondary.withValues(alpha: 0.4)
+                            : (_isListening ? Colors.white : context.primaryButtonBg),
                         size: 20,
                       ),
                       tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
-                      onPressed: _toggleListening,
+                      onPressed: _lockoutRemainingSeconds > 0 ? null : _toggleListening,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -765,24 +924,33 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: context.icedHeroGradient.colors,
-                      ),
+                      gradient: _lockoutRemainingSeconds > 0
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: context.icedHeroGradient.colors,
+                            ),
+                      color: _lockoutRemainingSeconds > 0 ? context.borderColor : null,
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: context.primaryButtonBg.withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      boxShadow: _lockoutRemainingSeconds > 0
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: context.primaryButtonBg.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 19),
+                      icon: Icon(
+                        Icons.send_rounded,
+                        color: _lockoutRemainingSeconds > 0 ? context.textSecondary : Colors.white,
+                        size: 19,
+                      ),
                       tooltip: context.tr('support_send'),
-                      onPressed: () => _sendMessage(_controller.text),
+                      onPressed: _lockoutRemainingSeconds > 0 ? null : () => _sendMessage(_controller.text),
                     ),
                   ),
                 ],

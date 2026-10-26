@@ -17,6 +17,8 @@ class ChatMessage {
   final Map<String, dynamic>? simulationData;
   final bool isPendingConfirmation;
   final Map<String, dynamic>? pendingData;
+  final bool isOffTopicWarning;
+  final List<Map<String, dynamic>>? guidanceActions;
 
   ChatMessage({
     required this.isUser,
@@ -27,6 +29,8 @@ class ChatMessage {
     this.simulationData,
     this.isPendingConfirmation = false,
     this.pendingData,
+    this.isOffTopicWarning = false,
+    this.guidanceActions,
   });
 }
 
@@ -38,6 +42,7 @@ class ChatMessageBubble extends StatelessWidget {
   final ValueChanged<String>? onEnrichCandidate;
   final ValueChanged<String>? onLogAsNewCandidate;
   final VoidCallback? onDiscardCandidate;
+  final ValueChanged<String>? onActionTap;
 
   const ChatMessageBubble({
     super.key,
@@ -47,6 +52,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onEnrichCandidate,
     this.onLogAsNewCandidate,
     this.onDiscardCandidate,
+    this.onActionTap,
   });
 
   @override
@@ -99,7 +105,9 @@ class ChatMessageBubble extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: context.cardBg,
+                color: message.isOffTopicWarning
+                    ? (context.isDark ? const Color(0xFF2E1A0C) : const Color(0xFFFFF7ED))
+                    : context.cardBg,
                 borderRadius: const BorderRadiusDirectional.only(
                   topStart: Radius.circular(18),
                   topEnd: Radius.circular(18),
@@ -107,7 +115,10 @@ class ChatMessageBubble extends StatelessWidget {
                   bottomStart: Radius.circular(4),
                 ),
                 border: Border.all(
-                  color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
+                  color: message.isOffTopicWarning
+                      ? Colors.amber.shade700
+                      : (context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight),
+                  width: message.isOffTopicWarning ? 1.5 : 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -117,11 +128,55 @@ class ChatMessageBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Text(
-                message.text,
-                style: TextStyle(color: context.textPrimary, fontSize: 14, height: 1.4, fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
-              ),
+              child: message.isOffTopicWarning
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.amber.shade700,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            message.text,
+                            style: TextStyle(
+                              color: message.isOffTopicWarning
+                                  ? (context.isDark ? const Color(0xFFFED7AA) : const Color(0xFF9A3412))
+                                  : context.textPrimary,
+                              fontSize: 14,
+                              height: 1.4,
+                              fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      message.text,
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 14,
+                        height: 1.4,
+                        fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+                      ),
+                    ),
             ),
+            if (message.guidanceActions != null && message.guidanceActions!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final action in message.guidanceActions!)
+                      _buildGuidanceActionChip(context, action),
+                  ],
+                ),
+              ),
+            ],
             if (message.simulationData != null) ...[
               const SizedBox(height: 6),
               PurchaseSimulationCard(simulationData: message.simulationData!),
@@ -164,4 +219,54 @@ class ChatMessageBubble extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildGuidanceActionChip(BuildContext context, Map<String, dynamic> action) {
+    final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    final label = (lang == 'ar'
+            ? action['label_ar']
+            : (lang == 'ur' ? (action['label_ur'] ?? action['label_en']) : action['label_en'])) ??
+        action['id'] ??
+        '';
+    final id = action['id'] as String? ?? '';
+    final IconData icon;
+    switch (id) {
+      case 'open_tutor':
+        icon = Icons.rocket_launch_rounded;
+        break;
+      case 'open_payday':
+        icon = Icons.calendar_month_rounded;
+        break;
+      case 'open_budgets':
+        icon = Icons.pie_chart_rounded;
+        break;
+      case 'open_accounts':
+        icon = Icons.account_balance_wallet_rounded;
+        break;
+      case 'open_roles':
+        icon = Icons.group_rounded;
+        break;
+      default:
+        icon = Icons.arrow_forward_rounded;
+    }
+
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: context.primaryButtonBg),
+      label: Text(
+        label.toString(),
+        style: TextStyle(
+          color: context.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          fontFamilyFallback: VelvetBurgundyTheme.arabicFallback,
+        ),
+      ),
+      backgroundColor: context.cardBg,
+      side: BorderSide(
+        color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onPressed: onActionTap != null ? () => onActionTap!(id) : null,
+    );
+  }
 }
+
