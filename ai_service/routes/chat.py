@@ -21,6 +21,7 @@ from mail_service import OutboundEmail, send_email
 from chat_parser import process_chat_transaction
 from preview_token import InvalidPreviewToken
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
+from support_agent import handle_support_query
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,63 @@ REPLAYABLE_STATUSES = {
     "success", "enriched", "duplicate_candidate", "simulation", "non_transactional",
     "off_topic_warning", "app_guidance",
 }
+
+
+def detect_chat_language(text: str) -> str:
+    """Detect language key ('ar', 'ur', 'en') from text."""
+    if any(c in text for c in "\u06d2\u06ba\u0679\u0688\u0691\u06be"):
+        return "ur"
+    if any("\u0600" <= c <= "\u06FF" for c in text):
+        return "ar"
+    return "en"
+
+
+def map_guidance_actions(message: str) -> list[dict]:
+    """Return contextual action descriptors based on user question."""
+    lower = message.lower()
+    actions = [
+        {
+            "id": "open_tutor",
+            "label_ar": "بدء جولة الإعداد",
+            "label_en": "Launch Setup Tutor",
+            "label_ur": "سیٹ اپ گائیڈ شروع کریں",
+            "route": "open_tutor",
+        }
+    ]
+    if any(w in lower for w in ("payday", "salary", "راتب", "الرواتب", "دورة", "تنخواہ")):
+        actions.append({
+            "id": "open_payday",
+            "label_ar": "تحديد يوم الراتب",
+            "label_en": "Set Payday",
+            "label_ur": "تنخواہ کا دن",
+            "route": "edit_payday",
+        })
+    if any(w in lower for w in ("envelope", "budget", "مغلف", "مغلفات", "ميزانية", "بجٹ", "بنود")):
+        actions.append({
+            "id": "open_budgets",
+            "label_ar": "إدارة الميزانيات",
+            "label_en": "Manage Envelopes",
+            "label_ur": "بجٹ مینج کریں",
+            "route": "manage_budgets",
+        })
+    if any(w in lower for w in ("account", "saving", "bank", "حساب", "ادخار", "توفير", "بنك", "بینک", "بچت")):
+        actions.append({
+            "id": "open_accounts",
+            "label_ar": "الحسابات والادخار",
+            "label_en": "Bank & Savings",
+            "label_ur": "بینک اور بچت",
+            "route": "manage_accounts",
+        })
+    if any(w in lower for w in ("nafaqah", "family", "roommate", "spouse", "نفقة", "نفقہ", "عائلة", "شريك", "روميت")):
+        actions.append({
+            "id": "open_roles",
+            "label_ar": "نمط الأسرة والنفقة",
+            "label_en": "Household Mode",
+            "label_ur": "گھریلو موڈ",
+            "route": "household_mode",
+        })
+    return actions
+
 
 
 @router.post(
@@ -253,6 +311,22 @@ async def chat_transaction(request: Request):
             "max_strikes": 3,
             "message": warning_ar,
             "message_en": warning_en,
+        }
+
+    if isinstance(result, dict) and (result.get("status") == "app_guidance" or result.get("intent") == "app_guidance"):
+        lang = detect_chat_language(message)
+        reply, escalate, summary = await handle_support_query(
+            message=message,
+            household_id=household_id,
+            user_id=user_id,
+            language=lang,
+        )
+        actions = map_guidance_actions(message)
+        result = {
+            "status": "app_guidance",
+            "intent": "app_guidance",
+            "message": reply,
+            "actions": actions,
         }
 
     if use_idempotency:

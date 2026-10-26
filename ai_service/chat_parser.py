@@ -487,6 +487,8 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
             notes="Heuristic simulation detection",
         )
 
+    has_expense_cues = bool(re.search(r'\d+', raw) and any(k in lower for k in ("بـ", "ريال", "sar", "دفعت", "شريت", "اشتريت", "spent", "paid")))
+
     # Off-topic banter check (checked first to catch weather, stories, jokes, chit-chat)
     offtopic_cues = [
         "story", "joke", "weather", "dragon", "poem", "python", "javascript", "code", "quicksort",
@@ -494,7 +496,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         "قصة", "حكاية", "نكتة", "الطقس", "جو اليوم", "برمج", "كود", "من انت", "مين انت", "كيف حالك",
         "اخبارك", "شخبارك", "صباح الخير", "مساء الخير", "سوالف", "سالفة", "دردش", "سولف"
     ]
-    if any(k in lower for k in offtopic_cues) and not any(k in lower for k in ("بـ", "ب ", "sar", "ريال", "دفعت", "شريت")):
+    if any(k in lower for k in offtopic_cues) and not has_expense_cues:
         return ParsedChatExpense(
             intent="off_topic",
             is_transaction=False,
@@ -512,7 +514,7 @@ def _fallback_heuristic_parse(text: str) -> ParsedChatExpense:
         "مساعدة في التطبيق", "ابغى اعرف عن التطبيق", "علمني عن التطبيق", "الميزانية كيف", "envelope",
         "كيف اقسم", "شرح", "تعليمات"
     ]
-    if any(k in lower for k in guidance_cues) and not any(k in lower for k in ("بـ", "ب ", "sar", "ريال", "دفعت", "شريت")):
+    if any(k in lower for k in guidance_cues) and not has_expense_cues:
         return ParsedChatExpense(
             intent="app_guidance",
             is_transaction=False,
