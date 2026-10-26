@@ -1,41 +1,25 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_themes.dart';
+import 'app_setup_tutor_dialog.dart';
 
 class UserGuideWalkthroughDialog extends StatefulWidget {
   final VoidCallback? onDismiss;
 
   const UserGuideWalkthroughDialog({super.key, this.onDismiss});
 
-  static const String prefKey = 'has_seen_user_guide_v1';
+  static const String prefKey = AppSetupTutorDialog.prefKey;
 
   /// Shows the dialog unconditionally (e.g. from Settings).
-  static Future<void> show(BuildContext context) {
-    return showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: UserGuideWalkthroughDialog(
-          onDismiss: () => Navigator.of(ctx).pop(),
-        ),
-      ),
-    );
+  static Future<void> show(BuildContext context, {String? householdId}) {
+    return AppSetupTutorDialog.show(context, householdId: householdId);
   }
 
   /// Automatically shows the dialog if the user has not seen it yet.
-  static Future<bool> showIfFirstTime(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final hasSeen = prefs.getBool(prefKey) ?? false;
-    if (!hasSeen && context.mounted) {
-      await show(context);
-      await prefs.setBool(prefKey, true);
-      return true;
-    }
-    return false;
+  static Future<bool> showIfFirstTime(BuildContext context, {String? householdId}) async {
+    return AppSetupTutorDialog.showIfFirstTime(context, householdId: householdId);
   }
 
   @override
