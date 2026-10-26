@@ -84,9 +84,7 @@ class SalaryCycleSelectorBar extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF381423)
-                                : VelvetBurgundyColors.rosePillLight,
+                            color: context.pillBg,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: isDark

@@ -193,7 +193,7 @@ class _LinkAccountSheetState extends State<LinkAccountSheet> {
                 ..._accounts.map((acc) {
                   final isSelected = _selectedAccountId == acc.id;
                   final hasEnough = widget.budget == null || acc.balance >= widget.budget!.allocatedAmount;
-                  final selectColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+                  final selectColor = context.accentText;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),

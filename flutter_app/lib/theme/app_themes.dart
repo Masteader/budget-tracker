@@ -74,6 +74,31 @@ extension ThemeContextExtension on BuildContext {
   Color get accentText => isDarkMode ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight;
   Color get successText => isDarkMode ? VelvetBurgundyColors.emeraldSafe : const Color(0xFF065F46);
 
+  Color get primaryButtonBg => isDarkMode ? VelvetBurgundyColors.primaryDark : VelvetBurgundyColors.primaryLight;
+  Color get primaryButtonFg => isDarkMode ? VelvetBurgundyColors.roseGoldGlow : Colors.white;
+  Color get activeTabBg => isDarkMode ? VelvetBurgundyColors.primaryDark : VelvetBurgundyColors.primaryLight;
+  Color get activeTabFg => isDarkMode ? VelvetBurgundyColors.roseGoldGlow : Colors.white;
+  Color get pillBg => isDarkMode ? const Color(0xFF381423) : VelvetBurgundyColors.rosePillLight;
+  Color get pillBorder => isDarkMode ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight;
+  Color get accentSubtleBg => isDarkMode ? VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.14) : VelvetBurgundyColors.primaryLight.withValues(alpha: 0.08);
+  Color get accentSubtleBorder => isDarkMode ? VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.35) : VelvetBurgundyColors.primaryLight.withValues(alpha: 0.3);
+
+  Color get infoColor => isDarkMode ? const Color(0xFF58A6FF) : const Color(0xFF0284C7);
+  Color get infoSubtleBg => infoColor.withValues(alpha: isDarkMode ? 0.16 : 0.10);
+  Color get infoSubtleBorder => infoColor.withValues(alpha: isDarkMode ? 0.40 : 0.30);
+
+  Color get shimmerBase => isDarkMode ? VelvetBurgundyColors.surfaceDark : const Color(0xFFE2E8F0);
+  Color get shimmerHighlight => isDarkMode ? const Color(0xFF2C101B) : const Color(0xFFFDF8FA);
+
+  Color get alertDangerBg => isDarkMode ? VelvetBurgundyColors.coralDanger.withValues(alpha: 0.16) : VelvetBurgundyColors.coralDangerBgLight;
+  Color get alertDangerBorder => isDarkMode ? VelvetBurgundyColors.coralDanger.withValues(alpha: 0.45) : VelvetBurgundyColors.coralDanger.withValues(alpha: 0.35);
+
+  Color get alertWarningBg => isDarkMode ? VelvetBurgundyColors.amberCaution.withValues(alpha: 0.16) : VelvetBurgundyColors.amberCautionBgLight;
+  Color get alertWarningBorder => isDarkMode ? VelvetBurgundyColors.amberCaution.withValues(alpha: 0.45) : VelvetBurgundyColors.amberCaution.withValues(alpha: 0.35);
+
+  Color get alertSuccessBg => isDarkMode ? VelvetBurgundyColors.emeraldSafe.withValues(alpha: 0.16) : VelvetBurgundyColors.emeraldSafeBgLight;
+  Color get alertSuccessBorder => isDarkMode ? VelvetBurgundyColors.emeraldSafe.withValues(alpha: 0.45) : VelvetBurgundyColors.emeraldSafe.withValues(alpha: 0.35);
+
   LinearGradient get icedHeroGradient => isDarkMode
       ? const LinearGradient(
           begin: Alignment.topLeft,

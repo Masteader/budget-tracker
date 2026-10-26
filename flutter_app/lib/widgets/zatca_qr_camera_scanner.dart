@@ -105,7 +105,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            Icon(Icons.qr_code_2_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+            Icon(Icons.qr_code_2_rounded, color: context.accentText),
             const SizedBox(width: 8),
             Text(
               context.tr('zq_manual_title'),
@@ -144,7 +144,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
@@ -176,12 +176,12 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                color: context.alertDangerBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.no_photography_rounded,
-                color: Color(0xFFEF4444),
+                color: context.dangerColor,
                 size: 40,
               ),
             ),
@@ -221,7 +221,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  backgroundColor: context.primaryButtonBg,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -316,13 +316,13 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                     height: 270,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: const Color(0xFFE598B0).withValues(alpha: 0.85),
+                        color: context.champagneGold.withValues(alpha: 0.85),
                         width: 2.5,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                          color: context.primaryButtonBg.withValues(alpha: 0.35),
                           blurRadius: 24,
                           spreadRadius: 2,
                         ),
@@ -338,14 +338,14 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E0B12).withValues(alpha: 0.85),
+                          color: context.cardBg.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.35)),
+                          border: Border.all(color: context.accentSubtleBorder),
                         ),
                         child: Text(
                           context.tr('zq_target'),
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFFE598B0),
+                            color: context.champagneGold,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.0,
@@ -365,18 +365,18 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
                         child: Container(
                           height: 2.5,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                Color(0xFFFF4D6D),
-                                Color(0xFFE598B0),
-                                Color(0xFFFF4D6D),
+                                context.accentText,
+                                context.champagneGold,
+                                context.accentText,
                                 Colors.transparent,
                               ],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFF4D6D).withValues(alpha: 0.85),
+                                color: context.accentText.withValues(alpha: 0.85),
                                 blurRadius: 10,
                                 spreadRadius: 1.5,
                               ),
@@ -397,9 +397,9 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E0B12).withValues(alpha: 0.92),
+                color: context.cardBg.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.3)),
+                border: Border.all(color: context.accentSubtleBorder),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.4),
@@ -410,7 +410,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_scanner, color: Color(0xFFF0A3BC), size: 22),
+                  Icon(Icons.qr_code_scanner, color: context.accentText, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

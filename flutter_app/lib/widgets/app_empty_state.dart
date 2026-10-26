@@ -23,7 +23,7 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveAccent = accentColor ?? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E));
+    final effectiveAccent = accentColor ?? (context.accentText);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
@@ -71,7 +71,7 @@ class AppEmptyState extends StatelessWidget {
               onPressed: onAction,
               style: ElevatedButton.styleFrom(
                 backgroundColor: effectiveAccent,
-                foregroundColor: effectiveAccent == const Color(0xFFF0A3BC) ? const Color(0xFF1E0B12) : Colors.white,
+                foregroundColor: effectiveAccent == context.accentText ? context.cardBg : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),

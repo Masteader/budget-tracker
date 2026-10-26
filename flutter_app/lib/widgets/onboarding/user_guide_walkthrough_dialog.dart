@@ -56,38 +56,40 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
   // Step texts are translation keys resolved at build time. UX-28: the core
   // promise (what is left until payday) first, then the household rules,
   // then the ways to record an expense.
-  final List<_WalkthroughStep> _steps = const [
+  static const int _stepCount = 5;
+
+  List<_WalkthroughStep> _getSteps(BuildContext context) => [
     _WalkthroughStep(
       icon: Icons.calendar_month_rounded,
-      gradientColors: [Color(0xFFF59E0B), Color(0xFFB45309)],
+      gradientColors: [context.warnText, context.warnText.withValues(alpha: 0.7)],
       title: 'wt3_title',
       subtitle: 'wt3_desc',
       tags: ['wt3_tag1', 'wt3_tag2', 'wt3_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.people_alt_rounded,
-      gradientColors: [Color(0xFF10B981), Color(0xFF047857)],
+      gradientColors: [context.successText, context.successText.withValues(alpha: 0.7)],
       title: 'wt5_title',
       subtitle: 'wt5_desc',
       tags: ['wt5_tag1', 'wt5_tag2', 'wt5_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.mic_rounded,
-      gradientColors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+      gradientColors: [context.accentText, context.primaryButtonBg],
       title: 'wt2_title',
       subtitle: 'wt2_desc',
       tags: ['wt2_tag1', 'wt2_tag2', 'wt2_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.qr_code_scanner_rounded,
-      gradientColors: [AppThemes.success, Color(0xFF007A5A)],
+      gradientColors: [context.successText, context.champagneGold],
       title: 'wt1_title',
       subtitle: 'wt1_desc',
       tags: ['wt1_tag1', 'wt1_tag2', 'wt1_tag3'],
     ),
     _WalkthroughStep(
       icon: Icons.receipt_long_rounded,
-      gradientColors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+      gradientColors: [context.infoColor, context.infoColor.withValues(alpha: 0.7)],
       title: 'wt4_title',
       subtitle: 'wt4_desc',
       tags: ['wt4_tag1', 'wt4_tag2', 'wt4_tag3'],
@@ -95,7 +97,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
   ];
 
   void _next() {
-    if (_currentPage < _steps.length - 1) {
+    if (_currentPage < _stepCount - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -117,6 +119,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
 
   @override
   Widget build(BuildContext context) {
+    final steps = _getSteps(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
       decoration: BoxDecoration(
@@ -150,7 +153,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                       border: Border.all(color: context.borderColor),
                     ),
                     child: Text(
-                      context.trArgs('wt_feature_x_of_y', {'current': _currentPage + 1, 'total': _steps.length}),
+                      context.trArgs('wt_feature_x_of_y', {'current': _currentPage + 1, 'total': steps.length}),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -172,10 +175,10 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _steps.length,
+                itemCount: steps.length,
                 onPageChanged: (idx) => setState(() => _currentPage = idx),
                 itemBuilder: (ctx, index) {
-                  final step = _steps[index];
+                  final step = steps[index];
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Center(
@@ -278,7 +281,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
-                      _steps.length,
+                      steps.length,
                       (idx) => AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -326,7 +329,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _currentPage == _steps.length - 1
+                              _currentPage == steps.length - 1
                                   ? context.tr('wt_get_started')
                                   : context.tr('wt_next'),
                               style: GoogleFonts.outfit(
@@ -336,7 +339,7 @@ class _UserGuideWalkthroughDialogState extends State<UserGuideWalkthroughDialog>
                             ),
                             const SizedBox(width: 6),
                             Icon(
-                              _currentPage == _steps.length - 1
+                              _currentPage == steps.length - 1
                                   ? Icons.check_circle_rounded
                                   : Icons.arrow_forward_rounded,
                               size: 16,

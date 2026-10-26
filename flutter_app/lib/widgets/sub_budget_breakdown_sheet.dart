@@ -260,12 +260,12 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
+                    color: context.accentSubtleBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.pie_chart_outline_rounded,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     size: 22,
                   ),
                 ),
@@ -296,7 +296,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                 IconButton(
                   icon: Icon(
                     Icons.edit_outlined,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     size: 20,
                   ),
                   tooltip: context.tr('edit_allocations'),
@@ -385,7 +385,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                           Text(
                             context.sar(allocated),
                             style: GoogleFonts.outfit(
-                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                              color: context.accentText,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -400,7 +400,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: prevDelta > 0
-                            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.15) : const Color(0xFF4A0E1E).withValues(alpha: 0.1))
+                            ? (context.accentSubtleBg)
                             : Colors.redAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -412,7 +412,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 ? Icons.arrow_downward_rounded
                                 : Icons.arrow_upward_rounded,
                             color: prevDelta > 0
-                                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                ? (context.accentText)
                                 : Colors.redAccent,
                             size: 14,
                           ),
@@ -423,7 +423,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                                 : '-${context.sar(prevDelta.abs())} ${context.tr('rolled_over_overspend')}',
                             style: TextStyle(
                               color: prevDelta > 0
-                                  ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                  ? (context.accentText)
                                   : Colors.redAccent,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -512,13 +512,13 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
 
         Color progressColor;
         if (!hasAllocation) {
-          progressColor = const Color(0xFF58A6FF);
+          progressColor = context.infoColor;
         } else if (item.spentAmount > item.allocatedAmount) {
           progressColor = Colors.redAccent;
         } else if (item.spentAmount > item.allocatedAmount * 0.85) {
           progressColor = Colors.orangeAccent;
         } else {
-          progressColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+          progressColor = context.accentText;
         }
 
         return Container(

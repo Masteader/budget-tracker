@@ -377,7 +377,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            Icon(Icons.settings_suggest_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+            Icon(Icons.settings_suggest_rounded, color: context.accentText),
             const SizedBox(width: 8),
             Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
@@ -390,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.open_in_new, size: 16),
@@ -440,7 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFF85149)),
+            Icon(Icons.warning_amber_rounded, color: context.dangerColor),
             const SizedBox(width: 8),
             Text(context.tr('leave_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
           ],
@@ -456,7 +456,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF85149),
+              backgroundColor: context.dangerColor,
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -541,7 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: Colors.white,
             ),
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -620,7 +620,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: Colors.white,
             ),
             child: Text(context.tr('create'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -713,7 +713,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         title: Row(
           children: [
-            const Icon(Icons.delete_outline_rounded, color: Color(0xFFF85149)),
+            Icon(Icons.delete_outline_rounded, color: context.dangerColor),
             const SizedBox(width: 8),
             Text(
               context.tr('set_remove_dependent'),
@@ -732,7 +732,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF85149),
+              backgroundColor: context.dangerColor,
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -833,7 +833,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: context.isDark ? const Color(0xFF381423) : VelvetBurgundyColors.rosePillLight,
+                      color: context.pillBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -879,7 +879,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      backgroundColor: context.primaryButtonBg,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(
@@ -915,7 +915,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      backgroundColor: context.primaryButtonBg,
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () {
@@ -1086,7 +1086,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.table_view_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
+                    Icon(Icons.table_view_rounded, color: context.accentText, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1099,7 +1099,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                        backgroundColor: context.primaryButtonBg,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       ),
@@ -1186,10 +1186,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
+                      color: context.accentSubtleBg,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.menu_book_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
+                    child: Icon(Icons.menu_book_rounded, color: context.accentText, size: 20),
                   ),
                   title: Text(
                     context.tr('set_app_guide_tutorial'),
@@ -1207,10 +1207,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                      color: context.infoSubtleBg,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.support_agent_rounded, color: Color(0xFF3B82F6), size: 20),
+                    child: Icon(Icons.support_agent_rounded, color: context.infoColor, size: 20),
                   ),
                   title: Text(
                     context.tr('set_help_center_ai_support'),
@@ -1238,10 +1238,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                      color: context.alertWarningBg,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.mail_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                    child: Icon(Icons.mail_outline_rounded, color: context.warnText, size: 20),
                   ),
                   title: Text(
                     context.tr('contact_developer'),
@@ -1349,7 +1349,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Color(0xFFDA3633)),
+                      side: BorderSide(color: context.dangerColor),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1368,7 +1368,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildNoWifeSettlementPlaceholder(BuildContext context) {
-    final isDark = context.isDark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1382,12 +1381,12 @@ class _SettingsScreenState extends State<SettingsScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: (isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.12),
+              color: context.accentText.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.family_restroom_rounded,
-              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
               size: 24,
             ),
           ),
@@ -1441,7 +1440,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final borderColor = context.borderColor;
     final textColor = context.textPrimary;
     final subtextColor = context.textSecondary;
-    final activeBg = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+    final activeBg = context.accentText;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1459,10 +1458,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
+                  color: context.accentSubtleBg,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.palette_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
+                child: Icon(Icons.palette_rounded, color: context.accentText, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1612,7 +1611,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               Icon(
                 icon,
                 size: 16,
-                color: isSelected ? (context.isDark ? const Color(0xFF1E0B12) : Colors.white) : textColor,
+                color: isSelected ? (context.cardBg) : textColor,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -1620,7 +1619,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isSelected ? (context.isDark ? const Color(0xFF1E0B12) : Colors.white) : textColor,
+                    color: isSelected ? (context.cardBg) : textColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),

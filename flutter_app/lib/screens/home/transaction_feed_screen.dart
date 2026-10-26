@@ -248,7 +248,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                           child: Text(
                             context.tr('reset_all'),
                             style: TextStyle(
-                              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                              color: context.accentText,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -390,9 +390,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                 return Theme(
                                   data: (context.isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
                                     colorScheme: ColorScheme.fromSeed(
-                                      seedColor: const Color(0xFF4A0E1E),
+                                      seedColor: VelvetBurgundyColors.primaryLight,
                                       brightness: context.isDark ? Brightness.dark : Brightness.light,
-                                      primary: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                      primary: context.accentText,
                                       onPrimary: Colors.white,
                                       surface: context.cardBg,
                                       onSurface: context.textPrimary,
@@ -516,8 +516,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                          foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -554,12 +554,12 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? (context.isDark ? const Color(0xFF5E1327).withValues(alpha: 0.35) : const Color(0xFF4A0E1E).withValues(alpha: 0.1))
+              ? (context.accentSubtleBg)
               : context.inputBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                ? (context.accentText)
                 : context.borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
@@ -573,7 +573,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   icon,
                   size: 16,
                   color: isSelected
-                      ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                      ? (context.accentText)
                       : context.textSecondary,
                 ),
                 const Spacer(),
@@ -581,7 +581,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   Icon(
                     Icons.check_circle,
                     size: 16,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                   ),
               ],
             ),
@@ -592,7 +592,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: isSelected
-                    ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                    ? (context.accentText)
                     : context.textPrimary,
               ),
             ),
@@ -617,7 +617,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           ? Icon(
               icon,
               size: 14,
-              color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textSecondary,
+              color: selected ? (context.primaryButtonFg) : context.textSecondary,
             )
           : null,
       label: Text(
@@ -625,15 +625,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
+          color: selected ? (context.primaryButtonFg) : context.textPrimary,
         ),
       ),
       selected: selected,
-      selectedColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+      selectedColor: context.primaryButtonBg,
       backgroundColor: context.cardBg,
       side: BorderSide(
         color: selected
-            ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E))
+            ? (context.accentText)
             : context.borderColor,
       ),
       onSelected: onSelected,
@@ -673,7 +673,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE24A4A), size: 22),
+            Icon(Icons.picture_as_pdf_rounded, color: context.dangerColor, size: 22),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -694,8 +694,8 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+              backgroundColor: context.primaryButtonBg,
+              foregroundColor: context.primaryButtonFg,
             ),
             icon: const Icon(Icons.ios_share_rounded, size: 16),
             label: Text(context.tr('pdf_download_share'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -876,7 +876,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                      color: context.accentText,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -959,7 +959,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       side: BorderSide(
                         color: isSelected
                             ? (context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.primaryLight)
-                            : (context.isDark ? const Color(0x33FFD2E1) : VelvetBurgundyColors.roseBorderLight),
+                            : (context.borderColor),
                       ),
                       onSelected: (val) {
                         HapticFeedback.selectionClick();
@@ -1029,7 +1029,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(
                                             color: _selectedSort != 'newest' || _selectedDatePeriod != 'ALL' || _selectedSpentByFilter != 'ALL'
-                                                ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                                ? (context.accentText)
                                                 : context.borderColor,
                                           ),
                                         ),
@@ -1081,7 +1081,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                                   ),
                                 )
                               : RefreshIndicator(
-                                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                  color: context.accentText,
                                   onRefresh: () async {
                                     await Future.wait([
                                       context.read<TransactionProvider>().fetchTransactions(),

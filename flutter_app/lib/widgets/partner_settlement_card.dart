@@ -62,7 +62,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
             ),
           ),
         ),
@@ -82,16 +82,16 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
     final stcNote = _data!['stc_pay_note'] as String? ?? context.tr('psc_household_settlement');
     final recEn = _data!['recommendation_en'] as String? ?? '';
 
-    Color badgeColor = const Color(0xFF10B981);
+    Color badgeColor = context.successText;
     IconData badgeIcon = Icons.check_circle_outline_rounded;
     String statusTitle = context.tr('psc_balanced');
 
     if (whoOwes == 'partner_owes_me') {
-      badgeColor = const Color(0xFF10B981);
+      badgeColor = context.successText;
       badgeIcon = Icons.arrow_downward_rounded;
       statusTitle = context.tr('psc_partner_owes_you');
     } else if (whoOwes == 'me_owes_partner') {
-      badgeColor = const Color(0xFFFF9E79);
+      badgeColor = context.warnText;
       badgeIcon = Icons.arrow_upward_rounded;
       statusTitle = context.tr('psc_you_owe_partner');
     }
@@ -115,10 +115,10 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF58A6FF).withValues(alpha: 0.15),
+                        color: context.infoSubtleBg,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.people_alt_outlined, color: Color(0xFF58A6FF), size: 18),
+                      child: Icon(Icons.people_alt_outlined, color: context.infoColor, size: 18),
                     ),
                     const SizedBox(width: 8),
                     Flexible(
@@ -222,16 +222,16 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6).withValues(alpha: context.isDarkMode ? 0.1 : 0.12),
+                    color: context.accentSubtleBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: context.isDarkMode ? 0.3 : 0.4),
+                      color: context.accentSubtleBorder,
                     ),
                   ),
                   child: Text(
                     context.trArgs('psc_paid_for_partner', {'amount': context.sar(iPaidForPartner)}),
                     style: TextStyle(
-                      color: context.isDarkMode ? const Color(0xFFBC8CFF) : const Color(0xFF6D28D9),
+                      color: context.accentText,
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -241,16 +241,16 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF97316).withValues(alpha: context.isDarkMode ? 0.1 : 0.12),
+                    color: context.alertWarningBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: const Color(0xFFF97316).withValues(alpha: context.isDarkMode ? 0.3 : 0.4),
+                      color: context.alertWarningBorder,
                     ),
                   ),
                   child: Text(
                     context.trArgs('psc_partner_paid_for_me', {'amount': context.sar(partnerPaidForMe)}),
                     style: TextStyle(
-                      color: context.isDarkMode ? const Color(0xFFFF9E79) : const Color(0xFFC2410C),
+                      color: context.warnText,
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -265,7 +265,7 @@ class _PartnerSettlementCardState extends State<PartnerSettlementCard> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  backgroundColor: context.primaryButtonBg,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

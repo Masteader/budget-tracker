@@ -43,15 +43,15 @@ class ExpenseDateChips extends StatelessWidget {
           key: ValueKey(key),
           avatar: icon == null
               ? null
-              : Icon(icon, size: 16, color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textSecondary),
+              : Icon(icon, size: 16, color: selected ? (context.primaryButtonFg) : context.textSecondary),
           label: Text(label),
           selected: selected,
           showCheckmark: false,
-          selectedColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+          selectedColor: context.primaryButtonBg,
           labelStyle: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
+            color: selected ? (context.primaryButtonFg) : context.textPrimary,
           ),
           onSelected: (_) => onTap(),
         );

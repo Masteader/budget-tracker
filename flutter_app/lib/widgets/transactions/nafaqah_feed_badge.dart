@@ -81,21 +81,20 @@ class NafaqahFeedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
     final (Color fg, Color tint, IconData icon) = switch (kind) {
       NafaqahBadgeKind.owedToWife => (
-          isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
-          isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+          context.warnText,
+          context.warnText,
           Icons.currency_exchange_rounded
         ),
       NafaqahBadgeKind.wifeAllowance => (
-          isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
-          isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
+          context.accentText,
+          context.accentText,
           Icons.shopping_bag_outlined
         ),
       NafaqahBadgeKind.settlement => (
-          isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
-          isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+          context.accentText,
+          context.accentText,
           Icons.swap_horiz_rounded
         ),
       NafaqahBadgeKind.household => (context.textSecondary, context.textSecondary, Icons.home_outlined),

@@ -161,14 +161,10 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: context.icedHeroGradient,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFFE598B0), size: 20),
+                  child: Icon(Icons.shopping_cart_outlined, color: context.primaryButtonFg, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -236,16 +232,16 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                     const SizedBox(width: 10),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4A0E1E),
+                        backgroundColor: context.primaryButtonBg,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: const Color(0xFFE598B0).withValues(alpha: 0.3)),
+                          side: BorderSide(color: context.accentSubtleBorder),
                         ),
                       ),
                       onPressed: () => _addItem(_itemInputCtrl.text),
-                      child: const Icon(Icons.add, color: Color(0xFFE598B0), size: 20),
+                      child: Icon(Icons.add, color: context.primaryButtonFg, size: 20),
                     ),
                   ],
                 ),
@@ -335,7 +331,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                             _optimizationResult = null;
                           });
                         },
-                        child: Text(context.tr('clear_all'), style: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 12)),
+                        child: Text(context.tr('clear_all'), style: TextStyle(color: context.dangerColor, fontSize: 12)),
                       ),
                   ],
                 ),
@@ -525,13 +521,13 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF388BFD).withValues(alpha: 0.1),
+                color: context.infoSubtleBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF388BFD).withValues(alpha: 0.3)),
+                border: Border.all(color: context.infoSubtleBorder),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.splitscreen_rounded, color: Color(0xFF58A6FF), size: 20),
+                  Icon(Icons.splitscreen_rounded, color: context.infoColor, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -540,7 +536,7 @@ class _SmartShoppingBasketSheetState extends State<SmartShoppingBasketSheet> {
                         Text(
                           context.tr('basket_split_savings'),
                           style: GoogleFonts.outfit(
-                            color: const Color(0xFF58A6FF),
+                            color: context.infoColor,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),

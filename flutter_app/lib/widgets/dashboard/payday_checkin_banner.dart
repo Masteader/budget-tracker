@@ -102,20 +102,18 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF4A0E1E), const Color(0xFF2A050E)]
-              : [const Color(0xFFFFF1F4), const Color(0xFFFCEEF2)],
+          colors: context.icedHeroGradient.colors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0x40F0A3BC) : const Color(0xFFF2DCE2),
+          color: context.borderColor,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A0E1E).withValues(alpha: isDark ? 0.35 : 0.08),
+            color: context.primaryButtonBg.withValues(alpha: isDark ? 0.35 : 0.08),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -126,12 +124,12 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF5E1327) : const Color(0xFFFCEEF2),
+              color: context.pillBg,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.celebration_rounded,
-              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
               size: 20,
             ),
           ),
@@ -170,8 +168,8 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
-              foregroundColor: isDark ? const Color(0xFF1E040B) : Colors.white,
+              backgroundColor: context.accentText,
+              foregroundColor: context.primaryButtonFg,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               minimumSize: const Size(48, 40),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

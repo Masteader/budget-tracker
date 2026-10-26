@@ -272,12 +272,12 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF58A6FF).withValues(alpha: 0.15),
+                    color: context.infoSubtleBg,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.calculate_outlined,
-                    color: Color(0xFF58A6FF),
+                    color: context.infoColor,
                     size: 20,
                   ),
                 ),
@@ -405,14 +405,10 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
+                      gradient: context.icedHeroGradient,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                          color: context.primaryButtonBg.withValues(alpha: 0.35),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -436,7 +432,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.flash_on_rounded, size: 20, color: Color(0xFFE598B0)),
+                                Icon(Icons.flash_on_rounded, size: 20, color: context.primaryButtonFg),
                                 const SizedBox(width: 8),
                                 Text(
                                   context.tr('simulate'),
@@ -628,19 +624,19 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF58A6FF).withValues(alpha: 0.1),
+                color: context.infoColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.3)),
+                border: Border.all(color: context.infoSubtleBorder),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.credit_card_rounded, color: Color(0xFF58A6FF), size: 18),
+                  Icon(Icons.credit_card_rounded, color: context.infoColor, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       '${context.tr('split_with_bnpl')}: 4 × ${context.sar(monthlyBnpl)}/${context.tr('months_short')}',
-                      style: const TextStyle(
-                        color: Color(0xFF58A6FF),
+                      style: TextStyle(
+                        color: context.infoColor,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),

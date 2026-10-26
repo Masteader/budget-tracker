@@ -648,7 +648,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.05),
+                          color: context.primaryButtonBg.withValues(alpha: 0.05),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -687,7 +687,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.7))),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF4A0E1E).withValues(alpha: 0.04),
+                    color: context.primaryButtonBg.withValues(alpha: 0.04),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -717,7 +717,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF4A0E1E), width: 1.5),
+                          borderSide: BorderSide(color: context.primaryButtonBg, width: 1.5),
                         ),
                       ),
                     ),
@@ -752,7 +752,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     child: IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_rounded,
-                        color: _isListening ? Colors.white : const Color(0xFF4A0E1E),
+                        color: _isListening ? Colors.white : context.primaryButtonBg,
                         size: 20,
                       ),
                       tooltip: _isListening ? context.tr('chat_stop_listening') : context.tr('chat_voice_input'),
@@ -765,15 +765,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Color(0xFF6C162F), Color(0xFF4A0E1E), Color(0xFF2A050E)],
+                        colors: context.icedHeroGradient.colors,
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.4),
+                          color: context.primaryButtonBg.withValues(alpha: 0.4),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),

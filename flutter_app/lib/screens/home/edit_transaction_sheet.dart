@@ -740,7 +740,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 style: GoogleFonts.outfit(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? (context.isDark ? Colors.white : const Color(0xFF0F172A)) : context.textSecondary,
+                  color: isSelected ? (context.textPrimary) : context.textSecondary,
                 ),
               ),
             ],
@@ -773,28 +773,28 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
-      color = context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF59454C);
+      color = context.textSecondary;
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'partner') {
       text = context.trArgs('settle_paid_for_partner', {'amount': context.sar(amount)});
       icon = Icons.volunteer_activism_outlined;
-      color = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42);
+      color = context.accentText;
     } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_you_owe', {'amount': context.sar(half)});
       icon = Icons.handshake_outlined;
-      color = const Color(0xFFFF9E79);
+      color = context.warnText;
     } else if (_selectedPaidBy == 'partner' && _selectedBeneficiary == 'me') {
       text = context.trArgs('settle_partner_paid_for_you', {'amount': context.sar(amount)});
       icon = Icons.card_giftcard_rounded;
-      color = const Color(0xFFFF6B6B);
+      color = context.dangerColor;
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'me') {
       text = context.tr('settle_personal_me');
       icon = Icons.person_outline;
-      color = context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E);
+      color = context.accentText;
     } else {
       text = context.tr('settle_personal_partner');
       icon = Icons.favorite_outline;
-      color = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42);
+      color = context.accentText;
     }
 
     return Container(
@@ -920,7 +920,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         setModalState(() => selectedProvider = p);
                       }),
                       const SizedBox(width: 8),
-                      _buildProviderRadio('Bank / Other', context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), selectedProvider, (p) {
+                      _buildProviderRadio('Bank / Other', context.accentText, selectedProvider, (p) {
                         setModalState(() => selectedProvider = p);
                       }),
                     ],
@@ -942,9 +942,9 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSelected ? (context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB)) : context.subtleCardBg,
+                                color: isSelected ? (context.pillBg) : context.subtleCardBg,
                                 border: Border.all(
-                                  color: isSelected ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFFE598B0)) : context.borderColor,
+                                  color: isSelected ? (context.accentText) : context.borderColor,
                                 ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -952,7 +952,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                                 context.trPlural('n_months', count),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: isSelected ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)) : context.textPrimary,
+                                  color: isSelected ? (context.accentText) : context.textPrimary,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   fontSize: 12,
                                 ),
@@ -1005,7 +1005,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                      backgroundColor: context.primaryButtonBg,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1102,7 +1102,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             labelText: context.tr('child_name_label'),
             labelStyle: TextStyle(color: context.textSecondary),
             hintText: context.tr('child_name_hint'),
-            hintStyle: const TextStyle(color: Color(0xFF484F58)),
+            hintStyle: TextStyle(color: context.textSecondary),
             filled: true,
             fillColor: context.inputBg,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -1115,7 +1115,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
@@ -1233,7 +1233,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.credit_score_rounded, color: Color(0xFFFF6B6B), size: 20),
+                  Icon(Icons.credit_score_rounded, color: context.warnText, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -1347,7 +1347,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedPaidBy == 'me',
                   title: context.tr('i_paid'),
                   icon: Icons.credit_card_rounded,
-                  activeColor: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+                  activeColor: context.accentText,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -1361,7 +1361,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedPaidBy == 'partner',
                   title: context.tr('partner_paid'),
                   icon: Icons.favorite_outline,
-                  activeColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
+                  activeColor: context.accentText,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -1391,7 +1391,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedBeneficiary == 'me',
                   title: context.tr('me_solo'),
                   icon: Icons.person_outline,
-                  activeColor: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+                  activeColor: context.accentText,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -1405,7 +1405,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedBeneficiary == 'partner',
                   title: context.tr('partner'),
                   icon: Icons.favorite_outline,
-                  activeColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
+                  activeColor: context.accentText,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -1419,7 +1419,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   isSelected: _selectedBeneficiary == 'both',
                   title: context.tr('both_shared'),
                   icon: Icons.people_alt_outlined,
-                  activeColor: context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF59454C),
+                  activeColor: context.textSecondary,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -1621,7 +1621,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                backgroundColor: context.primaryButtonBg,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

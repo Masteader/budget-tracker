@@ -410,7 +410,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                   .order('category_code'),
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
-                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                  color: context.accentText,
                   backgroundColor: context.cardBg,
                   onRefresh: () async {
                     try {

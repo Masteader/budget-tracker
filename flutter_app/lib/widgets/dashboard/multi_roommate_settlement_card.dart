@@ -133,11 +133,11 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: context.borderColor),
         ),
-        child: const Center(
+        child: Center(
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)),
+            child: CircularProgressIndicator(strokeWidth: 2, color: context.infoColor),
           ),
         ),
       );
@@ -280,8 +280,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 final isPositive = balance > 0.01;
                 final isNegative = balance < -0.01;
                 final color = isPositive
-                    ? const Color(0xFF10B981)
-                    : (isNegative ? const Color(0xFFFF6B6B) : context.textSecondary);
+                    ? context.successText : (isNegative ? context.dangerColor : context.textSecondary);
 
                 final sign = isPositive ? '+' : (isNegative ? '-' : '');
                 final displayAmt = '$sign${context.sar(balance.abs())}';
@@ -325,13 +324,13 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                color: context.alertSuccessBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
+                border: Border.all(color: context.alertSuccessBorder),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981), size: 20),
+                  Icon(Icons.check_circle_outline_rounded, color: context.successText, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -366,10 +365,10 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: context.isDark ? const Color(0xFF14060C) : const Color(0xFFFAF5F7),
+                    color: context.subtleCardBg,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: context.isDark ? const Color(0x33FFD2E1) : VelvetBurgundyColors.roseBorderLight,
+                      color: context.borderColor,
                     ),
                   ),
                   child: Row(

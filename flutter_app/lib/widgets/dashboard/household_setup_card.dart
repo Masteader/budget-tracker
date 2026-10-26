@@ -123,7 +123,7 @@ class HouseholdSetupCard extends StatelessWidget {
         color: context.cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.25) : const Color(0xFFE598B0).withValues(alpha: 0.35),
+          color: context.accentSubtleBorder,
           width: 1.2,
         ),
       ),
@@ -153,7 +153,7 @@ class HouseholdSetupCard extends StatelessWidget {
                 TextButton(
                   onPressed: onHide,
                   style: TextButton.styleFrom(
-                    foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                    foregroundColor: context.accentText,
                   ),
                   child: Text(context.tr('setup_hide')),
                 ),
@@ -167,7 +167,7 @@ class HouseholdSetupCard extends StatelessWidget {
               minHeight: 5,
               backgroundColor: context.chipBg,
               valueColor: AlwaysStoppedAnimation(
-                context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                context.accentText,
               ),
             ),
           ),
@@ -254,7 +254,7 @@ class HouseholdSetupCard extends StatelessWidget {
             Icon(
               isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
               color: isDone
-                  ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                  ? (context.accentText)
                   : context.textSecondary,
               size: 22,
             ),
@@ -275,7 +275,7 @@ class HouseholdSetupCard extends StatelessWidget {
               TextButton(
                 key: const Key('setup_confirm_payday'),
                 style: TextButton.styleFrom(
-                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                  foregroundColor: context.accentText,
                 ),
                 onPressed: () async {
                   await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
@@ -559,8 +559,8 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
         ElevatedButton(
           onPressed: _saving ? null : _create,
           style: ElevatedButton.styleFrom(
-            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-            foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+            backgroundColor: context.primaryButtonBg,
+            foregroundColor: context.primaryButtonFg,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

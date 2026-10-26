@@ -392,7 +392,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                             isExpanded: true,
                             hint: Text(
                               _availableSubCategories.isEmpty ? context.tr('pec_general') : context.tr('sub_category'),
-                              style: const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                              style: TextStyle(color: context.textSecondary, fontSize: 11),
                             ),
                             dropdownColor: context.cardBg,
                             style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 12),
@@ -565,12 +565,12 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF58A6FF).withValues(alpha: 0.15),
+                                      color: context.infoSubtleBg,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
                                       itemSub,
-                                      style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 9),
+                                      style: TextStyle(color: context.infoColor, fontSize: 9),
                                     ),
                                   ),
                                 ],

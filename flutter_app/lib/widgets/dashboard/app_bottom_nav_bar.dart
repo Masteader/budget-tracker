@@ -43,8 +43,8 @@ class AppBottomNavBar extends StatelessWidget {
                 height: 66,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? const Color(0xFF1E0B12).withValues(alpha: 0.82)
-                      : Colors.white.withValues(alpha: 0.85),
+                      ? context.cardBg.withValues(alpha: 0.85)
+                      : Colors.white.withValues(alpha: 0.88),
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
                     color: isDark
@@ -56,13 +56,13 @@ class AppBottomNavBar extends StatelessWidget {
                     BoxShadow(
                       color: isDark
                           ? Colors.black.withValues(alpha: 0.65)
-                          : const Color(0xFF4A0E1E).withValues(alpha: 0.14),
+                          : context.primaryButtonBg.withValues(alpha: 0.14),
                       blurRadius: 36,
                       offset: const Offset(0, 18),
                       spreadRadius: -4,
                     ),
                     BoxShadow(
-                      color: const Color(0xFF4A0E1E).withValues(alpha: 0.06),
+                      color: context.primaryButtonBg.withValues(alpha: 0.06),
                       blurRadius: 14,
                       offset: const Offset(0, 6),
                     ),
@@ -95,17 +95,9 @@ class AppBottomNavBar extends StatelessWidget {
     );
   }
 
-  Color _activeColor(BuildContext context) {
-    return context.isDark
-        ? VelvetBurgundyColors.roseGoldGlow
-        : VelvetBurgundyColors.primaryLight;
-  }
+  Color _activeColor(BuildContext context) => context.accentText;
 
-  Color _inactiveColor(BuildContext context) {
-    return context.isDark
-        ? const Color(0xFF8E757F)
-        : const Color(0xFF9E8E94);
-  }
+  Color _inactiveColor(BuildContext context) => context.textSecondary;
 
   Widget _item(
     BuildContext context,
@@ -211,31 +203,17 @@ class _ElevatedCenterOrbState extends State<_ElevatedCenterOrb> {
           height: 52,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: widget.isDark
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF6E162F), Color(0xFF29040D)],
-                  )
-                : const RadialGradient(
-                    center: Alignment(-0.35, -0.35),
-                    radius: 0.85,
-                    colors: [
-                      Color(0xFF8A243D),
-                      Color(0xFF571324),
-                      Color(0xFF25030A),
-                    ],
-                  ),
+            gradient: context.icedHeroGradient,
             boxShadow: [
               BoxShadow(
-                color: (widget.isDark ? Colors.black : const Color(0xFF4A0E1E))
+                color: (widget.isDark ? Colors.black : context.primaryButtonBg)
                     .withValues(alpha: widget.isDark ? 0.75 : 0.55),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
                 spreadRadius: -2,
               ),
               BoxShadow(
-                color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                color: context.primaryButtonBg.withValues(alpha: 0.35),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),

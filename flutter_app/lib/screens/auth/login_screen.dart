@@ -104,9 +104,7 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: context.isDark
-                ? const [Color(0xFF1E0B12), Color(0xFF110509)]
-                : const [Color(0xFFF8F3F5), Color(0xFFF2E6EB)],
+            colors: [context.scaffoldBg, context.cardBg],
           ),
         ),
         child: SafeArea(
@@ -122,23 +120,19 @@ class _LoginScreenState extends State<LoginScreen>
                     Container(
                       width: 84, height: 84,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        gradient: context.icedHeroGradient,
                         borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: const Color(0xFFE598B0).withValues(alpha: 0.5), width: 1.5),
+                        border: Border.all(color: context.accentSubtleBorder, width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                            color: context.primaryButtonBg.withValues(alpha: 0.35),
                             blurRadius: 20,
                             offset: const Offset(0, 8),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.account_balance_wallet_rounded,
-                          color: Color(0xFFE598B0), size: 42),
+                      child: Icon(Icons.account_balance_wallet_rounded,
+                          color: context.primaryButtonFg, size: 42),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -237,14 +231,10 @@ class _LoginScreenState extends State<LoginScreen>
                             height: 52,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
+                              gradient: context.icedHeroGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                                  color: context.primaryButtonBg.withValues(alpha: 0.35),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),

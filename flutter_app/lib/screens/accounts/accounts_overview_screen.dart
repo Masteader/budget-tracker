@@ -151,7 +151,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           IconButton(
             icon: Icon(
               Icons.add_rounded,
-              color: isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              color: context.accentText,
             ),
             tooltip: context.tr('add_account'),
             onPressed: () {
@@ -263,9 +263,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                   borderRadius: 22.0,
                   padding: const EdgeInsets.all(20),
                   customGradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF2A0D18), const Color(0xFF1B070E)]
-                        : [const Color(0xFF4A0E1E), const Color(0xFF2A050E)],
+                    colors: context.icedHeroGradient.colors,
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -278,7 +276,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                           Text(
                             context.tr('total_net_worth'),
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFFE598B0),
+                              color: context.champagneGold,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.1,
@@ -288,12 +286,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: deficitCount == 0
-                                  ? const Color(0xFF00A87A).withValues(alpha: 0.2)
+                                  ? context.alertSuccessBg
                                   : Colors.redAccent.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: deficitCount == 0
-                                    ? const Color(0xFF00A87A).withValues(alpha: 0.4)
+                                    ? context.alertSuccessBorder
                                     : Colors.redAccent.withValues(alpha: 0.4),
                               ),
                             ),
@@ -302,7 +300,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 Icon(
                                   deficitCount == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                                   size: 13,
-                                  color: deficitCount == 0 ? const Color(0xFF00E599) : Colors.redAccent,
+                                  color: deficitCount == 0 ? context.successText : Colors.redAccent,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -345,8 +343,8 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.savings_rounded, size: 16),
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE598B0),
-                                foregroundColor: const Color(0xFF2A050E),
+                                backgroundColor: context.champagneGold,
+                                foregroundColor: context.primaryButtonBg,
                                 elevation: 2,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

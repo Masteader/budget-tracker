@@ -65,12 +65,12 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
+                    color: context.pillBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.document_scanner_outlined,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     size: 22,
                   ),
                 ),
@@ -102,10 +102,10 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF79C0FF).withValues(alpha: 0.15),
+                    color: context.infoSubtleBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.mic_rounded, color: Color(0xFF79C0FF), size: 22),
+                  child: Icon(Icons.mic_rounded, color: context.infoColor, size: 22),
                 ),
                 title: Text(
                   context.tr('voice_chat'),
@@ -136,10 +136,10 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFA371F7).withValues(alpha: 0.15),
+                    color: context.accentSubtleBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.calculate_outlined, color: Color(0xFFA371F7), size: 22),
+                  child: Icon(Icons.calculate_outlined, color: context.accentText, size: 22),
                 ),
                 title: Text(
                   context.tr('affordability_simulator'),
@@ -167,10 +167,10 @@ class DashboardActionSheet extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFA657).withValues(alpha: 0.15),
+                    color: context.alertWarningBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.edit_note_rounded, color: Color(0xFFFFA657), size: 22),
+                  child: Icon(Icons.edit_note_rounded, color: context.warnText, size: 22),
                 ),
                 title: Text(
                   context.tr('manual_log'),

@@ -64,7 +64,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         elevation: 0,
         title: Row(
           children: [
-            Icon(Icons.analytics_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 22),
+            Icon(Icons.analytics_outlined, color: context.accentText, size: 22),
             const SizedBox(width: 8),
             Text(
               context.tr('grocery_price_intelligence'),
@@ -85,16 +85,16 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF4A0E1E),
+        backgroundColor: context.primaryButtonBg,
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: const Color(0xFFE598B0).withValues(alpha: 0.4), width: 1.5),
+          side: BorderSide(color: context.accentSubtleBorder, width: 1.5),
         ),
-        icon: const Icon(Icons.shopping_basket_rounded, color: Color(0xFFE598B0)),
+        icon: Icon(Icons.shopping_basket_rounded, color: context.primaryButtonFg),
         label: Text(
           context.tr('shopping_list'),
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(color: context.primaryButtonFg, fontWeight: FontWeight.bold),
         ),
         onPressed: () {
           HapticFeedback.mediumImpact();
@@ -137,7 +137,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE598B0)),
+                  borderSide: BorderSide(color: context.accentText),
                 ),
               ),
             ),
@@ -160,14 +160,14 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.white : context.textPrimary,
+                      color: isSelected ? context.primaryButtonFg : context.textPrimary,
                     ),
                   ),
                   selected: isSelected,
-                  selectedColor: const Color(0xFF4A0E1E),
+                  selectedColor: context.primaryButtonBg,
                   backgroundColor: context.cardBg,
                   side: BorderSide(
-                    color: isSelected ? const Color(0xFFE598B0) : context.borderColor,
+                    color: isSelected ? context.accentText : context.borderColor,
                   ),
                   onSelected: (val) {
                     HapticFeedback.selectionClick();

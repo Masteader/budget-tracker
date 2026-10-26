@@ -203,8 +203,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: context.isDark
-                ? const [AppThemes.brandDarkBg, Color(0xFF091C31)]
-                : const [Color(0xFFF8FAFC), Color(0xFFEFF6FF)],
+                ? const [VelvetBurgundyColors.canvasDark, VelvetBurgundyColors.surfaceDark]
+                : const [VelvetBurgundyColors.canvasLight, VelvetBurgundyColors.rosePillLight],
           ),
         ),
         child: SafeArea(

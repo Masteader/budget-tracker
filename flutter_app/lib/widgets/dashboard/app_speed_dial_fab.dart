@@ -135,7 +135,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                           BoxShadow(
                             color: context.isDark
                                 ? Colors.black.withValues(alpha: 0.4)
-                                : const Color(0xFF0F172A).withValues(alpha: 0.10),
+                                : context.primaryButtonBg.withValues(alpha: 0.10),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -144,7 +144,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
                       child: Text(
                         label,
                         style: GoogleFonts.outfit(
-                          color: context.isDark ? Colors.white : const Color(0xFF0F172A),
+                          color: context.textPrimary,
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -190,38 +190,38 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
         _buildOption(
           icon: Icons.camera_alt_rounded,
           label: context.tr('scan_receipt'),
-          color: const Color(0xFF6B182E),
+          color: context.primaryButtonBg,
           onTap: _onScanReceipt,
           offset: 150,
         ),
         _buildOption(
           icon: Icons.mic_rounded,
           label: context.tr('voice_chat'),
-          color: const Color(0xFF8B263E),
+          color: context.accentText,
           onTap: _onVoiceEntry,
           offset: 100,
         ),
         _buildOption(
           icon: Icons.edit_note_rounded,
           label: context.tr('manual_log'),
-          color: const Color(0xFF4A0E1E),
+          color: context.primaryButtonBg,
           onTap: _onManualEntry,
           offset: 50,
         ),
         FloatingActionButton.extended(
           heroTag: 'main_speed_dial_fab',
-          backgroundColor: const Color(0xFF4A0E1E),
+          backgroundColor: context.primaryButtonBg,
           foregroundColor: Colors.white,
           elevation: 6,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: const Color(0xFFE598B0).withValues(alpha: 0.4), width: 1.5),
+            side: BorderSide(color: context.accentSubtleBorder, width: 1.5),
           ),
           onPressed: _toggle,
           icon: AnimatedRotation(
             turns: _isOpen ? 0.125 : 0.0,
             duration: const Duration(milliseconds: 200),
-            child: Icon(_isOpen ? Icons.close_rounded : Icons.add_rounded, size: 24, color: const Color(0xFFE598B0)),
+            child: Icon(_isOpen ? Icons.close_rounded : Icons.add_rounded, size: 24, color: context.primaryButtonFg),
           ),
           label: Text(
             _isOpen ? context.tr('close') : context.tr('add_expense'),

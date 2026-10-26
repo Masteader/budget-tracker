@@ -123,7 +123,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               ),
               if (!_isEditing)
                 IconButton(
-                  icon: Icon(Icons.edit_rounded, size: 18, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                  icon: Icon(Icons.edit_rounded, size: 18, color: context.accentText),
                   tooltip: context.tr('isc_edit'),
                   onPressed: () => setState(() => _isEditing = true),
                 ),
@@ -150,7 +150,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                   Text(
                     currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
                     style: GoogleFonts.outfit(
-                      color: currentIncome > 0 ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)) : subtextColor,
+                      color: currentIncome > 0 ? (context.accentText) : subtextColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -167,7 +167,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               decoration: InputDecoration(
                 labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
-                prefixIcon: Icon(Icons.attach_money_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                prefixIcon: Icon(Icons.attach_money_rounded, color: context.accentText),
                 suffixText: context.tr('sar'),
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
                 filled: true,
@@ -222,7 +222,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A0E1E),
+                    backgroundColor: context.primaryButtonBg,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),

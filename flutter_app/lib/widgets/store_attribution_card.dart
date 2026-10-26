@@ -62,7 +62,7 @@ class StoreAttributionCard extends StatelessWidget {
                 style: GoogleFonts.outfit(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? (context.isDark ? Colors.white : const Color(0xFF0F172A)) : context.textSecondary,
+                  color: isSelected ? (context.textPrimary) : context.textSecondary,
                 ),
               ),
             ],
@@ -83,7 +83,7 @@ class StoreAttributionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.storefront_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 18),
+              Icon(Icons.storefront_outlined, color: context.accentText, size: 18),
               const SizedBox(width: 8),
               Text(
                 title ?? context.tr('sac_title'),
@@ -103,7 +103,7 @@ class StoreAttributionCard extends StatelessWidget {
             decoration: InputDecoration(
               labelText: context.tr('sac_store_label'),
               labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
-              prefixIcon: Icon(Icons.store_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 18),
+              prefixIcon: Icon(Icons.store_outlined, color: context.accentText, size: 18),
               filled: true,
               fillColor: context.inputBg,
               contentPadding: EdgeInsets.symmetric(
@@ -120,7 +120,7 @@ class StoreAttributionCard extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                borderSide: BorderSide(color: context.accentText),
               ),
             ),
           ),
@@ -142,21 +142,21 @@ class StoreAttributionCard extends StatelessWidget {
                 key: 'me',
                 label: context.tr('me'),
                 icon: Icons.person_outline,
-                activeColor: const Color(0xFF58A6FF),
+                activeColor: context.infoColor,
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'partner',
                 label: context.tr('partner'),
                 icon: Icons.favorite_outline,
-                activeColor: const Color(0xFFBC8CFF),
+                activeColor: context.accentText,
               ),
               const SizedBox(width: 6),
               _buildSpentByOption(context,
                 key: 'both',
                 label: context.tr('both_shared'),
                 icon: Icons.group_outlined,
-                activeColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                activeColor: context.accentText,
               ),
             ],
           ),

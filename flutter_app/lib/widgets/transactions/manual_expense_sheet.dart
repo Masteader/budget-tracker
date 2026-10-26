@@ -512,21 +512,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4A0E1E), Color(0xFF6B182E)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      gradient: context.icedHeroGradient,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF4A0E1E).withValues(alpha: 0.25),
+                          color: context.primaryButtonBg.withValues(alpha: 0.25),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.edit_note_rounded, color: Color(0xFFE598B0), size: 22),
+                    child: Icon(Icons.edit_note_rounded, color: context.primaryButtonFg, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -558,7 +554,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 decoration: InputDecoration(
                   labelText: context.tr('amount_sar'),
                   prefixText: '${context.tr('sar')} ',
-                  prefixStyle: GoogleFonts.outfit(color: const Color(0xFFE598B0), fontWeight: FontWeight.w700, fontSize: 18),
+                  prefixStyle: GoogleFonts.outfit(color: context.accentText, fontWeight: FontWeight.w700, fontSize: 18),
                   labelStyle: TextStyle(color: context.textSecondary),
                   filled: true,
                   fillColor: context.inputBg,
@@ -568,7 +564,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFE598B0), width: 1.8),
+                    borderSide: BorderSide(color: context.accentText, width: 1.8),
                   ),
                 ),
               ),
@@ -590,10 +586,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: context.isDark ? const Color(0xFF2D121B) : const Color(0xFFFBF1F4),
+                        color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: const Color(0xFFE598B0).withValues(alpha: 0.35),
+                          color: context.accentSubtleBorder,
                           width: 1,
                         ),
                       ),
@@ -602,7 +598,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+                          color: context.accentText,
                         ),
                       ),
                     ),
@@ -677,7 +673,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   decoration: InputDecoration(
                     labelText: context.tr('payment_account'),
                     labelStyle: TextStyle(color: context.textSecondary),
-                    prefixIcon: Icon(Icons.account_balance_wallet_outlined, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 20),
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined, color: context.accentText, size: 20),
                     filled: true,
                     fillColor: context.inputBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -687,7 +683,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       value: acc.id,
                       child: Row(
                         children: [
-                          Icon(acc.accountType.defaultIcon, size: 16, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                          Icon(acc.accountType.defaultIcon, size: 16, color: context.accentText),
                           const SizedBox(width: 8),
                           Text('${acc.name} (${context.money(acc.balance, acc.currency)})'),
                         ],
@@ -810,18 +806,18 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                             onSelected: (sel) {
                               if (sel) setState(() => _selectedRoommateId = mid);
                             },
-                            selectedColor: (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E)),
+                            selectedColor: (context.primaryButtonBg),
                             backgroundColor: context.subtleCardBg,
                             labelStyle: TextStyle(
                               color: isSelected
-                                  ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                                  ? (context.primaryButtonFg)
                                   : context.textSecondary,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               fontSize: 11.5,
                             ),
                             side: BorderSide(
                               color: isSelected
-                                  ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E))
+                                  ? (context.accentText)
                                   : context.borderColor,
                             ),
                           ),
@@ -837,7 +833,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'all',
                       label: context.tr('roommate_split_all'),
                       icon: Icons.groups_rounded,
-                      activeColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                      activeColor: context.accentText,
                       onTap: () => setState(() => _roommateSplit = 'all'),
                     ),
                     const SizedBox(width: 8),
@@ -845,7 +841,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       isSelected: _roommateSplit == 'personal',
                       label: context.tr('roommate_split_personal'),
                       icon: Icons.lock_outline_rounded,
-                      activeColor: context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E),
+                      activeColor: context.textSecondary,
                       onTap: () => setState(() => _roommateSplit = 'personal'),
                     ),
                   ],
@@ -855,14 +851,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: (_roommateSplit == 'all'
-                            ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
-                            : (context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E)))
+                            ? (context.accentText)
+                            : (context.textSecondary))
                         .withValues(alpha: context.isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: (_roommateSplit == 'all'
-                              ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
-                              : (context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E)))
+                              ? (context.accentText)
+                              : (context.textSecondary))
                           .withValues(alpha: context.isDark ? 0.35 : 0.25),
                     ),
                   ),
@@ -872,8 +868,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                         _roommateSplit == 'all' ? Icons.pie_chart_outline_rounded : Icons.lock_outline_rounded,
                         size: 15,
                         color: _roommateSplit == 'all'
-                            ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
-                            : (context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF7A152E)),
+                            ? (context.accentText)
+                            : (context.textSecondary),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -898,14 +894,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4A0E1E), Color(0xFF2A050E)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
+                  gradient: context.icedHeroGradient,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF4A0E1E).withValues(alpha: 0.35),
+                      color: context.primaryButtonBg.withValues(alpha: 0.35),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -929,7 +921,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.check_rounded, size: 20, color: Color(0xFFE598B0)),
+                            Icon(Icons.check_rounded, size: 20, color: context.primaryButtonFg),
                             const SizedBox(width: 8),
                             Text(
                               context.tr('record_expense'),
@@ -959,12 +951,12 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSelected
-              ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E))
+              ? (context.primaryButtonBg)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: isSelected
               ? Border.all(
-                  color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E),
+                  color: context.accentText,
                 )
               : null,
         ),
@@ -975,7 +967,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               icon,
               size: 12,
               color: isSelected
-                  ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                  ? (context.primaryButtonFg)
                   : context.textSecondary,
             ),
             const SizedBox(width: 4),
@@ -983,7 +975,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               label,
               style: TextStyle(
                 color: isSelected
-                    ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                    ? (context.primaryButtonFg)
                     : context.textSecondary,
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,

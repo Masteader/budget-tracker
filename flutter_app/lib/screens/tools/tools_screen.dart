@@ -65,7 +65,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_transfer',
         icon: Icons.swap_horiz_rounded,
-        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
+        color: context.accentText,
         title: context.tr('transfer_funds'),
         subtitle: context.tr('tool_transfer_desc'),
         onTap: () => AccountTransferSheet.show(context, householdId: householdId),
@@ -73,7 +73,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_batch_scan',
         icon: Icons.dynamic_feed_rounded,
-        color: context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E),
+        color: context.accentText,
         title: context.tr('batch_scan_receipts'),
         subtitle: context.tr('tool_batch_scan_desc'),
         onTap: () => _push(context, BatchReceiptScannerScreen(householdId: householdId)),
@@ -89,7 +89,7 @@ class ToolsScreen extends StatelessWidget {
       _Tool(
         key: 'tool_smart_basket',
         icon: Icons.shopping_basket_outlined,
-        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42),
+        color: context.accentText,
         title: context.tr('smart_basket_optimizer'),
         subtitle: context.tr('tool_smart_basket_desc'),
         onTap: () => SmartShoppingBasketSheet.show(context, householdId: householdId),

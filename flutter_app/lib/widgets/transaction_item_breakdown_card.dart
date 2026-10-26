@@ -98,21 +98,21 @@ class TransactionItemBreakdownCard extends StatelessWidget {
 
     switch (who.toLowerCase()) {
       case 'partner':
-        bg = (context.isDark ? const Color(0xFF5E1327) : const Color(0xFFFDF2F4));
-        fg = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF9E1B42);
+        bg = context.accentSubtleBg;
+        fg = context.accentText;
         icon = Icons.favorite_outline;
         label = detailed ? context.tr('paid_by_partner') : context.tr('partner');
         break;
       case 'me':
-        bg = (context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB));
-        fg = context.isDark ? const Color(0xFFE598B0) : const Color(0xFF4A0E1E);
+        bg = (context.pillBg);
+        fg = context.accentText;
         icon = Icons.person_outline;
         label = detailed ? context.tr('paid_by_me') : context.tr('me');
         break;
       case 'both':
       default:
-        bg = (context.isDark ? const Color(0xFF2E1520) : const Color(0xFFF2ECEE));
-        fg = context.isDark ? const Color(0xFFC7AEB6) : const Color(0xFF59454C);
+        bg = context.subtleCardBg;
+        fg = context.textSecondary;
         icon = Icons.people_alt_outlined;
         label = detailed ? context.tr('both_shared') : context.tr('both');
         break;
@@ -301,19 +301,19 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF58A6FF).withValues(alpha: 0.16),
+                        color: context.infoSubtleBg,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF58A6FF).withValues(alpha: 0.4), width: 0.8),
+                        border: Border.all(color: context.infoSubtleBorder, width: 0.8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.receipt_long_rounded, size: 11, color: Color(0xFF58A6FF)),
+                          Icon(Icons.receipt_long_rounded, size: 11, color: context.infoColor),
                           const SizedBox(width: 4),
                           Text(
                             context.tr('view_receipt'),
-                            style: const TextStyle(
-                              color: Color(0xFF58A6FF),
+                            style: TextStyle(
+                              color: context.infoColor,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
@@ -542,7 +542,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                           context.tr('tap_to_zoom'),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
-                            color: const Color(0xFF58A6FF),
+                            color: context.infoColor,
                           ),
                         ),
                       ],
@@ -604,7 +604,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.zoom_in, color: Color(0xFF58A6FF), size: 14),
+                                      Icon(Icons.zoom_in, color: context.infoColor, size: 14),
                                       const SizedBox(width: 4),
                                       Text(
                                         context.tr('view_full'),
@@ -724,7 +724,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 10,
-                              color: context.isDark ? const Color(0xFF79C0FF) : const Color(0xFF0284C7),
+                              color: context.infoColor,
                             ),
                             maxLines: 4,
                           ),
@@ -859,10 +859,10 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                 ),
                 child: SelectableText(
                   rawQr,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 10,
-                    color: Color(0xFF79C0FF),
+                    color: context.infoColor,
                   ),
                 ),
               ),

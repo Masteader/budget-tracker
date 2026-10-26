@@ -227,11 +227,11 @@ class _HouseholdScreenState extends State<HouseholdScreen>
     String roleLabel = context.tr('member');
 
     if (invite.isSpouse) {
-      bannerColor = const Color(0xFFE5A93C);
+      bannerColor = context.warnText;
       roleIcon = Icons.favorite_rounded;
       roleLabel = context.tr('wife_spouse_title');
     } else if (invite.isPeer) {
-      bannerColor = const Color(0xFF38BDF8);
+      bannerColor = context.infoColor;
       roleIcon = Icons.group_outlined;
       roleLabel = context.tr('role_roommate');
     }

@@ -46,7 +46,7 @@ class OverBudgetAlerts extends StatelessWidget {
               TextButton(
                 onPressed: onShowAll,
                 style: TextButton.styleFrom(
-                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                  foregroundColor: context.accentText,
                 ),
                 child: Text(context.tr('show_all')),
               ),

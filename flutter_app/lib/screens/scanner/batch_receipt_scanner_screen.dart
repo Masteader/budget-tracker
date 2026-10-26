@@ -170,7 +170,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF030D18),
+      backgroundColor: context.cardBg,
       appBar: AppBar(
         key: const Key('batch_scanner_app_bar'),
         backgroundColor: AppThemes.deepGlacial,
@@ -485,7 +485,7 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                                 width: 75,
                                 height: 95,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0A2544),
+                                  color: context.subtleCardBg,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
                                     color: context.iceCyan.withValues(alpha: 0.5),

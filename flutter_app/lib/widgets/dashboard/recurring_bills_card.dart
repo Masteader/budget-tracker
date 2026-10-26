@@ -121,7 +121,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: summary.reservedAmount > 0
-                  ? const Color(0xFFF0883E).withValues(alpha: 0.3)
+                  ? context.alertWarningBorder
                   : context.borderColor,
             ),
           ),
@@ -140,15 +140,15 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: summary.reservedAmount > 0
-                              ? const Color(0xFFF0883E).withValues(alpha: 0.15)
-                              : (context.isDark ? const Color(0xFF10B981).withValues(alpha: 0.15) : const Color(0xFF10B981).withValues(alpha: 0.15)),
+                              ? context.alertWarningBg
+                              : (context.isDark ? context.alertSuccessBg : context.alertSuccessBg),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.repeat_rounded,
                           color: summary.reservedAmount > 0
-                              ? const Color(0xFFF0883E)
-                              : (context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669)),
+                              ? context.warnText
+                              : (context.successText),
                           size: 22,
                         ),
                       ),
@@ -173,8 +173,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: summary.reservedAmount > 0
-                                    ? const Color(0xFFF0883E)
-                                    : (context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669)),
+                                    ? context.warnText
+                                    : (context.successText),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -185,7 +185,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       IconButton(
                         tooltip: context.tr('configure_bills'),
                         visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.tune_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E), size: 20),
+                        icon: Icon(Icons.tune_rounded, color: context.accentText, size: 20),
                         onPressed: () => _showManageRecurringBillsSheet(context),
                       ),
                       Icon(
@@ -216,12 +216,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             if (paidRatio > 0)
                               Expanded(
                                 flex: (paidRatio * 1000).toInt(),
-                                child: Container(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                                child: Container(color: context.accentText),
                               ),
                             if (1.0 - paidRatio > 0)
                               Expanded(
                                 flex: ((1.0 - paidRatio) * 1000).toInt(),
-                                child: Container(color: const Color(0xFFF0883E)),
+                                child: Container(color: context.warnText),
                               ),
                           ],
                         ),
@@ -250,7 +250,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                    color: context.accentText,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -259,7 +259,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                                   child: Text(
                                     '${context.tr('paid')} ${context.sar(summary.paidThisCycle)}',
                                     style: TextStyle(
-                                      color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                      color: context.accentText,
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -270,12 +270,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF0883E), shape: BoxShape.circle)),
+                                Container(width: 8, height: 8, decoration: BoxDecoration(color: context.warnText, shape: BoxShape.circle)),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
                                     '${context.tr('reserved')} ${context.sar(summary.reservedAmount)}',
-                                    style: const TextStyle(color: Color(0xFFF0883E), fontSize: 11, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: context.warnText, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
@@ -357,7 +357,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           height: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+            color: context.accentText,
           ),
         ),
       ),
@@ -377,10 +377,10 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.15) : const Color(0xFF4A0E1E).withValues(alpha: 0.1),
+              color: context.accentSubtleBg,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.repeat_rounded, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E), size: 22),
+            child: Icon(Icons.repeat_rounded, color: context.accentText, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -402,7 +402,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.chipBg,
-              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+              foregroundColor: context.accentText,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -423,12 +423,12 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: selected
-              ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E))
+              ? (context.primaryButtonBg)
               : context.chipBg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E))
+                ? (context.accentText)
                 : Colors.transparent,
           ),
         ),
@@ -436,7 +436,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           label,
           style: TextStyle(
             color: selected
-                ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                ? (context.primaryButtonFg)
                 : context.textSecondary,
             fontSize: 11,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
@@ -464,8 +464,8 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-              foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+              backgroundColor: context.primaryButtonBg,
+              foregroundColor: context.primaryButtonFg,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('rb_confirm_paid'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -531,15 +531,15 @@ class _BillRowItem extends StatelessWidget {
     IconData badgeIcon;
 
     if (bill.isPaid) {
-      badgeColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+      badgeColor = context.accentText;
       badgeText = context.tr('paid');
       badgeIcon = Icons.check_circle_rounded;
     } else if (bill.isOverdue) {
-      badgeColor = const Color(0xFFFF7B72);
+      badgeColor = context.dangerColor;
       badgeText = context.tr('overdue');
       badgeIcon = Icons.error_outline_rounded;
     } else {
-      badgeColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+      badgeColor = context.accentText;
       badgeText = '${context.tr('due_day')} ~${bill.expectedDayOfMonth}';
       badgeIcon = Icons.schedule_rounded;
     }
@@ -587,16 +587,16 @@ class _BillRowItem extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                    color: context.primaryButtonBg,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.3) : const Color(0xFF4A0E1E),
+                      color: context.accentText,
                     ),
                   ),
                   child: Text(
                     context.tr('rb_pay'),
                     style: TextStyle(
-                      color: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                      color: context.primaryButtonFg,
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
                     ),
@@ -616,7 +616,7 @@ class _BillRowItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: bill.isOverdue
-              ? const Color(0xFFFF7B72).withValues(alpha: 0.3)
+              ? context.alertDangerBorder
               : context.borderColor,
         ),
       ),
@@ -653,13 +653,13 @@ class _BillRowItem extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
-                          color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.15) : const Color(0xFF4A0E1E).withValues(alpha: 0.1),
+                          color: context.accentSubtleBg,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           context.tr('budgeted'),
                           style: TextStyle(
-                            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                            color: context.accentText,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
@@ -757,7 +757,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Center(
                       child: CircularProgressIndicator(
-                        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                        color: context.accentText,
                       ),
                     );
                   }
@@ -788,7 +788,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: c.isRecurring
-                                ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.3) : const Color(0xFF4A0E1E).withValues(alpha: 0.3))
+                                ? (context.accentText.withValues(alpha: 0.3))
                                 : context.borderColor,
                           ),
                         ),
@@ -797,7 +797,7 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                             Icon(
                               icon,
                               color: c.isRecurring
-                                  ? (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E))
+                                  ? (context.accentText)
                                   : context.textSecondary,
                               size: 20,
                             ),
@@ -823,8 +823,8 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                             ),
                             Switch(
                               value: c.isRecurring,
-                              activeThumbColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
-                              activeTrackColor: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.4),
+                              activeThumbColor: context.accentText,
+                              activeTrackColor: context.accentText.withValues(alpha: 0.4),
                               onChanged: (val) async {
                                 setState(() {
                                   c.isRecurring = val;

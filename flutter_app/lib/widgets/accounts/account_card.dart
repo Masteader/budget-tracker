@@ -36,7 +36,6 @@ class AccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final margin = account.calculateMargin(committedBudgets);
     final status = account.getStatus(committedBudgets);
-    final isDark = context.isDark;
 
     Color statusColor;
     String statusLabel;
@@ -229,8 +228,8 @@ class AccountCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
-                        side: BorderSide(color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309), width: 1.4),
+                        foregroundColor: context.warnText,
+                        side: BorderSide(color: context.warnText, width: 1.4),
                         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),

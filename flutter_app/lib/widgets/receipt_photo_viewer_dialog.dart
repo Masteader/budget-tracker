@@ -61,7 +61,7 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                         context.sar(amount!),
                         style: GoogleFonts.outfit(
                           // Header sits on the dark modal barrier in both themes.
-                          color: const Color(0xFFF0A3BC),
+                          color: context.accentText,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -93,8 +93,8 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                       future: ReceiptStorageService().getSignedReceiptUrl(receiptUrl),
                       builder: (ctx, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(color: Color(0xFFF0A3BC)),
+                          return Center(
+                            child: CircularProgressIndicator(color: context.accentText),
                           );
                         }
                         final resolvedUrl = snapshot.data;
@@ -119,8 +119,8 @@ class ReceiptPhotoViewerDialog extends StatelessWidget {
                           fit: BoxFit.contain,
                           loadingBuilder: (ctx, child, progress) {
                             if (progress == null) return child;
-                            return const Center(
-                              child: CircularProgressIndicator(color: Color(0xFFF0A3BC)),
+                            return Center(
+                              child: CircularProgressIndicator(color: context.accentText),
                             );
                           },
                           errorBuilder: (ctx, _, __) => Center(

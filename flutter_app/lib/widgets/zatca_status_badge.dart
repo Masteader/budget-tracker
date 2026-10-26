@@ -21,7 +21,7 @@ class ZatcaStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E);
+    final accentColor = context.accentText;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

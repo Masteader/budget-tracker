@@ -46,7 +46,7 @@ class ReceiptPhotoStrip extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.add_a_photo_outlined,
-                          color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                          color: context.accentText,
                           size: 26,
                         ),
                         const SizedBox(height: 4),

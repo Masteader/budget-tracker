@@ -42,7 +42,7 @@ class AppSnackBar {
       context,
       message: message,
       title: title,
-      accentColor: const Color(0xFFFF7B72),
+      accentColor: context.dangerColor,
       icon: Icons.delete_outline_rounded,
       duration: duration,
       undoCallback: onUndo,
@@ -62,7 +62,7 @@ class AppSnackBar {
       context,
       message: message,
       title: title,
-      accentColor: const Color(0xFFF85149),
+      accentColor: context.dangerColor,
       icon: Icons.error_outline_rounded,
       duration: duration,
       actionLabel: actionLabel,
@@ -84,7 +84,7 @@ class AppSnackBar {
       context,
       message: message,
       title: title,
-      accentColor: const Color(0xFFFFA657),
+      accentColor: context.warnText,
       icon: icon,
       duration: duration,
       actionLabel: actionLabel,
@@ -106,7 +106,7 @@ class AppSnackBar {
       context,
       message: message,
       title: title,
-      accentColor: const Color(0xFF79C0FF),
+      accentColor: context.infoColor,
       icon: icon,
       duration: duration,
       actionLabel: actionLabel,
@@ -134,7 +134,7 @@ class AppSnackBar {
       SnackBar(
         elevation: 8,
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF1E0B12),
+        backgroundColor: context.cardBg,
         duration: duration,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -182,7 +182,7 @@ class AppSnackBar {
                   Text(
                     message,
                     style: GoogleFonts.outfit(
-                      color: const Color(0xFFC9D1D9),
+                      color: context.textPrimary,
                       fontSize: 12.5,
                       fontWeight: title != null ? FontWeight.w400 : FontWeight.w500,
                       height: 1.25,
@@ -206,22 +206,22 @@ class AppSnackBar {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0A3BC).withValues(alpha: 0.16),
+                    color: context.accentSubtleBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: const Color(0xFFF0A3BC).withValues(alpha: 0.6),
+                      color: context.accentSubtleBorder,
                       width: 1.1,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.undo_rounded, size: 14, color: Color(0xFFF0A3BC)),
+                      Icon(Icons.undo_rounded, size: 14, color: context.accentText),
                       const SizedBox(width: 4),
                       Text(
                         'UNDO',
                         style: GoogleFonts.outfit(
-                          color: const Color(0xFFF0A3BC),
+                          color: context.accentText,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,

@@ -68,15 +68,15 @@ class ReminderSettingsCard extends StatelessWidget {
               if (i > 0) Divider(color: context.borderColor, height: 1),
               SwitchListTile(
                 key: ValueKey('reminder_switch_${_items[i].$1.name}'),
-                secondary: Icon(_items[i].$2, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                secondary: Icon(_items[i].$2, color: context.accentText),
                 title: Text(
                   context.tr(_items[i].$3),
                   style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: Text(context.tr(_items[i].$4), style: TextStyle(color: context.textSecondary, fontSize: 11.5)),
                 value: prefs.isEnabled(_items[i].$1),
-                activeThumbColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
-                activeTrackColor: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.35),
+                activeThumbColor: context.accentText,
+                activeTrackColor: context.accentText.withValues(alpha: 0.35),
                 onChanged: (v) => _toggle(context, prefs, _items[i].$1, v),
               ),
             ],

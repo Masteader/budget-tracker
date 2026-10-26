@@ -61,9 +61,7 @@ class ChatMessageBubble extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: context.isDark
-                  ? const [Color(0xFF7A1934), VelvetBurgundyColors.primaryDark, Color(0xFF380814)]
-                  : const [Color(0xFF6C162F), VelvetBurgundyColors.primaryLight, VelvetBurgundyColors.primaryDarkMaroon],
+              colors: context.icedHeroGradient.colors,
             ),
             borderRadius: const BorderRadiusDirectional.only(
               topStart: Radius.circular(18),
@@ -73,7 +71,7 @@ class ChatMessageBubble extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: (context.isDark ? Colors.black : const Color(0xFF4A0E1E)).withValues(alpha: context.isDark ? 0.5 : 0.28),
+                color: (context.isDark ? Colors.black : context.primaryButtonBg).withValues(alpha: context.isDark ? 0.5 : 0.28),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -101,7 +99,7 @@ class ChatMessageBubble extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: context.isDark ? const Color(0xFF1E0B12) : Colors.white,
+                color: context.cardBg,
                 borderRadius: const BorderRadiusDirectional.only(
                   topStart: Radius.circular(18),
                   topEnd: Radius.circular(18),
@@ -113,7 +111,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: (context.isDark ? Colors.black : const Color(0xFF4A0E1E)).withValues(alpha: context.isDark ? 0.4 : 0.08),
+                    color: (context.isDark ? Colors.black : context.primaryButtonBg).withValues(alpha: context.isDark ? 0.4 : 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

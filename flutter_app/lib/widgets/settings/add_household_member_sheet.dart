@@ -57,12 +57,12 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
   bool _isSubmitting = false;
   String? _errorMessage;
 
-  final List<Map<String, dynamic>> _roleOptions = const [
+  List<Map<String, dynamic>> _getRoleOptions(BuildContext context) => [
     {
       'id': 'spouse',
       'title': 'wife_spouse_title',
       'icon': Icons.favorite_rounded,
-      'color': Color(0xFFE5A93C),
+      'color': context.warnText,
       'avatar': 'wife',
       'desc': 'ahm_spouse_desc',
     },
@@ -70,7 +70,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
       'id': 'roommate',
       'title': 'roommate_partner_title',
       'icon': Icons.group_outlined,
-      'color': Color(0xFF38BDF8),
+      'color': context.infoColor,
       'avatar': 'roommate',
       'desc': 'ahm_peer_desc',
     },
@@ -78,7 +78,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
       'id': 'child',
       'title': 'child_dependent_title',
       'icon': Icons.child_care_rounded,
-      'color': Color(0xFF34D399),
+      'color': context.successText,
       'avatar': 'child',
       'desc': 'ahm_child_desc',
     },
@@ -99,7 +99,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
     }
 
     final allowance = parseMoneyInput(_allowanceController.text.trim()) ?? 0.0;
-    final selectedOption = _roleOptions.firstWhere((r) => r['id'] == _selectedRole);
+    final selectedOption = _getRoleOptions(context).firstWhere((r) => r['id'] == _selectedRole);
     final avatar = selectedOption['avatar'] as String;
 
     setState(() {
@@ -170,12 +170,12 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: context.isDark ? const Color(0xFF381423) : const Color(0xFFF7E6EB),
+                    color: context.pillBg,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.person_add_alt_1_rounded,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     size: 22,
                   ),
                 ),
@@ -242,7 +242,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                  borderSide: BorderSide(color: context.accentText),
                 ),
               ),
               onChanged: (_) {
@@ -266,7 +266,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
             ),
             const SizedBox(height: 8),
 
-            ..._roleOptions.map((opt) {
+            ..._getRoleOptions(context).map((opt) {
               final isSelected = _selectedRole == opt['id'];
               final color = opt['color'] as Color;
 
@@ -369,7 +369,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                  borderSide: BorderSide(color: context.accentText),
                 ),
               ),
             ),
@@ -379,18 +379,18 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF85149).withValues(alpha: 0.15),
+                  color: context.alertDangerBg,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFF85149).withValues(alpha: 0.4)),
+                  border: Border.all(color: context.alertDangerBorder),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline_rounded, color: Color(0xFFF85149), size: 16),
+                    Icon(Icons.error_outline_rounded, color: context.dangerColor, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _errorMessage!,
-                        style: const TextStyle(color: Color(0xFFF85149), fontSize: 12),
+                        style: TextStyle(color: context.dangerColor, fontSize: 12),
                       ),
                     ),
                   ],
@@ -407,7 +407,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               child: ElevatedButton.icon(
                 key: const Key('add_member_submit_button'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                  backgroundColor: context.primaryButtonBg,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,

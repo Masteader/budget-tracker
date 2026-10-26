@@ -83,7 +83,7 @@ class BudgetHeroCard extends StatelessWidget {
       {'amount': context.sar(outlook.base, decimals: 0)},
     );
 
-    final cautionColor = isDark ? const Color(0xFFFFA657) : const Color(0xFFB45309);
+    final cautionColor = context.warnText;
     final okColor = isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight;
     final Color verdictColor;
     final IconData verdictIcon;
@@ -128,14 +128,14 @@ class BudgetHeroCard extends StatelessWidget {
         label: context.tr('spent'),
         value: context.sar(outlook.totalSpent, decimals: 0),
         icon: Icons.payments_outlined,
-        accentColor: isDark ? const Color(0xFFF472B6) : VelvetBurgundyColors.accentRose,
+        accentColor: context.accentText,
       ),
     ];
 
     final Widget titleText = Text(
       title,
       style: GoogleFonts.outfit(
-        color: isDark ? Colors.white70 : const Color(0xFF64748B),
+        color: context.textSecondary,
         fontSize: 12.5,
         fontWeight: FontWeight.w600,
       ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
@@ -144,9 +144,7 @@ class BudgetHeroCard extends StatelessWidget {
     final Widget badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF381423)
-            : VelvetBurgundyColors.rosePillLight,
+        color: context.pillBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
@@ -240,10 +238,10 @@ class BudgetHeroCard extends StatelessWidget {
             height: 7,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF14050B) : const Color(0xFFF0E6E9),
+              color: context.subtleCardBg,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isDark ? const Color(0x33FFD2E1) : const Color(0xFFE8DEE1),
+                color: context.borderColor,
                 width: 0.8,
               ),
             ),
@@ -255,11 +253,11 @@ class BudgetHeroCard extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: share > 0.9
+                      colors: (share > 0.9)
                           ? [
-                              const Color(0xFFF59E0B),
+                              context.warnText,
                               VelvetBurgundyColors.coralDanger,
-                              const Color(0xFF991B1B),
+                              context.dangerColor,
                             ]
                           : [
                               VelvetBurgundyColors.roseGold,
@@ -285,7 +283,7 @@ class BudgetHeroCard extends StatelessWidget {
                         context.trArgs('hero_daily_safe', {'amount': context.sar(outlook.safeDaily, decimals: 0)}),
                         key: const Key('hero_daily_figure'),
                         style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          color: context.textPrimary,
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
                         ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
@@ -397,16 +395,16 @@ class _DialGauge3D extends StatelessWidget {
             ? const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF2E101D), Color(0xFF19060E)],
+                colors: [VelvetBurgundyColors.surfaceDarkGradientStart, VelvetBurgundyColors.surfaceDarkGradientEnd],
               )
             : const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFFFF7F9), Color(0xFFF2DCE2)],
+                colors: [VelvetBurgundyColors.canvasLight, VelvetBurgundyColors.roseBorderLight],
               ),
         boxShadow: [
           BoxShadow(
-            color: (isDark ? Colors.black : const Color(0xFF4A0E1E))
+            color: (isDark ? Colors.black : context.primaryButtonBg)
                 .withValues(alpha: isDark ? 0.4 : 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -429,7 +427,7 @@ class _DialGauge3D extends StatelessWidget {
             child: CircularProgressIndicator(
               value: spentShare.clamp(0.0, 1.0),
               strokeWidth: 6,
-              backgroundColor: isDark ? const Color(0xFF14050B) : const Color(0xFFF5EEF0),
+              backgroundColor: context.subtleCardBg,
               valueColor: AlwaysStoppedAnimation(
                 isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
               ),
@@ -452,7 +450,7 @@ class _DialGauge3D extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 1),
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF5E1327) : VelvetBurgundyColors.primaryLight,
+                  color: context.primaryButtonBg,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -483,9 +481,7 @@ class _DueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDark;
     return Material(
-      color: isDark
-          ? const Color(0xFF2E1520)
-          : const Color(0xFFFFF7F9),
+      color: context.subtleCardBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
@@ -551,7 +547,7 @@ class _StatCapsule extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF19060E) : Colors.white,
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
@@ -563,7 +559,7 @@ class _StatCapsule extends StatelessWidget {
             ? null
             : [
                 BoxShadow(
-                  color: const Color(0xFF4A0E1E).withValues(alpha: 0.04),
+                  color: context.primaryButtonBg.withValues(alpha: 0.04),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -581,7 +577,7 @@ class _StatCapsule extends StatelessWidget {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                    color: context.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
@@ -597,7 +593,7 @@ class _StatCapsule extends StatelessWidget {
               value,
               maxLines: 1,
               style: GoogleFonts.outfit(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: context.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),

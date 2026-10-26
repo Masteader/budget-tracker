@@ -90,12 +90,8 @@ class CategoryBudgetCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: budget.isOverspent
-                                  ? (isDark
-                                      ? const Color(0xFF3B0C18)
-                                      : VelvetBurgundyColors.coralDangerBgLight)
-                                  : (isDark
-                                      ? const Color(0xFF381423)
-                                      : VelvetBurgundyColors.rosePillLight),
+                                  ? (context.alertDangerBg)
+                                  : (context.pillBg),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: budget.isOverspent
@@ -108,7 +104,7 @@ class CategoryBudgetCard extends StatelessWidget {
                               statusText,
                               style: GoogleFonts.outfit(
                                 color: budget.isOverspent
-                                    ? (isDark ? const Color(0xFFFF8FA2) : VelvetBurgundyColors.coralDangerTextLight)
+                                    ? (context.dangerColor)
                                     : (isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
@@ -166,10 +162,10 @@ class CategoryBudgetCard extends StatelessWidget {
               height: 7,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF14050B) : const Color(0xFFF0E6E9),
+                color: context.subtleCardBg,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: isDark ? const Color(0x33FFD2E1) : const Color(0xFFE8DEE1),
+                  color: context.borderColor,
                   width: 0.8,
                 ),
               ),
@@ -181,11 +177,11 @@ class CategoryBudgetCard extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: budget.isOverspent
+                        colors: (budget.isOverspent)
                             ? [
-                                const Color(0xFFF59E0B),
+                                context.warnText,
                                 VelvetBurgundyColors.coralDanger,
-                                const Color(0xFF991B1B),
+                                context.dangerColor,
                               ]
                             : [
                                 VelvetBurgundyColors.roseGold,
@@ -220,10 +216,10 @@ class CategoryBudgetCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF14060C) : const Color(0xFFFAF5F7),
+                  color: context.subtleCardBg,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isDark ? const Color(0x26FFD2E1) : VelvetBurgundyColors.roseBorderLight,
+                    color: context.borderColor,
                   ),
                 ),
                 child: Column(
@@ -258,10 +254,10 @@ class CategoryBudgetCard extends StatelessWidget {
                       children: subCategories.map((s) => Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF260D17) : Colors.white,
+                          color: context.cardBg,
                           borderRadius: BorderRadius.circular(5),
                           border: Border.all(
-                            color: isDark ? const Color(0x33FFD2E1) : VelvetBurgundyColors.roseBorderLight,
+                            color: context.borderColor,
                           ),
                         ),
                         child: Text(

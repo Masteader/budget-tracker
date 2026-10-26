@@ -122,7 +122,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: context.isDark ? const Color(0xFF381423) : VelvetBurgundyColors.rosePillLight,
+                  color: context.pillBg,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
@@ -132,7 +132,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                 child: Text(
                   context.trArgs('pds_of_month', {'day': _ordinal(context, _selectedDay)}),
                   style: TextStyle(
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -210,7 +210,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                 value: _selectedDay,
                 isExpanded: true,
                 dropdownColor: context.cardBg,
-                icon: Icon(Icons.arrow_drop_down, color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)),
+                icon: Icon(Icons.arrow_drop_down, color: context.accentText),
                 items: List.generate(31, (index) {
                   final day = index + 1;
                   return DropdownMenuItem<int>(
@@ -244,7 +244,7 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             height: 44,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A0E1E),
+                backgroundColor: context.primaryButtonBg,
                 foregroundColor: Colors.white,
                 elevation: 3,
                 shape: RoundedRectangleBorder(
@@ -284,15 +284,15 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: const Color(0xFF4A0E1E).withValues(alpha: 0.15),
+      selectedColor: context.accentSubtleBg,
       backgroundColor: context.scaffoldBg,
       labelStyle: TextStyle(
-        color: isSelected ? const Color(0xFF4A0E1E) : context.textPrimary,
+        color: isSelected ? context.accentText : context.textPrimary,
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? const Color(0xFF4A0E1E) : context.borderColor,
+        color: isSelected ? context.accentText : context.borderColor,
       ),
       onSelected: (_) {
         setState(() => _selectedDay = day);

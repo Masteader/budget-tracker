@@ -75,12 +75,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   // FAQ content is stored as translation keys and resolved in the language
   // selected on this screen (defaults to the app locale).
-  static const List<_FaqCategory> _faqCategories = [
+  List<_FaqCategory> _getFaqCategories(BuildContext context) => [
     _FaqCategory(
       titleKey: 'faq_cat_salary',
       icon: Icons.calendar_month_rounded,
-      color: Color(0xFFF59E0B),
-      faqs: [
+      color: context.warnText,
+      faqs: const [
         _FaqItem(questionKey: 'faq_salary_q1', answerKey: 'faq_salary_a1'),
         _FaqItem(questionKey: 'faq_salary_q2', answerKey: 'faq_salary_a2'),
         _FaqItem(questionKey: 'faq_salary_q3', answerKey: 'faq_salary_a3'),
@@ -90,8 +90,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     _FaqCategory(
       titleKey: 'faq_cat_nafaqah',
       icon: Icons.family_restroom_rounded,
-      color: AppThemes.champagneGold,
-      faqs: [
+      color: context.champagneGold,
+      faqs: const [
         _FaqItem(questionKey: 'faq_nafaqah_q1', answerKey: 'faq_nafaqah_a1'),
         _FaqItem(questionKey: 'faq_nafaqah_q2', answerKey: 'faq_nafaqah_a2'),
         _FaqItem(questionKey: 'faq_nafaqah_q3', answerKey: 'faq_nafaqah_a3'),
@@ -100,8 +100,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     _FaqCategory(
       titleKey: 'faq_cat_receipts',
       icon: Icons.qr_code_scanner_rounded,
-      color: AppThemes.success,
-      faqs: [
+      color: context.successText,
+      faqs: const [
         _FaqItem(questionKey: 'faq_receipts_q1', answerKey: 'faq_receipts_a1'),
         _FaqItem(questionKey: 'faq_receipts_q2', answerKey: 'faq_receipts_a2'),
         _FaqItem(questionKey: 'faq_receipts_q3', answerKey: 'faq_receipts_a3'),
@@ -110,8 +110,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     _FaqCategory(
       titleKey: 'faq_cat_bills',
       icon: Icons.receipt_long_rounded,
-      color: Color(0xFF3B82F6),
-      faqs: [
+      color: context.infoColor,
+      faqs: const [
         _FaqItem(questionKey: 'faq_bills_q1', answerKey: 'faq_bills_a1'),
         _FaqItem(questionKey: 'faq_bills_q2', answerKey: 'faq_bills_a2'),
         _FaqItem(questionKey: 'faq_bills_q3', answerKey: 'faq_bills_a3'),
@@ -120,16 +120,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
     _FaqCategory(
       titleKey: 'faq_cat_bnpl',
       icon: Icons.credit_card_rounded,
-      color: Color(0xFF8B5CF6),
-      faqs: [
+      color: context.accentText,
+      faqs: const [
         _FaqItem(questionKey: 'faq_bnpl_q1', answerKey: 'faq_bnpl_a1'),
       ],
     ),
     _FaqCategory(
       titleKey: 'faq_cat_household',
       icon: Icons.people_alt_rounded,
-      color: Color(0xFF10B981),
-      faqs: [
+      color: context.successText,
+      faqs: const [
         _FaqItem(questionKey: 'faq_household_q1', answerKey: 'faq_household_a1'),
         _FaqItem(questionKey: 'faq_household_q2', answerKey: 'faq_household_a2'),
       ],
@@ -285,7 +285,7 @@ User: ${widget.userEmail ?? "N/A"}
           IconButton(
             icon: Icon(
               Icons.play_circle_outline_rounded,
-              color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+              color: context.accentText,
             ),
             tooltip: context.tr('support_replay_guide'),
             onPressed: () => UserGuideWalkthroughDialog.show(context),
@@ -293,9 +293,9 @@ User: ${widget.userEmail ?? "N/A"}
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+          indicatorColor: context.accentText,
           indicatorWeight: 3,
-          labelColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+          labelColor: context.accentText,
           unselectedLabelColor: context.textSecondary,
           labelStyle:
               GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
@@ -334,7 +334,7 @@ User: ${widget.userEmail ?? "N/A"}
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: selected
-                ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E))
+                ? (context.primaryButtonBg)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
@@ -342,7 +342,7 @@ User: ${widget.userEmail ?? "N/A"}
             text,
             style: TextStyle(
               color: selected
-                  ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                  ? (context.primaryButtonFg)
                   : context.textSecondary,
               fontWeight: FontWeight.bold,
               fontSize: 11,
@@ -355,7 +355,7 @@ User: ${widget.userEmail ?? "N/A"}
 
   Widget _buildFaqTab() {
     final query = _faqQuery.toLowerCase();
-    final filteredCategories = _faqCategories.map((cat) {
+    final filteredCategories = _getFaqCategories(context).map((cat) {
       final title = _t(cat.titleKey);
       final matchingFaqs = cat.faqs.where((f) {
         return _t(f.questionKey).toLowerCase().contains(query) ||
@@ -379,8 +379,8 @@ User: ${widget.userEmail ?? "N/A"}
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: context.isDark
-                  ? const [Color(0xFF240E17), Color(0xFF1E0B12)]
-                  : const [Color(0xFFFCEEF2), Color(0xFFF8E5EB)],
+                  ? const [VelvetBurgundyColors.surfaceDarkGradientStart, VelvetBurgundyColors.surfaceDarkGradientEnd]
+                  : const [VelvetBurgundyColors.rosePillLight, VelvetBurgundyColors.canvasLight],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -393,12 +393,12 @@ User: ${widget.userEmail ?? "N/A"}
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: (context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E)).withValues(alpha: 0.15),
+                  color: context.accentSubtleBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.explore_rounded,
-                  color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                  color: context.accentText,
                   size: 24,
                 ),
               ),
@@ -429,8 +429,8 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(
@@ -478,7 +478,7 @@ User: ${widget.userEmail ?? "N/A"}
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                color: context.accentText,
               ),
             ),
           ),
@@ -523,7 +523,7 @@ User: ${widget.userEmail ?? "N/A"}
                         Text(
                           _t(faq.questionKey),
                           style: GoogleFonts.outfit(
-                            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                            color: context.accentText,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -563,7 +563,7 @@ User: ${widget.userEmail ?? "N/A"}
                 children: [
                   Icon(
                     Icons.mail_outline_rounded,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -590,9 +590,9 @@ User: ${widget.userEmail ?? "N/A"}
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    foregroundColor: context.accentText,
                     side: BorderSide(
-                      color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.5) : const Color(0xFF4A0E1E),
+                      color: context.accentText,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -637,7 +637,7 @@ User: ${widget.userEmail ?? "N/A"}
                 label: Text(
                   quickChips[idx],
                   style: GoogleFonts.outfit(
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                     fontSize: 12,
                   ),
                 ),
@@ -667,7 +667,7 @@ User: ${widget.userEmail ?? "N/A"}
                     constraints: const BoxConstraints(maxWidth: 320),
                     decoration: BoxDecoration(
                       color: msg.isUser
-                          ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E))
+                          ? (context.primaryButtonBg)
                           : context.cardBg,
                       borderRadius: BorderRadius.circular(14),
                       border: msg.isUser
@@ -678,7 +678,7 @@ User: ${widget.userEmail ?? "N/A"}
                       msg.text,
                       style: GoogleFonts.outfit(
                         color: msg.isUser
-                            ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white)
+                            ? (context.primaryButtonFg)
                             : context.textPrimary,
                         fontSize: 13.5,
                         height: 1.4,
@@ -698,7 +698,7 @@ User: ${widget.userEmail ?? "N/A"}
                         color: context.subtleCardBg,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E),
+                          color: context.accentText,
                         ),
                       ),
                       child: Column(
@@ -708,7 +708,7 @@ User: ${widget.userEmail ?? "N/A"}
                             children: [
                               Icon(
                                 Icons.engineering_rounded,
-                                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                color: context.accentText,
                                 size: 18,
                               ),
                               const SizedBox(width: 6),
@@ -735,8 +735,8 @@ User: ${widget.userEmail ?? "N/A"}
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                                foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                                backgroundColor: context.primaryButtonBg,
+                                foregroundColor: context.primaryButtonFg,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 8),
                                 shape: RoundedRectangleBorder(
@@ -777,7 +777,7 @@ User: ${widget.userEmail ?? "N/A"}
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                    color: context.accentText,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -822,7 +822,7 @@ User: ${widget.userEmail ?? "N/A"}
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                        color: context.accentText,
                       ),
                     ),
                   ),
@@ -832,8 +832,8 @@ User: ${widget.userEmail ?? "N/A"}
               const SizedBox(width: 8),
               IconButton(
                 style: IconButton.styleFrom(
-                  backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                  foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -987,7 +987,7 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
         children: [
           Icon(
             Icons.mail_rounded,
-            color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+            color: context.accentText,
             size: 24,
           ),
           const SizedBox(width: 10),
@@ -1057,7 +1057,7 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
             child: Text(
               context.tr('support_copy_diag'),
               style: TextStyle(
-                color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF7A152E),
+                color: context.accentText,
               ),
             ),
           ),
@@ -1069,8 +1069,8 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
         ElevatedButton.icon(
           key: const ValueKey('support-inquiry-send'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-            foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+            backgroundColor: context.primaryButtonBg,
+            foregroundColor: context.primaryButtonFg,
           ),
           onPressed: _sending ? null : _send,
           icon: _sending
@@ -1079,7 +1079,7 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                    color: context.primaryButtonFg,
                   ),
                 )
               : const Icon(Icons.send_rounded, size: 16),

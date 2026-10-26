@@ -87,8 +87,8 @@ class DuplicateResolutionCard extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFF85149),
-                  side: BorderSide(color: const Color(0xFFF85149).withValues(alpha: 0.5)),
+                  foregroundColor: context.dangerColor,
+                  side: BorderSide(color: context.alertDangerBorder),
                   padding: const EdgeInsets.symmetric(vertical: 6),
                 ),
                 icon: const Icon(Icons.delete_outline, size: 16),

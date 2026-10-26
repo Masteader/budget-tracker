@@ -249,8 +249,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     visualDensity: VisualDensity.compact,
                   ),
-                  icon: const Icon(Icons.paste, size: 14, color: Color(0xFF58A6FF)),
-                  label: Text(context.tr('from_clipboard'), style: const TextStyle(fontSize: 11, color: Color(0xFF58A6FF))),
+                  icon: Icon(Icons.paste, size: 14, color: context.infoColor),
+                  label: Text(context.tr('from_clipboard'), style: TextStyle(fontSize: 11, color: context.infoColor)),
                   onPressed: () async {
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
                     // The dialog (and its controller) may be gone by now.
@@ -916,13 +916,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5A93C).withValues(alpha: 0.12),
+                  color: context.alertWarningBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5A93C).withValues(alpha: 0.5)),
+                  border: Border.all(color: context.alertWarningBorder),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.cloud_off_rounded, color: Color(0xFFE5A93C), size: 20),
+                    Icon(Icons.cloud_off_rounded, color: context.warnText, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -933,7 +933,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                             style: GoogleFonts.outfit(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
-                              color: const Color(0xFFE5A93C),
+                              color: context.warnText,
                             ),
                           ),
                           Text(
@@ -1015,8 +1015,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF58A6FF),
-                        side: BorderSide(color: const Color(0xFF1F6FEB).withValues(alpha: 0.4)),
+                        foregroundColor: context.infoColor,
+                        side: BorderSide(color: context.infoSubtleBorder),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -1039,7 +1039,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 if (_imageFiles.isEmpty) ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1F6FEB),
+                      backgroundColor: context.infoColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1089,7 +1089,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                 const SizedBox(height: 10),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1F6FEB),
+                    backgroundColor: context.infoColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1397,7 +1397,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           if (!isCandidate && isZatcaVerified && _imageFiles.isEmpty) ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1F6FEB),
+                backgroundColor: context.infoColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

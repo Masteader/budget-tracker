@@ -28,11 +28,11 @@ class PurchaseSimulationCard extends StatelessWidget {
     String verdictLabel = context.tr('comfortably_affordable');
 
     if (verdict == 'caution') {
-      badgeColor = const Color(0xFFD97706);
+      badgeColor = context.warnText;
       badgeIcon = Icons.warning_amber_rounded;
       verdictLabel = context.tr('caution_reallocation');
     } else if (verdict == 'unaffordable' || verdict == 'not_recommended') {
-      badgeColor = const Color(0xFFDC2626);
+      badgeColor = context.dangerColor;
       badgeIcon = Icons.cancel_outlined;
       verdictLabel = context.tr('unaffordable_exceeds');
     }

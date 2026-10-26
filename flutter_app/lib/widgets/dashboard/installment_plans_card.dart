@@ -111,11 +111,11 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   Color _getProviderColor(String provider) {
     switch (provider.toLowerCase()) {
       case 'tamara':
-        return const Color(0xFFFF6B6B);
+        return context.dangerColor;
       case 'tabby':
-        return const Color(0xFF00E676);
+        return context.successText;
       default:
-        return const Color(0xFF58A6FF);
+        return context.infoColor;
     }
   }
 
@@ -184,9 +184,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E)) : context.inputBg,
+                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
                               border: Border.all(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E)) : context.borderColor,
+                                color: isSel ? (context.accentText) : context.borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -194,7 +194,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
+                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -220,9 +220,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E)) : context.inputBg,
+                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
                               border: Border.all(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E)) : context.borderColor,
+                                color: isSel ? (context.accentText) : context.borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -230,7 +230,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               '$cnt',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
+                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -257,9 +257,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? (context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E)) : context.inputBg,
+                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
                               border: Border.all(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC).withValues(alpha: 0.4) : const Color(0xFF4A0E1E)) : context.borderColor,
+                                color: isSel ? (context.accentText) : context.borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -267,7 +267,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               context.tr(f == 'biweekly' ? 'inst_every_two_weeks' : 'inst_every_month'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? (context.isDark ? const Color(0xFFF0A3BC) : Colors.white) : context.textPrimary,
+                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
@@ -288,8 +288,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
               ),
               onPressed: isSubmitting
                   ? null
@@ -464,12 +464,12 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFF6B6B).withValues(alpha: 0.15),
+                          color: context.alertDangerBg,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.credit_score_rounded,
-                          color: Color(0xFFFF6B6B),
+                          color: context.dangerColor,
                           size: 20,
                         ),
                       ),
@@ -499,7 +499,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: activePlans.isEmpty && plans.isNotEmpty
-                                    ? (context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
+                                    ? (context.successText)
                                     : context.textSecondary,
                               ),
                             ),
@@ -556,8 +556,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 14),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
-                            foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : Colors.white,
+                            backgroundColor: context.primaryButtonBg,
+                            foregroundColor: context.primaryButtonFg,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
@@ -627,7 +627,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
                                       style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.bold,
-                                        color: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                                        color: context.accentText,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -641,7 +641,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                     backgroundColor: context.chipBg,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       plan.isCompleted
-                                          ? (context.isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
+                                          ? (context.successText)
                                           : providerColor,
                                     ),
                                     minHeight: 6,
@@ -720,7 +720,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         const SizedBox(height: 4),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: context.isDark ? const Color(0xFFF0A3BC) : const Color(0xFF4A0E1E),
+                            foregroundColor: context.accentText,
                             side: BorderSide(color: context.borderColor),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

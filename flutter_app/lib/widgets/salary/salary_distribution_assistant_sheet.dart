@@ -260,8 +260,8 @@ class _SalaryDistributionAssistantSheetState
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [const Color(0xFF09223D), const Color(0xFF0A1828)]
-                    : [const Color(0xFFE6FAF5), const Color(0xFFF0FDF8)],
+                    ? const [VelvetBurgundyColors.surfaceDark, VelvetBurgundyColors.canvasDark]
+                    : const [VelvetBurgundyColors.surfaceLight, VelvetBurgundyColors.rosePillLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

@@ -154,7 +154,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                backgroundColor: context.primaryButtonBg,
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.pop(dCtx, true),
@@ -249,7 +249,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
             ElevatedButton(
               key: const ValueKey('household_type_save'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+                backgroundColor: context.primaryButtonBg,
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.pop(dCtx, picked),

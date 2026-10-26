@@ -110,7 +110,7 @@ class InactiveCategoryResolutionDialog extends StatelessWidget {
         FilledButton(
           onPressed: onReactivate,
           style: FilledButton.styleFrom(
-            backgroundColor: context.isDark ? const Color(0xFF5E1327) : const Color(0xFF4A0E1E),
+            backgroundColor: context.primaryButtonBg,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(40),
           ),
