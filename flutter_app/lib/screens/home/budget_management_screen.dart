@@ -343,7 +343,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       labelText: context.tr('amount'),
-                      suffixText: 'SAR',
+                      suffixText: context.tr('sar'),
                       filled: true,
                       fillColor: context.inputBg,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
