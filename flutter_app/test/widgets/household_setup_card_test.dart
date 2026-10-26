@@ -9,6 +9,7 @@ import 'package:budget_tracker/widgets/settings/income_settings_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 HouseholdRoster _roster({String type = 'family', bool admin = true, int members = 1, bool provider = true}) =>
     HouseholdRoster.fromMap({
@@ -191,5 +192,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('جهّز منزلك في دقيقتين'), findsOneWidget);
     expect(find.text('اختيار المكلّف بالنفقة'), findsOneWidget);
+  });
+
+  testWidgets('HouseholdSetupPrefs setHidden and isHidden toggle correctly', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    expect(await HouseholdSetupPrefs.isHidden('hh-test'), isFalse);
+
+    await HouseholdSetupPrefs.setHidden('hh-test', true);
+    expect(await HouseholdSetupPrefs.isHidden('hh-test'), isTrue);
+
+    await HouseholdSetupPrefs.setHidden('hh-test', false);
+    expect(await HouseholdSetupPrefs.isHidden('hh-test'), isFalse);
+  });
+
+  testWidgets('showChecklistSheet opens bottom sheet and restores checklist to dashboard', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'setup_hidden_hh-sheet': true,
+    });
+    var restored = false;
+
+    await tester.pumpWidget(_app(
+      Builder(
+        builder: (ctx) => ElevatedButton(
+          onPressed: () => HouseholdSetupCard.showChecklistSheet(
+            ctx,
+            householdId: 'hh-sheet',
+            onRestored: () => restored = true,
+          ),
+          child: const Text('Open'),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('restore_setup_checklist_button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('restore_setup_checklist_button')));
+    await tester.pumpAndSettle();
+
+    expect(restored, isTrue);
+    expect(await HouseholdSetupPrefs.isHidden('hh-sheet'), isFalse);
   });
 }

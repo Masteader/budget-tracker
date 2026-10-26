@@ -286,6 +286,7 @@ class _HouseholdScreenState extends State<HouseholdScreen>
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -293,7 +294,19 @@ class _HouseholdScreenState extends State<HouseholdScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 32),
+              if (canPop) ...[
+                IconButton(
+                  key: const Key('household_back_button'),
+                  tooltip: context.tr('nav_back'),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  alignment: AlignmentDirectional.centerStart,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(height: 16),
+              ] else
+                const SizedBox(height: 32),
               Text(context.tr('hh_your_household'),
                   style: GoogleFonts.outfit(
                       fontSize: 28, fontWeight: FontWeight.w700, color: context.textPrimary)),

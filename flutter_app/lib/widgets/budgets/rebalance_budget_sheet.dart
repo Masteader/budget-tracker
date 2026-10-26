@@ -329,7 +329,11 @@ class _RebalanceBudgetSheetState extends State<RebalanceBudgetSheet> {
                             Row(
                               children: [
                                 Text(
-                                  b.categoryCode,
+                                  context.trCat(b.categoryCode).trim().isNotEmpty
+                                      ? context.trCat(b.categoryCode)
+                                      : (b.categoryCode.trim().isNotEmpty
+                                          ? b.categoryCode
+                                          : context.tr('uncategorized')),
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13,
@@ -390,7 +394,7 @@ class _RebalanceBudgetSheetState extends State<RebalanceBudgetSheet> {
           ElevatedButton(
             onPressed: _isSaving ? null : () => _applyRebalance(adjustments),
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.accentText,
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: context.primaryButtonFg,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

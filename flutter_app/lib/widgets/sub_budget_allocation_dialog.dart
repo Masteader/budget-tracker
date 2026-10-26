@@ -416,7 +416,21 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     widget.onSaved?.call();
   }
 
+  bool _isSystemSub(String subCode) {
+    final catalog = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode];
+    if (catalog == null) return false;
+    return catalog.any((entry) => entry['sub_code'] == subCode);
+  }
+
   Future<void> _promptRenameSubCategory(_SubCategoryItemDef item) async {
+    if (_isSystemSub(item.subCode)) {
+      AppSnackBar.showInfo(
+        context,
+        context.tr('cannot_rename_system_cat_desc'),
+        title: context.tr('cannot_rename_system_cat'),
+      );
+      return;
+    }
     final nameCtrl = TextEditingController(text: item.nameEn);
 
     final res = await showDialog<bool>(
@@ -528,6 +542,14 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   }
 
   Future<void> _promptRemoveSubCategory(_SubCategoryItemDef item) async {
+    if (_isSystemSub(item.subCode)) {
+      AppSnackBar.showInfo(
+        context,
+        context.tr('cannot_rename_system_cat_desc'),
+        title: context.tr('cannot_rename_system_cat'),
+      );
+      return;
+    }
     final confirm = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
@@ -953,32 +975,34 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _promptRenameSubCategory(item),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                            child: Icon(
-                                              Icons.edit_outlined,
-                                              size: 15,
-                                              color: context.textSecondary,
+                                        if (!_isSystemSub(item.subCode)) ...[
+                                          const SizedBox(width: 4),
+                                          GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _promptRenameSubCategory(item),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                              child: Icon(
+                                                Icons.edit_outlined,
+                                                size: 15,
+                                                color: context.accentText,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _promptRemoveSubCategory(item),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                            child: Icon(
-                                              Icons.delete_outline_rounded,
-                                              size: 16,
-                                              color: context.dangerColor,
+                                          const SizedBox(width: 2),
+                                          GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _promptRemoveSubCategory(item),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                              child: Icon(
+                                                Icons.delete_outline_rounded,
+                                                size: 16,
+                                                color: context.dangerColor,
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                        ],
                                       ],
                                     ),
                                   ),

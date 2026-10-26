@@ -26,6 +26,10 @@ import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../models/money.dart';
+import '../../models/manual_expense_row.dart';
+import '../../providers/budget_provider.dart';
+import '../../providers/transaction_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
@@ -73,13 +77,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           activeCodes.add({
             'code': cat.code,
             'category': cat.name,
+            'is_system': cat.isSystem ? 'true' : 'false',
           });
         }
       }
     } else {
       final codesRaw = await supabase
           .from('cost_control_codes')
-          .select('code, category')
+          .select('code, category, is_system')
           .order('code');
 
       final activeBudgets = await supabase
@@ -110,6 +115,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           activeCodes.add({
             'code': code,
             'category': name,
+            'is_system': (r['is_system'] == true) ? 'true' : 'false',
           });
         }
       }
@@ -383,22 +389,29 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   if (amt <= 0) return;
                   Navigator.pop(ctx);
                   try {
-                    await supabase.from('transactions').insert({
-                      'id': const Uuid().v4(),
-                      'household_id': householdId,
-                      'user_id': supabase.auth.currentUser?.id,
-                      'amount': amt,
-                      'merchant': merchantLabel,
-                      'category_code': selectedCat,
-                      'spent_by': 'me',
-                      'paid_by': 'me',
-                      'beneficiary_type': 'household',
-                      'beneficiary_id': 'household',
-                      'account_id': null,
-                      'occurred_at': DateTime.now().toIso8601String(),
-                      'cycle_key': cycleKey,
-                    });
+                    final row = buildManualExpenseRow(
+                      id: const Uuid().v4(),
+                      householdId: householdId,
+                      userId: supabase.auth.currentUser?.id,
+                      amount: amt,
+                      merchant: merchantLabel,
+                      categoryCode: selectedCat,
+                      spentBy: 'me',
+                      paidBy: 'me',
+                      beneficiaryType: 'household',
+                      beneficiaryId: 'household',
+                      accountId: null,
+                      occurredAt: DateTime.now(),
+                    );
+                    if (cycleKey.isNotEmpty) {
+                      row['cycle_key'] = cycleKey.length > 7 ? cycleKey.substring(0, 7) : cycleKey;
+                    }
+                    await supabase.from('transactions').insert(row);
                     if (mounted) {
+                      try {
+                        context.read<BudgetProvider>().refresh();
+                        context.read<TransactionProvider>().refresh();
+                      } catch (_) {}
                       setState(() {
                         _staticFuture = _loadStaticData();
                       });
@@ -779,6 +792,120 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           context,
           context.trArgs('bm_deactivate_failed_msg', {'error': e}),
           title: context.tr('bm_deactivate_failed_title'),
+        );
+      }
+    }
+  }
+
+  Future<void> _renameCategory(
+    _BudgetStaticData staticData,
+    String categoryCode,
+    String currentName,
+    bool isSystem,
+  ) async {
+    if (isSystem) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: context.accentText, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  context.tr('cannot_rename_system_cat'),
+                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            context.tr('cannot_rename_system_cat_desc'),
+            style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
+              ),
+              child: Text(context.tr('close'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final nameCtrl = TextEditingController(text: currentName);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [nameCtrl],
+        child: AlertDialog(
+          backgroundColor: context.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            context.tr('rename_category_title'),
+            style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          content: TextField(
+            controller: nameCtrl,
+            autofocus: true,
+            style: TextStyle(color: context.textPrimary),
+            decoration: InputDecoration(
+              labelText: context.tr('category_name'),
+              hintText: context.tr('rename_category_hint'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
+              ),
+              child: Text(context.tr('save'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+    final newName = nameCtrl.text.trim();
+    if (newName.isEmpty || newName == currentName) return;
+
+    try {
+      await supabase
+          .from('cost_control_codes')
+          .update({'category': newName})
+          .eq('code', categoryCode)
+          .eq('household_id', staticData.householdId);
+
+      if (mounted) {
+        setState(() {
+          _staticFuture = _loadStaticData();
+        });
+        AppSnackBar.showSuccess(
+          context,
+          context.trArgs('category_renamed_msg', {'name': newName}),
+          title: context.tr('category_renamed'),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          context.trArgs('category_rename_failed_msg', {'error': e.toString()}),
+          title: context.tr('category_rename_failed'),
         );
       }
     }
@@ -1373,6 +1500,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
                 final code = staticData.allCodes[i - 1]['code'] as String;
                 final category = staticData.allCodes[i - 1]['category'] as String;
+                final isSys = staticData.allCodes[i - 1]['is_system'] == 'true';
+                final displayName = (!isSys && category.trim().isNotEmpty) ? category : context.trCat(code);
                 final existing =
                     budgets.where((b) => b.categoryCode == code).firstOrNull;
                 final subCategories = kSubCategoriesByParent[code] ?? const <String>[];
@@ -1418,7 +1547,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    context.trCat(code),
+                                    displayName,
                                     style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 15,
@@ -1461,7 +1590,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             ),
                             if (staticData.isAdmin) ...[
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined),
+                                icon: const Icon(Icons.tune_rounded),
                                 color: context.accentText,
                                 tooltip: context.tr('edit_budget'),
                                 onPressed: () => _editBudget(staticData, existing, code),
@@ -1471,9 +1600,23 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 tooltip: context.tr('feed_more_actions'),
                                 icon: Icon(Icons.more_vert_rounded, color: context.accentText),
                                 onSelected: (v) {
-                                  if (v == 'deactivate') _archiveCategory(staticData, code, category);
+                                  if (v == 'rename') {
+                                    _renameCategory(staticData, code, category, isSys);
+                                  } else if (v == 'deactivate') {
+                                    _archiveCategory(staticData, code, category);
+                                  }
                                 },
                                 itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'rename',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18, color: context.accentText),
+                                        const SizedBox(width: 10),
+                                        Flexible(child: Text(context.tr('rename_category'))),
+                                      ],
+                                    ),
+                                  ),
                                   PopupMenuItem(
                                     value: 'deactivate',
                                     child: Row(

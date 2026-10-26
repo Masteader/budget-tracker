@@ -33,6 +33,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import '../accounts/accounts_overview_screen.dart';
@@ -819,6 +820,69 @@ class _SettingsScreenState extends State<SettingsScreen>
               householdId: _householdId!,
               onRolesChanged: _onRolesChanged,
               onNafaqahProviderChanged: _onNafaqahProviderChanged,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  HouseholdSetupCard.showChecklistSheet(
+                    context,
+                    householdId: _householdId!,
+                  );
+                },
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: context.pillBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.checklist_rtl_rounded,
+                        color: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('household_setup_checklist'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            context.tr('household_setup_checklist_desc'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: context.accentText,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Container(

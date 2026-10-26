@@ -32,11 +32,20 @@ class HouseholdSetupPrefs {
     } catch (_) {}
   }
 
-  static Future<void> setHidden(String householdId) async {
+  static Future<void> setHidden(String householdId, [bool hidden = true]) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(hiddenKey(householdId), true);
+      await prefs.setBool(hiddenKey(householdId), hidden);
     } catch (_) {}
+  }
+
+  static Future<bool> isHidden(String householdId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(hiddenKey(householdId)) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Loads the checklist's data from the existing endpoints (payday, income,
@@ -109,6 +118,24 @@ class HouseholdSetupCard extends StatelessWidget {
     this.saveIncome,
     this.confirmPayday,
   });
+
+  /// Opens a modal bottom sheet displaying the setup checklist.
+  /// Allows reviewing progress and restoring the checklist to the dashboard.
+  static Future<void> showChecklistSheet(
+    BuildContext context, {
+    required String householdId,
+    VoidCallback? onRestored,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _HouseholdSetupSheet(
+        householdId: householdId,
+        onRestored: onRestored,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -572,3 +599,167 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
     );
   }
 }
+
+class _HouseholdSetupSheet extends StatefulWidget {
+  final String householdId;
+  final VoidCallback? onRestored;
+
+  const _HouseholdSetupSheet({
+    required this.householdId,
+    this.onRestored,
+  });
+
+  @override
+  State<_HouseholdSetupSheet> createState() => _HouseholdSetupSheetState();
+}
+
+class _HouseholdSetupSheetState extends State<_HouseholdSetupSheet> {
+  late Future<HouseholdSetupData> _future;
+  bool _restoring = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = HouseholdSetupPrefs.load(widget.householdId);
+  }
+
+  void _reload() {
+    setState(() {
+      _future = HouseholdSetupPrefs.load(widget.householdId);
+    });
+  }
+
+  Future<void> _restoreChecklist() async {
+    setState(() => _restoring = true);
+    await HouseholdSetupPrefs.setHidden(widget.householdId, false);
+    if (!mounted) return;
+    AppSnackBar.showSuccess(
+      context,
+      context.tr('setup_card_restored'),
+    );
+    widget.onRestored?.call();
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.scaffoldBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: context.borderColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('household_setup_checklist'),
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          context.tr('household_setup_checklist_desc'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    color: context.textSecondary,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              FutureBuilder<HouseholdSetupData>(
+                future: _future,
+                builder: (ctx, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  if (snap.hasError || !snap.hasData) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        context.tr('load_error_generic'),
+                        style: TextStyle(color: context.dangerColor),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+                  final data = snap.data!;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      HouseholdSetupCard(
+                        householdId: widget.householdId,
+                        data: data,
+                        hasBudgets: true,
+                        onChanged: _reload,
+                        onHide: null,
+                      ),
+                      const SizedBox(height: 16),
+                      if (data.hidden)
+                        ElevatedButton.icon(
+                          key: const Key('restore_setup_checklist_button'),
+                          onPressed: _restoring ? null : _restoreChecklist,
+                          icon: const Icon(Icons.dashboard_customize_rounded, size: 18),
+                          label: Text(
+                            context.tr('restore_to_dashboard'),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.primaryButtonBg,
+                            foregroundColor: context.primaryButtonFg,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
