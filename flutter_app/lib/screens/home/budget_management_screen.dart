@@ -26,6 +26,7 @@ import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../models/money.dart';
+import 'package:uuid/uuid.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({super.key});
@@ -285,6 +286,144 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         setState(() => _isCopying = false);
       }
     }
+  }
+
+  Future<void> _showPriorSpendingDialog({
+    required String householdId,
+    required String cycleKey,
+    required double shortfall,
+    required List<Budget> budgets,
+    required List<Map<String, String>> allCodes,
+  }) async {
+    final activeBudgets = budgets.where((b) => b.isActive).toList();
+    String selectedCat = activeBudgets.isNotEmpty ? activeBudgets.first.categoryCode : 'OPEX-OTHER';
+    final amountCtrl = TextEditingController(text: shortfall.toStringAsFixed(2));
+
+    String getCategoryLabel(String code) {
+      final found = allCodes.where((c) => c['code'] == code).firstOrNull;
+      return found?['category'] ?? code;
+    }
+
+    final merchantLabel = context.tr('prior_cycle_spending_label');
+    final successMsg = context.tr('apply_prior_spend_adjustment');
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => DisposeOnUnmount(
+        disposables: [amountCtrl],
+        child: StatefulBuilder(
+          builder: (ctx, setDlgState) => AlertDialog(
+            backgroundColor: context.cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.history_toggle_off_rounded, color: context.electricTeal, size: 22),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    merchantLabel,
+                    style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.trArgs('mid_cycle_setup_prompt', {'amount': context.sar(shortfall)}),
+                    style: TextStyle(color: context.textSecondary, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      labelText: context.tr('amount'),
+                      suffixText: 'SAR',
+                      filled: true,
+                      fillColor: context.inputBg,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (activeBudgets.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedCat,
+                      dropdownColor: context.cardBg,
+                      style: TextStyle(color: context.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: context.tr('category'),
+                        filled: true,
+                        fillColor: context.inputBg,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: activeBudgets.map((b) => DropdownMenuItem(
+                        value: b.categoryCode,
+                        child: Text('${getCategoryLabel(b.categoryCode)} (${context.sar(b.allocatedAmount)})'),
+                      )).toList(),
+                      onChanged: (val) {
+                        if (val != null) setDlgState(() => selectedCat = val);
+                      },
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.tr('cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final amt = double.tryParse(amountCtrl.text) ?? shortfall;
+                  if (amt <= 0) return;
+                  Navigator.pop(ctx);
+                  try {
+                    await supabase.from('transactions').insert({
+                      'id': const Uuid().v4(),
+                      'household_id': householdId,
+                      'user_id': supabase.auth.currentUser?.id,
+                      'amount': amt,
+                      'merchant': merchantLabel,
+                      'category_code': selectedCat,
+                      'spent_by': 'me',
+                      'paid_by': 'me',
+                      'beneficiary_type': 'household',
+                      'beneficiary_id': 'household',
+                      'account_id': null,
+                      'occurred_at': DateTime.now().toIso8601String(),
+                      'cycle_key': cycleKey,
+                    });
+                    if (mounted) {
+                      setState(() {
+                        _staticFuture = _loadStaticData();
+                      });
+                      AppSnackBar.showSuccess(
+                        context,
+                        successMsg,
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      AppSnackBar.showError(context, e.toString());
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.electricTeal,
+                  foregroundColor: Colors.black,
+                ),
+                child: Text(successMsg, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showAddCategoryDialog(_BudgetStaticData staticData) async {
@@ -1128,52 +1267,88 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 const SizedBox(height: 10),
                                 if (isOverAllocated) ...[
                                   Container(
-                                    padding: const EdgeInsets.all(10),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: Colors.redAccent.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                       border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
                                     ),
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Expanded(
-                                          child: Text(
-                                            context.trArgs('allocations_exceed_cash', {'amount': context.sar(-cashMargin)}),
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.redAccent,
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.redAccent),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                context.trArgs('allocations_exceed_cash', {'amount': context.sar(-cashMargin)}),
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.redAccent,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 8),
-                                        ElevatedButton.icon(
-                                          key: const Key('shrink_to_match_cash_button'),
-                                          onPressed: () {
-                                            RebalanceBudgetSheet.show(
-                                              context,
-                                              householdId: staticData.householdId,
-                                              cycleKey: _currentCycleKey,
-                                              budgets: budgets,
-                                              targetAvailableCash: benchmarkCash,
-                                              onRebalanced: () => setState(() {
-                                                _staticFuture = _loadStaticData();
-                                              }),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
-                                          label: Text(
-                                            context.tr('shrink_to_match_cash'),
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                          ),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.redAccent,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            visualDensity: VisualDensity.compact,
-                                            elevation: 0,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          ),
+                                        const SizedBox(height: 10),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            ElevatedButton.icon(
+                                              key: const Key('shrink_to_match_cash_button'),
+                                              onPressed: () {
+                                                RebalanceBudgetSheet.show(
+                                                  context,
+                                                  householdId: staticData.householdId,
+                                                  cycleKey: _currentCycleKey,
+                                                  budgets: budgets,
+                                                  targetAvailableCash: benchmarkCash,
+                                                  onRebalanced: () => setState(() {
+                                                    _staticFuture = _loadStaticData();
+                                                  }),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
+                                              label: Text(
+                                                context.tr('shrink_to_match_cash'),
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.redAccent,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                visualDensity: VisualDensity.compact,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                            ),
+                                            OutlinedButton.icon(
+                                              key: const Key('log_prior_spending_button'),
+                                              onPressed: () {
+                                                _showPriorSpendingDialog(
+                                                  householdId: staticData.householdId,
+                                                  cycleKey: _currentCycleKey,
+                                                  shortfall: -cashMargin,
+                                                  budgets: budgets,
+                                                  allCodes: staticData.allCodes,
+                                                );
+                                              },
+                                              icon: const Icon(Icons.history_toggle_off_rounded, size: 14),
+                                              label: Text(
+                                                context.tr('apply_prior_spend_adjustment'),
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: context.textPrimary),
+                                              ),
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide(color: context.borderColor),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                visualDensity: VisualDensity.compact,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
