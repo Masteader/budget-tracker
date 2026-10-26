@@ -89,6 +89,20 @@ void main() {
       final o = _outlook([_b('OPEX-SHOPPING', 1000, 1310)], DateTime.utc(2026, 11, 6));
       expect(o.spentShare, closeTo(1.31, 1e-9));
     });
+
+    test('operatingCash grounds baseline over static income when present', () {
+      final o = PaydayOutlook.compute(
+        budgets: [_b('OPEX-GROCERY', 5000, 1000)],
+        monthlyIncome: 12000,
+        operatingCash: 8500,
+        today: DateTime.utc(2026, 11, 6),
+        cycleStart: _start,
+        cycleEnd: _end,
+      );
+      expect(o.base, 8500.0);
+      expect(o.incomeBased, isTrue);
+      expect(o.left, 7500.0);
+    });
   });
 
   group('dues for the hero', () {

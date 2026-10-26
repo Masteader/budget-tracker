@@ -22,6 +22,7 @@ Widget _host(
   List<Budget> budgets,
   DateTime now, {
   double? income,
+  double? operatingCash,
   List<DueLine> dues = const [],
   VoidCallback? onDueTap,
   Locale locale = const Locale('en'),
@@ -41,6 +42,7 @@ Widget _host(
             budgets: budgets,
             now: now,
             monthlyIncome: income,
+            operatingCash: operatingCash,
             dueLines: dues,
             onDueTap: onDueTap,
           ),
@@ -88,6 +90,20 @@ void main() {
     expect(find.text('Left until payday'), findsOneWidget);
     expect(find.text('9,800.00'), findsOneWidget);
     expect(find.text('of SAR 12,000 income'), findsOneWidget);
+    expect(find.text('On track for payday'), findsOneWidget);
+  });
+
+  testWidgets('operatingCash-based: grounds left until payday in real liquid cash', (tester) async {
+    await tester.pumpWidget(_host(
+      [_budget('OPEX-DINING', 3000, 1000)],
+      DateTime.utc(2026, 11, 6, 9),
+      income: 12000,
+      operatingCash: 8000,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Left until payday'), findsOneWidget);
+    expect(find.text('7,000.00'), findsOneWidget);
+    expect(find.text('of SAR 8,000 income'), findsOneWidget);
     expect(find.text('On track for payday'), findsOneWidget);
   });
 

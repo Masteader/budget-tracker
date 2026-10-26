@@ -70,11 +70,12 @@ class PaydayOutlook {
   /// Spent ÷ base, not clamped (1.31 = 131%).
   double get spentShare => base > 0 ? totalSpent / base : (totalSpent > 0 ? 1.0 : 0.0);
 
-  /// [today], [cycleStart] and [cycleEnd] are calendar dates (Riyadh). A
-  /// [monthlyIncome] of null or 0 falls back to the budgets as the base.
+  /// [today], [cycleStart] and [cycleEnd] are calendar dates (Riyadh). An
+  /// [operatingCash] or [monthlyIncome] of null or 0 falls back to the budgets as the base.
   factory PaydayOutlook.compute({
     required List<Budget> budgets,
     double? monthlyIncome,
+    double? operatingCash,
     required DateTime today,
     required DateTime cycleStart,
     required DateTime cycleEnd,
@@ -86,8 +87,11 @@ class PaydayOutlook {
 
     final totalAllocated = budgets.fold(0.0, (s, b) => s + b.allocatedAmount);
     final totalSpent = budgets.fold(0.0, (s, b) => s + b.spentAmount);
-    final incomeBased = (monthlyIncome ?? 0) > 0;
-    final base = incomeBased ? monthlyIncome! : totalAllocated;
+    final hasOperatingCash = (operatingCash ?? 0) > 0;
+    final incomeBased = hasOperatingCash || (monthlyIncome ?? 0) > 0;
+    final base = hasOperatingCash
+        ? operatingCash!
+        : ((monthlyIncome ?? 0) > 0 ? monthlyIncome! : totalAllocated);
     final left = base - totalSpent;
 
     double variableSpent = 0;

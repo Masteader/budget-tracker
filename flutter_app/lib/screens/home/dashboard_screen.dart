@@ -51,6 +51,7 @@ import 'transaction_feed_screen.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../services/account_service.dart';
 import '../../services/salary_cycle_service.dart';
+import '../../models/account.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -196,7 +197,15 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   Future<void> _fetchAccountsCount(String hid) async {
     try {
       final accounts = await AccountService.instance.getAccounts(hid);
-      if (mounted) setState(() => _accountsCount = accounts.length);
+      if (mounted) {
+        final cash = accounts
+            .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+            .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
+        setState(() {
+          _accountsCount = accounts.length;
+          _operatingCash = cash > 0 ? cash : null;
+        });
+      }
     } catch (_) {}
   }
 
@@ -243,6 +252,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   final GlobalKey _balancesKey = GlobalKey();
   final GlobalKey _commitmentsKey = GlobalKey();
   int? _accountsCount;
+  double? _operatingCash;
 
   /// First-run checklist data (UX-02): payday, income, members. The income is
   /// also the hero's base (UX-07); null until loaded.
@@ -314,6 +324,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         budgets: budgets,
         cycle: _selectedCycle,
         monthlyIncome: setup?.monthlyIncome,
+        operatingCash: _operatingCash,
         dueLines: _dueLines(),
         onDueTap: _scrollToBalances,
       ),

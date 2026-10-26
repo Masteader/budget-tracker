@@ -20,6 +20,9 @@ class BudgetHeroCard extends StatelessWidget {
   /// The household's monthly income; null or 0 falls back to the budgets.
   final double? monthlyIncome;
 
+  /// Operating cash available in live bank and wallet accounts.
+  final double? operatingCash;
+
   /// What is owed between household members, from the viewer's side (the
   /// wife's dues in family mode, the viewer's roommate balances).
   final List<DueLine> dueLines;
@@ -38,6 +41,7 @@ class BudgetHeroCard extends StatelessWidget {
     required this.budgets,
     this.cycle,
     this.monthlyIncome,
+    this.operatingCash,
     this.dueLines = const [],
     this.onDueTap,
     this.now,
@@ -65,6 +69,7 @@ class BudgetHeroCard extends StatelessWidget {
     final outlook = PaydayOutlook.compute(
       budgets: budgets,
       monthlyIncome: monthlyIncome,
+      operatingCash: operatingCash,
       today: today,
       cycleStart: start,
       cycleEnd: end,
