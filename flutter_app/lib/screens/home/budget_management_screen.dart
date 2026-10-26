@@ -17,6 +17,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../services/account_service.dart';
 import '../../widgets/budgets/link_account_sheet.dart';
+import '../../widgets/budgets/rebalance_budget_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../theme/app_themes.dart';
@@ -941,10 +942,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       );
                     }
 
-                    final income = staticData.monthlyIncome;
-                    final hasIncome = income > 0;
-                    final savingsReserve = hasIncome ? (income - totalAllocated) : 0.0;
-                    final isOverAllocated = hasIncome && savingsReserve < 0;
+                    final operatingCash = staticData.accounts
+                        .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+                        .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
+                    final hasOperatingCash = operatingCash > 0;
+                    final benchmarkCash = hasOperatingCash ? operatingCash : staticData.monthlyIncome;
+                    final hasBenchmark = benchmarkCash > 0;
+                    final cashMargin = hasBenchmark ? (benchmarkCash - totalAllocated) : 0.0;
+                    final isOverAllocated = hasBenchmark && cashMargin < -0.005;
 
                     // Calculate any account deficits
                     Account? deficitAccount;
@@ -1080,55 +1085,109 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   ),
                                 ],
                               ),
-                              if (hasIncome) ...[
+                              if (hasBenchmark) ...[
                                 const SizedBox(height: 14),
                                 Divider(color: context.borderColor.withValues(alpha: 0.5), height: 1),
                                 const SizedBox(height: 12),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_rounded,
-                                          size: 17,
-                                          color: isOverAllocated ? Colors.redAccent : (context.successText),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          isOverAllocated ? context.tr('overallocated_by') : context.tr('savings_reserve_label'),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isOverAllocated ? Colors.redAccent : context.textSecondary,
-                                            fontWeight: FontWeight.w600,
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            isOverAllocated ? Icons.warning_amber_rounded : Icons.account_balance_wallet_outlined,
+                                            size: 17,
+                                            color: isOverAllocated ? Colors.redAccent : context.electricTeal,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              context.tr('total_operating_cash'),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isOverAllocated ? Colors.redAccent : context.textSecondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     Text(
-                                      isOverAllocated
-                                          ? '-${context.sar(-savingsReserve)}'
-                                          : '+${context.sar(savingsReserve)}',
+                                      context.sar(benchmarkCash),
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
-                                        color: isOverAllocated ? Colors.redAccent : (context.successText),
+                                        color: context.textPrimary,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  isOverAllocated
-                                      ? context.trArgs('allocations_exceed_salary', {'amount': context.sar(income)})
-                                      : context.tr('protected_buffer_desc'),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isOverAllocated
-                                        ? Colors.redAccent.withValues(alpha: 0.8)
-                                        : context.textSecondary,
+                                const SizedBox(height: 10),
+                                if (isOverAllocated) ...[
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            context.trArgs('allocations_exceed_cash', {'amount': context.sar(-cashMargin)}),
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.redAccent,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        ElevatedButton.icon(
+                                          key: const Key('shrink_to_match_cash_button'),
+                                          onPressed: () {
+                                            RebalanceBudgetSheet.show(
+                                              context,
+                                              householdId: staticData.householdId,
+                                              cycleKey: _currentCycleKey,
+                                              budgets: budgets,
+                                              targetAvailableCash: benchmarkCash,
+                                              onRebalanced: () => setState(() {
+                                                _staticFuture = _loadStaticData();
+                                              }),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.auto_fix_high_rounded, size: 14),
+                                          label: Text(
+                                            context.tr('shrink_to_match_cash'),
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.redAccent,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            visualDensity: VisualDensity.compact,
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
+                                ] else ...[
+                                  Text(
+                                    context.trArgs('covered_by_cash', {'amount': context.sar(cashMargin)}),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.successText,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ],
                           ),
