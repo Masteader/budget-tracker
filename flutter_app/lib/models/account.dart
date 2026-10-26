@@ -7,6 +7,7 @@ enum AccountType {
   crypto,
   cash,
   sharedPool,
+  savings,
 }
 
 extension AccountTypeExtension on AccountType {
@@ -22,6 +23,8 @@ extension AccountTypeExtension on AccountType {
         return 'cash';
       case AccountType.sharedPool:
         return 'shared_pool';
+      case AccountType.savings:
+        return 'savings';
     }
   }
 
@@ -39,6 +42,9 @@ extension AccountTypeExtension on AccountType {
       case 'shared_pool':
       case 'pool':
         return AccountType.sharedPool;
+      case 'savings':
+      case 'saving':
+        return AccountType.savings;
       default:
         return AccountType.bank;
     }
@@ -56,6 +62,8 @@ extension AccountTypeExtension on AccountType {
         return 'Cash Wallet';
       case AccountType.sharedPool:
         return 'Shared Household Pool';
+      case AccountType.savings:
+        return 'Savings Vault';
     }
   }
 
@@ -71,6 +79,8 @@ extension AccountTypeExtension on AccountType {
         return 'account_type_cash';
       case AccountType.sharedPool:
         return 'account_type_pool';
+      case AccountType.savings:
+        return 'account_type_savings';
     }
   }
 
@@ -86,6 +96,23 @@ extension AccountTypeExtension on AccountType {
         return Icons.payments_rounded;
       case AccountType.sharedPool:
         return Icons.group_rounded;
+      case AccountType.savings:
+        return Icons.savings_rounded;
+    }
+  }
+
+  /// Only operating accounts are part of the active budget spending pool.
+  /// Savings vaults and crypto are protected from daily budget consumption.
+  bool get isOperatingPool {
+    switch (this) {
+      case AccountType.bank:
+      case AccountType.eWallet:
+      case AccountType.cash:
+      case AccountType.sharedPool:
+        return true;
+      case AccountType.savings:
+      case AccountType.crypto:
+        return false;
     }
   }
 }

@@ -250,6 +250,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           final eWallets = accounts.where((a) => a.accountType == AccountType.eWallet && !a.isSharedPool).toList();
           final crypto = accounts.where((a) => a.accountType == AccountType.crypto && !a.isSharedPool).toList();
           final cash = accounts.where((a) => a.accountType == AccountType.cash && !a.isSharedPool).toList();
+          final savings = accounts.where((a) => a.accountType == AccountType.savings && !a.isSharedPool).toList();
           final sharedPools = accounts.where((a) => a.isSharedPool || a.accountType == AccountType.sharedPool).toList();
 
           return RefreshIndicator(
@@ -412,6 +413,13 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                 if (cash.isNotEmpty) ...[
                   _buildSectionHeader('💵 ${context.tr("account_type_cash")}', cash.length),
                   ...cash.map((a) => _buildCard(a)),
+                  const SizedBox(height: 12),
+                ],
+
+                // 7. Savings Vaults Section (Protected from daily budgets)
+                if (savings.isNotEmpty) ...[
+                  _buildSectionHeader('🔒 ${context.tr("savings_vaults_section")}', savings.length),
+                  ...savings.map((a) => _buildCard(a)),
                   const SizedBox(height: 12),
                 ],
               ],
