@@ -20,6 +20,7 @@ from dedup_engine import find_duplicate_candidate, enrich_transaction_items
 from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
     fetch_all_cost_control_codes,
+    fetch_household_cost_control_codes,
     match_category,
     insert_transaction,
     fetch_budget,
@@ -986,7 +987,7 @@ def process_chat_transaction(
     merchant = sanitize_audit_text(override_merchant or parsed.merchant, MAX_MERCHANT_LENGTH) or "Unknown Merchant"
 
     # Match or fallback category
-    codes = fetch_all_cost_control_codes()
+    codes = fetch_household_cost_control_codes(household_id) if household_id else fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
     if override_category_code is not None and override_category_code != "":
         # A client-chosen category must exist for this household (global or its own custom

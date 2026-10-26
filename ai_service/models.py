@@ -26,11 +26,13 @@ Keyword = Annotated[str, Field(max_length=60)]
 # =============================================================================
 
 class CostControlCode(BaseModel):
-    id: str
+    id: Optional[str] = None
     code: str
     category: str
     keywords: list[str]
     is_flexible: bool
+    is_system: Optional[bool] = None
+    household_id: Optional[str] = None
 
 
 class BudgetRow(BaseModel):
@@ -295,6 +297,19 @@ class CustomCategoryCreateRequest(BaseModel):
     keywords: List[Keyword] = Field(default_factory=list, max_length=50)
     is_flexible: bool = False
     allocated_amount: Money = 0.0
+
+
+class CategoryReplaceRequest(BaseModel):
+    household_id: str
+    old_code: Code
+    new_name: ShortText
+    new_code: Optional[Code] = None
+    cycle_key: Optional[str] = None
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: str) -> str:
+        return _uuid_validator(v)
 
 
 class DependentCreateRequest(BaseModel):

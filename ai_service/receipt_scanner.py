@@ -27,6 +27,7 @@ from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
     get_client,
     fetch_all_cost_control_codes,
+    fetch_household_cost_control_codes,
     match_category,
     insert_transaction,
     fetch_budget,
@@ -931,7 +932,7 @@ def process_receipt_scan(
         }
 
     # Match category with keyword taxonomy
-    codes = fetch_all_cost_control_codes()
+    codes = fetch_household_cost_control_codes(household_id) if household_id else fetch_all_cost_control_codes()
     matched = match_category(merchant, codes)
     if matched:
         category_code = matched.code

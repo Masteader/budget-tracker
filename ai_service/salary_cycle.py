@@ -963,6 +963,7 @@ def add_sub_category_for_household(
             "name_en": name_en,
             "name_ar": name_en,
             "keywords": sub_category_keywords(name_en),
+            "household_id": household_id,
         }).execute()
 
 

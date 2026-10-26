@@ -160,6 +160,37 @@ def fetch_all_cost_control_codes(force_refresh: bool = False) -> list[CostContro
     return _cached_cost_codes
 
 
+def fetch_household_cost_control_codes(household_id: str, force_refresh: bool = False) -> list[CostControlCode]:
+    """
+    Load the cost control codes applicable to this household:
+    1. System/global codes + household's custom codes.
+    2. Filter out codes that are deactivated in household_category_settings.
+    """
+    if not household_id:
+        return fetch_all_cost_control_codes(force_refresh=force_refresh)
+
+    try:
+        from salary_cycle import get_household_categories
+        cats = get_household_categories(household_id)
+        active_list = cats.get("active", [])
+        if active_list:
+            res: list[CostControlCode] = []
+            for c in active_list:
+                res.append(CostControlCode(
+                    code=c.get("code") or "",
+                    category=c.get("category") or "",
+                    is_flexible=bool(c.get("is_flexible", False)),
+                    keywords=list(c.get("keywords") or []),
+                    is_system=bool(c.get("is_system", False)),
+                    household_id=c.get("household_id")
+                ))
+            return res
+    except Exception as exc:
+        logger.warning("Could not fetch household-scoped categories for %s: %s", household_id, exc)
+
+    return fetch_all_cost_control_codes(force_refresh=force_refresh)
+
+
 def match_category(merchant: str, codes: list[CostControlCode]) -> Optional[CostControlCode]:
     """
     Find the best-matching CostControlCode for a merchant name.

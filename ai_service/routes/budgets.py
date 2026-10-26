@@ -30,6 +30,7 @@ from utils import safe_error_response, validate_uuid
 from models import (
     MAX_SAR_AMOUNT,
     CategoryCreateRequest,
+    CategoryReplaceRequest,
     SubAllocationsRequest,
     SubCategoryCreateRequest,
     SubCategoryRenameRequest,
@@ -46,6 +47,7 @@ from salary_cycle import (
     rename_sub_category,
     remove_sub_category_for_household,
     archive_category_for_household,
+    replace_household_category,
     simulate_affordability,
     SUB_CATEGORY_FORBIDDEN,
     sub_category_sole_owner,
@@ -490,6 +492,29 @@ async def remove_sub_category_endpoint(
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to remove sub-category.")
+
+
+@router.post(
+    "/budgets/categories/replace",
+    tags=["budgets"],
+    summary="Replace a category with a new one and archive the old one, preserving history.",
+)
+async def replace_category_endpoint(
+    request: Request,
+    req: CategoryReplaceRequest,
+):
+    await verify_household_admin_access(request, req.household_id)
+    try:
+        return await asyncio.to_thread(
+            replace_household_category,
+            household_id=req.household_id,
+            old_code=req.old_code,
+            new_name=req.new_name,
+            new_code=req.new_code,
+            cycle_key=req.cycle_key,
+        )
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to replace category.")
 
 
 @router.delete(
