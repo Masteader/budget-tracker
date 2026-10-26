@@ -417,6 +417,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   }
 
   bool _isSystemSub(String subCode) {
+    if (widget.categoryCode.startsWith('CUSTOM-')) return false;
     final catalog = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode];
     if (catalog == null) return false;
     return catalog.any((entry) => entry['sub_code'] == subCode);
@@ -542,14 +543,20 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   }
 
   Future<void> _promptRemoveSubCategory(_SubCategoryItemDef item) async {
-    if (_isSystemSub(item.subCode)) {
-      AppSnackBar.showInfo(
-        context,
-        context.tr('cannot_rename_system_cat_desc'),
-        title: context.tr('cannot_rename_system_cat'),
-      );
-      return;
-    }
+    int txCount = 0;
+    try {
+      final txRes = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('household_id', widget.householdId)
+          .eq('category_code', widget.categoryCode)
+          .eq('sub_category', item.subCode)
+          .limit(1);
+      txCount = (txRes as List).length;
+    } catch (_) {}
+
+    if (!mounted) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       useRootNavigator: true,
@@ -561,7 +568,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           style: GoogleFonts.inter(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         content: Text(
-          context.trArgs('sba_remove_confirm', {'name': context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn), 'category': widget.categoryName}),
+          txCount > 0
+              ? context.trArgs('sba_remove_has_expenses_desc', {
+                  'name': context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn),
+                  'category': widget.categoryName,
+                })
+              : context.trArgs('sba_remove_confirm', {
+                  'name': context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn),
+                  'category': widget.categoryName,
+                }),
           style: GoogleFonts.inter(color: context.textSecondary, fontSize: 13, height: 1.4),
         ),
         actions: [
@@ -975,34 +990,32 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        if (!_isSystemSub(item.subCode)) ...[
-                                          const SizedBox(width: 4),
-                                          GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: () => _promptRenameSubCategory(item),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                              child: Icon(
-                                                Icons.edit_outlined,
-                                                size: 15,
-                                                color: context.accentText,
-                                              ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _promptRenameSubCategory(item),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                            child: Icon(
+                                              Icons.edit_outlined,
+                                              size: 15,
+                                              color: context.accentText,
                                             ),
                                           ),
-                                          const SizedBox(width: 2),
-                                          GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: () => _promptRemoveSubCategory(item),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                              child: Icon(
-                                                Icons.delete_outline_rounded,
-                                                size: 16,
-                                                color: context.dangerColor,
-                                              ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => _promptRemoveSubCategory(item),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                            child: Icon(
+                                              Icons.delete_outline_rounded,
+                                              size: 16,
+                                              color: context.dangerColor,
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       ],
                                     ),
                                   ),
