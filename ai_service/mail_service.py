@@ -93,15 +93,15 @@ def _assert_header_safe(name: str, value: Optional[str]) -> None:
         raise ValueError(f"{name} contains line breaks or NUL characters.")
 
 
-async def send_email(message: OutboundEmail) -> str:
-    """Deliver *message* to the configured recipient. Returns the provider name used."""
+async def send_email(message: OutboundEmail, to_override: Optional[str] = None) -> str:
+    """Deliver *message* to the configured recipient or to_override. Returns the provider name used."""
     _assert_header_safe("subject", message.subject)
     _assert_header_safe("reply_to", message.reply_to)
 
     provider = active_provider()
     if provider is None:
         raise MailNotConfiguredError("No email provider configured (set RESEND_API_KEY or SMTP_HOST).")
-    to_address = recipient()
+    to_address = to_override or recipient()
 
     if provider == "resend":
         await _send_via_resend(message, to_address)

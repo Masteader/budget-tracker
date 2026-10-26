@@ -5,17 +5,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from auth import verify_household_access, get_current_user_id
+from auth import verify_household_access, get_current_user_id, get_verified_claims
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
 from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
 from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
-from rate_limiter import check_api_quota, is_chat_locked_out, record_offtopic_strike
+from rate_limiter import check_api_quota, is_chat_locked_out, record_offtopic_strike, get_offtopic_history
+from mail_service import OutboundEmail, send_email
 from chat_parser import process_chat_transaction
 from preview_token import InvalidPreviewToken
 from idempotency import idempotency_store, parse_client_occurred_at, validate_idempotency_key
@@ -195,6 +197,44 @@ async def chat_transaction(request: Request):
         if is_locked:
             if use_idempotency:
                 await idempotency_store.release(user_id, "chat-transaction", idem_key)
+
+            user_email = None
+            try:
+                claims = get_verified_claims(request)
+                user_email = claims.get("email")
+            except Exception:
+                pass
+
+            history_entries = get_offtopic_history(user_id)
+            messages_lines = []
+            for h in history_entries:
+                ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(h.get('timestamp', time.time())))
+                messages_lines.append(f"- [{ts_str}] {h.get('message', '')}")
+            messages_text = "\n".join(messages_lines)
+
+            email_body = (
+                f"ALERT: AI Chat 15-Minute Lockout Triggered\n\n"
+                f"User ID: {user_id}\n"
+                f"User Email: {user_email or 'Not available in JWT'}\n"
+                f"Household ID: {household_id}\n"
+                f"Violation Count: {strikes} (Strike 3 limit reached within 1 hour)\n"
+                f"Lockout Duration: 15 minutes (900 seconds)\n\n"
+                f"Offending Messages:\n{messages_text}\n\n"
+                f"Purpose:\n"
+                f"Track repeated off-topic AI chit-chat, monitor account abuse, or prepare for future paid AI tiers.\n"
+            )
+
+            try:
+                await send_email(
+                    OutboundEmail(
+                        subject=f"[AI Violation] Strike 3 Chat Lockout: {user_email or user_id}",
+                        body=email_body,
+                    ),
+                    to_override="fmscoinfo@fmsco.com.sa",
+                )
+            except Exception as mail_exc:
+                logger.warning("Failed to dispatch developer lockout email: %s", mail_exc)
+
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
