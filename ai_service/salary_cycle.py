@@ -7,6 +7,8 @@ Calculates days to payday, burn rates, projected run-out dates, and budget healt
 from __future__ import annotations
 import calendar
 import logging
+import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Iterable, List, Optional
 
@@ -1367,6 +1369,121 @@ def create_household_custom_category(
         "category": category,
         "is_active": True,
     }
+
+
+def replace_household_category(
+    household_id: str,
+    old_code: str,
+    new_name: str,
+    new_code: Optional[str] = None,
+    cycle_key: Optional[str] = None,
+    supabase_client: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Replaces an existing category for a household by archiving the old category
+    and provisioning a new autonomous category with transferred allocation.
+    Leaves historical transactions pointing to old_code untouched.
+    """
+    client = supabase_client or get_client()
+
+    clean_name = new_name.strip()
+    if new_code:
+        clean_code = new_code.strip().upper()
+    else:
+        sanitized = re.sub(r'[^a-zA-Z0-9]+', '_', clean_name).strip('_').upper()
+        clean_code = f"CUSTOM-{sanitized}" if sanitized else f"CUSTOM-{int(time.time())}"
+
+    if not clean_code.startswith("CUSTOM-"):
+        clean_code = f"CUSTOM-{clean_code}"
+
+    if not cycle_key:
+        try:
+            curr = current_household_cycle(household_id)
+            cycle_key = curr["cycle_key"]
+        except Exception:
+            cycle_key = riyadh_today().strftime("%Y-%m")
+
+    # 1. Fetch current allocated amount of the old budget envelope
+    allocated_amount = 0.0
+    try:
+        old_b = (
+            client.table("budgets")
+            .select("id, allocated_amount, spent_amount, month")
+            .eq("household_id", household_id)
+            .eq("category_code", old_code)
+            .eq("cycle_key", cycle_key)
+            .execute()
+            .data
+        )
+        if old_b:
+            allocated_amount = float(old_b[0].get("allocated_amount") or 0.0)
+    except Exception as exc:
+        logger.warning("Could not fetch old budget allocation for %s: %s", old_code, exc)
+
+    # 2. Deactivate old category in household_category_settings
+    try:
+        client.table("household_category_settings").upsert({
+            "household_id": household_id,
+            "category_code": old_code,
+            "is_active": False,
+        }).execute()
+    except Exception as exc:
+        logger.warning("Could not deactivate category setting for %s: %s", old_code, exc)
+
+    # 3. Deactivate old budget envelope
+    try:
+        client.table("budgets").update({
+            "is_active": False,
+        }).eq("household_id", household_id).eq("category_code", old_code).eq("cycle_key", cycle_key).execute()
+    except Exception as exc:
+        logger.warning("Could not deactivate budget for %s: %s", old_code, exc)
+
+    # 4. Provision new category in cost_control_codes
+    try:
+        client.table("cost_control_codes").insert({
+            "code": clean_code,
+            "category": clean_name,
+            "is_system": False,
+            "household_id": household_id,
+            "keywords": [],
+        }).execute()
+    except Exception as exc:
+        logger.warning("Could not insert cost_control_codes for %s: %s", clean_code, exc)
+
+    # 5. Activate new category in household_category_settings
+    try:
+        client.table("household_category_settings").upsert({
+            "household_id": household_id,
+            "category_code": clean_code,
+            "is_active": True,
+        }).execute()
+    except Exception as exc:
+        logger.warning("Could not activate category setting for %s: %s", clean_code, exc)
+
+    # 6. Create new budget envelope with transferred allocation
+    try:
+        today = riyadh_today()
+        month_str = today.replace(day=1).isoformat()
+        client.table("budgets").insert({
+            "household_id": household_id,
+            "month": month_str,
+            "cycle_key": cycle_key,
+            "category_code": clean_code,
+            "allocated_amount": allocated_amount,
+            "spent_amount": 0.0,
+            "is_active": True,
+        }).execute()
+    except Exception as exc:
+        logger.warning("Could not insert new budget envelope for %s: %s", clean_code, exc)
+
+    return {
+        "status": "success",
+        "old_code": old_code,
+        "new_code": clean_code,
+        "new_name": clean_name,
+        "allocated_transferred": allocated_amount,
+    }
+
 
 
 
