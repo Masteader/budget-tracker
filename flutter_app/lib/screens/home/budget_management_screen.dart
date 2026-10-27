@@ -245,7 +245,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       }
 
       double totalUnspent = 0.0;
-      for (final b in (prevBudgets as List)) {
+      for (final b in prevBudgets) {
         final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
         final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
         final rem = alloc - spent;
@@ -289,7 +289,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         rolloverToCushion = choice ?? true;
       }
 
-      final newEntries = (prevBudgets as List).map((b) {
+      final newEntries = prevBudgets.map((b) {
         final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
         final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
         final rem = alloc - spent;
@@ -314,7 +314,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          context.trArgs('bm_copied_msg', {'count': newEntries.length, 'month': context.fmtDate(prevDate, 'MMMM yyyy')}),
+          context.trArgs('bm_copied_msg', {'count': newEntries.length, 'month': context.cycleMonth(prevCycleKey)}),
           title: context.tr('bm_copied_title'),
         );
       }

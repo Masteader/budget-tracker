@@ -5917,6 +5917,8 @@ extension LocalizationExtension on BuildContext {
       AppLocalizations.of(this).cycleMonth(cycleKey, fallback: fallback);
   String cycleLabel(String cycleKey, {String fallback = ''}) =>
       AppLocalizations.of(this).cycleLabel(cycleKey, fallback: fallback);
+  String cycleRange(DateTime start, DateTime end, {DateTime? now}) =>
+      AppLocalizations.of(this).cycleRange(start, end, now: now);
   String cycleRangeIso(String startIso, String endIso, {String fallback = ''}) =>
       AppLocalizations.of(this).cycleRangeIso(startIso, endIso, fallback: fallback);
   String trCat(String codeOrName) => AppLocalizations.of(this).category(codeOrName);

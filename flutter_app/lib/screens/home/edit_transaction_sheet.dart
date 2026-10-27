@@ -1320,44 +1320,38 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
-                          const SizedBox(width: 8),
-                          Text(
-                            context.tr('change_cycle_date'),
-                            style: GoogleFonts.outfit(
-                              color: context.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                      Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.tr('change_cycle_date'),
+                          style: GoogleFonts.outfit(
+                            color: context.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 6),
                       // Quick Cycle Pills
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildCyclePill(
-                            label: context.tr('current_cycle'),
-                            isSelected: _targetCycle.key == _currentCycle.key,
-                            onTap: () => setState(() {
-                              _occurredAt = DateTime.now();
-                              _dateTouched = true;
-                            }),
-                          ),
-                          const SizedBox(width: 6),
-                          _buildCyclePill(
-                            label: context.tr('previous_cycle'),
-                            isSelected: _targetCycle.key == _previousCycle.key,
-                            onTap: () => setState(() {
-                              _occurredAt = _previousCycle.end;
-                              _dateTouched = true;
-                            }),
-                          ),
-                        ],
+                      _buildCyclePill(
+                        label: context.tr('current_cycle'),
+                        isSelected: _targetCycle.key == _currentCycle.key,
+                        onTap: () => setState(() {
+                          _occurredAt = DateTime.now();
+                          _dateTouched = true;
+                        }),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildCyclePill(
+                        label: context.tr('previous_cycle'),
+                        isSelected: _targetCycle.key == _previousCycle.key,
+                        onTap: () => setState(() {
+                          _occurredAt = _previousCycle.end;
+                          _dateTouched = true;
+                        }),
                       ),
                     ],
                   ),

@@ -225,7 +225,9 @@ void main() {
     expect(find.text("Couldn't read how this expense is classified."), findsOneWidget);
     expect(find.byKey(const ValueKey('nafaqah_option_husband')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('nafaqah_class_retry')));
+    final retryBtn = find.byKey(const ValueKey('nafaqah_class_retry'));
+    await tester.ensureVisible(retryBtn);
+    await tester.tap(retryBtn);
     await tester.pump();
     await tester.pump();
     expect(calls, 2);
