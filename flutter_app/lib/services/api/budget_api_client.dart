@@ -476,6 +476,7 @@ class BudgetApiClient {
     required String subCode,
     required String nameEn,
     String? nameAr,
+    String? householdId,
   }) async {
     return baseClient.patch(
       '/budgets/sub-categories',
@@ -484,6 +485,7 @@ class BudgetApiClient {
         'sub_code': subCode,
         'name_en': nameEn,
         if (nameAr != null && nameAr.isNotEmpty) 'name_ar': nameAr,
+        if (householdId != null && householdId.isNotEmpty) 'household_id': householdId,
       },
       timeout: const Duration(seconds: 10),
     );

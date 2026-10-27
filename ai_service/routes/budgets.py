@@ -52,6 +52,7 @@ from salary_cycle import (
     SUB_CATEGORY_FORBIDDEN,
     sub_category_sole_owner,
     sub_category_write_allowed,
+    get_sub_category_owner_household,
 )
 from recurring_detector import (
     UnknownRecurringSubCode,
@@ -443,8 +444,15 @@ async def rename_sub_category_endpoint(req: SubCategoryRenameRequest, request: R
     """
     get_current_user_id(request)
     forbidden = HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUB_CATEGORY_FORBIDDEN)
+    owner_household_id = None
     try:
         owner_household_id = await asyncio.to_thread(sub_category_sole_owner, req.parent_code)
+        if owner_household_id is None:
+            sub_owner = await asyncio.to_thread(get_sub_category_owner_household, req.parent_code, req.sub_code)
+            if sub_owner:
+                owner_household_id = sub_owner
+            elif req.household_id:
+                owner_household_id = req.household_id
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to rename sub-category.")
     if owner_household_id is None:
@@ -462,6 +470,7 @@ async def rename_sub_category_endpoint(req: SubCategoryRenameRequest, request: R
             sub_code=req.sub_code,
             name_en=req.name_en,
             name_ar=req.name_ar,
+            household_id=owner_household_id,
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to rename sub-category.")

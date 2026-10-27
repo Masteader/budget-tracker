@@ -141,6 +141,12 @@ class SubCategoryRenameRequest(BaseModel):
     sub_code: Code
     name_en: ShortText
     name_ar: Optional[ShortText] = None
+    household_id: Optional[str] = None
+
+    @field_validator("household_id")
+    @classmethod
+    def validate_household_uuid(cls, v: Optional[str]) -> Optional[str]:
+        return _uuid_validator(v) if v else None
 
 
 class PaydayUpdateRequest(BaseModel):

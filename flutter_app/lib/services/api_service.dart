@@ -464,12 +464,14 @@ class ApiService {
     required String subCode,
     required String nameEn,
     String? nameAr,
+    String? householdId,
   }) =>
       budget.renameSubCategory(
         parentCode: parentCode,
         subCode: subCode,
         nameEn: nameEn,
         nameAr: nameAr,
+        householdId: householdId,
       );
 
   Future<Map<String, dynamic>> removeSubCategory({

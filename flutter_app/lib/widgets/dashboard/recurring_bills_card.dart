@@ -331,6 +331,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
                       return _BillRowItem(
                         bill: bill,
                         onMarkPaid: () => _recordBillPayment(bill),
+                        onEditDueDay: bill.subCode != null ? () => _editBillDueDay(bill) : null,
                       );
                     },
                   ),
@@ -498,6 +499,37 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
     }
   }
 
+  Future<void> _editBillDueDay(RecurringBillItem bill) async {
+    if (bill.subCode == null) return;
+    final picked = await _showDueDayPicker(context, bill.expectedDayOfMonth);
+    if (picked == null || picked == bill.expectedDayOfMonth) return;
+    try {
+      await ApiService.instance.toggleRecurringBill(
+        householdId: widget.householdId,
+        categoryCode: bill.categoryCode,
+        subCode: bill.subCode!,
+        isRecurring: true,
+        dueDay: picked,
+      );
+      if (!mounted) return;
+      context.read<RecurringBillsProvider>().fetchBills();
+      context.read<BudgetProvider>().refresh();
+      AppSnackBar.showSuccess(
+        context,
+        context.trArgs('rb_due_day_saved', {'day': '$picked'}),
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          e is ApiRequestException && e.statusCode == 422
+              ? context.tr('rb_toggle_invalid')
+              : context.tr('rb_toggle_failed'),
+        );
+      }
+    }
+  }
+
   void _showManageRecurringBillsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -517,11 +549,112 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
   }
 }
 
+Future<int?> _showDueDayPicker(BuildContext context, int initialDay) async {
+  int tempDay = initialDay.clamp(1, 31);
+  return showDialog<int>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDialogState) => AlertDialog(
+        backgroundColor: context.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.event_note_rounded, color: context.accentText, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('rb_select_due_day'),
+                style: GoogleFonts.outfit(
+                  color: context.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                context.trArgs('rb_day_of_month', {'day': '$tempDay'}),
+                style: TextStyle(
+                  color: context.accentText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                children: List.generate(31, (index) {
+                  final day = index + 1;
+                  final isSelected = day == tempDay;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setDialogState(() => tempDay = day);
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected ? context.accentText : context.subtleCardBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected ? context.accentText : context.borderColor,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        '$day',
+                        style: TextStyle(
+                          color: isSelected ? Colors.black : context.textPrimary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.primaryButtonBg,
+              foregroundColor: context.primaryButtonFg,
+            ),
+            onPressed: () => Navigator.pop(ctx, tempDay),
+            child: Text(context.tr('save'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _BillRowItem extends StatelessWidget {
   final RecurringBillItem bill;
   final VoidCallback onMarkPaid;
+  final VoidCallback? onEditDueDay;
 
-  const _BillRowItem({required this.bill, required this.onMarkPaid});
+  const _BillRowItem({
+    required this.bill,
+    required this.onMarkPaid,
+    this.onEditDueDay,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -560,24 +693,32 @@ class _BillRowItem extends StatelessWidget {
           spacing: 6,
           runSpacing: 4,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(badgeIcon, color: badgeColor, size: 10),
-                  const SizedBox(width: 3),
-                  Flexible(
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: (onEditDueDay != null && !bill.isPaid) ? onEditDueDay : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, color: badgeColor, size: 10),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                ],
+                    if (onEditDueDay != null && !bill.isPaid) ...[
+                      const SizedBox(width: 3),
+                      Icon(Icons.edit_rounded, color: badgeColor, size: 9),
+                    ],
+                  ],
+                ),
               ),
             ),
             if (!bill.isPaid) ...[
@@ -710,6 +851,39 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
     _futureCandidates = ApiService.instance.getRecurringBillCandidates(widget.householdId);
   }
 
+  Future<void> _editDueDay(RecurringBillCandidate c) async {
+    final picked = await _showDueDayPicker(context, c.dueDay);
+    if (picked == null || picked == c.dueDay) return;
+    try {
+      await ApiService.instance.toggleRecurringBill(
+        householdId: widget.householdId,
+        categoryCode: c.categoryCode,
+        subCode: c.subCode,
+        isRecurring: true,
+        dueDay: picked,
+      );
+      if (!mounted) return;
+      setState(() {
+        c.dueDay = picked;
+        c.isRecurring = true;
+      });
+      widget.onUpdated();
+      AppSnackBar.showSuccess(
+        context,
+        context.trArgs('rb_due_day_saved', {'day': '$picked'}),
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          e is ApiRequestException && e.statusCode == 422
+              ? context.tr('rb_toggle_invalid')
+              : context.tr('rb_toggle_failed'),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
 
@@ -814,9 +988,48 @@ class _ManageRecurringBillsSheetState extends State<_ManageRecurringBillsSheet> 
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  Text(
-                                    '${context.trCat(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
-                                    style: TextStyle(color: context.textSecondary, fontSize: 11),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${context.trCat(c.categoryCode)} • ${context.sar(c.allocatedAmount)}',
+                                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                                      ),
+                                      if (c.isRecurring)
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(4),
+                                          onTap: () => _editDueDay(c),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: context.accentSubtleBg,
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: context.accentText.withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.schedule_rounded, size: 11, color: context.accentText),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  '${context.tr('due_day')} ~${c.dueDay}',
+                                                  style: TextStyle(
+                                                    color: context.accentText,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                Icon(Icons.edit_rounded, size: 10, color: context.accentText),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ],
                               ),

@@ -522,6 +522,29 @@ def sub_category_sole_owner(parent_code: str) -> Optional[str]:
     return ownership["owners"][0]
 
 
+def get_sub_category_owner_household(parent_code: str, sub_code: str) -> Optional[str]:
+    """
+    Returns the household_id that owns the sub_category definition if it is household-scoped
+    in cost_control_sub_categories; returns None if it is a system-wide or unowned sub-category.
+    """
+    from supabase_client import get_client
+    client = get_client()
+    try:
+        res = (
+            client.table("cost_control_sub_categories")
+            .select("household_id")
+            .eq("parent_code", parent_code)
+            .eq("sub_code", sub_code)
+            .execute()
+        )
+        for row in (res.data or []):
+            if row.get("household_id"):
+                return str(row["household_id"])
+    except Exception:
+        pass
+    return None
+
+
 def match_sub_category(
     category_code: str,
     text: str,
@@ -1023,26 +1046,59 @@ def rename_sub_category(
     sub_code: str,
     name_en: str,
     name_ar: Optional[str] = None,
+    household_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Renames an existing sub-category in cost_control_sub_categories.
+    Supports updating a household-owned subcategory, or creating a household override
+    for a system subcategory so other households are not affected.
     """
     from supabase_client import get_client
     client = get_client()
 
-    update_data: Dict[str, Any] = {"name_en": name_en.strip()}
-    if name_ar is not None:
-        update_data["name_ar"] = name_ar.strip()
-    else:
-        update_data["name_ar"] = name_en.strip()
+    clean_en = name_en.strip()
+    clean_ar = (name_ar or clean_en).strip()
+    update_data: Dict[str, Any] = {
+        "name_en": clean_en,
+        "name_ar": clean_ar,
+        "keywords": sub_category_keywords(clean_en),
+    }
 
-    client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
+    if household_id and sub_category_sole_owner(parent_code) == household_id:
+        client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
+    elif household_id:
+        existing = (
+            client.table("cost_control_sub_categories")
+            .select("id, household_id")
+            .eq("parent_code", parent_code)
+            .eq("sub_code", sub_code)
+            .execute()
+            .data or []
+        )
+        hh_match = [r for r in existing if r.get("household_id") == household_id]
+        if hh_match:
+            client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).eq("household_id", household_id).execute()
+        elif existing and any(r.get("household_id") is None for r in existing):
+            # System subcategory being customized for this household: insert household override
+            client.table("cost_control_sub_categories").insert({
+                "parent_code": parent_code,
+                "sub_code": sub_code,
+                "name_en": clean_en,
+                "name_ar": clean_ar,
+                "keywords": sub_category_keywords(clean_en),
+                "household_id": household_id,
+            }).execute()
+        else:
+            client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
+    else:
+        client.table("cost_control_sub_categories").update(update_data).eq("parent_code", parent_code).eq("sub_code", sub_code).execute()
 
     return {
         "status": "success",
         "parent_code": parent_code,
         "sub_code": sub_code,
-        "name_en": name_en.strip(),
+        "name_en": clean_en,
+        "name_ar": clean_ar,
     }
 
 

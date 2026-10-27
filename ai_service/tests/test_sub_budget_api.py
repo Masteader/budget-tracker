@@ -149,3 +149,30 @@ def test_rename_and_remove_sub_category(monkeypatch, fake_supabase):
     assert del_resp.json()["status"] == "success"
 
 
+def test_rename_custom_sub_category_under_system_category(fake_supabase):
+    # System category OPEX-UTILITIES (shared, is_system: True)
+    fake_supabase.seed("cost_control_codes", [
+        {"id": "c-utils", "code": "OPEX-UTILITIES", "category": "Utilities & Bills", "keywords": [],
+         "is_flexible": False, "household_id": None, "is_system": True},
+    ])
+    fake_supabase.seed("cost_control_sub_categories", [
+        {"id": "sub-zain-row", "parent_code": "OPEX-UTILITIES", "sub_code": "sub-zain-internet-sim",
+         "name_en": "Zain internet & sim", "name_ar": "زين", "keywords": ["zain"], "household_id": HOUSEHOLD_ID},
+    ])
+
+    rename_payload = {
+        "parent_code": "OPEX-UTILITIES",
+        "sub_code": "sub-zain-internet-sim",
+        "name_en": "Zain Fiber 5G",
+        "household_id": HOUSEHOLD_ID,
+    }
+    patch_resp = client.patch("/budgets/sub-categories", json=rename_payload, headers=AUTH_HEADERS)
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["name_en"] == "Zain Fiber 5G"
+
+    # Verify DB was updated
+    subs = fake_supabase.tables.get("cost_control_sub_categories", [])
+    updated = next(s for s in subs if s.get("sub_code") == "sub-zain-internet-sim")
+    assert updated["name_en"] == "Zain Fiber 5G"
+
+

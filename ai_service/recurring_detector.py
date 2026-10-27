@@ -349,6 +349,8 @@ def detect_recurring_bills(
     # Group remaining transactions not claimed by a budgeted bill
     unmatched_txs = [t for t in parsed_txs if not t["id"] or t["id"] not in matched_tx_ids]
     covered_providers = {b.normalized_merchant.lower() for b in detected_bills}
+    covered_merchants = {b.merchant.lower() for b in detected_bills}
+    covered_sub_codes = {b.sub_code.lower() for b in detected_bills if b.sub_code}
     covered_categories = {b.category_code for b in detected_bills}
 
     groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -356,7 +358,16 @@ def detect_recurring_bills(
         groups[tx["norm_m"]].append(tx)
 
     for norm_m, tx_list in groups.items():
-        if norm_m.lower() in covered_providers:
+        nm_lower = norm_m.lower()
+        if nm_lower in covered_providers or nm_lower in covered_merchants:
+            continue
+
+        # Prevent duplicate prediction if provider matches any budgeted envelope
+        # (e.g. "zain" covered by "zain-internet-sim" / "Zain internet & sim")
+        if any(
+            (len(nm_lower) >= 3 and (nm_lower in cov or (len(cov) >= 3 and cov in nm_lower)))
+            for cov in (covered_providers | covered_merchants | covered_sub_codes)
+        ):
             continue
 
         # Sort ascending by date

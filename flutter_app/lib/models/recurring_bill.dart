@@ -119,7 +119,7 @@ class RecurringBillCandidate {
   final String nameAr;
   final double allocatedAmount;
   bool isRecurring;
-  final int dueDay;
+  int dueDay;
   final String iconKey;
 
   RecurringBillCandidate({

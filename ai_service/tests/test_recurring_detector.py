@@ -166,3 +166,42 @@ def test_two_phase_matching_prevents_sim_hijacking_zain_internet_bill():
     assert sim_bill["paid_amount"] is None
 
 
+def test_budgeted_sub_category_prevents_duplicate_unbudgeted_provider_bill():
+    budgets = [
+        {
+            "category_code": "OPEX-UTILITIES",
+            "cycle_key": "2026-10",
+            "is_active": True,
+            "sub_allocations": {
+                "sub-zain-internet-sim": 287.0,
+            },
+        },
+    ]
+    # Historical transactions from previous months to Zain
+    txs = [
+        {
+            "id": "tx-zain-aug",
+            "merchant": "Zain",
+            "amount": 287.0,
+            "category_code": "OPEX-UTILITIES",
+            "timestamp": "2026-08-12T10:00:00Z",
+        },
+        {
+            "id": "tx-zain-sep",
+            "merchant": "Zain",
+            "amount": 287.0,
+            "category_code": "OPEX-UTILITIES",
+            "timestamp": "2026-09-12T10:00:00Z",
+        },
+    ]
+
+    res = detect_recurring_bills(txs, as_of_date=date(2026, 10, 5), budgets=budgets)
+    bills = res["bills"]
+
+    # There should only be ONE Zain bill (the budgeted one), NOT two!
+    zain_bills = [b for b in bills if "zain" in b["merchant"].lower() or "zain" in b["normalized_merchant"].lower()]
+    assert len(zain_bills) == 1
+    assert zain_bills[0]["is_budgeted"] is True
+    assert zain_bills[0]["sub_code"] == "sub-zain-internet-sim"
+
+

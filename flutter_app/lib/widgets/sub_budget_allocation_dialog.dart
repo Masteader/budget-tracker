@@ -506,6 +506,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         parentCode: widget.categoryCode,
         subCode: item.subCode,
         nameEn: newName,
+        householdId: widget.householdId,
       );
 
       if (!mounted) return;
