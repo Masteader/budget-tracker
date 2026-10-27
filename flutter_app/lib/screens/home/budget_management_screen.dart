@@ -201,20 +201,43 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   Future<void> _copyFromPreviousMonth(String householdId) async {
     setState(() => _isCopying = true);
     try {
-      final prevDate = DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
-      final prevMonthStr = DateFormat('yyyy-MM-01').format(prevDate);
+      String prevCycleKey;
+      final currentIdx = _cycles.indexWhere((c) => c.cycleKey == _currentCycleKey);
+      if (currentIdx != -1 && currentIdx + 1 < _cycles.length) {
+        prevCycleKey = _cycles[currentIdx + 1].cycleKey;
+      } else {
+        final parts = _currentCycleKey.split('-');
+        if (parts.length == 2) {
+          int y = int.parse(parts[0]);
+          int m = int.parse(parts[1]) - 1;
+          if (m < 1) {
+            m = 12;
+            y--;
+          }
+          prevCycleKey = '$y-${m.toString().padLeft(2, '0')}';
+        } else {
+          prevCycleKey = _currentCycleKey;
+        }
+      }
 
-      final prevBudgets = await supabase
+      final allBudgetsRes = await supabase
           .from('budgets')
-          .select('category_code, allocated_amount, account_id, remaining_amount, spent_amount, sub_allocations')
-          .eq('household_id', householdId)
-          .eq('month', prevMonthStr);
+          .select('category_code, allocated_amount, account_id, remaining_amount, spent_amount, sub_allocations, cycle_key, month, is_active')
+          .eq('household_id', householdId);
+
+      final prevBudgets = (allBudgetsRes as List).where((b) {
+        final k = b['cycle_key'] as String?;
+        final m = b['month'] as String? ?? '';
+        final match = (k == prevCycleKey || (k == null && m.startsWith(prevCycleKey)));
+        final active = b['is_active'] != false;
+        return match && active;
+      }).toList();
 
       if (prevBudgets.isEmpty) {
         if (mounted) {
           AppSnackBar.showInfo(
             context,
-            context.trArgs('bm_no_prior_msg', {'month': context.fmtDate(prevDate, 'MMMM yyyy')}),
+            context.trArgs('bm_no_prior_msg', {'month': prevCycleKey}),
             title: context.tr('bm_no_prior_title'),
           );
         }

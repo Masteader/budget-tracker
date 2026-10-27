@@ -28,6 +28,7 @@ Map<String, dynamic> buildManualExpenseRow({
   required String beneficiaryId,
   required String? accountId,
   required DateTime occurredAt,
+  DateTime? recordedAt,
   String? nafaqahClass,
   String? nafaqahSpouseId,
 }) {
@@ -46,6 +47,7 @@ Map<String, dynamic> buildManualExpenseRow({
     'account_id': accountId,
     'source': 'manual',
     'timestamp': occurredAt.toUtc().toIso8601String(),
+    if (recordedAt != null) 'created_at': recordedAt.toUtc().toIso8601String(),
     'raw_sms': manualAuditNote(
       head: 'Manual: $merchant',
       payer: auditPayer,

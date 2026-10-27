@@ -23,6 +23,8 @@ import '../../widgets/nafaqah/nafaqah_class_selector.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
+import '../../services/salary_cycle_service.dart';
+import '../../widgets/transactions/expense_date_chips.dart';
 
 /// Reads the stored Nafaqah fields (`nafaqah_class`, `nafaqah_spouse_id`) of a transaction.
 typedef NafaqahFieldsLoader = Future<Map<String, dynamic>?> Function(String transactionId);
@@ -134,12 +136,23 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   /// directly: the me/partner vocabulary does not name the wife for them).
   String? _adminClass;
 
+  late DateTime _occurredAt;
+  bool _dateTouched = false;
+
+  SaudiCycle get _currentCycle => SalaryCycleService.currentCycle();
+  SaudiCycle get _previousCycle {
+    final curr = _currentCycle;
+    return SalaryCycleService.cycleForInstant(curr.start.subtract(const Duration(days: 1)));
+  }
+  SaudiCycle get _targetCycle => SalaryCycleService.cycleForInstant(_occurredAt);
+
 
   @override
   void initState() {
     super.initState();
     _merchantCtrl = TextEditingController(text: widget.transaction.merchant ?? '');
     _amountCtrl = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
+    _occurredAt = widget.transaction.timestamp;
     var initialCat = widget.transaction.categoryCode ?? 'OPEX-MISC';
     // Keep the stored category (new system codes included); only known
     // aliases are normalised, never remapped to another category.
@@ -610,6 +623,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       'category_code': _selectedCategory,
       'sub_category': _selectedSubCategory,
       'items': _items,
+      if (_dateTouched && _occurredAt != widget.transaction.timestamp)
+        'timestamp': _occurredAt.toUtc().toIso8601String(),
       ..._nafaqahPayload(),
     };
     // Who paid / for whom: only when the user changed it, and only in the
@@ -707,6 +722,36 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         );
       }
     }
+  }
+
+  Widget _buildCyclePill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? context.primaryButtonBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? context.accentText : context.borderColor,
+            width: isSelected ? 1.4 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? context.primaryButtonFg : context.textSecondary,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSegmentOption({
@@ -1257,6 +1302,100 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   TextButton(
                     onPressed: _convertToInstallmentPlan,
                     child: Text(context.tr('convert'), style: TextStyle(color: context.accentText, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Date & Cycle Attribution
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.subtleCardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
+                          const SizedBox(width: 8),
+                          Text(
+                            context.tr('change_cycle_date'),
+                            style: GoogleFonts.outfit(
+                              color: context.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Quick Cycle Pills
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildCyclePill(
+                            label: context.tr('current_cycle'),
+                            isSelected: _targetCycle.key == _currentCycle.key,
+                            onTap: () => setState(() {
+                              _occurredAt = DateTime.now();
+                              _dateTouched = true;
+                            }),
+                          ),
+                          const SizedBox(width: 6),
+                          _buildCyclePill(
+                            label: context.tr('previous_cycle'),
+                            isSelected: _targetCycle.key == _previousCycle.key,
+                            onTap: () => setState(() {
+                              _occurredAt = _previousCycle.end;
+                              _dateTouched = true;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ExpenseDateChips(
+                    value: _occurredAt,
+                    maxDaysBack: 365,
+                    onChanged: (d) => setState(() {
+                      _occurredAt = d;
+                      _dateTouched = true;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: context.cardBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 14, color: context.accentText),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            context.trArgs('books_to_cycle', {
+                              'cycle': '${context.cycleRange(_targetCycle.start, _targetCycle.end)} (${_targetCycle.key})',
+                            }),
+                            style: TextStyle(
+                              color: context.accentText,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

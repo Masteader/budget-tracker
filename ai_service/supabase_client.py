@@ -693,46 +693,82 @@ def ensure_household_cycle_budgets(
     cycle_info = get_cycle_for_date(target_date, payday_day=payday_day)
     cycle_key = cycle_info["cycle_key"]
     client = get_client()
-
-    # 1. Check existing for this cycle
-    existing = client.table("budgets").select("*").eq("household_id", household_id).eq("cycle_key", cycle_key).execute().data
-    if existing:
-        return existing
-
     cycle_month_str = f"{cycle_key}-01"
 
+    # 1. Fetch existing budgets for this target cycle
+    existing_resp = (
+        client.table("budgets")
+        .select("*")
+        .eq("household_id", household_id)
+        .eq("cycle_key", cycle_key)
+        .execute()
+    )
+    existing = existing_resp.data if isinstance(getattr(existing_resp, "data", None), list) else []
+
+    # 2. Fetch all budget rows to find prior cycle envelopes
+    all_prev_resp = (
+        client.table("budgets")
+        .select("*")
+        .eq("household_id", household_id)
+        .order("month", desc=True)
+        .execute()
+    )
+    all_prev = all_prev_resp.data if isinstance(getattr(all_prev_resp, "data", None), list) else []
+
+    # If all_prev includes rows for cycle_key, merge them into existing
+    existing_from_all = [
+        b for b in all_prev
+        if b.get("cycle_key") == cycle_key or (not b.get("cycle_key") and (b.get("month") or "")[:7] == cycle_key)
+    ]
+    if existing_from_all and not existing:
+        existing = existing_from_all
+
     # Fallback: only backfill legacy rows that truly belong to this cycle where cycle_key is null.
-    # Never hijack or overwrite an existing cycle's rows!
     try:
-        existing_legacy = (
-            client.table("budgets")
-            .select("*")
-            .eq("household_id", household_id)
-            .eq("month", cycle_month_str)
-            .is_("cycle_key", "null")
-            .execute()
-            .data
-        )
-        if existing_legacy:
+        legacy_to_update = [b for b in existing if not b.get("cycle_key") and (b.get("month") or "") == cycle_month_str]
+        if legacy_to_update:
             client.table("budgets").update({"cycle_key": cycle_key}).eq("household_id", household_id).eq("month", cycle_month_str).is_("cycle_key", "null").execute()
-            for b in existing_legacy:
+            for b in legacy_to_update:
                 b["cycle_key"] = cycle_key
-            return existing_legacy
     except Exception as exc:
         logger.warning("Could not check legacy budget rows for household=%s cycle=%s: %s", household_id, cycle_key, exc)
 
-    # 2. Find latest previous cycle to roll over from
-    all_prev = client.table("budgets").select("*").eq("household_id", household_id).order("month", desc=True).execute().data
-    if not all_prev:
-        return []
+    # 2. Find latest previous cycle that has active budgets (strictly earlier than cycle_key)
+    prior_budgets = [
+        b for b in all_prev
+        if (b.get("cycle_key") or (b.get("month") or "")[:7]) < cycle_key
+        and b.get("is_active", True) is not False
+    ]
+    if not prior_budgets:
+        return existing
 
-    # Group by latest month / cycle
-    latest_month = all_prev[0]["month"]
-    latest_rows = [b for b in all_prev if b["month"] == latest_month and b.get("is_active", True)]
+    # Find the maximum previous cycle key
+    prior_cycle_keys = sorted(
+        {b.get("cycle_key") or (b.get("month") or "")[:7] for b in prior_budgets},
+        reverse=True,
+    )
+    latest_prev_key = prior_cycle_keys[0] if prior_cycle_keys else None
+    if not latest_prev_key:
+        return existing
 
-    # 3. Create new cycle rows with rollover rule
+    latest_rows = [
+        b for b in prior_budgets
+        if (b.get("cycle_key") == latest_prev_key or (not b.get("cycle_key") and (b.get("month") or "")[:7] == latest_prev_key))
+        and b.get("is_active", True) is not False
+    ]
+    if not latest_rows:
+        return existing
+
+    # 3. Determine which categories are missing from target cycle
+    existing_codes = {b.get("category_code") for b in existing}
+    missing_prev_rows = [b for b in latest_rows if b.get("category_code") not in existing_codes]
+
+    if not missing_prev_rows:
+        return existing
+
+    # 4. Create new cycle rows with rollover rule
     rollover_rule = get_household_rollover_rule(household_id)
-    if rollover_rule == "send_to_savings":
+    if not existing and rollover_rule == "send_to_savings":
         surplus = round(
             sum(
                 max(0.0, float(prev.get("allocated_amount") or 0.0) - float(prev.get("spent_amount") or 0.0))
@@ -745,7 +781,7 @@ def ensure_household_cycle_budgets(
             logger.info("Auto-swept cycle surplus of SAR %.2f to savings for household=%s cycle=%s", surplus, household_id, cycle_key)
 
     new_rows = []
-    for prev in latest_rows:
+    for prev in missing_prev_rows:
         prev_allocated = float(prev.get("allocated_amount") or 0.0)
         prev_spent = float(prev.get("spent_amount") or 0.0)
         if rollover_rule == "rollover_to_categories":
@@ -759,17 +795,19 @@ def ensure_household_cycle_budgets(
             "cycle_key": cycle_key,
             "category_code": prev["category_code"],
             "allocated_amount": prev_allocated,
+            "sub_allocations": prev.get("sub_allocations") or {},
+            "account_id": prev.get("account_id"),
             "spent_amount": 0.0,
             "previous_cycle_delta": delta,
             "is_active": True,
         })
 
     if new_rows:
-        inserted = client.table("budgets").insert(new_rows).execute().data
-        logger.info("Auto-rolled over %d budgets for household=%s cycle=%s (rule=%s)", len(new_rows), household_id, cycle_key, rollover_rule)
-        return inserted
+        inserted = client.table("budgets").insert(new_rows).execute().data or []
+        logger.info("Auto-rolled over %d missing budgets for household=%s cycle=%s (rule=%s)", len(new_rows), household_id, cycle_key, rollover_rule)
+        return list(existing) + list(inserted)
 
-    return []
+    return existing
 
 
 # =============================================================================

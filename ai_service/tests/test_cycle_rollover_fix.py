@@ -57,6 +57,91 @@ def test_ensure_household_cycle_budgets_never_overwrites_previous_cycle(monkeypa
     assert inserted_records[0]["month"] == "2026-11-01"
 
 
+def test_ensure_household_cycle_budgets_preserves_sub_allocations_and_fills_missing(monkeypatch):
+    """
+    Verifies that when rolling over from previous cycle:
+    1. Sub-allocations (like Zain, electricity, rent) are preserved.
+    2. If the new cycle already has 1 category (e.g. from an auto-created expense),
+       the remaining categories from previous cycle are still rolled over.
+    """
+    mock_sb = MagicMock()
+    # Household already has 1 budget in new cycle (2026-11)
+    existing_in_new_cycle = [
+        {
+            "id": "b-new-dining",
+            "household_id": "hh-test-1",
+            "category_code": "OPEX-DINING",
+            "month": "2026-11-01",
+            "cycle_key": "2026-11",
+            "allocated_amount": 0.0,
+            "spent_amount": 45.0,
+            "is_active": True,
+        }
+    ]
+    # Previous cycle (2026-10) had OPEX-DINING, OPEX-UTILITIES (with sub_allocations), and OPEX-GROCERY
+    prev_rows = [
+        {
+            "id": "b-prev-util",
+            "household_id": "hh-test-1",
+            "category_code": "OPEX-UTILITIES",
+            "month": "2026-10-01",
+            "cycle_key": "2026-10",
+            "allocated_amount": 1500.0,
+            "spent_amount": 1200.0,
+            "sub_allocations": {"housing_rent": 1000.0, "zain_sim": 287.0},
+            "account_id": "acc-123",
+            "is_active": True,
+        },
+        {
+            "id": "b-prev-groc",
+            "household_id": "hh-test-1",
+            "category_code": "OPEX-GROCERY",
+            "month": "2026-09-28",  # Different month date in same cycle!
+            "cycle_key": "2026-10",
+            "allocated_amount": 2000.0,
+            "spent_amount": 1800.0,
+            "sub_allocations": {"meat": 500.0},
+            "is_active": True,
+        },
+    ]
+
+    all_db_rows = existing_in_new_cycle + prev_rows
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = all_db_rows
+
+    inserted_records = []
+    def capture_insert(rows):
+        inserted_records.extend(rows)
+        m = MagicMock()
+        m.execute.return_value.data = rows
+        return m
+    mock_sb.table.return_value.insert.side_effect = capture_insert
+
+    monkeypatch.setattr("supabase_client.get_client", lambda: mock_sb)
+    monkeypatch.setattr("supabase_client.get_household_payday", lambda hid: 27)
+    monkeypatch.setattr("supabase_client.get_household_rollover_rule", lambda hid: "fresh_start")
+
+    res = ensure_household_cycle_budgets("hh-test-1", target_date=date(2026, 10, 27), payday_day=27)
+
+    # OPEX-DINING was already present in new cycle, so OPEX-UTILITIES and OPEX-GROCERY should be inserted
+    assert len(inserted_records) == 2
+    inserted_codes = {r["category_code"] for r in inserted_records}
+    assert inserted_codes == {"OPEX-UTILITIES", "OPEX-GROCERY"}
+
+    # Sub allocations and account_id must be preserved
+    util_row = next(r for r in inserted_records if r["category_code"] == "OPEX-UTILITIES")
+    assert util_row["sub_allocations"] == {"housing_rent": 1000.0, "zain_sim": 287.0}
+    assert util_row["account_id"] == "acc-123"
+    assert util_row["allocated_amount"] == 1500.0
+    assert util_row["spent_amount"] == 0.0
+
+    groc_row = next(r for r in inserted_records if r["category_code"] == "OPEX-GROCERY")
+    assert groc_row["sub_allocations"] == {"meat": 500.0}
+    assert groc_row["allocated_amount"] == 2000.0
+
+    # Total result contains existing + newly rolled over
+    assert len(res) == 3
+
+
 def test_get_available_cycles_includes_past_cycles_and_transactions(monkeypatch):
     """
     get_available_cycles_for_household should:

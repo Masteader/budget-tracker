@@ -426,6 +426,15 @@ class AppLocalizations {
       'nav_settings': 'Settings',
 
       // Dashboard
+      'target_cycle': 'Target Cycle',
+      'current_cycle': 'Current Cycle',
+      'previous_cycle': 'Previous Cycle',
+      'books_to_cycle': 'Books to cycle: {cycle}',
+      'transaction_date_title': 'Transaction Date',
+      'recorded_date_title': 'Recorded Date',
+      'custom_recorded_date': 'Different Recorded Date',
+      'custom_recorded_date_hint': 'Record under today’s audit log while attributing to the expense date.',
+      'change_cycle_date': 'Transaction Date & Cycle',
       'salary_cycle': 'Salary Cycle',
       'cycle': 'Cycle',
       'days_to_payday': 'Days to Payday',
@@ -2030,6 +2039,15 @@ class AppLocalizations {
       'nav_settings': 'الإعدادات',
 
       // Dashboard
+      'target_cycle': 'دورة الراتب المستهدفة',
+      'current_cycle': 'الدورة الحالية',
+      'previous_cycle': 'الدورة السابقة',
+      'books_to_cycle': 'تُحتسب ضمن دورة: {cycle}',
+      'transaction_date_title': 'تاريخ المعاملة',
+      'recorded_date_title': 'تاريخ التسجيل',
+      'custom_recorded_date': 'تاريخ تسجيل مختلف',
+      'custom_recorded_date_hint': 'تسجيل المعاملة في سجل تدقيق اليوم مع احتسابها في تاريخ الصرف.',
+      'change_cycle_date': 'تاريخ المعاملة ودورة الراتب',
       'salary_cycle': 'دورة الراتب',
       'cycle': 'الدورة',
       'days_to_payday': 'أيام حتى الراتب',
@@ -3638,6 +3656,15 @@ class AppLocalizations {
       'nav_settings': 'ترتیبات',
 
       // Dashboard
+      'target_cycle': 'ہدف سائیکل',
+      'current_cycle': 'موجودہ سائیکل',
+      'previous_cycle': 'پچھلا سائیکل',
+      'books_to_cycle': 'سائیکل میں درج ہوگی: {cycle}',
+      'transaction_date_title': 'لین دین کی تاریخ',
+      'recorded_date_title': 'ریکارڈ کی تاریخ',
+      'custom_recorded_date': 'مختلف ریکارڈ تاریخ',
+      'custom_recorded_date_hint': 'آج کے آڈٹ لاگ میں ریکارڈ کریں جبکہ خرچ کی تاریخ پر لاگو ہو۔',
+      'change_cycle_date': 'لین دین کی تاریخ اور سائیکل',
       'salary_cycle': 'تنخواہ کا سائیکل',
       'cycle': 'سائیکل',
       'days_to_payday': 'تنخواہ تک دن',

@@ -84,4 +84,27 @@ void main() {
     expect(build(cls: 'wife_personal').containsKey('nafaqah_class'), isFalse);
     expect(build().containsKey('nafaqah_class'), isFalse);
   });
+
+  test('recordedAt supplies custom created_at instant when provided', () {
+    final occurred = DateTime.utc(2026, 10, 15, 14, 0);
+    final recorded = DateTime.utc(2026, 10, 27, 9, 30);
+    final row = buildManualExpenseRow(
+      id: 'tx-custom-date-1',
+      householdId: 'h-1',
+      userId: 'u-1',
+      amount: 150.0,
+      merchant: 'Lulu',
+      categoryCode: 'OPEX-GROCERY',
+      spentBy: 'me',
+      paidBy: 'me',
+      beneficiaryType: 'household',
+      beneficiaryId: 'household',
+      accountId: null,
+      occurredAt: occurred,
+      recordedAt: recorded,
+    );
+    expect(row['timestamp'], '2026-10-15T14:00:00.000Z');
+    expect(row['created_at'], '2026-10-27T09:30:00.000Z');
+    expect(row.keys.toSet().difference(_transactionColumns), isEmpty);
+  });
 }

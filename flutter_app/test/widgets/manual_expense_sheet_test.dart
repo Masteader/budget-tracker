@@ -320,4 +320,47 @@ void main() {
     expect(find.byKey(const ValueKey('manual_mode_toggle')), findsNothing);
     expect(find.byType(NafaqahClassSelector), findsNothing);
   });
+
+  testWidgets('switching to previous cycle sets occurredAt to previous cycle date', (tester) async {
+    Map<String, dynamic>? saved;
+    await openSheet(
+      tester,
+      members: [_peerA, _peerB],
+      currentUser: 'u-a',
+      insertRow: (row) async => saved = row,
+    );
+
+    final prevPill = find.text('Previous Cycle');
+    expect(prevPill, findsOneWidget);
+    await tester.ensureVisible(prevPill);
+    await tester.tap(prevPill);
+    await tester.pumpAndSettle();
+
+    await tapSave(tester);
+    expect(saved, isNotNull);
+    final timestamp = DateTime.parse(saved!['timestamp'] as String);
+    expect(timestamp.isBefore(DateTime.now()), isTrue);
+  });
+
+  testWidgets('custom recorded date toggle and save', (tester) async {
+    Map<String, dynamic>? saved;
+    await openSheet(
+      tester,
+      members: [_peerA, _peerB],
+      currentUser: 'u-a',
+      insertRow: (row) async => saved = row,
+    );
+
+    final toggle = find.byKey(const ValueKey('toggle_custom_recorded_date'));
+    expect(toggle, findsOneWidget);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.edit_calendar_rounded), findsOneWidget);
+
+    await tapSave(tester);
+    expect(saved, isNotNull);
+    expect(saved!['created_at'], isNotNull);
+  });
 }

@@ -23,6 +23,7 @@ import 'expense_date_chips.dart';
 import '../../models/nafaqah.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
+import '../../services/salary_cycle_service.dart';
 
 /// Modal bottom sheet for logging a manual expense quickly.
 class ManualExpenseSheet extends StatefulWidget {
@@ -102,6 +103,17 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   /// When the expense happened (UX-12): today by default, or a past day.
   DateTime _occurredAt = DateTime.now();
   bool _datePicked = false;
+
+  /// Recorded date (created_at): defaults to now, or custom past/future date if needed.
+  DateTime _recordedAt = DateTime.now();
+  bool _useCustomRecordedDate = false;
+
+  SaudiCycle get _currentCycle => SalaryCycleService.currentCycle();
+  SaudiCycle get _previousCycle {
+    final curr = _currentCycle;
+    return SalaryCycleService.cycleForInstant(curr.start.subtract(const Duration(days: 1)));
+  }
+  SaudiCycle get _targetCycle => SalaryCycleService.cycleForInstant(_occurredAt);
 
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
@@ -412,6 +424,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       accountId: _selectedAccountId,
       // A day the user chose, else the moment of saving.
       occurredAt: _datePicked ? _occurredAt : DateTime.now(),
+      recordedAt: _useCustomRecordedDate ? _recordedAt : null,
       nafaqahClass: nafaqahClass,
       nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
@@ -645,14 +658,169 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
               ),
               const SizedBox(height: 12),
 
-              // When (UX-12): yesterday's cash purchase is not booked today.
-              ExpenseDateChips(
-                value: _occurredAt,
-                maxDaysBack: 365,
-                onChanged: (d) => setState(() {
-                  _occurredAt = d;
-                  _datePicked = true;
-                }),
+              // Date & Cycle Attribution
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.subtleCardBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_month_rounded, size: 16, color: context.accentText),
+                            const SizedBox(width: 8),
+                            Text(
+                              context.tr('transaction_date_title'),
+                              style: GoogleFonts.outfit(
+                                color: context.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Quick Cycle Pills
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildCyclePill(
+                              label: context.tr('current_cycle'),
+                              isSelected: _targetCycle.key == _currentCycle.key,
+                              onTap: () => setState(() {
+                                _occurredAt = DateTime.now();
+                                _datePicked = false;
+                              }),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildCyclePill(
+                              label: context.tr('previous_cycle'),
+                              isSelected: _targetCycle.key == _previousCycle.key,
+                              onTap: () => setState(() {
+                                _occurredAt = _previousCycle.end;
+                                _datePicked = true;
+                              }),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Date chips
+                    ExpenseDateChips(
+                      value: _occurredAt,
+                      maxDaysBack: 365,
+                      onChanged: (d) => setState(() {
+                        _occurredAt = d;
+                        _datePicked = true;
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    // Target Cycle Informative Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: context.cardBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.borderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.bolt_rounded, size: 14, color: context.accentText),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              context.trArgs('books_to_cycle', {
+                                'cycle': '${context.cycleRange(_targetCycle.start, _targetCycle.end)} (${_targetCycle.key})',
+                              }),
+                              style: TextStyle(
+                                color: context.accentText,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Collapsible toggle for custom recorded date
+                    InkWell(
+                      key: const ValueKey('toggle_custom_recorded_date'),
+                      onTap: () => setState(() => _useCustomRecordedDate = !_useCustomRecordedDate),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _useCustomRecordedDate ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                              size: 18,
+                              color: _useCustomRecordedDate ? context.accentText : context.textSecondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                context.tr('custom_recorded_date'),
+                                style: GoogleFonts.outfit(
+                                  color: _useCustomRecordedDate ? context.textPrimary : context.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: _useCustomRecordedDate ? FontWeight.w600 : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_useCustomRecordedDate) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: context.cardBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.accentSubtleBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_calendar_rounded, size: 16, color: context.accentText),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${context.tr('recorded_date_title')}: ${context.fmtDate(_recordedAt, 'd MMMM yyyy')}',
+                                style: TextStyle(color: context.textPrimary, fontSize: 12),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _recordedAt,
+                                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                  lastDate: DateTime.now().add(const Duration(days: 30)),
+                                );
+                                if (picked != null) {
+                                  setState(() => _recordedAt = picked);
+                                }
+                              },
+                              child: Text(
+                                context.tr('edit'),
+                                style: TextStyle(color: context.accentText, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
 
@@ -954,6 +1122,36 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCyclePill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? context.primaryButtonBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? context.accentText : context.borderColor,
+            width: isSelected ? 1.4 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? context.primaryButtonFg : context.textSecondary,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
         ),
       ),
