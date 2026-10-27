@@ -399,6 +399,7 @@ class BudgetApiClient {
     required String newName,
     String? newCode,
     String? cycleKey,
+    bool updatePastTransactions = false,
   }) async {
     final res = await baseClient.post(
       '/budgets/categories/replace',
@@ -408,6 +409,7 @@ class BudgetApiClient {
         'new_name': newName,
         if (newCode != null && newCode.isNotEmpty) 'new_code': newCode,
         if (cycleKey != null && cycleKey.isNotEmpty) 'cycle_key': cycleKey,
+        'update_past_transactions': updatePastTransactions,
       },
       shouldSign: false,
       timeout: const Duration(seconds: 10),
@@ -663,5 +665,17 @@ class BudgetApiClient {
       }
     } catch (_) {}
     return false;
+  }
+
+  /// Trigger on-demand server repair of budgets.spent_amount from transactions
+  Future<Map<String, dynamic>> recalculateBudgets({
+    required String householdId,
+    String? cycleKey,
+  }) async {
+    final path = cycleKey != null && cycleKey.isNotEmpty
+        ? '/budgets/recalculate?household_id=$householdId&cycle_key=$cycleKey'
+        : '/budgets/recalculate?household_id=$householdId';
+    final res = await baseClient.post(path, {});
+    return ApiRequestException.check(res);
   }
 }

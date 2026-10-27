@@ -403,16 +403,43 @@ def get_available_cycles_for_household(household_id: str, payday_day: Optional[i
     current_cycle = get_cycle_for_date(payday_day=payday_day)
 
     client = get_client()
-    res = client.table("budgets").select("cycle_key, month").eq("household_id", household_id).execute()
     keys = set()
-    for row in res.data or []:
-        ck = row.get("cycle_key")
-        if ck and len(ck) == 7:
-            keys.add(ck)
-        elif row.get("month"):
-            keys.add(row["month"][:7])
 
+    # 1. Distinct cycle keys from budgets
+    try:
+        res = client.table("budgets").select("cycle_key, month").eq("household_id", household_id).execute()
+        for row in res.data or []:
+            ck = row.get("cycle_key")
+            if ck and len(ck) == 7:
+                keys.add(ck)
+            elif row.get("month"):
+                keys.add(row["month"][:7])
+    except Exception:
+        pass
+
+    # 2. Distinct cycle keys from transactions (so past transaction cycles are always navigable)
+    try:
+        tx_res = client.table("transactions").select("cycle_key").eq("household_id", household_id).execute()
+        for row in tx_res.data or []:
+            ck = row.get("cycle_key")
+            if ck and len(ck) == 7:
+                keys.add(ck)
+    except Exception:
+        pass
+
+    # 3. Always include current cycle
     keys.add(current_cycle["cycle_key"])
+
+    # 4. Generate at least the prior 3 cycles relative to current_cycle so backward navigation is enabled
+    try:
+        cur_y, cur_m = map(int, current_cycle["cycle_key"].split("-"))
+        for offset in range(1, 4):
+            total_m = (cur_y * 12 + cur_m - 1) - offset
+            prior_y = total_m // 12
+            prior_m = (total_m % 12) + 1
+            keys.add(f"{prior_y:04d}-{prior_m:02d}")
+    except Exception:
+        pass
 
     sorted_keys = sorted(list(keys), reverse=True)
     cycles = []
@@ -1378,12 +1405,16 @@ def replace_household_category(
     new_name: str,
     new_code: Optional[str] = None,
     cycle_key: Optional[str] = None,
+    update_past_transactions: bool = False,
     supabase_client: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
-    Replaces an existing category for a household by archiving the old category
-    and provisioning a new autonomous category with transferred allocation.
-    Leaves historical transactions pointing to old_code untouched.
+    Replaces or renames an existing category for a household.
+    If update_past_transactions is True ("Rename Only"):
+      - If old_code is custom, updates cost_control_codes category name directly.
+      - If old_code is system, provisions new custom category and updates transactions & budgets.
+    If update_past_transactions is False ("Replace & Archive"):
+      - Archives old category, provisions new category, and transfers current allocation.
     """
     client = supabase_client or get_client()
 
@@ -1403,6 +1434,74 @@ def replace_household_category(
             cycle_key = curr["cycle_key"]
         except Exception:
             cycle_key = riyadh_today().strftime("%Y-%m")
+
+    if update_past_transactions:
+        if old_code.startswith("CUSTOM-"):
+            try:
+                client.table("cost_control_codes").update({
+                    "category": clean_name
+                }).eq("code", old_code).eq("household_id", household_id).execute()
+            except Exception as exc:
+                logger.warning("Could not update custom category name for %s: %s", old_code, exc)
+
+            return {
+                "status": "success",
+                "old_code": old_code,
+                "new_code": old_code,
+                "new_name": clean_name,
+                "allocated_transferred": 0.0,
+            }
+        else:
+            try:
+                client.table("cost_control_codes").insert({
+                    "code": clean_code,
+                    "category": clean_name,
+                    "is_system": False,
+                    "household_id": household_id,
+                    "keywords": [],
+                }).execute()
+            except Exception as exc:
+                logger.warning("Could not insert cost_control_codes for %s: %s", clean_code, exc)
+
+            try:
+                client.table("household_category_settings").upsert({
+                    "household_id": household_id,
+                    "category_code": clean_code,
+                    "is_active": True,
+                }).execute()
+            except Exception as exc:
+                logger.warning("Could not activate category setting for %s: %s", clean_code, exc)
+
+            try:
+                client.table("household_category_settings").upsert({
+                    "household_id": household_id,
+                    "category_code": old_code,
+                    "is_active": False,
+                }).execute()
+            except Exception as exc:
+                logger.warning("Could not deactivate category setting for %s: %s", old_code, exc)
+
+            try:
+                client.table("transactions").update({
+                    "category_code": clean_code
+                }).eq("household_id", household_id).eq("category_code", old_code).execute()
+            except Exception as exc:
+                logger.warning("Could not migrate transactions from %s to %s: %s", old_code, clean_code, exc)
+
+            try:
+                client.table("budgets").update({
+                    "category_code": clean_code
+                }).eq("household_id", household_id).eq("category_code", old_code).execute()
+            except Exception as exc:
+                logger.warning("Could not migrate budgets from %s to %s: %s", old_code, clean_code, exc)
+
+            return {
+                "status": "success",
+                "old_code": old_code,
+                "new_code": clean_code,
+                "new_name": clean_name,
+                "allocated_transferred": 0.0,
+            }
 
     # 1. Fetch current allocated amount of the old budget envelope
     allocated_amount = 0.0

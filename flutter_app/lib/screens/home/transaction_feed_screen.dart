@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import '../../services/api/base_api_client.dart';
 import '../../services/csv_export_service.dart';
 import '../../services/nafaqah_write_errors.dart';
+import '../../services/salary_cycle_service.dart';
 import '../../services/statement_pdf_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_shimmer.dart';
@@ -28,6 +29,7 @@ import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import 'edit_transaction_sheet.dart';
 import '../../models/category_catalog.dart';
+import '../../widgets/dashboard/salary_cycle_selector_bar.dart';
 
 class TransactionFeedScreen extends StatefulWidget {
   /// The household whose family context words the badges (defaults to the
@@ -37,7 +39,18 @@ class TransactionFeedScreen extends StatefulWidget {
   /// `GET /households/{id}/nafaqah` (injectable for tests).
   final Future<NafaqahSummary> Function(String householdId)? loadNafaqah;
 
-  const TransactionFeedScreen({super.key, this.householdId, this.loadNafaqah});
+  /// `GET /budgets/cycles` (injectable for tests).
+  final Future<Map<String, dynamic>> Function(String householdId)? loadCycles;
+
+  final String initialDatePeriod;
+
+  const TransactionFeedScreen({
+    super.key,
+    this.householdId,
+    this.loadNafaqah,
+    this.loadCycles,
+    this.initialDatePeriod = 'CYCLE',
+  });
 
   @override
   State<TransactionFeedScreen> createState() => _TransactionFeedScreenState();
@@ -47,10 +60,62 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   // Filters & Sorting state
   String _selectedCategoryFilter = 'ALL';
   String _selectedSort = 'newest'; // 'newest' | 'oldest' | 'highest' | 'lowest'
-  String _selectedDatePeriod = 'ALL'; // 'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM'
+  late String _selectedDatePeriod;
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
   bool _exportingPdf = false;
+
+  // Salary Cycles
+  List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
+  int _currentCycleIndex = 0;
+  String? _cyclesRequestedFor;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDatePeriod = widget.initialDatePeriod;
+    final initialCycles = SalaryCycleService.getAvailableCycles();
+    final idx = initialCycles.indexWhere((c) => c.isCurrent);
+    _cycles = initialCycles;
+    _currentCycleIndex = idx != -1 ? idx : 0;
+  }
+
+  void _ensureCycles(String? householdId) {
+    if (householdId == null || householdId.isEmpty || _cyclesRequestedFor == householdId) return;
+    _cyclesRequestedFor = householdId;
+    final loader = widget.loadCycles ?? ApiService.instance.getSalaryCycles;
+    loader(householdId).then((res) {
+      if (!mounted || _cyclesRequestedFor != householdId) return;
+      if (res['cycles'] != null) {
+        final list = (res['cycles'] as List)
+            .map((c) => SalaryCycleInfo.fromMap(Map<String, dynamic>.from(c as Map)))
+            .toList();
+        final merged = SalaryCycleService.getAvailableCycles(serverCycles: list);
+        if (merged.isNotEmpty) {
+          setState(() {
+            final prevKey = _selectedCycle?.cycleKey;
+            _cycles = merged;
+            if (prevKey != null) {
+              final idx = merged.indexWhere((c) => c.cycleKey == prevKey);
+              if (idx != -1) {
+                _currentCycleIndex = idx;
+                return;
+              }
+            }
+            final curIdx = merged.indexWhere((c) => c.isCurrent);
+            _currentCycleIndex = curIdx != -1 ? curIdx : 0;
+          });
+        }
+      }
+    }).catchError((Object e) {
+      debugPrint('[TransactionFeed] Cycles unavailable: $e');
+    });
+  }
+
+  SalaryCycleInfo? get _selectedCycle =>
+      _cycles.isNotEmpty && _currentCycleIndex < _cycles.length
+          ? _cycles[_currentCycleIndex]
+          : null;
 
   /// Family context (UX-04): whether rows get Nafaqah badges, and the names.
   FeedFamilyContext _family = const FeedFamilyContext();
@@ -116,7 +181,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     int count = 0;
     if (_selectedSort != 'newest') count++;
     if (_selectedCategoryFilter != 'ALL') count++;
-    if (_selectedDatePeriod != 'ALL') count++;
+    if (_selectedDatePeriod != 'CYCLE' && _selectedDatePeriod != 'ALL') count++;
     if (_selectedSpentByFilter != 'ALL') count++;
     return count;
   }
@@ -141,7 +206,21 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
 
     // 3. Date Range Filter
     final now = DateTime.now();
-    if (_selectedDatePeriod == 'TODAY') {
+    if (_selectedDatePeriod == 'CYCLE' && _selectedCycle != null) {
+      final selCycleKey = _selectedCycle!.cycleKey;
+      final start = DateTime.tryParse(_selectedCycle!.cycleStart);
+      final end = DateTime.tryParse('${_selectedCycle!.cycleEnd} 23:59:59');
+      result = result.where((t) {
+        if (t.cycleKey != null && t.cycleKey!.isNotEmpty && t.cycleKey == selCycleKey) {
+          return true;
+        }
+        if (start != null && end != null) {
+          final ts = t.timestamp.toLocal();
+          return !ts.isBefore(start) && ts.isBefore(end.add(const Duration(seconds: 1)));
+        }
+        return false;
+      }).toList();
+    } else if (_selectedDatePeriod == 'TODAY') {
       result = result.where((t) {
         final d = t.timestamp.toLocal();
         return d.year == now.year && d.month == now.month && d.day == now.day;
@@ -185,9 +264,11 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     setState(() {
       _selectedCategoryFilter = 'ALL';
       _selectedSort = 'newest';
-      _selectedDatePeriod = 'ALL';
+      _selectedDatePeriod = 'CYCLE';
       _customDateRange = null;
       _selectedSpentByFilter = 'ALL';
+      final idx = _cycles.indexWhere((c) => c.isCurrent);
+      if (idx != -1) _currentCycleIndex = idx;
     });
   }
 
@@ -338,6 +419,15 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        if (_selectedCycle != null)
+                          _buildFilterChip(
+                            label: context.cycleLabel(_selectedCycle!.cycleKey, fallback: _selectedCycle!.monthName),
+                            selected: _selectedDatePeriod == 'CYCLE',
+                            onSelected: (_) {
+                              setModalState(() => _selectedDatePeriod = 'CYCLE');
+                              setState(() => _selectedDatePeriod = 'CYCLE');
+                            },
+                          ),
                         _buildFilterChip(
                           label: context.tr('all_time'),
                           selected: _selectedDatePeriod == 'ALL',
@@ -853,7 +943,9 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   Widget build(BuildContext context) {
     final roles = _watchRoles(context);
     final rows = context.watch<TransactionProvider>().transactions;
-    _ensureFamilyContext(widget.householdId ?? roles?.householdId ?? (rows.isNotEmpty ? rows.first.householdId : null));
+    final hid = widget.householdId ?? roles?.householdId ?? (rows.isNotEmpty ? rows.first.householdId : null);
+    _ensureFamilyContext(hid);
+    _ensureCycles(hid);
     return Scaffold(
       backgroundColor: context.scaffoldBg,
       appBar: AppBar(
@@ -931,7 +1023,22 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
       ),
       body: Column(
         children: [
-              // Horizontal Category Chips
+          if (_cycles.isNotEmpty)
+            SalaryCycleSelectorBar(
+              currentCycle: _selectedCycle,
+              hasPrevious: _currentCycleIndex < _cycles.length - 1,
+              hasNext: _currentCycleIndex > 0,
+              onPrevious: () => setState(() {
+                _currentCycleIndex++;
+                _selectedDatePeriod = 'CYCLE';
+              }),
+              onNext: () => setState(() {
+                _currentCycleIndex--;
+                _selectedDatePeriod = 'CYCLE';
+              }),
+            ),
+
+          // Horizontal Category Chips
               Container(
                 height: 48,
                 padding: const EdgeInsets.symmetric(vertical: 6),

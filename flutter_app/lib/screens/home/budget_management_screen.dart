@@ -21,6 +21,7 @@ import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/budgets/rebalance_budget_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
+import '../../services/budget_repair_service.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/widgets/three_d_surface_card.dart';
@@ -43,7 +44,7 @@ class BudgetManagementScreen extends StatefulWidget {
 
 class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   final DateTime _selectedDate = DateTime.now();
-  List<SalaryCycleInfo> _cycles = [];
+  List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
 
   int _currentCycleIndex = 0;
   late Future<_BudgetStaticData> _staticFuture;
@@ -52,6 +53,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   @override
   void initState() {
     super.initState();
+    final initialCycles = SalaryCycleService.getAvailableCycles();
+    final idx = initialCycles.indexWhere((c) => c.isCurrent);
+    _cycles = initialCycles;
+    _currentCycleIndex = idx != -1 ? idx : 0;
     _staticFuture = _loadStaticData();
   }
 
@@ -66,6 +71,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     final hid = profile['household_id'] as String;
     final role = profile['role'] as String? ?? 'member';
 
+    BudgetRepairService.instance.repairHouseholdBudgets(hid);
     _fetchCycles(hid);
 
     final catData = await ApiService.instance.fetchHouseholdCategories(hid);
@@ -160,11 +166,20 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         final list = (res['cycles'] as List)
             .map((c) => SalaryCycleInfo.fromMap(Map<String, dynamic>.from(c as Map)))
             .toList();
-        if (mounted && list.isNotEmpty) {
+        final merged = SalaryCycleService.getAvailableCycles(serverCycles: list);
+        if (mounted && merged.isNotEmpty) {
           setState(() {
-            _cycles = list;
-            final idx = list.indexWhere((c) => c.isCurrent);
-            _currentCycleIndex = idx != -1 ? idx : 0;
+            final prevKey = _selectedCycle?.cycleKey;
+            _cycles = merged;
+            if (prevKey != null) {
+              final idx = merged.indexWhere((c) => c.cycleKey == prevKey);
+              if (idx != -1) {
+                _currentCycleIndex = idx;
+                return;
+              }
+            }
+            final curIdx = merged.indexWhere((c) => c.isCurrent);
+            _currentCycleIndex = curIdx != -1 ? curIdx : 0;
           });
         }
       }
@@ -830,39 +845,24 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         onConfirm: (action, newName) async {
           if (newName.isEmpty || newName == currentName) return;
           try {
-            if (action == CategoryLifecycleAction.replaceAndArchive) {
-              await ApiService.instance.replaceCategory(
-                householdId: staticData.householdId,
-                oldCode: categoryCode,
-                newName: newName,
+            final isRenameOnly = action == CategoryLifecycleAction.renameOnly;
+            await ApiService.instance.replaceCategory(
+              householdId: staticData.householdId,
+              oldCode: categoryCode,
+              newName: newName,
+              updatePastTransactions: isRenameOnly,
+            );
+            if (mounted) {
+              setState(() {
+                _staticFuture = _loadStaticData();
+              });
+              AppSnackBar.showSuccess(
+                context,
+                isRenameOnly
+                    ? context.trArgs('category_renamed_msg', {'name': newName})
+                    : context.trArgs('category_replaced_msg', {'name': newName}),
+                title: context.tr('category_renamed'),
               );
-              if (mounted) {
-                setState(() {
-                  _staticFuture = _loadStaticData();
-                });
-                AppSnackBar.showSuccess(
-                  context,
-                  context.trArgs('category_replaced_msg', {'name': newName}),
-                  title: context.tr('category_renamed'),
-                );
-              }
-            } else {
-              // Rename Only
-              await supabase
-                  .from('cost_control_codes')
-                  .update({'category': newName})
-                  .eq('code', categoryCode)
-                  .eq('household_id', staticData.householdId);
-              if (mounted) {
-                setState(() {
-                  _staticFuture = _loadStaticData();
-                });
-                AppSnackBar.showSuccess(
-                  context,
-                  context.trArgs('category_renamed_msg', {'name': newName}),
-                  title: context.tr('category_renamed'),
-                );
-              }
             }
           } catch (e) {
             if (mounted) {
@@ -923,19 +923,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     if (newName.isEmpty || newName == currentName) return;
 
     try {
-      if (isSystem || !categoryCode.startsWith('CUSTOM-')) {
-        await ApiService.instance.replaceCategory(
-          householdId: staticData.householdId,
-          oldCode: categoryCode,
-          newName: newName,
-        );
-      } else {
-        await supabase
-            .from('cost_control_codes')
-            .update({'category': newName})
-            .eq('code', categoryCode)
-            .eq('household_id', staticData.householdId);
-      }
+      await ApiService.instance.replaceCategory(
+        householdId: staticData.householdId,
+        oldCode: categoryCode,
+        newName: newName,
+        updatePastTransactions: true,
+      );
 
       if (mounted) {
         setState(() {
@@ -1187,7 +1180,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 .stream(primaryKey: ['id'])
                 .eq('household_id', staticData.householdId),
             builder: (ctx, budgetSnap) {
-              final budgets = (budgetSnap.data ?? [])
+              final rawBudgets = (budgetSnap.data ?? [])
                   .map(Budget.fromMap)
                   .where((b) {
                     if (!b.isActive) return false;
@@ -1198,6 +1191,25 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     return b.month.startsWith(key) || b.month == _currentMonthStr;
                   })
                   .toList();
+
+              final txProvider = ctx.watch<TransactionProvider>();
+              final (start, end) = _selectedCycle != null
+                  ? (DateTime.tryParse(_selectedCycle!.cycleStart), DateTime.tryParse(_selectedCycle!.cycleEnd))
+                  : (null, null);
+
+              final budgets = rawBudgets.map((b) {
+                if (txProvider.isLoading) return b;
+                final realSpent = txProvider.cycleSpendForCategory(
+                  b.categoryCode,
+                  _currentCycleKey,
+                  cycleStart: start,
+                  cycleEnd: end,
+                );
+                return b.copyWith(
+                  spentAmount: realSpent,
+                  remainingAmount: b.allocatedAmount - realSpent,
+                );
+              }).toList();
 
               final totalAllocated = budgets.fold<double>(0.0, (sum, b) => sum + b.allocatedAmount);
 
@@ -1259,22 +1271,31 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .where((a) => !a.isArchived && a.accountType.isOperatingPool)
                         .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
                     final hasOperatingCash = operatingCash > 0;
+
+                    // Unspent commitments remaining to be funded for the rest of the cycle
+                    final totalUnspentCommitments = budgets
+                        .where((b) => b.isActive)
+                        .fold<double>(0.0, (s, b) => s + (b.allocatedAmount - b.spentAmount).clamp(0.0, double.infinity));
+
                     final benchmarkCash = hasOperatingCash ? operatingCash : staticData.monthlyIncome;
                     final hasBenchmark = benchmarkCash > 0;
-                    final cashMargin = hasBenchmark ? (benchmarkCash - totalAllocated) : 0.0;
+                    final cashMargin = hasOperatingCash
+                        ? (operatingCash - totalUnspentCommitments)
+                        : (staticData.monthlyIncome > 0 ? (staticData.monthlyIncome - totalAllocated) : 0.0);
                     final isOverAllocated = hasBenchmark && cashMargin < -0.005;
 
-                    // Calculate any account deficits
+                    // Calculate any account deficits based on remaining unspent commitments
                     Account? deficitAccount;
                     double deficitAmount = 0.0;
                     if (staticData.accounts.isNotEmpty) {
-                      final Map<String, double> committedByAccount = {};
+                      final Map<String, double> unspentByAccount = {};
                       for (final b in budgets) {
-                        if (b.accountId != null && b.accountId!.isNotEmpty) {
-                          committedByAccount[b.accountId!] = (committedByAccount[b.accountId!] ?? 0.0) + b.allocatedAmount;
+                        if (b.isActive && b.accountId != null && b.accountId!.isNotEmpty) {
+                          final unspent = (b.allocatedAmount - b.spentAmount).clamp(0.0, double.infinity);
+                          unspentByAccount[b.accountId!] = (unspentByAccount[b.accountId!] ?? 0.0) + unspent;
                         }
                       }
-                      for (final entry in committedByAccount.entries) {
+                      for (final entry in unspentByAccount.entries) {
                         final acc = staticData.accounts.where((a) => a.id == entry.key).firstOrNull;
                         if (acc != null && acc.balance < entry.value) {
                           deficitAccount = acc;

@@ -512,6 +512,7 @@ async def replace_category_endpoint(
             new_name=req.new_name,
             new_code=req.new_code,
             cycle_key=req.cycle_key,
+            update_past_transactions=req.update_past_transactions,
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to replace category.")

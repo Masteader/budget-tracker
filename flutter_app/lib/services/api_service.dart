@@ -177,6 +177,9 @@ class ApiService {
     return {'status': 'success', 'cycles': list};
   }
 
+  Future<Map<String, dynamic>> recalculateBudgets(String householdId, {String? cycleKey}) =>
+      budget.recalculateBudgets(householdId: householdId, cycleKey: cycleKey);
+
   Future<List<Map<String, dynamic>>> fetchSalaryCycles({
     required String householdId,
     int? paydayDay,
@@ -412,6 +415,7 @@ class ApiService {
     required String newName,
     String? newCode,
     String? cycleKey,
+    bool updatePastTransactions = false,
   }) =>
       budget.replaceBudgetCategory(
         householdId: householdId,
@@ -419,6 +423,7 @@ class ApiService {
         newName: newName,
         newCode: newCode,
         cycleKey: cycleKey,
+        updatePastTransactions: updatePastTransactions,
       );
 
   Future<Map<String, dynamic>> saveSubAllocations({

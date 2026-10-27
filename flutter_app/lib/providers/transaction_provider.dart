@@ -366,6 +366,61 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  /// Total cycle spending for a given category code, respecting Nafaqah rules
+  /// (settlements and wife_personal are excluded from household category budgets).
+  double cycleSpendForCategory(
+    String categoryCode,
+    String cycleKey, {
+    DateTime? cycleStart,
+    DateTime? cycleEnd,
+  }) {
+    double total = 0.0;
+    for (final t in _transactions) {
+      if (t.isSettlement) continue;
+      if (t.nafaqahClass == 'wife_personal') continue;
+      if (t.categoryCode != categoryCode) continue;
+
+      if (t.cycleKey != null && t.cycleKey!.isNotEmpty) {
+        if (t.cycleKey == cycleKey) total += t.amount;
+      } else if (cycleStart != null && cycleEnd != null) {
+        final ts = t.timestamp.toLocal();
+        if (ts.isAfter(cycleStart.subtract(const Duration(seconds: 1))) &&
+            ts.isBefore(cycleEnd.add(const Duration(seconds: 1)))) {
+          total += t.amount;
+        }
+      }
+    }
+    return total;
+  }
+
+  /// Total spending across all categories for a cycle.
+  double totalCycleSpend(
+    String cycleKey, {
+    DateTime? cycleStart,
+    DateTime? cycleEnd,
+  }) {
+    double total = 0.0;
+    for (final t in _transactions) {
+      if (t.isSettlement) continue;
+      if (t.nafaqahClass == 'wife_personal') continue;
+
+      if (t.cycleKey != null && t.cycleKey!.isNotEmpty) {
+        if (t.cycleKey == cycleKey) total += t.amount;
+      } else if (cycleStart != null && cycleEnd != null) {
+        final ts = t.timestamp.toLocal();
+        if (ts.isAfter(cycleStart.subtract(const Duration(seconds: 1))) &&
+            ts.isBefore(cycleEnd.add(const Duration(seconds: 1)))) {
+          total += t.amount;
+        }
+      }
+    }
+    return total;
+  }
+
+  /// Distinct cycle keys found in loaded transactions.
+  Set<String> get loadedCycleKeys =>
+      _transactions.map((t) => t.cycleKey).whereType<String>().where((k) => k.isNotEmpty).toSet();
+
   @override
   void dispose() {
     _realtimeChannel?.unsubscribe();

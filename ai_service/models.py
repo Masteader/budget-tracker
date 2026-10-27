@@ -305,6 +305,7 @@ class CategoryReplaceRequest(BaseModel):
     new_name: ShortText
     new_code: Optional[Code] = None
     cycle_key: Optional[str] = None
+    update_past_transactions: bool = False
 
     @field_validator("household_id")
     @classmethod

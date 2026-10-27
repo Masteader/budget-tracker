@@ -65,7 +65,11 @@ void main() {
         ChangeNotifierProvider<RecurringBillsProvider>(create: (_) => RecurringBillsProvider()),
       ],
       child: localizedApp(
-        TransactionFeedScreen(householdId: 'h1', loadNafaqah: (_) async => summary),
+        TransactionFeedScreen(
+          householdId: 'h1',
+          loadNafaqah: (_) async => summary,
+          initialDatePeriod: 'ALL',
+        ),
         lang: lang,
         scaffold: false,
       ),

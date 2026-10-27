@@ -59,6 +59,9 @@ class Transaction {
   /// A settlement transfer between members (`is_settlement`), not an expense.
   final bool isSettlement;
 
+  /// The salary cycle key (`transactions.cycle_key`, e.g. '2026-11').
+  final String? cycleKey;
+
   /// Ingestion channels a transaction can come from (zero-SMS policy: no SMS channel).
   static const Set<String> sources = {'chat', 'receipt_scan', 'manual'};
 
@@ -93,6 +96,7 @@ class Transaction {
     this.nafaqahSpouseId,
     this.hasNafaqahFields = false,
     this.isSettlement = false,
+    this.cycleKey,
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
@@ -248,6 +252,7 @@ class Transaction {
       nafaqahSpouseId: map['nafaqah_spouse_id']?.toString(),
       hasNafaqahFields: map.containsKey('nafaqah_class'),
       isSettlement: map['is_settlement'] == true,
+      cycleKey: map['cycle_key'] as String?,
     );
   }
 
@@ -313,6 +318,7 @@ class Transaction {
       'qr_code_raw': qrCodeRaw,
       'raw_sms': rawSms,
       if (userId != null) 'user_id': userId,
+      if (cycleKey != null) 'cycle_key': cycleKey,
     };
   }
 
@@ -343,6 +349,7 @@ class Transaction {
     String? qrCodeRaw,
     String? rawSms,
     String? userId,
+    String? cycleKey,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -375,6 +382,7 @@ class Transaction {
       nafaqahSpouseId: nafaqahSpouseId,
       hasNafaqahFields: hasNafaqahFields,
       isSettlement: isSettlement,
+      cycleKey: cycleKey ?? this.cycleKey,
     );
   }
 }
@@ -426,6 +434,35 @@ class Budget {
               (k, v) => MapEntry(k, (v as num).toDouble()),
             ) ??
             const {},
+      );
+
+  Budget copyWith({
+    String? id,
+    String? householdId,
+    String? month,
+    String? categoryCode,
+    double? allocatedAmount,
+    double? spentAmount,
+    double? remainingAmount,
+    String? cycleKey,
+    double? previousCycleDelta,
+    bool? isActive,
+    Map<String, double>? subAllocations,
+    String? accountId,
+  }) =>
+      Budget(
+        id: id ?? this.id,
+        householdId: householdId ?? this.householdId,
+        month: month ?? this.month,
+        categoryCode: categoryCode ?? this.categoryCode,
+        allocatedAmount: allocatedAmount ?? this.allocatedAmount,
+        spentAmount: spentAmount ?? this.spentAmount,
+        remainingAmount: remainingAmount ?? this.remainingAmount,
+        cycleKey: cycleKey ?? this.cycleKey,
+        previousCycleDelta: previousCycleDelta ?? this.previousCycleDelta,
+        isActive: isActive ?? this.isActive,
+        subAllocations: subAllocations ?? this.subAllocations,
+        accountId: accountId ?? this.accountId,
       );
 
   /// Share of the allocation used, clamped to [0, 1]: for progress bars only.

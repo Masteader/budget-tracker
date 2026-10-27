@@ -16,6 +16,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/models.dart';
 
 /// A salary cycle: inclusive [start] and [end] calendar dates (UTC-midnight
 /// `DateTime`s used purely as dates) and its `YYYY-MM` [key].
@@ -184,5 +185,78 @@ class SalaryCycleService {
     final today = riyadhToday(now: now);
     final cycle = cycleForInstant(now ?? DateTime.now(), paydayDay: paydayDay);
     return cycle.end.difference(today).inDays + 1;
+  }
+
+  /// Generates available salary cycles deterministically (default past 6 + current + 1 upcoming).
+  /// Merges any extra cycles (e.g. from server or loaded transactions).
+  static List<SalaryCycleInfo> getAvailableCycles({
+    DateTime? anchorDate,
+    int? paydayDay,
+    int pastCycles = 6,
+    int futureCycles = 1,
+    List<SalaryCycleInfo>? serverCycles,
+    Iterable<String>? extraCycleKeys,
+  }) {
+    final today = riyadhToday(now: anchorDate);
+    final curCycle = cycleForInstant(today, paydayDay: paydayDay);
+    final payday = normalizePayday(paydayDay ?? _paydayDay);
+
+    final Map<String, SalaryCycleInfo> map = {};
+
+    SalaryCycleInfo toInfo(SaudiCycle sc, {required bool isCurrent}) {
+      return SalaryCycleInfo(
+        cycleKey: sc.key,
+        cycleStart: sc.startIso,
+        cycleEnd: sc.endIso,
+        label: sc.key,
+        monthName: sc.key,
+        isCurrent: isCurrent,
+      );
+    }
+
+    // 1. Generate future cycles
+    SaudiCycle c = curCycle;
+    for (int i = 0; i < futureCycles; i++) {
+      final nextDate = c.end.add(const Duration(days: 2));
+      c = cycleForInstant(nextDate, paydayDay: payday);
+      map[c.key] = toInfo(c, isCurrent: false);
+    }
+
+    // 2. Add current cycle
+    map[curCycle.key] = toInfo(curCycle, isCurrent: true);
+
+    // 3. Generate past cycles
+    c = curCycle;
+    for (int i = 0; i < pastCycles; i++) {
+      final prevDate = c.start.subtract(const Duration(days: 1));
+      c = cycleForInstant(prevDate, paydayDay: payday);
+      map[c.key] = toInfo(c, isCurrent: false);
+    }
+
+    // 4. Incorporate any extra cycle keys
+    if (extraCycleKeys != null) {
+      for (final k in extraCycleKeys) {
+        if (!map.containsKey(k) && k.isNotEmpty) {
+          final sc = cycleForKey(k, paydayDay: payday);
+          if (sc != null) {
+            map[k] = toInfo(sc, isCurrent: sc.containsDate(today));
+          }
+        }
+      }
+    }
+
+    // 5. Merge server cycles if available
+    if (serverCycles != null) {
+      for (final sc in serverCycles) {
+        if (sc.cycleKey.isNotEmpty) {
+          map[sc.cycleKey] = sc;
+        }
+      }
+    }
+
+    // Sort descending by cycleStart
+    final list = map.values.toList()
+      ..sort((a, b) => b.cycleStart.compareTo(a.cycleStart));
+    return list;
   }
 }

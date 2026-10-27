@@ -699,16 +699,27 @@ def ensure_household_cycle_budgets(
     if existing:
         return existing
 
-    # Fallback check by month
-    target_d = target_date or riyadh_today()
-    month_str = target_d.replace(day=1).isoformat()
-    existing_month = client.table("budgets").select("*").eq("household_id", household_id).eq("month", month_str).execute().data
-    if existing_month:
-        # Backfill cycle_key on them
-        client.table("budgets").update({"cycle_key": cycle_key}).eq("household_id", household_id).eq("month", month_str).execute()
-        for b in existing_month:
-            b["cycle_key"] = cycle_key
-        return existing_month
+    cycle_month_str = f"{cycle_key}-01"
+
+    # Fallback: only backfill legacy rows that truly belong to this cycle where cycle_key is null.
+    # Never hijack or overwrite an existing cycle's rows!
+    try:
+        existing_legacy = (
+            client.table("budgets")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("month", cycle_month_str)
+            .is_("cycle_key", "null")
+            .execute()
+            .data
+        )
+        if existing_legacy:
+            client.table("budgets").update({"cycle_key": cycle_key}).eq("household_id", household_id).eq("month", cycle_month_str).is_("cycle_key", "null").execute()
+            for b in existing_legacy:
+                b["cycle_key"] = cycle_key
+            return existing_legacy
+    except Exception as exc:
+        logger.warning("Could not check legacy budget rows for household=%s cycle=%s: %s", household_id, cycle_key, exc)
 
     # 2. Find latest previous cycle to roll over from
     all_prev = client.table("budgets").select("*").eq("household_id", household_id).order("month", desc=True).execute().data
@@ -744,7 +755,7 @@ def ensure_household_cycle_budgets(
 
         new_rows.append({
             "household_id": household_id,
-            "month": month_str,
+            "month": cycle_month_str,
             "cycle_key": cycle_key,
             "category_code": prev["category_code"],
             "allocated_amount": prev_allocated,

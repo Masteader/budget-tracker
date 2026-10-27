@@ -18,7 +18,9 @@ import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/budget_repair_service.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/salary_cycle_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
 import '../../widgets/dashboard/category_budget_card.dart';
 import '../../widgets/dashboard/over_budget_alerts.dart';
@@ -50,7 +52,6 @@ import 'budget_management_screen.dart';
 import 'transaction_feed_screen.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../services/account_service.dart';
-import '../../services/salary_cycle_service.dart';
 import '../../models/account.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -163,7 +164,7 @@ class _BudgetDashboard extends StatefulWidget {
 
 class _BudgetDashboardState extends State<_BudgetDashboard> {
   late Future<String> _householdId;
-  List<SalaryCycleInfo> _cycles = [];
+  List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
   int _currentCycleIndex = 0;
 
   /// Bumped by "Try again" to subscribe to the budgets stream afresh.
@@ -172,6 +173,10 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   @override
   void initState() {
     super.initState();
+    final initialCycles = SalaryCycleService.getAvailableCycles();
+    final idx = initialCycles.indexWhere((c) => c.isCurrent);
+    _cycles = initialCycles;
+    _currentCycleIndex = idx != -1 ? idx : 0;
     _householdId = _fetchHouseholdId();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -188,6 +193,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .eq('id', uid)
         .single();
     final hid = data['household_id'] as String;
+    BudgetRepairService.instance.repairHouseholdBudgets(hid);
     _fetchCycles(hid);
     _fetchSetup(hid);
     _fetchAccountsCount(hid);
@@ -216,11 +222,20 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         final list = (res['cycles'] as List)
             .map((c) => SalaryCycleInfo.fromMap(Map<String, dynamic>.from(c as Map)))
             .toList();
-        if (mounted && list.isNotEmpty) {
+        final merged = SalaryCycleService.getAvailableCycles(serverCycles: list);
+        if (mounted && merged.isNotEmpty) {
           setState(() {
-            _cycles = list;
-            final idx = list.indexWhere((c) => c.isCurrent);
-            _currentCycleIndex = idx != -1 ? idx : 0;
+            final prevKey = _selectedCycle?.cycleKey;
+            _cycles = merged;
+            if (prevKey != null) {
+              final idx = merged.indexWhere((c) => c.cycleKey == prevKey);
+              if (idx != -1) {
+                _currentCycleIndex = idx;
+                return;
+              }
+            }
+            final curIdx = merged.indexWhere((c) => c.isCurrent);
+            _currentCycleIndex = curIdx != -1 ? curIdx : 0;
           });
         }
       }
@@ -237,6 +252,20 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return SalaryCycleService.cycleKeyForInstant(DateTime.now());
   }
 
+  /// The cycle dates as Riyadh calendar dates.
+  (DateTime, DateTime) _cycleDates() {
+    final c = _selectedCycle;
+    if (c != null) {
+      final start = DateTime.tryParse(c.cycleStart);
+      final end = DateTime.tryParse(c.cycleEnd);
+      if (start != null && end != null) {
+        return (DateTime.utc(start.year, start.month, start.day), DateTime.utc(end.year, end.month, end.day));
+      }
+    }
+    final current = SalaryCycleService.currentCycle();
+    return (current.start, current.end);
+  }
+
   /// The selected cycle by its dates ("27 Oct – 26 Nov").
   String _cycleLabel(BuildContext context) {
     final c = _selectedCycle;
@@ -244,9 +273,25 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return c == null ? byKey : context.cycleRangeIso(c.cycleStart, c.cycleEnd, fallback: byKey);
   }
 
-  /// The selected cycle's active budgets from the budgets stream.
-  List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows) =>
-      rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
+  /// The selected cycle's active budgets from the budgets stream,
+  /// reconciled with real transactions from [TransactionProvider].
+  List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows, [TransactionProvider? txProvider]) {
+    final list = rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
+    if (txProvider == null || txProvider.isLoading) return list;
+    final (start, end) = _cycleDates();
+    return list.map((b) {
+      final realSpent = txProvider.cycleSpendForCategory(
+        b.categoryCode,
+        _currentCycleKey,
+        cycleStart: start,
+        cycleEnd: end,
+      );
+      return b.copyWith(
+        spentAmount: realSpent,
+        remainingAmount: b.allocatedAmount - realSpent,
+      );
+    }).toList();
+  }
 
   final GlobalKey _categoriesKey = GlobalKey();
   final GlobalKey _balancesKey = GlobalKey();
@@ -369,12 +414,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   bool _matchesSelectedCycle(Budget b) {
     final key = _currentCycleKey;
     if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
-      if (b.cycleKey == key) return true;
-    }
-    final cycleStart = _selectedCycle?.cycleStart;
-    if (cycleStart != null && cycleStart.length >= 7) {
-      final cycleMonth = cycleStart.substring(0, 7);
-      if (b.month == cycleMonth || b.month.startsWith(cycleMonth)) return true;
+      return b.cycleKey == key;
     }
     final keyPrefix = key.length >= 7 ? key.substring(0, 7) : key;
     return b.month.startsWith(keyPrefix);
@@ -523,7 +563,15 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                                 },
                               ),
                               PaydayCheckinBanner(householdId: hid),
-                              ..._buildTop(hid, _cycleBudgets(budgetSnap.data!)),
+                              Builder(
+                                builder: (ctx) {
+                                  final txProvider = ctx.watch<TransactionProvider>();
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: _buildTop(hid, _cycleBudgets(budgetSnap.data!, txProvider)),
+                                  );
+                                },
+                              ),
                               const SizedBox(height: 12),
                               // Balances only once there are 2+ accounts; the
                               // Tools screen always has them.
@@ -580,8 +628,8 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         sliver: Builder(
                           builder: (context) {
-                            // Most at risk first: overspent, then by share used (UX-08).
-                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!));
+                            final txProvider = context.watch<TransactionProvider>();
+                            final cycleBudgets = Budget.sortByRisk(_cycleBudgets(budgetSnap.data!, txProvider));
                             if (cycleBudgets.isEmpty) {
                               // The running cycle's empty state is the setup
                               // card at the top (UX-02); it no longer points
