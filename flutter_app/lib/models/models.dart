@@ -401,6 +401,7 @@ class Budget {
   final double previousCycleDelta;
   final bool isActive;
   final Map<String, double> subAllocations;
+  final Map<String, dynamic> metadata;
   final String? accountId;
 
   const Budget({
@@ -415,18 +416,49 @@ class Budget {
     this.previousCycleDelta = 0.0,
     this.isActive = true,
     this.subAllocations = const {},
+    this.metadata = const {},
     this.accountId,
   });
+
+  /// Whether an accumulating sinking fund is enabled for [subCode] (or the parent category if null).
+  bool isSinkingFund([String? subCode]) {
+    final key = subCode ?? '_parent';
+    final sf = metadata['_sinking_fund'];
+    if (sf is Map && sf[key] is Map) {
+      return (sf[key] as Map)['accumulate'] == true;
+    }
+    return false;
+  }
+
+  /// The base monthly allocation for an accumulating sinking fund.
+  double sinkingFundBase([String? subCode]) {
+    final key = subCode ?? '_parent';
+    final sf = metadata['_sinking_fund'];
+    if (sf is Map && sf[key] is Map) {
+      final base = (sf[key] as Map)['base_amount'];
+      if (base is num) return base.toDouble();
+    }
+    return subCode != null ? (subAllocations[subCode] ?? 0.0) : allocatedAmount;
+  }
+
+  /// Combined sub-allocations map including numeric allocations and metadata.
+  Map<String, dynamic> get rawSubAllocationsWithMetadata => {
+        ...subAllocations,
+        ...metadata,
+      };
 
   factory Budget.fromMap(Map<String, dynamic> map) {
     final rawSubAllocs = map['sub_allocations'];
     final Map<String, double> subAllocations = {};
+    final Map<String, dynamic> metadata = {};
     if (rawSubAllocs is Map) {
       for (final entry in rawSubAllocs.entries) {
         final k = entry.key.toString();
         final v = entry.value;
         if (!k.startsWith('_') && v is num) {
           subAllocations[k] = v.toDouble();
+        } else if (k.startsWith('_')) {
+          metadata[k] = v;
         }
       }
     }
@@ -443,6 +475,7 @@ class Budget {
       isActive: map['is_active'] as bool? ?? true,
       accountId: map['account_id'] as String?,
       subAllocations: subAllocations,
+      metadata: metadata,
     );
   }
 
@@ -458,6 +491,7 @@ class Budget {
     double? previousCycleDelta,
     bool? isActive,
     Map<String, double>? subAllocations,
+    Map<String, dynamic>? metadata,
     String? accountId,
   }) =>
       Budget(
@@ -472,6 +506,7 @@ class Budget {
         previousCycleDelta: previousCycleDelta ?? this.previousCycleDelta,
         isActive: isActive ?? this.isActive,
         subAllocations: subAllocations ?? this.subAllocations,
+        metadata: metadata ?? this.metadata,
         accountId: accountId ?? this.accountId,
       );
 
