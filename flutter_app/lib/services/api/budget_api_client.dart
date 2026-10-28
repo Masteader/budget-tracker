@@ -420,7 +420,7 @@ class BudgetApiClient {
   Future<Map<String, dynamic>> saveSubAllocations({
     required String householdId,
     required String categoryCode,
-    required Map<String, double> subAllocations,
+    required Map<String, dynamic> subAllocations,
     String? cycleKey,
   }) async {
     return baseClient.post(

@@ -30,7 +30,10 @@ class ApiService {
     support = SupportApiClient(baseClient: base);
   }
 
-  static final ApiService instance = ApiService._();
+  static ApiService _instance = ApiService._();
+  static ApiService get instance => _instance;
+  @visibleForTesting
+  static set instance(ApiService value) => _instance = value;
 
   @visibleForTesting
   ApiService({
@@ -429,7 +432,7 @@ class ApiService {
   Future<Map<String, dynamic>> saveSubAllocations({
     required String householdId,
     required String categoryCode,
-    required Map<String, double> subAllocations,
+    required Map<String, dynamic> subAllocations,
     String? cycleKey,
   }) =>
       budget.saveSubAllocations(

@@ -152,7 +152,7 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<bool> saveSubAllocations({
     required String categoryCode,
-    required Map<String, double> subAllocations,
+    required Map<String, dynamic> subAllocations,
   }) async {
     if (_householdId == null) return false;
     final cycleKey = activeCycle?.cycleKey;

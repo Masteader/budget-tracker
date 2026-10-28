@@ -21,6 +21,7 @@ class SubBudgetAllocationDialog extends StatefulWidget {
   final Budget? existingBudget;
   final String? cycleKey;
   final VoidCallback? onSaved;
+  final ApiService? apiService;
 
   const SubBudgetAllocationDialog({
     super.key,
@@ -30,6 +31,7 @@ class SubBudgetAllocationDialog extends StatefulWidget {
     this.existingBudget,
     this.cycleKey,
     this.onSaved,
+    this.apiService,
   });
 
   static Future<bool?> show(
@@ -40,6 +42,7 @@ class SubBudgetAllocationDialog extends StatefulWidget {
     Budget? existingBudget,
     String? cycleKey,
     VoidCallback? onSaved,
+    ApiService? apiService,
   }) {
     return showModalBottomSheet<bool>(
       context: context,
@@ -52,6 +55,7 @@ class SubBudgetAllocationDialog extends StatefulWidget {
         existingBudget: existingBudget,
         cycleKey: cycleKey,
         onSaved: onSaved,
+        apiService: apiService,
       ),
     );
   }
@@ -117,12 +121,16 @@ class _SubCategoryItemDef {
   String nameEn;
   String nameAr;
   final TextEditingController controller;
+  bool isSinkingFund;
+  double baseAmount;
 
   _SubCategoryItemDef({
     required this.subCode,
     required this.nameEn,
     required this.nameAr,
     required this.controller,
+    this.isSinkingFund = false,
+    this.baseAmount = 0.0,
   });
 }
 
@@ -133,6 +141,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   final List<_SubCategoryItemDef> _subItems = [];
   late TextEditingController _fallbackParentController;
   double _totalSum = 0.0;
+  bool _parentIsSinkingFund = false;
+  double _parentBaseAmount = 0.0;
 
   @override
   void initState() {
@@ -176,7 +186,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
   Future<void> _loadSubCategories() async {
     try {
       // 1. Fetch sub-categories from backend API (uses service-role key, bypassing RLS)
-      final apiSubs = await ApiService.instance.getSubCategories(widget.categoryCode);
+      final api = widget.apiService ?? ApiService.instance;
+      final apiSubs = await api.getSubCategories(widget.categoryCode);
 
       List<Map<String, String>> rawDefs = [];
       if (apiSubs.isNotEmpty) {
@@ -191,7 +202,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           final res = await supabase
               .from('cost_control_sub_categories')
               .select('sub_code, name_en, name_ar')
-              .eq('parent_code', widget.categoryCode);
+              .eq('parent_code', widget.categoryCode)
+              .timeout(const Duration(milliseconds: 1500));
           if (res.isNotEmpty) {
             rawDefs = res.map((row) => {
               'sub_code': row['sub_code'] as String,
@@ -212,6 +224,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
       Map<String, double> existingAllocs = Map<String, double>.from(
         widget.existingBudget?.subAllocations ?? {},
       );
+      Map<String, dynamic> existingSinkingFund = {};
+      final existingSfRaw = widget.existingBudget?.metadata['_sinking_fund'];
+      if (existingSfRaw is Map) {
+        existingSinkingFund = Map<String, dynamic>.from(existingSfRaw);
+      }
       try {
         final cycleKey = widget.cycleKey;
         var query = supabase
@@ -222,7 +239,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         if (cycleKey != null && cycleKey.isNotEmpty) {
           query = query.eq('cycle_key', cycleKey);
         }
-        final bData = await query.maybeSingle();
+        final bData = await query.maybeSingle().timeout(const Duration(milliseconds: 1500));
         if (bData != null && bData['sub_allocations'] is Map) {
           final rawMap = bData['sub_allocations'] as Map<String, dynamic>;
           final Map<String, double> dbAllocs = {};
@@ -232,8 +249,20 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             }
           }
           existingAllocs = {...existingAllocs, ...dbAllocs};
+          if (rawMap['_sinking_fund'] is Map) {
+            existingSinkingFund = {
+              ...existingSinkingFund,
+              ...Map<String, dynamic>.from(rawMap['_sinking_fund'] as Map),
+            };
+          }
         }
       } catch (_) {}
+
+      if (existingSinkingFund['_parent'] is Map) {
+        _parentIsSinkingFund = (existingSinkingFund['_parent'] as Map)['accumulate'] == true;
+        final base = (existingSinkingFund['_parent'] as Map)['base_amount'];
+        if (base is num) _parentBaseAmount = base.toDouble();
+      }
 
       // 3. Ensure any sub-category present in existingAllocs is included in rawDefs
       for (final entry in existingAllocs.entries) {
@@ -260,6 +289,11 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         final nameEn = row['name_en']!;
         final nameAr = row['name_ar'] ?? '';
         final existingVal = existingAllocs[code];
+        final sfEntry = existingSinkingFund[code];
+        final isSf = sfEntry is Map && sfEntry['accumulate'] == true;
+        final base = sfEntry is Map && sfEntry['base_amount'] is num
+            ? (sfEntry['base_amount'] as num).toDouble()
+            : (existingVal ?? 0.0);
         final ctrl = TextEditingController(
           text: (existingVal != null && existingVal > 0)
               ? existingVal.toStringAsFixed(2)
@@ -271,6 +305,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           nameEn: nameEn,
           nameAr: nameAr,
           controller: ctrl,
+          isSinkingFund: isSf,
+          baseAmount: base,
         );
       }).toList();
 
@@ -278,11 +314,21 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
     } catch (e) {
       final defaultList = SubBudgetAllocationDialog.kDefaultSubCategoriesCatalog[widget.categoryCode] ?? [];
       final existingAllocs = widget.existingBudget?.subAllocations ?? {};
+      Map<String, dynamic> existingSinkingFund = {};
+      final existingSfRaw = widget.existingBudget?.metadata['_sinking_fund'];
+      if (existingSfRaw is Map) {
+        existingSinkingFund = Map<String, dynamic>.from(existingSfRaw);
+      }
       final list = defaultList.map((row) {
         final code = row['sub_code']!;
         final nameEn = row['name_en']!;
         final nameAr = row['name_ar'] ?? '';
         final existingVal = existingAllocs[code];
+        final sfEntry = existingSinkingFund[code];
+        final isSf = sfEntry is Map && sfEntry['accumulate'] == true;
+        final base = sfEntry is Map && sfEntry['base_amount'] is num
+            ? (sfEntry['base_amount'] as num).toDouble()
+            : (existingVal ?? 0.0);
         final ctrl = TextEditingController(
           text: (existingVal != null && existingVal > 0)
               ? existingVal.toStringAsFixed(2)
@@ -294,6 +340,8 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
           nameEn: nameEn,
           nameAr: nameAr,
           controller: ctrl,
+          isSinkingFund: isSf,
+          baseAmount: base,
         );
       }).toList();
 
@@ -656,10 +704,22 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
 
     try {
       if (_subItems.isNotEmpty) {
-        final allocMap = <String, double>{};
+        final allocMap = <String, dynamic>{};
+        final sfMap = <String, dynamic>{};
         for (final item in _subItems) {
           final val = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
           allocMap[item.subCode] = val;
+          if (item.isSinkingFund) {
+            final base = item.baseAmount > 0 ? item.baseAmount : val;
+            sfMap[item.subCode] = {
+              'accumulate': true,
+              'base_amount': base > 0 ? base : val,
+            };
+          }
+        }
+
+        if (sfMap.isNotEmpty) {
+          allocMap['_sinking_fund'] = sfMap;
         }
 
         final res = await ApiService.instance.saveSubAllocations(
@@ -677,12 +737,24 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         final amount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
         final cycleKey = widget.cycleKey ?? DateFormat('yyyy-MM').format(DateTime.now());
         final monthStr = '$cycleKey-01';
+        final sfMap = <String, dynamic>{};
+        if (_parentIsSinkingFund) {
+          final base = _parentBaseAmount > 0 ? _parentBaseAmount : amount;
+          sfMap['_parent'] = {
+            'accumulate': true,
+            'base_amount': base > 0 ? base : amount,
+          };
+        }
+        final Map<String, dynamic> subAllocsPayload = sfMap.isNotEmpty
+            ? {'_sinking_fund': sfMap}
+            : {};
 
         if (widget.existingBudget != null) {
           await supabase.from('budgets').update({
             'allocated_amount': amount,
             'cycle_key': cycleKey,
             'is_active': true,
+            'sub_allocations': subAllocsPayload,
           }).eq('id', widget.existingBudget!.id);
         } else {
           final existingCheck = await supabase
@@ -697,6 +769,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               'allocated_amount': amount,
               'cycle_key': cycleKey,
               'is_active': true,
+              'sub_allocations': subAllocsPayload,
             }).eq('id', existingCheck['id']);
           } else {
             await supabase.from('budgets').insert({
@@ -707,10 +780,10 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
               'month': monthStr,
               'cycle_key': cycleKey,
               'is_active': true,
+              'sub_allocations': subAllocsPayload,
             });
           }
         }
-
       }
 
       if (mounted) {
@@ -908,7 +981,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                       ? SingleChildScrollView(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
                                 context.trArgs('sba_allocate_for', {'category': widget.categoryName}),
@@ -937,6 +1010,75 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                                     borderSide: BorderSide(
                                       color: context.accentText,
                                     ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _parentIsSinkingFund = !_parentIsSinkingFund;
+                                    if (_parentIsSinkingFund && _parentBaseAmount <= 0) {
+                                      _parentBaseAmount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
+                                    }
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: _parentIsSinkingFund
+                                        ? context.accentText.withValues(alpha: 0.12)
+                                        : context.subtleCardBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _parentIsSinkingFund ? context.accentText : context.borderColor,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _parentIsSinkingFund ? Icons.all_inclusive_rounded : Icons.savings_outlined,
+                                        size: 20,
+                                        color: _parentIsSinkingFund ? context.accentText : context.textSecondary,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              context.tr('sinking_fund_toggle'),
+                                              style: GoogleFonts.inter(
+                                                color: context.textPrimary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              context.tr('sinking_fund_desc'),
+                                              style: GoogleFonts.inter(
+                                                color: context.textSecondary,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: _parentIsSinkingFund,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            _parentIsSinkingFund = val;
+                                            if (_parentIsSinkingFund && _parentBaseAmount <= 0) {
+                                              _parentBaseAmount = parseMoneyInput(_fallbackParentController.text.trim()) ?? 0.0;
+                                            }
+                                          });
+                                        },
+                                        activeThumbColor: context.accentText,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -982,42 +1124,97 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Flexible(
-                                          child: Text(
-                                            context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn),
-                                            style: GoogleFonts.inter(
-                                              color: context.textPrimary,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                context.trSub(item.subCode, nameAr: item.nameAr, nameEn: item.nameEn),
+                                                style: GoogleFonts.inter(
+                                                  color: context.textPrimary,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _promptRenameSubCategory(item),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                            child: Icon(
-                                              Icons.edit_outlined,
-                                              size: 15,
-                                              color: context.accentText,
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => _promptRenameSubCategory(item),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                                child: Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 15,
+                                                  color: context.accentText,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 2),
+                                            GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => _promptRemoveSubCategory(item),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                                                child: Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  size: 16,
+                                                  color: context.dangerColor,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 2),
-                                        GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => _promptRemoveSubCategory(item),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                                            child: Icon(
-                                              Icons.delete_outline_rounded,
-                                              size: 16,
-                                              color: context.dangerColor,
+                                        const SizedBox(height: 4),
+                                        Align(
+                                          alignment: AlignmentDirectional.centerStart,
+                                          child: InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                item.isSinkingFund = !item.isSinkingFund;
+                                                if (item.isSinkingFund && item.baseAmount <= 0) {
+                                                  item.baseAmount = parseMoneyInput(item.controller.text.trim()) ?? 0.0;
+                                                }
+                                              });
+                                            },
+                                            borderRadius: BorderRadius.circular(6),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: item.isSinkingFund
+                                                    ? context.accentText.withValues(alpha: 0.15)
+                                                    : context.borderColor.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: item.isSinkingFund ? context.accentText : context.borderColor.withValues(alpha: 0.5),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    item.isSinkingFund ? Icons.all_inclusive_rounded : Icons.savings_outlined,
+                                                    size: 11,
+                                                    color: item.isSinkingFund ? context.accentText : context.textSecondary,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    item.isSinkingFund
+                                                        ? context.tr('sinking_fund_badge')
+                                                        : context.tr('sinking_fund_toggle'),
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 10,
+                                                      fontWeight: item.isSinkingFund ? FontWeight.bold : FontWeight.w500,
+                                                      color: item.isSinkingFund ? context.accentText : context.textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ),
