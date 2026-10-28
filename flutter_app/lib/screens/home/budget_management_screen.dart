@@ -239,65 +239,102 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         return;
       }
 
-      double totalUnspent = 0.0;
-      for (final b in prevBudgets) {
-        final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
-        final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
-        final rem = alloc - spent;
-        if (rem > 0) totalUnspent += rem;
-      }
-
-      bool rolloverToCushion = true;
-      if (totalUnspent > 0 && mounted) {
-        final choice = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: context.cardBg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                Icon(Icons.savings_outlined, color: context.accentText, size: 22),
-                const SizedBox(width: 8),
-                Flexible(child: Text(context.trArgs('bm_unspent_title', {'amount': context.sar(totalUnspent)}), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16))),
-              ],
-            ),
-            content: Text(
-              context.trArgs('bm_unspent_desc', {'amount': context.sar(totalUnspent)}),
-              style: TextStyle(color: context.textSecondary, fontSize: 13),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(context.tr('bm_option_sweep')),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.primaryButtonBg,
-                  foregroundColor: context.primaryButtonFg,
-                ),
-                child: Text(context.tr('bm_option_rollover'), style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-        rolloverToCushion = choice ?? true;
-      }
-
       final newEntries = prevBudgets.map((b) {
         final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
         final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
-        final rem = alloc - spent;
-        final delta = (rolloverToCushion && rem > 0) ? rem : 0.0;
+        final subAllocsRaw = b['sub_allocations'];
+        final Map<String, dynamic> subAllocs = subAllocsRaw is Map
+            ? Map<String, dynamic>.from(subAllocsRaw)
+            : <String, dynamic>{};
+
+        Map<String, dynamic> sinkingCfg = {};
+        if (subAllocs['_sinking_fund'] is Map) {
+          sinkingCfg = Map<String, dynamic>.from(subAllocs['_sinking_fund'] as Map);
+        } else if (b['metadata'] is Map && (b['metadata'] as Map)['_sinking_fund'] is Map) {
+          sinkingCfg = Map<String, dynamic>.from((b['metadata'] as Map)['_sinking_fund'] as Map);
+        }
+
+        final numericSubs = <String, double>{};
+        for (final e in subAllocs.entries) {
+          if (!e.key.startsWith('_') && e.value is num) {
+            numericSubs[e.key] = (e.value as num).toDouble();
+          }
+        }
+
+        double newAlloc = alloc;
+        double delta = 0.0;
+        final newSubAllocs = Map<String, dynamic>.from(subAllocs);
+
+        if (sinkingCfg.isNotEmpty) {
+          if (numericSubs.isNotEmpty) {
+            final newSubNumeric = <String, double>{};
+            for (final entry in numericSubs.entries) {
+              final sc = entry.key;
+              final prevSubAlloc = entry.value;
+              final scCfg = sinkingCfg[sc] is Map ? (sinkingCfg[sc] as Map) : null;
+              final accumulate = scCfg != null && scCfg['accumulate'] == true;
+              final baseAmt = (scCfg != null && scCfg['base_amount'] is num)
+                  ? (scCfg['base_amount'] as num).toDouble()
+                  : prevSubAlloc;
+
+              final ratio = alloc > 0 ? (prevSubAlloc / alloc) : 0.0;
+              final subSpent = spent * ratio;
+              final unspent = (prevSubAlloc - subSpent > 0) ? (prevSubAlloc - subSpent) : 0.0;
+
+              if (accumulate) {
+                newSubNumeric[sc] = double.parse((baseAmt + unspent).toStringAsFixed(2));
+              } else {
+                newSubNumeric[sc] = double.parse(baseAmt.toStringAsFixed(2));
+              }
+            }
+            newAlloc = double.parse(
+              newSubNumeric.values.fold<double>(0.0, (a, b) => a + b).toStringAsFixed(2),
+            );
+            newSubAllocs.addAll(newSubNumeric);
+
+            double baseSum = 0.0;
+            for (final entry in numericSubs.entries) {
+              final scCfg = sinkingCfg[entry.key] is Map ? (sinkingCfg[entry.key] as Map) : null;
+              baseSum += (scCfg != null && scCfg['base_amount'] is num)
+                  ? (scCfg['base_amount'] as num).toDouble()
+                  : entry.value;
+            }
+            final computedDelta = newAlloc - baseSum;
+            delta = double.parse((computedDelta > 0 ? computedDelta : 0.0).toStringAsFixed(2));
+          } else {
+            final parentCfg = (sinkingCfg['_parent'] is Map
+                    ? sinkingCfg['_parent']
+                    : sinkingCfg['_self'])
+                as Map?;
+            final accumulate = parentCfg != null && parentCfg['accumulate'] == true;
+            final baseAmt = (parentCfg != null && parentCfg['base_amount'] is num)
+                ? (parentCfg['base_amount'] as num).toDouble()
+                : alloc;
+            final unspent = (alloc - spent > 0) ? (alloc - spent) : 0.0;
+
+            if (accumulate) {
+              newAlloc = double.parse((baseAmt + unspent).toStringAsFixed(2));
+              delta = double.parse(unspent.toStringAsFixed(2));
+            } else {
+              newAlloc = double.parse(baseAmt.toStringAsFixed(2));
+              delta = 0.0;
+            }
+          }
+        } else {
+          // Standard categories start fresh with default allocated amount
+          newAlloc = alloc;
+          delta = 0.0;
+        }
 
         return {
           'household_id': householdId,
           'month': _currentMonthStr,
           'cycle_key': _currentCycleKey,
           'category_code': b['category_code'],
-          'allocated_amount': b['allocated_amount'],
+          'allocated_amount': newAlloc,
           'account_id': b['account_id'],
-          'sub_allocations': b['sub_allocations'] ?? {},
+          'sub_allocations': newSubAllocs,
+          'metadata': b['metadata'] ?? {},
           'previous_cycle_delta': delta,
           'spent_amount': 0.0,
           'is_active': true,
@@ -309,7 +346,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
-          context.trArgs('bm_copied_msg', {'count': newEntries.length, 'month': context.cycleMonth(prevCycleKey)}),
+          context.tr('bm_copied_silent_success'),
           title: context.tr('bm_copied_title'),
         );
       }
