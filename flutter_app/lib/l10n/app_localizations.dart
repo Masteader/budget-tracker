@@ -868,6 +868,9 @@ class AppLocalizations {
       // Accounts & Balances
       'accounts_balances': 'Accounts & Balances',
       'accounts_balances_desc': 'Manage your banks, e-wallets, crypto, and cash pools.',
+      'tip_actual_balance_after_commitments': 'After commitments ({commitments}): {actual} actual available',
+      'tip_balance_deficit': 'Deficit: commitments exceed balance by {deficit}',
+      'tip_no_pending_commitments': 'No pending commitments: full balance available',
       'total_net_worth': 'TOTAL NET WORTH & LIQUIDITY',
       'no_accounts_configured': 'No accounts configured yet.',
       'add_bank_wallet_cash': 'Add Bank, Wallet or Cash',
@@ -2486,6 +2489,9 @@ class AppLocalizations {
       // Accounts & Balances
       'accounts_balances': 'الحسابات والأرصدة',
       'accounts_balances_desc': 'إدارة الحسابات البنكية والمحافظ الرقمية والعملات الرقمية والنقد.',
+      'tip_actual_balance_after_commitments': 'الرصيد الفعلي بعد الالتزامات ({commitments}): {actual}',
+      'tip_balance_deficit': 'عجز: الالتزامات تتجاوز الرصيد بمقدار {deficit}',
+      'tip_no_pending_commitments': 'لا توجد التزامات معلقة: كامل الرصيد متاح',
       'total_net_worth': 'إجمالي السيولة وصافي القيمة',
       'no_accounts_configured': 'لم يتم إعداد أي حسابات حتى الآن.',
       'add_bank_wallet_cash': 'إضافة بنك أو محفظة أو نقد',
@@ -4108,6 +4114,9 @@ class AppLocalizations {
       // Accounts & Balances
       'accounts_balances': 'اکاؤنٹس اور بیلنس',
       'accounts_balances_desc': 'بینک اکاؤنٹس، ای بٹوے، کرپٹو اور کیش کا انتظام کریں۔',
+      'tip_actual_balance_after_commitments': 'واجبات کے بعد اصل دستیاب رقم ({commitments}): {actual}',
+      'tip_balance_deficit': 'خسارہ: واجبات بیلنس سے {deficit} زیادہ ہیں',
+      'tip_no_pending_commitments': 'کوئی زیرِ التواء واجبات نہیں: مکمل رقم دستیاب ہے',
       'total_net_worth': 'کل خالص مالیت اور نقدی',
       'no_accounts_configured': 'ابھی تک کوئی اکاؤنٹ شامل نہیں کیا گیا۔',
       'add_bank_wallet_cash': 'بینک، بٹوا یا کیش شامل کریں',

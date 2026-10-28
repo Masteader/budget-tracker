@@ -11,6 +11,11 @@ import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
+import 'package:provider/provider.dart';
+import '../../models/installment_plan.dart';
+import '../../models/recurring_bill.dart';
+import '../../providers/installment_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 
 /// Dashboard summary card displaying total liquidity across all accounts
 /// and horizontal account pills. Tapping navigates to AccountsOverviewScreen.
@@ -21,8 +26,18 @@ class AccountsSummaryCard extends StatefulWidget {
   /// dashboard passes 2: with one account it repeats the budget; the Tools
   /// screen always shows it).
   final int minAccounts;
+  final VoidCallback? onCommitmentsTap;
+  final RecurringBillsSummary? billsSummaryOverride;
+  final List<InstallmentPlan>? installmentPlansOverride;
 
-  const AccountsSummaryCard({super.key, required this.householdId, this.minAccounts = 1});
+  const AccountsSummaryCard({
+    super.key,
+    required this.householdId,
+    this.minAccounts = 1,
+    this.onCommitmentsTap,
+    this.billsSummaryOverride,
+    this.installmentPlansOverride,
+  });
 
   @override
   State<AccountsSummaryCard> createState() => _AccountsSummaryCardState();
@@ -97,6 +112,24 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);
 
         final hasDeficit = accounts.any((a) => a.balance < 0);
+        RecurringBillsSummary? billsSummary = widget.billsSummaryOverride;
+        List<InstallmentPlan>? installmentPlans = widget.installmentPlansOverride;
+        if (billsSummary == null) {
+          try {
+            billsSummary = Provider.of<RecurringBillsProvider>(context, listen: true).summary;
+          } catch (_) {}
+        }
+        if (installmentPlans == null) {
+          try {
+            installmentPlans = Provider.of<InstallmentProvider>(context, listen: true).plans;
+          } catch (_) {}
+        }
+        final unpaidBills = (billsSummary?.bills ?? []).where((b) => !b.isPaid).toList();
+        final totalUnpaidBills = unpaidBills.fold<double>(0.0, (acc, b) => acc + b.averageAmount);
+        final activePlans = (installmentPlans ?? []).where((p) => !p.isCompleted).toList();
+        final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
+        final totalCommitments = totalUnpaidBills + totalInstallmentsDues;
+        final actualAvailable = totalLiquidity - totalCommitments;
 
         return ThreeDSurfaceCard(
           borderRadius: 20.0,
@@ -207,6 +240,11 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
                     ),
                   ],
                 ),
+                _buildCommitmentsTip(
+                  context,
+                  totalCommitments: totalCommitments,
+                  actualAvailable: actualAvailable,
+                ),
                 const SizedBox(height: 14),
 
                 // Horizontal Account Pill Strip
@@ -270,5 +308,103 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
           ),
         ),
       );
+  }
+
+  Widget _buildCommitmentsTip(
+    BuildContext context, {
+    required double totalCommitments,
+    required double actualAvailable,
+  }) {
+    final isDark = context.isDark;
+    if (totalCommitments <= 0) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8.0),
+        child: Row(
+          key: const Key('accounts_no_commitments_tip'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_circle_outline_rounded,
+              size: 13,
+              color: isDark ? VelvetBurgundyColors.roseGoldGlow : context.accentText,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              context.tr('tip_no_pending_commitments'),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: context.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isDeficit = actualAvailable < 0;
+    final Color badgeBg = isDeficit
+        ? Colors.redAccent.withValues(alpha: 0.12)
+        : (isDark ? VelvetBurgundyColors.surfaceDark : context.chipBg);
+    final Color borderColor = isDeficit
+        ? Colors.redAccent.withValues(alpha: 0.35)
+        : context.borderColor;
+    final Color iconColor = isDeficit ? Colors.redAccent : context.accentText;
+
+    final String tipText = isDeficit
+        ? context.trArgs('tip_balance_deficit', {
+            'deficit': context.sar(-actualAvailable),
+            'commitments': context.sar(totalCommitments),
+          })
+        : context.trArgs('tip_actual_balance_after_commitments', {
+            'actual': context.sar(actualAvailable),
+            'commitments': context.sar(totalCommitments),
+          });
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: InkWell(
+        key: const Key('accounts_commitments_tip'),
+        onTap: widget.onCommitmentsTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor, width: 1.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isDeficit ? Icons.warning_amber_rounded : Icons.shield_outlined,
+                size: 14,
+                color: iconColor,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  tipText,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: isDeficit ? Colors.redAccent : context.textPrimary,
+                  ),
+                ),
+              ),
+              if (widget.onCommitmentsTap != null) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 10,
+                  color: isDeficit ? Colors.redAccent : context.textSecondary,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

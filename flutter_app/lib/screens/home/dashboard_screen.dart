@@ -597,7 +597,11 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
                               const SizedBox(height: 12),
                               // Balances only once there are 2+ accounts; the
                               // Tools screen always has them.
-                              AccountsSummaryCard(householdId: hid, minAccounts: 2),
+                              AccountsSummaryCard(
+                                householdId: hid,
+                                minAccounts: 2,
+                                onCommitmentsTap: _scrollToCommitments,
+                              ),
                               const SizedBox(height: 12),
                               HouseholdBalancesSection(
                                 key: _balancesKey,
