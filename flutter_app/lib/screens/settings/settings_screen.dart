@@ -1259,54 +1259,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                ],
-                if (_householdId != null) ...[
-                  // The household ID is for support only: folded under "Advanced".
-                  Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      key: const ValueKey('settings_advanced'),
-                      tilePadding: EdgeInsets.zero,
-                      minTileHeight: 48,
-                      shape: const Border(),
-                      collapsedShape: const Border(),
-                      title: Text(
-                        context.tr('set_advanced'),
-                        style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                      children: [
-                      Row(
-                        children: [
-                          Icon(Icons.home_outlined, color: context.textSecondary, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              context.trArgs('set_household_short_id', {'id': _householdId!.substring(0, 8)}),
-                              style: TextStyle(color: context.textSecondary, fontSize: 12, fontFamily: 'monospace'),
-                            ),
-                          ),
-                          InkWell(
-                            onTap: () {
-                              Clipboard.setData(ClipboardData(text: _householdId!));
-                              AppSnackBar.showSuccess(
-                                context,
-                                context.tr('set_household_id_copied_clipboard'),
-                                title: context.tr('set_copied'),
-                                icon: Icons.copy_rounded,
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              child: Text(context.tr('set_copy'), style: TextStyle(color: context.successText, fontSize: 12, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                 ],
                 SizedBox(
                   width: double.infinity,
