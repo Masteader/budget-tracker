@@ -20,7 +20,6 @@ import 'package:provider/provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
-import '../../widgets/settings/income_settings_card.dart';
 import '../../widgets/settings/household_management_card.dart';
 import '../../widgets/settings/settings_section.dart';
 import '../../widgets/settings/household_roles_card.dart';
@@ -28,7 +27,6 @@ import '../../widgets/settings/household_type_chooser.dart';
 import '../../widgets/settings/add_household_member_sheet.dart';
 import '../../widgets/settings/payday_settings_card.dart';
 import '../../widgets/settings/reminder_settings_card.dart';
-import '../../widgets/settings/rollover_settings_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/settings/household_switch_sheet.dart';
@@ -67,9 +65,6 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// Bumped when the Nafaqah provider changes so the family card reloads.
   int _nafaqahRevision = 0;
-  double _monthlyIncome = 0.0;
-  String _rolloverRule = 'send_to_savings';
-  double _accumulatedSavings = 0.0;
 
   @override
   void initState() {
@@ -190,42 +185,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         setState(() => _paydayDay = payday);
       }
 
-      // Load configured monthly income
-      double income = 0.0;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        income = prefs.getDouble('household_monthly_income') ?? 0.0;
-        final serverIncome = await ApiService.instance.getHouseholdIncome(hid);
-        if (serverIncome > 0) {
-          income = serverIncome;
-          await prefs.setDouble('household_monthly_income', income);
-        }
-      } catch (_) {}
-      if (mounted) {
-        setState(() => _monthlyIncome = income);
-      }
-
-      // Load configured budget rollover rule & savings surplus
-      String rollover = 'send_to_savings';
-      double savingsSurplus = 0.0;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        rollover = prefs.getString('household_rollover_rule') ?? 'send_to_savings';
-        final serverRule = await ApiService.instance.getHouseholdRolloverRule(hid);
-        if (serverRule.isNotEmpty) {
-          rollover = serverRule;
-          await prefs.setString('household_rollover_rule', rollover);
-        }
-        final summary = await ApiService.instance.getHouseholdSavingsSummary(hid);
-        savingsSurplus = (summary['accumulated_savings'] as num?)?.toDouble() ?? 0.0;
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _rolloverRule = rollover;
-          _accumulatedSavings = savingsSurplus;
-        });
-      }
-
       // Load household dependents
       try {
         final deps = await ApiService.instance.getDependents(hid);
@@ -281,55 +240,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  Future<bool> _saveIncome(double newIncome) async {
-    try {
-      await saveHouseholdSetting<double>(
-        householdId: _householdId,
-        value: newIncome,
-        saveRemote: (hid, income) => _confirmAndMirror(ApiService.instance.setHouseholdIncome(hid, income), hid, {'monthly_income': income}),
-        applyLocal: (income) async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setDouble('household_monthly_income', income);
-        },
-      );
-      if (mounted) setState(() => _monthlyIncome = newIncome);
-      return true;
-    } catch (e) {
-      if (mounted) {
-        AppSnackBar.showError(
-          context,
-          context.trArgs('set_failed_save_income', {'error': _settingSaveError(e)}),
-          title: context.tr('set_income_error'),
-        );
-      }
-      return false;
-    }
-  }
 
-  Future<bool> _saveRolloverRule(String newRule) async {
-    try {
-      await saveHouseholdSetting<String>(
-        householdId: _householdId,
-        value: newRule,
-        saveRemote: (hid, rule) => _confirmAndMirror(ApiService.instance.setHouseholdRolloverRule(hid, rule), hid, {'rollover_rule': rule}),
-        applyLocal: (rule) async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('household_rollover_rule', rule);
-        },
-      );
-      if (mounted) setState(() => _rolloverRule = newRule);
-      return true;
-    } catch (e) {
-      if (mounted) {
-        AppSnackBar.showError(
-          context,
-          context.trArgs('set_failed_save_rollover_policy', {'error': _settingSaveError(e)}),
-          title: context.tr('set_rollover_error'),
-        );
-      }
-      return false;
-    }
-  }
 
   Future<void> _requestCameraPermission() async {
     final status = await Permission.camera.request();
@@ -997,7 +908,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
 
-          // ── SALARY & BUDGET CYCLE (payday, income, rollover) ──
+          // ── SALARY & BUDGET CYCLE (payday) ──
           if (_householdId != null)
             SettingsSection(
               title: context.tr('set_salary_section'),
@@ -1007,17 +918,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                 PaydaySettingsCard(
                   initialPayday: _paydayDay,
                   onSavePayday: _savePayday,
-                ),
-                const SizedBox(height: 16),
-                IncomeSettingsCard(
-                  initialIncome: _monthlyIncome,
-                  onSaveIncome: _saveIncome,
-                ),
-                const SizedBox(height: 16),
-                RolloverSettingsCard(
-                  initialRule: _rolloverRule,
-                  accumulatedSavings: _accumulatedSavings,
-                  onSaveRule: _saveRolloverRule,
                 ),
               ],
             ),

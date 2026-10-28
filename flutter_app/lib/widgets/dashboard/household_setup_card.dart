@@ -14,7 +14,6 @@ import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../accounts/record_income_sheet.dart';
 import '../settings/household_roles_card.dart';
-import '../settings/income_settings_card.dart';
 import '../settings/payday_settings_card.dart';
 import '../settings/role_invite_dialog.dart';
 
@@ -425,31 +424,7 @@ class HouseholdSetupCard extends StatelessWidget {
     }
   }
 
-  Future<bool> _defaultSaveIncome(BuildContext context, double income) async {
-    try {
-      await saveHouseholdSetting<double>(
-        householdId: householdId,
-        value: income,
-        saveRemote: (hid, v) => ApiService.instance.setHouseholdIncome(hid, v),
-        applyLocal: (v) async {
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setDouble('household_monthly_income', v);
-          } catch (_) {}
-        },
-      );
-      return true;
-    } catch (e) {
-      if (context.mounted) {
-        AppSnackBar.showError(
-          context,
-          context.trArgs('set_failed_save_income', {'error': _saveError(context, e)}),
-          title: context.tr('set_income_error'),
-        );
-      }
-      return false;
-    }
-  }
+
 
   String _saveError(BuildContext context, Object e) =>
       e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : e.toString();

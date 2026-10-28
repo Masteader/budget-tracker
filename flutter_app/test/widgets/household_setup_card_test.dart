@@ -6,7 +6,6 @@ import 'package:budget_tracker/models/household_membership.dart';
 import 'package:budget_tracker/models/household_setup.dart';
 import 'package:budget_tracker/widgets/accounts/record_income_sheet.dart';
 import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
-import 'package:budget_tracker/widgets/settings/income_settings_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

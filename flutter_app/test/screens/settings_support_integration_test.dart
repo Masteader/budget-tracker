@@ -44,8 +44,11 @@ void main() {
       'dedup_policy',
       'expense_ingestion_channels',
       'duplicate_resolution',
+      'IncomeSettingsCard',
+      'RolloverSettingsCard',
     ]) {
       expect(src, isNot(contains(dead)), reason: dead);
     }
   });
 }
+
