@@ -725,12 +725,12 @@ class _SettingsScreenState extends State<SettingsScreen>
               onCreateHousehold: _showCreateHouseholdDialog,
               onAddDependent: _showAddDependentDialog,
               onRemoveDependent: _removeDependent,
-            ),
-            const SizedBox(height: 16),
-            HouseholdRolesCard(
-              householdId: _householdId!,
-              onRolesChanged: _onRolesChanged,
-              onNafaqahProviderChanged: _onNafaqahProviderChanged,
+              rolesSection: HouseholdRolesCard(
+                householdId: _householdId!,
+                isEmbedded: true,
+                onRolesChanged: _onRolesChanged,
+                onNafaqahProviderChanged: _onNafaqahProviderChanged,
+              ),
             ),
             const SizedBox(height: 16),
             Container(

@@ -37,6 +37,7 @@ class HouseholdRolesCard extends StatefulWidget {
   final RosterAction? promote;
   final RosterAction? revoke;
   final RosterAction? transferPrimary;
+  final bool isEmbedded;
   final NafaqahProviderSetter? setNafaqahProvider;
   final HouseholdTypeSetter? setHouseholdType;
   final FinancialRoleSetter? setFinancialRole;
@@ -56,6 +57,7 @@ class HouseholdRolesCard extends StatefulWidget {
   const HouseholdRolesCard({
     super.key,
     required this.householdId,
+    this.isEmbedded = false,
     this.loadRoster,
     this.promote,
     this.revoke,
@@ -646,6 +648,56 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
   @override
   Widget build(BuildContext context) {
     final roster = _roster;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.admin_panel_settings_outlined, color: context.accentText, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('roles_title'),
+                style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: context.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          context.tr('roles_subtitle'),
+          style: TextStyle(color: context.textSecondary, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        if (_loading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          )
+        else if (_failed || roster == null)
+          Row(
+            children: [
+              Expanded(
+                child: Text(context.tr('roles_load_failed'), style: TextStyle(color: context.dangerColor, fontSize: 12)),
+              ),
+              TextButton(onPressed: _fetch, child: Text(context.tr('roles_retry'))),
+            ],
+          )
+        else ...[
+          _typeSection(roster),
+          const SizedBox(height: 10),
+          ...roster.members.map((m) => _memberRow(roster, m)),
+          ...[_providerSection(roster)].nonNulls.expand((section) => [const SizedBox(height: 4), section]),
+        ],
+      ],
+    );
+
+    if (widget.isEmbedded) {
+      return content;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -653,51 +705,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.admin_panel_settings_outlined, color: context.accentText, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  context.tr('roles_title'),
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: context.textPrimary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('roles_subtitle'),
-            style: TextStyle(color: context.textSecondary, fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-            )
-          else if (_failed || roster == null)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(context.tr('roles_load_failed'), style: TextStyle(color: context.dangerColor, fontSize: 12)),
-                ),
-                TextButton(onPressed: _fetch, child: Text(context.tr('roles_retry'))),
-              ],
-            )
-          else ...[
-            _typeSection(roster),
-            const SizedBox(height: 10),
-            ...roster.members.map((m) => _memberRow(roster, m)),
-            ...[_providerSection(roster)].nonNulls.expand((section) => [const SizedBox(height: 4), section]),
-          ],
-        ],
-      ),
+      child: content,
     );
   }
 }

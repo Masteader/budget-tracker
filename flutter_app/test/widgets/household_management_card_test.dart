@@ -147,6 +147,41 @@ void main() {
       await tester.pumpWidget(card('--------'));
       expect(find.byKey(const ValueKey('share_invite_button')), findsNothing);
     });
+
+    testWidgets('consolidates rolesSection and eliminates duplicate static member rows', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: HouseholdManagementCard(
+                householdName: 'Unified Villa',
+                inviteCode: 'UNI001',
+                userRole: 'admin',
+                members: const [
+                  {'email': 'duplicate.owner@example.com', 'role': 'admin'},
+                ],
+                rolesSection: const KeyedSubtree(
+                  key: ValueKey('embedded_roles_hub'),
+                  child: Text('EMBEDDED_ROLES_HUB_CONTENT'),
+                ),
+                onCopyInviteCode: () {},
+                onLeaveHousehold: () {},
+                onSwitchHousehold: () {},
+                onCreateHousehold: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Embedded roles widget is present
+      expect(find.byKey(const ValueKey('embedded_roles_hub')), findsOneWidget);
+      expect(find.text('EMBEDDED_ROLES_HUB_CONTENT'), findsOneWidget);
+
+      // Duplicate static member row is suppressed
+      expect(find.text('duplicate.owner@example.com'), findsNothing);
+      expect(find.text('HOUSEHOLD & LIVING GROUP MEMBERS'), findsNothing);
+    });
   });
 
   group('UX-10 / UX-15 / UX-19 / UX-24 / UX-29', () {
