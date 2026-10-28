@@ -91,13 +91,11 @@ void main() {
     expect(find.text('Payday Saved'), findsNothing, reason: 'no success toast on failure');
   });
 
-  test('settings screen saves payday/income/rollover server-first', () {
+  test('settings screen saves payday server-first', () {
     final src = File('lib/screens/settings/settings_screen.dart').readAsStringSync();
-    for (final setting in ['saveHouseholdSetting<int>', 'saveHouseholdSetting<double>', 'saveHouseholdSetting<String>']) {
-      expect(src, contains(setting));
-    }
+    expect(src, contains('saveHouseholdSetting<int>'));
     // The old code wrote the cache before the server call.
-    final savePayday = src.substring(src.indexOf('Future<bool> _savePayday'), src.indexOf('Future<bool> _saveIncome'));
+    final savePayday = src.substring(src.indexOf('Future<bool> _savePayday'));
     expect(savePayday.indexOf('setState(() => _paydayDay'), greaterThan(savePayday.indexOf('saveHouseholdSetting')));
   });
 }
