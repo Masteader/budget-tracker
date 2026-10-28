@@ -1223,6 +1223,9 @@ def save_sub_allocations(
     
     month_start = f"{target_key}-01"
     
+    incoming_sinking = sub_allocations.get("_sinking_fund") if isinstance(sub_allocations, dict) else None
+    incoming_meta = {"_sinking_fund": incoming_sinking} if isinstance(incoming_sinking, dict) else {}
+
     if matching:
         budget_id = matching[0]["id"]
         stored = matching[0].get("sub_allocations")
@@ -1232,7 +1235,7 @@ def save_sub_allocations(
         # Update allocated_amount and sub_allocations (note: remaining_amount is GENERATED ALWAYS)
         update_data = {
             "allocated_amount": total_allocated,
-            "sub_allocations": {**clean_sub_allocations, **metadata},
+            "sub_allocations": {**clean_sub_allocations, **metadata, **incoming_meta},
             "cycle_key": target_key,
             "is_active": True,
         }
@@ -1242,7 +1245,7 @@ def save_sub_allocations(
             "household_id": household_id,
             "category_code": category_code,
             "allocated_amount": total_allocated,
-            "sub_allocations": clean_sub_allocations,
+            "sub_allocations": {**clean_sub_allocations, **incoming_meta},
             "spent_amount": 0.0,
             "month": month_start,
             "cycle_key": target_key,

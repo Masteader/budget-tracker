@@ -766,41 +766,94 @@ def ensure_household_cycle_budgets(
     if not missing_prev_rows:
         return existing
 
-    # 4. Create new cycle rows with rollover rule
+    # 4. Create new cycle rows with rollover rule and sinking funds
     rollover_rule = get_household_rollover_rule(household_id)
-    if not existing and rollover_rule == "send_to_savings":
-        surplus = round(
-            sum(
-                max(0.0, float(prev.get("allocated_amount") or 0.0) - float(prev.get("spent_amount") or 0.0))
-                for prev in latest_rows
-            ),
-            2,
-        )
-        if surplus > 0:
-            add_household_savings_surplus(household_id, surplus, cycle_key)
-            logger.info("Auto-swept cycle surplus of SAR %.2f to savings for household=%s cycle=%s", surplus, household_id, cycle_key)
 
+    total_surplus = 0.0
     new_rows = []
+
     for prev in missing_prev_rows:
         prev_allocated = float(prev.get("allocated_amount") or 0.0)
         prev_spent = float(prev.get("spent_amount") or 0.0)
-        if rollover_rule == "rollover_to_categories":
-            delta = round(prev_allocated - prev_spent, 2)
+        sub_allocs = prev.get("sub_allocations") or {}
+        sinking_cfg = sub_allocs.get("_sinking_fund") if isinstance(sub_allocs, dict) else {}
+        if not isinstance(sinking_cfg, dict):
+            sinking_cfg = {}
+
+        numeric_subs = {
+            k: float(v) for k, v in sub_allocs.items()
+            if not k.startswith("_") and isinstance(v, (int, float))
+        }
+
+        delta = 0.0
+        if sinking_cfg:
+            if numeric_subs:
+                new_sub_numeric = {}
+                for sc, prev_sub_alloc in numeric_subs.items():
+                    sc_cfg = sinking_cfg.get(sc) if isinstance(sinking_cfg, dict) else None
+                    accumulate = bool(sc_cfg.get("accumulate")) if isinstance(sc_cfg, dict) else False
+                    base_amt = float(sc_cfg.get("base_amount", prev_sub_alloc)) if isinstance(sc_cfg, dict) else prev_sub_alloc
+
+                    ratio = (prev_sub_alloc / prev_allocated) if prev_allocated > 0 else 0.0
+                    sub_spent = round(prev_spent * ratio, 2)
+                    unspent = max(0.0, prev_sub_alloc - sub_spent)
+
+                    if accumulate:
+                        new_sub_alloc = round(base_amt + unspent, 2)
+                    else:
+                        new_sub_alloc = round(base_amt, 2)
+                        total_surplus += unspent
+
+                    new_sub_numeric[sc] = new_sub_alloc
+
+                new_allocated = round(sum(new_sub_numeric.values()), 2)
+                new_sub_allocations = {**sub_allocs, **new_sub_numeric}
+                delta = round(max(0.0, new_allocated - sum(
+                    float(sinking_cfg.get(sc, {}).get("base_amount", numeric_subs[sc])) if isinstance(sinking_cfg.get(sc), dict) else numeric_subs[sc]
+                    for sc in numeric_subs
+                )), 2)
+            else:
+                parent_cfg = sinking_cfg.get("_parent") or sinking_cfg.get("_self") if isinstance(sinking_cfg, dict) else None
+                accumulate = bool(parent_cfg.get("accumulate")) if isinstance(parent_cfg, dict) else (rollover_rule == "rollover_to_categories")
+                base_amt = float(parent_cfg.get("base_amount", prev_allocated)) if isinstance(parent_cfg, dict) else prev_allocated
+
+                unspent = max(0.0, prev_allocated - prev_spent)
+                if accumulate:
+                    new_allocated = round(base_amt + unspent, 2)
+                    delta = round(unspent, 2)
+                else:
+                    new_allocated = round(base_amt, 2)
+                    delta = 0.0
+                    total_surplus += unspent
+
+                new_sub_allocations = sub_allocs
         else:
-            delta = 0.0
+            # Standard rollover without sinking fund
+            new_allocated = prev_allocated
+            new_sub_allocations = sub_allocs
+            if rollover_rule == "rollover_to_categories":
+                delta = round(prev_allocated - prev_spent, 2)
+            else:
+                delta = 0.0
+                total_surplus += max(0.0, prev_allocated - prev_spent)
 
         new_rows.append({
             "household_id": household_id,
             "month": cycle_month_str,
             "cycle_key": cycle_key,
             "category_code": prev["category_code"],
-            "allocated_amount": prev_allocated,
-            "sub_allocations": prev.get("sub_allocations") or {},
+            "allocated_amount": new_allocated,
+            "sub_allocations": new_sub_allocations,
             "account_id": prev.get("account_id"),
             "spent_amount": 0.0,
             "previous_cycle_delta": delta,
             "is_active": True,
         })
+
+    if not existing and rollover_rule == "send_to_savings" and total_surplus > 0:
+        total_surplus = round(total_surplus, 2)
+        add_household_savings_surplus(household_id, total_surplus, cycle_key)
+        logger.info("Auto-swept cycle surplus of SAR %.2f to savings for household=%s cycle=%s", total_surplus, household_id, cycle_key)
 
     if new_rows:
         inserted = client.table("budgets").insert(new_rows).execute().data or []
