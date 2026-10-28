@@ -130,25 +130,20 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     double income = 0.0;
     try {
-      final hh = await supabase
-          .from('households')
-          .select('monthly_income')
-          .eq('id', hid)
-          .maybeSingle();
-      if (hh != null && hh['monthly_income'] != null) {
-        income = (hh['monthly_income'] as num).toDouble();
-      }
+      final records = await AccountService.instance.getCycleIncome(hid, _currentCycleKey);
+      income = records.fold<double>(0.0, (s, r) => s + r.netAmount);
     } catch (_) {}
-    if (income <= 0) {
-      try {
-        income = await ApiService.instance.getHouseholdIncome(hid);
-      } catch (_) {}
-    }
 
     List<Account> accounts = [];
     try {
       accounts = await AccountService.instance.getAccounts(hid);
     } catch (_) {}
+
+    if (income <= 0 && accounts.isNotEmpty) {
+      income = accounts
+          .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+          .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
+    }
 
     return _BudgetStaticData(
       householdId: hid,

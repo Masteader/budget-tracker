@@ -197,7 +197,18 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     _fetchCycles(hid);
     _fetchSetup(hid);
     _fetchAccountsCount(hid);
+    _fetchCycleIncome(hid, _currentCycleKey);
     return hid;
+  }
+
+  Future<void> _fetchCycleIncome(String hid, String cycleKey) async {
+    try {
+      final records = await AccountService.instance.getCycleIncome(hid, cycleKey);
+      final total = records.fold<double>(0.0, (sum, r) => sum + r.netAmount);
+      if (mounted) {
+        setState(() => _cycleIncome = total > 0 ? total : null);
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchAccountsCount(String hid) async {
@@ -308,6 +319,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   final GlobalKey _commitmentsKey = GlobalKey();
   int? _accountsCount;
   double? _operatingCash;
+  double? _cycleIncome;
 
   /// First-run checklist data (UX-02): payday, income, members. The income is
   /// also the hero's base (UX-07); null until loaded.
@@ -378,7 +390,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
       BudgetHeroCard(
         budgets: budgets,
         cycle: _selectedCycle,
-        monthlyIncome: setup?.monthlyIncome,
+        monthlyIncome: _cycleIncome ?? setup?.monthlyIncome,
         operatingCash: _operatingCash,
         dueLines: _dueLines(),
         onDueTap: _scrollToBalances,

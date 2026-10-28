@@ -7,10 +7,12 @@ import '../../models/household_membership.dart';
 import '../../models/household_setup.dart';
 import '../../models/money.dart';
 import '../../services/api_service.dart';
+import '../../services/account_service.dart';
 import '../../services/household_setting_saver.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import '../accounts/record_income_sheet.dart';
 import '../settings/household_roles_card.dart';
 import '../settings/income_settings_card.dart';
 import '../settings/payday_settings_card.dart';
@@ -62,7 +64,13 @@ class HouseholdSetupPrefs {
 
     final results = await Future.wait<Object?>([
       attempt(() => service.getHouseholdPayday(householdId)),
-      attempt(() => service.getHouseholdIncome(householdId)),
+      attempt(() async {
+        final currentKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
+        final records = await AccountService.instance.getCycleIncome(householdId, currentKey);
+        final sum = records.fold<double>(0.0, (s, r) => s + r.netAmount);
+        if (sum > 0) return sum;
+        return await service.getHouseholdIncome(householdId);
+      }),
       attempt(() => service.getHouseholdMembers(householdId)),
     ]);
     var confirmed = false;
@@ -339,17 +347,11 @@ class HouseholdSetupCard extends StatelessWidget {
           ),
         );
       case SetupStep.income:
-        await _sheet(
+        await RecordIncomeSheet.show(
           context,
-          IncomeSettingsCard(
-            initialIncome: data.monthlyIncome ?? 0,
-            onSaveIncome: (income) async {
-              final ok = await (saveIncome ?? (v) => _defaultSaveIncome(context, v))(income);
-              if (ok) onChanged();
-              return ok;
-            },
-          ),
+          householdId: householdId,
         );
+        onChanged();
       case SetupStep.budgets:
         await _sheet(
           context,

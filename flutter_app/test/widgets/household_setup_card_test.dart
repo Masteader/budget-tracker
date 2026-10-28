@@ -4,6 +4,7 @@
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/household_membership.dart';
 import 'package:budget_tracker/models/household_setup.dart';
+import 'package:budget_tracker/widgets/accounts/record_income_sheet.dart';
 import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
 import 'package:budget_tracker/widgets/settings/income_settings_card.dart';
 import 'package:flutter/material.dart';
@@ -122,7 +123,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Monthly income'));
     await tester.pumpAndSettle();
-    expect(find.byType(IncomeSettingsCard), findsOneWidget);
+    expect(find.byType(RecordIncomeSheet), findsOneWidget);
   });
 
   testWidgets('starter budgets: amounts from the income, created through the API seam', (tester) async {
