@@ -88,3 +88,16 @@ def test_clients_cannot_write_metadata_keys(api, fake_supabase, w):
     assert r.status_code == 200, r.text
     assert r.json()["allocated_amount"] == 300.0
     assert isinstance(_subs(fake_supabase)["_recurring_config"], dict)
+
+
+def test_breakdown_succeeds_with_recurring_config_metadata(api, fake_supabase, w):
+    # Verify that get_budget_breakdown ignores _recurring_config and doesn't throw TypeError (float of dict)
+    r = api.get(f"/budgets/breakdown?household_id={w.hid}", headers=w.hdr("ahmed"))
+    assert r.status_code == 200, r.text
+    data = r.json()
+    cats = data.get("categories", [])
+    util_cat = next((c for c in cats if c.get("category_code") == "OPEX-UTILITIES"), None)
+    assert util_cat is not None
+    sub_codes = [s.get("sub_code") for s in util_cat.get("sub_categories", [])]
+    assert "_recurring_config" not in sub_codes
+    assert "electricity_sec" in sub_codes

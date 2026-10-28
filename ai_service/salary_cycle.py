@@ -711,9 +711,7 @@ def get_cycle_breakdown(household_id: str, cycle_key: Optional[str] = None) -> D
         sub_items = []
         predefined = sub_defs_by_parent.get(c_code, [])
         used_sub_codes = set()
-        sub_allocs = b.get("sub_allocations") or {} if b else {}
-        if not isinstance(sub_allocs, dict):
-            sub_allocs = {}
+        sub_allocs = numeric_sub_allocations(b.get("sub_allocations")) if b else {}
 
         for pre in predefined:
             sc_code = pre["sub_code"]

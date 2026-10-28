@@ -418,23 +418,33 @@ class Budget {
     this.accountId,
   });
 
-  factory Budget.fromMap(Map<String, dynamic> map) => Budget(
-        id: map['id'] as String,
-        householdId: map['household_id'] as String,
-        month: map['month'] as String,
-        categoryCode: map['category_code'] as String,
-        allocatedAmount: (map['allocated_amount'] as num).toDouble(),
-        spentAmount: (map['spent_amount'] as num).toDouble(),
-        remainingAmount: (map['remaining_amount'] as num).toDouble(),
-        cycleKey: map['cycle_key'] as String?,
-        previousCycleDelta: (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
-        isActive: map['is_active'] as bool? ?? true,
-        accountId: map['account_id'] as String?,
-        subAllocations: (map['sub_allocations'] as Map<String, dynamic>?)?.map(
-              (k, v) => MapEntry(k, (v as num).toDouble()),
-            ) ??
-            const {},
-      );
+  factory Budget.fromMap(Map<String, dynamic> map) {
+    final rawSubAllocs = map['sub_allocations'];
+    final Map<String, double> subAllocations = {};
+    if (rawSubAllocs is Map) {
+      for (final entry in rawSubAllocs.entries) {
+        final k = entry.key.toString();
+        final v = entry.value;
+        if (!k.startsWith('_') && v is num) {
+          subAllocations[k] = v.toDouble();
+        }
+      }
+    }
+    return Budget(
+      id: map['id']?.toString() ?? '',
+      householdId: map['household_id']?.toString() ?? '',
+      month: map['month']?.toString() ?? '',
+      categoryCode: map['category_code']?.toString() ?? '',
+      allocatedAmount: (map['allocated_amount'] as num?)?.toDouble() ?? 0.0,
+      spentAmount: (map['spent_amount'] as num?)?.toDouble() ?? 0.0,
+      remainingAmount: (map['remaining_amount'] as num?)?.toDouble() ?? 0.0,
+      cycleKey: map['cycle_key'] as String?,
+      previousCycleDelta: (map['previous_cycle_delta'] as num?)?.toDouble() ?? 0.0,
+      isActive: map['is_active'] as bool? ?? true,
+      accountId: map['account_id'] as String?,
+      subAllocations: subAllocations,
+    );
+  }
 
   Budget copyWith({
     String? id,

@@ -1203,17 +1203,20 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 .stream(primaryKey: ['id'])
                 .eq('household_id', staticData.householdId),
             builder: (ctx, budgetSnap) {
-              final rawBudgets = (budgetSnap.data ?? [])
-                  .map(Budget.fromMap)
-                  .where((b) {
-                    if (!b.isActive) return false;
-                    final key = _currentCycleKey;
-                    if (b.cycleKey != null && b.cycleKey!.isNotEmpty) {
-                      return b.cycleKey == key;
-                    }
-                    return b.month.startsWith(key) || b.month == _currentMonthStr;
-                  })
-                  .toList();
+              final rawBudgets = <Budget>[];
+              for (final row in (budgetSnap.data ?? [])) {
+                try {
+                  final b = Budget.fromMap(row);
+                  if (!b.isActive) continue;
+                  final key = _currentCycleKey;
+                  final matches = (b.cycleKey != null && b.cycleKey!.isNotEmpty)
+                      ? b.cycleKey == key
+                      : (b.month.startsWith(key) || b.month == _currentMonthStr);
+                  if (matches) rawBudgets.add(b);
+                } catch (e) {
+                  debugPrint('[BudgetManagementScreen] Failed to parse budget row: $e');
+                }
+              }
 
               final txProvider = ctx.watch<TransactionProvider>();
               final (start, end) = _selectedCycle != null

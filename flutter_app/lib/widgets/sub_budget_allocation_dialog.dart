@@ -224,9 +224,13 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
         }
         final bData = await query.maybeSingle();
         if (bData != null && bData['sub_allocations'] is Map) {
-          final dbAllocs = (bData['sub_allocations'] as Map<String, dynamic>).map(
-            (k, v) => MapEntry(k, (v as num).toDouble()),
-          );
+          final rawMap = bData['sub_allocations'] as Map<String, dynamic>;
+          final Map<String, double> dbAllocs = {};
+          for (final entry in rawMap.entries) {
+            if (!entry.key.startsWith('_') && entry.value is num) {
+              dbAllocs[entry.key] = (entry.value as num).toDouble();
+            }
+          }
           existingAllocs = {...existingAllocs, ...dbAllocs};
         }
       } catch (_) {}

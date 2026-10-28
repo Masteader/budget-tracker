@@ -276,7 +276,17 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
   /// The selected cycle's active budgets from the budgets stream,
   /// reconciled with real transactions from [TransactionProvider].
   List<Budget> _cycleBudgets(List<Map<String, dynamic>> rows, [TransactionProvider? txProvider]) {
-    final list = rows.map(Budget.fromMap).where((b) => b.isActive && _matchesSelectedCycle(b)).toList();
+    final list = <Budget>[];
+    for (final r in rows) {
+      try {
+        final b = Budget.fromMap(r);
+        if (b.isActive && _matchesSelectedCycle(b)) {
+          list.add(b);
+        }
+      } catch (e, st) {
+        debugPrint('[DashboardScreen] Failed to parse budget row: $e\n$st');
+      }
+    }
     if (txProvider == null || txProvider.isLoading) return list;
     final (start, end) = _cycleDates();
     return list.map((b) {

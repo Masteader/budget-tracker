@@ -123,8 +123,14 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         }
         final bData = await query.maybeSingle();
         if (bData != null && bData['sub_allocations'] is Map) {
-          final map = bData['sub_allocations'] as Map<String, dynamic>;
-          dbSubAllocs = map.map((k, v) => MapEntry(k, (v as num).toDouble()));
+          final rawMap = bData['sub_allocations'] as Map<String, dynamic>;
+          final Map<String, double> dbSubAllocsMap = {};
+          for (final entry in rawMap.entries) {
+            if (!entry.key.startsWith('_') && entry.value is num) {
+              dbSubAllocsMap[entry.key] = (entry.value as num).toDouble();
+            }
+          }
+          dbSubAllocs = dbSubAllocsMap;
         }
       } catch (_) {}
 
