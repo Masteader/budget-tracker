@@ -130,7 +130,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ dict, lang }) => {
             <p className="text-xs text-muted max-w-xl leading-relaxed">
               {lang === 'ar'
                 ? 'مخصص شهري خالص للزوجة يخصم منه ما تشتريه لنفسها (أحكام النفقة الشرعية)، ولا يعتبر ديناً ولا تشترك في مصاريف البيت المشتركة.'
-                : "A protected monthly personal allowance for the wife. Personal expenses are deducted from this allowance according to Islamic Nafaqah principles."}
+                : "A protected monthly personal allowance for the wife. Personal expenses are deducted from this allowance according to family expense rules."}
             </p>
           </div>
 

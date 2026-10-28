@@ -36,7 +36,7 @@ Android / iOS Phone                 Python AI Service              Supabase
 - 🎙️ **Voice Entry**: hands-free logging with item and merchant extraction.
 - 📅 **Salary Cycles & Recurring Bills**: cycles follow the household payday
   (`households.payday_day`, default 27th, Asia/Riyadh dates), bill reserves and BNPL installments.
-- 👪 **Family Nafaqah & Roommate Settlements**: no spousal percentage splits, wife reimbursement
+- 👪 **Family & Wife Expenses / Roommate Settlements**: no spousal percentage splits, wife reimbursement
   ledger and personal allowance; multi-roommate debt simplification.
 - 🛡️ **Admin / co-admin permissions**: the database and the API enforce who may move shared money
   and edit other members' transactions.

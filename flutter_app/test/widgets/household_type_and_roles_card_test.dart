@@ -63,7 +63,7 @@ void main() {
     testWidgets('everyone sees the type; a member has no Change button', (tester) async {
       await tester.pumpWidget(_app(HouseholdRolesCard(householdId: 'hh', loadRoster: (_) async => _family(admin: false))));
       await tester.pumpAndSettle();
-      expect(find.text('Household type: Family (Nafaqah)'), findsOneWidget);
+      expect(find.text('Household type: Family (Wife Expenses)'), findsOneWidget);
       expect(find.byKey(const ValueKey('household_type_change')), findsNothing);
       expect(find.text('Wife / Spouse'), findsOneWidget, reason: "Sara's financial role chip");
     });
@@ -116,7 +116,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('household_type_save')));
       await tester.pumpAndSettle();
       expect(find.text('This family has a wife and Nafaqah records.'), findsOneWidget);
-      expect(find.text('Household type: Family (Nafaqah)'), findsOneWidget);
+      expect(find.text('Household type: Family (Wife Expenses)'), findsOneWidget);
     });
   });
 
@@ -197,7 +197,7 @@ void main() {
     testWidgets('Arabic: the type row is localized and RTL renders', (tester) async {
       await tester.pumpWidget(_app(HouseholdRolesCard(householdId: 'hh', loadRoster: (_) async => _family()), lang: 'ar'));
       await tester.pumpAndSettle();
-      expect(find.text('نوع المنزل: الأسرة (النفقة الشرعية)'), findsOneWidget);
+      expect(find.text('نوع المنزل: الأسرة (مصاريف الزوجة)'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

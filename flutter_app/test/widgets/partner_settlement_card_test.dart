@@ -158,7 +158,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('50/50'), findsNothing);
-      expect(find.text("Household (husband's Nafaqah): SAR 950.00"), findsOneWidget);
+      expect(find.text("Household (husband): SAR 950.00"), findsOneWidget);
     });
   });
 }

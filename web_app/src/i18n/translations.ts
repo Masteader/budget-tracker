@@ -197,7 +197,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     },
     nav: {
       features: 'المزايا',
-      nafaqah: 'النفقة',
+      nafaqah: 'مصاريف الزوجة',
       privacy: 'الخصوصية',
       faq: 'الأسئلة',
       cta: 'الوصول المبكر',
@@ -260,13 +260,13 @@ export const translations: Record<Language, TranslationDictionary> = {
           desc: 'في السكن المشترك كل واحد يسجّل اللي دفعه، والتطبيق يقسم المصاريف المشتركة بالتساوي ويبسّط الديون: مين يحوّل لمين وكم، بأقل عدد تحويلات.',
         },
       ],
-      nafaqahLink: 'شوف كيف تنحسب النفقة',
+      nafaqahLink: 'شوف كيف تنحسب مصاريف الزوجة',
     },
     nafaqah: {
       badge: 'وضع الأسرة',
-      title: 'كيف تنحسب النفقة؟',
+      title: 'كيف تنحسب مصاريف الزوجة؟',
       intro:
-        'في وضع الأسرة يمشي التطبيق على أن النفقة على الزوج: السكن والأكل واحتياجات البيت مسؤوليته. ما يقسم التطبيق أي مصروف بين الزوجين بالنسبة، وكل مصروف ينحسب حسب مين دفع ولمين:',
+        'في وضع الأسرة يمشي التطبيق على أن مصاريف البيت على الزوج: السكن والأكل واحتياجات البيت مسؤوليته. ما يقسم التطبيق أي مصروف بين الزوجين بالنسبة، وكل مصروف ينحسب حسب مين دفع ولمين:',
       cases: [
         {
           who: 'الزوج دفع لشي للبيت أو للعيال',
@@ -439,7 +439,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     },
     nav: {
       features: 'Features',
-      nafaqah: 'Nafaqah',
+      nafaqah: 'Wife Expenses',
       privacy: 'Privacy',
       faq: 'FAQ',
       cta: 'Early access',
@@ -448,9 +448,9 @@ export const translations: Record<Language, TranslationDictionary> = {
       badge: 'Mobile app · Early access open',
       title: 'Know what’s left until payday',
       subtitle:
-        'Your household budget follows your salary cycle, from one payday to the next. Log expenses by voice or a receipt photo, and keep Nafaqah between spouses or a shared flat’s split clear.',
+        'Your household budget follows your salary cycle, from one payday to the next. Log expenses by voice or a receipt photo, and keep wife expenses between spouses or a shared flat’s split clear.',
       ctaPrimary: 'Join early access',
-      ctaSecondary: 'How Nafaqah works',
+      ctaSecondary: 'How wife expenses work',
       note: 'The app speaks Arabic, English and Urdu.',
     },
     demo: {
@@ -490,8 +490,8 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           icon: 'scale',
-          title: 'Nafaqah between spouses, made clear',
-          desc: 'Nafaqah is the husband’s duty. What the wife pays for the home from her own money is recorded as his debt to her, and her personal purchases come out of her personal allowance. Nothing is split between spouses by percentage.',
+          title: 'Wife expenses between spouses, made clear',
+          desc: 'Household maintenance is the husband’s duty. What the wife pays for the home from her own money is recorded as his debt to her, and her personal purchases come out of her personal allowance. Nothing is split between spouses by percentage.',
         },
         {
           icon: 'users',
@@ -499,13 +499,13 @@ export const translations: Record<Language, TranslationDictionary> = {
           desc: 'In a shared flat everyone logs what they paid. The app splits shared costs equally and simplifies the debts: who pays whom and how much, in the fewest transfers.',
         },
       ],
-      nafaqahLink: 'See how Nafaqah works',
+      nafaqahLink: 'See how wife expenses work',
     },
     nafaqah: {
       badge: 'Family mode',
-      title: 'How Nafaqah works',
+      title: 'How wife expenses work',
       intro:
-        'In family mode the app follows the rule that Nafaqah is the husband’s responsibility: housing, food and the home’s needs. It never splits an expense between spouses by percentage. Each expense is handled by who paid and for whom:',
+        'In family mode the app follows the rule that household maintenance is the husband’s responsibility: housing, food and the home’s needs. It never splits an expense between spouses by percentage. Each expense is handled by who paid and for whom:',
       cases: [
         {
           who: 'The husband pays for the home or the children',
@@ -583,7 +583,7 @@ export const translations: Record<Language, TranslationDictionary> = {
         },
         {
           q: 'Does the app split expenses between husband and wife?',
-          a: 'No. In family mode Nafaqah is on the husband, and what the wife pays for the home is recorded as his debt to her. Splitting costs is only for shared flats.',
+          a: 'No. In family mode household maintenance is on the husband, and what the wife pays for the home is recorded as his debt to her. Splitting costs is only for shared flats.',
         },
       ],
     },
@@ -654,7 +654,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       spent: 'Spent',
       remaining: 'Remaining',
       wifeAllowanceTitle: "Wife's Personal Allowance",
-      wifeAllowanceSubtitle: 'Protected periodic allowance adhering to Nafaqah rules',
+      wifeAllowanceSubtitle: 'Protected periodic allowance adhering to family expense rules',
       subAllocationsTitle: 'Sub-allocations for Dependents & Categories',
       noData: 'No records found yet.',
       activePlans: 'active plan(s)',

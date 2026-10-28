@@ -240,7 +240,7 @@ void main() {
       )));
       await tester.pumpAndSettle();
       expect(find.byType(CardErrorState), findsOneWidget);
-      expect(find.text('Family Expenses & Nafaqah'), findsOneWidget);
+      expect(find.text('Family Expenses & Wife Reimbursements'), findsOneWidget);
       expect(find.text("Couldn't load what is owed to the wife. Check your connection."), findsOneWidget);
       expect(reported, isNull);
 

@@ -26,7 +26,7 @@ void main() {
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text("Nafaqah, the wife's allowance, roommate settling"), findsOneWidget);
+    expect(find.text("Wife expenses, allowance & roommate settling"), findsOneWidget);
     expect(find.textContaining('50/50'), findsNothing);
 
     await tester.tap(find.text('Next'));

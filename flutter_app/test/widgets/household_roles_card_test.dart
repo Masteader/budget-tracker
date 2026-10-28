@@ -195,10 +195,10 @@ void main() {
 
       final husbandRow = find.byKey(const ValueKey('role-member-h'));
       expect(
-        find.descendant(of: husbandRow, matching: find.text('Nafaqah provider (husband)')),
+        find.descendant(of: husbandRow, matching: find.text('Household provider (husband)')),
         findsOneWidget,
       );
-      expect(find.text('Nafaqah provider (husband)'), findsOneWidget, reason: 'only on the provider');
+      expect(find.text('Household provider (husband)'), findsOneWidget, reason: 'only on the provider');
       expect(find.text('Change provider'), findsNothing);
       expect(find.byKey(const ValueKey('roles_needs_provider')), findsNothing);
     });
@@ -217,7 +217,7 @@ void main() {
         ),
       )));
       await tester.pumpAndSettle();
-      expect(find.text('Nafaqah provider (husband)'), findsNothing);
+      expect(find.text('Household provider (husband)'), findsNothing);
       expect(find.text('Change provider'), findsNothing);
     });
 
@@ -244,10 +244,10 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
-      expect(find.text('Nafaqah provider (husband): Ahmed'), findsOneWidget);
+      expect(find.text('Household provider (husband): Ahmed'), findsOneWidget);
       await tester.tap(find.text('Change provider'));
       await tester.pumpAndSettle();
-      expect(find.text('Who is the Nafaqah provider (husband)?'), findsOneWidget);
+      expect(find.text('Who is the household provider (husband)?'), findsOneWidget);
       expect(find.byKey(const ValueKey('provider-option-w')), findsNothing, reason: 'a wife is never offered');
       expect(find.byKey(const ValueKey('provider-option-h')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('provider-option-s')));
@@ -256,9 +256,9 @@ void main() {
       expect(calls, ['hh:s']);
       expect(loads, 2, reason: 'the roster is reloaded after the change');
       expect(notified?.husbandId, 's');
-      expect(find.text('Nafaqah provider updated'), findsOneWidget);
+      expect(find.text('Household provider updated'), findsOneWidget);
       expect(
-        find.descendant(of: find.byKey(const ValueKey('role-member-s')), matching: find.text('Nafaqah provider (husband)')),
+        find.descendant(of: find.byKey(const ValueKey('role-member-s')), matching: find.text('Household provider (husband)')),
         findsOneWidget,
       );
     });
@@ -280,8 +280,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('provider-option-s')));
       await tester.pumpAndSettle();
-      expect(find.text('Only a household admin can choose the Nafaqah provider.'), findsOneWidget);
-      expect(find.text('Nafaqah provider (husband): Ahmed'), findsOneWidget, reason: 'nothing changed');
+      expect(find.text('Only a household admin can choose the household provider.'), findsOneWidget);
+      expect(find.text('Household provider (husband): Ahmed'), findsOneWidget, reason: 'nothing changed');
 
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
@@ -290,7 +290,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('provider-option-s')));
       await tester.pumpAndSettle();
       expect(
-        find.text('That member cannot be the Nafaqah provider (a wife, or no longer in the household).'),
+        find.text('That member cannot be the household provider (a wife, or no longer in the household).'),
         findsOneWidget,
       );
     });
@@ -305,11 +305,11 @@ void main() {
 
       expect(find.byKey(const ValueKey('roles_needs_provider')), findsOneWidget);
       expect(
-        find.text('This family has no Nafaqah provider (husband). Choose one so that expenses the wife pays can be recorded.'),
+        find.text('This family has no household provider (husband). Choose one so that expenses the wife pays can be recorded.'),
         findsOneWidget,
       );
       expect(find.text('Choose provider'), findsOneWidget);
-      expect(find.text('Nafaqah provider (husband)'), findsNothing);
+      expect(find.text('Household provider (husband)'), findsNothing);
     });
 
     testWidgets('a member of a family without a provider is told to ask an admin', (tester) async {
@@ -319,7 +319,7 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
-      expect(find.text('This family has no Nafaqah provider (husband). Ask an admin to set one.'), findsOneWidget);
+      expect(find.text('This family has no household provider (husband). Ask an admin to set one.'), findsOneWidget);
       expect(find.text('Choose provider'), findsNothing);
     });
 
@@ -330,8 +330,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(Directionality.of(tester.element(find.byType(HouseholdRolesCard))), TextDirection.rtl);
-      expect(find.text('المكلّف بالنفقة (الزوج)'), findsOneWidget);
-      expect(find.text('تغيير المكلّف بالنفقة'), findsOneWidget);
+      expect(find.text('المكلّف بالمصاريف (الزوج)'), findsOneWidget);
+      expect(find.text('تغيير المكلّف بالمصاريف'), findsOneWidget);
     });
   });
 

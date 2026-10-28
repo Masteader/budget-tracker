@@ -98,10 +98,10 @@ void main() {
       await tester.pump();
     }
     expect(texts['en']![0], startsWith('Not saved: the husband has already repaid'));
-    expect(texts['en']![1], contains('no Nafaqah provider'));
+    expect(texts['en']![1], contains('no household provider'));
     expect(texts['en']![2], isNull);
     expect(texts['ar']![0], startsWith('لم يُحفظ'));
-    expect(texts['ur']![1], contains('نفقہ دینے والا'));
+    expect(texts['ur']![1], contains('کفیل'));
   });
 
   // FABLE2-APP-03 (app side): a 409 {"detail": {"code": ...}} from the chat or
@@ -178,7 +178,7 @@ void main() {
         ));
         await tester.pump();
       }
-      expect(texts['en'], contains('only the wife, the Nafaqah provider (husband) or an admin'));
+      expect(texts['en'], contains('only the wife, the household provider (husband) or an admin'));
       expect(texts['ar'], contains('المشرف'));
       expect(texts['ur'], contains('ایڈمن'));
     });

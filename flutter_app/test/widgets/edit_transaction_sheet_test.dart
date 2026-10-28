@@ -126,7 +126,7 @@ void main() {
     await tester.ensureVisible(find.text('My husband paid'));
     await tester.tap(find.text('My husband paid'));
     await tester.pump();
-    expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
+    expect(find.text("Household expense: the husband's responsibility, no debt."), findsOneWidget);
     expect(find.textContaining('50/50'), findsNothing);
   });
 
@@ -278,7 +278,7 @@ void main() {
         stored: {'nafaqah_class': null, 'nafaqah_spouse_id': null});
     await tester.pump();
 
-    expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
+    expect(find.text("Household expense: the husband's responsibility, no debt."), findsOneWidget);
     expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsNothing);
   });
 
@@ -289,7 +289,7 @@ void main() {
         stored: {'nafaqah_class': null, 'nafaqah_spouse_id': null});
     await tester.pump();
 
-    expect(find.text("Household expense: the husband's Nafaqah, no debt."), findsOneWidget);
+    expect(find.text("Household expense: the husband's responsibility, no debt."), findsOneWidget);
     expect(find.text('Shared for the family: the husband owes the wife SAR 300.00.'), findsNothing);
   });
 
@@ -375,7 +375,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.textContaining('no Nafaqah provider (husband) yet'), findsOneWidget);
+      expect(find.textContaining('no household provider (husband) yet'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
     });
   });

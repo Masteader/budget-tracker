@@ -85,7 +85,7 @@ void main() {
     expect(find.text('Monthly income'), findsOneWidget);
     expect(find.text('Starter budgets'), findsOneWidget);
     expect(find.text('Invite your wife'), findsOneWidget);
-    expect(find.text('Choose who provides (Nafaqah)'), findsOneWidget);
+    expect(find.text('Choose household provider'), findsOneWidget);
     expect(find.text('Hide'), findsNothing, reason: 'cannot be hidden before budgets exist');
   });
 
@@ -191,7 +191,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('جهّز منزلك في دقيقتين'), findsOneWidget);
-    expect(find.text('اختيار المكلّف بالنفقة'), findsOneWidget);
+    expect(find.text('اختيار المكلّف بالمصاريف'), findsOneWidget);
   });
 
   testWidgets('HouseholdSetupPrefs setHidden and isHidden toggle correctly', (tester) async {

@@ -235,7 +235,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('nafaqah_needs_provider')), findsOneWidget);
-    expect(find.text('This family has no Nafaqah provider (husband). Ask an admin to set one.'), findsOneWidget);
+    expect(find.text('This family has no household provider (husband). Ask an admin to set one.'), findsOneWidget);
 
     await tester.pumpWidget(_app(FamilyReimbursementCard(
       householdId: 'hh2',
@@ -243,7 +243,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(
-      find.text('This family has no Nafaqah provider (husband). Choose one in Settings, under Members & Admins.'),
+      find.text('This family has no household provider (husband). Choose one in Settings, under Members & Admins.'),
       findsOneWidget,
     );
   });
@@ -311,7 +311,7 @@ void main() {
     await tester.pumpWidget(_app(FamilyReimbursementCard(householdId: 'hh', summary: _summary(mode: 'not_family'))));
     await tester.pumpAndSettle();
 
-    expect(find.text('Family Expenses & Nafaqah'), findsNothing);
+    expect(find.text('Family Expenses & Wife Reimbursements'), findsNothing);
     expect(find.byType(ElevatedButton), findsNothing);
   });
 

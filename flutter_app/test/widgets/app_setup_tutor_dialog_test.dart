@@ -43,7 +43,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Stage 4 elements
-    expect(find.text('4. Living Model: Islamic Nafaqah & Roommates'), findsOneWidget);
+    expect(find.text('4. Living Model: Family & Roommates'), findsOneWidget);
     expect(find.text('Configure Household Mode'), findsOneWidget);
 
     // Tap Next

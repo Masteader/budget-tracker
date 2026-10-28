@@ -216,7 +216,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-ink mb-1.5">
-              {lang === 'ar' ? 'تصنيف النفقة الشرعية (اختياري)' : 'Nafaqah Category (Optional)'}
+              {lang === 'ar' ? 'تصنيف مصاريف الزوجة (اختياري)' : 'Wife Expense Category (Optional)'}
             </label>
             <select
               value={nafaqahClass}
