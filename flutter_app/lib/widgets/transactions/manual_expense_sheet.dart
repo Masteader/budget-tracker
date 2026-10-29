@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
+import '../../models/installment_plan.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/installment_provider.dart';
+import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/sync_worker.dart' show SyncWorker, kTransactionInsertOperation;
@@ -31,6 +34,7 @@ class ManualExpenseSheet extends StatefulWidget {
   final String? initialMerchant;
   final double? initialAmount;
   final String? initialCategory;
+  final InstallmentPlan? installmentPlan;
 
   /// Test seams; default to the API / Supabase / the offline queue.
   /// [loadMembers] replaces the whole member lookup (rows with `id`,
@@ -56,6 +60,7 @@ class ManualExpenseSheet extends StatefulWidget {
     this.initialMerchant,
     this.initialAmount,
     this.initialCategory,
+    this.installmentPlan,
     this.loadMembers,
     this.loadRoster,
     this.loadOwnMemberships,
@@ -66,14 +71,15 @@ class ManualExpenseSheet extends StatefulWidget {
     this.loadAccounts,
   });
 
-  static Future<void> show(
+  static Future<bool?> show(
     BuildContext context, {
     String? householdId,
     String? initialMerchant,
     double? initialAmount,
     String? initialCategory,
+    InstallmentPlan? installmentPlan,
   }) {
-    return showModalBottomSheet(
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -85,6 +91,7 @@ class ManualExpenseSheet extends StatefulWidget {
           initialMerchant: initialMerchant,
           initialAmount: initialAmount,
           initialCategory: initialCategory,
+          installmentPlan: installmentPlan,
         ),
       ),
     );
@@ -142,13 +149,22 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   @override
   void initState() {
     super.initState();
-    _merchantCtrl = TextEditingController(text: widget.initialMerchant ?? '');
+    final initialAmt = widget.initialAmount ?? widget.installmentPlan?.monthlyAmount;
+    final initialMerch = widget.initialMerchant ?? widget.installmentPlan?.merchant;
+    final initialCat = widget.initialCategory ??
+        (widget.installmentPlan != null &&
+                widget.installmentPlan!.categoryCode != null &&
+                widget.installmentPlan!.categoryCode!.isNotEmpty
+            ? widget.installmentPlan!.categoryCode
+            : null);
+
+    _merchantCtrl = TextEditingController(text: initialMerch ?? '');
     _amountCtrl = TextEditingController(
-      text: widget.initialAmount != null && widget.initialAmount! > 0
-          ? widget.initialAmount!.toStringAsFixed(2)
+      text: initialAmt != null && initialAmt > 0
+          ? initialAmt.toStringAsFixed(2)
           : '',
     );
-    _selectedCategory = widget.initialCategory ?? 'OPEX-GROCERY';
+    _selectedCategory = initialCat ?? 'OPEX-GROCERY';
     _loadHouseholdMembers();
     _loadAccounts();
   }
@@ -326,6 +342,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     try {
       context.read<TransactionProvider>().fetchTransactions();
       context.read<BudgetProvider>().refresh();
+      context.read<InstallmentProvider>().fetchPlans(silent: true);
+      context.read<RecurringBillsProvider>().fetchBills(silent: true);
     } catch (e) {
       debugPrint('[ManualExpenseSheet] Refresh after save skipped: $e');
     }
@@ -429,6 +447,12 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       nafaqahSpouseId: nafaqahClass == null ? null : _selectedWifeId,
     );
 
+    if (widget.installmentPlan != null) {
+      final noteSuffix = ' [Financed via ${widget.installmentPlan!.provider}: Installment ${widget.installmentPlan!.paidInstallments + 1} of ${widget.installmentPlan!.installmentCount}]';
+      final currentNotes = row['raw_sms'] as String? ?? '';
+      row['raw_sms'] = '$currentNotes$noteSuffix';
+    }
+
     Object? insertError;
     try {
       // 1. Direct Supabase insert
@@ -442,15 +466,34 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     }
 
     if (insertError == null) {
-      if (mounted) {
-        _refreshProviders();
-        Navigator.pop(context);
-        AppSnackBar.showSuccess(
-          context,
-          context.trArgs('mes_recorded', {'amount': context.sar(amount), 'merchant': merchant}),
-          title: context.tr('mes_logged_title'),
-        );
+      if (_selectedAccountId != null && _accounts.isNotEmpty) {
+        final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
+        if (selectedAcc != null) {
+          final newBal = selectedAcc.balance - amount;
+          try {
+            await AccountService.instance.updateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
+          } catch (e) {
+            debugPrint('[ManualExpenseSheet] Balance update error: $e');
+          }
+        }
       }
+      if (widget.installmentPlan != null && mounted) {
+        try {
+          await context.read<InstallmentProvider>().recordPayment(widget.installmentPlan!.id);
+        } catch (e) {
+          try {
+            await ApiService.instance.payInstallment(widget.installmentPlan!.id);
+          } catch (_) {}
+        }
+      }
+      if (!mounted) return;
+      _refreshProviders();
+      Navigator.pop(context, true);
+      AppSnackBar.showSuccess(
+        context,
+        context.trArgs('mes_recorded', {'amount': context.sar(amount), 'merchant': merchant}),
+        title: context.tr('mes_logged_title'),
+      );
     } else if (SyncWorker.isPermanentInsertError(insertError)) {
       // FR-A-08: the database rejected the row itself (permissions, a check,
       // the Nafaqah trigger). Replaying it can never succeed, so say so and
@@ -482,8 +525,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         }
 
         if (mounted) {
+          if (widget.installmentPlan != null) {
+            try {
+              await context.read<InstallmentProvider>().recordPayment(widget.installmentPlan!.id);
+            } catch (_) {}
+          }
+          if (!mounted) return;
           _refreshProviders();
-          Navigator.pop(context);
+          Navigator.pop(context, true);
           AppSnackBar.showSuccess(
             context,
             context.trArgs('mes_saved_offline', {'amount': context.sar(amount), 'merchant': merchant}),
@@ -562,7 +611,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      context.tr('manual_log'),
+                      widget.installmentPlan != null
+                          ? context.tr('pay_installment_title')
+                          : context.tr('manual_log'),
                       style: GoogleFonts.outfit(
                         color: context.textPrimary,
                         fontSize: 17,
@@ -578,6 +629,84 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              if (widget.installmentPlan != null) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.subtleCardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (widget.installmentPlan!.provider.toLowerCase() == 'tamara'
+                                      ? const Color(0xFFFF6B6B)
+                                      : (widget.installmentPlan!.provider.toLowerCase() == 'tabby'
+                                          ? const Color(0xFF00E676)
+                                          : context.accentText))
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: (widget.installmentPlan!.provider.toLowerCase() == 'tamara'
+                                        ? const Color(0xFFFF6B6B)
+                                        : (widget.installmentPlan!.provider.toLowerCase() == 'tabby'
+                                            ? const Color(0xFF00E676)
+                                            : context.accentText))
+                                    .withValues(alpha: 0.5),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              widget.installmentPlan!.provider,
+                              style: TextStyle(
+                                color: widget.installmentPlan!.provider.toLowerCase() == 'tamara'
+                                    ? const Color(0xFFFF6B6B)
+                                    : (widget.installmentPlan!.provider.toLowerCase() == 'tabby'
+                                        ? const Color(0xFF00E676)
+                                        : context.accentText),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.trArgs('inst_x_of_y_paid', {
+                                'paid': widget.installmentPlan!.paidInstallments + 1,
+                                'count': widget.installmentPlan!.installmentCount,
+                              }),
+                              style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '${context.tr('remaining')}: ${context.sar(widget.installmentPlan!.remainingAmount)}',
+                            style: TextStyle(
+                              color: context.accentText,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        context.tr('installment_payment_preview_info'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               // Amount first, focused, decimal keypad (UX-12)
               TextField(

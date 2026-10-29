@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -14,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../dispose_on_unmount.dart';
+import '../transactions/manual_expense_sheet.dart';
 import '../../models/money.dart';
 import '../../services/salary_cycle_service.dart';
 
@@ -869,46 +871,109 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: providerColor.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: providerColor.withValues(alpha: 0.5),
-                                          width: 0.8,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        plan.provider,
-                                        style: TextStyle(
-                                          color: providerColor,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    Expanded(
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: providerColor.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: providerColor.withValues(alpha: 0.5),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              plan.provider,
+                                              style: TextStyle(
+                                                color: providerColor,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            plan.merchant,
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w600,
+                                              color: context.textPrimary,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.bold,
+                                              color: context.accentText,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Text(
-                                      plan.merchant,
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.w600,
-                                        color: context.textPrimary,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.bold,
-                                        color: context.accentText,
-                                        fontSize: 13,
-                                      ),
+                                    PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert, size: 18, color: context.textSecondary),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      color: context.cardBg,
+                                      onSelected: (val) async {
+                                        if (val == 'delete') {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (dCtx) => AlertDialog(
+                                              backgroundColor: dCtx.cardBg,
+                                              title: Text(dCtx.tr('delete_installment_title'),
+                                                  style: GoogleFonts.outfit(color: dCtx.textPrimary, fontWeight: FontWeight.bold)),
+                                              content: Text(dCtx.tr('delete_installment_confirm'),
+                                                  style: TextStyle(color: dCtx.textSecondary)),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(dCtx, false),
+                                                  child: Text(dCtx.tr('cancel'), style: TextStyle(color: dCtx.textSecondary)),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                  onPressed: () => Navigator.pop(dCtx, true),
+                                                  child: Text(dCtx.tr('delete'),
+                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed == true && context.mounted) {
+                                            try {
+                                              await context.read<InstallmentProvider>().deletePlan(plan.id);
+                                            } catch (_) {
+                                              try {
+                                                await supabase.from('installment_plans').delete().eq('id', plan.id);
+                                              } catch (_) {}
+                                            }
+                                            if (!context.mounted) return;
+                                            if (mounted) setState(() => _loadPlans());
+                                            AppSnackBar.showSuccess(context, context.tr('installment_deleted'));
+                                          }
+                                        }
+                                      },
+                                      itemBuilder: (ctx) => [
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                              const SizedBox(width: 8),
+                                              Text(ctx.tr('delete'), style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -968,24 +1033,20 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
                                         } else {
-                                          bool recorded;
-                                          try {
-                                            recorded = await context.read<InstallmentProvider>().recordPayment(plan.id);
-                                          } catch (_) {
-                                            recorded = await ApiService.instance.payInstallment(plan.id) != null;
-                                          }
-                                          if (!mounted) return;
-                                          setState(() => _loadPlans());
-                                          if (!recorded && context.mounted) {
-                                            // FR-A-03: never imply a payment the server did not record.
-                                            AppSnackBar.showError(context, context.tr('rb_payment_failed'));
-                                          }
-                                          if (recorded && context.mounted) {
-                                            try {
-                                              context.read<TransactionProvider>().fetchTransactions();
-                                              context.read<BudgetProvider>().refresh();
-                                              context.read<RecurringBillsProvider>().fetchBills(silent: true);
-                                            } catch (_) {}
+                                          final recorded = await ManualExpenseSheet.show(
+                                            context,
+                                            householdId: plan.householdId.isNotEmpty
+                                                ? plan.householdId
+                                                : widget.householdId,
+                                            initialMerchant: plan.merchant,
+                                            initialAmount: plan.monthlyAmount,
+                                            initialCategory: (plan.categoryCode != null && plan.categoryCode!.isNotEmpty)
+                                                ? plan.categoryCode!
+                                                : 'OPEX-SHOPPING',
+                                            installmentPlan: plan,
+                                          );
+                                          if (recorded == true && mounted) {
+                                            setState(() => _loadPlans());
                                           }
                                         }
                                       },

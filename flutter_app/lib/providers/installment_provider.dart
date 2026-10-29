@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../main.dart';
 import '../models/installment_plan.dart';
 import '../services/api_service.dart';
 
@@ -91,6 +92,18 @@ class InstallmentProvider extends ChangeNotifier {
       return plan != null;
     } catch (e) {
       debugPrint('[InstallmentProvider] Error recording installment payment: $e');
+      return false;
+    }
+  }
+
+  /// Deletes an installment plan.
+  Future<bool> deletePlan(String planId) async {
+    try {
+      await supabase.from('installment_plans').delete().eq('id', planId);
+      await fetchPlans(silent: true);
+      return true;
+    } catch (e) {
+      debugPrint('[InstallmentProvider] Error deleting installment plan: $e');
       return false;
     }
   }
