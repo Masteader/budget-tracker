@@ -90,7 +90,7 @@ void main() {
       expect(o.spentShare, closeTo(1.31, 1e-9));
     });
 
-    test('operatingCash grounds baseline over static income when present', () {
+    test('operatingCash grounds live remaining liquidity while income preserves cycle capacity', () {
       final o = PaydayOutlook.compute(
         budgets: [_b('OPEX-GROCERY', 5000, 1000)],
         monthlyIncome: 12000,
@@ -99,9 +99,22 @@ void main() {
         cycleStart: _start,
         cycleEnd: _end,
       );
-      expect(o.base, 8500.0);
+      expect(o.base, 12000.0);
       expect(o.incomeBased, isTrue);
-      expect(o.left, 7500.0);
+      expect(o.left, 8500.0);
+    });
+
+    test('operatingCash infers cycle capacity when static income is null', () {
+      final o = PaydayOutlook.compute(
+        budgets: [_b('OPEX-GROCERY', 5000, 1000)],
+        operatingCash: 8500,
+        today: DateTime.utc(2026, 11, 6),
+        cycleStart: _start,
+        cycleEnd: _end,
+      );
+      expect(o.base, 9500.0); // 8500 balance + 1000 spent so far
+      expect(o.incomeBased, isTrue);
+      expect(o.left, 8500.0);
     });
   });
 

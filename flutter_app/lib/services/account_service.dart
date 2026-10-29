@@ -196,21 +196,31 @@ class AccountService {
     }
   }
 
-  /// Get total committed budgets per account for a cycle.
+  /// Get total remaining unspent committed budgets per account for a cycle.
+  /// Deducts already spent amounts from allocated amounts so that
+  /// only remaining unspent commitments are counted against current balance.
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async {
     final res = await _client
         .from('budgets')
-        .select('account_id, allocated_amount, is_active')
-        .eq('household_id', householdId)
-        .eq('cycle_key', cycleKey);
+        .select('account_id, allocated_amount, spent_amount, cycle_key, month, is_active')
+        .eq('household_id', householdId);
 
     final Map<String, double> map = {};
     for (final row in (res as List)) {
       if (row['is_active'] == false) continue;
+      final k = row['cycle_key'] as String?;
+      final m = row['month'] as String? ?? '';
+      final matches = (k != null && k.isNotEmpty)
+          ? k == cycleKey
+          : (m.startsWith(cycleKey) || m.startsWith(cycleKey.replaceAll('-', '')));
+      if (!matches) continue;
+
       final accId = row['account_id'] as String?;
       if (accId != null && accId.isNotEmpty) {
-        final amount = (row['allocated_amount'] as num?)?.toDouble() ?? 0.0;
-        map[accId] = (map[accId] ?? 0.0) + amount;
+        final allocated = (row['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+        final spent = (row['spent_amount'] as num?)?.toDouble() ?? 0.0;
+        final unspent = (allocated - spent).clamp(0.0, double.infinity);
+        map[accId] = (map[accId] ?? 0.0) + unspent;
       }
     }
     return map;

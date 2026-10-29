@@ -106,8 +106,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('Left until payday'), findsOneWidget);
-    expect(find.text('7,000.00'), findsOneWidget);
-    expect(find.text('of SAR 8,000 income'), findsOneWidget);
+    expect(find.text('8,000.00'), findsOneWidget);
+    expect(find.text('of SAR 12,000 income'), findsOneWidget);
     expect(find.text('On track for payday'), findsOneWidget);
   });
 

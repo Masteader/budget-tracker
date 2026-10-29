@@ -88,11 +88,21 @@ class PaydayOutlook {
     final totalAllocated = budgets.fold(0.0, (s, b) => s + b.allocatedAmount);
     final totalSpent = budgets.fold(0.0, (s, b) => s + b.spentAmount);
     final hasOperatingCash = (operatingCash ?? 0) > 0;
-    final incomeBased = hasOperatingCash || (monthlyIncome ?? 0) > 0;
-    final base = hasOperatingCash
-        ? operatingCash!
-        : ((monthlyIncome ?? 0) > 0 ? monthlyIncome! : totalAllocated);
-    final left = base - totalSpent;
+    final hasIncome = (monthlyIncome ?? 0) > 0;
+    final incomeBased = hasIncome || hasOperatingCash;
+
+    // Total cycle income / funding capacity:
+    // If monthlyIncome is known (> 0), base is monthlyIncome.
+    // Otherwise, if operating accounts exist, base reflects initial cycle capacity (operating cash + spent).
+    // Otherwise, falls back to totalAllocated budgets.
+    final base = hasIncome
+        ? monthlyIncome!
+        : (hasOperatingCash ? (operatingCash! + totalSpent) : totalAllocated);
+
+    // Left represents what is actually available right now until payday:
+    // If live bank accounts exist, the balance in the bank IS what is left (it already reflects all spent transactions).
+    // Otherwise, left is base - totalSpent.
+    final left = hasOperatingCash ? operatingCash! : (base - totalSpent);
 
     double variableSpent = 0;
     double fixedStillDue = 0;

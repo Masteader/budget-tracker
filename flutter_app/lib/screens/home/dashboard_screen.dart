@@ -432,7 +432,12 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
     final installmentPlans = context.watch<InstallmentProvider>().plans;
     final activePlans = installmentPlans.where((p) => !p.isCompleted).toList();
-    final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
+    final today = SalaryCycleService.riyadhToday();
+    final cycleEnd = SalaryCycleService.currentCycle().end;
+    final totalInstallmentsDues = activePlans.fold<double>(0.0, (sum, p) {
+      final due = p.dueDates(today: today, max: 12).where((d) => !d.isBefore(today) && !d.isAfter(cycleEnd));
+      return sum + p.installmentAmount * due.length;
+    });
 
     final totalCommitments = (billsSummary?.reservedAmount != null && billsSummary!.reservedAmount > 0)
         ? (billsSummary.reservedAmount + totalInstallmentsDues)

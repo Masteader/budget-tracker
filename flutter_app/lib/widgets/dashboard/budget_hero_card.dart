@@ -643,12 +643,15 @@ class _HeroCommitmentsTip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDeficit = actualAvailable < 0;
+    final isDeficit = actualAvailable < -0.005;
     final tipText = isDeficit
-        ? context.trArgs('tip_balance_deficit', {
-            'deficit': context.sar(-actualAvailable),
-            'commitments': context.sar(commitmentsAmount),
-          })
+        ? '${context.trArgs("tip_actual_balance_after_commitments", {
+            "actual": context.sar(actualAvailable),
+            "commitments": context.sar(commitmentsAmount),
+          })} • ${context.trArgs("tip_balance_deficit", {
+            "deficit": context.sar(-actualAvailable),
+            "commitments": context.sar(commitmentsAmount),
+          })}'
         : context.trArgs('tip_actual_balance_after_commitments', {
             'actual': context.sar(actualAvailable),
             'commitments': context.sar(commitmentsAmount),
