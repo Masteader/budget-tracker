@@ -1,6 +1,7 @@
 /// Budget management screen — edit monthly allocations per category.
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -21,7 +22,7 @@ import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/budgets/rebalance_budget_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
-import '../../services/budget_repair_service.dart';
+import '../../providers/household_role_provider.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/widgets/three_d_surface_card.dart';
@@ -35,7 +36,19 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 class BudgetManagementScreen extends StatefulWidget {
-  const BudgetManagementScreen({super.key});
+  const BudgetManagementScreen({
+    super.key,
+    @visibleForTesting this.initialStaticData,
+    @visibleForTesting this.loadStaticDataOverride,
+    @visibleForTesting this.budgetStreamOverride,
+  });
+
+  @visibleForTesting
+  final BudgetStaticData? initialStaticData;
+  @visibleForTesting
+  final Future<BudgetStaticData> Function()? loadStaticDataOverride;
+  @visibleForTesting
+  final Stream<List<Map<String, dynamic>>> Function(String hid)? budgetStreamOverride;
 
   @override
   State<BudgetManagementScreen> createState() =>
@@ -48,11 +61,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   int _currentCycleIndex = 0;
   late Future<_BudgetStaticData> _staticFuture;
+  _BudgetStaticData? _lastStaticData;
   bool _isCopying = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialStaticData != null) {
+      _lastStaticData = widget.initialStaticData;
+    }
     final initialCycles = SalaryCycleService.getAvailableCycles();
     final idx = initialCycles.indexWhere((c) => c.isCurrent);
     _cycles = initialCycles;
@@ -61,20 +78,46 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   }
 
   Future<_BudgetStaticData> _loadStaticData() async {
-    final user = supabase.auth.currentUser!;
-    final profile = await supabase
-        .from('users')
-        .select('household_id, role')
-        .eq('id', user.id)
-        .single();
+    if (widget.loadStaticDataOverride != null) {
+      final data = await widget.loadStaticDataOverride!();
+      _lastStaticData = data;
+      return data;
+    }
 
-    final hid = profile['household_id'] as String;
-    final role = profile['role'] as String? ?? 'member';
+    final budgetProvider = context.read<BudgetProvider>();
 
-    BudgetRepairService.instance.repairHouseholdBudgets(hid);
-    _fetchCycles(hid);
+    String hid = '';
+    String role = 'member';
 
-    final catData = await ApiService.instance.fetchHouseholdCategories(hid);
+    try {
+      final roleProvider = context.read<HouseholdRoleProvider>();
+      if (roleProvider.isLoaded &&
+          roleProvider.householdId != null &&
+          roleProvider.householdId!.isNotEmpty) {
+        hid = roleProvider.householdId!;
+        role = roleProvider.role;
+      }
+    } catch (_) {}
+
+    if (hid.isEmpty) {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        final profile = await supabase
+            .from('users')
+            .select('household_id, role')
+            .eq('id', user.id)
+            .single();
+        hid = profile['household_id'] as String;
+        role = profile['role'] as String? ?? 'member';
+      }
+    }
+
+    if (budgetProvider.cycles.isNotEmpty) {
+      _cycles = budgetProvider.cycles;
+    }
+    unawaited(_fetchCycles(hid));
+
+    final catData = await budgetProvider.getHouseholdCategories(hid);
     final activeFromApi = catData['active'] ?? [];
     final activeCodes = <Map<String, String>>[];
 
@@ -129,14 +172,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     }
 
     double income = 0.0;
-    try {
-      final records = await AccountService.instance.getCycleIncome(hid, _currentCycleKey);
-      income = records.fold<double>(0.0, (s, r) => s + r.netAmount);
-    } catch (_) {}
-
     List<Account> accounts = [];
     try {
-      accounts = await AccountService.instance.getAccounts(hid);
+      final results = await Future.wait([
+        AccountService.instance.getCycleIncome(hid, _currentCycleKey).catchError((_) => <IncomeRecord>[]),
+        AccountService.instance.getAccounts(hid).catchError((_) => <Account>[]),
+      ]);
+      final records = results[0] as List<IncomeRecord>;
+      accounts = results[1] as List<Account>;
+      income = records.fold<double>(0.0, (s, r) => s + r.netAmount);
     } catch (_) {}
 
     if (income <= 0 && accounts.isNotEmpty) {
@@ -145,13 +189,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
     }
 
-    return _BudgetStaticData(
+    final data = _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
       allCodes: activeCodes,
       monthlyIncome: income,
       accounts: accounts,
     );
+    _lastStaticData = data;
+    return data;
   }
 
   Future<void> _fetchCycles(String hid) async {
@@ -1031,7 +1077,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   }
 
   Future<void> _openCategoryLibrary(_BudgetStaticData data) async {
-    final catData = await ApiService.instance.fetchHouseholdCategories(data.householdId);
+    final catData = await context.read<BudgetProvider>().getHouseholdCategories(data.householdId);
     if (!mounted) return;
 
     await showModalBottomSheet(
@@ -1135,7 +1181,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     return FutureBuilder<_BudgetStaticData>(
       future: _staticFuture,
       builder: (ctx, staticSnap) {
-        if (!staticSnap.hasData) {
+        if (staticSnap.hasData) {
+          _lastStaticData = staticSnap.data!;
+        }
+
+        if (!staticSnap.hasData && _lastStaticData == null) {
           return Scaffold(
             backgroundColor: context.scaffoldBg,
             appBar: AppBar(
@@ -1147,7 +1197,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             ),
           );
         }
-        final staticData = staticSnap.data!;
+        final staticData = staticSnap.data ?? _lastStaticData!;
 
         return Scaffold(
           appBar: AppBar(
@@ -1230,10 +1280,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 )
               : null,
           body: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: supabase
-                .from('budgets')
-                .stream(primaryKey: ['id'])
-                .eq('household_id', staticData.householdId),
+            stream: widget.budgetStreamOverride != null
+                ? widget.budgetStreamOverride!(staticData.householdId)
+                : supabase
+                    .from('budgets')
+                    .stream(primaryKey: ['id'])
+                    .eq('household_id', staticData.householdId),
             builder: (ctx, budgetSnap) {
               final rawBudgets = <Budget>[];
               for (final row in (budgetSnap.data ?? [])) {
@@ -1887,14 +1939,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 }
 }
 
-class _BudgetStaticData {
+class BudgetStaticData {
   final String householdId;
   final bool isAdmin;
   final List<Map<String, String>> allCodes;
   final double monthlyIncome;
   final List<Account> accounts;
 
-  _BudgetStaticData({
+  BudgetStaticData({
     required this.householdId,
     required this.isAdmin,
     required this.allCodes,
@@ -1902,3 +1954,5 @@ class _BudgetStaticData {
     this.accounts = const [],
   });
 }
+
+typedef _BudgetStaticData = BudgetStaticData;

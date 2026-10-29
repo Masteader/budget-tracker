@@ -10,9 +10,11 @@ class BudgetRepairService {
   BudgetRepairService._();
   static final BudgetRepairService instance = BudgetRepairService._();
 
+  int repairCallCount = 0;
   bool _isRepairing = false;
 
   Future<void> repairHouseholdBudgets(String householdId) async {
+    repairCallCount++;
     if (_isRepairing || householdId.isEmpty) return;
     _isRepairing = true;
     try {

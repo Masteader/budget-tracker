@@ -18,7 +18,6 @@ import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/budget_repair_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../widgets/dashboard/budget_hero_card.dart';
@@ -120,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Widget screen(BuildContext context, int index) {
       switch (index) {
         case 0:
-          return const _BudgetDashboard();
+          return _BudgetDashboard(householdId: _householdId);
         case 1:
           return const TransactionFeedScreen();
         case 2:
@@ -155,14 +154,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 // ─── Budget Dashboard Tab ─────────────────────────────────────────────────────
 
-class _BudgetDashboard extends StatefulWidget {
-  const _BudgetDashboard();
+class BudgetDashboard extends StatefulWidget {
+  const BudgetDashboard({
+    super.key,
+    this.householdId,
+    @visibleForTesting this.fetchHouseholdIdOverride,
+    @visibleForTesting this.budgetStreamOverride,
+  });
+
+  final String? householdId;
+  final Future<String> Function()? fetchHouseholdIdOverride;
+  final Stream<List<Map<String, dynamic>>> Function(String hid)? budgetStreamOverride;
 
   @override
-  State<_BudgetDashboard> createState() => _BudgetDashboardState();
+  State<BudgetDashboard> createState() => _BudgetDashboardState();
 }
 
-class _BudgetDashboardState extends State<_BudgetDashboard> {
+typedef _BudgetDashboard = BudgetDashboard;
+
+class _BudgetDashboardState extends State<BudgetDashboard> {
   late Future<String> _householdId;
   List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
   int _currentCycleIndex = 0;
@@ -177,7 +187,13 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     final idx = initialCycles.indexWhere((c) => c.isCurrent);
     _cycles = initialCycles;
     _currentCycleIndex = idx != -1 ? idx : 0;
-    _householdId = _fetchHouseholdId();
+    final passedHid = widget.householdId;
+    if (passedHid != null && passedHid.isNotEmpty) {
+      _householdId = Future.value(passedHid);
+      _loadDashboardData(passedHid);
+    } else {
+      _householdId = _fetchHouseholdId();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         UserGuideWalkthroughDialog.showIfFirstTime(context);
@@ -185,7 +201,25 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant BudgetDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.householdId != null &&
+        widget.householdId!.isNotEmpty &&
+        widget.householdId != oldWidget.householdId) {
+      setState(() {
+        _householdId = Future.value(widget.householdId!);
+      });
+      _loadDashboardData(widget.householdId!);
+    }
+  }
+
   Future<String> _fetchHouseholdId() async {
+    if (widget.fetchHouseholdIdOverride != null) {
+      final hid = await widget.fetchHouseholdIdOverride!();
+      _loadDashboardData(hid);
+      return hid;
+    }
     final uid = supabase.auth.currentUser!.id;
     final data = await supabase
         .from('users')
@@ -193,12 +227,17 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
         .eq('id', uid)
         .single();
     final hid = data['household_id'] as String;
-    BudgetRepairService.instance.repairHouseholdBudgets(hid);
-    _fetchCycles(hid);
-    _fetchSetup(hid);
-    _fetchAccountsCount(hid);
-    _fetchCycleIncome(hid, _currentCycleKey);
+    _loadDashboardData(hid);
     return hid;
+  }
+
+  Future<void> _loadDashboardData(String hid) async {
+    unawaited(_fetchCycles(hid));
+    await Future.wait([
+      _fetchSetup(hid),
+      _fetchAccountsCount(hid),
+      _fetchCycleIncome(hid, _currentCycleKey),
+    ]);
   }
 
   Future<void> _fetchCycleIncome(String hid, String cycleKey) async {
@@ -442,6 +481,21 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
     return b.month.startsWith(keyPrefix);
   }
 
+  Stream<List<Map<String, dynamic>>> _getBudgetStream(String hid) {
+    if (widget.budgetStreamOverride != null) {
+      return widget.budgetStreamOverride!(hid);
+    }
+    try {
+      return supabase
+          .from('budgets')
+          .stream(primaryKey: ['id'])
+          .eq('household_id', hid)
+          .order('category_code');
+    } catch (_) {
+      return const Stream.empty();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<String>(
@@ -476,11 +530,7 @@ class _BudgetDashboardState extends State<_BudgetDashboard> {
           body: SafeArea(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               key: ValueKey('budgets-$hid-$_budgetStreamGeneration'),
-              stream: supabase
-                  .from('budgets')
-                  .stream(primaryKey: ['id'])
-                  .eq('household_id', hid)
-                  .order('category_code'),
+              stream: _getBudgetStream(hid),
               builder: (ctx, budgetSnap) {
                 return RefreshIndicator(
                   color: context.accentText,

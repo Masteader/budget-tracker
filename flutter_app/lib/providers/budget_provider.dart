@@ -13,6 +13,8 @@ class BudgetProvider extends ChangeNotifier {
   List<SalaryCycleInfo> _cycles = [];
   int _selectedCycleIndex = 0;
   List<CategoryBreakdownItem> _categories = [];
+  Map<String, List<CategoryItem>>? _cachedHouseholdCategories;
+  DateTime? _categoriesLastFetched;
   bool _isLoading = false;
   String? _error;
   int _breakdownGeneration = 0;
@@ -28,6 +30,7 @@ class BudgetProvider extends ChangeNotifier {
   List<SalaryCycleInfo> get cycles => _cycles;
   int get selectedCycleIndex => _selectedCycleIndex;
   List<CategoryBreakdownItem> get categories => _categories;
+  Map<String, List<CategoryItem>>? get cachedCategories => _cachedHouseholdCategories;
 
   SalaryCycleInfo? get activeCycle {
     if (_cycles.isEmpty) return null;
@@ -63,8 +66,37 @@ class BudgetProvider extends ChangeNotifier {
     _cycles = [];
     _selectedCycleIndex = 0;
     _categories = [];
+    _cachedHouseholdCategories = null;
+    _categoriesLastFetched = null;
     _error = null;
     _isLoading = false;
+  }
+
+
+  Future<Map<String, List<CategoryItem>>> getHouseholdCategories(
+    String householdId, {
+    bool forceRefresh = false,
+  }) async {
+    final now = DateTime.now();
+    final isStale = _categoriesLastFetched == null ||
+        now.difference(_categoriesLastFetched!).inMinutes > 15;
+
+    if (!forceRefresh && _cachedHouseholdCategories != null && !isStale) {
+      return _cachedHouseholdCategories!;
+    }
+
+    try {
+      final res = await _api.fetchHouseholdCategories(householdId);
+      _cachedHouseholdCategories = res;
+      _categoriesLastFetched = now;
+      notifyListeners();
+      return res;
+    } catch (e) {
+      if (_cachedHouseholdCategories != null) {
+        return _cachedHouseholdCategories!;
+      }
+      rethrow;
+    }
   }
 
   Future<void> selectCycle(int index) async {
