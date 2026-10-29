@@ -106,5 +106,73 @@ void main() {
       // 29 Oct, 12 Nov and 26 Nov all fall before the 27 Nov payday.
       expect(find.text('SAR 300.00 due before payday'), findsOneWidget);
     });
+
+    testWidgets('Ongoing plan with 0 paid displays First of N due text', (tester) async {
+      final plan = InstallmentPlan.fromJson({
+        'id': 'p3',
+        'household_id': 'hh_1',
+        'merchant': 'Panda Store',
+        'provider': 'Tamara',
+        'total_amount': 600,
+        'installment_count': 2,
+        'monthly_amount': 300,
+        'paid_installments': 0,
+        'start_date': '2026-10-15',
+        'status': 'ACTIVE',
+        'frequency': 'monthly',
+        'next_due_at': '2026-10-29',
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: InstallmentPlansCard(plans: [plan], now: DateTime.utc(2026, 10, 28, 9)),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('SAR 300.00 / mo'), findsOneWidget);
+      expect(find.text('First of 2 due 29 Oct'), findsOneWidget);
+    });
+
+    testWidgets('Add dialog renders New Purchase and Ongoing Plan tabs and custom options', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: InstallmentPlansCard(plans: []),
+            ),
+          ),
+        ),
+      );
+
+      final addBtn = find.text('Add Installment Plan');
+      expect(addBtn, findsOneWidget);
+      await tester.tap(addBtn);
+      await tester.pumpAndSettle();
+
+      // Check modal title and tabs
+      expect(find.text('New Installment Plan'), findsOneWidget);
+      expect(find.text('New Purchase'), findsOneWidget);
+      expect(find.text('Ongoing Plan (In Progress)'), findsOneWidget);
+
+      // Check preset count chips
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+      expect(find.text('6'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
+      expect(find.text('Custom'), findsOneWidget);
+
+      // Switch to Ongoing Plan
+      await tester.tap(find.text('Ongoing Plan (In Progress)'));
+      await tester.pumpAndSettle();
+
+      // Verify ongoing fields
+      expect(find.text('Remaining Amount (SAR)'), findsOneWidget);
+      expect(find.text('Monthly Payment (SAR)'), findsOneWidget);
+      expect(find.text('Remaining installments'), findsOneWidget);
+    });
   });
 }

@@ -1010,33 +1010,30 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                   // Duration selector
                   Text(context.tr('installment_duration_caps'), style: GoogleFonts.outfit(fontSize: 11, color: context.textSecondary, letterSpacing: 1)),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [3, 4, 6].map((count) {
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [2, 3, 4, 6, 12].map((count) {
                       final isSelected = selectedCount == count;
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: InkWell(
-                            onTap: () => setModalState(() => selectedCount = count),
+                      return InkWell(
+                        onTap: () => setModalState(() => selectedCount = count),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? (context.pillBg) : context.subtleCardBg,
+                            border: Border.all(
+                              color: isSelected ? (context.accentText) : context.borderColor,
+                            ),
                             borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? (context.pillBg) : context.subtleCardBg,
-                                border: Border.all(
-                                  color: isSelected ? (context.accentText) : context.borderColor,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                context.trPlural('n_months', count),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: isSelected ? (context.accentText) : context.textPrimary,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 12,
-                                ),
-                              ),
+                          ),
+                          child: Text(
+                            context.trPlural('n_months', count),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isSelected ? (context.accentText) : context.textPrimary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 12,
                             ),
                           ),
                         ),
