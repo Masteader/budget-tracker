@@ -72,3 +72,4 @@ Add keys for the new tip across English, Arabic, and Urdu:
    cd flutter_app
    flutter test test/widgets/card_error_states_test.dart test/widgets/partner_settlement_card_test.dart
    ```
+
