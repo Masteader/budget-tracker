@@ -15,7 +15,8 @@ void main() {
     await tester.pumpWidget(localizedApp(const HelpSupportScreen(), lang: 'ar', scaffold: false));
     await tester.pumpAndSettle();
 
-    final topic = find.text('النفقة ومصروف الزوجة');
+    final ar = AppLocalizations(const Locale('ar'));
+    final topic = find.text(ar.get('faq_cat_nafaqah'));
     expect(topic, findsOneWidget);
     await tester.tap(topic);
     await tester.pumpAndSettle();

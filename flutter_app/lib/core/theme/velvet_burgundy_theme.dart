@@ -143,6 +143,90 @@ class VelvetBurgundyTheme {
           side: const BorderSide(color: VelvetBurgundyColors.roseBorderLight),
         ),
       ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: VelvetBurgundyColors.surfaceLight,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: VelvetBurgundyColors.roseBorderLight),
+        ),
+        headerBackgroundColor: VelvetBurgundyColors.primaryLight,
+        headerForegroundColor: Colors.white,
+        headerHeadlineStyle: GoogleFonts.outfit(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        headerHelpStyle: GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: VelvetBurgundyColors.roseGold,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        weekdayStyle: GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: VelvetBurgundyColors.textSecondaryLight,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        dayStyle: GoogleFonts.outfit(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: VelvetBurgundyColors.textPrimaryLight,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return VelvetBurgundyColors.textSecondaryLight.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.textPrimaryLight;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return VelvetBurgundyColors.primaryLight;
+          }
+          return Colors.transparent;
+        }),
+        todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.primaryLight;
+        }),
+        todayBorder: const BorderSide(color: VelvetBurgundyColors.primaryLight, width: 1.5),
+        yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return VelvetBurgundyColors.textSecondaryLight.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.textPrimaryLight;
+        }),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return VelvetBurgundyColors.primaryLight;
+          }
+          return Colors.transparent;
+        }),
+        dividerColor: VelvetBurgundyColors.roseBorderLight,
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: VelvetBurgundyColors.primaryLight,
+          textStyle: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ).copyWith(fontFamilyFallback: arabicFallback),
+        ),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: VelvetBurgundyColors.primaryLight,
+          textStyle: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ).copyWith(fontFamilyFallback: arabicFallback),
+        ),
+      ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: VelvetBurgundyColors.canvasLight,
         modalBackgroundColor: VelvetBurgundyColors.canvasLight,
@@ -247,6 +331,96 @@ class VelvetBurgundyTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: VelvetBurgundyColors.roseBorderDark),
+        ),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: VelvetBurgundyColors.surfaceDark,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: VelvetBurgundyColors.roseBorderDark),
+        ),
+        headerBackgroundColor: VelvetBurgundyColors.primaryDarkMaroon,
+        headerForegroundColor: VelvetBurgundyColors.textPrimaryDark,
+        headerHeadlineStyle: GoogleFonts.outfit(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: VelvetBurgundyColors.textPrimaryDark,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        headerHelpStyle: GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: VelvetBurgundyColors.roseGoldGlow,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        weekdayStyle: GoogleFonts.outfit(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: VelvetBurgundyColors.textSecondaryDark,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        dayStyle: GoogleFonts.outfit(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: VelvetBurgundyColors.textPrimaryDark,
+        ).copyWith(fontFamilyFallback: arabicFallback),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return VelvetBurgundyColors.textSecondaryDark.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.textPrimaryDark;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return VelvetBurgundyColors.accentRose;
+          }
+          return Colors.transparent;
+        }),
+        dayOverlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
+            return VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.12);
+          }
+          return null;
+        }),
+        todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.roseGoldGlow;
+        }),
+        todayBorder: const BorderSide(color: VelvetBurgundyColors.roseGoldGlow, width: 1.5),
+        yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return VelvetBurgundyColors.textSecondaryDark.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return VelvetBurgundyColors.textPrimaryDark;
+        }),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return VelvetBurgundyColors.accentRose;
+          }
+          return Colors.transparent;
+        }),
+        dividerColor: VelvetBurgundyColors.roseBorderDark,
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: VelvetBurgundyColors.roseGoldGlow,
+          textStyle: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ).copyWith(fontFamilyFallback: arabicFallback),
+        ),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: VelvetBurgundyColors.roseGoldGlow,
+          textStyle: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ).copyWith(fontFamilyFallback: arabicFallback),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
