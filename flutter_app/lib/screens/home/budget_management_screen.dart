@@ -189,6 +189,26 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
     }
 
+    if (accounts.isNotEmpty) {
+      try {
+        final unlinked = await supabase
+            .from('transactions')
+            .select('id, category_code')
+            .eq('household_id', hid)
+            .isFilter('account_id', null);
+        if (unlinked.isNotEmpty) {
+          final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
+          for (final row in (unlinked as List)) {
+            final txId = row['id'] as String?;
+            if (txId != null) {
+              await supabase.from('transactions').update({'account_id': defaultAcc.id}).eq('id', txId);
+            }
+          }
+          accounts = await AccountService.instance.getAccounts(hid).catchError((_) => accounts);
+        }
+      } catch (_) {}
+    }
+
     final data = _BudgetStaticData(
       householdId: hid,
       isAdmin: role == 'admin',
@@ -1377,6 +1397,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       );
                     }
 
+                    final totalSpent = budgets
+                        .where((b) => b.isActive)
+                        .fold<double>(0.0, (s, b) => s + b.spentAmount);
+
                     final operatingCash = staticData.accounts
                         .where((a) => !a.isArchived && a.accountType.isOperatingPool)
                         .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
@@ -1389,9 +1413,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
                     final benchmarkCash = hasOperatingCash ? operatingCash : staticData.monthlyIncome;
                     final hasBenchmark = benchmarkCash > 0;
-                    final cashMargin = hasOperatingCash
-                        ? (operatingCash - totalUnspentCommitments)
-                        : (staticData.monthlyIncome > 0 ? (staticData.monthlyIncome - totalAllocated) : 0.0);
+                    final currentOperatingCash = hasBenchmark
+                        ? (benchmarkCash - totalSpent).clamp(0.0, double.infinity)
+                        : 0.0;
+                    final cashMargin = hasBenchmark
+                        ? (currentOperatingCash - totalUnspentCommitments)
+                        : 0.0;
                     final isOverAllocated = hasBenchmark && cashMargin < -0.005;
 
                     // Calculate any account deficits based on remaining unspent commitments
@@ -1560,7 +1587,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ),
                                     ),
                                     Text(
-                                      context.sar(benchmarkCash),
+                                      context.sar(currentOperatingCash),
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
@@ -1610,7 +1637,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                   householdId: staticData.householdId,
                                                   cycleKey: _currentCycleKey,
                                                   budgets: budgets,
-                                                  targetAvailableCash: benchmarkCash,
+                                                  targetAvailableCash: currentOperatingCash,
                                                   onRebalanced: () => setState(() {
                                                     _staticFuture = _loadStaticData();
                                                   }),

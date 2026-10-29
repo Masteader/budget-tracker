@@ -25,6 +25,8 @@ Widget _host(
   double? operatingCash,
   List<DueLine> dues = const [],
   VoidCallback? onDueTap,
+  double? pendingCommitments,
+  VoidCallback? onCommitmentsTap,
   Locale locale = const Locale('en'),
 }) =>
     MaterialApp(
@@ -45,6 +47,8 @@ Widget _host(
             operatingCash: operatingCash,
             dueLines: dues,
             onDueTap: onDueTap,
+            pendingCommitments: pendingCommitments,
+            onCommitmentsTap: onCommitmentsTap,
           ),
         ),
       ),
@@ -160,5 +164,29 @@ void main() {
     await tester.pumpWidget(_host([_budget('OPEX-GROCERY', 3000, 500)], DateTime.utc(2026, 11, 6, 9)));
     await tester.pumpAndSettle();
     expect(find.textContaining('Owed to'), findsNothing);
+  });
+
+  testWidgets('commitments deduction tip displays net remaining liquidity and handles tap', (tester) async {
+    var commitmentsTapped = false;
+    await tester.pumpWidget(_host(
+      [_budget('OPEX-FOOD', 1000, 46)],
+      DateTime.utc(2026, 11, 6, 9),
+      income: 8941,
+      pendingCommitments: 4462.00,
+      onCommitmentsTap: () => commitmentsTapped = true,
+    ));
+    await tester.pumpAndSettle();
+
+    // Available balance is 8,941 - 46 = 8,895.00
+    expect(find.text('8,895.00'), findsOneWidget);
+
+    // Tip: 8,895 - 4,462 = 4,433.00 net available
+    final tipFinder = find.byKey(const Key('hero_commitments_tip'));
+    expect(tipFinder, findsOneWidget);
+    expect(find.textContaining('4,433.00'), findsOneWidget);
+    expect(find.textContaining('4,462.00'), findsOneWidget);
+
+    await tester.tap(tipFinder);
+    expect(commitmentsTapped, isTrue);
   });
 }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../models/account.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
 import '../../providers/household_role_provider.dart';
@@ -15,6 +16,7 @@ import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/account_service.dart';
 import '../../services/household_permissions.dart';
 import '../../services/nafaqah_write_errors.dart';
 import '../../services/receipt_storage_service.dart';
@@ -628,13 +630,45 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         'timestamp': _occurredAt.toUtc().toIso8601String(),
       ..._nafaqahPayload(),
     };
+
+    if (widget.transaction.accountId == null) {
+      String? targetAccountId;
+      try {
+        final bRes = await supabase
+            .from('budgets')
+            .select('account_id')
+            .eq('household_id', widget.transaction.householdId)
+            .eq('category_code', _selectedCategory)
+            .eq('is_active', true)
+            .not('account_id', 'is', null)
+            .limit(1)
+            .maybeSingle();
+        if (bRes != null && bRes['account_id'] != null) {
+          targetAccountId = bRes['account_id'] as String;
+        }
+      } catch (_) {}
+      if (targetAccountId == null) {
+        try {
+          final accList = await AccountService.instance.getAccounts(widget.transaction.householdId);
+          if (accList.isNotEmpty) {
+            final defaultAcc = accList.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accList.first;
+            targetAccountId = defaultAcc.id;
+          }
+        } catch (_) {}
+      }
+      if (targetAccountId != null) {
+        values['account_id'] = targetAccountId;
+      }
+    }
     // Who paid / for whom: only when the user changed it, and only in the
     // columns the server reads (FABLE2-APP-01). There is no paid_by or
     // beneficiary column, so there is no second, note-only attempt.
     if (_payerTouched || _beneficiaryTouched) {
       final attribution = _attributionPayload(merchant);
       if (attribution == null) {
-        AppSnackBar.showError(context, context.tr('tx_attr_unresolvable'), title: context.tr('update_error'));
+        if (mounted) {
+          AppSnackBar.showError(context, context.tr('tx_attr_unresolvable'), title: context.tr('update_error'));
+        }
         return;
       }
       values.addAll(attribution);

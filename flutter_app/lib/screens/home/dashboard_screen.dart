@@ -425,6 +425,19 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         setup.isAdmin &&
         !setup.hidden &&
         !setup.isComplete(hasBudgets: hasBudgets);
+
+    final billsSummary = context.watch<RecurringBillsProvider>().summary;
+    final unpaidBills = (billsSummary?.bills ?? []).where((b) => !b.isPaid).toList();
+    final totalUnpaidBills = unpaidBills.fold<double>(0.0, (acc, b) => acc + b.averageAmount);
+
+    final installmentPlans = context.watch<InstallmentProvider>().plans;
+    final activePlans = installmentPlans.where((p) => !p.isCompleted).toList();
+    final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
+
+    final totalCommitments = (billsSummary?.reservedAmount != null && billsSummary!.reservedAmount > 0)
+        ? (billsSummary.reservedAmount + totalInstallmentsDues)
+        : (totalUnpaidBills + totalInstallmentsDues);
+
     return [
       BudgetHeroCard(
         budgets: budgets,
@@ -433,6 +446,8 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         operatingCash: _operatingCash,
         dueLines: _dueLines(),
         onDueTap: _scrollToBalances,
+        pendingCommitments: totalCommitments,
+        onCommitmentsTap: _scrollToCommitments,
       ),
       // UX-08: overspent categories right under the hero.
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),

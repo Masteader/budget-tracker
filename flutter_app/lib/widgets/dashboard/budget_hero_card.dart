@@ -33,6 +33,13 @@ class BudgetHeroCard extends StatelessWidget {
   /// Clock for tests; defaults to now.
   final DateTime? now;
 
+  /// Total pending recurring bills + active installment dues to deduct
+  /// for calculating real-time remaining liquidity.
+  final double? pendingCommitments;
+
+  /// Opens or scrolls to the commitments section.
+  final VoidCallback? onCommitmentsTap;
+
   /// Above this text scale the stat tiles stack instead of truncating (UX-14).
   static const double stackTilesAboveTextScale = 1.3;
 
@@ -44,6 +51,8 @@ class BudgetHeroCard extends StatelessWidget {
     this.operatingCash,
     this.dueLines = const [],
     this.onDueTap,
+    this.pendingCommitments,
+    this.onCommitmentsTap,
     this.now,
   });
 
@@ -222,6 +231,15 @@ class BudgetHeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(baseLine, style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                    if (pendingCommitments != null && pendingCommitments! > 0) ...[
+                      const SizedBox(height: 6),
+                      _HeroCommitmentsTip(
+                        actualAvailable: outlook.left - pendingCommitments!,
+                        commitmentsAmount: pendingCommitments!,
+                        isDark: isDark,
+                        onTap: onCommitmentsTap,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -605,6 +623,89 @@ class _StatCapsule extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeroCommitmentsTip extends StatelessWidget {
+  final double actualAvailable;
+  final double commitmentsAmount;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  const _HeroCommitmentsTip({
+    required this.actualAvailable,
+    required this.commitmentsAmount,
+    required this.isDark,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDeficit = actualAvailable < 0;
+    final tipText = isDeficit
+        ? context.trArgs('tip_balance_deficit', {
+            'deficit': context.sar(-actualAvailable),
+            'commitments': context.sar(commitmentsAmount),
+          })
+        : context.trArgs('tip_actual_balance_after_commitments', {
+            'actual': context.sar(actualAvailable),
+            'commitments': context.sar(commitmentsAmount),
+          });
+
+    final Color badgeBg = isDeficit
+        ? Colors.redAccent.withValues(alpha: 0.12)
+        : (isDark ? VelvetBurgundyColors.surfaceDark : context.chipBg);
+    final Color borderColor = isDeficit
+        ? Colors.redAccent.withValues(alpha: 0.35)
+        : (isDark ? VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.25) : context.borderColor);
+    final Color iconColor = isDeficit
+        ? Colors.redAccent
+        : (isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight);
+
+    return InkWell(
+      key: const Key('hero_commitments_tip'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: badgeBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor, width: 1.0),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isDeficit ? Icons.warning_amber_rounded : Icons.shield_outlined,
+              size: 13,
+              color: iconColor,
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                tipText,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDeficit ? Colors.redAccent : context.textPrimary,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 9,
+                color: isDeficit ? Colors.redAccent : context.textSecondary,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

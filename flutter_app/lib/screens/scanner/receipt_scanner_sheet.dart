@@ -8,11 +8,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../main.dart';
+import '../../models/account.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/account_service.dart';
 import '../../services/api_service.dart';
 import '../../services/api/base_api_client.dart' show BaseApiClient;
 import '../../services/api/preview_token.dart';
@@ -763,6 +765,33 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final categoryCode = edited.categoryCode ??
           (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String? ??
           'OPEX-MISC';
+
+      String? accountId;
+      try {
+        final bRes = await supabase
+            .from('budgets')
+            .select('account_id')
+            .eq('household_id', widget.householdId)
+            .eq('category_code', categoryCode)
+            .eq('is_active', true)
+            .not('account_id', 'is', null)
+            .limit(1)
+            .maybeSingle();
+        if (bRes != null && bRes['account_id'] != null) {
+          accountId = bRes['account_id'] as String;
+        }
+      } catch (_) {}
+
+      if (accountId == null) {
+        try {
+          final accounts = await AccountService.instance.getAccounts(widget.householdId);
+          if (accounts.isNotEmpty) {
+            final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
+            accountId = defaultAcc.id;
+          }
+        } catch (_) {}
+      }
+
       final row = <String, dynamic>{
         'household_id': widget.householdId,
         if (userId != null) 'user_id': userId,
@@ -770,6 +799,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'currency': 'SAR',
         'merchant': merchant,
         'category_code': categoryCode,
+        if (accountId != null) 'account_id': accountId,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'raw_sms': auditText,
         'source': 'receipt_scan',
