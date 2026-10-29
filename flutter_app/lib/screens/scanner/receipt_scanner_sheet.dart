@@ -853,7 +853,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
         left: 20,
@@ -1210,6 +1215,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             ],
           ],
         ),
+      ),
       ),
     );
   }

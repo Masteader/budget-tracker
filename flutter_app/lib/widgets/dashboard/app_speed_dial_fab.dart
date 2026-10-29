@@ -72,12 +72,7 @@ class _AppSpeedDialFabState extends State<AppSpeedDialFab>
     HapticFeedback.selectionClick();
     final hid = widget.householdId;
     if (hid != null && mounted) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => ReceiptScannerSheet(householdId: hid),
-      );
+      ReceiptScannerSheet.show(context, hid);
     }
   }
 
