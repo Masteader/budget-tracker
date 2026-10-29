@@ -32,6 +32,7 @@ import '../../models/money.dart';
 import '../../models/manual_expense_row.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -60,6 +61,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
   List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
 
   int _currentCycleIndex = 0;
+  bool _userNavigatedManually = false;
   late Future<_BudgetStaticData> _staticFuture;
   _BudgetStaticData? _lastStaticData;
   bool _isCopying = false;
@@ -114,6 +116,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     if (budgetProvider.cycles.isNotEmpty) {
       _cycles = budgetProvider.cycles;
+      if (!_userNavigatedManually) {
+        final curIdx = _cycles.indexWhere((c) => c.isCurrent);
+        _currentCycleIndex = curIdx != -1 ? curIdx : 0;
+      }
     }
     unawaited(_fetchCycles(hid));
 
@@ -183,6 +189,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       income = records.fold<double>(0.0, (s, r) => s + r.netAmount);
     } catch (_) {}
 
+    if (income <= 0) {
+      try {
+        final setup = await HouseholdSetupPrefs.load(hid);
+        if (setup.monthlyIncome != null && setup.monthlyIncome! > 0) {
+          income = setup.monthlyIncome!;
+        }
+      } catch (_) {}
+    }
+
     if (income <= 0 && accounts.isNotEmpty) {
       income = accounts
           .where((a) => !a.isArchived && a.accountType.isOperatingPool)
@@ -230,10 +245,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
         final merged = SalaryCycleService.getAvailableCycles(serverCycles: list);
         if (mounted && merged.isNotEmpty) {
           setState(() {
-            final prevKey = _selectedCycle?.cycleKey;
             _cycles = merged;
-            if (prevKey != null) {
-              final idx = merged.indexWhere((c) => c.cycleKey == prevKey);
+            if (_userNavigatedManually && _selectedCycle != null) {
+              final idx = merged.indexWhere((c) => c.cycleKey == _selectedCycle!.cycleKey);
               if (idx != -1) {
                 _currentCycleIndex = idx;
                 return;
@@ -1263,7 +1277,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       tooltip: context.tr('a11y_previous'),
                       icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
-                          ? () => setState(() => _currentCycleIndex++)
+                          ? () => setState(() {
+                              _userNavigatedManually = true;
+                              _currentCycleIndex++;
+                            })
                           : null,
                     ),
                     Column(
@@ -1283,7 +1300,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       tooltip: context.tr('a11y_next'),
                       icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
-                          ? () => setState(() => _currentCycleIndex--)
+                          ? () => setState(() {
+                              _userNavigatedManually = true;
+                              _currentCycleIndex--;
+                            })
                           : null,
                     ),
                   ],
@@ -1397,6 +1417,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       );
                     }
 
+                    final isCurrentCycle = _selectedCycle?.isCurrent ?? true;
+
                     final totalSpent = budgets
                         .where((b) => b.isActive)
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
@@ -1411,20 +1433,22 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .where((b) => b.isActive)
                         .fold<double>(0.0, (s, b) => s + (b.allocatedAmount - b.spentAmount).clamp(0.0, double.infinity));
 
-                    final benchmarkCash = hasOperatingCash ? operatingCash : staticData.monthlyIncome;
+                    final benchmarkCash = (isCurrentCycle && hasOperatingCash)
+                        ? operatingCash
+                        : staticData.monthlyIncome;
                     final hasBenchmark = benchmarkCash > 0;
-                    final currentOperatingCash = hasBenchmark
-                        ? (benchmarkCash - totalSpent).clamp(0.0, double.infinity)
-                        : 0.0;
+                    final currentOperatingCash = (isCurrentCycle && hasOperatingCash)
+                        ? operatingCash
+                        : (hasBenchmark ? (benchmarkCash - totalSpent).clamp(0.0, double.infinity) : 0.0);
                     final cashMargin = hasBenchmark
                         ? (currentOperatingCash - totalUnspentCommitments)
                         : 0.0;
-                    final isOverAllocated = hasBenchmark && cashMargin < -0.005;
+                    final isOverAllocated = isCurrentCycle && hasBenchmark && cashMargin < -0.005;
 
                     // Calculate any account deficits based on remaining unspent commitments
                     Account? deficitAccount;
                     double deficitAmount = 0.0;
-                    if (staticData.accounts.isNotEmpty) {
+                    if (isCurrentCycle && staticData.accounts.isNotEmpty) {
                       final Map<String, double> unspentByAccount = {};
                       for (final b in budgets) {
                         if (b.isActive && b.accountId != null && b.accountId!.isNotEmpty) {

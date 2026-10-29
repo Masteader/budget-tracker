@@ -13,6 +13,7 @@
 ///   ([manualAuditNote]) so both write exactly what the server parses.
 library;
 
+import '../services/salary_cycle_service.dart';
 import 'transaction_attribution.dart';
 
 Map<String, dynamic> buildManualExpenseRow({
@@ -47,6 +48,7 @@ Map<String, dynamic> buildManualExpenseRow({
     'account_id': accountId,
     'source': 'manual',
     'timestamp': occurredAt.toUtc().toIso8601String(),
+    'cycle_key': SalaryCycleService.cycleKeyForInstant(occurredAt),
     if (recordedAt != null) 'created_at': recordedAt.toUtc().toIso8601String(),
     'raw_sms': manualAuditNote(
       head: 'Manual: $merchant',
