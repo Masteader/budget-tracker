@@ -39,10 +39,12 @@ import '../../theme/app_themes.dart';
 
 class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
+  final Map<String, dynamic>? initialScanResult;
 
   const ReceiptScannerSheet({
     super.key,
     required this.householdId,
+    this.initialScanResult,
   });
 
   static Future<void> show(BuildContext context, String householdId) {
@@ -73,6 +75,29 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   late final TextEditingController _merchantController;
   String _selectedSpentBy = 'both';
+  bool _taxEnabled = true;
+
+  List<Map<String, dynamic>> _consolidateItems(List<Map<String, dynamic>> list) {
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (final it in list) {
+      final name = (it['name'] as String? ?? '').trim();
+      final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
+      final price = (it['price'] as num?)?.toDouble() ?? 0.0;
+      final key = '${name.toLowerCase()}::$price';
+      if (merged.containsKey(key)) {
+        final existing = merged[key]!;
+        final existingQty = (existing['quantity'] as num?)?.toDouble() ?? 1.0;
+        existing['quantity'] = existingQty + qty;
+      } else {
+        merged[key] = {
+          'name': name.isEmpty ? 'Item' : name,
+          'quantity': qty > 0 ? qty : 1.0,
+          'price': price,
+        };
+      }
+    }
+    return merged.values.toList();
+  }
 
   // UX-12: the scanned total and category, editable before saving.
   final TextEditingController _reviewAmountCtrl = TextEditingController();
@@ -128,6 +153,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   void initState() {
     super.initState();
     _merchantController = TextEditingController();
+    if (widget.initialScanResult != null) {
+      _scanResult = Map<String, dynamic>.from(widget.initialScanResult!);
+      final m = _scanResult!['merchant'] as String?;
+      if (m != null && m.isNotEmpty) _merchantController.text = m;
+    }
   }
 
   /// setState that is a no-op once the widget is unmounted (async callbacks).
@@ -696,9 +726,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           (_zatcaDecoded?['total'] as num?)?.toDouble() ??
           (_scanResult?['amount'] as num?)?.toDouble() ??
           0.0;
-      final vat = (_zatcaDecoded?['vat'] as num?)?.toDouble() ??
-          (_scanResult?['vat_amount'] as num?)?.toDouble() ??
-          (total > 0 ? (total * 0.15 / 1.15) : 0.0);
+      final vat = _taxEnabled
+          ? ((_zatcaDecoded?['vat'] as num?)?.toDouble() ??
+              (_scanResult?['vat_amount'] as num?)?.toDouble() ??
+              (total > 0 ? (total * 0.15 / 1.15) : 0.0))
+          : 0.0;
 
       if (!allowDuplicate && total > 0) {
         final isDup = await _checkFallbackDuplicateCandidate(merchant, total, vat);
@@ -707,17 +739,19 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       final dynamic rawItems = _scanResult?['items'];
       final List<Map<String, dynamic>> items = (rawItems is List && rawItems.isNotEmpty)
-          ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          ? _consolidateItems(rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList())
           : [
               {
-                'name': context.trArgs('scan_tax_invoice_total_item', {'vat': context.sar(vat)}),
+                'name': _taxEnabled
+                    ? context.trArgs('scan_tax_invoice_total_item', {'vat': context.sar(vat)})
+                    : merchant,
                 'quantity': 1.0,
                 'price': total,
               }
             ];
 
       final itemsSummary = items.map((e) => '${e['quantity']}x ${e['name']} (${e['price']} SAR)').join(', ');
-      String auditText = 'Invoice Scan: $merchant (${items.length} items) | Items: [$itemsSummary]';
+      String auditText = 'Invoice Scan: $merchant (${items.length} items) | ${_taxEnabled ? '15% VAT: ${context.sar(vat)}' : 'No Tax (0%)'} | Items: [$itemsSummary]';
       if (_zatcaQrRaw != null && _zatcaQrRaw!.isNotEmpty) {
         auditText += ' | ZATCA QR: $_zatcaQrRaw';
       }
@@ -1300,7 +1334,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
     final dynamic rawItems = _scanResult!['items'] ?? _scanResult!['parsed_data']?['items'];
     final List<Map<String, dynamic>> items = (rawItems is List)
-        ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        ? _consolidateItems(rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList())
         : <Map<String, dynamic>>[];
 
     final isZatcaVerified = _zatcaDecoded != null || _scanResult!['zatca_verified'] != null;
@@ -1369,6 +1403,99 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             total: amount,
             vat: (_zatcaDecoded?['vat'] as num?)?.toDouble() ?? (amount * 0.15 / 1.15),
             customSubtitle: context.trArgs('scan_total_items_extracted', {'amount': context.sar(amount), 'count': items.length}),
+          ),
+        ],
+
+        if (!isSuccess && !isCandidate) ...[
+          Container(
+            key: const ValueKey('invoice_tax_preview_card'),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: context.subtleCardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_rounded,
+                          size: 20,
+                          color: _taxEnabled ? context.accentText : context.textSecondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          context.tr('invoice_tax_toggle'),
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch.adaptive(
+                      key: const ValueKey('invoice_tax_switch'),
+                      value: _taxEnabled,
+                      activeTrackColor: context.accentText,
+                      onChanged: (val) => setState(() => _taxEnabled = val),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Divider(color: context.borderColor.withValues(alpha: 0.5), height: 1),
+                const SizedBox(height: 8),
+                if (_taxEnabled) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        context.tr('invoice_subtotal'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 12),
+                      ),
+                      Text(
+                        context.sar(amount / 1.15),
+                        style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        context.tr('invoice_tax_amount'),
+                        style: TextStyle(color: context.accentText, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        context.sar(amount * 0.15 / 1.15),
+                        style: TextStyle(color: context.accentText, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        context.tr('invoice_no_tax'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 12),
+                      ),
+                      Text(
+                        context.sar(0.0),
+                        style: TextStyle(color: context.textSecondary, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
 
@@ -1488,6 +1615,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             _zatcaDecoded = null;
             _scanResult = null;
             _applyNafaqahPreview(null);
+            _taxEnabled = true;
           }),
           label: Text(context.tr('scan_another_receipt'), style: TextStyle(color: context.textSecondary)),
         ),

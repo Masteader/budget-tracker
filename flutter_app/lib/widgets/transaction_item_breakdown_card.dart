@@ -435,6 +435,7 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                             final name = it['name'] ?? context.tr('sim_item');
                             final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
                             final price = (it['price'] as num?)?.toDouble() ?? 0.0;
+                            final lineTotal = qty > 1 ? (qty * price) : price;
                             return Padding(
                               padding: EdgeInsets.only(
                                 top: idx > 0 ? 6 : 0,
@@ -452,17 +453,30 @@ class TransactionItemBreakdownCard extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: Text(
-                                      '${qty > 1 ? '${qty.toStringAsFixed(0)}x ' : ''}$name',
-                                      style: GoogleFonts.outfit(
-                                        color: context.textPrimary,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${qty > 1 ? '${qty.toStringAsFixed(0)}x ' : ''}$name',
+                                          style: GoogleFonts.outfit(
+                                            color: context.textPrimary,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (qty > 1)
+                                          Text(
+                                            '${qty.toStringAsFixed(0)} × ${context.money(price, currency)}',
+                                            style: TextStyle(
+                                              color: context.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   Text(
-                                    context.money(price, currency),
+                                    context.money(lineTotal, currency),
                                     style: GoogleFonts.outfit(
                                       color: context.textPrimary,
                                       fontSize: 13,

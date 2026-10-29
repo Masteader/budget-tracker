@@ -111,6 +111,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late String _selectedPaidBy;
   late String _selectedBeneficiary;
   late List<Map<String, dynamic>> _items;
+  bool _taxEnabled = true;
   List<Map<String, dynamic>> _subCategories = [];
   List<String> _dependents = [];
   bool _isSaving = false;
@@ -1568,13 +1569,15 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  context.tr('paid_for_whom_title'),
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w700,
-                    color: context.textSecondary,
+                Expanded(
+                  child: Text(
+                    context.tr('paid_for_whom_title'),
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      letterSpacing: 0.8,
+                      fontWeight: FontWeight.w700,
+                      color: context.textSecondary,
+                    ),
                   ),
                 ),
                 InkWell(
@@ -1696,12 +1699,55 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
               ),
 
+            if (_items.isNotEmpty) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: context.subtleCardBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_rounded,
+                          size: 16,
+                          color: _taxEnabled ? context.accentText : context.textSecondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          context.tr('invoice_tax_toggle'),
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch.adaptive(
+                      value: _taxEnabled,
+                      activeTrackColor: context.accentText,
+                      onChanged: (val) => setState(() => _taxEnabled = val),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             ..._items.asMap().entries.map((entry) {
               final idx = entry.key;
               final it = entry.value;
+              final qty = ((it['quantity'] as num?)?.toDouble() ?? 1.0);
+              final qtyInt = qty.toInt() > 0 ? qty.toInt() : 1;
+              final price = (it['price'] as num?)?.toDouble() ?? 0.0;
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: context.subtleCardBg,
                   borderRadius: BorderRadius.circular(10),
@@ -1709,6 +1755,69 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 ),
                 child: Row(
                   children: [
+                    // Quantity Stepper: [-] 1x [+]
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: context.cardBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.borderColor),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            key: ValueKey('qty_minus_$idx'),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () {
+                              if (qtyInt > 1) {
+                                setState(() {
+                                  it['quantity'] = (qtyInt - 1).toDouble();
+                                });
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.remove,
+                                size: 14,
+                                color: qtyInt > 1 ? context.accentText : context.textSecondary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            child: Text(
+                              '${qtyInt}x',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: context.accentText,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            key: ValueKey('qty_plus_$idx'),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () {
+                              setState(() {
+                                it['quantity'] = (qtyInt + 1).toDouble();
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.add,
+                                size: 14,
+                                color: context.accentText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Item Name
                     Expanded(
                       flex: 3,
                       child: TextFormField(
@@ -1724,20 +1833,35 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    // Price & Line Total
                     Expanded(
                       flex: 2,
-                      child: TextFormField(
-                        initialValue: ((it['price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: TextStyle(color: context.accentText, fontSize: 13, fontWeight: FontWeight.w600),
-                        decoration: InputDecoration(
-                          prefixText: '${context.tr('sar')} ',
-                          border: InputBorder.none,
-                          isDense: true,
-                        ),
-                        onChanged: (val) {
-                          it['price'] = parseMoneyInput(val) ?? 0.0;
-                        },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextFormField(
+                            initialValue: price.toStringAsFixed(2),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textAlign: TextAlign.end,
+                            style: TextStyle(color: context.accentText, fontSize: 13, fontWeight: FontWeight.w600),
+                            decoration: InputDecoration(
+                              prefixText: '${context.tr('sar')} ',
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                it['price'] = parseMoneyInput(val) ?? 0.0;
+                              });
+                            },
+                          ),
+                          if (qtyInt > 1)
+                            Text(
+                              '= ${context.sar(qtyInt * price)}',
+                              style: TextStyle(color: context.textSecondary, fontSize: 10, fontWeight: FontWeight.w500),
+                            ),
+                        ],
                       ),
                     ),
                     IconButton(
