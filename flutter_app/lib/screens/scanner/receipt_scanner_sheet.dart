@@ -1,3 +1,4 @@
+import '../../utils/refresh_app_data.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -177,8 +178,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   void _notifyGlobalProviders() {
     if (!mounted) return;
     try {
-      context.read<TransactionProvider>().refresh();
-      context.read<BudgetProvider>().refresh();
+      refreshGlobalAppData(context);
     } catch (_) {}
   }
 

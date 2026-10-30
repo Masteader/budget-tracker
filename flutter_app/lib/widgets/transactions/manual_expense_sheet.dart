@@ -1,3 +1,4 @@
+import '../../utils/refresh_app_data.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -367,10 +368,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   /// into a second (offline) save.
   void _refreshProviders() {
     try {
-      context.read<TransactionProvider>().fetchTransactions();
-      context.read<BudgetProvider>().refresh();
-      context.read<InstallmentProvider>().fetchPlans(silent: true);
-      context.read<RecurringBillsProvider>().fetchBills(silent: true);
+      refreshGlobalAppData(context);
     } catch (e) {
       debugPrint('[ManualExpenseSheet] Refresh after save skipped: $e');
     }
@@ -497,6 +495,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
         if (selectedAcc != null) {
           final newBal = selectedAcc.balance - amount;
+          try {
+            context.read<AccountProvider>().optimisticUpdateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
+          } catch (_) {}
           try {
             await AccountService.instance.updateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
           } catch (e) {

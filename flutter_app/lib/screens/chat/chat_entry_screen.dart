@@ -1,3 +1,4 @@
+import '../../utils/refresh_app_data.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
@@ -337,9 +338,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   void _refreshGlobalProviders() {
     if (!mounted) return;
     try {
-      context.read<TransactionProvider>().refresh();
-      context.read<BudgetProvider>().refresh();
-      context.read<RecurringBillsProvider>().fetchBills();
+      refreshGlobalAppData(context);
     } catch (_) {}
   }
 

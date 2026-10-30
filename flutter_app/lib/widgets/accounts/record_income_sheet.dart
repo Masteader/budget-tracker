@@ -1,3 +1,4 @@
+import '../../utils/refresh_app_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -156,6 +157,7 @@ class _RecordIncomeSheetState extends State<RecordIncomeSheet> {
       );
 
       if (mounted) {
+        refreshGlobalAppData(context);
         Navigator.pop(context);
         AppSnackBar.showSuccess(
           context,
