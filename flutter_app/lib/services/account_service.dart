@@ -196,23 +196,119 @@ class AccountService {
     }
   }
 
-  /// Get total committed budgets per account for a cycle.
+  /// Get total remaining unspent committed budgets per account for a cycle.
+  /// Deducts already spent amounts from allocated amounts so that
+  /// only remaining unspent commitments are counted against current balance.
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async {
     final res = await _client
         .from('budgets')
-        .select('account_id, allocated_amount, is_active')
-        .eq('household_id', householdId)
-        .eq('cycle_key', cycleKey);
+        .select('account_id, category_code, allocated_amount, spent_amount, cycle_key, month, is_active')
+        .eq('household_id', householdId);
+
+    // Also fetch transaction spending to ensure real-time accuracy even if DB trigger is delayed
+    Map<String, double> categorySpendMap = {};
+    try {
+      final txRes = await _client
+          .from('transactions')
+          .select('category_code, amount, cycle_key, is_settlement, nafaqah_class')
+          .eq('household_id', householdId);
+
+      for (final tx in (txRes as List)) {
+        if (tx['is_settlement'] == true) continue;
+        if (tx['nafaqah_class'] == 'wife_personal') continue;
+        final k = tx['cycle_key'] as String?;
+        if (k == cycleKey) {
+          final cat = tx['category_code'] as String?;
+          final amt = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+          if (cat != null && cat.isNotEmpty) {
+            categorySpendMap[cat] = (categorySpendMap[cat] ?? 0.0) + amt;
+          }
+        }
+      }
+    } catch (_) {}
 
     final Map<String, double> map = {};
     for (final row in (res as List)) {
       if (row['is_active'] == false) continue;
+      final k = row['cycle_key'] as String?;
+      final m = row['month'] as String? ?? '';
+      final matches = (k != null && k.isNotEmpty)
+          ? k == cycleKey
+          : (m.startsWith(cycleKey) || m.startsWith(cycleKey.replaceAll('-', '')));
+      if (!matches) continue;
+
       final accId = row['account_id'] as String?;
       if (accId != null && accId.isNotEmpty) {
-        final amount = (row['allocated_amount'] as num?)?.toDouble() ?? 0.0;
-        map[accId] = (map[accId] ?? 0.0) + amount;
+        final cat = row['category_code'] as String?;
+        final allocated = (row['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+        final dbSpent = (row['spent_amount'] as num?)?.toDouble() ?? 0.0;
+        final txSpent = (cat != null && categorySpendMap.containsKey(cat)) ? categorySpendMap[cat]! : 0.0;
+        final actualSpent = txSpent > dbSpent ? txSpent : dbSpent;
+        final unspent = (allocated - actualSpent).clamp(0.0, double.infinity);
+        map[accId] = (map[accId] ?? 0.0) + unspent;
       }
     }
     return map;
+  }
+
+  /// Automatically links any unlinked transactions to the category's budget account
+  /// or primary operating account, and adjusts the account balance if it was not deducted yet.
+  Future<void> reconcileUnlinkedTransactions(String householdId) async {
+    try {
+      final accounts = await getAccounts(householdId);
+      if (accounts.isEmpty) return;
+
+      final unlinked = await _client
+          .from('transactions')
+          .select('id, amount, category_code')
+          .eq('household_id', householdId)
+          .isFilter('account_id', null);
+
+      if (unlinked.isEmpty) return;
+
+      final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
+
+      for (final row in (unlinked as List)) {
+        final txId = row['id'] as String?;
+        final txAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+        final catCode = row['category_code'] as String?;
+        if (txId == null) continue;
+
+        String targetAccId = defaultAcc.id;
+        if (catCode != null && catCode.isNotEmpty) {
+          try {
+            final bRes = await _client
+                .from('budgets')
+                .select('account_id')
+                .eq('household_id', householdId)
+                .eq('category_code', catCode)
+                .eq('is_active', true)
+                .not('account_id', 'is', null)
+                .limit(1)
+                .maybeSingle();
+            if (bRes != null && bRes['account_id'] != null) {
+              targetAccId = bRes['account_id'] as String;
+            }
+          } catch (_) {}
+        }
+
+        // Check target account balance before linking
+        final targetAccBefore = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
+
+        // Link the transaction
+        await _client.from('transactions').update({'account_id': targetAccId}).eq('id', txId);
+
+        // Check target account balance after linking
+        final targetAccAfter = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
+
+        if (targetAccBefore != null && targetAccAfter != null) {
+          // If the database trigger did not decrement the balance, deduct it directly
+          if ((targetAccAfter.balance - targetAccBefore.balance).abs() < 0.001) {
+            final newBal = (targetAccBefore.balance - txAmt).clamp(0.0, double.infinity);
+            await updateBalance(targetAccId, newBal);
+          }
+        }
+      }
+    } catch (_) {}
   }
 }

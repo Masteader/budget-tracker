@@ -26,12 +26,14 @@ class ChatApiClient {
     DateTime? occurredAt,
     String? previewToken,
     double? amount,
+    String? accountId,
   }) async {
     final payload = <String, dynamic>{
       'message': message,
       'household_id': householdId,
       'allow_duplicate': allowDuplicate,
       'preview_only': previewOnly,
+      if (accountId != null && accountId.isNotEmpty) 'account_id': accountId,
       if (userId != null) 'user_id': userId,
       if (enrichTxId != null) 'enrich_tx_id': enrichTxId,
       if (merchant != null && merchant.trim().isNotEmpty) 'merchant': merchant.trim(),

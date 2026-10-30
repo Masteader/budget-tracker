@@ -375,6 +375,23 @@ extension IncomeSourceTypeExtension on IncomeSourceType {
         return 'income_source_other';
     }
   }
+
+  IconData get icon {
+    switch (this) {
+      case IncomeSourceType.salary:
+        return Icons.work_outline_rounded;
+      case IncomeSourceType.overtime:
+        return Icons.more_time_rounded;
+      case IncomeSourceType.bonus:
+        return Icons.star_outline_rounded;
+      case IncomeSourceType.sideGig:
+        return Icons.laptop_mac_rounded;
+      case IncomeSourceType.roommateShare:
+        return Icons.group_outlined;
+      case IncomeSourceType.other:
+        return Icons.savings_outlined;
+    }
+  }
 }
 
 /// Multi-source itemized income record.

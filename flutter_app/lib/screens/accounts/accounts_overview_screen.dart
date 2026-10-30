@@ -33,6 +33,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   StreamSubscription<List<Account>>? _accountsSub;
   List<Account> _cachedAccounts = [];
   bool _isLoadingAccounts = true;
+  List<IncomeRecord> _cycleIncomeRecords = [];
+  bool _isLoadingIncome = true;
+
+  double get _totalCycleIncome =>
+      _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
 
   @override
   void initState() {
@@ -113,10 +118,31 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
     }
   }
 
+  Future<void> _loadCycleIncome() async {
+    try {
+      final records = await AccountService.instance.getCycleIncome(
+        widget.householdId,
+        _currentCycleKey,
+      );
+      if (mounted) {
+        setState(() {
+          _cycleIncomeRecords = records;
+          _isLoadingIncome = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingIncome = false);
+    }
+  }
+
   Future<void> _refreshAll() async {
+    try {
+      await AccountService.instance.reconcileUnlinkedTransactions(widget.householdId);
+    } catch (_) {}
     await Future.wait([
       _loadCommittedBudgets(),
       _fetchAccountsDirectly(),
+      _loadCycleIncome(),
     ]);
   }
 
@@ -339,7 +365,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 RecordIncomeSheet.show(
                                   context,
                                   householdId: widget.householdId,
-                                );
+                                ).then((_) => _refreshAll());
                               },
                               icon: const Icon(Icons.savings_rounded, size: 16),
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -359,7 +385,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 AccountTransferSheet.show(
                                   context,
                                   householdId: widget.householdId,
-                                  onTransferSuccess: () => setState(() {}),
+                                  onTransferSuccess: _refreshAll,
                                 );
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
@@ -379,7 +405,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                _buildCycleIncomeCard(context, accounts),
+                const SizedBox(height: 20),
 
                 // 2. Banks Section
                 if (banks.isNotEmpty) ...[
@@ -468,6 +496,177 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           onSuccess: () => setState(() {}),
         );
       },
+    );
+  }
+
+  Widget _buildCycleIncomeCard(BuildContext context, List<Account> accounts) {
+    return ThreeDSurfaceCard(
+      borderRadius: 18.0,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.savings_outlined, size: 18, color: context.electricTeal),
+                  const SizedBox(width: 8),
+                  Text(
+                    context.tr('total_cycle_income'),
+                    style: GoogleFonts.outfit(
+                      color: context.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                _hideBalances ? '••••••' : context.sar(_totalCycleIncome),
+                style: GoogleFonts.outfit(
+                  color: context.electricTeal,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          if (_cycleIncomeRecords.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Divider(color: context.borderColor, height: 1),
+            const SizedBox(height: 10),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _cycleIncomeRecords.length,
+              separatorBuilder: (_, __) => Divider(color: context.borderColor.withValues(alpha: 0.4), height: 16),
+              itemBuilder: (ctx, idx) {
+                final rec = _cycleIncomeRecords[idx];
+                final accountName = accounts.where((a) => a.id == rec.accountId).firstOrNull?.name ?? '';
+                return _buildIncomeRow(context, rec, accountName);
+              },
+            ),
+          ] else if (!_isLoadingIncome) ...[
+            const SizedBox(height: 10),
+            Text(
+              context.tr('no_income_records_cycle'),
+              style: TextStyle(color: context.textSecondary, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIncomeRow(BuildContext context, IncomeRecord rec, String accountName) {
+    final hasBreakdown = rec.overtime > 0 || rec.bonus > 0 || rec.deductions > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: context.electricTeal.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(rec.sourceType.icon, size: 16, color: context.electricTeal),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rec.title,
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Text(
+                              context.fmtDate(rec.receivedAt, 'd MMM'),
+                              style: TextStyle(color: context.textSecondary, fontSize: 11),
+                            ),
+                            if (accountName.isNotEmpty) ...[
+                              Text(' • ', style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                              Flexible(
+                                child: Text(
+                                  accountName,
+                                  style: TextStyle(color: context.textSecondary, fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '+${_hideBalances ? "••••" : context.sar(rec.netAmount)}',
+              style: GoogleFonts.outfit(
+                color: context.successText,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        if (hasBreakdown) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              if (rec.baseAmount > 0)
+                _incomeBreakdownChip(context, '${context.tr("base_amount")}: ${context.sar(rec.baseAmount)}', context.textSecondary),
+              if (rec.overtime > 0)
+                _incomeBreakdownChip(context, '+${context.tr("overtime")}: ${context.sar(rec.overtime)}', context.electricTeal),
+              if (rec.bonus > 0)
+                _incomeBreakdownChip(context, '+${context.tr("bonus")}: ${context.sar(rec.bonus)}', context.champagneGold),
+              if (rec.deductions > 0)
+                _incomeBreakdownChip(context, '-${context.tr("deductions")}: ${context.sar(rec.deductions)}', context.dangerColor),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _incomeBreakdownChip(BuildContext context, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

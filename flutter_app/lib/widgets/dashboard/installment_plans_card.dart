@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -14,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../dispose_on_unmount.dart';
+import '../transactions/manual_expense_sheet.dart';
 import '../../models/money.dart';
 import '../../services/salary_cycle_service.dart';
 
@@ -122,107 +124,277 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
   void _showAddPlanDialog(BuildContext context) {
     final merchantCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
+    final monthlyCtrl = TextEditingController();
+    final customCountCtrl = TextEditingController();
+    bool isOngoing = false;
     String selectedProvider = 'Tamara';
     int selectedCount = 4;
-    // null: the default for the provider (Tabby/Tamara "pay in 4" is every
-    // two weeks, the server applies the same rule); set when the user picks.
+    bool isCustomCount = false;
+    bool firstPaidAtCheckout = true;
     String? chosenFrequency;
     String frequencyFor() =>
         chosenFrequency ?? ((selectedProvider == 'Tabby' || selectedProvider == 'Tamara') && selectedCount == 4 ? 'biweekly' : 'monthly');
     bool isSubmitting = false;
+    bool isUpdatingInternally = false;
+
+    void onRemainingAmountChanged(String val, StateSetter setDialogState) {
+      if (isUpdatingInternally) return;
+      final remaining = parseMoneyInput(val);
+      if (remaining != null && remaining > 0 && selectedCount > 0) {
+        isUpdatingInternally = true;
+        final monthly = remaining / selectedCount;
+        monthlyCtrl.text = monthly.toStringAsFixed(2);
+        isUpdatingInternally = false;
+        setDialogState(() {});
+      }
+    }
+
+    void onMonthlyPaymentChanged(String val, StateSetter setDialogState) {
+      if (isUpdatingInternally) return;
+      final monthly = parseMoneyInput(val);
+      if (monthly != null && monthly > 0 && selectedCount > 0) {
+        isUpdatingInternally = true;
+        final totalRemaining = monthly * selectedCount;
+        amountCtrl.text = totalRemaining.toStringAsFixed(2);
+        isUpdatingInternally = false;
+        setDialogState(() {});
+      }
+    }
+
+    void onCountChanged(int count, StateSetter setDialogState) {
+      selectedCount = count;
+      isCustomCount = false;
+      final amt = parseMoneyInput(amountCtrl.text);
+      if (amt != null && amt > 0 && selectedCount > 0) {
+        isUpdatingInternally = true;
+        monthlyCtrl.text = (amt / selectedCount).toStringAsFixed(2);
+        isUpdatingInternally = false;
+      }
+      setDialogState(() {});
+    }
 
     showDialog(
       context: context,
       builder: (dCtx) => DisposeOnUnmount(
-        disposables: [merchantCtrl, amountCtrl],
+        disposables: [merchantCtrl, amountCtrl, monthlyCtrl, customCountCtrl],
         child: StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: context.cardBg,
-          title: Text(
-            context.tr('new_installment_plan'),
-            style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: merchantCtrl,
-                  style: TextStyle(color: context.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: context.tr('merchant_item'),
-                    labelStyle: TextStyle(color: context.textSecondary),
-                    hintText: context.tr('merchant_placeholder'),
-                    hintStyle: TextStyle(color: context.textSecondary),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: TextStyle(color: context.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: context.tr('total_price'),
-                    labelStyle: TextStyle(color: context.textSecondary),
-                    hintText: '${context.tr('example_prefix')} 4000',
-                    hintStyle: TextStyle(color: context.textSecondary),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(context.tr('provider'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                const SizedBox(height: 6),
-                Row(
-                  children: ['Tamara', 'Tabby', 'Bank'].map((p) {
-                    final isSel = selectedProvider == p;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: InkWell(
-                          onTap: () => setDialogState(() => selectedProvider = p),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
-                              border: Border.all(
-                                color: isSel ? (context.accentText) : context.borderColor,
+          builder: (ctx, setDialogState) => AlertDialog(
+            backgroundColor: context.cardBg,
+            title: Text(
+              context.tr('new_installment_plan'),
+              style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Mode Selector: New Purchase vs Ongoing Plan
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.inputBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    padding: const EdgeInsets.all(3),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              if (isOngoing) {
+                                setDialogState(() {
+                                  isOngoing = false;
+                                  if (selectedCount == 1) selectedCount = 4;
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: !isOngoing ? context.primaryButtonBg : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                fontSize: 12,
+                              child: Text(
+                                context.tr('plan_type_new'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: !isOngoing ? context.primaryButtonFg : context.textSecondary,
+                                  fontWeight: !isOngoing ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ),
                         ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              if (!isOngoing) {
+                                setDialogState(() {
+                                  isOngoing = true;
+                                  final amt = parseMoneyInput(amountCtrl.text);
+                                  if (amt != null && amt > 0) {
+                                    isUpdatingInternally = true;
+                                    monthlyCtrl.text = (amt / selectedCount).toStringAsFixed(2);
+                                    isUpdatingInternally = false;
+                                  }
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isOngoing ? context.primaryButtonBg : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                context.tr('plan_type_ongoing'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isOngoing ? context.primaryButtonFg : context.textSecondary,
+                                  fontWeight: isOngoing ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: merchantCtrl,
+                    style: TextStyle(color: context.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: context.tr('merchant_item'),
+                      labelStyle: TextStyle(color: context.textSecondary),
+                      hintText: context.tr('merchant_placeholder'),
+                      hintStyle: TextStyle(color: context.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (!isOngoing) ...[
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(color: context.textPrimary),
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        labelText: context.tr('total_price'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                        hintText: '${context.tr('example_prefix')} 4000',
+                        hintStyle: TextStyle(color: context.textSecondary),
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(context.tr('inst_installment_count'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                const SizedBox(height: 6),
-                Row(
-                  children: [3, 4, 6].map((cnt) {
-                    final isSel = selectedCount == cnt;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: InkWell(
-                          onTap: () => setDialogState(() => selectedCount = cnt),
+                    ),
+                    if (parseMoneyInput(amountCtrl.text) != null && parseMoneyInput(amountCtrl.text)! > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '≈ ${context.sar(parseMoneyInput(amountCtrl.text)! / selectedCount)} / ${context.tr(frequencyFor() == 'biweekly' ? 'inst_two_weeks_short' : 'month')}',
+                          style: TextStyle(color: context.accentText, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ] else ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: amountCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: TextStyle(color: context.textPrimary),
+                            onChanged: (v) => onRemainingAmountChanged(v, setDialogState),
+                            decoration: InputDecoration(
+                              labelText: context.tr('remaining_amount_sar'),
+                              labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
+                              hintText: '${context.tr('example_prefix')} 1000',
+                              hintStyle: TextStyle(color: context.textSecondary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: monthlyCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: TextStyle(color: context.textPrimary),
+                            onChanged: (v) => onMonthlyPaymentChanged(v, setDialogState),
+                            decoration: InputDecoration(
+                              labelText: context.tr('monthly_payment_sar'),
+                              labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
+                              hintText: '${context.tr('example_prefix')} 500',
+                              hintStyle: TextStyle(color: context.textSecondary),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  Text(context.tr('provider'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: ['Tamara', 'Tabby', 'Bank'].map((p) {
+                      final isSel = selectedProvider == p;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: InkWell(
+                            onTap: () => setDialogState(() => selectedProvider = p),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSel ? (context.primaryButtonBg) : context.inputBg,
+                                border: Border.all(
+                                  color: isSel ? (context.accentText) : context.borderColor,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                p == 'Bank' ? context.tr('bnpl_provider_bank_other') : p,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSel ? (context.primaryButtonFg) : context.textPrimary,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Text(
+                    context.tr(isOngoing ? 'remaining_installments' : 'inst_installment_count'),
+                    style: TextStyle(color: context.textSecondary, fontSize: 11),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ...[1, 2, 3, 4, 6, 12].map((cnt) {
+                        final isSel = !isCustomCount && selectedCount == cnt;
+                        return InkWell(
+                          onTap: () => onCountChanged(cnt, setDialogState),
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
-                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
+                              color: isSel ? context.primaryButtonBg : context.inputBg,
                               border: Border.all(
-                                color: isSel ? (context.accentText) : context.borderColor,
+                                color: isSel ? context.accentText : context.borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -230,126 +402,228 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                               '$cnt',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
+                                color: isSel ? context.primaryButtonFg : context.textPrimary,
                                 fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 12,
                               ),
                             ),
                           ),
+                        );
+                      }),
+                      InkWell(
+                        onTap: () => setDialogState(() => isCustomCount = true),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isCustomCount ? context.primaryButtonBg : context.inputBg,
+                            border: Border.all(
+                              color: isCustomCount ? context.accentText : context.borderColor,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isCustomCount && selectedCount > 0 ? '$selectedCount' : context.tr('custom_installments'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isCustomCount ? context.primaryButtonFg : context.textPrimary,
+                              fontWeight: isCustomCount ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(context.tr('inst_frequency'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                const SizedBox(height: 6),
-                Row(
-                  children: ['biweekly', 'monthly'].map((f) {
-                    final isSel = frequencyFor() == f;
-                    return Expanded(
+                    ],
+                  ),
+                  if (isCustomCount) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: customCountCtrl,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(color: context.textPrimary),
+                      onChanged: (v) {
+                        final n = int.tryParse(v);
+                        if (n != null && n >= 1 && n <= 60) {
+                          selectedCount = n;
+                          final amt = parseMoneyInput(amountCtrl.text);
+                          if (amt != null && amt > 0) {
+                            isUpdatingInternally = true;
+                            monthlyCtrl.text = (amt / n).toStringAsFixed(2);
+                            isUpdatingInternally = false;
+                          }
+                          setDialogState(() {});
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: context.tr('custom_count_label'),
+                        labelStyle: TextStyle(color: context.textSecondary, fontSize: 11),
+                        hintText: 'e.g. 5, 8, 9, 18, 24, 36',
+                        hintStyle: TextStyle(color: context.textSecondary),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  if (!isOngoing && selectedCount > 1) ...[
+                    InkWell(
+                      onTap: () => setDialogState(() => firstPaidAtCheckout = !firstPaidAtCheckout),
+                      borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: InkWell(
-                          key: ValueKey('inst_frequency_$f'),
-                          onTap: () => setDialogState(() => chosenFrequency = f),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSel ? (context.primaryButtonBg) : context.inputBg,
-                              border: Border.all(
-                                color: isSel ? (context.accentText) : context.borderColor,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
+                                value: firstPaidAtCheckout,
+                                onChanged: (v) => setDialogState(() => firstPaidAtCheckout = v ?? true),
+                                activeColor: context.accentText,
                               ),
-                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(
-                              context.tr(f == 'biweekly' ? 'inst_every_two_weeks' : 'inst_every_month'),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: isSel ? (context.primaryButtonFg) : context.textPrimary,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                fontSize: 12,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                context.tr('first_paid_at_checkout'),
+                                style: TextStyle(color: context.textSecondary, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  Text(context.tr('inst_frequency'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: ['biweekly', 'monthly'].map((f) {
+                      final isSel = frequencyFor() == f;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: InkWell(
+                            key: ValueKey('inst_frequency_$f'),
+                            onTap: () => setDialogState(() => chosenFrequency = f),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSel ? (context.primaryButtonBg) : context.inputBg,
+                                border: Border.all(
+                                  color: isSel ? (context.accentText) : context.borderColor,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                context.tr(f == 'biweekly' ? 'inst_every_two_weeks' : 'inst_every_month'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSel ? (context.primaryButtonFg) : context.textPrimary,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: context.primaryButtonBg,
-                foregroundColor: context.primaryButtonFg,
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
-              onPressed: isSubmitting
-                  ? null
-                  : () async {
-                      final merchant = merchantCtrl.text.trim();
-                      final total = parseMoneyInput(amountCtrl.text);
-                      if (merchant.isEmpty || total == null || total <= 0) {
-                        AppSnackBar.showError(dCtx, context.tr('inst_invalid_input'));
-                        return;
-                      }
-                      setDialogState(() => isSubmitting = true);
-                      try {
-                        final planData = {
-                          'household_id': widget.householdId ?? '',
-                          'merchant': merchant,
-                          'provider': selectedProvider,
-                          'total_amount': total,
-                          'installment_count': selectedCount,
-                          'frequency': frequencyFor(),
-                          'paid_installments': 1,
-                          'category_code': 'OPEX-SHOPPING',
-                          'adjust_original_transaction': false,
-                          'notes': 'Manually registered BNPL plan',
-                        };
-                        try {
-                          await context.read<InstallmentProvider>().createPlan(planData);
-                        } on ProviderNotFoundException {
-                          await ApiService.instance.createInstallmentPlan(planData);
-                        }
-                        if (dCtx.mounted) Navigator.pop(dCtx);
-                        if (mounted) setState(() => _loadPlans());
-                        if (context.mounted) {
-                          try {
-                            context.read<TransactionProvider>().fetchTransactions();
-                            context.read<BudgetProvider>().refresh();
-                            context.read<RecurringBillsProvider>().fetchBills(silent: true);
-                          } catch (_) {}
-                          AppSnackBar.showSuccess(
-                            context,
-                            context.trArgs('inst_created_msg', {'provider': selectedProvider == 'Bank' ? context.tr('bnpl_provider_bank_other') : selectedProvider, 'merchant': merchant}),
-                            title: context.tr('plan_active'),
-                          );
-                        }
-                      } catch (e) {
-                        setDialogState(() => isSubmitting = false);
-                        if (dCtx.mounted) {
-                          AppSnackBar.showError(
-                            dCtx,
-                            nafaqahWriteErrorText(dCtx, e) ?? dCtx.trArgs('inst_create_failed', {'error': e}),
-                          );
-                        }
-                      }
-                    },
-              child: isSubmitting
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : Text(context.tr('confirm_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dCtx),
+                child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
+                ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final merchant = merchantCtrl.text.trim();
+                        final totalInput = parseMoneyInput(amountCtrl.text);
+                        if (merchant.isEmpty || totalInput == null || totalInput <= 0 || selectedCount <= 0) {
+                          AppSnackBar.showError(dCtx, context.tr('inst_invalid_input'));
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          final double totalAmount;
+                          final double monthlyAmount;
+                          final int totalCount = selectedCount;
+                          final int paidCount;
+
+                          if (isOngoing) {
+                            totalAmount = totalInput;
+                            final parsedMonthly = parseMoneyInput(monthlyCtrl.text);
+                            monthlyAmount = (parsedMonthly != null && parsedMonthly > 0)
+                                ? parsedMonthly
+                                : totalInput / selectedCount;
+                            paidCount = 0;
+                          } else {
+                            totalAmount = totalInput;
+                            monthlyAmount = totalInput / selectedCount;
+                            paidCount = (selectedCount > 1 && firstPaidAtCheckout) ? 1 : 0;
+                          }
+
+                          final planData = {
+                            'household_id': widget.householdId ?? '',
+                            'merchant': merchant,
+                            'provider': selectedProvider,
+                            'total_amount': totalAmount,
+                            'monthly_amount': monthlyAmount,
+                            'installment_count': totalCount,
+                            'frequency': frequencyFor(),
+                            'paid_installments': paidCount,
+                            'category_code': 'OPEX-SHOPPING',
+                            'adjust_original_transaction': false,
+                            'notes': isOngoing
+                                ? 'Manually registered ongoing plan ($selectedCount remaining)'
+                                : 'Manually registered BNPL plan',
+                          };
+                          try {
+                            await context.read<InstallmentProvider>().createPlan(planData);
+                          } on ProviderNotFoundException {
+                            await ApiService.instance.createInstallmentPlan(planData);
+                          }
+                          if (dCtx.mounted) Navigator.pop(dCtx);
+                          if (mounted) setState(() => _loadPlans());
+                          if (context.mounted) {
+                            try {
+                              context.read<TransactionProvider>().fetchTransactions();
+                              context.read<BudgetProvider>().refresh();
+                              context.read<RecurringBillsProvider>().fetchBills(silent: true);
+                            } catch (_) {}
+                            AppSnackBar.showSuccess(
+                              context,
+                              context.trArgs('inst_created_msg', {'provider': selectedProvider == 'Bank' ? context.tr('bnpl_provider_bank_other') : selectedProvider, 'merchant': merchant}),
+                              title: context.tr('plan_active'),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          if (dCtx.mounted) {
+                            AppSnackBar.showError(
+                              dCtx,
+                              nafaqahWriteErrorText(dCtx, e) ?? dCtx.trArgs('inst_create_failed', {'error': e}),
+                            );
+                          }
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : Text(context.tr('confirm_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -416,10 +690,17 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
         ),
       );
 
-  /// "Installment 2 of 4 paid · next 29 Oct" for an active plan.
+  /// "Installment 2 of 4 paid · next 29 Oct" for an active plan, or
+  /// "First of 2 due 29 Oct" when 0 paid.
   String? _nextDueText(BuildContext context, InstallmentPlan plan, DateTime today) {
     final next = plan.nextDueDate(today: today);
     if (next == null) return null;
+    if (plan.paidInstallments == 0) {
+      return context.trArgs('inst_first_due', {
+        'count': plan.installmentCount,
+        'date': context.fmtDate(next, 'd MMM'),
+      });
+    }
     return context.trArgs('inst_paid_next_due', {
       'paid': plan.paidInstallments,
       'count': plan.installmentCount,
@@ -590,46 +871,109 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: providerColor.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: providerColor.withValues(alpha: 0.5),
-                                          width: 0.8,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        plan.provider,
-                                        style: TextStyle(
-                                          color: providerColor,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    Expanded(
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: providerColor.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: providerColor.withValues(alpha: 0.5),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              plan.provider,
+                                              style: TextStyle(
+                                                color: providerColor,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            plan.merchant,
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w600,
+                                              color: context.textPrimary,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.bold,
+                                              color: context.accentText,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Text(
-                                      plan.merchant,
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.w600,
-                                        color: context.textPrimary,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${context.sar(plan.installmentAmount)} / ${context.tr(plan.isBiweekly ? 'inst_two_weeks_short' : 'month')}',
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.bold,
-                                        color: context.accentText,
-                                        fontSize: 13,
-                                      ),
+                                    PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert, size: 18, color: context.textSecondary),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      color: context.cardBg,
+                                      onSelected: (val) async {
+                                        if (val == 'delete') {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (dCtx) => AlertDialog(
+                                              backgroundColor: dCtx.cardBg,
+                                              title: Text(dCtx.tr('delete_installment_title'),
+                                                  style: GoogleFonts.outfit(color: dCtx.textPrimary, fontWeight: FontWeight.bold)),
+                                              content: Text(dCtx.tr('delete_installment_confirm'),
+                                                  style: TextStyle(color: dCtx.textSecondary)),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(dCtx, false),
+                                                  child: Text(dCtx.tr('cancel'), style: TextStyle(color: dCtx.textSecondary)),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                  onPressed: () => Navigator.pop(dCtx, true),
+                                                  child: Text(dCtx.tr('delete'),
+                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed == true && context.mounted) {
+                                            try {
+                                              await context.read<InstallmentProvider>().deletePlan(plan.id);
+                                            } catch (_) {
+                                              try {
+                                                await supabase.from('installment_plans').delete().eq('id', plan.id);
+                                              } catch (_) {}
+                                            }
+                                            if (!context.mounted) return;
+                                            if (mounted) setState(() => _loadPlans());
+                                            AppSnackBar.showSuccess(context, context.tr('installment_deleted'));
+                                          }
+                                        }
+                                      },
+                                      itemBuilder: (ctx) => [
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                              const SizedBox(width: 8),
+                                              Text(ctx.tr('delete'), style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -689,24 +1033,20 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
                                         } else {
-                                          bool recorded;
-                                          try {
-                                            recorded = await context.read<InstallmentProvider>().recordPayment(plan.id);
-                                          } catch (_) {
-                                            recorded = await ApiService.instance.payInstallment(plan.id) != null;
-                                          }
-                                          if (!mounted) return;
-                                          setState(() => _loadPlans());
-                                          if (!recorded && context.mounted) {
-                                            // FR-A-03: never imply a payment the server did not record.
-                                            AppSnackBar.showError(context, context.tr('rb_payment_failed'));
-                                          }
-                                          if (recorded && context.mounted) {
-                                            try {
-                                              context.read<TransactionProvider>().fetchTransactions();
-                                              context.read<BudgetProvider>().refresh();
-                                              context.read<RecurringBillsProvider>().fetchBills(silent: true);
-                                            } catch (_) {}
+                                          final recorded = await ManualExpenseSheet.show(
+                                            context,
+                                            householdId: plan.householdId.isNotEmpty
+                                                ? plan.householdId
+                                                : widget.householdId,
+                                            initialMerchant: plan.merchant,
+                                            initialAmount: plan.monthlyAmount,
+                                            initialCategory: (plan.categoryCode != null && plan.categoryCode!.isNotEmpty)
+                                                ? plan.categoryCode!
+                                                : 'OPEX-SHOPPING',
+                                            installmentPlan: plan,
+                                          );
+                                          if (recorded == true && mounted) {
+                                            setState(() => _loadPlans());
                                           }
                                         }
                                       },

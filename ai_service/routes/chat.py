@@ -158,6 +158,12 @@ async def chat_transaction(request: Request):
     # The amount the user corrected in the confirmation card (UX-12), validated like any edit.
     override_amount = optional_amount(body)
 
+    account_id = body.get("account_id")
+    if account_id is not None:
+        if not isinstance(account_id, str):
+            raise HTTPException(status_code=422, detail="account_id must be a UUID string.")
+        validate_uuid(account_id)
+
     nafaqah_class = body.get("nafaqah_class")
     if nafaqah_class is not None and nafaqah_class not in ("wife_reimbursable", "wife_personal", "none"):
         # Family households never split between spouses: there is no "50/50" or ratio class.
@@ -210,6 +216,7 @@ async def chat_transaction(request: Request):
             override_nafaqah_spouse_id=overrides["nafaqah_spouse_id"],
             preview_token=preview_token,
             override_amount=override_amount,
+            override_account_id=account_id,
         )
     except InvalidPreviewToken:
         if use_idempotency:

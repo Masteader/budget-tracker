@@ -17,7 +17,8 @@ import '../transactions/expense_date_chips.dart';
 class PendingExpenseEdits {
   final double? amount;
   final DateTime? occurredAt;
-  const PendingExpenseEdits({this.amount, this.occurredAt});
+  final String? accountId;
+  const PendingExpenseEdits({this.amount, this.occurredAt, this.accountId});
 }
 
 /// Confirmed values of a chat expense. [confirmedNafaqahClass] is set in
@@ -618,6 +619,7 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
                     final edits = PendingExpenseEdits(
                       amount: (typed - _previewAmount).abs() < 0.005 ? null : typed,
                       occurredAt: isToday ? null : _occurredAt,
+                      accountId: widget.pendingData['account_id'] as String?,
                     );
                     // The class follows the confirmed chips (the selector keeps
                     // them in sync), so a stale suggestion is never sent.

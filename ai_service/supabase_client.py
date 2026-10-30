@@ -521,6 +521,7 @@ def insert_transaction(
     user_id: Optional[str] = None,
     beneficiary_type: Optional[str] = None,
     beneficiary_id: Optional[str] = None,
+    account_id: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -572,6 +573,52 @@ def insert_transaction(
         except Exception:
             pass
 
+    # Automatically resolve account_id if not supplied
+    if not account_id:
+        try:
+            b_res = (
+                client.table("budgets")
+                .select("account_id")
+                .eq("household_id", household_id)
+                .eq("category_code", category_code)
+                .eq("is_active", True)
+                .execute()
+            )
+            if b_res.data:
+                for b_row in b_res.data:
+                    if b_row.get("account_id"):
+                        account_id = b_row["account_id"]
+                        break
+        except Exception as e:
+            logger.debug("Failed checking budget account: %s", e)
+
+        if not account_id:
+            try:
+                accs_res = (
+                    client.table("accounts")
+                    .select("id, account_type, is_shared_pool, balance")
+                    .eq("household_id", household_id)
+                    .eq("is_archived", False)
+                    .execute()
+                )
+                if accs_res.data:
+                    pool_acc = next(
+                        (a for a in accs_res.data if a.get("is_shared_pool") or a.get("account_type") in ("checking", "primary_operating")),
+                        accs_res.data[0]
+                    )
+                    account_id = pool_acc.get("id")
+            except Exception as e:
+                logger.debug("Failed finding default operating account: %s", e)
+
+    bal_before = None
+    if account_id:
+        try:
+            cur_acc = client.table("accounts").select("balance").eq("id", account_id).execute()
+            if cur_acc.data:
+                bal_before = float(cur_acc.data[0].get("balance") or 0.0)
+        except Exception:
+            pass
+
     payload = {
         "household_id": household_id,
         "user_id": user_id,
@@ -585,6 +632,8 @@ def insert_transaction(
         "reallocated_from_budget_id": reallocated_from_budget_id,
         "source": source,
     }
+    if account_id:
+        payload["account_id"] = account_id
     if items:
         payload["items"] = items
     if receipt_url:
@@ -655,6 +704,8 @@ def insert_transaction(
                 base_payload["cycle_key"] = cycle_key
             if spent_by:
                 base_payload["spent_by"] = spent_by
+            if account_id:
+                base_payload["account_id"] = account_id
             # Never pruned: without them the expense would be split among every member.
             base_payload.update(attribution_fields)
             base_payload.update(nafaqah_fields)
@@ -667,6 +718,24 @@ def insert_transaction(
                 raise
 
     transaction_id = response.data[0]["id"]
+
+    # Synchronize account balance if the database trigger did not decrement it
+    if account_id and bal_before is not None:
+        try:
+            cur_acc_after = client.table("accounts").select("balance").eq("id", account_id).execute()
+            if cur_acc_after.data:
+                bal_after = float(cur_acc_after.data[0].get("balance") or 0.0)
+                if abs(bal_after - bal_before) < 0.001:
+                    new_bal = max(0.0, round(bal_before - float(amount), 2))
+                    from utils import utc_now
+                    client.table("accounts").update({
+                        "balance": new_bal,
+                        "updated_at": utc_now().isoformat()
+                    }).eq("id", account_id).execute()
+                    logger.info("Synchronized account %s balance from %.2f to %.2f", account_id, bal_before, new_bal)
+        except Exception as e:
+            logger.warning("Failed balance synchronization for account %s: %s", account_id, e)
+
     logger.info(
         "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s sub_category=%s cycle=%s reallocated=%s source=%s",
         transaction_id, amount, currency, merchant, category_code, sub_category, cycle_key, is_reallocated, source,

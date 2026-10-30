@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../services/household_permissions.dart';
 import '../services/nafaqah_write_errors.dart';
 import '../services/receipt_storage_service.dart';
+import '../services/salary_cycle_service.dart';
 
 /// Centralized reactive state provider for all transactions in the household.
 /// Manages list cache, Supabase Realtime synchronization, optimistic deletions, and filtering.
@@ -380,14 +381,12 @@ class TransactionProvider extends ChangeNotifier {
       if (t.nafaqahClass == 'wife_personal') continue;
       if (t.categoryCode != categoryCode) continue;
 
-      if (t.cycleKey != null && t.cycleKey!.isNotEmpty) {
-        if (t.cycleKey == cycleKey) total += t.amount;
-      } else if (cycleStart != null && cycleEnd != null) {
-        final ts = t.timestamp.toLocal();
-        if (ts.isAfter(cycleStart.subtract(const Duration(seconds: 1))) &&
-            ts.isBefore(cycleEnd.add(const Duration(seconds: 1)))) {
-          total += t.amount;
-        }
+      final effectiveKey = (t.cycleKey != null && t.cycleKey!.isNotEmpty)
+          ? t.cycleKey!
+          : SalaryCycleService.cycleKeyForInstant(t.timestamp);
+
+      if (effectiveKey == cycleKey) {
+        total += t.amount;
       }
     }
     return total;
@@ -404,14 +403,12 @@ class TransactionProvider extends ChangeNotifier {
       if (t.isSettlement) continue;
       if (t.nafaqahClass == 'wife_personal') continue;
 
-      if (t.cycleKey != null && t.cycleKey!.isNotEmpty) {
-        if (t.cycleKey == cycleKey) total += t.amount;
-      } else if (cycleStart != null && cycleEnd != null) {
-        final ts = t.timestamp.toLocal();
-        if (ts.isAfter(cycleStart.subtract(const Duration(seconds: 1))) &&
-            ts.isBefore(cycleEnd.add(const Duration(seconds: 1)))) {
-          total += t.amount;
-        }
+      final effectiveKey = (t.cycleKey != null && t.cycleKey!.isNotEmpty)
+          ? t.cycleKey!
+          : SalaryCycleService.cycleKeyForInstant(t.timestamp);
+
+      if (effectiveKey == cycleKey) {
+        total += t.amount;
       }
     }
     return total;

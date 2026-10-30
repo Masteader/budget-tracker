@@ -167,7 +167,7 @@ class AccountCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(context.tr('committed_budgets'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                        Text(context.tr('remaining_commitments'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         const SizedBox(height: 2),
                         Text(
                           displayCommitted,

@@ -249,7 +249,15 @@ class SalaryCycleService {
     if (serverCycles != null) {
       for (final sc in serverCycles) {
         if (sc.cycleKey.isNotEmpty) {
-          map[sc.cycleKey] = sc;
+          final isCurr = sc.cycleKey == curCycle.key || sc.isCurrentCycle;
+          map[sc.cycleKey] = SalaryCycleInfo(
+            cycleKey: sc.cycleKey,
+            cycleStart: sc.cycleStart,
+            cycleEnd: sc.cycleEnd,
+            label: sc.label,
+            monthName: sc.monthName,
+            isCurrent: isCurr,
+          );
         }
       }
     }
