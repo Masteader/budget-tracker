@@ -73,7 +73,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       _lastStaticData = widget.initialStaticData;
     }
     final initialCycles = SalaryCycleService.getAvailableCycles();
-    final idx = initialCycles.indexWhere((c) => c.isCurrent);
+    final idx = initialCycles.indexWhere((c) => c.isCurrentCycle || c.isCurrent);
     _cycles = initialCycles;
     _currentCycleIndex = idx != -1 ? idx : 0;
     _staticFuture = _loadStaticData();
@@ -117,7 +117,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     if (budgetProvider.cycles.isNotEmpty) {
       _cycles = budgetProvider.cycles;
       if (!_userNavigatedManually) {
-        final curIdx = _cycles.indexWhere((c) => c.isCurrent);
+        final curIdx = _cycles.indexWhere((c) => c.isCurrentCycle || c.isCurrent);
         _currentCycleIndex = curIdx != -1 ? curIdx : 0;
       }
     }
@@ -240,7 +240,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 return;
               }
             }
-            final curIdx = merged.indexWhere((c) => c.isCurrent);
+            final curIdx = merged.indexWhere((c) => c.isCurrentCycle || c.isCurrent);
             _currentCycleIndex = curIdx != -1 ? curIdx : 0;
           });
         }
@@ -1415,22 +1415,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
                     final hasOperatingCash = operatingCash > 0;
 
-                    // Unspent commitments remaining to be funded for the rest of the cycle
-                    final totalUnspentCommitments = budgets
-                        .where((b) => b.isActive)
-                        .fold<double>(0.0, (s, b) => s + (b.allocatedAmount - b.spentAmount).clamp(0.0, double.infinity));
+                    // Cycle funding benchmark: monthly income if known, else operating cash + total spent so far
+                    final cycleFunding = (staticData.monthlyIncome > 0)
+                        ? staticData.monthlyIncome
+                        : (hasOperatingCash ? (operatingCash + totalSpent) : 0.0);
+                    final hasBenchmark = cycleFunding > 0;
 
-                    final benchmarkCash = (isCurrentCycle && hasOperatingCash)
-                        ? operatingCash
-                        : staticData.monthlyIncome;
-                    final hasBenchmark = benchmarkCash > 0;
-                    final currentOperatingCash = (isCurrentCycle && hasOperatingCash)
-                        ? operatingCash
-                        : (hasBenchmark ? (benchmarkCash - totalSpent).clamp(0.0, double.infinity) : 0.0);
-                    final cashMargin = hasBenchmark
-                        ? (currentOperatingCash - totalUnspentCommitments)
-                        : 0.0;
-                    final isOverAllocated = isCurrentCycle && hasBenchmark && cashMargin < -0.005;
+                    // Allocation capacity margin against cycle funding
+                    final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
+                    final isOverAllocated = isCurrentCycle && hasBenchmark && fundingMargin < -0.005;
 
                     // Calculate any account deficits based on remaining unspent commitments
                     Account? deficitAccount;
@@ -1598,7 +1591,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ),
                                     ),
                                     Text(
-                                      context.sar(currentOperatingCash),
+                                      context.sar(cycleFunding),
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
@@ -1625,7 +1618,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                             const SizedBox(width: 6),
                                             Expanded(
                                               child: Text(
-                                                context.trArgs('allocations_exceed_cash', {'amount': context.sar(-cashMargin)}),
+                                                context.trArgs('allocations_exceed_cash', {'amount': context.sar(-fundingMargin)}),
                                                 style: const TextStyle(
                                                   fontSize: 11.5,
                                                   fontWeight: FontWeight.bold,
@@ -1648,7 +1641,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                   householdId: staticData.householdId,
                                                   cycleKey: _currentCycleKey,
                                                   budgets: budgets,
-                                                  targetAvailableCash: currentOperatingCash,
+                                                  targetAvailableCash: cycleFunding,
                                                   onRebalanced: () => setState(() {
                                                     _staticFuture = _loadStaticData();
                                                   }),
@@ -1674,7 +1667,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                 _showPriorSpendingDialog(
                                                   householdId: staticData.householdId,
                                                   cycleKey: _currentCycleKey,
-                                                  shortfall: -cashMargin,
+                                                  shortfall: -fundingMargin,
                                                   budgets: budgets,
                                                   allCodes: staticData.allCodes,
                                                 );
@@ -1697,13 +1690,27 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     ),
                                   ),
                                 ] else ...[
-                                  Text(
-                                    context.trArgs('covered_by_cash', {'amount': context.sar(cashMargin)}),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: context.successText,
-                                    ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        context.trArgs('covered_by_cash', {'amount': context.sar(fundingMargin)}),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.successText,
+                                        ),
+                                      ),
+                                      if (hasOperatingCash && totalSpent > 0)
+                                        Text(
+                                          ':  • : ',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            color: context.textSecondary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ],
                               ],

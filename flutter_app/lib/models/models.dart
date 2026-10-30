@@ -564,14 +564,34 @@ class SalaryCycleInfo {
     this.isCurrent = false,
   });
 
-  factory SalaryCycleInfo.fromMap(Map<String, dynamic> map) => SalaryCycleInfo(
-        cycleKey: map['cycle_key'] as String? ?? '',
-        cycleStart: map['cycle_start'] as String? ?? '',
-        cycleEnd: map['cycle_end'] as String? ?? '',
-        label: map['label'] as String? ?? '',
-        monthName: map['month_name'] as String? ?? '',
-        isCurrent: map['is_current'] as bool? ?? false,
-      );
+  /// True if today in Asia/Riyadh falls between [cycleStart] and [cycleEnd] inclusive.
+  bool get isCurrentCycle {
+    if (cycleStart.isEmpty || cycleEnd.isEmpty) return isCurrent;
+    final today = SalaryCycleService.riyadhToday();
+    final todayIso = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    return cycleStart.compareTo(todayIso) <= 0 && cycleEnd.compareTo(todayIso) >= 0;
+  }
+
+  factory SalaryCycleInfo.fromMap(Map<String, dynamic> map) {
+    final start = map['cycle_start'] as String? ?? '';
+    final end = map['cycle_end'] as String? ?? '';
+    bool current = map['is_current'] as bool? ?? false;
+    if (start.isNotEmpty && end.isNotEmpty) {
+      final today = SalaryCycleService.riyadhToday();
+      final todayIso = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      if (start.compareTo(todayIso) <= 0 && end.compareTo(todayIso) >= 0) {
+        current = true;
+      }
+    }
+    return SalaryCycleInfo(
+      cycleKey: map['cycle_key'] as String? ?? '',
+      cycleStart: start,
+      cycleEnd: end,
+      label: map['label'] as String? ?? '',
+      monthName: map['month_name'] as String? ?? '',
+      isCurrent: current,
+    );
+  }
 
   /// Calendar-date arithmetic in UTC so a device DST change (23 h / 25 h day)
   /// cannot shift the count; "today" is the Asia/Riyadh date.

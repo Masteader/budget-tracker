@@ -202,8 +202,30 @@ class AccountService {
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async {
     final res = await _client
         .from('budgets')
-        .select('account_id, allocated_amount, spent_amount, cycle_key, month, is_active')
+        .select('account_id, category_code, allocated_amount, spent_amount, cycle_key, month, is_active')
         .eq('household_id', householdId);
+
+    // Also fetch transaction spending to ensure real-time accuracy even if DB trigger is delayed
+    Map<String, double> categorySpendMap = {};
+    try {
+      final txRes = await _client
+          .from('transactions')
+          .select('category_code, amount, cycle_key, is_settlement, nafaqah_class')
+          .eq('household_id', householdId);
+
+      for (final tx in (txRes as List)) {
+        if (tx['is_settlement'] == true) continue;
+        if (tx['nafaqah_class'] == 'wife_personal') continue;
+        final k = tx['cycle_key'] as String?;
+        if (k == cycleKey) {
+          final cat = tx['category_code'] as String?;
+          final amt = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+          if (cat != null && cat.isNotEmpty) {
+            categorySpendMap[cat] = (categorySpendMap[cat] ?? 0.0) + amt;
+          }
+        }
+      }
+    } catch (_) {}
 
     final Map<String, double> map = {};
     for (final row in (res as List)) {
@@ -217,9 +239,12 @@ class AccountService {
 
       final accId = row['account_id'] as String?;
       if (accId != null && accId.isNotEmpty) {
+        final cat = row['category_code'] as String?;
         final allocated = (row['allocated_amount'] as num?)?.toDouble() ?? 0.0;
-        final spent = (row['spent_amount'] as num?)?.toDouble() ?? 0.0;
-        final unspent = (allocated - spent).clamp(0.0, double.infinity);
+        final dbSpent = (row['spent_amount'] as num?)?.toDouble() ?? 0.0;
+        final txSpent = (cat != null && categorySpendMap.containsKey(cat)) ? categorySpendMap[cat]! : 0.0;
+        final actualSpent = txSpent > dbSpent ? txSpent : dbSpent;
+        final unspent = (allocated - actualSpent).clamp(0.0, double.infinity);
         map[accId] = (map[accId] ?? 0.0) + unspent;
       }
     }

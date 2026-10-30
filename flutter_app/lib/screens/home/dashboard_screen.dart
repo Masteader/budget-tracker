@@ -233,6 +233,9 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   Future<void> _loadDashboardData(String hid) async {
     unawaited(_fetchCycles(hid));
+    try {
+      context.read<BudgetProvider>().init(hid);
+    } catch (_) {}
     await Future.wait([
       _fetchSetup(hid),
       _fetchAccountsCount(hid),
