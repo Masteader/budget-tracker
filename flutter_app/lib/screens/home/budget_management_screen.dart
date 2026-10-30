@@ -1776,7 +1776,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 final displayName = (!isSys && category.trim().isNotEmpty) ? category : context.trCat(code);
                 final existing =
                     budgets.where((b) => b.categoryCode == code).firstOrNull;
-                final subCategories = kSubCategoriesByParent[code] ?? const <String>[];
+                final subCategories = (existing != null && existing.subAllocations.isNotEmpty)
+                    ? existing.subAllocations.keys.toList()
+                    : (kSubCategoriesByParent[code] ?? const <String>[]);
                 final mappedAccount = staticData.accounts
                     .where((a) => a.id == existing?.accountId)
                     .firstOrNull;
