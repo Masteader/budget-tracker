@@ -527,6 +527,11 @@ class BudgetApiClient {
   /// Throws [ApiRequestException] when the server refuses the plan (403 for
   /// another member's transaction, 400, 5xx) or cannot be reached, so callers
   /// never act on a plan that was not created (FR-A-02).
+  Future<InstallmentPlan> updateInstallmentPlan(String planId, Map<String, dynamic> updateData) async {
+    final res = ApiRequestException.check(await baseClient.put('/budgets/installments/$planId', body: updateData));
+    return InstallmentPlan.fromJson(res);
+  }
+
   Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) async {
     final res = ApiRequestException.check(await baseClient.post('/budgets/installments', planData));
     final plan = InstallmentPlan.fromJson(res);

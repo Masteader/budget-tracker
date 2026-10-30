@@ -366,6 +366,9 @@ class ApiService {
   Future<List<InstallmentPlan>> getInstallments(String householdId) =>
       budget.fetchInstallments(householdId: householdId);
 
+  Future<InstallmentPlan> updateInstallmentPlan(String planId, Map<String, dynamic> updateData) =>
+      budget.updateInstallmentPlan(planId, updateData);
+
   Future<InstallmentPlan> createInstallmentPlan(Map<String, dynamic> planData) =>
       budget.createInstallmentPlan(planData);
 

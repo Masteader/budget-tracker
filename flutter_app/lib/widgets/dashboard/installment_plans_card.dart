@@ -121,6 +121,214 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     }
   }
 
+  void _showEditPlanDialog(BuildContext context, InstallmentPlan plan) {
+    final merchantCtrl = TextEditingController(text: plan.merchant);
+    final totalAmountCtrl = TextEditingController(text: plan.totalAmount.toStringAsFixed(2));
+    final monthlyAmountCtrl = TextEditingController(text: plan.monthlyAmount.toStringAsFixed(2));
+    final countCtrl = TextEditingController(text: plan.installmentCount.toString());
+    final paidCtrl = TextEditingController(text: plan.paidInstallments.toString());
+    final dayCtrl = TextEditingController(text: plan.dayOfMonth.toString());
+
+    String selectedProvider = plan.provider;
+    String selectedFrequency = plan.frequency;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (dCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: context.cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              context.tr('edit_installment_title'),
+              style: GoogleFonts.outfit(
+                color: context.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.85,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: merchantCtrl,
+                      decoration: InputDecoration(
+                        labelText: context.tr('merchant'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                      ),
+                      style: TextStyle(color: context.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: totalAmountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: context.tr('total_amount'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                        suffixText: 'SAR',
+                      ),
+                      style: TextStyle(color: context.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: monthlyAmountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: context.tr('monthly_amount'),
+                        labelStyle: TextStyle(color: context.textSecondary),
+                        suffixText: 'SAR',
+                      ),
+                      style: TextStyle(color: context.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: countCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.tr('installment_count'),
+                              labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
+                            ),
+                            style: TextStyle(color: context.textPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: paidCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.tr('paid_installments'),
+                              labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
+                            ),
+                            style: TextStyle(color: context.textPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: dayCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.tr('day_of_month'),
+                              labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
+                            ),
+                            style: TextStyle(color: context.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      context.tr('provider'),
+                      style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: ['Tamara', 'Tabby', 'Bank', 'Other'].map((p) {
+                        final isSel = selectedProvider.toLowerCase() == p.toLowerCase();
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setDialogState(() => selectedProvider = p),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSel ? context.primaryButtonBg : context.inputBg,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSel ? context.accentText : context.borderColor,
+                                ),
+                              ),
+                              child: Text(
+                                p,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSel ? context.primaryButtonFg : context.textPrimary,
+                                  fontSize: 11,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dCtx),
+                child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
+                ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final merchant = merchantCtrl.text.trim();
+                        final total = parseMoneyInput(totalAmountCtrl.text) ?? plan.totalAmount;
+                        final monthly = parseMoneyInput(monthlyAmountCtrl.text) ?? plan.monthlyAmount;
+                        final count = int.tryParse(countCtrl.text.trim()) ?? plan.installmentCount;
+                        final paid = int.tryParse(paidCtrl.text.trim()) ?? plan.paidInstallments;
+                        final day = int.tryParse(dayCtrl.text.trim()) ?? plan.dayOfMonth;
+
+                        if (merchant.isEmpty) {
+                          AppSnackBar.showError(context, 'Merchant is required');
+                          return;
+                        }
+                        if (paid > count) {
+                          AppSnackBar.showError(context, 'Paid installments cannot exceed total count');
+                          return;
+                        }
+
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          final prov = Provider.of<InstallmentProvider>(context, listen: false);
+                          await prov.updatePlan(plan.id, {
+                            'merchant': merchant,
+                            'provider': selectedProvider,
+                            'total_amount': total,
+                            'monthly_amount': monthly,
+                            'installment_count': count,
+                            'paid_installments': paid,
+                            'day_of_month': day,
+                            'frequency': selectedFrequency,
+                          });
+                          if (dCtx.mounted) Navigator.pop(dCtx);
+                          if (context.mounted) {
+                            AppSnackBar.showSuccess(context, context.tr('installment_updated'));
+                            if (mounted) setState(() => _loadPlans());
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          if (context.mounted) {
+                            AppSnackBar.showError(context, e.toString());
+                          }
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(context.tr('save'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showAddPlanDialog(BuildContext context) {
     final merchantCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -925,7 +1133,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       constraints: const BoxConstraints(),
                                       color: context.cardBg,
                                       onSelected: (val) async {
-                                        if (val == 'delete') {
+                                        if (val == 'edit') {
+                                          _showEditPlanDialog(context, plan);
+                                        } else if (val == 'delete') {
                                           final confirmed = await showDialog<bool>(
                                             context: context,
                                             builder: (dCtx) => AlertDialog(
@@ -963,6 +1173,16 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                         }
                                       },
                                       itemBuilder: (ctx) => [
+                                          PopupMenuItem(
+                                            value: 'edit',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.edit_outlined, size: 18, color: ctx.textPrimary),
+                                                const SizedBox(width: 8),
+                                                Text(ctx.tr('edit'), style: TextStyle(color: ctx.textPrimary, fontSize: 13)),
+                                              ],
+                                            ),
+                                          ),
                                         PopupMenuItem(
                                           value: 'delete',
                                           child: Row(

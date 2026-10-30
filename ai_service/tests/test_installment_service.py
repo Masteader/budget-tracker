@@ -111,3 +111,32 @@ def test_installments_api(tmp_path, monkeypatch, fake_supabase):
     assert pay_res.status_code == 200
     paid_data = pay_res.json()
     assert paid_data["paid_installments"] == 2
+
+    # 5. Edit / update installment plan (PUT /budgets/installments/{plan_id})
+    update_payload = {
+        "merchant": "eXtra Store Flagship",
+        "total_amount": 8000.0,
+        "monthly_amount": 2000.0,
+        "paid_installments": 2,
+        "installment_count": 4,
+        "day_of_month": 28,
+        "provider": "Tabby",
+    }
+    update_res = client.put(f"/budgets/installments/{plan_id}", json=update_payload, headers=headers)
+    assert update_res.status_code == 200
+    updated_data = update_res.json()
+    assert updated_data["merchant"] == "eXtra Store Flagship"
+    assert updated_data["total_amount"] == 8000.0
+    assert updated_data["monthly_amount"] == 2000.0
+    assert updated_data["provider"] == "Tabby"
+    assert updated_data["day_of_month"] == 28
+
+    # 6. Reject invalid paid_installments exceeding count
+    bad_res = client.put(f"/budgets/installments/{plan_id}", json={"paid_installments": 10, "installment_count": 4}, headers=headers)
+    assert bad_res.status_code in (400, 422)
+
+    # 7. Complete plan by updating paid == count
+    complete_res = client.put(f"/budgets/installments/{plan_id}", json={"paid_installments": 4, "installment_count": 4}, headers=headers)
+    assert complete_res.status_code == 200
+    assert complete_res.json()["status"] == "COMPLETED"
+

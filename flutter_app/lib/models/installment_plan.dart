@@ -155,4 +155,42 @@ class InstallmentPlan {
       'next_due_at': nextDueAt?.toIso8601String().substring(0, 10),
     };
   }
+
+  InstallmentPlan copyWith({
+    String? id,
+    String? householdId,
+    String? merchant,
+    String? provider,
+    double? totalAmount,
+    int? installmentCount,
+    double? monthlyAmount,
+    int? paidInstallments,
+    int? dayOfMonth,
+    String? startDate,
+    String? status,
+    String? categoryCode,
+    String? originalTransactionId,
+    String? notes,
+    String? frequency,
+    DateTime? nextDueAt,
+  }) {
+    return InstallmentPlan(
+      id: id ?? this.id,
+      householdId: householdId ?? this.householdId,
+      merchant: merchant ?? this.merchant,
+      provider: provider ?? this.provider,
+      totalAmount: totalAmount ?? this.totalAmount,
+      installmentCount: installmentCount ?? this.installmentCount,
+      monthlyAmount: monthlyAmount ?? this.monthlyAmount,
+      paidInstallments: paidInstallments ?? this.paidInstallments,
+      dayOfMonth: dayOfMonth ?? this.dayOfMonth,
+      startDate: startDate ?? this.startDate,
+      status: status ?? this.status,
+      categoryCode: categoryCode ?? this.categoryCode,
+      originalTransactionId: originalTransactionId ?? this.originalTransactionId,
+      notes: notes ?? this.notes,
+      frequency: frequency ?? this.frequency,
+      nextDueAt: nextDueAt ?? this.nextDueAt,
+    );
+  }
 }

@@ -60,7 +60,7 @@ from recurring_detector import (
     toggle_household_recurring_bill,
     get_recurring_bill_candidates,
 )
-from installment_service import InstallmentPlanCreate, InstallmentService, PlanNotActiveError
+from installment_service import InstallmentPlanCreate, InstallmentPlanUpdate, InstallmentService, PlanNotActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +288,46 @@ async def pay_installment_endpoint(plan_id: str, request: Request):
         )
     except Exception as exc:
         raise safe_error_response(exc, public_message="Failed to pay installment.")
+
+
+@router.put(
+    "/budgets/installments/{plan_id}",
+    tags=["installments"],
+    summary="Update an existing installment plan.",
+)
+async def update_installment_plan_endpoint(plan_id: str, request: Request):
+    caller = get_current_user_id(request)
+    not_found = HTTPException(status_code=404, detail="Installment plan not found.")
+    try:
+        UUID(plan_id)
+    except ValueError:
+        raise not_found
+    try:
+        household_id = await asyncio.to_thread(InstallmentService.get_plan_household_id, plan_id)
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to update installment plan.")
+    if not household_id:
+        raise not_found
+    await verify_household_access(request, household_id)
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise safe_error_response(exc, status_code=422, public_message="Invalid request body.")
+    try:
+        req = InstallmentPlanUpdate(**body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=[
+            {"loc": list(err.get("loc", ())), "type": err.get("type"), "msg": err.get("msg")} for err in exc.errors()
+        ])
+    try:
+        plan = await asyncio.to_thread(InstallmentService.update_plan, plan_id, household_id, req, caller)
+        if not plan:
+            raise not_found
+        return plan.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise safe_error_response(exc, public_message="Failed to update installment plan.")
 
 
 @router.post(

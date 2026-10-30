@@ -205,6 +205,38 @@ class InstallmentPlanCreate(BaseModel):
         return self
 
 
+class InstallmentPlanUpdate(BaseModel):
+    merchant: Optional[str] = Field(None, min_length=1, max_length=120)
+    provider: Optional[str] = Field(None, max_length=40)
+    total_amount: Optional[float] = Field(None, gt=0, le=10_000_000, allow_inf_nan=False)
+    installment_count: Optional[int] = Field(None, ge=1, le=60)
+    monthly_amount: Optional[float] = Field(None, ge=0, le=10_000_000, allow_inf_nan=False)
+    paid_installments: Optional[int] = Field(None, ge=0, le=60)
+    day_of_month: Optional[int] = Field(None, ge=1, le=31)
+    start_date: Optional[str] = Field(None, max_length=32)
+    frequency: Optional[Literal["monthly", "biweekly"]] = None
+    category_code: Optional[str] = Field(None, max_length=60)
+    notes: Optional[str] = Field(None, max_length=500)
+    status: Optional[str] = Field(None, max_length=20)
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        try:
+            return date.fromisoformat(v.strip()).isoformat()
+        except (AttributeError, ValueError):
+            raise ValueError("start_date must be an ISO date (YYYY-MM-DD)")
+
+    @field_validator("frequency", mode="before")
+    @classmethod
+    def normalize_frequency(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().lower() or None
+        return v
+
+
 class InstallmentPlan(BaseModel):
     id: str
     household_id: str
@@ -369,6 +401,77 @@ class InstallmentService:
                 raise
 
         return InstallmentPlan(**plan_dict)
+
+    @classmethod
+    def update_plan(
+        cls,
+        plan_id: str,
+        household_id: str,
+        req: "InstallmentPlanUpdate",
+        actor_user_id: Optional[str] = None,
+    ) -> Optional[InstallmentPlan]:
+        sb = supabase_client.get_client()
+        res = sb.table("installment_plans").select("*").eq("id", plan_id).eq("household_id", household_id).execute()
+        rows = res.data or []
+        if not rows:
+            return None
+        existing = rows[0]
+
+        update_dict: Dict[str, Any] = {}
+        if req.merchant is not None:
+            update_dict["merchant"] = req.merchant.strip()
+        if req.provider is not None:
+            update_dict["provider"] = req.provider.strip()
+        if req.category_code is not None:
+            update_dict["category_code"] = req.category_code.strip()
+        if req.notes is not None:
+            update_dict["notes"] = req.notes
+        if req.day_of_month is not None:
+            update_dict["day_of_month"] = req.day_of_month
+
+        total_amount = Decimal(str(req.total_amount if req.total_amount is not None else existing["total_amount"])).quantize(_HALALA, rounding=ROUND_HALF_UP)
+        if req.total_amount is not None:
+            update_dict["total_amount"] = float(total_amount)
+
+        count = req.installment_count if req.installment_count is not None else existing.get("installment_count", 4)
+        if req.installment_count is not None:
+            update_dict["installment_count"] = count
+
+        paid = req.paid_installments if req.paid_installments is not None else existing.get("paid_installments", 0)
+        if paid > count:
+            raise ValueError(f"paid_installments ({paid}) cannot exceed installment_count ({count})")
+        if req.paid_installments is not None:
+            update_dict["paid_installments"] = paid
+
+        if req.monthly_amount is not None:
+            monthly = Decimal(str(req.monthly_amount)).quantize(_HALALA, rounding=ROUND_HALF_UP)
+            update_dict["monthly_amount"] = float(monthly)
+        elif req.total_amount is not None or req.installment_count is not None:
+            amounts = installment_amounts(float(total_amount), count)
+            update_dict["monthly_amount"] = amounts[0]
+
+        start_date = req.start_date or existing.get("start_date") or date.today().isoformat()
+        if req.start_date is not None:
+            update_dict["start_date"] = start_date
+
+        frequency = req.frequency or existing.get("frequency") or "monthly"
+        if req.frequency is not None:
+            update_dict["frequency"] = frequency
+
+        status = req.status or ("COMPLETED" if paid >= count else "ACTIVE")
+        update_dict["status"] = status
+
+        next_due = next_due_date(start_date, frequency, paid, count, status)
+        update_dict["next_due_at"] = next_due
+
+        sb.table("installment_plans").update(update_dict).eq("id", plan_id).eq("household_id", household_id).execute()
+        cls.recalculate_budgets(household_id)
+
+        updated_res = sb.table("installment_plans").select("*").eq("id", plan_id).eq("household_id", household_id).execute()
+        updated_rows = updated_res.data or []
+        if not updated_rows:
+            return None
+        return InstallmentPlan(**updated_rows[0])
 
     @classmethod
     def _adjust_original_transaction(

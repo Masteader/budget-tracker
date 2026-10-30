@@ -72,6 +72,18 @@ class InstallmentProvider extends ChangeNotifier {
   }
 
   /// Creates a new installment plan and refreshes active plans.
+  /// Updates an existing installment plan.
+  Future<InstallmentPlan> updatePlan(String planId, Map<String, dynamic> updateData) async {
+    try {
+      final plan = await _api.updateInstallmentPlan(planId, updateData);
+      await fetchPlans(silent: true);
+      return plan;
+    } catch (e) {
+      debugPrint('[InstallmentProvider] Error updating installment plan: $e');
+      rethrow;
+    }
+  }
+
   Future<InstallmentPlan> createPlan(Map<String, dynamic> planData) async {
     try {
       final plan = await _api.createInstallmentPlan(planData);
