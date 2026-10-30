@@ -30,6 +30,7 @@ import '../../core/widgets/three_d_icon_puck.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../models/money.dart';
 import '../../models/manual_expense_row.dart';
+import '../../providers/account_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../widgets/dashboard/household_setup_card.dart';
@@ -1410,14 +1411,19 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .where((b) => b.isActive)
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
 
-                    final operatingCash = staticData.accounts
+                    final accountProvider = ctx.watch<AccountProvider>();
+                    final liveAccounts = accountProvider.accounts.isNotEmpty ? accountProvider.accounts : staticData.accounts;
+                    final operatingCash = liveAccounts
                         .where((a) => !a.isArchived && a.accountType.isOperatingPool)
                         .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
                     final hasOperatingCash = operatingCash > 0;
 
-                    // Cycle funding benchmark: monthly income if known, else operating cash + total spent so far
-                    final cycleFunding = (staticData.monthlyIncome > 0)
-                        ? staticData.monthlyIncome
+                    // Cycle funding benchmark: verified cycle income if known, else operating cash + total spent
+                    final verifiedCycleIncome = accountProvider.cycleIncomeTotal > 0
+                        ? accountProvider.cycleIncomeTotal
+                        : staticData.monthlyIncome;
+                    final cycleFunding = (verifiedCycleIncome > 0)
+                        ? verifiedCycleIncome
                         : (hasOperatingCash ? (operatingCash + totalSpent) : 0.0);
                     final hasBenchmark = cycleFunding > 0;
 
@@ -1425,10 +1431,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
                     final isOverAllocated = isCurrentCycle && hasBenchmark && fundingMargin < -0.005;
 
-                    // Calculate any account deficits based on remaining unspent commitments
+                    // Guardrail 2: Calculate any account deficits based on remaining unspent commitments vs current balance
                     Account? deficitAccount;
                     double deficitAmount = 0.0;
-                    if (isCurrentCycle && staticData.accounts.isNotEmpty) {
+                    if (isCurrentCycle && liveAccounts.isNotEmpty) {
                       final Map<String, double> unspentByAccount = {};
                       for (final b in budgets) {
                         if (b.isActive && b.accountId != null && b.accountId!.isNotEmpty) {
@@ -1437,7 +1443,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         }
                       }
                       for (final entry in unspentByAccount.entries) {
-                        final acc = staticData.accounts.where((a) => a.id == entry.key).firstOrNull;
+                        final acc = liveAccounts.where((a) => a.id == entry.key).firstOrNull;
                         if (acc != null && acc.balance < entry.value) {
                           deficitAccount = acc;
                           deficitAmount = entry.value - acc.balance;
@@ -1564,6 +1570,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 const SizedBox(height: 14),
                                 Divider(color: context.borderColor.withValues(alpha: 0.5), height: 1),
                                 const SizedBox(height: 12),
+                                // Row 1: Cycle Funding Capacity Benchmark
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
@@ -1571,14 +1578,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       child: Row(
                                         children: [
                                           Icon(
-                                            isOverAllocated ? Icons.warning_amber_rounded : Icons.account_balance_wallet_outlined,
+                                            isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_outlined,
                                             size: 17,
                                             color: isOverAllocated ? Colors.redAccent : context.electricTeal,
                                           ),
                                           const SizedBox(width: 6),
                                           Flexible(
                                             child: Text(
-                                              context.tr('total_operating_cash'),
+                                              context.tr('cycle_income_capacity'),
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontSize: 12,
@@ -1592,6 +1599,44 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     ),
                                     Text(
                                       context.sar(cycleFunding),
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Row 2: Live Remaining Operating Cash
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.account_balance_wallet_outlined,
+                                            size: 17,
+                                            color: context.accentText,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              context.tr('operating_cash_remaining'),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: context.textSecondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      context.sar(operatingCash),
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
@@ -1618,7 +1663,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                             const SizedBox(width: 6),
                                             Expanded(
                                               child: Text(
-                                                context.trArgs('allocations_exceed_cash', {'amount': context.sar(-fundingMargin)}),
+                                                context.trArgs('allocations_exceed_income', {'amount': context.sar(-fundingMargin)}),
                                                 style: const TextStyle(
                                                   fontSize: 11.5,
                                                   fontWeight: FontWeight.bold,
@@ -1694,7 +1739,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        context.trArgs('covered_by_cash', {'amount': context.sar(fundingMargin)}),
+                                        context.trArgs('within_income_capacity', {'amount': context.sar(fundingMargin)}),
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
