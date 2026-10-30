@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
+import 'providers/account_provider.dart';
 import 'providers/budget_provider.dart';
 import 'providers/household_role_provider.dart';
 import 'providers/installment_provider.dart';
@@ -101,6 +102,7 @@ class BudgetTrackerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AccountProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => BudgetProvider()),
         ChangeNotifierProvider(create: (_) => RecurringBillsProvider()),
@@ -215,6 +217,7 @@ class _AuthGateState extends State<AuthGate> {
         context.read<HouseholdRoleProvider>().reset();
         context.read<RecurringBillsProvider>().reset();
         context.read<InstallmentProvider>().reset();
+        context.read<AccountProvider>().reset();
         ReceiptStorageService.clearSignedUrlCache();
         // Another account may sign in next: no reminder of this household stays.
         ReminderService.instance.cancelAll();
@@ -237,6 +240,7 @@ class _AuthGateState extends State<AuthGate> {
         // Bills and plans feed the reminders even before their cards build.
         context.read<RecurringBillsProvider>().init(householdId);
         context.read<InstallmentProvider>().init(householdId);
+        context.read<AccountProvider>().init(householdId, SalaryCycleService.currentCycle().cycleKey);
       }
     });
   }

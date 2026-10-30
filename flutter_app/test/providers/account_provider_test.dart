@@ -1,0 +1,155 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:budget_tracker/models/account.dart';
+import 'package:budget_tracker/providers/account_provider.dart';
+
+void main() {
+  group('AccountProvider Unit Tests', () {
+    test('initial state has empty accounts, 0 cash, and is not loading', () {
+      final provider = AccountProvider();
+      expect(provider.accounts, isEmpty);
+      expect(provider.operatingCash, equals(0.0));
+      expect(provider.totalNetWorth, equals(0.0));
+      expect(provider.cycleIncomeRecords, isEmpty);
+      expect(provider.cycleIncomeTotal, equals(0.0));
+      expect(provider.isLoading, isFalse);
+      expect(provider.error, isNull);
+      expect(provider.householdId, isNull);
+    });
+
+    test('operatingCash calculates only unarchived operating pool accounts, totalNetWorth includes all non-archived', () {
+      final provider = AccountProvider();
+      var notified = false;
+      provider.addListener(() => notified = true);
+
+      final accounts = [
+        Account(
+          id: 'acc-1',
+          householdId: 'hh-1',
+          ownerUserId: 'u-1',
+          name: 'Rajhi Main',
+          accountType: AccountType.bank,
+          currency: 'SAR',
+          balance: 7076.0,
+          isSharedPool: true,
+          colorHex: '#10B981',
+          iconName: 'account_balance',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+        Account(
+          id: 'acc-2',
+          householdId: 'hh-1',
+          ownerUserId: 'u-1',
+          name: 'Emergency Savings Vault',
+          accountType: AccountType.savings,
+          currency: 'SAR',
+          balance: 10000.0,
+          isSharedPool: true,
+          colorHex: '#3B82F6',
+          iconName: 'savings',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+        Account(
+          id: 'acc-3',
+          householdId: 'hh-1',
+          ownerUserId: 'u-1',
+          name: 'Old Archived Account',
+          accountType: AccountType.bank,
+          currency: 'SAR',
+          balance: 500.0,
+          isSharedPool: true,
+          colorHex: '#64748B',
+          iconName: 'account_balance',
+          isArchived: true,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ];
+
+      provider.setAccountsForTesting(accounts, householdId: 'hh-1');
+      expect(notified, isTrue);
+      // bank is operating pool -> 7076.0; savings is not operating pool
+      expect(provider.operatingCash, equals(7076.0));
+      // totalNetWorth is non-archived -> 7076 + 10000 = 17076.0
+      expect(provider.totalNetWorth, equals(17076.0));
+      expect(provider.householdId, equals('hh-1'));
+    });
+
+    test('cycleIncomeTotal sums netAmount of cycle income records', () {
+      final provider = AccountProvider();
+      final records = [
+        IncomeRecord(
+          id: 'inc-1',
+          householdId: 'hh-1',
+          userId: 'u-1',
+          accountId: 'acc-1',
+          cycleKey: '2026-10',
+          sourceType: IncomeSourceType.salary,
+          title: 'Primary Salary',
+          baseAmount: 8500.0,
+          overtime: 500.0,
+          bonus: 441.0,
+          deductions: 500.0,
+          receivedAt: DateTime(2026, 10, 27),
+          createdAt: DateTime(2026, 10, 27),
+        ),
+      ];
+
+      provider.setCycleIncomeForTesting(records, cycleKey: '2026-10');
+      expect(provider.cycleIncomeTotal, equals(8941.0));
+      expect(provider.cycleKey, equals('2026-10'));
+    });
+
+    test('optimisticUpdateBalance updates account balance instantly and notifies listeners', () {
+      final provider = AccountProvider();
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 7076.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      var notifyCount = 0;
+      provider.addListener(() => notifyCount++);
+
+      // Deduct 34.40 spent
+      provider.optimisticUpdateBalance('acc-1', 7041.60);
+      expect(notifyCount, equals(1));
+      expect(provider.operatingCash, equals(7041.60));
+      expect(provider.accounts.first.balance, equals(7041.60));
+    });
+
+    test('reset clears accounts and income and notifies listeners', () {
+      final provider = AccountProvider();
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 7076.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      provider.reset();
+      expect(provider.accounts, isEmpty);
+      expect(provider.operatingCash, equals(0.0));
+      expect(provider.householdId, isNull);
+    });
+  });
+}
