@@ -140,3 +140,79 @@ def test_installments_api(tmp_path, monkeypatch, fake_supabase):
     assert complete_res.status_code == 200
     assert complete_res.json()["status"] == "COMPLETED"
 
+
+def test_installment_plan_update_validation():
+    from installment_service import InstallmentPlanUpdate
+    from pydantic import ValidationError
+
+    # monthly_amount must be gt=0 (not 0)
+    with pytest.raises(ValidationError):
+        InstallmentPlanUpdate(monthly_amount=0)
+
+    with pytest.raises(ValidationError):
+        InstallmentPlanUpdate(monthly_amount=-100)
+
+    valid = InstallmentPlanUpdate(monthly_amount=150.0)
+    assert valid.monthly_amount == 150.0
+
+    # status validation: case-insensitive ACTIVE, COMPLETED, CANCELLED
+    valid_status = InstallmentPlanUpdate(status="active")
+    assert valid_status.status == "ACTIVE"
+
+    valid_comp = InstallmentPlanUpdate(status="Completed")
+    assert valid_comp.status == "COMPLETED"
+
+    with pytest.raises(ValidationError):
+        InstallmentPlanUpdate(status="PENDING_UNKNOWN")
+
+
+def test_installment_update_adjusts_linked_transaction(fake_supabase):
+    from installment_service import InstallmentService, InstallmentPlanCreate, InstallmentPlanUpdate
+    hid = "f860188e-23b5-4749-b180-868c956151a6"
+    tx_id = "tx-12345678-0000-0000-0000-000000000001"
+
+    fake_supabase.seed("transactions", [{
+        "id": tx_id,
+        "household_id": hid,
+        "amount": 1000.0,
+        "raw_sms": "Purchase at Extra",
+    }])
+
+    plan_req = InstallmentPlanCreate(
+        household_id=hid,
+        merchant="eXtra",
+        provider="Tamara",
+        total_amount=1000.0,
+        installment_count=4,
+        monthly_amount=250.0,
+        original_transaction_id=tx_id,
+        adjust_original_transaction=True,
+    )
+    plan = InstallmentService.create_plan(plan_req)
+    assert plan.id is not None
+
+    # Verify transaction was adjusted to 250.0
+    tx_rows = fake_supabase.table("transactions").select("*").eq("id", tx_id).execute().data
+    assert tx_rows[0]["amount"] == 250.0
+    assert "Financed via Tamara" in tx_rows[0]["raw_sms"]
+
+    # Now update plan monthly_amount to 300.0 and total to 1200.0
+    update_req = InstallmentPlanUpdate(
+        monthly_amount=300.0,
+        total_amount=1200.0,
+    )
+    updated_plan = InstallmentService.update_plan(
+        plan_id=plan.id,
+        household_id=hid,
+        req=update_req,
+    )
+    assert updated_plan is not None
+    assert updated_plan.monthly_amount == 300.0
+    assert updated_plan.total_amount == 1200.0
+
+    # Linked transaction must be adjusted to 300.0
+    tx_updated = fake_supabase.table("transactions").select("*").eq("id", tx_id).execute().data
+    assert tx_updated[0]["amount"] == 300.0
+    assert "Full price: SAR 1,200.00" in tx_updated[0]["raw_sms"]
+
+

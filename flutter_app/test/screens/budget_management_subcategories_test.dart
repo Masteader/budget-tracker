@@ -14,7 +14,7 @@ import 'package:budget_tracker/screens/home/budget_management_screen.dart';
 import 'package:budget_tracker/services/salary_cycle_service.dart';
 import '../support/localized_app.dart';
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {String lang = 'en'}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<AccountProvider>(create: (_) => AccountProvider()),
@@ -24,7 +24,7 @@ Widget _wrap(Widget child) {
       ChangeNotifierProvider<InstallmentProvider>(create: (_) => InstallmentProvider()),
       ChangeNotifierProvider<HouseholdRoleProvider>(create: (_) => HouseholdRoleProvider()),
     ],
-    child: localizedApp(child, scaffold: false),
+    child: localizedApp(child, lang: lang, scaffold: false),
   );
 }
 
@@ -81,6 +81,105 @@ void main() {
     // Verify sub-category chips appear on screen
     expect(find.text('Fresh Produce'), findsOneWidget);
     expect(find.text('Specialty Bakery'), findsOneWidget);
+  });
+
+  testWidgets('BudgetManagementScreen merges system defaults and custom subAllocations (HIGH-01)', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+
+    final staticData = BudgetStaticData(
+      householdId: 'hh-1',
+      isAdmin: true,
+      allCodes: [
+        {'code': 'OPEX-GROCERY', 'category': 'Groceries', 'is_system': 'true'},
+      ],
+      monthlyIncome: 5000.0,
+      accounts: [],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        BudgetManagementScreen(
+          initialStaticData: staticData,
+          loadStaticDataOverride: () async => staticData,
+          budgetStreamOverride: (_) => Stream.value([
+            {
+              'id': 'b-grocery',
+              'household_id': 'hh-1',
+              'category_code': 'OPEX-GROCERY',
+              'allocated_amount': 2000.0,
+              'spent_amount': 0.0,
+              'is_active': true,
+              'cycle_key': currentCycleKey,
+              'month': '$currentCycleKey-01',
+              'sub_allocations': {
+                'Gourmet Imports': 500.0,
+              },
+            }
+          ]),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // System default translated key for Meat & Poultry should be visible
+    expect(find.text('Meat & Poultry'), findsOneWidget);
+    // Custom suballocation should also be visible
+    expect(find.text('Gourmet Imports'), findsOneWidget);
+  });
+
+  testWidgets('BudgetManagementScreen translates merged sub-categories in Arabic (Rule 03.3)', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+
+    final staticData = BudgetStaticData(
+      householdId: 'hh-1',
+      isAdmin: true,
+      allCodes: [
+        {'code': 'OPEX-GROCERY', 'category': 'Groceries', 'is_system': 'true'},
+      ],
+      monthlyIncome: 5000.0,
+      accounts: [],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        BudgetManagementScreen(
+          initialStaticData: staticData,
+          loadStaticDataOverride: () async => staticData,
+          budgetStreamOverride: (_) => Stream.value([
+            {
+              'id': 'b-grocery',
+              'household_id': 'hh-1',
+              'category_code': 'OPEX-GROCERY',
+              'allocated_amount': 2000.0,
+              'spent_amount': 0.0,
+              'is_active': true,
+              'cycle_key': currentCycleKey,
+              'month': '$currentCycleKey-01',
+              'sub_allocations': {
+                'Gourmet Imports': 500.0,
+              },
+            }
+          ]),
+        ),
+        lang: 'ar',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Arabic translation for Meat & Poultry should be visible
+    expect(find.text('اللحوم والدواجن'), findsOneWidget);
+    // Custom suballocation retains original string
+    expect(find.text('Gourmet Imports'), findsOneWidget);
   });
 }
 

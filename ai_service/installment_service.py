@@ -210,7 +210,7 @@ class InstallmentPlanUpdate(BaseModel):
     provider: Optional[str] = Field(None, max_length=40)
     total_amount: Optional[float] = Field(None, gt=0, le=10_000_000, allow_inf_nan=False)
     installment_count: Optional[int] = Field(None, ge=1, le=60)
-    monthly_amount: Optional[float] = Field(None, ge=0, le=10_000_000, allow_inf_nan=False)
+    monthly_amount: Optional[float] = Field(None, gt=0, le=10_000_000, allow_inf_nan=False)
     paid_installments: Optional[int] = Field(None, ge=0, le=60)
     day_of_month: Optional[int] = Field(None, ge=1, le=31)
     start_date: Optional[str] = Field(None, max_length=32)
@@ -218,6 +218,18 @@ class InstallmentPlanUpdate(BaseModel):
     category_code: Optional[str] = Field(None, max_length=60)
     notes: Optional[str] = Field(None, max_length=500)
     status: Optional[str] = Field(None, max_length=20)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            val = v.strip().upper()
+            if val not in ("ACTIVE", "COMPLETED", "CANCELLED"):
+                raise ValueError("status must be ACTIVE, COMPLETED, or CANCELLED")
+            return val
+        raise ValueError("Invalid status")
 
     @field_validator("start_date")
     @classmethod
@@ -464,6 +476,29 @@ class InstallmentService:
         next_due = next_due_date(start_date, frequency, paid, count, status)
         update_dict["next_due_at"] = next_due
 
+        # If linked to an original transaction and amounts changed, adjust it first
+        orig_tx_id = existing.get("original_transaction_id")
+        old_monthly = float(existing.get("monthly_amount") or 0.0)
+        new_monthly = update_dict.get("monthly_amount", old_monthly)
+        old_total = float(existing.get("total_amount") or 0.0)
+        new_total = update_dict.get("total_amount", old_total)
+
+        if orig_tx_id and (new_monthly != old_monthly or new_total != old_total):
+            try:
+                cls._adjust_original_transaction(
+                    tx_id=orig_tx_id,
+                    household_id=household_id,
+                    monthly_amount=new_monthly,
+                    total_amount=new_total,
+                    provider=update_dict.get("provider", existing.get("provider", "Tamara")),
+                    installment_count=update_dict.get("installment_count", existing.get("installment_count", 4)),
+                )
+            except Exception as exc:
+                final = supabase_client.final_transaction_db_error(exc)
+                if final is not None:
+                    raise final from exc
+                raise
+
         sb.table("installment_plans").update(update_dict).eq("id", plan_id).eq("household_id", household_id).execute()
         cls.recalculate_budgets(household_id)
 
@@ -499,7 +534,8 @@ class InstallmentService:
             .single()
             .execute()
         )
-        raw_sms = (tx.data.get("raw_sms") or "") + note_suffix
+        base_sms = re.sub(r"\s*\[Financed via [^\]]+\]", "", (tx.data.get("raw_sms") or "")).strip()
+        raw_sms = (base_sms + " " + note_suffix).strip() if base_sms else note_suffix.strip()
 
         sb.table("transactions").update({
             "amount": monthly_amount,

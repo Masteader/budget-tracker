@@ -144,7 +144,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
 
   List<Map<String, String>> _getCategories(BuildContext context) {
     try {
-      final active = context.read<BudgetProvider>().activeCategories;
+      final active = context.watch<BudgetProvider>().activeCategories;
       if (active.isNotEmpty) {
         final list = <Map<String, String>>[];
         for (final item in active) {
@@ -192,6 +192,16 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           : '',
     );
     _selectedCategory = initialCat ?? 'OPEX-GROCERY';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        final bp = context.read<BudgetProvider>();
+        final hid = widget.householdId;
+        if (bp.activeCategories.isEmpty && hid != null && hid.isNotEmpty) {
+          bp.getHouseholdCategories(hid);
+        }
+      } catch (_) {}
+    });
     _loadHouseholdMembers();
     _loadAccounts();
   }

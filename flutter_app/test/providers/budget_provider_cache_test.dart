@@ -80,5 +80,17 @@ void main() {
       expect(fallbackCats['active']?.length, 1);
       expect(mockApi.fetchCategoriesCallCount, 2);
     });
+
+    test('init(householdId) warms activeCategories eagerly (HIGH-02)', () async {
+      final mockApi = MockBudgetApi();
+      final provider = BudgetProvider(api: mockApi);
+
+      expect(provider.activeCategories, isEmpty);
+      await provider.init('hid-1');
+
+      expect(mockApi.fetchCategoriesCallCount, 1);
+      expect(provider.activeCategories, isNotEmpty);
+      expect(provider.activeCategories.first.code, equals('OPEX-FOOD'));
+    });
   });
 }

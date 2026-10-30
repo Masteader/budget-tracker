@@ -1416,7 +1416,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
 
                     final accountProvider = ctx.watch<AccountProvider>();
-                    final liveAccounts = accountProvider.accounts.isNotEmpty ? accountProvider.accounts : staticData.accounts;
+                    final liveAccounts = accountProvider.hasLoaded ? accountProvider.accounts : staticData.accounts;
                     final operatingCash = liveAccounts
                         .where((a) => !a.isArchived && a.accountType.isOperatingPool)
                         .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
@@ -1776,9 +1776,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 final displayName = (!isSys && category.trim().isNotEmpty) ? category : context.trCat(code);
                 final existing =
                     budgets.where((b) => b.categoryCode == code).firstOrNull;
-                final subCategories = (existing != null && existing.subAllocations.isNotEmpty)
-                    ? existing.subAllocations.keys.toList()
-                    : (kSubCategoriesByParent[code] ?? const <String>[]);
+                final systemSubs = kSubCategoriesByParent[code] ?? const <String>[];
+                final customSubs = existing?.subAllocations.keys ?? const <String>[];
+                final subCategories = <String>{
+                  ...systemSubs,
+                  ...customSubs,
+                }.toList();
                 final mappedAccount = staticData.accounts
                     .where((a) => a.id == existing?.accountId)
                     .firstOrNull;

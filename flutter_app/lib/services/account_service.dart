@@ -42,18 +42,14 @@ class AccountService {
   Future<List<Account>> getAccounts(String householdId) async {
     final client = _safeClient;
     if (client == null) return [];
-    try {
-      final res = await client
-          .from('accounts')
-          .select()
-          .eq('household_id', householdId)
-          .eq('is_archived', false)
-          .order('created_at', ascending: true);
+    final res = await client
+        .from('accounts')
+        .select()
+        .eq('household_id', householdId)
+        .eq('is_archived', false)
+        .order('created_at', ascending: true);
 
-      return (res as List).map((map) => Account.fromMap(map)).toList();
-    } catch (_) {
-      return [];
-    }
+    return (res as List).map((map) => Account.fromMap(map)).toList();
   }
 
   /// Create a new account.
@@ -191,18 +187,14 @@ class AccountService {
   Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async {
     final client = _safeClient;
     if (client == null) return [];
-    try {
-      final res = await client
-          .from('income_records')
-          .select()
-          .eq('household_id', householdId)
-          .eq('cycle_key', cycleKey)
-          .order('received_at', ascending: false);
+    final res = await client
+        .from('income_records')
+        .select()
+        .eq('household_id', householdId)
+        .eq('cycle_key', cycleKey)
+        .order('received_at', ascending: false);
 
-      return (res as List).map((map) => IncomeRecord.fromMap(map)).toList();
-    } catch (_) {
-      return [];
-    }
+    return (res as List).map((map) => IncomeRecord.fromMap(map)).toList();
   }
 
   /// Link a budget category to an account.

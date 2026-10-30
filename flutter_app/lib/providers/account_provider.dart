@@ -14,6 +14,7 @@ class AccountProvider extends ChangeNotifier {
   List<Account> _accounts = [];
   List<IncomeRecord> _cycleIncomeRecords = [];
   bool _isLoading = false;
+  bool _hasLoaded = false;
   String? _error;
 
   AccountProvider({AccountService? service}) : _service = service ?? AccountService.instance;
@@ -23,6 +24,7 @@ class AccountProvider extends ChangeNotifier {
   List<Account> get accounts => List.unmodifiable(_accounts);
   List<IncomeRecord> get cycleIncomeRecords => List.unmodifiable(_cycleIncomeRecords);
   bool get isLoading => _isLoading;
+  bool get hasLoaded => _hasLoaded;
   String? get error => _error;
 
   /// Liquid operating cash: accounts in the active operating pool with positive balances.
@@ -58,6 +60,7 @@ class AccountProvider extends ChangeNotifier {
     _streamSub = _service.streamAccounts(householdId).listen(
       (list) {
         _accounts = list;
+        _hasLoaded = true;
         _error = null;
         notifyListeners();
       },
@@ -95,6 +98,7 @@ class AccountProvider extends ChangeNotifier {
       final results = await Future.wait([accFuture, incFuture]);
       _accounts = results[0] as List<Account>;
       _cycleIncomeRecords = results[1] as List<IncomeRecord>;
+      _hasLoaded = true;
       _error = null;
     } catch (e) {
       _error = e.toString();
@@ -113,6 +117,7 @@ class AccountProvider extends ChangeNotifier {
     _accounts = [];
     _cycleIncomeRecords = [];
     _isLoading = false;
+    _hasLoaded = false;
     _error = null;
     notifyListeners();
   }
@@ -122,6 +127,7 @@ class AccountProvider extends ChangeNotifier {
     _accounts = List.from(accounts);
     _householdId = householdId;
     if (cycleKey != null) _cycleKey = cycleKey;
+    _hasLoaded = true;
     notifyListeners();
   }
 

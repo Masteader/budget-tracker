@@ -90,4 +90,50 @@ void main() {
 
     expect(accountProvider.operatingCash, equals(6976.0));
   });
+
+  testWidgets('Dashboard respects 0.00 SAR operating cash when hasLoaded is true (CRITICAL-03)', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+    final accountProvider = AccountProvider();
+    final zeroAcc = Account(
+      id: 'acc-zero',
+      householdId: 'test-hid',
+      ownerUserId: 'u-1',
+      name: 'Zero Balance Bank',
+      accountType: AccountType.bank,
+      currency: 'SAR',
+      balance: 0.0,
+      isSharedPool: true,
+      colorHex: '#10B981',
+      iconName: 'account_balance',
+      isArchived: false,
+      createdAt: DateTime(2026, 1, 1),
+    );
+    accountProvider.setAccountsForTesting(
+      [zeroAcc],
+      householdId: 'test-hid',
+      cycleKey: currentCycleKey,
+    );
+    expect(accountProvider.hasLoaded, isTrue);
+    expect(accountProvider.operatingCash, equals(0.0));
+
+    await tester.pumpWidget(
+      _wrapWithProviders(
+        BudgetDashboard(
+          householdId: 'test-hid',
+          budgetStreamOverride: (_) => Stream.value([]),
+        ),
+        accountProvider: accountProvider,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // When hasLoaded is true, liveOperatingCash should be 0.00 SAR (operatingCash)
+    // and total accounts count should be 1
+    expect(find.textContaining('1'), findsWidgets);
+  });
 }

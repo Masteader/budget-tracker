@@ -45,13 +45,16 @@ class BudgetProvider extends ChangeNotifier {
   double get totalRemaining => _categories.fold(0.0, (acc, c) => acc + c.remainingAmount);
 
   Future<void> init(String householdId) async {
-    if (_householdId == householdId && _cycles.isNotEmpty) return;
+    if (_householdId == householdId && _cycles.isNotEmpty && _cachedHouseholdCategories != null) return;
     if (_householdId != householdId) {
       // Never show another household's budgets while the new ones load.
       _clearData();
     }
     _householdId = householdId;
-    await refresh();
+    await Future.wait([
+      refresh(),
+      getHouseholdCategories(householdId).catchError((_) => <String, List<CategoryItem>>{}),
+    ]);
   }
 
   /// Drops all cached household data (sign-out / household switch).

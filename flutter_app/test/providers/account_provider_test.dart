@@ -1,12 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/providers/account_provider.dart';
+import 'package:budget_tracker/services/account_service.dart';
 
 void main() {
   group('AccountProvider Unit Tests', () {
     test('initial state has empty accounts, 0 cash, and is not loading', () {
       final provider = AccountProvider();
       expect(provider.accounts, isEmpty);
+      expect(provider.hasLoaded, isFalse);
       expect(provider.operatingCash, equals(0.0));
       expect(provider.totalNetWorth, equals(0.0));
       expect(provider.cycleIncomeRecords, isEmpty);
@@ -150,6 +152,60 @@ void main() {
       expect(provider.accounts, isEmpty);
       expect(provider.operatingCash, equals(0.0));
       expect(provider.householdId, isNull);
+      expect(provider.hasLoaded, isFalse);
+    });
+
+    test('hasLoaded is true after setAccountsForTesting', () {
+      final provider = AccountProvider();
+      expect(provider.hasLoaded, isFalse);
+      provider.setAccountsForTesting([], householdId: 'hh-1');
+      expect(provider.hasLoaded, isTrue);
+    });
+
+    test('refresh preserves existing accounts and sets error on service failure (CRITICAL-02)', () async {
+      final fakeService = _FailingAccountService();
+      final provider = AccountProvider(service: fakeService);
+
+      final initialAcc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 7076.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([initialAcc], householdId: 'hh-1');
+
+      await provider.refresh();
+
+      expect(provider.accounts.length, equals(1));
+      expect(provider.accounts.first.balance, equals(7076.0));
+      expect(provider.operatingCash, equals(7076.0));
+      expect(provider.error, contains('Simulated network failure'));
+      expect(provider.isLoading, isFalse);
     });
   });
+}
+
+class _FailingAccountService extends AccountService {
+  @override
+  Future<List<Account>> getAccounts(String householdId) async {
+    throw Exception('Simulated network failure');
+  }
+
+  @override
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async {
+    return [];
+  }
+
+  @override
+  Stream<List<Account>> streamAccounts(String householdId) {
+    return const Stream.empty();
+  }
 }

@@ -15,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../dispose_on_unmount.dart';
+import '../../utils/refresh_app_data.dart';
 import '../transactions/manual_expense_sheet.dart';
 import '../../models/money.dart';
 import '../../services/salary_cycle_service.dart';
@@ -132,6 +133,20 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
     String selectedProvider = plan.provider;
     String selectedFrequency = plan.frequency;
     bool isSubmitting = false;
+    bool userOverrodeMonthly = false;
+    bool isUpdatingInternally = false;
+
+    void recalculateMonthly(StateSetter setDialogState) {
+      if (userOverrodeMonthly || isUpdatingInternally) return;
+      final total = parseMoneyInput(totalAmountCtrl.text);
+      final count = int.tryParse(countCtrl.text.trim());
+      if (total != null && total > 0 && count != null && count > 0) {
+        isUpdatingInternally = true;
+        monthlyAmountCtrl.text = (total / count).toStringAsFixed(2);
+        isUpdatingInternally = false;
+        setDialogState(() {});
+      }
+    }
 
     showDialog(
       context: context,
@@ -168,6 +183,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                     TextFormField(
                       controller: totalAmountCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => recalculateMonthly(setDialogState),
                       decoration: InputDecoration(
                         labelText: context.tr('total_amount'),
                         labelStyle: TextStyle(color: context.textSecondary),
@@ -179,6 +195,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                     TextFormField(
                       controller: monthlyAmountCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (val) {
+                        userOverrodeMonthly = true;
+                      },
                       decoration: InputDecoration(
                         labelText: context.tr('monthly_amount'),
                         labelStyle: TextStyle(color: context.textSecondary),
@@ -193,6 +212,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           child: TextFormField(
                             controller: countCtrl,
                             keyboardType: TextInputType.number,
+                            onChanged: (_) => recalculateMonthly(setDialogState),
                             decoration: InputDecoration(
                               labelText: context.tr('installment_count'),
                               labelStyle: TextStyle(color: context.textSecondary, fontSize: 12),
@@ -225,6 +245,45 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      context.tr('frequency'),
+                      style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        ('monthly', context.tr('frequency_monthly')),
+                        ('biweekly', context.tr('frequency_biweekly')),
+                      ].map((f) {
+                        final isSel = selectedFrequency.toLowerCase() == f.$1.toLowerCase();
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setDialogState(() => selectedFrequency = f.$1),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSel ? context.primaryButtonBg : context.inputBg,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSel ? context.accentText : context.borderColor,
+                                ),
+                              ),
+                              child: Text(
+                                f.$2,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSel ? context.primaryButtonFg : context.textPrimary,
+                                  fontSize: 11,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -287,11 +346,27 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         final day = int.tryParse(dayCtrl.text.trim()) ?? plan.dayOfMonth;
 
                         if (merchant.isEmpty) {
-                          AppSnackBar.showError(context, 'Merchant is required');
+                          AppSnackBar.showError(context, context.tr('merchant_required'));
                           return;
                         }
-                        if (paid > count) {
-                          AppSnackBar.showError(context, 'Paid installments cannot exceed total count');
+                        if (total <= 0) {
+                          AppSnackBar.showError(context, context.tr('invalid_total_amount'));
+                          return;
+                        }
+                        if (monthly <= 0) {
+                          AppSnackBar.showError(context, context.tr('invalid_monthly_amount'));
+                          return;
+                        }
+                        if (count < 1 || count > 60) {
+                          AppSnackBar.showError(context, context.tr('invalid_installment_count'));
+                          return;
+                        }
+                        if (paid < 0 || paid > count) {
+                          AppSnackBar.showError(context, context.tr('paid_exceeds_count'));
+                          return;
+                        }
+                        if (day < 1 || day > 31) {
+                          AppSnackBar.showError(context, context.tr('invalid_day_of_month'));
                           return;
                         }
 
@@ -312,6 +387,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                           if (context.mounted) {
                             AppSnackBar.showSuccess(context, context.tr('installment_updated'));
                             if (mounted) setState(() => _loadPlans());
+                            refreshGlobalAppData(context);
                           }
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
@@ -1255,6 +1331,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                       onPressed: () async {
                                         if (widget.onPayInstallment != null) {
                                           widget.onPayInstallment!(plan.id);
+                                          if (context.mounted) refreshGlobalAppData(context);
                                         } else {
                                           final recorded = await ManualExpenseSheet.show(
                                             context,
@@ -1270,6 +1347,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                                           );
                                           if (recorded == true && mounted) {
                                             setState(() => _loadPlans());
+                                            if (context.mounted) refreshGlobalAppData(context);
                                           }
                                         }
                                       },

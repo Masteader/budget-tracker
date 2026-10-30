@@ -150,4 +150,95 @@ void main() {
     expect(mockProvider.updateCalled, isTrue);
     expect(mockProvider.lastUpdateData?['merchant'], 'eXtra Flagship Store');
   });
+
+  testWidgets('Edit dialog auto-recalculates monthly amount and provides frequency selector (CRITICAL-01)', (tester) async {
+    final mockProvider = MockInstallmentProvider();
+    final testPlan = InstallmentPlan(
+      id: 'plan_2',
+      householdId: 'hh_1',
+      merchant: 'IKEA Furniture',
+      provider: 'Tabby',
+      totalAmount: 4000.0,
+      installmentCount: 4,
+      monthlyAmount: 1000.0,
+      paidInstallments: 1,
+      dayOfMonth: 27,
+      startDate: '2026-10-01',
+      frequency: 'monthly',
+      status: 'ACTIVE',
+    );
+    mockProvider.plans = [testPlan];
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<InstallmentProvider>.value(
+        value: mockProvider,
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizationsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('en')],
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: InstallmentPlansCard(
+                plans: [testPlan],
+                now: DateTime.utc(2026, 10, 21, 9),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Open popup menu and tap Edit
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // Verify frequency options exist
+    expect(find.text('Monthly'), findsWidgets);
+    expect(find.text('Bi-weekly'), findsWidgets);
+
+    // Tap Bi-weekly
+    await tester.tap(find.text('Bi-weekly'));
+    await tester.pumpAndSettle();
+
+    // Find TextFormFields:
+    // 0: merchant, 1: total_amount, 2: monthly_amount, 3: count, 4: paid, 5: day
+    final fields = find.byType(TextFormField);
+    final totalField = fields.at(1);
+    final monthlyField = fields.at(2);
+    final countField = fields.at(3);
+
+    // Change total from 4000 to 6000
+    await tester.enterText(totalField, '6000');
+    await tester.pumpAndSettle();
+
+    // Monthly field should auto-recalculate to 1500.00 (6000 / 4)
+    final monthlyWidget = tester.widget<TextFormField>(monthlyField);
+    expect(monthlyWidget.controller?.text, '1500.00');
+
+    // Change count to 6
+    await tester.enterText(countField, '6');
+    await tester.pumpAndSettle();
+
+    // Monthly field should auto-recalculate to 1000.00 (6000 / 6)
+    final monthlyWidgetAfterCount = tester.widget<TextFormField>(monthlyField);
+    expect(monthlyWidgetAfterCount.controller?.text, '1000.00');
+
+    // Tap Save
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(mockProvider.updateCalled, isTrue);
+    expect(mockProvider.lastUpdateData?['frequency'], 'biweekly');
+    expect(mockProvider.lastUpdateData?['total_amount'], 6000.0);
+    expect(mockProvider.lastUpdateData?['installment_count'], 6);
+    expect(mockProvider.lastUpdateData?['monthly_amount'], 1000.0);
+  });
 }

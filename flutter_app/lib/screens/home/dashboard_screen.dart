@@ -477,8 +477,8 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         : (totalUnpaidBills + totalInstallmentsDues);
 
     final accountProvider = context.watch<AccountProvider>();
-    final liveOperatingCash = accountProvider.operatingCash > 0 ? accountProvider.operatingCash : _operatingCash;
-    final totalAccountsCount = accountProvider.accounts.isNotEmpty ? accountProvider.accounts.length : _accountsCount;
+    final liveOperatingCash = accountProvider.hasLoaded ? accountProvider.operatingCash : _operatingCash;
+    final totalAccountsCount = accountProvider.hasLoaded ? accountProvider.accounts.length : _accountsCount;
     final effectiveIncome = (accountProvider.cycleIncomeTotal > 0)
         ? accountProvider.cycleIncomeTotal
         : (_cycleIncome ?? setup?.monthlyIncome);
