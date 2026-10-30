@@ -675,7 +675,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               if (rec.bonus > 0)
                 _incomeBreakdownChip(context, '+${context.tr("bonus")}: ${context.sar(rec.bonus)}', context.champagneGold),
               if (rec.deductions > 0)
-                _incomeBreakdownChip(context, '-${context.tr("deductions")}: ${context.sar(rec.deductions)}', context.dangerColor),
+                _incomeBreakdownChip(context, '-${context.tr("deductions_gosi")}: ${context.sar(rec.deductions)}', context.dangerColor),
             ],
           ),
         ],

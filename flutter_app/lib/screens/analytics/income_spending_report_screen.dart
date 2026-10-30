@@ -304,7 +304,7 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
                 style: TextStyle(color: context.textSecondary, fontSize: 11),
               ),
               Text(
-                '${(outflowRatio * 100).toStringAsFixed(0)}% ${context.tr('hero_spent').toLowerCase()}',
+                '${(outflowRatio * 100).toStringAsFixed(0)}% ${context.tr('spent').toLowerCase()}',
                 style: TextStyle(color: context.textSecondary, fontSize: 11),
               ),
             ],
@@ -521,7 +521,7 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
               if (rec.bonus > 0)
                 _chip(context, '+${context.tr("bonus")}: ${context.sar(rec.bonus)}', context.champagneGold),
               if (rec.deductions > 0)
-                _chip(context, '-${context.tr("deductions")}: ${context.sar(rec.deductions)}', context.dangerColor),
+                _chip(context, '-${context.tr("deductions_gosi")}: ${context.sar(rec.deductions)}', context.dangerColor),
             ],
           ),
         ],
