@@ -79,6 +79,7 @@ class ApiService {
     DateTime? occurredAt,
     String? previewToken,
     double? amount,
+    String? accountId,
   }) =>
       chat.postChatTransaction(
         message: message,
@@ -99,6 +100,7 @@ class ApiService {
         occurredAt: occurredAt,
         previewToken: previewToken,
         amount: amount,
+        accountId: accountId,
       );
 
   // ── Receipts & Invoices ──────────────────────────────────────────────────

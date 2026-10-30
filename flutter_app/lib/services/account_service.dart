@@ -225,4 +225,65 @@ class AccountService {
     }
     return map;
   }
+
+  /// Automatically links any unlinked transactions to the category's budget account
+  /// or primary operating account, and adjusts the account balance if it was not deducted yet.
+  Future<void> reconcileUnlinkedTransactions(String householdId) async {
+    try {
+      final accounts = await getAccounts(householdId);
+      if (accounts.isEmpty) return;
+
+      final unlinked = await _client
+          .from('transactions')
+          .select('id, amount, category_code')
+          .eq('household_id', householdId)
+          .isFilter('account_id', null);
+
+      if (unlinked.isEmpty) return;
+
+      final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
+
+      for (final row in (unlinked as List)) {
+        final txId = row['id'] as String?;
+        final txAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+        final catCode = row['category_code'] as String?;
+        if (txId == null) continue;
+
+        String targetAccId = defaultAcc.id;
+        if (catCode != null && catCode.isNotEmpty) {
+          try {
+            final bRes = await _client
+                .from('budgets')
+                .select('account_id')
+                .eq('household_id', householdId)
+                .eq('category_code', catCode)
+                .eq('is_active', true)
+                .not('account_id', 'is', null)
+                .limit(1)
+                .maybeSingle();
+            if (bRes != null && bRes['account_id'] != null) {
+              targetAccId = bRes['account_id'] as String;
+            }
+          } catch (_) {}
+        }
+
+        // Check target account balance before linking
+        final targetAccBefore = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
+
+        // Link the transaction
+        await _client.from('transactions').update({'account_id': targetAccId}).eq('id', txId);
+
+        // Check target account balance after linking
+        final targetAccAfter = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
+
+        if (targetAccBefore != null && targetAccAfter != null) {
+          // If the database trigger did not decrement the balance, deduct it directly
+          if ((targetAccAfter.balance - targetAccBefore.balance).abs() < 0.001) {
+            final newBal = (targetAccBefore.balance - txAmt).clamp(0.0, double.infinity);
+            await updateBalance(targetAccId, newBal);
+          }
+        }
+      }
+    } catch (_) {}
+  }
 }

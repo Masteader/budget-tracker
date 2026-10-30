@@ -136,6 +136,9 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   Future<void> _refreshAll() async {
+    try {
+      await AccountService.instance.reconcileUnlinkedTransactions(widget.householdId);
+    } catch (_) {}
     await Future.wait([
       _loadCommittedBudgets(),
       _fetchAccountsDirectly(),

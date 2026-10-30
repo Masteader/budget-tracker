@@ -22,6 +22,7 @@ import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 import '../accounts/accounts_overview_screen.dart';
+import '../../services/account_service.dart';
 import '../home/budget_management_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
@@ -522,6 +523,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
         _refreshGlobalProviders();
+        unawaited(AccountService.instance.reconcileUnlinkedTransactions(_householdId!));
       } else {
         // Check for offline network error and save to SQLite queue
         final errText = res['message']?.toString() ?? '';
@@ -607,6 +609,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         amount: edits.amount,
         occurredAt: edits.occurredAt,
         previewToken: token,
+        accountId: edits.accountId ?? pending['account_id'] as String?,
       ),
       rePreview: () => ApiService.instance.postChatTransaction(
         message: originalText,
@@ -614,6 +617,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         userId: user?.id,
         allowDuplicate: true,
         previewOnly: true,
+        accountId: edits.accountId ?? pending['account_id'] as String?,
       ),
     );
 
@@ -650,6 +654,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           _messages.add(confirmedMsg);
         }
         _refreshGlobalProviders();
+        unawaited(AccountService.instance.reconcileUnlinkedTransactions(householdId));
       } else {
         AppSnackBar.showError(
           context,

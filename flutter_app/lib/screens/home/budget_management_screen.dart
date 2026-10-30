@@ -206,21 +206,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     if (accounts.isNotEmpty) {
       try {
-        final unlinked = await supabase
-            .from('transactions')
-            .select('id, category_code')
-            .eq('household_id', hid)
-            .isFilter('account_id', null);
-        if (unlinked.isNotEmpty) {
-          final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
-          for (final row in (unlinked as List)) {
-            final txId = row['id'] as String?;
-            if (txId != null) {
-              await supabase.from('transactions').update({'account_id': defaultAcc.id}).eq('id', txId);
-            }
-          }
-          accounts = await AccountService.instance.getAccounts(hid).catchError((_) => accounts);
-        }
+        await AccountService.instance.reconcileUnlinkedTransactions(hid);
+        accounts = await AccountService.instance.getAccounts(hid).catchError((_) => accounts);
       } catch (_) {}
     }
 

@@ -252,6 +252,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   Future<void> _fetchAccountsCount(String hid) async {
     try {
+      await AccountService.instance.reconcileUnlinkedTransactions(hid);
       final accounts = await AccountService.instance.getAccounts(hid);
       if (mounted) {
         final cash = accounts

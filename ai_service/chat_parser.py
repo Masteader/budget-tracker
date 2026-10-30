@@ -881,6 +881,7 @@ def process_chat_transaction(
     override_nafaqah_spouse_id: Optional[str] = None,
     preview_token: Optional[str] = None,
     override_amount: Optional[float] = None,
+    override_account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Parse a chat message, perform duplicate checks/enrichment, update budget, and insert transaction.
@@ -1097,6 +1098,7 @@ def process_chat_transaction(
             "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
             "wives": nafaqah["wives"],
             "items": items_dicts,
+            "account_id": override_account_id,
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",
         }
@@ -1183,6 +1185,7 @@ def process_chat_transaction(
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         user_id=user_id,
+        account_id=override_account_id,
     )
 
     # Attach items fallback if needed
@@ -1201,6 +1204,7 @@ def process_chat_transaction(
         "beneficiary": beneficiary,
         "nafaqah_class": nafaqah["nafaqah_class"],
         "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+        "account_id": override_account_id,
         "is_reallocated": is_reallocated,
         "items": items_dicts,
         "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by}).",
