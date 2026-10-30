@@ -6,15 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 
 import '../../main.dart';
 import '../../models/account.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
-import '../../providers/budget_provider.dart';
 import '../../providers/household_role_provider.dart';
-import '../../providers/transaction_provider.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
 import '../../services/api/base_api_client.dart' show BaseApiClient;

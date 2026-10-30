@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:budget_tracker/models/account.dart';
-import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/household_role_provider.dart';

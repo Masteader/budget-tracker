@@ -4,13 +4,9 @@ import 'package:flutter/material.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../main.dart';
-import '../../providers/budget_provider.dart';
-import '../../providers/recurring_bills_provider.dart';
-import '../../providers/transaction_provider.dart';
 import '../../services/api/preview_token.dart';
 import '../../services/api_service.dart';
 import '../../services/nafaqah_write_errors.dart';

@@ -135,7 +135,9 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
 
     showDialog(
       context: context,
-      builder: (dCtx) => StatefulBuilder(
+      builder: (dCtx) => DisposeOnUnmount(
+        disposables: [merchantCtrl, totalAmountCtrl, monthlyAmountCtrl, countCtrl, paidCtrl, dayCtrl],
+        child: StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
             backgroundColor: context.cardBg,
@@ -169,7 +171,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       decoration: InputDecoration(
                         labelText: context.tr('total_amount'),
                         labelStyle: TextStyle(color: context.textSecondary),
-                        suffixText: 'SAR',
+                        suffixText: context.tr('sar'),
                       ),
                       style: TextStyle(color: context.textPrimary),
                     ),
@@ -180,7 +182,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                       decoration: InputDecoration(
                         labelText: context.tr('monthly_amount'),
                         labelStyle: TextStyle(color: context.textSecondary),
-                        suffixText: 'SAR',
+                        suffixText: context.tr('sar'),
                       ),
                       style: TextStyle(color: context.textPrimary),
                     ),
@@ -326,7 +328,8 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
           );
         },
       ),
-    );
+    ),
+  );
   }
 
   void _showAddPlanDialog(BuildContext context) {

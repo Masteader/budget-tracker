@@ -8,8 +8,7 @@ import '../../main.dart';
 import '../../models/installment_plan.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
-import '../../providers/recurring_bills_provider.dart';
-import '../../providers/transaction_provider.dart';
+import '../../providers/account_provider.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/sync_worker.dart' show SyncWorker, kTransactionInsertOperation;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
@@ -495,9 +494,11 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
         if (selectedAcc != null) {
           final newBal = selectedAcc.balance - amount;
-          try {
-            context.read<AccountProvider>().optimisticUpdateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
-          } catch (_) {}
+          if (mounted) {
+            try {
+              context.read<AccountProvider>().optimisticUpdateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
+            } catch (_) {}
+          }
           try {
             await AccountService.instance.updateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
           } catch (e) {

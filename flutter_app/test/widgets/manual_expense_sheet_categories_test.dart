@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:budget_tracker/models/models.dart';
 import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/installment_provider.dart';
@@ -56,3 +55,4 @@ void main() {
     expect(find.byType(DropdownButtonFormField<String>), findsWidgets);
   });
 }
+
