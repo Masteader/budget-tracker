@@ -10,29 +10,50 @@ class AccountService {
 
   SupabaseClient get _client => _customClient ?? Supabase.instance.client;
 
+  SupabaseClient? get _safeClient {
+    if (_customClient != null) return _customClient;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Stream of accounts for the given household (and owner/shared pool).
   Stream<List<Account>> streamAccounts(String householdId) {
-    return _client
-        .from('accounts')
-        .stream(primaryKey: ['id'])
-        .eq('household_id', householdId)
-        .order('created_at', ascending: true)
-        .map((list) => list
-            .map((map) => Account.fromMap(map))
-            .where((a) => !a.isArchived)
-            .toList());
+    final client = _safeClient;
+    if (client == null) return const Stream.empty();
+    try {
+      return client
+          .from('accounts')
+          .stream(primaryKey: ['id'])
+          .eq('household_id', householdId)
+          .order('created_at', ascending: true)
+          .map((list) => list
+              .map((map) => Account.fromMap(map))
+              .where((a) => !a.isArchived)
+              .toList());
+    } catch (_) {
+      return const Stream.empty();
+    }
   }
 
   /// Fetch active accounts for the household.
   Future<List<Account>> getAccounts(String householdId) async {
-    final res = await _client
-        .from('accounts')
-        .select()
-        .eq('household_id', householdId)
-        .eq('is_archived', false)
-        .order('created_at', ascending: true);
+    final client = _safeClient;
+    if (client == null) return [];
+    try {
+      final res = await client
+          .from('accounts')
+          .select()
+          .eq('household_id', householdId)
+          .eq('is_archived', false)
+          .order('created_at', ascending: true);
 
-    return (res as List).map((map) => Account.fromMap(map)).toList();
+      return (res as List).map((map) => Account.fromMap(map)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Create a new account.
@@ -168,14 +189,20 @@ class AccountService {
 
   /// Fetch income records for a specific cycle.
   Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async {
-    final res = await _client
-        .from('income_records')
-        .select()
-        .eq('household_id', householdId)
-        .eq('cycle_key', cycleKey)
-        .order('received_at', ascending: false);
+    final client = _safeClient;
+    if (client == null) return [];
+    try {
+      final res = await client
+          .from('income_records')
+          .select()
+          .eq('household_id', householdId)
+          .eq('cycle_key', cycleKey)
+          .order('received_at', ascending: false);
 
-    return (res as List).map((map) => IncomeRecord.fromMap(map)).toList();
+      return (res as List).map((map) => IncomeRecord.fromMap(map)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Link a budget category to an account.

@@ -43,6 +43,7 @@ class AccountProvider extends ChangeNotifier {
   /// Enforces Guardrail 1: cancels any prior stream before listening anew.
   Future<void> init(String householdId, String cycleKey) async {
     final isSameScope = _householdId == householdId && _cycleKey == cycleKey;
+    if (isSameScope && _accounts.isNotEmpty) return;
     _householdId = householdId;
     _cycleKey = cycleKey;
 
@@ -117,9 +118,10 @@ class AccountProvider extends ChangeNotifier {
   }
 
   @visibleForTesting
-  void setAccountsForTesting(List<Account> accounts, {String? householdId}) {
+  void setAccountsForTesting(List<Account> accounts, {String? householdId, String? cycleKey}) {
     _accounts = List.from(accounts);
     _householdId = householdId;
+    if (cycleKey != null) _cycleKey = cycleKey;
     notifyListeners();
   }
 

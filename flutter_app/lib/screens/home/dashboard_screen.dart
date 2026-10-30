@@ -13,6 +13,7 @@ import '../../models/household_dues.dart';
 import '../../models/household_setup.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart';
+import '../../providers/account_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
@@ -475,12 +476,19 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         ? (billsSummary.reservedAmount + totalInstallmentsDues)
         : (totalUnpaidBills + totalInstallmentsDues);
 
+    final accountProvider = context.watch<AccountProvider>();
+    final liveOperatingCash = accountProvider.operatingCash > 0 ? accountProvider.operatingCash : _operatingCash;
+    final totalAccountsCount = accountProvider.accounts.isNotEmpty ? accountProvider.accounts.length : _accountsCount;
+    final effectiveIncome = (accountProvider.cycleIncomeTotal > 0)
+        ? accountProvider.cycleIncomeTotal
+        : (_cycleIncome ?? setup?.monthlyIncome);
+
     return [
       BudgetHeroCard(
         budgets: budgets,
         cycle: _selectedCycle,
-        monthlyIncome: _cycleIncome ?? setup?.monthlyIncome,
-        operatingCash: _operatingCash,
+        monthlyIncome: effectiveIncome,
+        operatingCash: liveOperatingCash,
         dueLines: _dueLines(),
         onDueTap: _scrollToBalances,
         pendingCommitments: totalCommitments,
@@ -490,7 +498,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
       const SizedBox(height: 12),
       QuickAccessStrip(
-        accountsCount: _accountsCount,
+        accountsCount: totalAccountsCount,
         wifeAllowance: _nafaqah?.primaryWife?.allowance.allocated,
         billsCount: context.watch<RecurringBillsProvider>().summary?.bills.length,
         onAccountsTap: () => Navigator.of(context).push(
@@ -580,6 +588,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
             try {
               context.read<InstallmentProvider>().init(hid);
               context.read<BudgetProvider>().init(hid);
+              context.read<AccountProvider>().init(hid, _currentCycleKey);
             } catch (_) {}
           }
         });
@@ -599,6 +608,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                         context.read<TransactionProvider>().fetchTransactions(),
                         context.read<BudgetProvider>().refresh(),
                         context.read<RecurringBillsProvider>().fetchBills(),
+                        context.read<AccountProvider>().refresh(),
                         _fetchSetup(hid),
                         _fetchAccountsCount(hid),
                       ]);
