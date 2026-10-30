@@ -240,7 +240,7 @@ class _AuthGateState extends State<AuthGate> {
         // Bills and plans feed the reminders even before their cards build.
         context.read<RecurringBillsProvider>().init(householdId);
         context.read<InstallmentProvider>().init(householdId);
-        context.read<AccountProvider>().init(householdId, SalaryCycleService.currentCycle().cycleKey);
+        context.read<AccountProvider>().init(householdId, SalaryCycleService.currentCycle().key);
       }
     });
   }

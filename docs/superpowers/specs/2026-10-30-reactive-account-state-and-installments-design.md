@@ -164,3 +164,4 @@ New and updated translation keys in `flutter_app/lib/l10n/app_localizations.dart
 * `edit_installment_title`: "Edit Installment Plan" / "تعديل خطة الأقساط" / "قسط کے منصوبے میں ترمیم"
 * `installment_updated`: "Installment plan updated successfully" / "تم تحديث خطة الأقساط بنجاح" / "قسط کا منصوبہ کامیابی کے ساتھ اپ ڈیٹ ہو گیا"
 * `all_active_categories`: "Active Categories" / "الفئات النشطة" / "فعال زمرے"
+

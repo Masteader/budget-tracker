@@ -549,3 +549,4 @@ Generate `docs/review/PR_AUDIT_BUNDLE.md` containing:
 - Section 2: Test & Analyzer Output Summary
 - Section 3: Baseline Context & Unified Diff (`git diff feat/income-tracking-and-reporting...HEAD`)
 Copy to clipboard for immediate review by Lead Architect (Argon).
+
