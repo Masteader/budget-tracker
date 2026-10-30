@@ -13,6 +13,7 @@ import '../../widgets/accounts/add_edit_account_dialog.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../services/salary_cycle_service.dart';
+import '../analytics/income_spending_report_screen.dart';
 
 /// Screen displaying all user accounts, live balances, budget capacity statuses, and quick transfers.
 class AccountsOverviewScreen extends StatefulWidget {
@@ -555,6 +556,37 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
           ],
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => IncomeSpendingReportScreen(householdId: widget.householdId)),
+            ),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                color: context.electricTeal.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.electricTeal.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.analytics_outlined, size: 16, color: context.electricTeal),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.tr('view_in_depth_report'),
+                    style: GoogleFonts.outfit(
+                      color: context.electricTeal,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -17,6 +17,7 @@ import '../../widgets/dashboard/accounts_summary_card.dart';
 import '../../widgets/simulator/affordability_simulator_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../analytics/grocery_price_intelligence_screen.dart';
+import '../analytics/income_spending_report_screen.dart';
 import '../scanner/batch_receipt_scanner_screen.dart';
 
 class ToolsScreen extends StatelessWidget {
@@ -53,6 +54,14 @@ class ToolsScreen extends StatelessWidget {
         title: context.tr('accounts_balances'),
         subtitle: context.tr('tool_accounts_desc'),
         onTap: () => _push(context, AccountsOverviewScreen(householdId: householdId)),
+      ),
+      _Tool(
+        key: 'tool_income_spending_report',
+        icon: Icons.analytics_outlined,
+        color: context.electricTeal,
+        title: context.tr('income_spending_report'),
+        subtitle: context.tr('tool_income_spending_report_desc'),
+        onTap: () => _push(context, IncomeSpendingReportScreen(householdId: householdId)),
       ),
       _Tool(
         key: 'tool_record_income',

@@ -48,6 +48,8 @@ import '../../core/widgets/widgets.dart';
 import '../chat/chat_entry_screen.dart';
 import '../tools/tools_screen.dart';
 import 'budget_management_screen.dart';
+import '../analytics/income_spending_report_screen.dart';
+import '../../widgets/accounts/record_income_sheet.dart';
 import 'transaction_feed_screen.dart';
 import '../accounts/accounts_overview_screen.dart';
 import '../../services/account_service.dart';
@@ -246,7 +248,36 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   Future<void> _fetchCycleIncome(String hid, String cycleKey) async {
     try {
       final records = await AccountService.instance.getCycleIncome(hid, cycleKey);
-      final total = records.fold<double>(0.0, (sum, r) => sum + r.netAmount);
+      double total = records.fold<double>(0.0, (sum, r) => sum + r.netAmount);
+
+      // If no explicit income records exist yet for this cycle, compute starting capacity
+      // from operating accounts + real cycle spending, or household setup monthly income,
+      // so the dashboard income benchmark never drops or collapses to depleted balance.
+      if (total <= 0.0) {
+        final accounts = await AccountService.instance.getAccounts(hid);
+        final liveOperatingCash = accounts
+            .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+            .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
+
+        double cycleSpend = 0.0;
+        try {
+          final txRes = await supabase
+              .from('transactions')
+              .select('amount, is_settlement, nafaqah_class')
+              .eq('household_id', hid)
+              .eq('cycle_key', cycleKey);
+          for (final t in (txRes as List)) {
+            if (t['is_settlement'] == true) continue;
+            if (t['nafaqah_class'] == 'wife_personal') continue;
+            cycleSpend += (t['amount'] as num?)?.toDouble() ?? 0.0;
+          }
+        } catch (_) {}
+
+        final startingCash = liveOperatingCash + cycleSpend;
+        final setupIncome = _setup?.monthlyIncome ?? 0.0;
+        total = setupIncome > 0 ? setupIncome : (startingCash > 0 ? startingCash : 0.0);
+      }
+
       if (mounted) {
         setState(() => _cycleIncome = total > 0 ? total : null);
       }
@@ -468,6 +499,10 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         onAccountsTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => AccountsOverviewScreen(householdId: hid)),
         ),
+        onRecordIncomeTap: () => RecordIncomeSheet.show(context, householdId: hid),
+        onReportsTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => IncomeSpendingReportScreen(householdId: hid)),
+        ),
         onNafaqahTap: _scrollToBalances,
         onBillsTap: _scrollToCommitments,
         onSmartBasketTap: () => ToolsScreen.open(context, householdId: hid),
@@ -606,8 +641,14 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                           currentCycle: _selectedCycle,
                           hasPrevious: _cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1,
                           hasNext: _cycles.isNotEmpty && _currentCycleIndex > 0,
-                          onPrevious: () => setState(() => _currentCycleIndex++),
-                          onNext: () => setState(() => _currentCycleIndex--),
+                          onPrevious: () {
+                            setState(() => _currentCycleIndex++);
+                            _fetchCycleIncome(hid, _currentCycleKey);
+                          },
+                          onNext: () {
+                            setState(() => _currentCycleIndex--);
+                            _fetchCycleIncome(hid, _currentCycleKey);
+                          },
                         ),
                       ),
                       SliverPadding(
@@ -890,6 +931,8 @@ class QuickAccessStrip extends StatelessWidget {
   final double? wifeAllowance;
   final int? billsCount;
   final VoidCallback onAccountsTap;
+  final VoidCallback? onRecordIncomeTap;
+  final VoidCallback? onReportsTap;
   final VoidCallback onNafaqahTap;
   final VoidCallback onBillsTap;
   final VoidCallback onSmartBasketTap;
@@ -901,6 +944,8 @@ class QuickAccessStrip extends StatelessWidget {
     this.wifeAllowance,
     this.billsCount,
     required this.onAccountsTap,
+    this.onRecordIncomeTap,
+    this.onReportsTap,
     required this.onNafaqahTap,
     required this.onBillsTap,
     required this.onSmartBasketTap,
@@ -973,6 +1018,14 @@ class QuickAccessStrip extends StatelessWidget {
           child: Row(
             children: [
               _buildMiniPill(context, '💳', _accountsLabel(context), onAccountsTap),
+              if (onRecordIncomeTap != null) ...[
+                const SizedBox(width: 8),
+                _buildMiniPill(context, '💰', context.tr('record_income'), onRecordIncomeTap!),
+              ],
+              if (onReportsTap != null) ...[
+                const SizedBox(width: 8),
+                _buildMiniPill(context, '📊', context.tr('income_spending_report'), onReportsTap!),
+              ],
               const SizedBox(width: 8),
               _buildMiniPill(context, '⚖️', _wifeAllowanceLabel(context), onNafaqahTap),
               const SizedBox(width: 8),

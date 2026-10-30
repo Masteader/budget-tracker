@@ -1,3 +1,4 @@
+import 'salary_cycle_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/account.dart';
 
@@ -60,7 +61,29 @@ class AccountService {
     };
 
     final res = await _client.from('accounts').insert(insertData).select().single();
-    return Account.fromMap(res);
+    final acc = Account.fromMap(res);
+
+    if (initialBalance > 0) {
+      try {
+        final cycleKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
+        await logIncome(
+          householdId: householdId,
+          accountId: acc.id,
+          cycleKey: cycleKey,
+          sourceType: IncomeSourceType.other,
+          title: 'Opening Balance - ${name.trim()}',
+          baseAmount: initialBalance,
+          notes: 'Initial account balance recorded upon account creation',
+        );
+        return acc.copyWith(balance: initialBalance);
+      } catch (e) {
+        try {
+          await updateBalance(acc.id, initialBalance);
+        } catch (_) {}
+        return acc.copyWith(balance: initialBalance);
+      }
+    }
+    return acc;
   }
 
   /// Update account details (name, color, icon, etc.).
