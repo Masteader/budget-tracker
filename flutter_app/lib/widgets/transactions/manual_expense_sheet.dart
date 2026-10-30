@@ -142,9 +142,36 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   List<Account> _accounts = [];
   String? _selectedAccountId;
 
-  static final List<Map<String, String>> _categories = [
-    for (final code in CategoryCatalog.pickerCodes) {'code': code, 'emoji': CategoryCatalog.emoji(code)},
-  ];
+  List<Map<String, String>> _getCategories(BuildContext context) {
+    try {
+      final active = context.read<BudgetProvider>().activeCategories;
+      if (active.isNotEmpty) {
+        final list = <Map<String, String>>[];
+        for (final item in active) {
+          list.add({
+            'code': item.code,
+            'name': item.name,
+            'is_system': item.isSystem ? 'true' : 'false',
+            'emoji': CategoryCatalog.emoji(item.code),
+          });
+        }
+        if (!list.any((c) => c['code'] == _selectedCategory)) {
+          list.insert(0, {
+            'code': _selectedCategory,
+            'name': _selectedCategory,
+            'is_system': 'true',
+            'emoji': CategoryCatalog.emoji(_selectedCategory),
+          });
+        }
+        return list;
+      }
+    } catch (_) {}
+
+    return [
+      for (final code in CategoryCatalog.pickerCodesIncluding(_selectedCategory))
+        {'code': code, 'name': code, 'is_system': 'true', 'emoji': CategoryCatalog.emoji(code)},
+    ];
+  }
 
   @override
   void initState() {
@@ -960,12 +987,16 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   fillColor: context.inputBg,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                items: _categories.map((c) {
+                items: _getCategories(context).map((c) {
                   final code = c['code']!;
                   final emoji = c['emoji']!;
+                  final isSys = c['is_system'] == 'true';
+                  final displayName = (!isSys && (c['name'] ?? '').isNotEmpty)
+                      ? c['name']!
+                      : context.trCat(code);
                   return DropdownMenuItem(
                     value: code,
-                    child: Text('$emoji${context.trCat(code)}'),
+                    child: Text('$emoji$displayName'),
                   );
                 }).toList(),
                 onChanged: (val) {

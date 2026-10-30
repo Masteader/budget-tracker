@@ -73,6 +73,17 @@ class BudgetProvider extends ChangeNotifier {
   }
 
 
+  /// Active household categories (or empty if not yet loaded).
+  List<CategoryItem> get activeCategories =>
+      _cachedHouseholdCategories?['active'] ?? const [];
+
+  /// Invalidates the category cache so screens receive fresh active categories immediately.
+  void invalidateCategoriesCache() {
+    _cachedHouseholdCategories = null;
+    _categoriesLastFetched = null;
+    notifyListeners();
+  }
+
   Future<Map<String, List<CategoryItem>>> getHouseholdCategories(
     String householdId, {
     bool forceRefresh = false,

@@ -1313,7 +1313,7 @@ def get_household_categories(household_id: str) -> Dict[str, List[Dict[str, Any]
     initial_core = {
         "OPEX-GROCERY", "OPEX-DINING", "OPEX-FUEL", "OPEX-UTILITIES",
         "OPEX-SHOPPING", "OPEX-HEALTH", "CAPEX-EDUCATION", "OPEX-MISC",
-        "OPEX-ENTERTAINMENT", "OPEX-GOV"
+        "OPEX-ENTERTAINMENT", "OPEX-GOV", "OPEX-FAMILY-SUPPORT"
     }
 
     active = []

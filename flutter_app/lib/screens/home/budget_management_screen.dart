@@ -790,6 +790,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           if (res['status'] == 'success') {
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (mounted) {
+                              context.read<BudgetProvider>().invalidateCategoriesCache();
                               setState(() {
                                 _staticFuture = _loadStaticData();
                               });
@@ -829,6 +830,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           if (res['status'] == 'success') {
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (mounted) {
+                              context.read<BudgetProvider>().invalidateCategoriesCache();
                               setState(() {
                                 _staticFuture = _loadStaticData();
                               });
@@ -913,6 +915,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       );
 
       if (res['status'] == 'success' && mounted) {
+        context.read<BudgetProvider>().invalidateCategoriesCache();
         setState(() {
           staticData.allCodes.removeWhere((c) => c['code'] == categoryCode);
           _staticFuture = _loadStaticData();
@@ -1140,6 +1143,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
             }
           } catch (_) {}
           if (mounted) {
+            context.read<BudgetProvider>().invalidateCategoriesCache();
             setState(() {
               _staticFuture = _loadStaticData();
             });
