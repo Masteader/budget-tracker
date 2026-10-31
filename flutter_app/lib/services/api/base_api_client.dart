@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
@@ -180,6 +180,7 @@ class BaseApiClient {
       );
 
       if (response.statusCode >= 400) {
+        debugPrint('[BaseApiClient] $method $uri failed (${response.statusCode}): ${response.body}');
         return _errorResponse(response);
       }
       if (response.body.trim().isEmpty) {
@@ -191,6 +192,7 @@ class BaseApiClient {
       }
       return {'status': 'success', 'data': decoded};
     } on Exception catch (e) {
+      debugPrint('[BaseApiClient] $method $uri network error: $e');
       // `network_error` tells "no answer at all" (offline, DNS, timeout) apart
       // from a server that answered 200 with {"status": "error"}.
       return {'status': 'error', 'message': e.toString(), networkErrorKey: true};
@@ -282,7 +284,7 @@ class BaseApiClient {
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParams,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 30),
   }) {
     return _send('GET', _resolve(path, queryParams), timeout: timeout);
   }
@@ -291,7 +293,7 @@ class BaseApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool shouldSign = false,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 30),
   }) {
     final encoded = jsonEncode(body ?? {});
     final signature = (shouldSign && _signingSecret.isNotEmpty) ? sign(encoded) : null;
@@ -301,7 +303,7 @@ class BaseApiClient {
   Future<Map<String, dynamic>> patch(
     String path, {
     Map<String, dynamic>? body,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 30),
   }) {
     return _send('PATCH', _resolve(path), body: jsonEncode(body ?? {}), timeout: timeout);
   }
@@ -309,7 +311,7 @@ class BaseApiClient {
   Future<Map<String, dynamic>> delete(
     String path, {
     Map<String, dynamic>? queryParams,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 30),
   }) {
     return _send('DELETE', _resolve(path, queryParams), timeout: timeout);
   }

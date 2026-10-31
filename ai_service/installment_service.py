@@ -19,7 +19,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 import supabase_client
 from postgrest_compat import db_error_fields
@@ -250,6 +250,8 @@ class InstallmentPlanUpdate(BaseModel):
 
 
 class InstallmentPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str
     household_id: str
     merchant: str
