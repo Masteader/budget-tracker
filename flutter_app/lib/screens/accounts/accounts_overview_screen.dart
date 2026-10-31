@@ -35,10 +35,14 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   List<Account> _cachedAccounts = [];
   bool _isLoadingAccounts = true;
   List<IncomeRecord> _cycleIncomeRecords = [];
+  double? _configuredMonthlyIncome;
   bool _isLoadingIncome = true;
 
-  double get _totalCycleIncome =>
-      _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
+  double get _totalCycleIncome {
+    final recordSum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
+    if (recordSum > 0) return recordSum;
+    return _configuredMonthlyIncome ?? 0.0;
+  }
 
   @override
   void initState() {
@@ -121,13 +125,16 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
   Future<void> _loadCycleIncome() async {
     try {
-      final records = await AccountService.instance.getCycleIncome(
+      final recordsFuture = AccountService.instance.getCycleIncome(
         widget.householdId,
         _currentCycleKey,
       );
+      final cfgFuture = AccountService.instance.getHouseholdConfiguredIncome(widget.householdId);
+      final results = await Future.wait([recordsFuture, cfgFuture]);
       if (mounted) {
         setState(() {
-          _cycleIncomeRecords = records;
+          _cycleIncomeRecords = results[0] as List<IncomeRecord>;
+          _configuredMonthlyIncome = results[1] as double;
           _isLoadingIncome = false;
         });
       }

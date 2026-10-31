@@ -13,6 +13,7 @@ class AccountProvider extends ChangeNotifier {
   String? _cycleKey;
   List<Account> _accounts = [];
   List<IncomeRecord> _cycleIncomeRecords = [];
+  double? _configuredMonthlyIncome;
   bool _isLoading = false;
   bool _hasLoaded = false;
   String? _error;
@@ -23,6 +24,7 @@ class AccountProvider extends ChangeNotifier {
   String? get cycleKey => _cycleKey;
   List<Account> get accounts => List.unmodifiable(_accounts);
   List<IncomeRecord> get cycleIncomeRecords => List.unmodifiable(_cycleIncomeRecords);
+  double? get configuredMonthlyIncome => _configuredMonthlyIncome;
   bool get isLoading => _isLoading;
   bool get hasLoaded => _hasLoaded;
   String? get error => _error;
@@ -37,9 +39,15 @@ class AccountProvider extends ChangeNotifier {
       .where((a) => !a.isArchived)
       .fold<double>(0.0, (s, a) => s + a.balance);
 
-  /// Verified cycle income total from income records.
-  double get cycleIncomeTotal =>
-      _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
+  /// Verified cycle income total from income records (falls back to configured income if no records exist).
+  double get cycleIncomeTotal {
+    final sum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
+    if (sum > 0) return sum;
+    return _configuredMonthlyIncome ?? 0.0;
+  }
+
+  /// Effective cycle income for funding benchmark calculations.
+  double get effectiveCycleIncome => cycleIncomeTotal;
 
   /// Initializes accounts and cycle income for the active household and salary cycle.
   /// Enforces Guardrail 1: cancels any prior stream before listening anew.
@@ -132,10 +140,12 @@ class AccountProvider extends ChangeNotifier {
       final incFuture = _cycleKey != null && _cycleKey!.isNotEmpty
           ? _service.getCycleIncome(hid, _cycleKey!)
           : Future.value(<IncomeRecord>[]);
+      final cfgIncFuture = _service.getHouseholdConfiguredIncome(hid);
 
-      final results = await Future.wait([accFuture, incFuture]);
+      final results = await Future.wait([accFuture, incFuture, cfgIncFuture]);
       _accounts = results[0] as List<Account>;
       _cycleIncomeRecords = results[1] as List<IncomeRecord>;
+      _configuredMonthlyIncome = results[2] as double;
       _hasLoaded = true;
       _error = null;
     } catch (e) {
@@ -154,6 +164,7 @@ class AccountProvider extends ChangeNotifier {
     _cycleKey = null;
     _accounts = [];
     _cycleIncomeRecords = [];
+    _configuredMonthlyIncome = null;
     _isLoading = false;
     _hasLoaded = false;
     _error = null;
@@ -173,6 +184,12 @@ class AccountProvider extends ChangeNotifier {
   void setCycleIncomeForTesting(List<IncomeRecord> records, {String? cycleKey}) {
     _cycleIncomeRecords = List.from(records);
     _cycleKey = cycleKey;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setConfiguredMonthlyIncomeForTesting(double income) {
+    _configuredMonthlyIncome = income;
     notifyListeners();
   }
 

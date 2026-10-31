@@ -729,6 +729,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                               HouseholdBalancesSection(
                                 key: _balancesKey,
                                 householdId: hid,
+                                isFamily: _setup?.isFamily,
                                 onNafaqahLoaded: (summary) {
                                   if (mounted) setState(() => _nafaqah = summary);
                                 },
