@@ -141,12 +141,23 @@ def test_roommates_household_is_never_a_family_even_with_a_spouse_row(world):
     assert ns.resolve_expense_nafaqah(FLAT, MATE1, "partner", "both")["household_mode"] == "not_family"
 
 
-def test_family_without_a_wife_is_not_a_nafaqah_family(world):
+def test_family_without_a_wife_is_a_family_with_no_registered_wives(world):
     world.tables["household_memberships"] = [
         m for m in world.tables["household_memberships"] if not (m["household_id"] == FAMILY and m["user_id"] == WIFE)
     ]
     ctx = ns.load_family_context(FAMILY)
-    assert ctx.household_type == "family" and not ctx.is_family and ctx.settlement_mode == "family_nafaqah"
+    assert ctx.household_type == "family" and ctx.is_family and ctx.wives == [] and ctx.settlement_mode == "family_nafaqah"
+
+
+def test_family_with_zero_wives_never_splits_50_50(world):
+    world.tables["household_memberships"] = [
+        m for m in world.tables["household_memberships"] if not (m["household_id"] == FAMILY and m["user_id"] == WIFE)
+    ]
+    from settlement_engine import calculate_partner_settlement
+    res = calculate_partner_settlement(FAMILY, caller_user_id=HUSBAND)
+    assert res["mode"] == "family_nafaqah"
+    assert res["fair_share_partner"] == 0.0
+    assert res["owed_to_partner"] == 0.0
 
 
 def test_nafaqah_summary_carries_the_type(world):

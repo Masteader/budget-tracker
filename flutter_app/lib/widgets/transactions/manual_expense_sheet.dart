@@ -500,21 +500,14 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     }
 
     if (insertError == null) {
-      if (_selectedAccountId != null && _accounts.isNotEmpty) {
-        final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
-        if (selectedAcc != null) {
-          final newBal = selectedAcc.balance - amount;
-          if (mounted) {
-            try {
-              context.read<AccountProvider>().optimisticUpdateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
-            } catch (_) {}
-          }
-          try {
-            await AccountService.instance.updateBalance(_selectedAccountId!, newBal >= 0 ? newBal : 0.0);
-          } catch (e) {
-            debugPrint('[ManualExpenseSheet] Balance update error: $e');
-          }
-        }
+      if (mounted) {
+        try {
+          context.read<AccountProvider>().deductExpense(
+            accountId: _selectedAccountId,
+            amount: amount,
+            nafaqahClass: nafaqahClass,
+          );
+        } catch (_) {}
       }
       if (widget.installmentPlan != null && mounted) {
         try {

@@ -126,6 +126,7 @@ class ApiService {
     String? previewToken,
     double? amount,
     String? categoryCode,
+    String? accountId,
   }) {
     final list = imagesBase64 ?? (imageBase64 != null ? [imageBase64] : <String>[]);
     return receipt.scanReceipt(
@@ -148,6 +149,7 @@ class ApiService {
       previewToken: previewToken,
       amount: amount,
       categoryCode: categoryCode,
+      accountId: accountId,
     );
   }
 

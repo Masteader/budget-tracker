@@ -81,6 +81,35 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
+  /// Deduct an expense from the given account (or default operating pool account).
+  /// Updates local state optimistically and calls [AccountService.updateBalance].
+  Future<void> deductExpense({
+    String? accountId,
+    required double amount,
+    String? nafaqahClass,
+  }) async {
+    // Wife personal purchases are charged to the wife's personal allowance,
+    // never deducted from the household/husband's operating cash pool (Rule 02.3).
+    if (nafaqahClass == 'wife_personal' || amount <= 0 || _accounts.isEmpty) return;
+
+    Account? target;
+    if (accountId != null && accountId.isNotEmpty) {
+      target = _accounts.where((a) => a.id == accountId).firstOrNull;
+    }
+    target ??= _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull ??
+        _accounts.where((a) => !a.isArchived).firstOrNull;
+
+    if (target != null) {
+      final newBal = (target.balance - amount) >= 0 ? (target.balance - amount) : 0.0;
+      optimisticUpdateBalance(target.id, newBal);
+      try {
+        await _service.updateBalance(target.id, newBal);
+      } catch (e) {
+        debugPrint('[AccountProvider] deductExpense updateBalance error: $e');
+      }
+    }
+  }
+
   /// Full refresh of accounts and cycle income from database.
   Future<void> refresh() async {
     final hid = _householdId;

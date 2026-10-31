@@ -342,7 +342,7 @@ class NafaqahSummary {
     this.householdType,
   });
 
-  bool get isFamily => mode == 'family_nafaqah' && wives.isNotEmpty;
+  bool get isFamily => mode == 'family_nafaqah' || householdType == 'family' || wives.isNotEmpty;
   bool get callerIsWife => callerRole == 'wife';
 
   /// The wife the caller is concerned with: herself, or the first wife.

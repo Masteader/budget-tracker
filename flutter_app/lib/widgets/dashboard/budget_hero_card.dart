@@ -79,6 +79,7 @@ class BudgetHeroCard extends StatelessWidget {
       budgets: budgets,
       monthlyIncome: monthlyIncome,
       operatingCash: operatingCash,
+      pendingCommitments: pendingCommitments,
       today: today,
       cycleStart: start,
       cycleEnd: end,
@@ -644,16 +645,17 @@ class _HeroCommitmentsTip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDeficit = actualAvailable < -0.005;
+    final displayAvailable = actualAvailable >= 0 ? actualAvailable : 0.0;
     final tipText = isDeficit
         ? '${context.trArgs("tip_actual_balance_after_commitments", {
-            "actual": context.sar(actualAvailable),
+            "actual": context.sar(displayAvailable),
             "commitments": context.sar(commitmentsAmount),
           })} • ${context.trArgs("tip_balance_deficit", {
             "deficit": context.sar(-actualAvailable),
             "commitments": context.sar(commitmentsAmount),
           })}'
         : context.trArgs('tip_actual_balance_after_commitments', {
-            'actual': context.sar(actualAvailable),
+            'actual': context.sar(displayAvailable),
             'commitments': context.sar(commitmentsAmount),
           });
 

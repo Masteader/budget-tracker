@@ -234,8 +234,12 @@ class FamilyContext:
 
     @property
     def is_family(self) -> bool:
-        """A 'family' household WITH a wife: the Nafaqah rules apply (never in roommates)."""
-        return self.household_type == FAMILY and bool(self.wives)
+        """A 'family' household: the Nafaqah rules apply (never in roommates)."""
+        if self.is_roommates:
+            return False
+        return self.household_type == FAMILY or any(
+            m.get("financial_role") == "spouse" for m in self.members.values()
+        )
 
     @property
     def settlement_mode(self) -> str:

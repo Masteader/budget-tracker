@@ -43,8 +43,8 @@ class PaydayOutlook {
   /// cycle is over.
   final int daysLeft;
 
-  /// What can be spent per day until payday: what is left, minus what is still
-  /// to pay of fixed costs, over [daysLeft]. 0 when nothing is left.
+  /// What can be spent per day until payday: true available cash after commitments
+  /// divided by [daysLeft]. 0 when nothing is left.
   final double safeDaily;
 
   final PaydayVerdict verdict;
@@ -76,6 +76,7 @@ class PaydayOutlook {
     required List<Budget> budgets,
     double? monthlyIncome,
     double? operatingCash,
+    double? pendingCommitments,
     required DateTime today,
     required DateTime cycleStart,
     required DateTime cycleEnd,
@@ -99,28 +100,20 @@ class PaydayOutlook {
         ? monthlyIncome!
         : (hasOperatingCash ? (operatingCash! + totalSpent) : totalAllocated);
 
-    // Left represents what is actually available right now until payday:
-    // If live bank accounts exist, the balance in the bank IS what is left (it already reflects all spent transactions).
-    // Otherwise, left is base - totalSpent.
-    final left = hasOperatingCash ? operatingCash! : (base - totalSpent);
-
-    double variableSpent = 0;
-    double fixedStillDue = 0;
-    for (final b in budgets) {
-      if (kFixedCostCategoryCodes.contains(b.categoryCode)) {
-        final due = b.allocatedAmount - b.spentAmount;
-        if (due > 0) fixedStillDue += due;
-      } else {
-        variableSpent += b.spentAmount;
-      }
-    }
+    // Left represents what is remaining until payday:
+    // Strictly base - totalSpent so LeftUntilPayday + Spent == Income to the exact halala.
+    final left = base - totalSpent;
 
     final cycleDays = end.difference(start).inDays + 1;
     final daysLeft = t.isAfter(end) ? 0 : (end.difference(t).inDays + 1).clamp(0, cycleDays);
     final daysElapsed = (t.difference(start).inDays + 1).clamp(1, cycleDays);
 
-    final available = left - fixedStillDue;
-    final safeDaily = daysLeft > 0 && available > 0 ? available / daysLeft : 0.0;
+    // Daily safe spend divides true available balance by daysRemaining:
+    // If commitments are present, use actualAvailableAfterCommitments / daysRemaining,
+    // otherwise leftUntilPayday / daysRemaining.
+    final commitments = (pendingCommitments ?? 0.0).clamp(0.0, double.infinity);
+    final actualAvailable = commitments > 0 ? (left - commitments) : left;
+    final safeDaily = daysLeft > 0 && actualAvailable > 0 ? actualAvailable / daysLeft : 0.0;
 
     // Halala precision: spending exactly the base is not "over".
     if (left <= -0.005) {
@@ -136,10 +129,13 @@ class PaydayOutlook {
       );
     }
 
+    // Burn-rate projection:
+    // Daily burn rate = totalSpent / max(1, daysElapsedInCycle).
+    // Only show the run-out warning if dailyBurnRate * totalCycleDays > effectiveIncome.
     DateTime? runOut;
-    final pace = variableSpent / daysElapsed;
-    if (daysLeft > 0 && pace > 0) {
-      final daysOfMoney = (left / pace).floor();
+    final dailyBurnRate = totalSpent / daysElapsed;
+    if (daysLeft > 0 && dailyBurnRate > 0 && (dailyBurnRate * cycleDays > base)) {
+      final daysOfMoney = (left / dailyBurnRate).floor();
       if (daysOfMoney < daysLeft) runOut = t.add(Duration(days: daysOfMoney));
     }
     return PaydayOutlook(

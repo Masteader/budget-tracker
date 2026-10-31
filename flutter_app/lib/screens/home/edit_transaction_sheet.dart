@@ -381,7 +381,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
   // ── Family mode (Islamic Nafaqah: no spousal split) ────────────────────────
 
-  bool get _isFamily => _nafaqah?.isFamily ?? false;
+  bool get _isFamily => (_nafaqah?.isFamily ?? false) || _nafaqah?.mode == 'family_nafaqah' || _nafaqah?.householdType == 'family';
 
   /// 'wife' | 'husband' when the viewer is one of the spouses of a family household.
   String? get _spouseRole {

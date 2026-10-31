@@ -130,12 +130,15 @@ class TransactionItemBreakdownCard extends StatelessWidget {
         children: [
           Icon(icon, size: detailed ? 14 : 11, color: fg),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              color: fg,
-              fontSize: detailed ? 12 : 10,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                color: fg,
+                fontSize: detailed ? 12 : 10,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

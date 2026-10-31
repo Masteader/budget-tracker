@@ -130,6 +130,88 @@ void main() {
       expect(provider.accounts.first.balance, equals(7041.60));
     });
 
+    test('deductExpense updates balance on specified account optimistically', () async {
+      final provider = AccountProvider();
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      await provider.deductExpense(accountId: 'acc-1', amount: 250.0);
+      expect(provider.accounts.first.balance, equals(750.0));
+      expect(provider.operatingCash, equals(750.0));
+    });
+
+    test('deductExpense falls back to default operating account when accountId is null', () async {
+      final provider = AccountProvider();
+      final acc1 = Account(
+        id: 'acc-savings',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Savings',
+        accountType: AccountType.savings,
+        currency: 'SAR',
+        balance: 5000.0,
+        isSharedPool: true,
+        colorHex: '#3B82F6',
+        iconName: 'savings',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      final acc2 = Account(
+        id: 'acc-op',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Checking Operating',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 2000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 2),
+      );
+      provider.setAccountsForTesting([acc1, acc2], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 500.0);
+      expect(provider.accounts.firstWhere((a) => a.id == 'acc-op').balance, equals(1500.0));
+      expect(provider.accounts.firstWhere((a) => a.id == 'acc-savings').balance, equals(5000.0));
+    });
+
+    test('deductExpense skips deduction when nafaqahClass is wife_personal', () async {
+      final provider = AccountProvider();
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 300.0, nafaqahClass: 'wife_personal');
+      expect(provider.accounts.first.balance, equals(1000.0));
+    });
+
     test('reset clears accounts and income and notifies listeners', () {
       final provider = AccountProvider();
       final acc = Account(

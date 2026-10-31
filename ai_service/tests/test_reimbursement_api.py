@@ -124,6 +124,7 @@ def test_create_peer_roommate_invite(monkeypatch):
 
 def test_reimbursement_record_endpoint(monkeypatch, fake_supabase):
     hid = HOUSEHOLD_ID
+    fake_supabase.seed("households", [{"id": hid, "household_type": "roommates", "payday_day": 27}])
     # Both parties must be members of the household (FR-B-01).
     fake_supabase.seed("household_memberships", [
         {"household_id": hid, "user_id": "00000000-0000-0000-0000-000000000001", "role": "member"},

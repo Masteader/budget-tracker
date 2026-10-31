@@ -78,7 +78,10 @@ def test_partner_settlement_calculation(mock_client):
         {"id": "2", "amount": 100.0, "category_code": "OPEX-GROCERY", "spent_by": "partner", "timestamp": "2026-09-28T12:00:00Z"},
     ]
 
-    res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
+    with patch("settlement_engine.load_family_context") as mock_ctx:
+        from nafaqah_service import FamilyContext
+        mock_ctx.return_value = FamilyContext(household_id=HOUSEHOLD_ID, household_type="roommates")
+        res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
     assert res["total_shared_expenses"] == 400.0
     assert res["shared_paid_by_me"] == 300.0
     assert res["shared_paid_by_partner"] == 100.0
@@ -104,7 +107,10 @@ def test_partner_settlement_2d_attribution(mock_client):
         {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: me", "timestamp": "2026-09-28T13:00:00Z"},
     ]
 
-    res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
+    with patch("settlement_engine.load_family_context") as mock_ctx:
+        from nafaqah_service import FamilyContext
+        mock_ctx.return_value = FamilyContext(household_id=HOUSEHOLD_ID, household_type="roommates")
+        res = calculate_partner_settlement(HOUSEHOLD_ID, split_ratio=0.50)
     assert res["i_paid_for_partner_100"] == 200.0
     assert res["partner_paid_for_me_100"] == 100.0
     assert res["shared_paid_by_me"] == 300.0

@@ -135,7 +135,7 @@ def test_missing_membership_role_is_never_read_as_spouse(homes):
         if m["household_id"] == FAMILY and m["user_id"] == WIFE:
             del m["financial_role"]
     ctx = ns.load_family_context(FAMILY)
-    assert not ctx.is_family and ctx.members[WIFE]["financial_role"] == "family_member"
+    assert ctx.is_family and ctx.wives == [] and ctx.members[WIFE]["financial_role"] == "family_member"
 
 
 # ─── FABLE-LOGIC-04: explicit provider ────────────────────────────────────────

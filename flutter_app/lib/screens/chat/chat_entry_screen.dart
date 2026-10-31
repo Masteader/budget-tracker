@@ -1,6 +1,8 @@
 import '../../utils/refresh_app_data.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/account_provider.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -648,6 +650,15 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         } else {
           _messages.add(confirmedMsg);
         }
+        final finalAmount = (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0;
+        final targetAccountId = edits.accountId ?? pending['account_id'] as String?;
+        try {
+          context.read<AccountProvider>().deductExpense(
+            accountId: targetAccountId,
+            amount: finalAmount,
+            nafaqahClass: nafaqahClass,
+          );
+        } catch (_) {}
         _refreshGlobalProviders();
         unawaited(AccountService.instance.reconcileUnlinkedTransactions(householdId));
       } else {

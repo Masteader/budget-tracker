@@ -81,7 +81,7 @@ async def scan_receipt(request: Request):
         for field, limit in (
             ("merchant", 120), ("spent_by", 20), ("paid_by", 60), ("beneficiary", 60),
             ("qr_code_raw", 4096), ("receipt_url", 512), ("nafaqah_class", 32),
-            ("nafaqah_spouse_id", 64), ("enrich_tx_id", 64),
+            ("nafaqah_spouse_id", 64), ("enrich_tx_id", 64), ("account_id", 64),
         )
     }
     qr_code_raw = overrides["qr_code_raw"]
@@ -136,6 +136,7 @@ async def scan_receipt(request: Request):
             preview_token=preview_token,
             override_amount=override_amount,
             override_category_code=override_category_code,
+            account_id=overrides.get("account_id"),
         )
     except (InvalidPreviewToken, PreviewTokenExpired) as exc:
         if use_idempotency:

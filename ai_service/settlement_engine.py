@@ -360,7 +360,7 @@ def calculate_partner_settlement(
     client = get_client()
     # No fallback on failure: guessing "not a family" would split the spouses 50/50.
     ctx = load_family_context(household_id)
-    is_family = ctx.is_family
+    is_family = ctx.settlement_mode == "family_nafaqah" or ctx.is_family
     caller_is_wife = ctx.is_wife(caller_user_id)
     dates = _cycle_dates(household_id)
     start_iso = cycle_start or dates["cycle_start"]

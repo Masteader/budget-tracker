@@ -84,7 +84,9 @@ class _PendingExpenseConfirmationCardState extends State<PendingExpenseConfirmat
     return (role == 'wife' || role == 'husband') ? role : null;
   }
 
-  bool get _isFamily => widget.pendingData['household_mode'] == 'family_nafaqah';
+  bool get _isFamily =>
+      widget.pendingData['household_mode'] == 'family_nafaqah' ||
+      widget.pendingData['is_family'] == true;
 
   /// Recomputes the suggestion after the payer / beneficiary chips change.
   void _syncNafaqah() {

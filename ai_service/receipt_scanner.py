@@ -668,6 +668,7 @@ def process_receipt_scan(
     preview_token: Optional[str] = None,
     override_amount: Optional[float] = None,
     override_category_code: Optional[str] = None,
+    account_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process scanned receipt image(s) or ZATCA QR code:
@@ -1036,6 +1037,7 @@ def process_receipt_scan(
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
         user_id=user_id,
+        account_id=account_id,
     )
 
     if items:
