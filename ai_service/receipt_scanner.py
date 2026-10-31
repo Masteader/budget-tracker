@@ -990,18 +990,19 @@ def process_receipt_scan(
     now_iso = event_time.isoformat()
     now_date = riyadh_date_for_timestamp(event_time)
 
-    # Check budget
-    budget = fetch_budget(household_id, category_code, now_date)
+    # Check budget (skip for wife_personal per Rule 02.3)
+    budget = None
     is_reallocated = False
     reallocated_from_id = None
-
-    if budget and budget.remaining_amount < total_amount:
-        deficit = total_amount - budget.remaining_amount
-        flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
-        if flexible and flexible[0].remaining_amount >= deficit:
-            if reallocate_budget(flexible[0].id, budget.id, deficit):
-                is_reallocated = True
-                reallocated_from_id = flexible[0].id
+    if nafaqah.get("nafaqah_class") != "wife_personal":
+        budget = fetch_budget(household_id, category_code, now_date)
+        if budget and budget.remaining_amount < total_amount:
+            deficit = total_amount - budget.remaining_amount
+            flexible = fetch_flexible_budgets(household_id, now_date, exclude_code=category_code)
+            if flexible and flexible[0].remaining_amount >= deficit:
+                if reallocate_budget(flexible[0].id, budget.id, deficit):
+                    is_reallocated = True
+                    reallocated_from_id = flexible[0].id
 
     items_summary = ", ".join(
         f"{it['quantity']}x {sanitize_audit_text(it['name'], 80)} ({it['price']} SAR)" for it in items[:10]

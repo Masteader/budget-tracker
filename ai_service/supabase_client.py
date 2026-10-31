@@ -573,12 +573,13 @@ def insert_transaction(
         except Exception:
             pass
 
-    # Rule 02.3: Wife personal allowance is isolated from husband's / operating pool accounts
-    if nafaqah_class == "wife_personal":
+    # Rule 02.3: Wife personal allowance and reimbursable advances are paid from her own funds,
+    # isolated from husband's / operating pool accounts.
+    if nafaqah_class in ("wife_personal", "wife_reimbursable"):
         account_id = None
 
     # Automatically resolve account_id if not supplied
-    if not account_id and nafaqah_class != "wife_personal":
+    if not account_id and nafaqah_class not in ("wife_personal", "wife_reimbursable"):
         try:
             b_res = (
                 client.table("budgets")
@@ -724,7 +725,7 @@ def insert_transaction(
     transaction_id = response.data[0]["id"]
 
     # Synchronize account balance if the database trigger did not decrement it
-    if account_id and bal_before is not None and nafaqah_class != "wife_personal":
+    if account_id and bal_before is not None and nafaqah_class not in ("wife_personal", "wife_reimbursable"):
         try:
             cur_acc_after = client.table("accounts").select("balance").eq("id", account_id).execute()
             if cur_acc_after.data:

@@ -71,4 +71,25 @@ void main() {
     // Now Paid by Partner, For Whom = Wife -> Wife Personal Allowance
     expect(find.textContaining('Deducted from Wife\'s Personal Allowance'), findsOneWidget);
   });
+
+  testWidgets('ReceiptScannerSheet: switching back to Me clears wife nafaqah class without resurrecting stale state', (tester) async {
+    await tester.pumpWidget(testSheet());
+    await tester.pumpAndSettle();
+
+    // Tap Paid by Partner (Wife) + Beneficiary Partner
+    await tester.tap(find.byKey(const ValueKey('spent_by_partner')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('beneficiary_partner')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Deducted from Wife\'s Personal Allowance'), findsOneWidget);
+
+    // Switch back to Paid by Me
+    await tester.tap(find.byKey(const ValueKey('spent_by_me')));
+    await tester.pumpAndSettle();
+
+    // Must show Husband Nafaqah and NOT resurrect wife_personal!
+    expect(find.textContaining('Husband Nafaqah — 0 SAR owed by wife'), findsOneWidget);
+    expect(find.textContaining('Deducted from Wife\'s Personal Allowance'), findsNothing);
+  });
 }
+

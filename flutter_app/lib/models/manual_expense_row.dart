@@ -34,6 +34,7 @@ Map<String, dynamic> buildManualExpenseRow({
   String? nafaqahSpouseId,
 }) {
   final auditPayer = manualPayerAuditTag(paidBy);
+  final isWifeExpense = nafaqahClass == 'wife_personal' || nafaqahClass == 'wife_reimbursable';
   return {
     'id': id,
     'household_id': householdId,
@@ -45,7 +46,7 @@ Map<String, dynamic> buildManualExpenseRow({
     'spent_by': spentBy,
     'beneficiary_type': beneficiaryType,
     'beneficiary_id': beneficiaryId,
-    'account_id': accountId,
+    'account_id': isWifeExpense ? null : accountId,
     'source': 'manual',
     'timestamp': occurredAt.toUtc().toIso8601String(),
     'cycle_key': SalaryCycleService.cycleKeyForInstant(occurredAt),

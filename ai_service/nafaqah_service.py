@@ -482,6 +482,7 @@ def resolve_expense_nafaqah(
         result["nafaqah_spouse_required"] = True
     result["nafaqah_class"] = nafaqah_class
     result["nafaqah_spouse_id"] = spouse_id if nafaqah_class else None
+    result["default_spouse_id"] = spouse_id
     return result
 
 

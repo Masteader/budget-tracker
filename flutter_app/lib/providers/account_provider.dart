@@ -82,15 +82,22 @@ class AccountProvider extends ChangeNotifier {
   }
 
   /// Deduct an expense from the given account (or default operating pool account).
-  /// Updates local state optimistically and calls [AccountService.updateBalance].
+  /// Updates local state optimistically and optionally persists to remote database
+  /// via [AccountService.updateBalance] when [persistToRemote] is true.
   Future<void> deductExpense({
     String? accountId,
     required double amount,
     String? nafaqahClass,
+    bool persistToRemote = false,
   }) async {
-    // Wife personal purchases are charged to the wife's personal allowance,
-    // never deducted from the household/husband's operating cash pool (Rule 02.3).
-    if (nafaqahClass == 'wife_personal' || amount <= 0 || _accounts.isEmpty) return;
+    // Both wife_personal (charged to allowance) and wife_reimbursable (paid from wife's own funds)
+    // are isolated from the household/husband's operating cash pool (Rule 02.3).
+    if (nafaqahClass == 'wife_personal' ||
+        nafaqahClass == 'wife_reimbursable' ||
+        amount <= 0 ||
+        _accounts.isEmpty) {
+      return;
+    }
 
     Account? target;
     if (accountId != null && accountId.isNotEmpty) {
@@ -102,10 +109,12 @@ class AccountProvider extends ChangeNotifier {
     if (target != null) {
       final newBal = (target.balance - amount) >= 0 ? (target.balance - amount) : 0.0;
       optimisticUpdateBalance(target.id, newBal);
-      try {
-        await _service.updateBalance(target.id, newBal);
-      } catch (e) {
-        debugPrint('[AccountProvider] deductExpense updateBalance error: $e');
+      if (persistToRemote) {
+        try {
+          await _service.updateBalance(target.id, newBal);
+        } catch (e) {
+          debugPrint('[AccountProvider] deductExpense updateBalance error: $e');
+        }
       }
     }
   }

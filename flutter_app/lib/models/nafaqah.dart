@@ -191,11 +191,12 @@ class NafaqahPreview {
   factory NafaqahPreview.fromPreview(Map<String, dynamic>? data) {
     if (data == null || data['household_mode'] != 'family_nafaqah') return const NafaqahPreview();
     final cls = data['nafaqah_class'] as String?;
+    final spouseId = (data['nafaqah_spouse_id'] ?? data['default_spouse_id']) as String?;
     return NafaqahPreview(
       isFamily: true,
       recorderRole: data['recorder_role'] as String?,
       suggestedClass: (cls == kWifeReimbursable || cls == kWifePersonal) ? cls : null,
-      suggestedSpouseId: data['nafaqah_spouse_id'] as String?,
+      suggestedSpouseId: spouseId,
       callerIsAdmin: data['caller_is_admin'] == true || data['can_classify'] == true,
       husbandName: (data['husband'] is Map ? (data['husband'] as Map)['display_name'] : data['husband_name']) as String?,
       wives: (data['wives'] as List? ?? const [])

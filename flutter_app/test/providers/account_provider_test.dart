@@ -212,6 +212,77 @@ void main() {
       expect(provider.accounts.first.balance, equals(1000.0));
     });
 
+    test('deductExpense skips deduction when nafaqahClass is wife_reimbursable', () async {
+      final provider = AccountProvider();
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 300.0, nafaqahClass: 'wife_reimbursable');
+      expect(provider.accounts.first.balance, equals(1000.0));
+    });
+
+    test('deductExpense with persistToRemote=false does NOT call service.updateBalance', () async {
+      final mockService = _MockAccountService();
+      final provider = AccountProvider(service: mockService);
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 300.0, persistToRemote: false);
+      expect(provider.accounts.first.balance, equals(700.0));
+      expect(mockService.updateBalanceCalls, equals(0));
+    });
+
+    test('deductExpense with persistToRemote=true calls service.updateBalance', () async {
+      final mockService = _MockAccountService();
+      final provider = AccountProvider(service: mockService);
+      final acc = Account(
+        id: 'acc-1',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Rajhi Main',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 300.0, persistToRemote: true);
+      expect(provider.accounts.first.balance, equals(700.0));
+      expect(mockService.updateBalanceCalls, equals(1));
+      expect(mockService.lastUpdatedBalance, equals(700.0));
+    });
+
     test('reset clears accounts and income and notifies listeners', () {
       final provider = AccountProvider();
       final acc = Account(
@@ -279,6 +350,32 @@ class _FailingAccountService extends AccountService {
   @override
   Future<List<Account>> getAccounts(String householdId) async {
     throw Exception('Simulated network failure');
+  }
+
+  @override
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async {
+    return [];
+  }
+
+  @override
+  Stream<List<Account>> streamAccounts(String householdId) {
+    return const Stream.empty();
+  }
+}
+
+class _MockAccountService extends AccountService {
+  int updateBalanceCalls = 0;
+  double? lastUpdatedBalance;
+
+  @override
+  Future<void> updateBalance(String accountId, double newBalance) async {
+    updateBalanceCalls++;
+    lastUpdatedBalance = newBalance;
+  }
+
+  @override
+  Future<List<Account>> getAccounts(String householdId) async {
+    return [];
   }
 
   @override
