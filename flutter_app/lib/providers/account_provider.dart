@@ -136,6 +136,10 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      try {
+        await _service.reconcileUnlinkedTransactions(hid);
+      } catch (_) {}
+
       final accFuture = _service.getAccounts(hid);
       final incFuture = _cycleKey != null && _cycleKey!.isNotEmpty
           ? _service.getCycleIncome(hid, _cycleKey!)

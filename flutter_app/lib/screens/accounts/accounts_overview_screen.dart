@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import '../../providers/account_provider.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -41,7 +44,14 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   double get _totalCycleIncome {
     final recordSum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
     if (recordSum > 0) return recordSum;
-    return _configuredMonthlyIncome ?? 0.0;
+    if (_configuredMonthlyIncome != null && _configuredMonthlyIncome! > 0) {
+      return _configuredMonthlyIncome!;
+    }
+    try {
+      final provInc = context.read<AccountProvider>().cycleIncomeTotal;
+      if (provInc > 0) return provInc;
+    } catch (_) {}
+    return 0.0;
   }
 
   @override
@@ -131,10 +141,19 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
       );
       final cfgFuture = AccountService.instance.getHouseholdConfiguredIncome(widget.householdId);
       final results = await Future.wait([recordsFuture, cfgFuture]);
+      double cfg = results[1] as double;
+      if (cfg <= 0) {
+        try {
+          final setup = await HouseholdSetupPrefs.load(widget.householdId);
+          if (setup.monthlyIncome != null && setup.monthlyIncome! > 0) {
+            cfg = setup.monthlyIncome!;
+          }
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() {
           _cycleIncomeRecords = results[0] as List<IncomeRecord>;
-          _configuredMonthlyIncome = results[1] as double;
+          _configuredMonthlyIncome = cfg;
           _isLoadingIncome = false;
         });
       }

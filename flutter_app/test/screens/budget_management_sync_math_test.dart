@@ -113,7 +113,7 @@ void main() {
         'household_id': 'hh-1',
         'category_code': 'OPEX-SHOPPING',
         'allocated_amount': 1000.0,
-        'spent_amount': 2466.37,
+        'spent_amount': 1520.74,
         'account_id': 'acc-1',
         'cycle_key': currentCycleKey,
         'month': currentCycleKey,
@@ -148,5 +148,78 @@ void main() {
 
     // Verify sub-category chips deduplication: 'Housing Rent' / 'إيجار السكن' appears only once
     expect(find.text('إيجار السكن'), findsOneWidget);
+  });
+
+  testWidgets('BudgetManagementScreen: When operating account has stale balance (6457.72), Row 2 reconciles to 6,370.26', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+    final accountProvider = AccountProvider();
+
+    // Stale cash on single operating account: SAR 6,457.72 (missing 87.46 SAR unlinked spend)
+    final staleAcc = Account(
+      id: 'acc-1',
+      householdId: 'hh-1',
+      ownerUserId: 'u-1',
+      name: 'Rajhi Main account',
+      accountType: AccountType.bank,
+      currency: 'SAR',
+      balance: 6457.72,
+      isSharedPool: true,
+      colorHex: '#10B981',
+      iconName: 'account_balance',
+      isArchived: false,
+      createdAt: DateTime(2026, 1, 1),
+    );
+
+    accountProvider.setAccountsForTesting([staleAcc], householdId: 'hh-1', cycleKey: currentCycleKey);
+    accountProvider.setConfiguredMonthlyIncomeForTesting(8900.0);
+
+    final staticData = BudgetStaticData(
+      householdId: 'hh-1',
+      isAdmin: true,
+      allCodes: [
+        {'code': 'OPEX-UTIL', 'category': 'Utilities & Bills', 'is_system': 'true'},
+      ],
+      monthlyIncome: 8900.0,
+      accounts: [staleAcc],
+    );
+
+    // Total spent is 2,529.74 SAR -> remaining cash should be 8,900 - 2,529.74 = 6,370.26 SAR
+    final budgetRows = [
+      {
+        'id': 'b-1',
+        'household_id': 'hh-1',
+        'category_code': 'OPEX-UTIL',
+        'allocated_amount': 7412.0,
+        'spent_amount': 2529.74,
+        'account_id': 'acc-1',
+        'cycle_key': currentCycleKey,
+        'month': currentCycleKey,
+        'is_active': true,
+      },
+    ];
+
+    await tester.pumpWidget(
+      _wrapWithProviders(
+        BudgetManagementScreen(
+          initialStaticData: staticData,
+          loadStaticDataOverride: () async => staticData,
+          budgetStreamOverride: (_) => Stream.value(budgetRows),
+        ),
+        accountProvider: accountProvider,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Verify Row 1: Cycle Funding Capacity is 8,900.00
+    expect(find.textContaining('8,900.00'), findsOneWidget);
+
+    // Verify Row 2: Operating Cash (Remaining) is 6,370.26 (NOT stale 6,457.72)
+    expect(find.textContaining('6,370.26'), findsOneWidget);
+    expect(find.textContaining('6,457.72'), findsNothing);
   });
 }

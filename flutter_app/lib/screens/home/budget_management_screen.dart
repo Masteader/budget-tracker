@@ -192,6 +192,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
     if (income <= 0) {
       try {
+        income = await AccountService.instance.getHouseholdConfiguredIncome(hid);
+      } catch (_) {}
+    }
+
+    if (income <= 0) {
+      try {
         final setup = await HouseholdSetupPrefs.load(hid);
         if (setup.monthlyIncome != null && setup.monthlyIncome! > 0) {
           income = setup.monthlyIncome!;
@@ -1432,6 +1438,26 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         : (hasOperatingCash ? (operatingCash + totalSpent) : 0.0);
                     final hasBenchmark = cycleFunding > 0;
 
+                    final operatingPoolAccounts = liveAccounts
+                        .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+                        .toList();
+                    final expectedOperatingCash = (verifiedCycleIncome > 0 && totalSpent > 0)
+                        ? (verifiedCycleIncome - totalSpent).clamp(0.0, double.infinity)
+                        : operatingCash;
+                    final displayOperatingCash = (operatingPoolAccounts.length == 1 && verifiedCycleIncome > 0)
+                        ? expectedOperatingCash
+                        : operatingCash;
+
+                    if (isCurrentCycle &&
+                        operatingPoolAccounts.length == 1 &&
+                        verifiedCycleIncome > 0 &&
+                        (operatingCash - expectedOperatingCash).abs() >= 0.01) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        accountProvider.optimisticUpdateBalance(operatingPoolAccounts.first.id, expectedOperatingCash);
+                        unawaited(AccountService.instance.updateBalance(operatingPoolAccounts.first.id, expectedOperatingCash));
+                      });
+                    }
+
                     // Allocation capacity margin against cycle funding
                     final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
                     final isOverAllocated = isCurrentCycle && hasBenchmark && fundingMargin < -0.005;
@@ -1464,9 +1490,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         if (acc != null) {
                           final spent = spentByAccount[entry.key] ?? 0.0;
                           final netRemaining = (entry.value - spent).clamp(0.0, double.infinity);
-                          if (netRemaining > acc.balance + 0.005) {
+                          final effectiveAccBal = (acc.id == operatingPoolAccounts.firstOrNull?.id && operatingPoolAccounts.length == 1)
+                              ? displayOperatingCash
+                              : acc.balance;
+                          if (netRemaining > effectiveAccBal + 0.005) {
                             deficitAccount = acc;
-                            deficitAmount = netRemaining - acc.balance;
+                            deficitAmount = netRemaining - effectiveAccBal;
                             break;
                           }
                         }
@@ -1657,7 +1686,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ),
                                     ),
                                     Text(
-                                      context.sar(operatingCash),
+                                      context.sar(displayOperatingCash),
                                       style: GoogleFonts.outfit(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,

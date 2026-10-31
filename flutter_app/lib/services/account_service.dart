@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'api_service.dart';
 import 'salary_cycle_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/account.dart';
@@ -63,10 +65,15 @@ class AccountService {
             .eq('id', householdId)
             .maybeSingle();
         if (row != null && row['monthly_income'] != null) {
-          return (row['monthly_income'] as num).toDouble();
+          final val = (row['monthly_income'] as num).toDouble();
+          if (val > 0) return val;
         }
       } catch (_) {}
     }
+    try {
+      final apiIncome = await ApiService.instance.getHouseholdIncome(householdId);
+      if (apiIncome > 0) return apiIncome;
+    } catch (_) {}
     return 0.0;
   }
 
@@ -135,10 +142,23 @@ class AccountService {
 
   /// Update or reconcile account balance via secure RPC.
   Future<void> updateBalance(String accountId, double newBalance) async {
-    await _client.rpc('reconcile_account_balance', params: {
-      'p_account_id': accountId,
-      'p_new_balance': newBalance,
-    });
+    final client = _safeClient;
+    if (client == null) return;
+    try {
+      await client.rpc('reconcile_account_balance', params: {
+        'p_account_id': accountId,
+        'p_new_balance': newBalance,
+      });
+      return;
+    } catch (e) {
+      debugPrint('[AccountService] reconcile_account_balance rpc failed: $e, attempting fallback');
+    }
+    try {
+      await client
+          .from('accounts')
+          .update({'balance': newBalance})
+          .eq('id', accountId);
+    } catch (_) {}
   }
 
   /// Archive an account (soft delete).
@@ -405,20 +425,59 @@ class AccountService {
         }
 
         if (cycleIncome > 0) {
-          // Calculate total household cycle spent excluding wife_personal
-          final allCycleTxs = await _client
-              .from('transactions')
-              .select('amount, nafaqah_class, is_settlement')
-              .eq('household_id', householdId)
-              .eq('cycle_key', currentKey);
+          // 1. Calculate budget spent amount from active budgets
+          double budgetSpent = 0.0;
+          try {
+            final bRows = await _client
+                .from('budgets')
+                .select('spent_amount')
+                .eq('household_id', householdId)
+                .eq('is_active', true);
+            for (final b in (bRows as List)) {
+              budgetSpent += (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
+            }
+          } catch (_) {}
 
-          double cycleSpent = 0.0;
-          for (final t in (allCycleTxs as List)) {
-            if (t['is_settlement'] == true) continue;
-            if (t['nafaqah_class'] == 'wife_personal') continue;
-            cycleSpent += (t['amount'] as num?)?.toDouble() ?? 0.0;
-          }
+          // 2. Query transactions matching cycle_key or within cycle calendar date range
+          final cycle = SalaryCycleService.currentCycle();
+          final startIso = cycle.startIso;
+          final endIso = cycle.endIso;
 
+          double txSpent = 0.0;
+          try {
+            final allTxs = await _client
+                .from('transactions')
+                .select('id, amount, nafaqah_class, is_settlement, cycle_key, timestamp, account_id')
+                .eq('household_id', householdId);
+
+            for (final t in (allTxs as List)) {
+              if (t['is_settlement'] == true) continue;
+              if (t['nafaqah_class'] == 'wife_personal') continue;
+
+              final tKey = t['cycle_key'] as String?;
+              final tTime = t['timestamp'] as String?;
+              final inCycle = (tKey == currentKey) ||
+                  (tTime != null && tTime.compareTo(startIso) >= 0 && tTime.compareTo(endIso) <= 0);
+
+              if (inCycle) {
+                txSpent += (t['amount'] as num?)?.toDouble() ?? 0.0;
+
+                // Backfill missing cycle_key or account_id
+                if (tKey == null || tKey.isEmpty) {
+                  try {
+                    await _client.from('transactions').update({'cycle_key': currentKey}).eq('id', t['id']);
+                  } catch (_) {}
+                }
+                if (t['account_id'] == null) {
+                  try {
+                    await _client.from('transactions').update({'account_id': singleOpAcc.id}).eq('id', t['id']);
+                  } catch (_) {}
+                }
+              }
+            }
+          } catch (_) {}
+
+          final cycleSpent = budgetSpent > txSpent ? budgetSpent : txSpent;
           final reconciledBalance = (cycleIncome - cycleSpent).clamp(0.0, double.infinity);
           if ((singleOpAcc.balance - reconciledBalance).abs() >= 0.01) {
             await updateBalance(singleOpAcc.id, reconciledBalance);
