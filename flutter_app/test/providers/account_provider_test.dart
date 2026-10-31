@@ -99,7 +99,38 @@ void main() {
 
       provider.setCycleIncomeForTesting(records, cycleKey: '2026-10');
       expect(provider.cycleIncomeTotal, equals(8941.0));
+      expect(provider.effectiveCycleIncome, equals(8941.0));
       expect(provider.cycleKey, equals('2026-10'));
+    });
+
+    test('cycleIncomeTotal falls back to configuredMonthlyIncome when cycleIncomeRecords is empty', () {
+      final provider = AccountProvider();
+      provider.setConfiguredMonthlyIncomeForTesting(8900.0);
+      expect(provider.cycleIncomeRecords, isEmpty);
+      expect(provider.cycleIncomeTotal, equals(8900.0));
+      expect(provider.effectiveCycleIncome, equals(8900.0));
+    });
+
+    test('cycleIncomeTotal prioritizes cycleIncomeRecords over configuredMonthlyIncome when records exist', () {
+      final provider = AccountProvider();
+      provider.setConfiguredMonthlyIncomeForTesting(8900.0);
+      final records = [
+        IncomeRecord(
+          id: 'inc-1',
+          householdId: 'hh-1',
+          userId: 'u-1',
+          accountId: 'acc-1',
+          cycleKey: '2026-10',
+          sourceType: IncomeSourceType.salary,
+          title: 'Primary Salary',
+          baseAmount: 9200.0,
+          receivedAt: DateTime(2026, 10, 27),
+          createdAt: DateTime(2026, 10, 27),
+        ),
+      ];
+      provider.setCycleIncomeForTesting(records, cycleKey: '2026-10');
+      expect(provider.cycleIncomeTotal, equals(9200.0));
+      expect(provider.effectiveCycleIncome, equals(9200.0));
     });
 
     test('optimisticUpdateBalance updates account balance instantly and notifies listeners', () {

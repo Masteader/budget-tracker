@@ -1347,9 +1347,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   cycleStart: start,
                   cycleEnd: end,
                 );
+                final actualSpent = realSpent > b.spentAmount ? realSpent : b.spentAmount;
                 return b.copyWith(
-                  spentAmount: realSpent,
-                  remainingAmount: b.allocatedAmount - realSpent,
+                  spentAmount: actualSpent,
+                  remainingAmount: b.allocatedAmount - actualSpent,
                 );
               }).toList();
 
@@ -1423,9 +1424,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     final hasOperatingCash = operatingCash > 0;
 
                     // Cycle funding benchmark: verified cycle income if known, else operating cash + total spent
-                    final verifiedCycleIncome = accountProvider.cycleIncomeTotal > 0
-                        ? accountProvider.cycleIncomeTotal
-                        : staticData.monthlyIncome;
+                    final verifiedCycleIncome = accountProvider.effectiveCycleIncome > 0
+                        ? accountProvider.effectiveCycleIncome
+                        : (staticData.monthlyIncome > 0 ? staticData.monthlyIncome : 0.0);
                     final cycleFunding = (verifiedCycleIncome > 0)
                         ? verifiedCycleIncome
                         : (hasOperatingCash ? (operatingCash + totalSpent) : 0.0);
@@ -1435,23 +1436,39 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
                     final isOverAllocated = isCurrentCycle && hasBenchmark && fundingMargin < -0.005;
 
-                    // Guardrail 2: Calculate any account deficits based on remaining unspent commitments vs current balance
+                    // Guardrail 2: Calculate any account deficits based on net remaining commitments vs current balance
                     Account? deficitAccount;
                     double deficitAmount = 0.0;
                     if (isCurrentCycle && liveAccounts.isNotEmpty) {
-                      final Map<String, double> unspentByAccount = {};
+                      final Map<String, double> allocatedByAccount = {};
+                      final Map<String, double> spentByAccount = {};
+                      final defaultAccId = liveAccounts
+                          .where((a) => !a.isArchived && a.accountType.isOperatingPool)
+                          .firstOrNull
+                          ?.id ?? (liveAccounts.length == 1 ? liveAccounts.first.id : null);
+
                       for (final b in budgets) {
-                        if (b.isActive && b.accountId != null && b.accountId!.isNotEmpty) {
-                          final unspent = (b.allocatedAmount - b.spentAmount).clamp(0.0, double.infinity);
-                          unspentByAccount[b.accountId!] = (unspentByAccount[b.accountId!] ?? 0.0) + unspent;
+                        if (b.isActive) {
+                          final accId = (b.accountId != null && b.accountId!.isNotEmpty)
+                              ? b.accountId!
+                              : defaultAccId;
+                          if (accId != null) {
+                            allocatedByAccount[accId] = (allocatedByAccount[accId] ?? 0.0) + b.allocatedAmount;
+                            spentByAccount[accId] = (spentByAccount[accId] ?? 0.0) + b.spentAmount;
+                          }
                         }
                       }
-                      for (final entry in unspentByAccount.entries) {
+
+                      for (final entry in allocatedByAccount.entries) {
                         final acc = liveAccounts.where((a) => a.id == entry.key).firstOrNull;
-                        if (acc != null && acc.balance < entry.value) {
-                          deficitAccount = acc;
-                          deficitAmount = entry.value - acc.balance;
-                          break;
+                        if (acc != null) {
+                          final spent = spentByAccount[entry.key] ?? 0.0;
+                          final netRemaining = (entry.value - spent).clamp(0.0, double.infinity);
+                          if (netRemaining > acc.balance + 0.005) {
+                            deficitAccount = acc;
+                            deficitAmount = netRemaining - acc.balance;
+                            break;
+                          }
                         }
                       }
                     }
@@ -1778,10 +1795,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     budgets.where((b) => b.categoryCode == code).firstOrNull;
                 final systemSubs = kSubCategoriesByParent[code] ?? const <String>[];
                 final customSubs = existing?.subAllocations.keys ?? const <String>[];
-                final subCategories = <String>{
-                  ...systemSubs,
-                  ...customSubs,
-                }.toList();
+                final seenLabels = <String>{};
+                final subCategories = <String>[];
+                for (final sub in [...systemSubs, ...customSubs]) {
+                  final label = context.trSub(sub).trim().toLowerCase();
+                  if (label.isNotEmpty && seenLabels.add(label)) {
+                    subCategories.add(sub);
+                  }
+                }
                 final mappedAccount = staticData.accounts
                     .where((a) => a.id == existing?.accountId)
                     .firstOrNull;

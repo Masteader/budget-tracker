@@ -18,6 +18,7 @@ typedef SettlementLoader = Future<SettlementV2Summary> Function(String household
 /// card, so a roommates household silently lost its balances.
 class HouseholdBalancesSection extends StatefulWidget {
   final String householdId;
+  final bool? isFamily;
   final SettlementLoader? loadSettlement;
   final NafaqahSummaryLoader? loadNafaqah;
 
@@ -30,6 +31,7 @@ class HouseholdBalancesSection extends StatefulWidget {
   const HouseholdBalancesSection({
     super.key,
     required this.householdId,
+    this.isFamily,
     this.loadSettlement,
     this.loadNafaqah,
     this.onSettlementLoaded,
@@ -41,24 +43,32 @@ class HouseholdBalancesSection extends StatefulWidget {
 }
 
 class _HouseholdBalancesSectionState extends State<HouseholdBalancesSection> {
-  late Future<SettlementV2Summary> _future;
+  Future<SettlementV2Summary>? _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    if (widget.isFamily != true) {
+      _future = _load();
+    }
   }
 
   @override
   void didUpdateWidget(covariant HouseholdBalancesSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.householdId != widget.householdId) _future = _load();
+    if (widget.isFamily != true) {
+      if (oldWidget.householdId != widget.householdId || oldWidget.isFamily != widget.isFamily || _future == null) {
+        _future = _load();
+      }
+    }
   }
 
   void _reload() {
-    setState(() {
-      _future = _load();
-    });
+    if (widget.isFamily != true) {
+      setState(() {
+        _future = _load();
+      });
+    }
   }
 
   Future<SettlementV2Summary> _load() async {
@@ -70,6 +80,14 @@ class _HouseholdBalancesSectionState extends State<HouseholdBalancesSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isFamily == true) {
+      return FamilyReimbursementCard(
+        householdId: widget.householdId,
+        loadSummary: widget.loadNafaqah,
+        onSummaryLoaded: widget.onNafaqahLoaded,
+      );
+    }
+
     return FutureBuilder<SettlementV2Summary>(
       future: _future,
       builder: (context, snap) {
