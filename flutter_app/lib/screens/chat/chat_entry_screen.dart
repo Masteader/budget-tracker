@@ -15,6 +15,7 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/pending_expense_confirmation_card.dart' show PendingExpenseEdits;
+import '../../models/nafaqah_account.dart';
 import '../../widgets/chat/voice_listening_banner.dart';
 import '../../widgets/chat/voice_language_button.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
@@ -606,7 +607,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         amount: edits.amount,
         occurredAt: edits.occurredAt,
         previewToken: token,
-        accountId: edits.accountId ?? pending['account_id'] as String?,
+        accountId: accountForNafaqahClass(nafaqahClass, edits.accountId ?? pending['account_id'] as String?),
       ),
       rePreview: () => ApiService.instance.postChatTransaction(
         message: originalText,
@@ -614,7 +615,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         userId: user?.id,
         allowDuplicate: true,
         previewOnly: true,
-        accountId: edits.accountId ?? pending['account_id'] as String?,
+        accountId: accountForNafaqahClass(nafaqahClass, edits.accountId ?? pending['account_id'] as String?),
       ),
     );
 

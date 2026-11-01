@@ -241,7 +241,9 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     final payday = setup?.paydayDay ?? SalaryCycleService.defaultPaydayDay;
     if (mounted) {
       try {
-        context.read<AccountProvider>().bindHousehold(hid, paydayDay: payday);
+        final ap = context.read<AccountProvider>();
+        ap.bindHousehold(hid, paydayDay: payday);
+        unawaited(ap.ensureLoaded());
         context.read<InstallmentProvider>().init(hid);
         context.read<BudgetProvider>().init(hid);
       } catch (_) {}
@@ -285,20 +287,6 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     return SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: _paydayDay);
   }
 
-  /// The cycle dates as Riyadh calendar dates.
-  (DateTime, DateTime) _cycleDates() {
-    final c = _selectedCycle;
-    if (c != null) {
-      final start = DateTime.tryParse(c.cycleStart);
-      final end = DateTime.tryParse(c.cycleEnd);
-      if (start != null && end != null) {
-        return (DateTime.utc(start.year, start.month, start.day), DateTime.utc(end.year, end.month, end.day));
-      }
-    }
-    final current = SalaryCycleService.currentCycle(paydayDay: _paydayDay);
-    return (current.start, current.end);
-  }
-
   /// The selected cycle by its dates ("27 Oct – 26 Nov").
   String _cycleLabel(BuildContext context) {
     final c = _selectedCycle;
@@ -321,8 +309,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
       }
     }
     if (txProvider == null || txProvider.isLoading) return list;
-    final (start, end) = _cycleDates();
-    return reconcileCycleBudgets(list, txProvider, _currentCycleKey, start, end);
+    return reconcileCycleBudgets(list, txProvider, _currentCycleKey, _paydayDay);
   }
 
   final GlobalKey _categoriesKey = GlobalKey();
@@ -416,7 +403,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     final accountProvider = context.watch<AccountProvider>();
     final snapshot = accountProvider.snapshot;
     final liveOperatingCash = accountProvider.hasLoaded ? snapshot.operatingCash : null;
-    final totalAccountsCount = accountProvider.hasLoaded ? snapshot.accountsCount : accountProvider.accounts.length;
+    final totalAccountsCount = accountProvider.accounts.where((a) => !a.isArchived).length;
     final effectiveIncome = (snapshot.cycleIncome > 0)
         ? snapshot.cycleIncome
         : setup?.monthlyIncome;
@@ -427,12 +414,12 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         budgets: budgets,
         cycle: _selectedCycle,
         monthlyIncome: effectiveIncome,
-        operatingCash: liveOperatingCash,
+        operatingCash: _isCurrentCycle ? liveOperatingCash : null,
         dueLines: _dueLines(),
         onDueTap: _scrollToBalances,
-        pendingCommitments: totalCommitments,
+        pendingCommitments: _isCurrentCycle ? totalCommitments : null,
         onCommitmentsTap: _scrollToCommitments,
-        snapshot: accountProvider.hasLoaded ? snapshot : null,
+        snapshot: (_isCurrentCycle && accountProvider.hasLoaded) ? snapshot : null,
         paydayDay: _paydayDay,
       ),
       // UX-08: overspent categories right under the hero.
@@ -582,11 +569,9 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                           hasNext: _cycles.isNotEmpty && _currentCycleIndex > 0,
                           onPrevious: () {
                             setState(() => _currentCycleIndex++);
-                            context.read<AccountProvider>().setCycleKey(_currentCycleKey);
                           },
                           onNext: () {
                             setState(() => _currentCycleIndex--);
-                            context.read<AccountProvider>().setCycleKey(_currentCycleKey);
                           },
                         ),
                       ),

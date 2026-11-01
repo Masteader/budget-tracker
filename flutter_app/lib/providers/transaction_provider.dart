@@ -377,8 +377,7 @@ class TransactionProvider extends ChangeNotifier {
   double cycleSpendForCategory(
     String categoryCode,
     String cycleKey, {
-    DateTime? cycleStart,
-    DateTime? cycleEnd,
+    required int paydayDay,
   }) {
     double total = 0.0;
     for (final t in transactions) {
@@ -388,7 +387,7 @@ class TransactionProvider extends ChangeNotifier {
 
       final effectiveKey = (t.cycleKey != null && t.cycleKey!.isNotEmpty)
           ? t.cycleKey!
-          : SalaryCycleService.cycleKeyForInstant(t.timestamp);
+          : SalaryCycleService.cycleKeyForInstant(t.timestamp, paydayDay: paydayDay);
 
       if (effectiveKey == cycleKey) {
         total += t.amount;
@@ -400,8 +399,7 @@ class TransactionProvider extends ChangeNotifier {
   /// Total spending across all categories for a cycle.
   double totalCycleSpend(
     String cycleKey, {
-    DateTime? cycleStart,
-    DateTime? cycleEnd,
+    required int paydayDay,
   }) {
     double total = 0.0;
     for (final t in transactions) {
@@ -410,7 +408,7 @@ class TransactionProvider extends ChangeNotifier {
 
       final effectiveKey = (t.cycleKey != null && t.cycleKey!.isNotEmpty)
           ? t.cycleKey!
-          : SalaryCycleService.cycleKeyForInstant(t.timestamp);
+          : SalaryCycleService.cycleKeyForInstant(t.timestamp, paydayDay: paydayDay);
 
       if (effectiveKey == cycleKey) {
         total += t.amount;

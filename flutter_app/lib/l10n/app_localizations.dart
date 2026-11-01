@@ -827,9 +827,9 @@ class AppLocalizations {
       'beneficiary_me': 'Me',
       'beneficiary_partner': 'Wife / Partner',
       'beneficiary_children': 'Children / Dependents',
-      'scan_nafaqah_husband_badge': 'Paid by husband — household expense (Nafaqah)',
-      'scan_nafaqah_wife_personal_badge': 'Deducted from Wife\'s Personal Allowance — Not charged to household budget',
-      'scan_nafaqah_wife_reimbursable_badge': 'Wife paid for the household — husband owes her {amount}',
+      'scan_nafaqah_husband_badge': 'Paid by husband — household expense',
+      'scan_nafaqah_wife_personal_badge': 'From wife\'s personal allowance',
+      'scan_nafaqah_wife_reimbursable_badge': 'Owed to wife: {amount}',
       'scan_invoice_desc': 'For long 60+ item receipts, snap multiple photos (top, middle, bottom). You can also scan the ZATCA VAT QR code.',
       'snap_photo': 'Snap Photo',
       'snap_next_page': 'Snap Next Page',
@@ -2507,9 +2507,9 @@ class AppLocalizations {
       'beneficiary_me': 'لي شخصياً',
       'beneficiary_partner': 'للزوجة شخصياً',
       'beneficiary_children': 'للأولاد / الأبناء',
-      'scan_nafaqah_husband_badge': 'دفعها الزوج — مصروف البيت (نفقة)',
-      'scan_nafaqah_wife_personal_badge': 'مخصوم من مصروف الزوجة — لا يُحمّل على ميزانية المنزل',
-      'scan_nafaqah_wife_reimbursable_badge': 'دفعت الزوجة عن البيت — على الزوج سدادها {amount}',
+      'scan_nafaqah_husband_badge': 'دفعه الزوج — مصاريف المنزل',
+      'scan_nafaqah_wife_personal_badge': 'من مصروف الزوجة',
+      'scan_nafaqah_wife_reimbursable_badge': 'مستحقات للزوجة: {amount}',
       'scan_invoice_desc': 'للإيصالات الطويلة، التقط عدة صور (أعلى ووسط وأسفل)، أو امسح رمز QR الضريبي (زاتكا).',
       'snap_photo': 'التقاط صورة',
       'snap_next_page': 'التقاط الصفحة التالية',
@@ -4212,9 +4212,9 @@ class AppLocalizations {
       'beneficiary_me': 'میرے لیے',
       'beneficiary_partner': 'بیوی / شریکِ حیات کے لیے',
       'beneficiary_children': 'بچوں کے لیے',
-      'scan_nafaqah_husband_badge': 'شوہر نے ادا کیا — گھریلو خرچ (نفقہ)',
-      'scan_nafaqah_wife_personal_badge': 'بیوی کے ذاتی خرچ سے منہا — گھریلو بجٹ پر کوئی بوجھ نہیں',
-      'scan_nafaqah_wife_reimbursable_badge': 'بیوی نے گھر کے لیے ادا کیا — شوہر پر واجب الادا {amount}',
+      'scan_nafaqah_husband_badge': 'شوہر نے ادا کیا — گھریلو اخراجات',
+      'scan_nafaqah_wife_personal_badge': 'بیوی کے ذاتی خرچ سے',
+      'scan_nafaqah_wife_reimbursable_badge': 'بیوی کے واجبات: {amount}',
       'scan_invoice_desc': 'طویل رسیدوں کے لیے کئی تصاویر لیں (اوپر، درمیان، نیچے) یا زاتکا VAT کیو آر کوڈ اسکین کریں۔',
       'snap_photo': 'تصویر لیں',
       'snap_next_page': 'اگلا صفحہ کیپچر کریں',
@@ -5841,6 +5841,10 @@ class AppLocalizations {
         _localizedValues['en']?[key] ??
         key;
   }
+
+  @visibleForTesting
+  static Map<String, String> localizedMap(String locale) =>
+      _localizedValues[locale] ?? const {};
 
   /// Formats a Saudi Riyal amount for the active locale.
   ///

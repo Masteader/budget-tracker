@@ -692,6 +692,125 @@ void main() {
       expect(provider.paydayDay, equals(10));
       expect(provider.cycleKey, equals(SalaryCycleService.cycleKeyForInstant(now, paydayDay: 10)));
     });
+
+    test('SSOT 11: commitments service failure does not block account loading and operating cash', () async {
+      final fakeAccounts = _FakeAccountService();
+      fakeAccounts.accountsToReturn = [
+        Account(
+          id: 'acc-1',
+          householdId: 'h1',
+          ownerUserId: 'u-1',
+          name: 'Main Bank',
+          accountType: AccountType.bank,
+          currency: 'SAR',
+          balance: 1000.0,
+          isSharedPool: true,
+          colorHex: '#10B981',
+          iconName: 'account_balance',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ];
+      final failingCommitments = _FailingCommitmentsService();
+      final fakeIncome = _FakeIncomeSource();
+
+      final provider = AccountProvider(
+        accounts: fakeAccounts,
+        commitments: failingCommitments,
+        income: fakeIncome,
+      );
+
+      provider.bindHousehold('h1', paydayDay: 27);
+      await provider.ensureLoaded();
+
+      expect(provider.hasLoaded, isTrue);
+      expect(provider.operatingCash, equals(1000.0));
+      expect(provider.error, isNotNull);
+    });
+
+    test('Realtime stream emission updates accounts and operating cash without calling getAccounts network refetch', () async {
+      final streamController = StreamController<List<Account>>.broadcast();
+      final fakeAccounts = _StreamFakeAccountService(streamController.stream);
+      final fakeCommitments = _FakeCommitmentsService();
+      final fakeIncome = _FakeIncomeSource();
+
+      final provider = AccountProvider(
+        accounts: fakeAccounts,
+        commitments: fakeCommitments,
+        income: fakeIncome,
+      );
+
+      provider.bindHousehold('h1', paydayDay: 27);
+      expect(fakeAccounts.getAccountsCalls, equals(0));
+
+      final testAccount = Account(
+        id: 'acc-stream',
+        householdId: 'h1',
+        ownerUserId: 'u-1',
+        name: 'Streamed Wallet',
+        accountType: AccountType.eWallet,
+        currency: 'SAR',
+        balance: 450.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+
+      streamController.add([testAccount]);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(fakeAccounts.getAccountsCalls, equals(0));
+      expect(provider.accounts.length, equals(1));
+      expect(provider.accounts.first.balance, equals(450.0));
+      expect(provider.operatingCash, equals(450.0));
+      expect(provider.hasLoaded, isTrue);
+
+      await streamController.close();
+    });
+
+    test('dispose during in-flight load completes safely without throwing', () async {
+      final fakeAccounts = _FakeAccountService();
+      final c = Completer<List<Account>>();
+      fakeAccounts.nextGetAccountsCompleter = c;
+
+      final provider = AccountProvider(
+        accounts: fakeAccounts,
+        commitments: _FakeCommitmentsService(),
+        income: _FakeIncomeSource(),
+      );
+
+      provider.bindHousehold('h1', paydayDay: 27);
+      final loadFuture = provider.ensureLoaded();
+
+      provider.dispose();
+      c.complete([]);
+      await expectLater(loadFuture, completes);
+    });
+
+    test('deductExpense with non-existent accountId does not fall back to debiting another account', () async {
+      final provider = AccountProvider();
+      final acc1 = Account(
+        id: 'acc-1',
+        householdId: 'h1',
+        ownerUserId: 'u-1',
+        name: 'Primary Bank',
+        accountType: AccountType.bank,
+        currency: 'SAR',
+        balance: 1000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([acc1], householdId: 'h1');
+
+      await provider.deductExpense(accountId: 'missing-id', amount: 200.0);
+
+      expect(provider.accounts.first.balance, equals(1000.0));
+    });
   });
 }
 
@@ -733,6 +852,7 @@ class _FakeCommitmentsService extends CommitmentsService {
     required String householdId,
     required int paydayDay,
     required String cycleKey,
+    DateTime? today,
   }) async {
     getCommitmentsCalls++;
     lastCycleKey = cycleKey;
@@ -802,4 +922,37 @@ class _MockAccountService extends AccountService {
   Stream<List<Account>> streamAccounts(String householdId) {
     return const Stream.empty();
   }
+}
+
+class _FailingCommitmentsService extends CommitmentsService {
+  @override
+  Future<List<PendingCommitment>> getPendingCommitments({
+    required String householdId,
+    required int paydayDay,
+    required String cycleKey,
+    DateTime? today,
+  }) async {
+    throw Exception('FastAPI commitments 500 error');
+  }
+}
+
+class _StreamFakeAccountService extends AccountService {
+  _StreamFakeAccountService(this._stream);
+  final Stream<List<Account>> _stream;
+  int getAccountsCalls = 0;
+
+  @override
+  Future<List<Account>> getAccounts(String householdId) async {
+    getAccountsCalls++;
+    return [];
+  }
+
+  @override
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async => [];
+
+  @override
+  Future<double> getHouseholdConfiguredIncome(String householdId) async => 0.0;
+
+  @override
+  Stream<List<Account>> streamAccounts(String householdId) => _stream;
 }

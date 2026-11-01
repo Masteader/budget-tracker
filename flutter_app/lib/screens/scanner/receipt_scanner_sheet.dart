@@ -13,6 +13,7 @@ import '../../main.dart';
 import '../../models/account.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
+import '../../models/nafaqah_account.dart';
 import '../../providers/household_role_provider.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
@@ -732,7 +733,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final confirmedSpouseId = (_isFamily && _computedNafaqahClass != null)
           ? (_nafaqahWifeId ?? _nafaqah.defaultSpouseId)
           : nafaqah['nafaqah_spouse_id'];
-      final isWifeExpense = confirmedClass == 'wife_personal' || confirmedClass == 'wife_reimbursable';
+      final rowAccountId = accountForNafaqahClass(confirmedClass, _selectedAccountId);
 
       // The preview's token (when the server sends one) is returned
       // unchanged; an expired token re-runs the preview once.
@@ -757,7 +758,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           amount: edits.amount,
           categoryCode: edits.categoryCode,
           previewToken: token,
-          accountId: isWifeExpense ? null : _selectedAccountId,
+          accountId: rowAccountId,
         ),
         rePreview: () => ApiService.instance.scanReceipt(
           imagesBase64: base64List,
@@ -765,7 +766,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           householdId: widget.householdId,
           userId: user?.id,
           previewOnly: true,
-          accountId: isWifeExpense ? null : _selectedAccountId,
+          accountId: rowAccountId,
         ),
       );
 
@@ -940,9 +941,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       }
 
       final confirmedNafaqahClass = _isFamily ? _computedNafaqahClass : _nafaqahClass;
-      if (confirmedNafaqahClass == kWifePersonal || confirmedNafaqahClass == kWifeReimbursable) {
-        accountId = null;
-      }
+      accountId = accountForNafaqahClass(confirmedNafaqahClass, accountId);
       final row = <String, dynamic>{
         'household_id': widget.householdId,
         if (userId != null) 'user_id': userId,

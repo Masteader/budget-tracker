@@ -1395,13 +1395,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
               }
 
               final txProvider = ctx.watch<TransactionProvider>();
-              final (start, end) = _selectedCycle != null
-                  ? (DateTime.tryParse(_selectedCycle!.cycleStart), DateTime.tryParse(_selectedCycle!.cycleEnd))
-                  : (null, null);
+              final paydayDay = context.read<AccountProvider>().paydayDay;
 
               final budgets = txProvider.isLoading
                   ? rawBudgets
-                  : reconcileCycleBudgets(rawBudgets, txProvider, _currentCycleKey, start, end);
+                  : reconcileCycleBudgets(rawBudgets, txProvider, _currentCycleKey, paydayDay);
 
               final totalAllocated = budgets.fold<double>(0.0, (sum, b) => sum + b.allocatedAmount);
 
@@ -1465,16 +1463,14 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .where((b) => b.isActive)
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
 
-                    final accountProvider = ctx.watch<AccountProvider>();
                     final snapshot = accountProvider.snapshot;
-                    final liveAccounts = accountProvider.hasLoaded ? accountProvider.accounts : staticData.accounts;
-                    final displayOperatingCash = accountProvider.hasLoaded ? snapshot.operatingCash : 0.0;
+                    final displayOperatingCash = (isCurrentCycle && accountProvider.hasLoaded) ? snapshot.operatingCash : 0.0;
                     final verifiedCycleIncome = accountProvider.hasLoaded ? snapshot.cycleIncome : staticData.monthlyIncome;
                     final cycleFunding = (verifiedCycleIncome > 0)
                         ? verifiedCycleIncome
                         : (displayOperatingCash + totalSpent);
                     final hasBenchmark = cycleFunding > 0;
-                    final hasOperatingCash = displayOperatingCash > 0;
+                    final hasOperatingCash = isCurrentCycle && displayOperatingCash > 0;
 
                     // Allocation capacity margin against cycle funding
                     final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
@@ -1673,44 +1669,46 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                // Row 2: Live Remaining Operating Cash
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.account_balance_wallet_outlined,
-                                            size: 17,
-                                            color: context.accentText,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Flexible(
-                                            child: Text(
-                                              context.tr('operating_cash_remaining'),
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: context.textSecondary,
-                                                fontWeight: FontWeight.w600,
+                                if (isCurrentCycle) ...[
+                                  const SizedBox(height: 8),
+                                  // Row 2: Live Remaining Operating Cash
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.account_balance_wallet_outlined,
+                                              size: 17,
+                                              color: context.accentText,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Flexible(
+                                              child: Text(
+                                                context.tr('operating_cash_remaining'),
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: context.textSecondary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      context.sar(displayOperatingCash),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.textPrimary,
+                                      Text(
+                                        context.sar(displayOperatingCash),
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: context.textPrimary,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                    ],
+                                  ),
+                                ],
                                 const SizedBox(height: 10),
                                 if (isOverAllocated) ...[
                                   Container(

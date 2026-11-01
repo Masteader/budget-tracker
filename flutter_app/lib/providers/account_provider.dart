@@ -47,6 +47,13 @@ class AccountProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _hasLoaded = false;
   String? _error;
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   Future<void>? _inFlight;
   bool _pendingForce = false;
@@ -206,13 +213,23 @@ class AccountProvider extends ChangeNotifier {
       final curCycleKey = _cycleKey ??
           SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: _paydayDay);
 
+      Object? commitmentsError;
+      Future<List<PendingCommitment>> fetchCommitmentsSafe() async {
+        try {
+          return await _commitmentsService.getPendingCommitments(
+            householdId: hid,
+            paydayDay: _paydayDay,
+            cycleKey: curCycleKey,
+          );
+        } catch (err) {
+          commitmentsError = err;
+          return _lastCommitments;
+        }
+      }
+
       final results = await Future.wait([
         _accountsService.getAccounts(hid),
-        _commitmentsService.getPendingCommitments(
-          householdId: hid,
-          paydayDay: _paydayDay,
-          cycleKey: curCycleKey,
-        ),
+        fetchCommitmentsSafe(),
         _fetchIncome(hid, curCycleKey),
       ]);
 
@@ -242,7 +259,7 @@ class AccountProvider extends ChangeNotifier {
       );
 
       _hasLoaded = true;
-      _error = null;
+      _error = commitmentsError?.toString();
     } catch (e) {
       if (gen == _generation && hid == _householdId) {
         _error = e.toString();
@@ -289,7 +306,16 @@ class AccountProvider extends ChangeNotifier {
     _streamSub = _accountsService.streamAccounts(householdId).listen(
       (list) {
         if (_householdId != householdId) return;
-        refresh(force: true);
+        _accounts = list;
+        _hasLoaded = true;
+        _publishSnapshot(
+          householdId: householdId,
+          cycleKey: _cycleKey ?? '',
+          accounts: list,
+          commitments: _lastCommitments,
+          cycleIncomeHalalas: _snapshot.cycleIncomeHalalas,
+        );
+        notifyListeners();
       },
       onError: (err) {
         if (_householdId != householdId) return;
@@ -334,9 +360,11 @@ class AccountProvider extends ChangeNotifier {
     Account? target;
     if (accountId != null && accountId.isNotEmpty) {
       target = _accounts.where((a) => a.id == accountId).firstOrNull;
+      if (target == null) return;
+    } else {
+      target = _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull ??
+          _accounts.where((a) => !a.isArchived).firstOrNull;
     }
-    target ??= _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull ??
-        _accounts.where((a) => !a.isArchived).firstOrNull;
 
     if (target != null) {
       final newBal = target.balance - amount;
@@ -429,6 +457,7 @@ class AccountProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _streamSub?.cancel();
     _streamSub = null;
     super.dispose();

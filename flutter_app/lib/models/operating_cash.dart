@@ -72,14 +72,14 @@ class OperatingCashCalculator {
     required List<PendingCommitment> commitments,
     required int cycleIncomeHalalas,
   }) {
-    // Rule: non-archived operating accounts only
-    final operatingAccounts = accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).toList();
+    // Rule: non-archived operating accounts in SAR currency only
+    final operatingAccounts = accounts
+        .where((a) => !a.isArchived && a.accountType.isOperatingPool && a.currency.toUpperCase() == 'SAR')
+        .toList();
 
     int totalLiquidHalalas = 0;
     for (final acc in operatingAccounts) {
-      if (acc.balance > 0) {
-        totalLiquidHalalas += toHalalas(acc.balance);
-      }
+      totalLiquidHalalas += toHalalas(acc.balance);
     }
 
     // Rule: unpaid commitments in the active cycle only

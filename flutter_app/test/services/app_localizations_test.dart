@@ -54,5 +54,42 @@ void main() {
       expect(delegate.isSupported(const Locale('ur')), isTrue);
       expect(delegate.isSupported(const Locale('fr')), isFalse);
     });
+
+    test('Arabic translations contain neither نفقة شرعية nor Compliance Engine', () {
+      final arMap = AppLocalizations.localizedMap('ar');
+      expect(arMap.isNotEmpty, isTrue);
+      for (final entry in arMap.entries) {
+        expect(
+          entry.value.contains('نفقة شرعية'),
+          isFalse,
+          reason: 'Key ${entry.key} contains prohibited phrase "نفقة شرعية"',
+        );
+        expect(
+          entry.value.contains('Compliance Engine'),
+          isFalse,
+          reason: 'Key ${entry.key} contains prohibited phrase "Compliance Engine"',
+        );
+      }
+    });
+
+    test('The three scan nafaqah badge keys contain no نفقة or Nafaqah in any locale', () {
+      const badgeKeys = [
+        'scan_nafaqah_husband_badge',
+        'scan_nafaqah_wife_personal_badge',
+        'scan_nafaqah_wife_reimbursable_badge',
+      ];
+
+      for (final lang in ['en', 'ar', 'ur']) {
+        final loc = AppLocalizations(Locale(lang));
+        for (final key in badgeKeys) {
+          final text = loc.get(key);
+          expect(
+            text.contains('نفقة') || text.toLowerCase().contains('nafaqah'),
+            isFalse,
+            reason: 'Locale $lang key $key contains نفقة/Nafaqah: "$text"',
+          );
+        }
+      }
+    });
   });
 }

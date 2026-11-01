@@ -24,6 +24,7 @@ import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
 import 'expense_date_chips.dart';
 import '../../models/nafaqah.dart';
+import '../../models/nafaqah_account.dart';
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
 import '../../services/salary_cycle_service.dart';
@@ -405,24 +406,6 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       return;
     }
 
-    // Zero-Balance Overdraft Guard: prevent spending more than available account balance.
-    if (_selectedAccountId != null && _accounts.isNotEmpty) {
-      final selectedAcc = _accounts.where((a) => a.id == _selectedAccountId).firstOrNull;
-      if (selectedAcc != null && amount > selectedAcc.balance) {
-        AppSnackBar.showError(
-          context,
-          context.trArgs('insufficient_funds_msg', {
-            'account': selectedAcc.name,
-            'balance': context.sar(selectedAcc.balance),
-            'amount': context.sar(amount),
-          }),
-          title: context.tr('insufficient_funds_title'),
-        );
-        return;
-      }
-    }
-
-    setState(() => _isSaving = true);
     final hid = widget.householdId ?? '';
 
     // Determine role-aware attribution fields
@@ -462,6 +445,28 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       }
     }
 
+    final String? rowAccountId = accountForNafaqahClass(nafaqahClass, _selectedAccountId);
+
+    // Zero-Balance Overdraft Guard: prevent spending more than available account balance.
+    // Skips wife-classified expenses (paid by her, never debited from household accounts).
+    if (rowAccountId != null && _accounts.isNotEmpty) {
+      final selectedAcc = _accounts.where((a) => a.id == rowAccountId).firstOrNull;
+      if (selectedAcc != null && amount > selectedAcc.balance) {
+        AppSnackBar.showError(
+          context,
+          context.trArgs('insufficient_funds_msg', {
+            'account': selectedAcc.name,
+            'balance': context.sar(selectedAcc.balance),
+            'amount': context.sar(amount),
+          }),
+          title: context.tr('insufficient_funds_title'),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isSaving = true);
+
     final row = buildManualExpenseRow(
       id: const Uuid().v4(),
       householdId: hid,
@@ -473,7 +478,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       paidBy: paidBy,
       beneficiaryType: benType,
       beneficiaryId: benId,
-      accountId: _selectedAccountId,
+      accountId: rowAccountId,
       // A day the user chose, else the moment of saving.
       occurredAt: _datePicked ? _occurredAt : DateTime.now(),
       recordedAt: _useCustomRecordedDate ? _recordedAt : null,
@@ -503,7 +508,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       if (mounted) {
         try {
           context.read<AccountProvider>().deductExpense(
-            accountId: _selectedAccountId,
+            accountId: rowAccountId,
             amount: amount,
             nafaqahClass: nafaqahClass,
           );
@@ -1253,6 +1258,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
                   ],
                 ),
                 child: ElevatedButton(
+                  key: const Key('save_expense_button'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     foregroundColor: Colors.white,

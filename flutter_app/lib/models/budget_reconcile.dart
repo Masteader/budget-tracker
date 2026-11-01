@@ -9,16 +9,14 @@ List<Budget> reconcileCycleBudgets(
   List<Budget> raw,
   TransactionProvider tx,
   String cycleKey,
-  DateTime? start,
-  DateTime? end,
+  int paydayDay,
 ) {
   if (tx.isLoading || tx.transactions.isEmpty) return raw;
   return raw.map((b) {
     final realSpent = tx.cycleSpendForCategory(
       b.categoryCode,
       cycleKey,
-      cycleStart: start,
-      cycleEnd: end,
+      paydayDay: paydayDay,
     );
     return b.copyWith(
       spentAmount: realSpent,

@@ -316,5 +316,82 @@ void main() {
       expect(snapshot.householdId, equals(householdId));
       expect(snapshot.cycleKey, equals('2026-12'));
     });
+
+    test('Case 9: Overdrawn operating account (negative balance) is summed: Bank 1000 + Wallet -250 == 75000 halalas', () {
+      final accounts = [
+        Account(
+          id: 'acc-1',
+          householdId: householdId,
+          ownerUserId: 'u-1',
+          name: 'Main Bank',
+          accountType: AccountType.bank,
+          balance: 1000.0,
+          currency: 'SAR',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+        Account(
+          id: 'acc-2',
+          householdId: householdId,
+          ownerUserId: 'u-1',
+          name: 'Overdrawn Wallet',
+          accountType: AccountType.eWallet,
+          balance: -250.0,
+          currency: 'SAR',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ];
+
+      final snapshot = OperatingCashCalculator.compute(
+        householdId: householdId,
+        cycleKey: cycleKey,
+        accounts: accounts,
+        commitments: const [],
+        cycleIncomeHalalas: 75000,
+      );
+
+      expect(snapshot.liquidHalalas, equals(75000)); // 750.00 SAR
+      expect(snapshot.operatingCash, equals(750.00));
+      expect(snapshot.accountsCount, equals(2));
+    });
+
+    test('Case 10: Non-SAR operating account (currency: USD, balance: 500) is excluded', () {
+      final accounts = [
+        Account(
+          id: 'acc-1',
+          householdId: householdId,
+          ownerUserId: 'u-1',
+          name: 'SAR Bank',
+          accountType: AccountType.bank,
+          balance: 1000.0,
+          currency: 'SAR',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+        Account(
+          id: 'acc-2',
+          householdId: householdId,
+          ownerUserId: 'u-1',
+          name: 'USD Bank',
+          accountType: AccountType.bank,
+          balance: 500.0,
+          currency: 'USD',
+          isArchived: false,
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ];
+
+      final snapshot = OperatingCashCalculator.compute(
+        householdId: householdId,
+        cycleKey: cycleKey,
+        accounts: accounts,
+        commitments: const [],
+        cycleIncomeHalalas: 100000,
+      );
+
+      expect(snapshot.liquidHalalas, equals(100000)); // 1000.00 SAR only
+      expect(snapshot.accountsCount, equals(1)); // Only the SAR account is counted
+    });
   });
 }

@@ -61,7 +61,7 @@ void main() {
       ];
 
       final fakeTx = _FakeTransactions(txList);
-      final reconciled = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, null, null);
+      final reconciled = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, 27);
 
       expect(reconciled.length, equals(1));
       expect(reconciled.first.spentAmount, equals(100.0));
@@ -135,12 +135,59 @@ void main() {
       ];
 
       final fakeTx = _FakeTransactions(txList);
-      final screen1Result = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, null, null);
-      final screen2Result = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, null, null);
+      final screen1Result = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, 27);
+      final screen2Result = reconcileCycleBudgets(rawBudgets, fakeTx, cycleKey, 27);
 
       expect(screen1Result.map((b) => b.spentAmount).toList(), equals([500.0, 200.0]));
       expect(screen2Result.map((b) => b.spentAmount).toList(), equals([500.0, 200.0]));
       expect(screen1Result.map((b) => b.spentAmount).toList(), equals(screen2Result.map((b) => b.spentAmount).toList()));
+    });
+
+    test('reconciles un-stamped transactions using household paydayDay', () {
+      // 2026-10-12 in Riyadh
+      final txDate = DateTime.utc(2026, 10, 12, 10, 0);
+      final rawBudgets = <Budget>[
+        const Budget(
+          id: 'b-oct',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 1500.0,
+          spentAmount: 0.0,
+          remainingAmount: 1500.0,
+          month: '2026-10-01',
+          cycleKey: '2026-10',
+          isActive: true,
+        ),
+      ];
+
+      final unstampedTx = [
+        Transaction.fromMap({
+          'id': 'tx-unstamped',
+          'household_id': 'h1',
+          'amount': 350.0,
+          'currency': 'SAR',
+          'merchant': 'Panda',
+          'category_code': 'OPEX-GROCERY',
+          'timestamp': txDate.toIso8601String(),
+          'created_at': txDate.toIso8601String(),
+          'spent_by': 'me',
+          'cycle_key': null, // no cycle_key
+        }),
+      ];
+
+      final fakeTx = _FakeTransactions(unstampedTx);
+
+      // Under paydayDay: 10, 2026-10-12 falls into cycle '2026-10' (starts Oct 10)
+      final resPayday10 = reconcileCycleBudgets(rawBudgets, fakeTx, '2026-10', 10);
+      expect(resPayday10.first.spentAmount, equals(350.0));
+
+      // Under paydayDay: 27, 2026-10-12 falls into cycle '2026-10' (Sep 27 - Oct 26)
+      final resPayday27Oct = reconcileCycleBudgets(rawBudgets, fakeTx, '2026-10', 27);
+      expect(resPayday27Oct.first.spentAmount, equals(350.0));
+
+      // Under paydayDay: 27, it must NOT count under '2026-11' (Oct 27 - Nov 26)
+      final resPayday27Nov = reconcileCycleBudgets(rawBudgets, fakeTx, '2026-11', 27);
+      expect(resPayday27Nov.first.spentAmount, equals(0.0));
     });
   });
 }

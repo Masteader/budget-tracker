@@ -156,6 +156,49 @@ void main() {
       expect(extra.isPaid, isFalse);
       expect(extra.cycleKey, equals('2026-12'));
     });
+
+    test('active plan with nextDueAt null filters out earlier paid dates in the cycle', () async {
+      final plan = InstallmentPlan(
+        id: 'inst-paid-earlier',
+        householdId: 'hh-1',
+        merchant: 'Noon',
+        provider: 'Tabby',
+        totalAmount: 1200.0,
+        installmentCount: 4,
+        monthlyAmount: 300.0,
+        paidInstallments: 1,
+        dayOfMonth: 1,
+        startDate: '2026-10-01',
+        status: 'ACTIVE',
+        nextDueAt: null, // computes from dayOfMonth
+      );
+
+      const emptyBills = RecurringBillsSummary(
+        cycleKey: '2026-11',
+        cycleLabel: 'November 2026',
+        totalRecurringMonthly: 0.0,
+        paidThisCycle: 0.0,
+        reservedAmount: 0.0,
+        bills: [],
+      );
+
+      final service = CommitmentsService(
+        installments: FakeInstallmentSource([plan]),
+        bills: FakeRecurringBillSource(emptyBills),
+      );
+
+      // Today is 2026-11-06; the 2026-11-01 installment is already in the past
+      final commitments = await service.getPendingCommitments(
+        householdId: 'hh-1',
+        paydayDay: 27,
+        cycleKey: '2026-11',
+        today: DateTime.utc(2026, 11, 6),
+      );
+
+      // Verify no commitment with 2026-11-01 exists
+      final hasPastDue = commitments.any((c) => c.id.contains('2026-11-01'));
+      expect(hasPastDue, isFalse);
+    });
   });
 }
 

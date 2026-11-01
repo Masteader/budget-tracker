@@ -58,6 +58,7 @@ class CommitmentsService {
     required String householdId,
     required int paydayDay,
     required String cycleKey,
+    DateTime? today,
   }) async {
     final results = await Future.wait([
       _bills.getRecurringBills(householdId),
@@ -82,8 +83,7 @@ class CommitmentsService {
     }
 
     // 2. Process active installment plans
-    final currentCycle = SalaryCycleService.cycleForKey(cycleKey, paydayDay: paydayDay) ??
-        SalaryCycleService.currentCycle(paydayDay: paydayDay);
+    final t = today ?? SalaryCycleService.riyadhToday();
 
     for (final plan in installmentPlans) {
       if (plan.isCompleted || plan.status != 'ACTIVE') continue;
@@ -99,7 +99,7 @@ class CommitmentsService {
         ));
       } else {
         // Generate upcoming due dates
-        final dueDates = plan.dueDates(today: currentCycle.start, max: 6);
+        final dueDates = plan.dueDates(today: t, max: 6).where((d) => !d.isBefore(t));
         for (final due in dueDates) {
           final dueKey = cycleKeyForDueDate(due, paydayDay);
           commitments.add(PendingCommitment(

@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -204,6 +205,10 @@ def show_budget_status() -> None:
     print(f"  Spend Log Location:      {SPEND_FILE}")
     print("=" * 55 + "\n")
 
+SECRET_PATTERNS = (
+    ".env", ".env.audit", "dart_defines.json", ".pem", ".key", ".p12", "service_account", "audit_spend.json"
+)
+
 # Files/dirs to always exclude from scans
 EXCLUDE_PATTERNS = {
     ".git", "node_modules", "build", "dist", ".dart_tool",
@@ -231,7 +236,15 @@ def _run_git(*args: str) -> str:
 
 def _should_exclude(path: str) -> bool:
     """Check if a file path matches any exclusion pattern."""
-    parts = Path(path).parts
+    p = Path(path)
+    if p.name.startswith(".env"):
+        return True
+    path_str = str(path).replace("\\", "/")
+    for sp in SECRET_PATTERNS:
+        if sp in p.name or sp in path_str:
+            return True
+
+    parts = p.parts
     for pattern in EXCLUDE_PATTERNS:
         if pattern in parts or path.endswith(pattern):
             return True
@@ -283,6 +296,11 @@ def get_changed_files_summary() -> str:
     return _run_git("diff", "--stat", "main...HEAD")
 
 
+_SECRET_CONTENT_REGEX = re.compile(
+    r'sb_secret_|"role"\s*:\s*"service_role"|SUPABASE_(SECRET|SERVICE_ROLE)_KEY\s*='
+)
+
+
 def read_changed_files_content(file_list: list[str]) -> str:
     """Read full content of changed files (NOT git diff -- saves tokens)."""
     content_blocks = []
@@ -290,6 +308,9 @@ def read_changed_files_content(file_list: list[str]) -> str:
         full_path = PROJECT_ROOT / filepath
         if full_path.exists() and full_path.is_file():
             file_content = _read_file_safe(full_path)
+            if _SECRET_CONTENT_REGEX.search(file_content):
+                print(f"[WARNING] Skipping file containing secret/credential patterns: {filepath}")
+                continue
             content_blocks.append(
                 f"{'-'*60}\n"
                 f"[FILE] {filepath}\n"
@@ -573,6 +594,14 @@ def mode_review(
     change_summary = get_changed_files_summary()
     file_contents = read_changed_files_content(changed_files)
 
+    # Append l10n diff if app_localizations.dart was modified
+    l10n_file = "flutter_app/lib/l10n/app_localizations.dart"
+    l10n_diff = _run_git("diff", "main...HEAD", "--", l10n_file)
+    if not l10n_diff:
+        l10n_diff = _run_git("diff", "HEAD", "--", l10n_file)
+    if l10n_diff:
+        file_contents += f"\n{'-'*60}\n[L10N DIFF] {l10n_file}\n{'-'*60}\n{l10n_diff}\n"
+
     # Get current branch name
     branch = _run_git("branch", "--show-current")
 
@@ -630,7 +659,9 @@ VERIFICATION GATES TO RUN:
 
     print(f"\n[FEEDBACK] Audit feedback written to: {output_path}")
 
-    if "AUDIT VERDICT: APPROVED" in result:
+    is_approved = "AUDIT VERDICT: REVISE" not in result and bool(re.search(r"^#?\s*AUDIT VERDICT:\s*APPROVED", result, re.M))
+
+    if is_approved:
         print("[OK] STATUS: APPROVED -- Ready for human sign-off to push to main.")
         return 0
     else:
