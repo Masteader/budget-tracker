@@ -208,5 +208,58 @@ void main() {
       expect(accProvider.householdId, equals('test-hid'));
       expect(accProvider.paydayDay, equals(10));
     });
+
+    test('source guard: no file hardcodes payday = 27 (Item 9)', () {
+      final paths = [
+        'lib/screens/home/budget_management_screen.dart',
+        'lib/screens/home/dashboard_screen.dart',
+        'lib/widgets/accounts/add_edit_account_dialog.dart',
+      ];
+      final regex = RegExp(r'[Pp]ayday(Day)?\s*=\s*27\b');
+      for (final p in paths) {
+        final file = File(p);
+        expect(file.existsSync(), isTrue, reason: 'File $p must exist');
+        final src = file.readAsStringSync();
+        expect(regex.hasMatch(src), isFalse, reason: 'File $p contains hardcoded payday = 27');
+      }
+    });
+
+    testWidgets('BudgetManagementScreen skips HouseholdSetupPrefs.load when AccountProvider is already bound (Item 10)', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      var loadCount = 0;
+      addTearDown(() {
+        tester.view.reset();
+        HouseholdSetupPrefs.loadOverride = null;
+      });
+
+      HouseholdSetupPrefs.loadOverride = (hid) async {
+        loadCount++;
+        return const HouseholdSetupData(paydayDay: 15);
+      };
+
+      final accProvider = AccountProvider();
+      accProvider.bindHousehold('test-hid', paydayDay: 15);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AccountProvider>.value(value: accProvider),
+            ChangeNotifierProvider<TransactionProvider>(create: (_) => TransactionProvider()),
+            ChangeNotifierProvider<BudgetProvider>(create: (_) => MockBudgetProvider()),
+            ChangeNotifierProvider<HouseholdRoleProvider>(create: (_) => TestHouseholdRoleProvider(householdId: 'test-hid')),
+          ],
+          child: localizedApp(
+            BudgetManagementScreen(
+              budgetStreamOverride: (_) => Stream.value([]),
+            ),
+            scaffold: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(loadCount, equals(0));
+    });
   });
 }

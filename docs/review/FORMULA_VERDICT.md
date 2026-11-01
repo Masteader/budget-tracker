@@ -33,8 +33,7 @@ Liquid Balance = Σ accounts.balance
     AND is_active = true
 ```
 **Implementation notes:**
-- **Use an `include_in_liquid` flag** on `accounts` rather than hard-coding types. Users may want to exclude a specific wallet.
-- **Credit cards:** spending on a card reduces the card balance, not liquid cash. The cash impact shows up when the **statement payment is due**, so add it to Commitments.
+- **Implemented filter:** `!isArchived && accountType.isOperatingPool && currency == 'SAR'` (`OperatingCashCalculator.compute`).
 - **Transfers:** a current → savings transfer correctly lowers Liquid Balance. It must **not** count as "spent" in the budget.
 
 ### B. Commitments (Upcoming Unpaid Obligations)
@@ -45,18 +44,6 @@ Commitments = Σ (amount_due − amount_paid)
   FROM bills + installments (+ credit card statement dues)
   WHERE status IN ('unpaid', 'partial', 'overdue')
     AND due_date <= period_end        -- include overdue
-```
-
-### C. Operating Cash (Spendable Headroom)
-**Definition:** Net liquid cash available for discretionary allocation after reserving funds for all period commitments. Spent amount is strictly excluded from this formula because transaction triggers already reduce `accounts.balance` at write time.
-
-```
-Operating Cash = Liquid Balance − Commitments
-```
-
-**Implementation SSOT:**
-- Represented in Flutter code by `OperatingCashCalculator.calculate(liquidAccounts, commitments)`.
-- Represented in PostgreSQL by zero-based trigger accounting ensuring `accounts.balance` remains the canonical live balance.
 ```
 
 ### C. Operating Cash (Spendable Headroom)

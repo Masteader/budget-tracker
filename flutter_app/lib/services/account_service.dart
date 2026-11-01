@@ -342,6 +342,8 @@ class AccountService {
   /// or primary operating account, and adjusts the account balance if it was not deducted yet.
   Future<void> reconcileUnlinkedTransactions(
     String householdId, {
+    required bool callerIsAdmin,
+    String? currentUserId,
     Future<List<Account>> Function(String householdId)? fetchAccounts,
     Future<List<Map<String, dynamic>>> Function(String householdId)? fetchUnlinked,
     Future<void> Function(String txId, String targetAccId)? linkTransaction,
@@ -350,8 +352,18 @@ class AccountService {
       final accounts = fetchAccounts != null ? await fetchAccounts(householdId) : await getAccounts(householdId);
       if (accounts.isEmpty) return;
 
-      final currentUserId = _safeClient?.auth.currentUser?.id;
-      if (fetchUnlinked == null && (currentUserId == null || currentUserId.isEmpty)) return;
+      final effectiveUserId = currentUserId ?? _safeClient?.auth.currentUser?.id;
+      if (fetchUnlinked == null && (effectiveUserId == null || effectiveUserId.isEmpty)) return;
+
+      final debitable = accounts
+          .where((a) =>
+              !a.isArchived &&
+              a.accountType.isOperatingPool &&
+              ((effectiveUserId != null && a.ownerUserId == effectiveUserId) || (a.isSharedPool && callerIsAdmin)))
+          .toList();
+      if (debitable.isEmpty) return;
+
+      final defaultAcc = debitable.first;
 
       final tenMinutesAgo = DateTime.now().toUtc().subtract(const Duration(minutes: 10)).toIso8601String();
       final List<dynamic> unlinked = fetchUnlinked != null
@@ -360,14 +372,11 @@ class AccountService {
               .from('transactions')
               .select('id, amount, category_code, nafaqah_class, source, merchant')
               .eq('household_id', householdId)
-              .eq('user_id', currentUserId!)
+              .eq('user_id', effectiveUserId!)
               .isFilter('account_id', null)
               .inFilter('source', ['chat', 'receipt_scan'])
               .gte('created_at', tenMinutesAgo)
               .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)');
-
-      final operatingAccounts = accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).toList();
-      final defaultAcc = operatingAccounts.firstOrNull ?? accounts.first;
 
       if (unlinked.isNotEmpty) {
         for (final row in unlinked) {
@@ -375,9 +384,8 @@ class AccountService {
           final catCode = row['category_code'] as String?;
           final nafaqahClass = row['nafaqah_class'] as String?;
           final source = row['source'] as String?;
-          final merchant = (row['merchant'] as String? ?? '').toLowerCase();
           if (txId == null) continue;
-          if (source == 'prior_adjustment' || merchant.startsWith('prior') || merchant.startsWith('سابق')) {
+          if (source == 'prior_adjustment') {
             continue;
           }
 
@@ -399,7 +407,10 @@ class AccountService {
                   .limit(1)
                   .maybeSingle();
               if (bRes != null && bRes['account_id'] != null) {
-                targetAccId = bRes['account_id'] as String;
+                final bAccId = bRes['account_id'] as String;
+                if (debitable.any((a) => a.id == bAccId)) {
+                  targetAccId = bAccId;
+                }
               }
             } catch (_) {}
           }

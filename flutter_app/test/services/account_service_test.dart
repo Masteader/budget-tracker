@@ -23,7 +23,7 @@ void main() {
 
     test('reconcileUnlinkedTransactions returns safely without throwing when uninitialized', () async {
       final service = AccountService();
-      await expectLater(service.reconcileUnlinkedTransactions('hh-nonexistent'), completes);
+      await expectLater(service.reconcileUnlinkedTransactions('hh-nonexistent', callerIsAdmin: true), completes);
     });
   });
 }

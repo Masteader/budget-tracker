@@ -9,6 +9,7 @@ import '../../models/installment_plan.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/account_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/sync_worker.dart' show SyncWorker, kTransactionInsertOperation;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
@@ -24,7 +25,7 @@ import '../app_snackbar.dart';
 import '../nafaqah/nafaqah_class_selector.dart';
 import 'expense_date_chips.dart';
 import '../../models/nafaqah.dart';
-import '../../models/nafaqah_account.dart';
+import '../../models/nafaqah_account.dart' show accountForNafaqahClass;
 import '../../models/money.dart';
 import '../../models/category_catalog.dart';
 import '../../services/salary_cycle_service.dart';
@@ -241,12 +242,24 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
         list = await AccountService.instance.getAccounts(hid);
       }
       if (mounted) {
+        final callerIsAdmin = viewerIsAdminOf(context, hid) ||
+            _householdMembers.any((m) =>
+                m["id"] == _currentUserId && (m["role"] as String?)?.toLowerCase() == "admin");
+        final currentUserId = _currentUserId;
+        final debitable = list.where((a) =>
+            !a.isArchived &&
+            a.accountType.isOperatingPool &&
+            (a.ownerUserId == currentUserId || (a.isSharedPool && callerIsAdmin))
+        ).toList();
+
         setState(() {
-          _accounts = list;
+          _accounts = debitable;
         });
         await _updateDefaultAccountForCategory(_selectedCategory);
-        if (_selectedAccountId == null && list.isNotEmpty && mounted) {
-          final defaultAcc = list.where((a) => a.accountType.isOperatingPool).firstOrNull ?? list.first;
+        if ((_selectedAccountId == null || !debitable.any((a) => a.id == _selectedAccountId)) &&
+            debitable.isNotEmpty &&
+            mounted) {
+          final defaultAcc = debitable.first;
           setState(() {
             _selectedAccountId = defaultAcc.id;
           });
@@ -264,7 +277,10 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           .select('account_id')
           .eq('household_id', hid)
           .eq('category_code', categoryCode)
+          .eq('is_active', true)
+          .eq('cycle_key', _targetCycle.key)
           .not('account_id', 'is', null)
+          .limit(1)
           .maybeSingle();
       if (bRes != null && bRes['account_id'] != null && mounted) {
         final accId = bRes['account_id'] as String;
@@ -471,7 +487,12 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
       }
     }
 
-    final String? rowAccountId = accountForNafaqahClass(nafaqahClass, _selectedAccountId);
+    final String? rowAccountId = accountForNafaqahClass(
+      nafaqahClass,
+      _selectedAccountId,
+      accounts: _accounts,
+      spouseId: _selectedWifeId,
+    );
 
     List<Account> accountsSource = _accounts;
     try {
@@ -567,6 +588,7 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
             accountId: rowAccountId,
             amount: amount,
             nafaqahClass: nafaqahClass,
+            spouseId: _selectedWifeId,
           );
         } catch (_) {}
       }

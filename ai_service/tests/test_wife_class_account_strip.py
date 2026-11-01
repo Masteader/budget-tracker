@@ -70,6 +70,7 @@ def family(fake_supabase):
         {"id": "b2222222-2222-3333-4444-555555555555", "household_id": "99999999-9999-4999-8999-999999999999", "name": "Foreign Account", "account_type": "checking", "balance": 1000.0, "currency": "SAR", "is_shared_pool": False, "is_archived": False},
         {"id": "c3333333-2222-3333-4444-555555555555", "household_id": HH, "name": "Wife Personal", "account_type": "checking", "balance": 1500.0, "currency": "SAR", "owner_user_id": WIFE, "is_shared_pool": False, "is_archived": False},
         {"id": "d4444444-2222-3333-4444-555555555555", "household_id": HH, "name": "Husband Personal", "account_type": "checking", "balance": 3000.0, "currency": "SAR", "owner_user_id": HUSBAND, "is_shared_pool": False, "is_archived": False},
+        {"id": "e5555555-2222-3333-4444-555555555555", "household_id": HH, "name": "Archived Account", "account_type": "checking", "balance": 1000.0, "currency": "SAR", "owner_user_id": HUSBAND, "is_shared_pool": False, "is_archived": True},
     ])
     return fake_supabase
 
@@ -174,13 +175,10 @@ def test_chat_transaction_derived_wife_class_strips_account_id(family):
     assert tx.get("account_id") is None
 
 
-    assert tx["nafaqah_class"] == "wife_reimbursable"
-    assert tx.get("account_id") is None
-
-
 FOREIGN_ACC = "b2222222-2222-3333-4444-555555555555"
 WIFE_PERSONAL_ACC = "c3333333-2222-3333-4444-555555555555"
 HUSBAND_PERSONAL_ACC = "d4444444-2222-3333-4444-555555555555"
+ARCHIVED_ACC = "e5555555-2222-3333-4444-555555555555"
 
 
 def test_chat_rejects_foreign_household_account(family):
@@ -234,3 +232,77 @@ def test_chat_allows_own_personal_account(family):
     tx = _last_tx(family)
     assert tx.get("account_id") == HUSBAND_PERSONAL_ACC
 
+
+
+def test_chat_transaction_wife_personal_with_wife_personal_account_kept(family):
+    body = {
+        "household_id": HH,
+        "message": "اشتريت فستان بـ 200 ريال",
+        "allow_duplicate": True,
+        "nafaqah_class": "wife_personal",
+        "account_id": WIFE_PERSONAL_ACC,
+    }
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(WIFE), json=body)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["account_id"] == WIFE_PERSONAL_ACC
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == "wife_personal"
+    assert tx.get("account_id") == WIFE_PERSONAL_ACC
+
+
+def test_member_cannot_debit_shared_pool(family):
+    body = {
+        "household_id": HH,
+        "message": "غداء 100 ريال",
+        "allow_duplicate": True,
+        "nafaqah_class": "none",
+        "account_id": ACC_ID,
+    }
+    tx_count_before = len(family.tables.get("transactions", []))
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(WIFE), json=body)
+    assert resp.status_code == 403, resp.text
+    assert len(family.tables.get("transactions", [])) == tx_count_before
+
+
+def test_archived_account_rejected(family):
+    body = {
+        "household_id": HH,
+        "message": "بنزين 50 ريال",
+        "allow_duplicate": True,
+        "account_id": ARCHIVED_ACC,
+    }
+    tx_count_before = len(family.tables.get("transactions", []))
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(HUSBAND), json=body)
+    assert resp.status_code == 403, resp.text
+    assert len(family.tables.get("transactions", [])) == tx_count_before
+
+
+def test_chat_success_returns_stored_account_id_none_for_household_account_wife_class(family):
+    body = {
+        "household_id": HH,
+        "message": "فستان 200 ريال",
+        "allow_duplicate": True,
+        "nafaqah_class": "wife_personal",
+        "account_id": ACC_ID,
+    }
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(WIFE), json=body)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["account_id"] is None
+
+
+def test_scan_receipt_success_returns_stored_account_id_none_for_household_account_wife_class(family):
+    body = {
+        "household_id": HH,
+        "qr_code_raw": _zatca_qr(),
+        "allow_duplicate": True,
+        "nafaqah_class": "wife_personal",
+        "account_id": ACC_ID,
+    }
+    with patch("receipt_scanner.fetch_budget", return_value=None):
+        resp = client.post("/agent/scan-receipt", headers=bearer(WIFE), json=body)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["account_id"] is None

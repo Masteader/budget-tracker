@@ -188,7 +188,7 @@ void main() {
       expect(provider.operatingCash, equals(750.0));
     });
 
-    test('deductExpense falls back to default operating account when accountId is null', () async {
+    test('deductExpense with null accountId changes no balance', () async {
       final provider = AccountProvider();
       final acc1 = Account(
         id: 'acc-savings',
@@ -221,7 +221,7 @@ void main() {
       provider.setAccountsForTesting([acc1, acc2], householdId: 'hh-1');
 
       await provider.deductExpense(amount: 500.0);
-      expect(provider.accounts.firstWhere((a) => a.id == 'acc-op').balance, equals(1500.0));
+      expect(provider.accounts.firstWhere((a) => a.id == 'acc-op').balance, equals(2000.0));
       expect(provider.accounts.firstWhere((a) => a.id == 'acc-savings').balance, equals(5000.0));
     });
 
@@ -310,7 +310,7 @@ void main() {
       );
       provider.setAccountsForTesting([acc], householdId: 'hh-1');
 
-      await provider.deductExpense(amount: 300.0);
+      await provider.deductExpense(accountId: 'acc-1', amount: 300.0);
       expect(provider.accounts.first.balance, equals(700.0));
       expect(mockService.updateBalanceCalls, equals(0));
     });
@@ -333,7 +333,7 @@ void main() {
       );
       provider.setAccountsForTesting([acc], householdId: 'hh-1');
 
-      await provider.deductExpense(amount: 300.0);
+      await provider.deductExpense(accountId: 'acc-1', amount: 300.0);
       expect(provider.accounts.first.balance, equals(-200.0));
     });
 

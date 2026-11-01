@@ -116,7 +116,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     if (widget.initialStaticData != null) {
       _lastStaticData = widget.initialStaticData;
     }
-    int initialPayday = 27;
+    int initialPayday = SalaryCycleService.defaultPaydayDay;
     try {
       initialPayday = context.read<AccountProvider>().paydayDay;
     } catch (_) {}
@@ -229,9 +229,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     double income = 0.0;
     List<Account> accounts = [];
     try {
-      final setup = await HouseholdSetupPrefs.load(hid);
-      final payday = setup.paydayDay ?? accProvider.paydayDay;
-      accProvider.bindHousehold(hid, paydayDay: payday);
+      if (accProvider.householdId != hid) {
+        final setup = await HouseholdSetupPrefs.load(hid);
+        accProvider.bindHousehold(hid, paydayDay: setup.paydayDay ?? accProvider.paydayDay);
+      }
       await accProvider.ensureLoaded();
       if (!mounted) {
         return _lastStaticData ??

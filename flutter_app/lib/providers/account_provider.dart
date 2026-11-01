@@ -343,32 +343,28 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
-  /// Deduct an expense from the given account (or default operating pool account).
-  /// Optimistic update only: Realtime CDC reconciles server-side balance changes.
+  /// Deduct an expense from the given account optimistically.
+  /// Realtime CDC reconciles server-side balance changes.
   Future<void> deductExpense({
     String? accountId,
     required double amount,
     String? nafaqahClass,
+    String? spouseId,
   }) async {
-    if (nafaqahClass == 'wife_personal' ||
-        nafaqahClass == 'wife_reimbursable' ||
-        amount <= 0 ||
-        _accounts.isEmpty) {
-      return;
+    if (amount <= 0 || _accounts.isEmpty) return;
+    if (accountId == null || accountId.isEmpty) return;
+
+    final target = _accounts.where((a) => a.id == accountId).firstOrNull;
+    if (target == null) return;
+    if (target.isArchived || !target.accountType.isOperatingPool) return;
+
+    if (nafaqahClass == 'wife_personal' || nafaqahClass == 'wife_reimbursable') {
+      final isSpousePersonal = !target.isSharedPool && target.ownerUserId == spouseId;
+      if (!isSpousePersonal) return;
     }
 
-    Account? target;
-    if (accountId != null && accountId.isNotEmpty) {
-      target = _accounts.where((a) => a.id == accountId).firstOrNull;
-      if (target == null) return;
-    } else {
-      target = _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull;
-    }
-
-    if (target != null) {
-      final newBal = target.balance - amount;
-      optimisticUpdateBalance(target.id, newBal);
-    }
+    final newBal = target.balance - amount;
+    optimisticUpdateBalance(target.id, newBal);
   }
 
   /// Clean teardown on sign-out or household switch.

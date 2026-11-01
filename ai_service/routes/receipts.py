@@ -19,6 +19,7 @@ from supabase_client import (
     InvalidAttributionError,
     TransactionRejectedError,
     UnknownCategoryError,
+    account_for_wife_class,
     assert_account_debitable,
 )
 from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
@@ -98,8 +99,6 @@ async def scan_receipt(request: Request):
             UUID(account_id)
         except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="account_id must be a valid UUID string.")
-    if overrides.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
-        account_id = None
     # The amount and category the user corrected in the review (UX-12), validated like any edit.
     override_amount = optional_amount(body)
     override_category_code = bounded_text(body, "category_code", 100)
@@ -123,8 +122,13 @@ async def scan_receipt(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
-        if account_id is not None:
-            await asyncio.to_thread(assert_account_debitable, household_id, user_id, account_id)
+        effective_account_id = account_id
+        if overrides.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+            effective_account_id = account_for_wife_class(
+                household_id, account_id, overrides.get("nafaqah_spouse_id") or user_id
+            )
+        if effective_account_id is not None:
+            await asyncio.to_thread(assert_account_debitable, household_id, user_id, effective_account_id)
 
         # Strict rate limit & quota: 10 invoices per 10 minutes maximum per user
         await check_api_quota(

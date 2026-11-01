@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../theme/app_themes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -15,7 +16,8 @@ import '../../services/nafaqah_write_errors.dart';
 import '../../services/offline_sync_service.dart';
 import '../../widgets/chat/chat_message_bubble.dart';
 import '../../widgets/chat/pending_expense_confirmation_card.dart' show PendingExpenseEdits;
-import '../../models/nafaqah_account.dart';
+import '../../models/account.dart';
+import '../../models/nafaqah_account.dart' show accountForNafaqahClass;
 import '../../widgets/chat/voice_listening_banner.dart';
 import '../../widgets/chat/voice_language_button.dart';
 import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
@@ -31,7 +33,8 @@ import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
 const String _previewMessageKey = 'preview_message';
 
 class ChatEntryScreen extends StatefulWidget {
-  const ChatEntryScreen({super.key});
+  final String? householdId;
+  const ChatEntryScreen({super.key, this.householdId});
 
   @override
   State<ChatEntryScreen> createState() => _ChatEntryScreenState();
@@ -63,7 +66,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     super.initState();
     _speech = stt.SpeechToText();
     _initSpeech();
-    _fetchHousehold();
+    _householdId = widget.householdId;
+    if (_householdId == null) {
+      _fetchHousehold();
+    }
   }
 
   bool _welcomeAdded = false;
@@ -306,14 +312,22 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     );
   }
 
-  Future<void> _fetchHousehold() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
+  String? get _currentUserId {
     try {
+      return supabase.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _fetchHousehold() async {
+    try {
+      final userId = _currentUserId;
+      if (userId == null) return;
       final res = await supabase
           .from('users')
           .select('household_id')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
       if (!mounted) return;
       setState(() {
@@ -378,11 +392,11 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     }
 
     final isPreview = (enrichTxId == null && previewOnly);
-    final user = supabase.auth.currentUser;
+    final userId = _currentUserId;
     final res = await ApiService.instance.postChatTransaction(
       message: message,
       householdId: _householdId!,
-      userId: user?.id,
+      userId: userId,
       allowDuplicate: allowDuplicate,
       enrichTxId: enrichTxId,
       previewOnly: isPreview,
@@ -405,14 +419,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           retrySeconds = (res['retry_after_seconds'] as num).toInt();
         }
         _startLockoutCountdown(retrySeconds);
-        final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
-        final lockMsg = (res['detail'] is Map && lang == 'ar' && res['detail']['message_ar'] != null)
-            ? res['detail']['message_ar'] as String
-            : (res['message']?.toString() ??
-                context.trArgs('chat_locked_out_banner', {
-                  'minutes': '${retrySeconds ~/ 60}',
-                  'seconds': '${retrySeconds % 60}',
-                }));
+        final lockMsg = context.trArgs('chat_locked_out_banner', {
+          'minutes': '${retrySeconds ~/ 60}',
+          'seconds': '${retrySeconds % 60}',
+        });
         _messages.add(
           ChatMessage(
             isUser: false,
@@ -421,17 +431,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
       } else if (status == 'off_topic_warning') {
-        final lang = Localizations.maybeLocaleOf(context)?.languageCode ?? 'ar';
-        final warningMsg = (lang == 'ar' ? res['message'] : res['message_en']) ??
-            res['message'] ??
-            context.trArgs('chat_offtopic_warning', {
-              'current': '${res['strikes'] ?? 1}',
-              'max': '${res['max_strikes'] ?? 3}',
-            });
+        final warningMsg = context.trArgs('chat_offtopic_warning', {
+          'current': '${res['strikes'] ?? 1}',
+          'max': '${res['max_strikes'] ?? 3}',
+        });
         _messages.add(
           ChatMessage(
             isUser: false,
-            text: warningMsg.toString(),
+            text: warningMsg,
             isOffTopicWarning: true,
           ),
         );
@@ -521,7 +528,10 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           ),
         );
         _refreshGlobalProviders();
-        unawaited(AccountService.instance.reconcileUnlinkedTransactions(_householdId!));
+        unawaited(AccountService.instance.reconcileUnlinkedTransactions(
+          _householdId!,
+          callerIsAdmin: viewerIsAdminOf(context, _householdId!),
+        ));
       } else {
         // Check for offline network error and save to SQLite queue
         final errText = res['message']?.toString() ?? '';
@@ -548,7 +558,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
       try {
         await OfflineSyncService.instance.enqueue(
           endpoint: 'chat',
-          payload: {'message': message, 'user_id': user?.id},
+          payload: {'message': message, 'user_id': userId},
           householdId: _householdId!,
         );
         reply = mounted ? context.tr('chat_offline_queued') : '';
@@ -579,7 +589,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
 
     setState(() => _isLoading = true);
 
-    final user = supabase.auth.currentUser;
+    final userId = _currentUserId;
     final originalText = pending[_previewMessageKey] as String? ??
         pending['original_message'] as String? ??
         "$merchant ${(pending['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'} SAR";
@@ -587,12 +597,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     final householdId = _householdId!;
     // The preview's token (when the server sends one) is returned unchanged;
     // an expired token re-runs the preview once (preview_token.dart).
+    List<Account> accounts = const [];
+    try {
+      accounts = context.read<AccountProvider>().accounts;
+    } catch (_) {}
+
     final res = await commitWithPreviewToken(
       token: previewTokenOf(pending),
       commit: (token) => ApiService.instance.postChatTransaction(
         message: originalText,
         householdId: householdId,
-        userId: user?.id,
+        userId: userId,
         allowDuplicate: true,
         previewOnly: false,
         merchant: merchant.trim().isNotEmpty ? merchant.trim() : null,
@@ -607,15 +622,25 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         amount: edits.amount,
         occurredAt: edits.occurredAt,
         previewToken: token,
-        accountId: accountForNafaqahClass(nafaqahClass, edits.accountId ?? pending['account_id'] as String?),
+        accountId: accountForNafaqahClass(
+          nafaqahClass,
+          edits.accountId ?? pending['account_id'] as String?,
+          accounts: accounts,
+          spouseId: nafaqahSpouseId,
+        ),
       ),
       rePreview: () => ApiService.instance.postChatTransaction(
         message: originalText,
         householdId: householdId,
-        userId: user?.id,
+        userId: userId,
         allowDuplicate: true,
         previewOnly: true,
-        accountId: accountForNafaqahClass(nafaqahClass, edits.accountId ?? pending['account_id'] as String?),
+        accountId: accountForNafaqahClass(
+          nafaqahClass,
+          edits.accountId ?? pending['account_id'] as String?,
+          accounts: accounts,
+          spouseId: nafaqahSpouseId,
+        ),
       ),
     );
 
@@ -653,18 +678,24 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         }
         final finalAmount = (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0;
         final serverNafaqahClass = (res['nafaqah_class'] as String?) ?? nafaqahClass;
-        final effectiveAccountId = (res['account_id'] as String?) ?? edits.accountId ?? pending['account_id'] as String?;
+        final effectiveAccountId = res.containsKey('account_id')
+            ? (res['account_id'] as String?)
+            : (edits.accountId ?? pending['account_id'] as String?);
         if (effectiveAccountId != null) {
           try {
             context.read<AccountProvider>().deductExpense(
               accountId: effectiveAccountId,
               amount: finalAmount,
               nafaqahClass: serverNafaqahClass,
+              spouseId: nafaqahSpouseId,
             );
           } catch (_) {}
         }
         _refreshGlobalProviders();
-        unawaited(AccountService.instance.reconcileUnlinkedTransactions(householdId));
+        unawaited(AccountService.instance.reconcileUnlinkedTransactions(
+          householdId,
+          callerIsAdmin: viewerIsAdminOf(context, householdId),
+        ));
       } else {
         AppSnackBar.showError(
           context,

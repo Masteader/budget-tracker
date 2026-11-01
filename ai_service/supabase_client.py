@@ -415,8 +415,48 @@ def assert_account_debitable(household_id: str, user_id: str, account_id: str) -
     if not row or row[0].get("is_archived"):
         raise ForbiddenAccountError()
     acc = row[0]
-    if acc.get("owner_user_id") != user_id and not acc.get("is_shared_pool"):
-        raise ForbiddenAccountError()
+    if acc.get("owner_user_id") == user_id:
+        return
+    if acc.get("is_shared_pool"):
+        from household_permissions import load_roster
+        roster = load_roster(household_id)
+        if roster.is_admin(user_id):
+            return
+    raise ForbiddenAccountError()
+
+
+def account_for_wife_class(
+    household_id: str,
+    account_id: Optional[str],
+    nafaqah_spouse_id: Optional[str],
+) -> Optional[str]:
+    """
+    Returns account_id only if the account is a non-shared account owned by the
+    nafaqah spouse in this household, else None.
+    """
+    if not account_id or not nafaqah_spouse_id:
+        return None
+    try:
+        row = (
+            get_client()
+            .table("accounts")
+            .select("id, household_id, owner_user_id, is_shared_pool, is_archived")
+            .eq("id", account_id)
+            .eq("household_id", household_id)
+            .limit(1)
+            .execute()
+        ).data
+        if not row:
+            return None
+        acc = row[0]
+        if acc.get("is_archived"):
+            return None
+        if not acc.get("is_shared_pool") and str(acc.get("owner_user_id") or "") == str(nafaqah_spouse_id):
+            return account_id
+        return None
+    except Exception as exc:
+        logger.warning("account_for_wife_class lookup failed: %s", exc)
+        return None
 
 
 # SQLSTATEs of refusals that a pruned payload cannot fix (check/trigger constraint, invalid
@@ -589,9 +629,9 @@ def insert_transaction(
             pass
 
     # Rule 02.3: Wife personal allowance and reimbursable advances are paid from her own funds,
-    # isolated from husband's / operating pool accounts.
+    # isolated from husband's / operating pool accounts. Her own personal account is allowed.
     if nafaqah_class in ("wife_personal", "wife_reimbursable"):
-        account_id = None
+        account_id = account_for_wife_class(household_id, account_id, nafaqah_spouse_id)
 
     # Automatically resolve account_id if not supplied
     if not account_id and nafaqah_class not in ("wife_personal", "wife_reimbursable"):
@@ -685,7 +725,9 @@ def insert_transaction(
     payload.update(nafaqah_fields)
 
     if payload.get('nafaqah_class') in ('wife_personal', 'wife_reimbursable'):
-        payload['account_id'] = None
+        payload['account_id'] = account_for_wife_class(
+            household_id, payload.get('account_id'), payload.get('nafaqah_spouse_id')
+        )
 
 
     # A constraint or permission refusal (an unknown category code, E2E-03; a family without a

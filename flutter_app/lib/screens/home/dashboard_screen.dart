@@ -186,7 +186,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   @override
   void initState() {
     super.initState();
-    int initialPayday = 27;
+    int initialPayday = SalaryCycleService.defaultPaydayDay;
     try {
       initialPayday = context.read<AccountProvider>().paydayDay;
     } catch (_) {}

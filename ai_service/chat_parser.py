@@ -28,6 +28,7 @@ from supabase_client import (
     reallocate_budget,
     category_code_in_taxonomy,
     household_attribution,
+    account_for_wife_class,
     UnknownCategoryError,
 )
 
@@ -1076,6 +1077,14 @@ def process_chat_transaction(
         except Exception as exc:
             logger.debug("Could not fetch sub categories: %s", exc)
 
+        preview_account_id = override_account_id
+        if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+            preview_account_id = account_for_wife_class(
+                household_id=household_id,
+                account_id=override_account_id,
+                nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+            )
+
         return {
             "status": "pending_confirmation",
             "preview_token": _issue_chat_token(parsed, household_id, user_id, message_digest),
@@ -1098,7 +1107,7 @@ def process_chat_transaction(
             "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
             "wives": nafaqah["wives"],
             "items": items_dicts,
-            "account_id": override_account_id,
+            "account_id": preview_account_id,
             "original_message": message,
             "message": f"Found expense of SAR {parsed.total_amount:.2f} ({len(items_dicts)} items). Please confirm details:",
         }
@@ -1166,6 +1175,14 @@ def process_chat_transaction(
         f"Items: [{items_summary}]" if items_summary else "",
     )
 
+    stored_account_id = override_account_id
+    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        stored_account_id = account_for_wife_class(
+            household_id=household_id,
+            account_id=override_account_id,
+            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+        )
+
     # Insert transaction
     tx_id = insert_transaction(
         household_id=household_id,
@@ -1186,7 +1203,7 @@ def process_chat_transaction(
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         user_id=user_id,
-        account_id=None if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable") else override_account_id,
+        account_id=stored_account_id,
     )
 
     # Attach items fallback if needed
@@ -1205,7 +1222,7 @@ def process_chat_transaction(
         "beneficiary": beneficiary,
         "nafaqah_class": nafaqah["nafaqah_class"],
         "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
-        "account_id": override_account_id,
+        "account_id": stored_account_id,
         "is_reallocated": is_reallocated,
         "items": items_dicts,
         "message": f"Recorded SAR {parsed.total_amount:.2f} at {merchant} under {category_code} ({spent_by}).",

@@ -69,9 +69,15 @@ class _RecordingAccountProvider extends AccountProvider {
     String? accountId,
     required double amount,
     String? nafaqahClass,
+    String? spouseId,
   }) async {
     deductExpenseCalls++;
-    return super.deductExpense(accountId: accountId, amount: amount, nafaqahClass: nafaqahClass);
+    return super.deductExpense(
+      accountId: accountId,
+      amount: amount,
+      nafaqahClass: nafaqahClass,
+      spouseId: spouseId,
+    );
   }
 }
 

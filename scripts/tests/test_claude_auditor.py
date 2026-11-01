@@ -25,6 +25,23 @@ def test_should_exclude_secret_files():
     assert _should_exclude("docs/review/audit_spend.json") is True
 
 
+def test_env_files_never_collected():
+    env_paths = [
+        ".env",
+        ".env.local",
+        ".env.production",
+        ".env.audit",
+        "ai_service/.env",
+        "flutter_app/.env",
+        "certs/server.pem",
+        "certs/server.key",
+        "flutter_app/dart_defines.json",
+        "sub/dir/dart_defines.json",
+    ]
+    for path in env_paths:
+        assert _should_exclude(path) is True, f"{path} should be excluded"
+
+
 def test_should_exclude_normal_code_files():
     assert _should_exclude("flutter_app/lib/models/operating_cash.dart") is False
     assert _should_exclude("ai_service/routers/budgets.py") is False

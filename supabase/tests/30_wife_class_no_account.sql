@@ -136,11 +136,11 @@ BEGIN
         now(), 'Standard fuel', NULL, v_acc_id
     );
 
-    -- 6. Verify the constraint exists and is validated
+    -- 6. Verify the enforcement trigger exists
     PERFORM pg_temp.expect(
-        'convalidated',
-        (SELECT convalidated::text FROM pg_constraint WHERE conname = 'transactions_wife_class_no_account'),
-        'true'
+        'trigger exists',
+        (SELECT count(*)::text FROM pg_trigger WHERE tgname = 'trg_enforce_wife_class_account'),
+        '1'
     );
 
 END $$;

@@ -25,6 +25,7 @@ from dedup_engine import find_duplicate_candidate, enrich_transaction_items, com
 from nafaqah_service import resolve_expense_nafaqah
 
 from supabase_client import (
+    account_for_wife_class,
     get_client,
     fetch_all_cost_control_codes,
     fetch_household_cost_control_codes,
@@ -873,12 +874,20 @@ def process_receipt_scan(
         attribution_explicit=paid_by is not None or beneficiary is not None,
         require_spouse=not preview_only,
     )
+    preview_account_id = account_id
+    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        preview_account_id = account_for_wife_class(
+            household_id=household_id,
+            account_id=account_id,
+            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+        )
     nafaqah_fields = {
         "paid_by": nafaqah["paid_by"],
         "beneficiary": nafaqah["beneficiary"],
         "household_mode": nafaqah["household_mode"],
         "recorder_role": nafaqah["recorder_role"],
         "nafaqah_class": nafaqah["nafaqah_class"],
+        "account_id": preview_account_id,
         "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
         "nafaqah_spouse_required": nafaqah["nafaqah_spouse_required"],
         "wives": nafaqah["wives"],
@@ -1017,6 +1026,14 @@ def process_receipt_scan(
         f"Items: [{items_summary}]",
     )
 
+    stored_account_id = account_id
+    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        stored_account_id = account_for_wife_class(
+            household_id=household_id,
+            account_id=account_id,
+            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+        )
+
     tx_id = insert_transaction(
         household_id=household_id,
         amount=total_amount,
@@ -1038,7 +1055,7 @@ def process_receipt_scan(
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
         user_id=user_id,
-        account_id=None if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable") else account_id,
+        account_id=stored_account_id,
     )
 
     if items:
@@ -1064,5 +1081,6 @@ def process_receipt_scan(
         "beneficiary": nafaqah["beneficiary"],
         "nafaqah_class": nafaqah["nafaqah_class"],
         "nafaqah_spouse_id": nafaqah["nafaqah_spouse_id"],
+        "account_id": stored_account_id,
         "message": f"Recorded SAR {total_amount:.2f} ({len(items)} items) from scanned receipt ({merchant}).",
     }

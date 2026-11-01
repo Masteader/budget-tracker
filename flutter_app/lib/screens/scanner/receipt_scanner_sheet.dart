@@ -13,7 +13,7 @@ import '../../main.dart';
 import '../../models/account.dart';
 import '../../models/nafaqah.dart';
 import '../../models/transaction_attribution.dart';
-import '../../models/nafaqah_account.dart';
+import '../../models/nafaqah_account.dart' show accountForNafaqahClass;
 import '../../providers/household_role_provider.dart';
 import '../../services/account_service.dart';
 import '../../services/api_service.dart';
@@ -44,12 +44,18 @@ class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
   final Map<String, dynamic>? initialScanResult;
   final ApiService? apiService;
+  final AccountService? accountService;
+  final Future<Map<String, dynamic>> Function(Map<String, dynamic> row)? fallbackInsert;
+  final String? currentUserId;
 
   const ReceiptScannerSheet({
     super.key,
     required this.householdId,
     this.initialScanResult,
     this.apiService,
+    this.accountService,
+    this.fallbackInsert,
+    this.currentUserId,
   });
 
   static Future<void> show(BuildContext context, String householdId) {
@@ -87,6 +93,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   String? _selectedAccountId;
   List<String> _dependents = [];
   bool _taxEnabled = true;
+
+  String? get _currentUserId {
+    if (widget.currentUserId != null) return widget.currentUserId;
+    try {
+      return supabase.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<Map<String, dynamic>> _consolidateItems(List<Map<String, dynamic>> list) {
     final Map<String, Map<String, dynamic>> merged = {};
@@ -247,8 +262,19 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   Future<void> _loadInitialContext() async {
     final hid = widget.householdId;
     if (hid.isEmpty) return;
+    await Future.microtask(() {});
+    if (!mounted) return;
     try {
-      final accList = await AccountService.instance.getAccounts(hid);
+      List<Account> accList = const [];
+      try {
+        final accProv = context.read<AccountProvider>();
+        if (accProv.accounts.isNotEmpty) {
+          accList = accProv.accounts;
+        }
+      } catch (_) {}
+      if (accList.isEmpty) {
+        accList = await (widget.accountService ?? AccountService.instance).getAccounts(hid);
+      }
       if (mounted) {
         setState(() {
           _accounts = accList;
@@ -757,7 +783,19 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final confirmedSpouseId = (_isFamily && _computedNafaqahClass != null)
           ? (_nafaqahWifeId ?? _nafaqah.defaultSpouseId)
           : nafaqah['nafaqah_spouse_id'];
-      final rowAccountId = accountForNafaqahClass(confirmedClass, _selectedAccountId);
+
+      if (!mounted) return;
+      List<Account> accounts = const [];
+      try {
+        accounts = context.read<AccountProvider>().accounts;
+      } catch (_) {}
+
+      final rowAccountId = accountForNafaqahClass(
+        confirmedClass,
+        _selectedAccountId,
+        accounts: accounts,
+        spouseId: confirmedSpouseId,
+      );
 
       // The preview's token (when the server sends one) is returned
       // unchanged; an expired token re-runs the preview once.
@@ -800,13 +838,16 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         if (res['status'] == 'success' || res['status'] == 'enriched') {
           final finalAmount = edits.amount ?? _scannedAmount;
           final serverNafaqahClass = (res['nafaqah_class'] as String?) ?? confirmedClass;
-          final effectiveAccountId = (res['account_id'] as String?) ?? rowAccountId;
+          final effectiveAccountId = res.containsKey('account_id')
+              ? (res['account_id'] as String?)
+              : rowAccountId;
           if (effectiveAccountId != null) {
             try {
               context.read<AccountProvider>().deductExpense(
                 accountId: effectiveAccountId,
                 amount: finalAmount,
                 nafaqahClass: serverNafaqahClass,
+                spouseId: confirmedSpouseId,
               );
             } catch (_) {}
           }
@@ -932,45 +973,70 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         auditText += ' | ZATCA QR: $_zatcaQrRaw';
       }
 
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _currentUserId;
       // The category the scan found (as the API would store it), never a
       // hard-coded one (FABLE2-APP-06).
       final categoryCode = edited.categoryCode ??
           (_scanResult?['category_code'] ?? _scanResult?['parsed_data']?['category_code']) as String? ??
           'OPEX-MISC';
 
-      String? accountId;
-      try {
-        final bRes = await supabase
-            .from('budgets')
-            .select('account_id')
-            .eq('household_id', widget.householdId)
-            .eq('category_code', categoryCode)
-            .eq('is_active', true)
-            .not('account_id', 'is', null)
-            .limit(1)
-            .maybeSingle();
-        if (bRes != null && bRes['account_id'] != null) {
-          accountId = bRes['account_id'] as String;
-        }
-      } catch (_) {}
-
+      String? accountId = _selectedAccountId;
       if (accountId == null) {
-        if (_selectedAccountId != null) {
-          accountId = _selectedAccountId;
+        try {
+          final bRes = await supabase
+              .from('budgets')
+              .select('account_id')
+              .eq('household_id', widget.householdId)
+              .eq('category_code', categoryCode)
+              .eq('is_active', true)
+              .not('account_id', 'is', null)
+              .limit(1)
+              .maybeSingle();
+          if (bRes != null && bRes['account_id'] != null) {
+            accountId = bRes['account_id'] as String;
+          }
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+      List<Account> accounts = const [];
+      try {
+        final accProv = context.read<AccountProvider>();
+        if (accProv.hasLoaded && accProv.accounts.isNotEmpty) {
+          accounts = accProv.accounts;
         } else {
-          try {
-            final accounts = await AccountService.instance.getAccounts(widget.householdId);
-            if (accounts.isNotEmpty) {
-              final defaultAcc = accounts.where((a) => a.accountType.isOperatingPool).firstOrNull ?? accounts.first;
-              accountId = defaultAcc.id;
-            }
-          } catch (_) {}
+          accounts = await AccountService.instance.getAccounts(widget.householdId);
         }
+      } catch (_) {
+        try {
+          accounts = await AccountService.instance.getAccounts(widget.householdId);
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+      final callerIsAdmin = viewerIsAdminOf(context, widget.householdId);
+      final currentUserId = _currentUserId;
+      final debitable = accounts.where((a) =>
+          !a.isArchived &&
+          a.accountType.isOperatingPool &&
+          (a.ownerUserId == currentUserId || (a.isSharedPool && callerIsAdmin))
+      ).toList();
+
+      if (accountId != null && !debitable.any((a) => a.id == accountId)) {
+        accountId = null;
       }
 
       final confirmedNafaqahClass = _isFamily ? _computedNafaqahClass : _nafaqahClass;
-      accountId = accountForNafaqahClass(confirmedNafaqahClass, accountId);
+      final nafaqah = _nafaqahFields;
+      final confirmedSpouseId = (_isFamily && _computedNafaqahClass != null)
+          ? (_nafaqahWifeId ?? _nafaqah.defaultSpouseId)
+          : nafaqah['nafaqah_spouse_id'];
+      accountId = accountForNafaqahClass(
+        confirmedNafaqahClass,
+        accountId,
+        accounts: accounts,
+        spouseId: confirmedSpouseId,
+      );
       final row = <String, dynamic>{
         'household_id': widget.householdId,
         if (userId != null) 'user_id': userId,
@@ -1003,7 +1069,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
       // One insert of real columns: the old cascade could store the row
       // without its attribution.
-      final Map<String, dynamic> res = await supabase.from('transactions').insert(row).select().single();
+      final Map<String, dynamic> res = widget.fallbackInsert != null
+          ? await widget.fallbackInsert!(row)
+          : await supabase.from('transactions').insert(row).select().single();
 
       final txId = res['id'] as String?;
       if (txId != null) {
@@ -1030,6 +1098,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               accountId: accountId,
               amount: total,
               nafaqahClass: confirmedNafaqahClass,
+              spouseId: confirmedSpouseId,
             );
           } catch (_) {}
         }

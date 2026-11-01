@@ -23,7 +23,8 @@ def cleanup():
     reset_offtopic_strikes()
 
 
-def test_strike_3_dispatches_email_alert_to_developer():
+def test_strike_3_dispatches_email_alert_to_developer(monkeypatch):
+    monkeypatch.setenv("ABUSE_ALERT_EMAIL", "alert@example.com")
     with patch("routes.chat.send_email", new_callable=AsyncMock) as mock_send_email:
         # Strike 1
         client.post(
@@ -54,7 +55,7 @@ def test_strike_3_dispatches_email_alert_to_developer():
         email_msg = call_args[0][0]
         to_override = call_args[1].get("to_override") or (call_args[0][1] if len(call_args[0]) > 1 else None)
 
-        assert to_override == "fmscoinfo@fmsco.com.sa"
+        assert to_override == "alert@example.com"
         assert "Lockout" in email_msg.subject or "Violation" in email_msg.subject
-        assert USER_ID in email_msg.body
+        assert USER_ID not in email_msg.body
         assert "write python code" in email_msg.body

@@ -242,6 +242,10 @@ def _should_exclude(path: str) -> bool:
     if p.name.startswith(".env"):
         return True
     path_str = str(path).replace("\\", "/")
+    if p.suffix in (".pem", ".key", ".p12") or p.name.endswith((".pem", ".key", ".p12")):
+        return True
+    if p.name == "dart_defines.json" or "dart_defines.json" in path_str:
+        return True
     for sp in SECRET_PATTERNS:
         if sp in p.name or sp in path_str:
             return True
@@ -303,6 +307,13 @@ _SECRET_CONTENT_REGEX = re.compile(
 )
 
 
+SAFE_AUDIT_FILES = {
+    "ai_service/supabase_client.py",
+    "scripts/claude_auditor.py",
+    "scripts/tests/test_claude_auditor.py",
+}
+
+
 def read_changed_files_content(file_list: list[str]) -> str:
     """Read full content of changed files (NOT git diff -- saves tokens)."""
     content_blocks = []
@@ -310,7 +321,8 @@ def read_changed_files_content(file_list: list[str]) -> str:
         full_path = PROJECT_ROOT / filepath
         if full_path.exists() and full_path.is_file():
             file_content = _read_file_safe(full_path)
-            if _SECRET_CONTENT_REGEX.search(file_content):
+            norm_filepath = str(filepath).replace("\\", "/")
+            if norm_filepath not in SAFE_AUDIT_FILES and _SECRET_CONTENT_REGEX.search(file_content):
                 print(f"[WARNING] Skipping file containing secret/credential patterns: {filepath}")
                 continue
             content_blocks.append(

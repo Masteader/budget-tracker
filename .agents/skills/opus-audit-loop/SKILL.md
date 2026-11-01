@@ -78,8 +78,8 @@ The verdict is written to `docs/review/AUDIT_FEEDBACK.md`.
 ### Step 6: User Approves
 The user reviews the green light and says "Approve" or "Push".
 
-### Step 7: Push to Main
-Antigravity merges and pushes to GitHub `main`.
+### Step 7: Push Feature Branch & Open PR
+Push the feature branch (`git push -u origin HEAD`) and open or update the PR (`gh pr create --fill`). The merge happens on GitHub after the user's sign-off.
 
 ## User Controls
 

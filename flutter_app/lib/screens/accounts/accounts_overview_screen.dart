@@ -1,5 +1,6 @@
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
+import '../../providers/household_role_provider.dart';
 import '../../widgets/dashboard/household_setup_card.dart';
 import 'dart:async';
 
@@ -164,7 +165,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
 
   Future<void> _refreshAll() async {
     try {
-      await AccountService.instance.reconcileUnlinkedTransactions(widget.householdId);
+      await AccountService.instance.reconcileUnlinkedTransactions(
+        widget.householdId,
+        callerIsAdmin: viewerIsAdminOf(context, widget.householdId),
+      );
     } catch (_) {}
     await Future.wait([
       _loadCommittedBudgets(),

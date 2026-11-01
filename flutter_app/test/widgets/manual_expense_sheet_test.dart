@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:budget_tracker/models/household_membership.dart';
+import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/models/nafaqah.dart';
 import 'package:budget_tracker/widgets/nafaqah/nafaqah_class_selector.dart';
 import 'package:budget_tracker/widgets/transactions/manual_expense_sheet.dart';
@@ -25,6 +26,7 @@ void main() {
     Future<void> Function(Map<String, dynamic> row)? insertRow,
     Future<void> Function(Map<String, dynamic> row, String householdId)? enqueueRow,
     NafaqahSummary? nafaqah,
+    Future<List<Account>> Function(String householdId)? loadAccounts,
   }) async {
     await tester.binding.setSurfaceSize(const Size(800, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -47,6 +49,7 @@ void main() {
                   insertRow: insertRow ?? (_) async {},
                   enqueueRow: enqueueRow ?? (_, __) async {},
                   loadNafaqah: (_) async => nafaqah ?? (throw Exception('offline')),
+                  loadAccounts: loadAccounts,
                 ),
               ),
               child: const Text('open'),
@@ -402,5 +405,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('2026-10'), findsOneWidget);
+  });
+
+  testWidgets('a non-admin member does not see a shared pool in the payment dropdown', (tester) async {
+    const memberUser = {'id': 'u-wife', 'display_name': 'Umm Fahad', 'role': 'member', 'financial_role': 'spouse'};
+    const adminUser = {'id': 'u-husband', 'display_name': 'Abu Fahad', 'role': 'admin', 'financial_role': 'provider'};
+    const wifeAcc = Account(
+      id: 'acc-wife',
+      householdId: 'h1',
+      name: 'Wife Personal',
+      accountType: AccountType.bank,
+      balance: 1000,
+      currency: 'SAR',
+      ownerUserId: 'u-wife',
+      isSharedPool: false,
+    );
+    const sharedAcc = Account(
+      id: 'acc-shared',
+      householdId: 'h1',
+      name: 'Household Shared',
+      accountType: AccountType.bank,
+      balance: 5000,
+      currency: 'SAR',
+      ownerUserId: 'u-husband',
+      isSharedPool: true,
+    );
+
+    await openSheet(
+      tester,
+      currentUser: 'u-wife',
+      members: [adminUser, memberUser],
+      loadAccounts: (_) async => [sharedAcc, wifeAcc],
+    );
+
+    expect(find.textContaining('Wife Personal'), findsOneWidget);
+    expect(find.textContaining('Household Shared'), findsNothing);
   });
 }

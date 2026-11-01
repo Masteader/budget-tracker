@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import os
 import time
 from uuid import UUID
 
@@ -20,9 +22,10 @@ from supabase_client import (
     InvalidAttributionError,
     TransactionRejectedError,
     UnknownCategoryError,
+    account_for_wife_class,
     assert_account_debitable,
 )
-from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
+from utils import bounded_text, optional_amount, safe_error_response, sanitize_audit_text, validate_uuid
 from rate_limiter import check_api_quota, is_chat_locked_out, record_offtopic_strike, get_offtopic_history
 from mail_service import OutboundEmail, send_email
 from chat_parser import process_chat_transaction
@@ -180,9 +183,6 @@ async def chat_transaction(request: Request):
             detail="nafaqah_class must be 'wife_reimbursable', 'wife_personal' or 'none'.",
         )
 
-    if nafaqah_class in ("wife_personal", "wife_reimbursable"):
-        account_id = None
-
     preview_token = body.get("preview_token")
     if preview_token is not None and not isinstance(preview_token, str):
         raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
@@ -200,8 +200,13 @@ async def chat_transaction(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
-        if account_id is not None:
-            await asyncio.to_thread(assert_account_debitable, household_id, user_id, account_id)
+        effective_account_id = account_id
+        if nafaqah_class in ("wife_personal", "wife_reimbursable"):
+            effective_account_id = account_for_wife_class(
+                household_id, account_id, overrides.get("nafaqah_spouse_id") or user_id
+            )
+        if effective_account_id is not None:
+            await asyncio.to_thread(assert_account_debitable, household_id, user_id, effective_account_id)
 
         # Persistent DB quota & sliding window rate limit (strictly verified user_id)
         await check_api_quota(
@@ -281,42 +286,40 @@ async def chat_transaction(request: Request):
             if use_idempotency:
                 await idempotency_store.release(user_id, "chat-transaction", idem_key)
 
-            user_email = None
-            try:
-                claims = get_verified_claims(request)
-                user_email = claims.get("email")
-            except Exception:
-                pass
+            abuse_email = os.getenv("ABUSE_ALERT_EMAIL")
+            if abuse_email:
+                user_hash = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:12]
+                household_hash = hashlib.sha256(household_id.encode("utf-8")).hexdigest()[:12]
 
-            history_entries = get_offtopic_history(user_id)
-            messages_lines = []
-            for h in history_entries:
-                ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(h.get('timestamp', time.time())))
-                messages_lines.append(f"- [{ts_str}] {h.get('message', '')}")
-            messages_text = "\n".join(messages_lines)
+                history_entries = get_offtopic_history(user_id)
+                messages_lines = []
+                for h in history_entries:
+                    ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(h.get('timestamp', time.time())))
+                    sanitized_msg = sanitize_audit_text(h.get('message', ''), 200)
+                    messages_lines.append(f"- [{ts_str}] {sanitized_msg}")
+                messages_text = "\n".join(messages_lines)
 
-            email_body = (
-                f"ALERT: AI Chat 15-Minute Lockout Triggered\n\n"
-                f"User ID: {user_id}\n"
-                f"User Email: {user_email or 'Not available in JWT'}\n"
-                f"Household ID: {household_id}\n"
-                f"Violation Count: {strikes} (Strike 3 limit reached within 1 hour)\n"
-                f"Lockout Duration: 15 minutes (900 seconds)\n\n"
-                f"Offending Messages:\n{messages_text}\n\n"
-                f"Purpose:\n"
-                f"Track repeated off-topic AI chit-chat, monitor account abuse, or prepare for future paid AI tiers.\n"
-            )
-
-            try:
-                await send_email(
-                    OutboundEmail(
-                        subject=f"[AI Violation] Strike 3 Chat Lockout: {user_email or user_id}",
-                        body=email_body,
-                    ),
-                    to_override="fmscoinfo@fmsco.com.sa",
+                email_body = (
+                    f"ALERT: AI Chat 15-Minute Lockout Triggered\n\n"
+                    f"User Anon ID: {user_hash}\n"
+                    f"Household Anon ID: {household_hash}\n"
+                    f"Violation Count: {strikes} (Strike 3 limit reached within 1 hour)\n"
+                    f"Lockout Duration: 15 minutes (900 seconds)\n\n"
+                    f"Offending Messages:\n{messages_text}\n\n"
+                    f"Purpose:\n"
+                    f"Track repeated off-topic AI chit-chat, monitor account abuse, or prepare for future paid AI tiers.\n"
                 )
-            except Exception as mail_exc:
-                logger.warning("Failed to dispatch developer lockout email: %s", mail_exc)
+
+                try:
+                    await send_email(
+                        OutboundEmail(
+                            subject=f"[AI Violation] Strike 3 Chat Lockout: {user_hash}",
+                            body=email_body,
+                        ),
+                        to_override=abuse_email,
+                    )
+                except Exception as mail_exc:
+                    logger.warning("Failed to dispatch developer lockout email: %s", mail_exc)
 
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

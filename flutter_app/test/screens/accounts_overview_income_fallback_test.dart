@@ -35,6 +35,8 @@ class _MockAccountService extends AccountService {
   @override
   Future<void> reconcileUnlinkedTransactions(
     String householdId, {
+    required bool callerIsAdmin,
+    String? currentUserId,
     Future<List<Account>> Function(String p1)? fetchAccounts,
     Future<List<Map<String, dynamic>>> Function(String p1)? fetchUnlinked,
     Future<void> Function(String p1, String p2)? linkTransaction,
