@@ -84,11 +84,53 @@ class CommitmentsService {
 
     // 2. Process active installment plans
     final t = today ?? SalaryCycleService.riyadhToday();
+    final activeCycle = SalaryCycleService.cycleForKey(cycleKey, paydayDay: paydayDay) ??
+        SalaryCycleService.cycleForInstant(DateTime.now(), paydayDay: paydayDay);
+    final cycleStart = activeCycle.start;
+    final cycleEnd = activeCycle.end;
 
     for (final plan in installmentPlans) {
-      if (plan.isCompleted || plan.status != 'ACTIVE') continue;
+      if (plan.isCompleted || plan.remainingInstallments <= 0 || plan.status != 'ACTIVE') continue;
 
-      if (plan.nextDueAt != null) {
+      final isBiweekly = plan.frequency.toLowerCase() == 'biweekly';
+
+      if (isBiweekly && plan.nextDueAt != null) {
+        final planDates = <DateTime>[];
+        var curDate = DateTime.utc(
+          plan.nextDueAt!.year,
+          plan.nextDueAt!.month,
+          plan.nextDueAt!.day,
+        );
+
+        // 1. Start with nextDueAt if it falls on or before cycleEnd (includes overdue dates).
+        if (!curDate.isAfter(cycleEnd)) {
+          planDates.add(curDate);
+        }
+
+        // 2. Step +14 days from nextDueAt, adding each date in [cycleStart, cycleEnd].
+        // 3. Stop when count == plan.remainingInstallments.
+        curDate = curDate.add(const Duration(days: 14));
+        while (planDates.length < plan.remainingInstallments && !curDate.isAfter(cycleEnd)) {
+          if (!curDate.isBefore(cycleStart)) {
+            planDates.add(curDate);
+          }
+          curDate = curDate.add(const Duration(days: 14));
+        }
+
+        for (final due in planDates) {
+          var dueKey = cycleKeyForDueDate(due, paydayDay);
+          if (dueKey.compareTo(cycleKey) < 0) {
+            dueKey = cycleKey;
+          }
+          commitments.add(PendingCommitment(
+            id: '${plan.id}_${due.toIso8601String()}',
+            kind: CommitmentKind.installment,
+            amountHalalas: OperatingCashCalculator.toHalalas(plan.monthlyAmount),
+            cycleKey: dueKey,
+            isPaid: false,
+          ));
+        }
+      } else if (plan.nextDueAt != null) {
         var dueKey = cycleKeyForDueDate(plan.nextDueAt!, paydayDay);
         // Overdue unpaid installments from an earlier cycle are rolled forward into
         // the current cycle so they are not dropped from pending commitments.
@@ -121,4 +163,3 @@ class CommitmentsService {
     return commitments;
   }
 }
-

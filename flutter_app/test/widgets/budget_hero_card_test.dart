@@ -242,4 +242,27 @@ void main() {
     expect(find.textContaining('6,000'), findsNothing);
     expect(find.textContaining('4,000'), findsNothing);
   });
+
+  testWidgets('CRITICAL-01: snapshot liquid 6,370.26 with 4,162 commitments shows headline 6,370.26 and tip 2,208.26', (tester) async {
+    const snapshot = OperatingCashSnapshot(
+      householdId: 'h1',
+      cycleKey: '2026-11',
+      liquidHalalas: 637026, // 6,370.26 SAR
+      pendingCommitmentsHalalas: 416200, // 4,162.00 SAR
+      cycleIncomeHalalas: 0,
+      accountsCount: 1,
+    );
+
+    // 6 Nov in 27 Oct - 26 Nov cycle: 21 days left
+    await tester.pumpWidget(_host(
+      [],
+      DateTime.utc(2026, 11, 6, 9),
+      snapshot: snapshot,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('6,370.26'), findsWidgets);
+    expect(find.textContaining('2,208.26'), findsOneWidget);
+    expect(find.textContaining('105 a day'), findsOneWidget);
+  });
 }

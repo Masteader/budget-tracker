@@ -459,6 +459,111 @@ def account_for_wife_class(
         return None
 
 
+WIFE_CLASSES = frozenset({"wife_personal", "wife_reimbursable"})
+
+
+def resolve_default_debitable_account(
+    household_id: str,
+    user_id: Optional[str],
+    category_code: Optional[str],
+    nafaqah_class: Optional[str],
+) -> Optional[str]:
+    """Return an account id the verified actor may debit, or None. Never guesses."""
+    if not user_id or not household_id or (nafaqah_class in WIFE_CLASSES):
+        return None
+
+    try:
+        client = get_client()
+
+        # 2. Check financial role of member
+        mem_rows = (
+            client.table("household_memberships")
+            .select("financial_role, role")
+            .eq("household_id", household_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        ).data or []
+        financial_role = mem_rows[0].get("financial_role") if mem_rows else None
+        is_spouse = (financial_role or "").lower() == "spouse"
+
+        # 3. Budget candidate (if category_code is given)
+        if category_code:
+            try:
+                b_query = (
+                    client.table("budgets")
+                    .select("account_id")
+                    .eq("household_id", household_id)
+                    .eq("category_code", category_code)
+                    .eq("is_active", True)
+                )
+                b_rows = b_query.execute().data or []
+                for b_row in b_rows:
+                    cand_id = b_row.get("account_id")
+                    if not cand_id:
+                        continue
+                    # Check candidate account
+                    acc_rows = (
+                        client.table("accounts")
+                        .select("id, household_id, owner_user_id, is_shared_pool, is_archived")
+                        .eq("id", cand_id)
+                        .eq("household_id", household_id)
+                        .limit(1)
+                        .execute()
+                    ).data or []
+                    if not acc_rows:
+                        return None
+                    acc = acc_rows[0]
+                    if acc.get("is_archived"):
+                        return None
+                    if is_spouse and str(acc.get("owner_user_id") or "") != str(user_id):
+                        return None
+                    try:
+                        assert_account_debitable(household_id, user_id, cand_id)
+                        return cand_id
+                    except ForbiddenAccountError:
+                        return None
+                    # Stop here either way (no fallback if budget link exists)
+            except Exception as b_exc:
+                logger.warning("Error checking budget candidate: %s", b_exc)
+
+        # 4. Account candidates
+        acc_rows = (
+            client.table("accounts")
+            .select("id, household_id, owner_user_id, is_shared_pool, is_archived")
+            .eq("household_id", household_id)
+            .eq("is_archived", False)
+            .execute()
+        ).data or []
+
+        survivors = []
+        for acc in acc_rows:
+            owner_id = str(acc.get("owner_user_id") or "")
+            is_shared = bool(acc.get("is_shared_pool"))
+            if is_spouse:
+                if owner_id != str(user_id):
+                    continue
+            else:
+                if owner_id != str(user_id) and not is_shared:
+                    continue
+
+            acc_id = acc.get("id")
+            if not acc_id:
+                continue
+            try:
+                assert_account_debitable(household_id, user_id, acc_id)
+                survivors.append(acc_id)
+            except ForbiddenAccountError:
+                pass
+
+        if len(survivors) == 1:
+            return survivors[0]
+        return None
+    except Exception as exc:
+        logger.warning("resolve_default_debitable_account error: %s", exc)
+        return None
+
+
 # SQLSTATEs of refusals that a pruned payload cannot fix (check/trigger constraint, invalid
 # parameter, foreign key, row-level security / forbidden, unique violation).
 FINAL_DB_REFUSAL_CODES = frozenset({"23514", "22023", "23503", "42501", "23505"})

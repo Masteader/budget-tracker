@@ -339,7 +339,8 @@ def test_member_expense_without_account_id_is_not_linked_to_shared_pool(family):
         resp = client.post("/agent/chat-transaction", headers=bearer(WIFE), json=body)
     assert resp.status_code == 200, resp.text
     tx = _last_tx(family)
-    assert tx.get("account_id") is None
+    assert tx.get("account_id") != ACC_ID
+    assert tx.get("account_id") == "c3333333-2222-3333-4444-555555555555"
     shared_bal_after = [a["balance"] for a in family.tables["accounts"] if a["id"] == ACC_ID][0]
     assert shared_bal_after == shared_bal_before
 

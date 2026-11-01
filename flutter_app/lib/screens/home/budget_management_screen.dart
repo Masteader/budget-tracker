@@ -37,6 +37,36 @@ import '../../providers/transaction_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+double resolveDisplayOperatingCash({
+  required bool isCurrentCycle,
+  required bool accountsLoaded,
+  required double liquidBalance,
+  required double fallback,
+}) {
+  return (isCurrentCycle && accountsLoaded) ? liquidBalance : fallback;
+}
+
+double householdDebitedSpend(Iterable<Map<String, dynamic>> cycleExpenses) {
+  double total = 0.0;
+  for (final tx in cycleExpenses) {
+    final nClass = tx['nafaqah_class']?.toString();
+    if (nClass == 'wife_personal' || nClass == 'wife_reimbursable') continue;
+    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+    total += amount;
+  }
+  return total;
+}
+
+double resolveCycleFunding({
+  required double verifiedCycleIncome,
+  required double liquidBalance,
+  required double householdDebitedSpend,
+}) {
+  return verifiedCycleIncome > 0
+      ? verifiedCycleIncome
+      : (liquidBalance + householdDebitedSpend);
+}
+
 class BudgetManagementScreen extends StatefulWidget {
   const BudgetManagementScreen({
     super.key,
@@ -74,8 +104,16 @@ class BudgetManagementScreen extends StatefulWidget {
     required double amount,
     required String merchant,
     required String categoryCode,
-    required DateTime occurredAt,
+    required String cycleKey,
+    required int paydayDay,
+    DateTime? occurredAt,
   }) {
+    final cycle = SalaryCycleService.cycleForKey(cycleKey, paydayDay: paydayDay);
+    final targetDate = occurredAt ??
+        (cycle != null
+            ? DateTime.utc(cycle.start.year, cycle.start.month, cycle.start.day, 9, 0, 0)
+            : DateTime.now().toUtc());
+
     final row = buildManualExpenseRow(
       id: id,
       householdId: householdId,
@@ -88,10 +126,11 @@ class BudgetManagementScreen extends StatefulWidget {
       beneficiaryType: 'household',
       beneficiaryId: 'household',
       accountId: null,
-      occurredAt: occurredAt,
+      occurredAt: targetDate,
     );
+    // cycle_key is trigger-derived (Rule 02 §1); never sent by client
     row.remove('cycle_key');
-    row['source'] = 'prior_adjustment';
+    row['source'] = 'manual';
     return row;
   }
 
@@ -576,6 +615,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                 onPressed: () async {
                   final amt = double.tryParse(amountCtrl.text) ?? shortfall;
                   if (amt <= 0) return;
+                  final paydayDay = context.read<AccountProvider>().paydayDay;
                   Navigator.pop(ctx);
                   try {
                     final currentUserId = supabase.auth.currentUser?.id;
@@ -602,7 +642,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       amount: amt,
                       merchant: merchantLabel,
                       categoryCode: selectedCat,
-                      occurredAt: DateTime.now(),
+                      cycleKey: _currentCycleKey,
+                      paydayDay: paydayDay,
                     );
                     await supabase.from('transactions').insert(row);
                     if (mounted) {
@@ -1474,11 +1515,18 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
 
                     final snapshot = accountProvider.snapshot;
-                    final displayOperatingCash = (isCurrentCycle && accountProvider.hasLoaded) ? snapshot.operatingCash : 0.0;
+                    final displayOperatingCash = resolveDisplayOperatingCash(
+                      isCurrentCycle: isCurrentCycle,
+                      accountsLoaded: accountProvider.hasLoaded,
+                      liquidBalance: snapshot.liquidBalance,
+                      fallback: 0.0,
+                    );
                     final verifiedCycleIncome = accountProvider.hasLoaded ? snapshot.cycleIncome : staticData.monthlyIncome;
-                    final cycleFunding = (verifiedCycleIncome > 0)
-                        ? verifiedCycleIncome
-                        : (displayOperatingCash + totalSpent);
+                    final cycleFunding = resolveCycleFunding(
+                      verifiedCycleIncome: verifiedCycleIncome,
+                      liquidBalance: displayOperatingCash,
+                      householdDebitedSpend: totalSpent,
+                    );
                     final hasBenchmark = cycleFunding > 0;
                     final hasOperatingCash = isCurrentCycle && displayOperatingCash > 0;
 

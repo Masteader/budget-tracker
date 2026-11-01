@@ -27,6 +27,7 @@ from nafaqah_service import resolve_expense_nafaqah
 from supabase_client import (
     account_for_wife_class,
     assert_account_debitable,
+    resolve_default_debitable_account,
     get_client,
     fetch_all_cost_control_codes,
     fetch_household_cost_control_codes,
@@ -996,6 +997,8 @@ def process_receipt_scan(
         )
     if stored_account_id is not None:
         assert_account_debitable(household_id, user_id, stored_account_id)
+    elif not preview_only:
+        stored_account_id = resolve_default_debitable_account(household_id, user_id, category_code, nafaqah.get('nafaqah_class'))
 
     # Who paid and for whom, as columns; refused (422) before any budget is touched when
     # 'partner' names nobody in this household.

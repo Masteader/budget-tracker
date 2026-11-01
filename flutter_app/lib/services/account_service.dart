@@ -349,9 +349,9 @@ class AccountService {
               .eq('household_id', householdId)
               .eq('user_id', effectiveUserId!)
               .isFilter('account_id', null)
+              .isFilter('nafaqah_class', null)
               .inFilter('source', ['chat', 'receipt_scan'])
-              .gte('created_at', tenMinutesAgo)
-              .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)');
+              .gte('created_at', tenMinutesAgo);
 
       if (unlinked.isNotEmpty) {
         for (final row in unlinked) {

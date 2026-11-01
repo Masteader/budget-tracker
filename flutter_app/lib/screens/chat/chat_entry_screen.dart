@@ -24,6 +24,7 @@ import '../../widgets/transactions/inactive_category_resolution_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 import '../accounts/accounts_overview_screen.dart';
+import '../../services/post_commit_sync.dart';
 import '../../services/account_service.dart';
 import '../home/budget_management_screen.dart';
 import '../settings/settings_screen.dart';
@@ -404,9 +405,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
 
     if (!mounted) return;
     var queueOffline = false;
+    final status = res['status'] as String? ?? 'error';
     setState(() {
       _isLoading = false;
-      final status = res['status'] as String? ?? 'error';
       final isLockout = res['status_code'] == 429 ||
           (res['detail'] is Map && res['detail']['code'] == 'chat_locked_out') ||
           res['code'] == 'chat_locked_out';
@@ -527,11 +528,6 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             },
           ),
         );
-        _refreshGlobalProviders();
-        unawaited(AccountService.instance.reconcileUnlinkedTransactions(
-          _householdId!,
-          callerIsAdmin: viewerIsAdminOf(context, _householdId!),
-        ));
       } else {
         // Check for offline network error and save to SQLite queue
         final errText = res['message']?.toString() ?? '';
@@ -551,6 +547,20 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         }
       }
     });
+
+    if (status == 'success' || status == 'enriched') {
+      final hid = _householdId;
+      if (hid != null) {
+        await reconcileThenRefresh(
+          reconcile: () => AccountService.instance.reconcileUnlinkedTransactions(
+            hid,
+            callerIsAdmin: viewerIsAdminOf(context, hid),
+          ),
+          refresh: _refreshGlobalProviders,
+          isMounted: () => mounted,
+        );
+      }
+    }
 
     if (queueOffline) {
       // MOB-28: only claim "stored offline" when the queue write succeeded.
@@ -645,9 +655,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     );
 
     if (!mounted) return;
+    final status = res['status'] as String? ?? 'error';
     setState(() {
       _isLoading = false;
-      final status = res['status'] as String? ?? 'error';
       if (status == 'success' || status == 'enriched') {
         final parsedItems = (res['items'] as List?)
                 ?.map((e) => Map<String, dynamic>.from(e as Map))
@@ -691,11 +701,6 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             );
           } catch (_) {}
         }
-        _refreshGlobalProviders();
-        unawaited(AccountService.instance.reconcileUnlinkedTransactions(
-          householdId,
-          callerIsAdmin: viewerIsAdminOf(context, householdId),
-        ));
       } else {
         AppSnackBar.showError(
           context,
@@ -704,6 +709,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         );
       }
     });
+
+    if (status == 'success' || status == 'enriched') {
+      await reconcileThenRefresh(
+        reconcile: () => AccountService.instance.reconcileUnlinkedTransactions(
+          householdId,
+          callerIsAdmin: viewerIsAdminOf(context, householdId),
+        ),
+        refresh: _refreshGlobalProviders,
+        isMounted: () => mounted,
+      );
+    }
 
     _scrollToBottom();
   }

@@ -417,7 +417,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
     final accountProvider = context.watch<AccountProvider>();
     final snapshot = accountProvider.snapshot;
-    final liveOperatingCash = accountProvider.hasLoaded ? snapshot.operatingCash : null;
+    final liveOperatingCash = accountProvider.hasLoaded ? snapshot.liquidBalance : null;
     final totalAccountsCount = accountProvider.accounts.where((a) => !a.isArchived).length;
     final effectiveIncome = (snapshot.cycleIncome > 0)
         ? snapshot.cycleIncome

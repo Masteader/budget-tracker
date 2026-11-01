@@ -34,7 +34,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('Item 3: buildPriorSpendRow never contains cycle_key', () {
+  test('CRITICAL-03: buildPriorSpendRow creates manual source, null account_id, and derives target cycle date', () {
     final row = BudgetManagementScreen.buildPriorSpendRow(
       id: 'tx-1',
       householdId: 'hh-1',
@@ -42,11 +42,106 @@ void main() {
       amount: 500.0,
       merchant: 'Adjustment',
       categoryCode: 'OPEX-UTIL',
-      occurredAt: DateTime(2026, 2, 1),
+      cycleKey: '2026-11',
+      paydayDay: 27,
     );
+    expect(row['source'], equals('manual'));
+    expect(row['account_id'], isNull);
     expect(row.containsKey('cycle_key'), isFalse);
     expect(row['amount'], equals(500.0));
     expect(row['spent_by'], equals('me'));
+
+    final ts = DateTime.parse(row['timestamp'] as String);
+    final cycle = SalaryCycleService.cycleForInstant(ts, paydayDay: 27);
+    expect(cycle.key, equals('2026-11'));
+  });
+
+  test('CRITICAL-03: buildPriorSpendRow cycle start dates across diverse payday configurations', () {
+    // Payday 1: cycle 2026-11 starts 2026-11-01
+    final row1 = BudgetManagementScreen.buildPriorSpendRow(
+      id: 'tx-p1',
+      householdId: 'hh-1',
+      userId: 'u-1',
+      amount: 100.0,
+      merchant: 'Adj 1',
+      categoryCode: 'OPEX-UTIL',
+      cycleKey: '2026-11',
+      paydayDay: 1,
+    );
+    final c1 = SalaryCycleService.cycleForInstant(DateTime.parse(row1['timestamp'] as String), paydayDay: 1);
+    expect(c1.key, equals('2026-11'));
+
+    // Payday 10: cycle 2026-11 starts 2026-11-10 (payday <= 15 names start month)
+    final row10 = BudgetManagementScreen.buildPriorSpendRow(
+      id: 'tx-p10',
+      householdId: 'hh-1',
+      userId: 'u-1',
+      amount: 100.0,
+      merchant: 'Adj 10',
+      categoryCode: 'OPEX-UTIL',
+      cycleKey: '2026-11',
+      paydayDay: 10,
+    );
+    final c10 = SalaryCycleService.cycleForInstant(DateTime.parse(row10['timestamp'] as String), paydayDay: 10);
+    expect(c10.key, equals('2026-11'));
+
+    // Payday 31 in a 30-day month (Nov cycle starts Oct 31)
+    final row31 = BudgetManagementScreen.buildPriorSpendRow(
+      id: 'tx-p31',
+      householdId: 'hh-1',
+      userId: 'u-1',
+      amount: 100.0,
+      merchant: 'Adj 31',
+      categoryCode: 'OPEX-UTIL',
+      cycleKey: '2026-11',
+      paydayDay: 31,
+    );
+    final c31 = SalaryCycleService.cycleForInstant(DateTime.parse(row31['timestamp'] as String), paydayDay: 31);
+    expect(c31.key, equals('2026-11'));
+  });
+
+  test('CRITICAL-02: resolveDisplayOperatingCash binds to liquidBalance when accounts loaded', () {
+    final cash = resolveDisplayOperatingCash(
+      isCurrentCycle: true,
+      accountsLoaded: true,
+      liquidBalance: 6370.26,
+      fallback: 0.0,
+    );
+    expect(cash, equals(6370.26));
+
+    final pastCash = resolveDisplayOperatingCash(
+      isCurrentCycle: false,
+      accountsLoaded: true,
+      liquidBalance: 6370.26,
+      fallback: 0.0,
+    );
+    expect(pastCash, equals(0.0));
+  });
+
+  test('CRITICAL-02: householdDebitedSpend and resolveCycleFunding exclude wife rows', () {
+    final txs = [
+      {'amount': 1000.0, 'nafaqah_class': null},
+      {'amount': 500.0, 'nafaqah_class': null},
+      {'amount': 300.0, 'nafaqah_class': 'wife_personal'},
+      {'amount': 200.0, 'nafaqah_class': 'wife_reimbursable'},
+    ];
+
+    final spend = householdDebitedSpend(txs);
+    expect(spend, equals(1500.0));
+
+    final fallbackFunding = resolveCycleFunding(
+      verifiedCycleIncome: 0.0,
+      liquidBalance: 6370.26,
+      householdDebitedSpend: spend,
+    );
+    expect(fallbackFunding, equals(6370.26 + 1500.0));
+
+    final verifiedFunding = resolveCycleFunding(
+      verifiedCycleIncome: 10000.0,
+      liquidBalance: 6370.26,
+      householdDebitedSpend: spend,
+    );
+    expect(verifiedFunding, equals(10000.0));
   });
 
   test('Item 15: buildCarryForwardRow preserves metadata and accumulates unspent for sinking funds', () {

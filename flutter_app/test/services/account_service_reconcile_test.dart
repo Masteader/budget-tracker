@@ -153,7 +153,7 @@ void main() {
       expect(linkedTxIds, isEmpty);
     });
 
-    test('source guard: buildPriorSpendRow emits source == prior_adjustment', () {
+    test('source guard: buildPriorSpendRow emits source == manual and null account_id (complies with 23514 check)', () {
       final row = BudgetManagementScreen.buildPriorSpendRow(
         id: 'test-id',
         householdId: 'test-hh',
@@ -161,9 +161,12 @@ void main() {
         amount: 100.0,
         merchant: 'Prior Spending',
         categoryCode: 'OPEX-GROCERY',
-        occurredAt: DateTime.now(),
+        cycleKey: '2026-11',
+        paydayDay: 27,
       );
-      expect(row['source'], equals('prior_adjustment'));
+      expect(row['source'], equals('manual'));
+      expect(row['account_id'], isNull);
+      expect(row.containsKey('cycle_key'), isFalse);
     });
 
     test('member never links to shared pool', () async {

@@ -39,6 +39,9 @@ class PaydayOutlook {
   /// [base] − [totalSpent]; negative when overspent.
   final double left;
 
+  /// True available cash after pending commitments ([left] − [pendingCommitments]).
+  final double afterCommitments;
+
   /// Days from today to the last day of the cycle, both included; 0 once the
   /// cycle is over.
   final int daysLeft;
@@ -58,6 +61,7 @@ class PaydayOutlook {
     required this.totalAllocated,
     required this.totalSpent,
     required this.left,
+    required this.afterCommitments,
     required this.daysLeft,
     required this.safeDaily,
     required this.verdict,
@@ -108,12 +112,10 @@ class PaydayOutlook {
     final daysLeft = t.isAfter(end) ? 0 : (end.difference(t).inDays + 1).clamp(0, cycleDays);
     final daysElapsed = (t.difference(start).inDays + 1).clamp(1, cycleDays);
 
-    // Daily safe spend divides true available balance by daysRemaining:
-    // If commitments are present, use actualAvailableAfterCommitments / daysRemaining,
-    // otherwise leftUntilPayday / daysRemaining.
+    // Commitments arithmetic (CRITICAL-01 SSOT):
     final commitments = (pendingCommitments ?? 0.0).clamp(0.0, double.infinity);
-    final actualAvailable = commitments > 0 ? (left - commitments) : left;
-    final safeDaily = daysLeft > 0 && actualAvailable > 0 ? actualAvailable / daysLeft : 0.0;
+    final afterCommitments = left - commitments;
+    final safeDaily = daysLeft > 0 && afterCommitments > 0 ? afterCommitments / daysLeft : 0.0;
 
     // Halala precision: spending exactly the base is not "over".
     if (left <= -0.005) {
@@ -123,6 +125,7 @@ class PaydayOutlook {
         totalAllocated: totalAllocated,
         totalSpent: totalSpent,
         left: left,
+        afterCommitments: afterCommitments,
         daysLeft: daysLeft,
         safeDaily: 0,
         verdict: PaydayVerdict.overspent,
@@ -144,6 +147,7 @@ class PaydayOutlook {
       totalAllocated: totalAllocated,
       totalSpent: totalSpent,
       left: left,
+      afterCommitments: afterCommitments,
       daysLeft: daysLeft,
       safeDaily: safeDaily,
       verdict: runOut != null ? PaydayVerdict.runsOut : PaydayVerdict.onTrack,

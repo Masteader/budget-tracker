@@ -84,15 +84,14 @@ class BudgetHeroCard extends StatelessWidget {
     final today = SalaryCycleService.riyadhToday(now: now);
     final (start, end) = _cycleDates();
     final s = snapshot;
-    final effectiveOperatingCash = operatingCash ?? s?.operatingCash;
     final effectiveCommitments = pendingCommitments ?? s?.pendingCommitments;
     final effectiveMonthlyIncome = monthlyIncome ?? ((s != null && s.cycleIncome > 0) ? s.cycleIncome : null);
 
     final outlook = PaydayOutlook.compute(
       budgets: budgets,
       monthlyIncome: effectiveMonthlyIncome,
-      operatingCash: effectiveOperatingCash,
-      pendingCommitments: 0,
+      operatingCash: s != null ? s.liquidBalance : operatingCash,
+      pendingCommitments: effectiveCommitments,
       today: today,
       cycleStart: start,
       cycleEnd: end,
@@ -248,7 +247,7 @@ class BudgetHeroCard extends StatelessWidget {
                     if (effectiveCommitments != null && effectiveCommitments > 0) ...[
                       const SizedBox(height: 6),
                       _HeroCommitmentsTip(
-                        actualAvailable: effectiveOperatingCash ?? (outlook.left - effectiveCommitments),
+                        actualAvailable: outlook.afterCommitments,
                         commitmentsAmount: effectiveCommitments,
                         isDark: isDark,
                         onTap: onCommitmentsTap,
