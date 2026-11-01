@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../main.dart';
 import '../../models/models.dart';
+import '../../models/budget_reconcile.dart';
 import '../../services/api_service.dart';
 import '../../widgets/sub_budget_allocation_dialog.dart';
 import '../../widgets/sub_budget_breakdown_sheet.dart';
@@ -17,7 +18,6 @@ import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/app_shimmer.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
-import '../../services/account_service.dart';
 import '../../widgets/budgets/link_account_sheet.dart';
 import '../../widgets/budgets/rebalance_budget_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
@@ -33,7 +33,6 @@ import '../../models/manual_expense_row.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/transaction_provider.dart';
-import '../../widgets/dashboard/household_setup_card.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -51,6 +50,48 @@ class BudgetManagementScreen extends StatefulWidget {
   final Future<BudgetStaticData> Function()? loadStaticDataOverride;
   @visibleForTesting
   final Stream<List<Map<String, dynamic>>> Function(String hid)? budgetStreamOverride;
+
+  @visibleForTesting
+  static Map<String, dynamic> buildCarryForwardRow({
+    required Map<String, dynamic> b,
+    required String householdId,
+    required String month,
+    required String cycleKey,
+  }) =>
+      _BudgetManagementScreenState.buildCarryForwardRow(
+        b: b,
+        householdId: householdId,
+        month: month,
+        cycleKey: cycleKey,
+      );
+
+  @visibleForTesting
+  static Map<String, dynamic> buildPriorSpendRow({
+    required String id,
+    required String householdId,
+    required String? userId,
+    required double amount,
+    required String merchant,
+    required String categoryCode,
+    required DateTime occurredAt,
+  }) {
+    final row = buildManualExpenseRow(
+      id: id,
+      householdId: householdId,
+      userId: userId,
+      amount: amount,
+      merchant: merchant,
+      categoryCode: categoryCode,
+      spentBy: 'me',
+      paidBy: 'me',
+      beneficiaryType: 'household',
+      beneficiaryId: 'household',
+      accountId: null,
+      occurredAt: occurredAt,
+    );
+    row.remove('cycle_key');
+    return row;
+  }
 
   @override
   State<BudgetManagementScreen> createState() =>
@@ -88,6 +129,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     }
 
     final budgetProvider = context.read<BudgetProvider>();
+    final accProvider = context.read<AccountProvider>();
 
     String hid = '';
     String role = 'member';
@@ -181,42 +223,20 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     double income = 0.0;
     List<Account> accounts = [];
     try {
-      final results = await Future.wait([
-        AccountService.instance.getCycleIncome(hid, _currentCycleKey).catchError((_) => <IncomeRecord>[]),
-        AccountService.instance.getAccounts(hid).catchError((_) => <Account>[]),
-      ]);
-      final records = results[0] as List<IncomeRecord>;
-      accounts = results[1] as List<Account>;
-      income = records.fold<double>(0.0, (s, r) => s + r.netAmount);
+      await accProvider.ensureLoaded(hid);
+      if (!mounted) {
+        return _lastStaticData ??
+            _BudgetStaticData(
+              householdId: hid,
+              isAdmin: role == 'admin',
+              allCodes: activeCodes,
+              monthlyIncome: 0.0,
+              accounts: [],
+            );
+      }
+      accounts = accProvider.accounts;
+      income = accProvider.snapshot.cycleIncome;
     } catch (_) {}
-
-    if (income <= 0) {
-      try {
-        income = await AccountService.instance.getHouseholdConfiguredIncome(hid);
-      } catch (_) {}
-    }
-
-    if (income <= 0) {
-      try {
-        final setup = await HouseholdSetupPrefs.load(hid);
-        if (setup.monthlyIncome != null && setup.monthlyIncome! > 0) {
-          income = setup.monthlyIncome!;
-        }
-      } catch (_) {}
-    }
-
-    if (income <= 0 && accounts.isNotEmpty) {
-      income = accounts
-          .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-          .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
-    }
-
-    if (accounts.isNotEmpty) {
-      try {
-        await AccountService.instance.reconcileUnlinkedTransactions(hid);
-        accounts = await AccountService.instance.getAccounts(hid).catchError((_) => accounts);
-      } catch (_) {}
-    }
 
     final data = _BudgetStaticData(
       householdId: hid,
@@ -262,7 +282,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    return SalaryCycleService.cycleKeyForInstant(_selectedDate);
+    final payday = mounted ? context.read<AccountProvider>().paydayDay : SalaryCycleService.defaultPaydayDay;
+    return SalaryCycleService.cycleKeyForInstant(_selectedDate, paydayDay: payday);
   }
 
   String get _currentMonthStr => DateFormat('yyyy-MM-01').format(_selectedDate);
@@ -291,7 +312,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
 
       final allBudgetsRes = await supabase
           .from('budgets')
-          .select('category_code, allocated_amount, account_id, remaining_amount, spent_amount, sub_allocations, cycle_key, month, is_active')
+          .select('category_code, allocated_amount, account_id, remaining_amount, spent_amount, sub_allocations, cycle_key, month, is_active, metadata')
           .eq('household_id', householdId);
 
       final prevBudgets = (allBudgetsRes as List).where((b) {
@@ -314,105 +335,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       }
 
       final newEntries = prevBudgets.map((b) {
-        final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
-        final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
-        final subAllocsRaw = b['sub_allocations'];
-        final Map<String, dynamic> subAllocs = subAllocsRaw is Map
-            ? Map<String, dynamic>.from(subAllocsRaw)
-            : <String, dynamic>{};
-
-        Map<String, dynamic> sinkingCfg = {};
-        if (subAllocs['_sinking_fund'] is Map) {
-          sinkingCfg = Map<String, dynamic>.from(subAllocs['_sinking_fund'] as Map);
-        } else if (b['metadata'] is Map && (b['metadata'] as Map)['_sinking_fund'] is Map) {
-          sinkingCfg = Map<String, dynamic>.from((b['metadata'] as Map)['_sinking_fund'] as Map);
-        }
-
-        final numericSubs = <String, double>{};
-        for (final e in subAllocs.entries) {
-          if (!e.key.startsWith('_') && e.value is num) {
-            numericSubs[e.key] = (e.value as num).toDouble();
-          }
-        }
-
-        double newAlloc = alloc;
-        double delta = 0.0;
-        final newSubAllocs = Map<String, dynamic>.from(subAllocs);
-
-        if (sinkingCfg.isNotEmpty) {
-          if (numericSubs.isNotEmpty) {
-            final newSubNumeric = <String, double>{};
-            for (final entry in numericSubs.entries) {
-              final sc = entry.key;
-              final prevSubAlloc = entry.value;
-              final scCfg = sinkingCfg[sc] is Map ? (sinkingCfg[sc] as Map) : null;
-              final accumulate = scCfg != null && scCfg['accumulate'] == true;
-              final baseAmt = (scCfg != null && scCfg['base_amount'] is num)
-                  ? (scCfg['base_amount'] as num).toDouble()
-                  : prevSubAlloc;
-
-              final ratio = alloc > 0 ? (prevSubAlloc / alloc) : 0.0;
-              final subSpent = spent * ratio;
-              final unspent = (prevSubAlloc - subSpent > 0) ? (prevSubAlloc - subSpent) : 0.0;
-
-              if (accumulate) {
-                newSubNumeric[sc] = double.parse((baseAmt + unspent).toStringAsFixed(2));
-              } else {
-                newSubNumeric[sc] = double.parse(baseAmt.toStringAsFixed(2));
-              }
-            }
-            newAlloc = double.parse(
-              newSubNumeric.values.fold<double>(0.0, (a, b) => a + b).toStringAsFixed(2),
-            );
-            newSubAllocs.addAll(newSubNumeric);
-
-            double baseSum = 0.0;
-            for (final entry in numericSubs.entries) {
-              final scCfg = sinkingCfg[entry.key] is Map ? (sinkingCfg[entry.key] as Map) : null;
-              baseSum += (scCfg != null && scCfg['base_amount'] is num)
-                  ? (scCfg['base_amount'] as num).toDouble()
-                  : entry.value;
-            }
-            final computedDelta = newAlloc - baseSum;
-            delta = double.parse((computedDelta > 0 ? computedDelta : 0.0).toStringAsFixed(2));
-          } else {
-            final parentCfg = (sinkingCfg['_parent'] is Map
-                    ? sinkingCfg['_parent']
-                    : sinkingCfg['_self'])
-                as Map?;
-            final accumulate = parentCfg != null && parentCfg['accumulate'] == true;
-            final baseAmt = (parentCfg != null && parentCfg['base_amount'] is num)
-                ? (parentCfg['base_amount'] as num).toDouble()
-                : alloc;
-            final unspent = (alloc - spent > 0) ? (alloc - spent) : 0.0;
-
-            if (accumulate) {
-              newAlloc = double.parse((baseAmt + unspent).toStringAsFixed(2));
-              delta = double.parse(unspent.toStringAsFixed(2));
-            } else {
-              newAlloc = double.parse(baseAmt.toStringAsFixed(2));
-              delta = 0.0;
-            }
-          }
-        } else {
-          // Standard categories start fresh with default allocated amount
-          newAlloc = alloc;
-          delta = 0.0;
-        }
-
-        return {
-          'household_id': householdId,
-          'month': _currentMonthStr,
-          'cycle_key': _currentCycleKey,
-          'category_code': b['category_code'],
-          'allocated_amount': newAlloc,
-          'account_id': b['account_id'],
-          'sub_allocations': newSubAllocs,
-          'metadata': b['metadata'] ?? {},
-          'previous_cycle_delta': delta,
-          'spent_amount': 0.0,
-          'is_active': true,
-        };
+        return buildCarryForwardRow(
+          b: Map<String, dynamic>.from(b as Map),
+          householdId: householdId,
+          month: _currentMonthStr,
+          cycleKey: _currentCycleKey,
+        );
       }).toList();
 
       await supabase.from('budgets').insert(newEntries);
@@ -439,9 +367,115 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     }
   }
 
+  @visibleForTesting
+  static Map<String, dynamic> buildCarryForwardRow({
+    required Map<String, dynamic> b,
+    required String householdId,
+    required String month,
+    required String cycleKey,
+  }) {
+    final alloc = (b['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+    final spent = (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
+    final subAllocsRaw = b['sub_allocations'];
+    final Map<String, dynamic> subAllocs = subAllocsRaw is Map
+        ? Map<String, dynamic>.from(subAllocsRaw)
+        : <String, dynamic>{};
+
+    Map<String, dynamic> sinkingCfg = {};
+    if (subAllocs['_sinking_fund'] is Map) {
+      sinkingCfg = Map<String, dynamic>.from(subAllocs['_sinking_fund'] as Map);
+    } else if (b['metadata'] is Map && (b['metadata'] as Map)['_sinking_fund'] is Map) {
+      sinkingCfg = Map<String, dynamic>.from((b['metadata'] as Map)['_sinking_fund'] as Map);
+    }
+
+    final numericSubs = <String, double>{};
+    for (final e in subAllocs.entries) {
+      if (!e.key.startsWith('_') && e.value is num) {
+        numericSubs[e.key] = (e.value as num).toDouble();
+      }
+    }
+
+    double newAlloc = alloc;
+    double delta = 0.0;
+    final newSubAllocs = Map<String, dynamic>.from(subAllocs);
+
+    if (sinkingCfg.isNotEmpty) {
+      if (numericSubs.isNotEmpty) {
+        final newSubNumeric = <String, double>{};
+        for (final entry in numericSubs.entries) {
+          final sc = entry.key;
+          final prevSubAlloc = entry.value;
+          final scCfg = sinkingCfg[sc] is Map ? (sinkingCfg[sc] as Map) : null;
+          final accumulate = scCfg != null && scCfg['accumulate'] == true;
+          final baseAmt = (scCfg != null && scCfg['base_amount'] is num)
+              ? (scCfg['base_amount'] as num).toDouble()
+              : prevSubAlloc;
+
+          final ratio = alloc > 0 ? (prevSubAlloc / alloc) : 0.0;
+          final subSpent = spent * ratio;
+          final unspent = (prevSubAlloc - subSpent > 0) ? (prevSubAlloc - subSpent) : 0.0;
+
+          if (accumulate) {
+            newSubNumeric[sc] = double.parse((baseAmt + unspent).toStringAsFixed(2));
+          } else {
+            newSubNumeric[sc] = double.parse(baseAmt.toStringAsFixed(2));
+          }
+        }
+        newAlloc = double.parse(
+          newSubNumeric.values.fold<double>(0.0, (a, b) => a + b).toStringAsFixed(2),
+        );
+        newSubAllocs.addAll(newSubNumeric);
+
+        double baseSum = 0.0;
+        for (final entry in numericSubs.entries) {
+          final scCfg = sinkingCfg[entry.key] is Map ? (sinkingCfg[entry.key] as Map) : null;
+          baseSum += (scCfg != null && scCfg['base_amount'] is num)
+              ? (scCfg['base_amount'] as num).toDouble()
+              : entry.value;
+        }
+        final computedDelta = newAlloc - baseSum;
+        delta = double.parse((computedDelta > 0 ? computedDelta : 0.0).toStringAsFixed(2));
+      } else {
+        final parentCfg = (sinkingCfg['_parent'] is Map
+                ? sinkingCfg['_parent']
+                : sinkingCfg['_self'])
+            as Map?;
+        final accumulate = parentCfg != null && parentCfg['accumulate'] == true;
+        final baseAmt = (parentCfg != null && parentCfg['base_amount'] is num)
+            ? (parentCfg['base_amount'] as num).toDouble()
+            : alloc;
+        final unspent = (alloc - spent > 0) ? (alloc - spent) : 0.0;
+
+        if (accumulate) {
+          newAlloc = double.parse((baseAmt + unspent).toStringAsFixed(2));
+          delta = double.parse(unspent.toStringAsFixed(2));
+        } else {
+          newAlloc = double.parse(baseAmt.toStringAsFixed(2));
+          delta = 0.0;
+        }
+      }
+    } else {
+      newAlloc = alloc;
+      delta = 0.0;
+    }
+
+    return {
+      'household_id': householdId,
+      'month': month,
+      'cycle_key': cycleKey,
+      'category_code': b['category_code'],
+      'allocated_amount': newAlloc,
+      'account_id': b['account_id'],
+      'sub_allocations': newSubAllocs,
+      'metadata': b['metadata'] ?? {},
+      'previous_cycle_delta': delta,
+      'spent_amount': 0.0,
+      'is_active': true,
+    };
+  }
+
   Future<void> _showPriorSpendingDialog({
     required String householdId,
-    required String cycleKey,
     required double shortfall,
     required List<Budget> budgets,
     required List<Map<String, String>> allCodes,
@@ -534,23 +568,32 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   if (amt <= 0) return;
                   Navigator.pop(ctx);
                   try {
-                    final row = buildManualExpenseRow(
+                    final currentUserId = supabase.auth.currentUser?.id;
+                    if (currentUserId != null) {
+                      try {
+                        final memRes = await supabase
+                            .from('household_memberships')
+                            .select('financial_role')
+                            .eq('household_id', householdId)
+                            .eq('user_id', currentUserId)
+                            .maybeSingle();
+                        if (memRes != null && (memRes['financial_role'] as String?)?.toLowerCase() == 'spouse') {
+                          if (mounted) {
+                            AppSnackBar.showInfo(context, context.tr('prior_spend_spouse_blocked'));
+                          }
+                          return;
+                        }
+                      } catch (_) {}
+                    }
+                    final row = BudgetManagementScreen.buildPriorSpendRow(
                       id: const Uuid().v4(),
                       householdId: householdId,
-                      userId: supabase.auth.currentUser?.id,
+                      userId: currentUserId,
                       amount: amt,
                       merchant: merchantLabel,
                       categoryCode: selectedCat,
-                      spentBy: 'me',
-                      paidBy: 'me',
-                      beneficiaryType: 'household',
-                      beneficiaryId: 'household',
-                      accountId: null,
                       occurredAt: DateTime.now(),
                     );
-                    if (cycleKey.isNotEmpty) {
-                      row['cycle_key'] = cycleKey.length > 7 ? cycleKey.substring(0, 7) : cycleKey;
-                    }
                     await supabase.from('transactions').insert(row);
                     if (mounted) {
                       try {
@@ -566,8 +609,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                       );
                     }
                   } catch (e) {
+                    debugPrint('Prior spend failed: $e');
                     if (mounted) {
-                      AppSnackBar.showError(context, e.toString());
+                      AppSnackBar.showError(context, context.tr('bm_prior_spend_failed'));
                     }
                   }
                 },
@@ -807,15 +851,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               );
                             }
                           } else {
-                            throw Exception(res['message'] ?? 'Failed to add category');
+                            throw Exception(res['message'] ?? 'add_category_failed');
                           }
                         } catch (e) {
+                          debugPrint('Add category failed: $e');
                           if (ctx.mounted) setDialogState(() => isSubmitting = false);
                           if (mounted) {
                             AppSnackBar.showError(
                               context,
-                              context.trArgs('bm_add_category_failed_msg', {'error': e}),
-                              title: context.tr('bm_add_failed'),
+                              context.tr('bm_add_failed'),
                             );
                           }
                         }
@@ -847,15 +891,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               );
                             }
                           } else {
-                            throw Exception(res['message'] ?? 'Failed to add sub-category');
+                            throw Exception(res['message'] ?? 'add_subcategory_failed');
                           }
                         } catch (e) {
+                          debugPrint('Add sub-category failed: $e');
                           if (ctx.mounted) setDialogState(() => isSubmitting = false);
                           if (mounted) {
                             AppSnackBar.showError(
                               context,
-                              context.trArgs('bm_add_sub_failed_msg', {'error': e}),
-                              title: context.tr('bm_add_failed'),
+                              context.tr('bm_add_failed'),
                             );
                           }
                         }
@@ -893,7 +937,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('${context.tr('deactivate')} ${context.trCat(categoryCode)}?', style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(context.trArgs('bm_deactivate_title', {'category': context.trCat(categoryCode)}), style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
           context.trArgs('bm_deactivate_desc', {'category': context.trCat(categoryCode)}),
           style: TextStyle(color: context.textSecondary, fontSize: 13),
@@ -1147,7 +1191,13 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   .eq('household_id', data.householdId)
                   .eq('category_code', cat.code);
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('Toggle category status failed: $e');
+            if (mounted) {
+              AppSnackBar.showError(context, context.tr('bm_toggle_failed'));
+            }
+            return;
+          }
           if (mounted) {
             context.read<BudgetProvider>().invalidateCategoriesCache();
             setState(() {
@@ -1251,11 +1301,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   });
                 },
               ),
-              IconButton(
-                icon: Icon(Icons.category_outlined, color: context.primaryButtonFg),
-                tooltip: context.tr('category_library'),
-                onPressed: () => _openCategoryLibrary(staticData),
-              ),
+              if (staticData.isAdmin)
+                IconButton(
+                  icon: Icon(Icons.category_outlined, color: context.primaryButtonFg),
+                  tooltip: context.tr('category_library'),
+                  onPressed: () => _openCategoryLibrary(staticData),
+                ),
               if (staticData.isAdmin)
                 IconButton(
                   icon: Icon(Icons.add_circle_outline_rounded, color: context.primaryButtonFg),
@@ -1273,7 +1324,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   children: [
                     IconButton(
                       tooltip: context.tr('a11y_previous'),
-                      icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
+                      icon: Icon(context.isRtl ? Icons.chevron_right_rounded : Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                           ? () => setState(() {
                               _userNavigatedManually = true;
@@ -1296,7 +1347,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     ),
                     IconButton(
                       tooltip: context.tr('a11y_next'),
-                      icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
+                      icon: Icon(context.isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                           ? () => setState(() {
                               _userNavigatedManually = true;
@@ -1325,6 +1376,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     .stream(primaryKey: ['id'])
                     .eq('household_id', staticData.householdId),
             builder: (ctx, budgetSnap) {
+              final accountProvider = ctx.watch<AccountProvider>();
+              final liveAccounts = accountProvider.hasLoaded ? accountProvider.accounts : staticData.accounts;
+
               final rawBudgets = <Budget>[];
               for (final row in (budgetSnap.data ?? [])) {
                 try {
@@ -1345,20 +1399,9 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   ? (DateTime.tryParse(_selectedCycle!.cycleStart), DateTime.tryParse(_selectedCycle!.cycleEnd))
                   : (null, null);
 
-              final budgets = rawBudgets.map((b) {
-                if (txProvider.isLoading) return b;
-                final realSpent = txProvider.cycleSpendForCategory(
-                  b.categoryCode,
-                  _currentCycleKey,
-                  cycleStart: start,
-                  cycleEnd: end,
-                );
-                final actualSpent = realSpent > b.spentAmount ? realSpent : b.spentAmount;
-                return b.copyWith(
-                  spentAmount: actualSpent,
-                  remainingAmount: b.allocatedAmount - actualSpent,
-                );
-              }).toList();
+              final budgets = txProvider.isLoading
+                  ? rawBudgets
+                  : reconcileCycleBudgets(rawBudgets, txProvider, _currentCycleKey, start, end);
 
               final totalAllocated = budgets.fold<double>(0.0, (sum, b) => sum + b.allocatedAmount);
 
@@ -1423,40 +1466,15 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         .fold<double>(0.0, (s, b) => s + b.spentAmount);
 
                     final accountProvider = ctx.watch<AccountProvider>();
+                    final snapshot = accountProvider.snapshot;
                     final liveAccounts = accountProvider.hasLoaded ? accountProvider.accounts : staticData.accounts;
-                    final operatingCash = liveAccounts
-                        .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-                        .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
-                    final hasOperatingCash = operatingCash > 0;
-
-                    // Cycle funding benchmark: verified cycle income if known, else operating cash + total spent
-                    final verifiedCycleIncome = accountProvider.effectiveCycleIncome > 0
-                        ? accountProvider.effectiveCycleIncome
-                        : (staticData.monthlyIncome > 0 ? staticData.monthlyIncome : 0.0);
+                    final displayOperatingCash = accountProvider.hasLoaded ? snapshot.operatingCash : 0.0;
+                    final verifiedCycleIncome = accountProvider.hasLoaded ? snapshot.cycleIncome : staticData.monthlyIncome;
                     final cycleFunding = (verifiedCycleIncome > 0)
                         ? verifiedCycleIncome
-                        : (hasOperatingCash ? (operatingCash + totalSpent) : 0.0);
+                        : (displayOperatingCash + totalSpent);
                     final hasBenchmark = cycleFunding > 0;
-
-                    final operatingPoolAccounts = liveAccounts
-                        .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-                        .toList();
-                    final expectedOperatingCash = (verifiedCycleIncome > 0 && totalSpent > 0)
-                        ? (verifiedCycleIncome - totalSpent).clamp(0.0, double.infinity)
-                        : operatingCash;
-                    final displayOperatingCash = (operatingPoolAccounts.length == 1 && verifiedCycleIncome > 0)
-                        ? expectedOperatingCash
-                        : operatingCash;
-
-                    if (isCurrentCycle &&
-                        operatingPoolAccounts.length == 1 &&
-                        verifiedCycleIncome > 0 &&
-                        (operatingCash - expectedOperatingCash).abs() >= 0.01) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        accountProvider.optimisticUpdateBalance(operatingPoolAccounts.first.id, expectedOperatingCash);
-                        unawaited(AccountService.instance.updateBalance(operatingPoolAccounts.first.id, expectedOperatingCash));
-                      });
-                    }
+                    final hasOperatingCash = displayOperatingCash > 0;
 
                     // Allocation capacity margin against cycle funding
                     final fundingMargin = hasBenchmark ? (cycleFunding - totalAllocated) : 0.0;
@@ -1490,9 +1508,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         if (acc != null) {
                           final spent = spentByAccount[entry.key] ?? 0.0;
                           final netRemaining = (entry.value - spent).clamp(0.0, double.infinity);
-                          final effectiveAccBal = (acc.id == operatingPoolAccounts.firstOrNull?.id && operatingPoolAccounts.length == 1)
-                              ? displayOperatingCash
-                              : acc.balance;
+                          final effectiveAccBal = acc.balance;
                           if (netRemaining > effectiveAccBal + 0.005) {
                             deficitAccount = acc;
                             deficitAmount = netRemaining - effectiveAccBal;
@@ -1510,21 +1526,21 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             margin: const EdgeInsets.only(bottom: 14),
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: Colors.redAccent.withValues(alpha: 0.12),
+                              color: context.dangerColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+                              border: Border.all(color: context.dangerColor.withValues(alpha: 0.5)),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+                                Icon(Icons.warning_amber_rounded, color: context.dangerColor, size: 22),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '⚠️ ${deficitAccount.name} ${context.tr('capacity_deficit')}: ${context.money(-deficitAmount, deficitAccount.currency)}',
-                                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                        context.trArgs('account_capacity_deficit', {'account': deficitAccount.name, 'amount': context.money(-deficitAmount, deficitAccount.currency)}),
+                                        style: TextStyle(color: context.dangerColor, fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -1547,7 +1563,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent,
+                                    backgroundColor: context.dangerColor,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                     visualDensity: VisualDensity.compact,
@@ -1563,7 +1579,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                           padding: const EdgeInsets.all(18),
                           borderRadius: 20,
                           customBorder: isOverAllocated
-                              ? Border.all(color: Colors.redAccent.withValues(alpha: 0.6), width: 1.5)
+                              ? Border.all(color: context.dangerColor.withValues(alpha: 0.6), width: 1.5)
                               : null,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1630,7 +1646,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                           Icon(
                                             isOverAllocated ? Icons.warning_amber_rounded : Icons.savings_outlined,
                                             size: 17,
-                                            color: isOverAllocated ? Colors.redAccent : context.electricTeal,
+                                            color: isOverAllocated ? context.dangerColor : context.electricTeal,
                                           ),
                                           const SizedBox(width: 6),
                                           Flexible(
@@ -1639,7 +1655,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: isOverAllocated ? Colors.redAccent : context.textSecondary,
+                                                color: isOverAllocated ? context.dangerColor : context.textSecondary,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
@@ -1700,24 +1716,24 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.withValues(alpha: 0.1),
+                                      color: context.dangerColor.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                                      border: Border.all(color: context.dangerColor.withValues(alpha: 0.3)),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
-                                            const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.redAccent),
+                                            Icon(Icons.warning_amber_rounded, size: 16, color: context.dangerColor),
                                             const SizedBox(width: 6),
                                             Expanded(
                                               child: Text(
                                                 context.trArgs('allocations_exceed_income', {'amount': context.sar(-fundingMargin)}),
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 11.5,
                                                   fontWeight: FontWeight.bold,
-                                                  color: Colors.redAccent,
+                                                  color: context.dangerColor,
                                                 ),
                                               ),
                                             ),
@@ -1748,7 +1764,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                                               ),
                                               style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.redAccent,
+                                                backgroundColor: context.dangerColor,
                                                 foregroundColor: Colors.white,
                                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                                 visualDensity: VisualDensity.compact,
@@ -1756,17 +1772,17 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
                                             ),
-                                            OutlinedButton.icon(
-                                              key: const Key('log_prior_spending_button'),
-                                              onPressed: () {
-                                                _showPriorSpendingDialog(
-                                                  householdId: staticData.householdId,
-                                                  cycleKey: _currentCycleKey,
-                                                  shortfall: -fundingMargin,
-                                                  budgets: budgets,
-                                                  allCodes: staticData.allCodes,
-                                                );
-                                              },
+                                            if (staticData.isAdmin)
+                                              OutlinedButton.icon(
+                                                key: const Key('log_prior_spending_button'),
+                                                onPressed: () {
+                                                  _showPriorSpendingDialog(
+                                                    householdId: staticData.householdId,
+                                                    shortfall: -fundingMargin,
+                                                    budgets: budgets,
+                                                    allCodes: staticData.allCodes,
+                                                  );
+                                                },
                                               icon: const Icon(Icons.history_toggle_off_rounded, size: 14),
                                               label: Text(
                                                 context.tr('apply_prior_spend_adjustment'),
@@ -1798,7 +1814,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       ),
                                       if (hasOperatingCash && totalSpent > 0)
                                         Text(
-                                          ':  • : ',
+                                          context.trArgs('bm_spent_vs_cash', {
+                                            'spent': context.sar(totalSpent),
+                                            'cash': context.sar(displayOperatingCash),
+                                          }),
                                           style: TextStyle(
                                             fontSize: 10.5,
                                             color: context.textSecondary,
@@ -1832,7 +1851,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     subCategories.add(sub);
                   }
                 }
-                final mappedAccount = staticData.accounts
+                final mappedAccount = liveAccounts
                     .where((a) => a.id == existing?.accountId)
                     .firstOrNull;
 
@@ -1903,7 +1922,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                           '• ${context.tr('spent')}: ${context.sar(spent)}',
                                           style: GoogleFonts.outfit(
                                             color: isExceeded
-                                                ? Colors.redAccent
+                                                ? context.dangerColor
                                                 : (context.textSecondary),
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
@@ -1957,7 +1976,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 ],
                               ),
                             ],
-                            Icon(Icons.chevron_right, size: 18, color: context.accentText),
+                            Icon(context.isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, size: 18, color: context.accentText),
                           ],
                         ),
                         if (existing != null && allocated > 0) ...[
@@ -1979,7 +1998,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: isExceeded
-                                              ? const [Colors.redAccent, Colors.red]
+                                              ? [context.dangerColor, Colors.red]
                                               : context.icedAccentGradient.colors,
                                         ),
                                         borderRadius: BorderRadius.circular(3),

@@ -506,7 +506,6 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
             accountId: _selectedAccountId,
             amount: amount,
             nafaqahClass: nafaqahClass,
-            persistToRemote: true,
           );
         } catch (_) {}
       }

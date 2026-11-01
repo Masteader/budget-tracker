@@ -1,13 +1,15 @@
 import 'package:budget_tracker/screens/scanner/receipt_scanner_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/localized_app.dart';
 
 void main() {
   Widget testSheet({
     Map<String, dynamic>? initialScanResult,
+    String lang = 'en',
   }) {
-    return MaterialApp(
-      home: Scaffold(
+    return localizedApp(
+      Scaffold(
         body: ReceiptScannerSheet(
           householdId: 'hh-test-family',
           initialScanResult: initialScanResult ??
@@ -26,6 +28,8 @@ void main() {
               },
         ),
       ),
+      lang: lang,
+      scaffold: false,
     );
   }
 
@@ -51,18 +55,20 @@ void main() {
   });
 
   testWidgets('ReceiptScannerSheet live Nafaqah preview: dynamically updates badge based on payer and beneficiary', (tester) async {
-    await tester.pumpWidget(testSheet());
+    await tester.pumpWidget(testSheet(lang: 'en'));
     await tester.pumpAndSettle();
 
-    // Default: Paid by Me, For Whom = Household -> Husband Nafaqah
-    expect(find.textContaining('Husband Nafaqah — 0 SAR owed by wife'), findsOneWidget);
+    // Default: Paid by Me, For Whom = Household -> Paid by Husband
+    expect(find.textContaining('Paid by husband — household expense (Nafaqah)'), findsOneWidget);
 
     // Tap Paid by Partner (Wife)
     await tester.tap(find.byKey(const ValueKey('spent_by_partner')));
     await tester.pumpAndSettle();
 
     // Now Paid by Partner, For Whom = Household -> Reimbursable Wife Advance
-    expect(find.textContaining('Reimbursable Wife Advance — Husband owes 100%'), findsOneWidget);
+    expect(find.textContaining('Wife paid for the household — husband owes her'), findsOneWidget);
+    expect(find.textContaining('100%'), findsNothing);
+    expect(find.descendant(of: find.byKey(const ValueKey('nafaqah_badge_text')), matching: find.textContaining('%')), findsNothing);
 
     // Tap For Whom = Wife / Partner
     await tester.tap(find.byKey(const ValueKey('beneficiary_partner')));
@@ -73,7 +79,7 @@ void main() {
   });
 
   testWidgets('ReceiptScannerSheet: switching back to Me clears wife nafaqah class without resurrecting stale state', (tester) async {
-    await tester.pumpWidget(testSheet());
+    await tester.pumpWidget(testSheet(lang: 'en'));
     await tester.pumpAndSettle();
 
     // Tap Paid by Partner (Wife) + Beneficiary Partner
@@ -87,9 +93,25 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('spent_by_me')));
     await tester.pumpAndSettle();
 
-    // Must show Husband Nafaqah and NOT resurrect wife_personal!
-    expect(find.textContaining('Husband Nafaqah — 0 SAR owed by wife'), findsOneWidget);
+    // Must show Paid by Husband and NOT resurrect wife_personal!
+    expect(find.textContaining('Paid by husband — household expense (Nafaqah)'), findsOneWidget);
     expect(find.textContaining('Deducted from Wife\'s Personal Allowance'), findsNothing);
   });
-}
 
+  testWidgets('ReceiptScannerSheet: Arabic-locale renders dignified Arabic copy', (tester) async {
+    await tester.pumpWidget(testSheet(lang: 'ar'));
+    await tester.pumpAndSettle();
+
+    // Default: Paid by husband in Arabic
+    expect(find.textContaining('دفعها الزوج — مصروف البيت (نفقة)'), findsOneWidget);
+
+    // Tap Paid by Partner (Wife)
+    await tester.tap(find.byKey(const ValueKey('spent_by_partner')));
+    await tester.pumpAndSettle();
+
+    // Reimbursable wife advance in Arabic
+    expect(find.textContaining('دفعت الزوجة عن البيت — على الزوج سدادها'), findsOneWidget);
+    expect(find.textContaining('100%'), findsNothing);
+    expect(find.descendant(of: find.byKey(const ValueKey('nafaqah_badge_text')), matching: find.textContaining('%')), findsNothing);
+  });
+}

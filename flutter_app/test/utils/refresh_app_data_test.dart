@@ -11,7 +11,7 @@ import 'package:budget_tracker/utils/refresh_app_data.dart';
 class MockAccountProvider extends ChangeNotifier implements AccountProvider {
   bool refreshed = false;
   @override
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     refreshed = true;
   }
   @override

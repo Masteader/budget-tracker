@@ -182,7 +182,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       );
     } else {
       return (
-        context.tr('scan_nafaqah_wife_reimbursable_badge'),
+        context.trArgs('scan_nafaqah_wife_reimbursable_badge', {'amount': context.sar(_scannedAmount)}),
         Icons.assignment_return_rounded,
         context.warnText,
       );
@@ -779,7 +779,6 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               accountId: _selectedAccountId,
               amount: finalAmount,
               nafaqahClass: confirmedClass,
-              persistToRemote: false,
             );
           } catch (_) {}
           AppSnackBar.showSuccess(
@@ -1000,7 +999,6 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             accountId: accountId,
             amount: total,
             nafaqahClass: confirmedNafaqahClass,
-            persistToRemote: true,
           );
         } catch (_) {}
         AppSnackBar.showSuccess(

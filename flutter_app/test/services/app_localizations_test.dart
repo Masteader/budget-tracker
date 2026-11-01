@@ -39,6 +39,14 @@ void main() {
       expect(loc.get('non_existent_key'), 'non_existent_key');
     });
 
+    test('app_title_badge and dial_days_short exist in all three locales (Item 9)', () {
+      for (final lang in ['en', 'ar', 'ur']) {
+        final loc = AppLocalizations(Locale(lang));
+        expect(loc.get('app_title_badge'), isNot(equals('app_title_badge')));
+        expect(loc.get('dial_days_short'), isNot(equals('dial_days_short')));
+      }
+    });
+
     test('AppLocalizationsDelegate supports en, ar, ur', () {
       const delegate = AppLocalizationsDelegate();
       expect(delegate.isSupported(const Locale('en')), isTrue);

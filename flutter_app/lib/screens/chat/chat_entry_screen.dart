@@ -657,7 +657,6 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
             accountId: targetAccountId,
             amount: finalAmount,
             nafaqahClass: nafaqahClass,
-            persistToRemote: false,
           );
         } catch (_) {}
         _refreshGlobalProviders();

@@ -1,6 +1,7 @@
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/household_dues.dart';
 import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/models/operating_cash.dart';
 import 'package:budget_tracker/services/salary_cycle_service.dart';
 import 'package:budget_tracker/widgets/dashboard/budget_hero_card.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +29,8 @@ Widget _host(
   double? pendingCommitments,
   VoidCallback? onCommitmentsTap,
   Locale locale = const Locale('en'),
+  OperatingCashSnapshot? snapshot,
+  int paydayDay = SalaryCycleService.defaultPaydayDay,
 }) =>
     MaterialApp(
       localizationsDelegates: const [
@@ -49,6 +52,8 @@ Widget _host(
             onDueTap: onDueTap,
             pendingCommitments: pendingCommitments,
             onCommitmentsTap: onCommitmentsTap,
+            snapshot: snapshot,
+            paydayDay: paydayDay,
           ),
         ),
       ),
@@ -203,5 +208,38 @@ void main() {
 
     await tester.tap(tipFinder);
     expect(commitmentsTapped, isTrue);
+  });
+
+  testWidgets('paydayDay: 5 with now = the 3rd shows days_to_payday_badge = 2', (tester) async {
+    // 3 Nov with paydayDay: 5 -> cycle ends on 4 Nov, so 2 days left until payday (3rd and 4th)
+    await tester.pumpWidget(_host(
+      [_budget('OPEX-FOOD', 1000, 100)],
+      DateTime.utc(2026, 11, 3, 9),
+      paydayDay: 5,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('2d'), findsOneWidget);
+  });
+
+  testWidgets('snapshot liquid 10,000 with 2,000 commitments shows left 8,000.00 and tip 8,000.00', (tester) async {
+    const snapshot = OperatingCashSnapshot(
+      householdId: 'h1',
+      cycleKey: '2026-11-27_2026-12-26',
+      liquidHalalas: 1000000, // 10,000.00 SAR
+      pendingCommitmentsHalalas: 200000, // 2,000.00 SAR
+      cycleIncomeHalalas: 0,
+      accountsCount: 1,
+    );
+
+    await tester.pumpWidget(_host(
+      [],
+      DateTime.utc(2026, 11, 6, 9),
+      snapshot: snapshot,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('8,000'), findsWidgets);
+    expect(find.textContaining('6,000'), findsNothing);
+    expect(find.textContaining('4,000'), findsNothing);
   });
 }

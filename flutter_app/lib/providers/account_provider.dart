@@ -1,78 +1,298 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/account.dart';
+import '../models/operating_cash.dart';
 import '../services/account_service.dart';
+import '../services/commitments_service.dart';
+import '../services/salary_cycle_service.dart';
 
-/// Central reactive provider for household accounts, liquidity, operating cash,
-/// and cycle income records. Eliminates stale local-state across screens.
-class AccountProvider extends ChangeNotifier {
+abstract interface class IncomeSource {
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey);
+  Future<double> getHouseholdConfiguredIncome(String householdId);
+}
+
+class AccountServiceIncomeSource implements IncomeSource {
   final AccountService _service;
+  AccountServiceIncomeSource([AccountService? service]) : _service = service ?? AccountService.instance;
+
+  @override
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) =>
+      _service.getCycleIncome(householdId, cycleKey);
+
+  @override
+  Future<double> getHouseholdConfiguredIncome(String householdId) =>
+      _service.getHouseholdConfiguredIncome(householdId);
+}
+
+/// Central single source of truth provider for household accounts, liquidity,
+/// commitments, operating cash, and cycle income.
+class AccountProvider extends ChangeNotifier {
+  final AccountService _accountsService;
+  final CommitmentsService _commitmentsService;
+  final IncomeSource _incomeSource;
+
   StreamSubscription<List<Account>>? _streamSub;
 
   String? _householdId;
+  int _paydayDay = SalaryCycleService.defaultPaydayDay;
   String? _cycleKey;
+
   List<Account> _accounts = [];
   List<IncomeRecord> _cycleIncomeRecords = [];
+  List<PendingCommitment> _lastCommitments = [];
   double? _configuredMonthlyIncome;
+
+  OperatingCashSnapshot _snapshot = OperatingCashSnapshot.empty;
+
   bool _isLoading = false;
   bool _hasLoaded = false;
   String? _error;
 
-  AccountProvider({AccountService? service}) : _service = service ?? AccountService.instance;
+  Future<void>? _inFlight;
+  bool _pendingForce = false;
+  int _generation = 0;
+  int _bindEpoch = 0;
+
+  AccountProvider({
+    AccountService? accounts,
+    AccountService? service, // legacy param alias
+    CommitmentsService? commitments,
+    IncomeSource? income,
+  })  : _accountsService = accounts ?? service ?? AccountService.instance,
+        _commitmentsService = commitments ?? CommitmentsService.instance,
+        _incomeSource = income ?? AccountServiceIncomeSource(accounts ?? service ?? AccountService.instance);
 
   String? get householdId => _householdId;
+  int get paydayDay => _paydayDay;
   String? get cycleKey => _cycleKey;
+
   List<Account> get accounts => List.unmodifiable(_accounts);
   List<IncomeRecord> get cycleIncomeRecords => List.unmodifiable(_cycleIncomeRecords);
   double? get configuredMonthlyIncome => _configuredMonthlyIncome;
+
+  OperatingCashSnapshot get snapshot => _snapshot;
+
   bool get isLoading => _isLoading;
   bool get hasLoaded => _hasLoaded;
   String? get error => _error;
 
-  /// Liquid operating cash: accounts in the active operating pool with positive balances.
-  double get operatingCash => _accounts
-      .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-      .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
+  /// Derived backwards-compatible getters driven by snapshot:
+  double get operatingCash => _snapshot.operatingCash;
+  double get cycleIncomeTotal => _snapshot.cycleIncome;
+  double get effectiveCycleIncome => cycleIncomeTotal;
+  int get accountsCount => _snapshot.accountsCount;
 
   /// Total net worth across all non-archived accounts.
   double get totalNetWorth => _accounts
       .where((a) => !a.isArchived)
       .fold<double>(0.0, (s, a) => s + a.balance);
 
-  /// Verified cycle income total from income records (falls back to configured income if no records exist).
-  double get cycleIncomeTotal {
-    final sum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
-    if (sum > 0) return sum;
-    return _configuredMonthlyIncome ?? 0.0;
+  void _publishSnapshot({
+    required String householdId,
+    required String cycleKey,
+    required List<Account> accounts,
+    required List<PendingCommitment> commitments,
+    required int cycleIncomeHalalas,
+  }) {
+    _snapshot = OperatingCashCalculator.compute(
+      householdId: householdId,
+      cycleKey: cycleKey,
+      accounts: accounts,
+      commitments: commitments,
+      cycleIncomeHalalas: cycleIncomeHalalas,
+    );
   }
 
-  /// Effective cycle income for funding benchmark calculations.
-  double get effectiveCycleIncome => cycleIncomeTotal;
-
-  /// Initializes accounts and cycle income for the active household and salary cycle.
-  /// Enforces Guardrail 1: cancels any prior stream before listening anew.
-  Future<void> init(String householdId, String cycleKey) async {
-    final isSameScope = _householdId == householdId && _cycleKey == cycleKey;
-    if (isSameScope && _accounts.isNotEmpty) return;
-    _householdId = householdId;
-    _cycleKey = cycleKey;
-
-    if (!isSameScope || _streamSub == null) {
+  /// Binds provider to a household and resets any prior household state cleanly.
+  void bindHousehold(String householdId, {required int paydayDay}) {
+    if (_householdId != householdId) {
+      _bindEpoch++;
+      _householdId = householdId;
+      _paydayDay = paydayDay;
+      _cycleKey = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: paydayDay);
+      _accounts = [];
+      _cycleIncomeRecords = [];
+      _lastCommitments = [];
+      _snapshot = OperatingCashSnapshot.empty;
+      _configuredMonthlyIncome = null;
+      _hasLoaded = false;
+      _error = null;
+      _generation++;
+      _inFlight = null;
+      _pendingForce = false;
+      notifyListeners();
       _listenToRealtime(householdId);
+    } else if (_paydayDay != paydayDay) {
+      onPaydayChanged(paydayDay);
     }
-    await refresh();
+  }
+
+  /// Sets active cycle key and triggers refresh if household is bound.
+  Future<void> setCycleKey(String cycleKey) async {
+    if (_cycleKey == cycleKey) return;
+    _cycleKey = cycleKey;
+    if (_householdId != null && _householdId!.isNotEmpty) {
+      await refresh(force: true);
+    }
+  }
+
+  /// Backwards-compatible init method.
+  Future<void> init(String householdId, String cycleKey, {int? paydayDay}) async {
+    final targetPayday = paydayDay ?? _paydayDay;
+    if (_householdId != householdId || _paydayDay != targetPayday) {
+      bindHousehold(householdId, paydayDay: targetPayday);
+    }
+    _cycleKey = cycleKey;
+    await ensureLoaded();
+  }
+
+  /// Ensures data is loaded for the bound household; returns immediately if already cached.
+  Future<void> ensureLoaded([String? householdId]) async {
+    if (householdId != null && householdId != _householdId) {
+      bindHousehold(householdId, paydayDay: _paydayDay);
+    }
+    if (_hasLoaded) return;
+    return refresh();
+  }
+
+  /// Refreshes accounts, commitments, and income from remote sources.
+  /// Deduplicates in-flight calls and queues forced refreshes sequentially.
+  Future<void> refresh({bool force = false}) {
+    final hid = _householdId;
+    if (hid == null || hid.isEmpty) return Future.value();
+
+    if (_inFlight != null) {
+      if (force) {
+        _pendingForce = true;
+      }
+      return _inFlight!;
+    }
+
+    final completer = Completer<void>();
+    final myFuture = completer.future;
+    _inFlight = myFuture;
+    final myEpoch = _bindEpoch;
+
+    () async {
+      try {
+        await _executeLoad();
+        while (_pendingForce && myEpoch == _bindEpoch && hid == _householdId) {
+          _pendingForce = false;
+          await _executeLoad();
+        }
+      } catch (_) {
+        // Errors are stored in _error property; never rethrow from refresh
+      } finally {
+        if (identical(_inFlight, myFuture)) {
+          _inFlight = null;
+        }
+        if (!completer.isCompleted) completer.complete();
+      }
+    }();
+
+    return _inFlight!;
+  }
+
+  Future<void> _executeLoad() async {
+    final hid = _householdId;
+    if (hid == null || hid.isEmpty) return;
+
+    final gen = ++_generation;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final curCycleKey = _cycleKey ??
+          SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: _paydayDay);
+
+      final results = await Future.wait([
+        _accountsService.getAccounts(hid),
+        _commitmentsService.getPendingCommitments(
+          householdId: hid,
+          paydayDay: _paydayDay,
+          cycleKey: curCycleKey,
+        ),
+        _fetchIncome(hid, curCycleKey),
+      ]);
+
+      if (gen != _generation || hid != _householdId) {
+        return; // Stale response discarded
+      }
+
+      final fetchedAccounts = results[0] as List<Account>;
+      final fetchedCommitments = results[1] as List<PendingCommitment>;
+      final incomeData = results[2] as ({List<IncomeRecord> records, double totalIncome, double? configured});
+
+      if (gen != _generation || hid != _householdId) {
+        return; // Stale response discarded
+      }
+
+      _configuredMonthlyIncome = incomeData.configured ?? _configuredMonthlyIncome;
+      _accounts = fetchedAccounts;
+      _lastCommitments = fetchedCommitments;
+      _cycleIncomeRecords = incomeData.records;
+
+      _publishSnapshot(
+        householdId: hid,
+        cycleKey: curCycleKey,
+        accounts: fetchedAccounts,
+        commitments: fetchedCommitments,
+        cycleIncomeHalalas: OperatingCashCalculator.toHalalas(incomeData.totalIncome),
+      );
+
+      _hasLoaded = true;
+      _error = null;
+    } catch (e) {
+      if (gen == _generation && hid == _householdId) {
+        _error = e.toString();
+      }
+    } finally {
+      if (gen == _generation && hid == _householdId) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<({List<IncomeRecord> records, double totalIncome, double? configured})> _fetchIncome(
+      String hid, String curCycleKey) async {
+    List<IncomeRecord> records = [];
+    try {
+      records = await _incomeSource.getCycleIncome(hid, curCycleKey);
+    } catch (_) {}
+
+    double sum = records.fold<double>(0.0, (s, r) => s + r.netAmount);
+    double? configured;
+    if (sum <= 0) {
+      try {
+        configured = await _incomeSource.getHouseholdConfiguredIncome(hid);
+        sum = configured;
+      } catch (_) {
+        sum = 0.0;
+      }
+    }
+    return (records: records, totalIncome: sum, configured: configured);
+  }
+
+  /// Handles household payday changes by recomputing the active cycle key and refreshing.
+  Future<void> onPaydayChanged(int paydayDay) async {
+    _paydayDay = paydayDay;
+    _cycleKey = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: paydayDay);
+    if (_householdId != null && _householdId!.isNotEmpty) {
+      await refresh(force: true);
+    }
   }
 
   void _listenToRealtime(String householdId) {
     _streamSub?.cancel();
-    _streamSub = _service.streamAccounts(householdId).listen(
+    _streamSub = _accountsService.streamAccounts(householdId).listen(
       (list) {
-        _accounts = list;
-        _hasLoaded = true;
-        _error = null;
-        notifyListeners();
+        if (_householdId != householdId) return;
+        refresh(force: true);
       },
       onError: (err) {
+        if (_householdId != householdId) return;
         _error = err.toString();
         notifyListeners();
       },
@@ -85,21 +305,25 @@ class AccountProvider extends ChangeNotifier {
     if (idx != -1) {
       final updated = _accounts[idx].copyWith(balance: newBalance);
       _accounts = List<Account>.from(_accounts)..[idx] = updated;
+
+      _publishSnapshot(
+        householdId: _householdId ?? '',
+        cycleKey: _cycleKey ?? '',
+        accounts: _accounts,
+        commitments: _lastCommitments,
+        cycleIncomeHalalas: _snapshot.cycleIncomeHalalas,
+      );
       notifyListeners();
     }
   }
 
   /// Deduct an expense from the given account (or default operating pool account).
-  /// Updates local state optimistically and optionally persists to remote database
-  /// via [AccountService.updateBalance] when [persistToRemote] is true.
+  /// Optimistic update only: Realtime CDC reconciles server-side balance changes.
   Future<void> deductExpense({
     String? accountId,
     required double amount,
     String? nafaqahClass,
-    bool persistToRemote = false,
   }) async {
-    // Both wife_personal (charged to allowance) and wife_reimbursable (paid from wife's own funds)
-    // are isolated from the household/husband's operating cash pool (Rule 02.3).
     if (nafaqahClass == 'wife_personal' ||
         nafaqahClass == 'wife_reimbursable' ||
         amount <= 0 ||
@@ -115,86 +339,92 @@ class AccountProvider extends ChangeNotifier {
         _accounts.where((a) => !a.isArchived).firstOrNull;
 
     if (target != null) {
-      final newBal = (target.balance - amount) >= 0 ? (target.balance - amount) : 0.0;
+      final newBal = target.balance - amount;
       optimisticUpdateBalance(target.id, newBal);
-      if (persistToRemote) {
-        try {
-          await _service.updateBalance(target.id, newBal);
-        } catch (e) {
-          debugPrint('[AccountProvider] deductExpense updateBalance error: $e');
-        }
-      }
-    }
-  }
-
-  /// Full refresh of accounts and cycle income from database.
-  Future<void> refresh() async {
-    final hid = _householdId;
-    if (hid == null || hid.isEmpty) return;
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      try {
-        await _service.reconcileUnlinkedTransactions(hid);
-      } catch (_) {}
-
-      final accFuture = _service.getAccounts(hid);
-      final incFuture = _cycleKey != null && _cycleKey!.isNotEmpty
-          ? _service.getCycleIncome(hid, _cycleKey!)
-          : Future.value(<IncomeRecord>[]);
-      final cfgIncFuture = _service.getHouseholdConfiguredIncome(hid);
-
-      final results = await Future.wait([accFuture, incFuture, cfgIncFuture]);
-      _accounts = results[0] as List<Account>;
-      _cycleIncomeRecords = results[1] as List<IncomeRecord>;
-      _configuredMonthlyIncome = results[2] as double;
-      _hasLoaded = true;
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
   /// Clean teardown on sign-out or household switch.
   void reset() {
+    _bindEpoch++;
     _streamSub?.cancel();
     _streamSub = null;
     _householdId = null;
     _cycleKey = null;
     _accounts = [];
     _cycleIncomeRecords = [];
+    _lastCommitments = [];
+    _snapshot = OperatingCashSnapshot.empty;
     _configuredMonthlyIncome = null;
     _isLoading = false;
     _hasLoaded = false;
     _error = null;
+    _generation++;
+    _inFlight = null;
+    _pendingForce = false;
     notifyListeners();
   }
 
   @visibleForTesting
-  void setAccountsForTesting(List<Account> accounts, {String? householdId, String? cycleKey}) {
+  void setAccountsForTesting(
+    List<Account> accounts, {
+    String? householdId,
+    String? cycleKey,
+    List<PendingCommitment>? commitments,
+    int? cycleIncomeHalalas,
+  }) {
     _accounts = List.from(accounts);
-    _householdId = householdId;
+    if (householdId != null) _householdId = householdId;
     if (cycleKey != null) _cycleKey = cycleKey;
+    _lastCommitments = commitments ?? _lastCommitments;
     _hasLoaded = true;
+
+    final hid = _householdId ?? 'test-hh';
+    final cKey = _cycleKey ?? '2026-11';
+    final income = cycleIncomeHalalas ??
+        OperatingCashCalculator.toHalalas(_calculateTestingIncome());
+
+    _publishSnapshot(
+      householdId: hid,
+      cycleKey: cKey,
+      accounts: _accounts,
+      commitments: _lastCommitments,
+      cycleIncomeHalalas: income,
+    );
     notifyListeners();
   }
 
   @visibleForTesting
   void setCycleIncomeForTesting(List<IncomeRecord> records, {String? cycleKey}) {
     _cycleIncomeRecords = List.from(records);
-    _cycleKey = cycleKey;
+    if (cycleKey != null) _cycleKey = cycleKey;
+    _recomputeTestingSnapshot();
     notifyListeners();
   }
 
   @visibleForTesting
   void setConfiguredMonthlyIncomeForTesting(double income) {
     _configuredMonthlyIncome = income;
+    _recomputeTestingSnapshot();
     notifyListeners();
+  }
+
+  double _calculateTestingIncome() {
+    final sum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
+    if (sum > 0) return sum;
+    return _configuredMonthlyIncome ?? 0.0;
+  }
+
+  void _recomputeTestingSnapshot() {
+    final hid = _householdId ?? 'test-hh';
+    final cKey = _cycleKey ?? '2026-11';
+    _publishSnapshot(
+      householdId: hid,
+      cycleKey: cKey,
+      accounts: _accounts,
+      commitments: _lastCommitments,
+      cycleIncomeHalalas: OperatingCashCalculator.toHalalas(_calculateTestingIncome()),
+    );
   }
 
   @override

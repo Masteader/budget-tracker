@@ -1,0 +1,4 @@
+# Claude Opus 5.5 Auditor Engine Dependencies
+# Install: pip install -r scripts/requirements-audit.txt
+anthropic>=0.40.0
+

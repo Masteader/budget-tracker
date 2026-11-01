@@ -6,6 +6,7 @@ import '../../core/widgets/three_d_surface_card.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/household_dues.dart';
 import '../../models/models.dart';
+import '../../models/operating_cash.dart';
 import '../../models/payday_outlook.dart';
 import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
@@ -40,8 +41,13 @@ class BudgetHeroCard extends StatelessWidget {
   /// Opens or scrolls to the commitments section.
   final VoidCallback? onCommitmentsTap;
 
+  /// Optional single-source-of-truth snapshot from AccountProvider.
+  final OperatingCashSnapshot? snapshot;
+
   /// Above this text scale the stat tiles stack instead of truncating (UX-14).
   static const double stackTilesAboveTextScale = 1.3;
+
+  final int paydayDay;
 
   const BudgetHeroCard({
     super.key,
@@ -54,6 +60,8 @@ class BudgetHeroCard extends StatelessWidget {
     this.pendingCommitments,
     this.onCommitmentsTap,
     this.now,
+    this.snapshot,
+    this.paydayDay = SalaryCycleService.defaultPaydayDay,
   });
 
   /// The cycle the hero describes, as calendar dates (Riyadh).
@@ -66,7 +74,7 @@ class BudgetHeroCard extends StatelessWidget {
         return (DateTime.utc(start.year, start.month, start.day), DateTime.utc(end.year, end.month, end.day));
       }
     }
-    final current = SalaryCycleService.currentCycle(now: now);
+    final current = SalaryCycleService.currentCycle(now: now, paydayDay: paydayDay);
     return (current.start, current.end);
   }
 
@@ -75,18 +83,23 @@ class BudgetHeroCard extends StatelessWidget {
     final isDark = context.isDark;
     final today = SalaryCycleService.riyadhToday(now: now);
     final (start, end) = _cycleDates();
+    final s = snapshot;
+    final effectiveOperatingCash = operatingCash ?? s?.operatingCash;
+    final effectiveCommitments = pendingCommitments ?? s?.pendingCommitments;
+    final effectiveMonthlyIncome = monthlyIncome ?? ((s != null && s.cycleIncome > 0) ? s.cycleIncome : null);
+
     final outlook = PaydayOutlook.compute(
       budgets: budgets,
-      monthlyIncome: monthlyIncome,
-      operatingCash: operatingCash,
-      pendingCommitments: pendingCommitments,
+      monthlyIncome: effectiveMonthlyIncome,
+      operatingCash: effectiveOperatingCash,
+      pendingCommitments: 0,
       today: today,
       cycleStart: start,
       cycleEnd: end,
     );
 
     // The payday badge is about the running cycle: 0 on payday itself.
-    final running = SalaryCycleService.currentCycle(now: now);
+    final running = SalaryCycleService.currentCycle(now: now, paydayDay: paydayDay);
     final daysUntilPayday = today == running.start ? 0 : running.end.difference(today).inDays + 1;
 
     final fmt = NumberFormat('#,##0.00', 'en_US');
@@ -232,11 +245,11 @@ class BudgetHeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(baseLine, style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                    if (pendingCommitments != null && pendingCommitments! > 0) ...[
+                    if (effectiveCommitments != null && effectiveCommitments > 0) ...[
                       const SizedBox(height: 6),
                       _HeroCommitmentsTip(
-                        actualAvailable: outlook.left - pendingCommitments!,
-                        commitmentsAmount: pendingCommitments!,
+                        actualAvailable: effectiveOperatingCash ?? (outlook.left - effectiveCommitments),
+                        commitmentsAmount: effectiveCommitments,
                         isDark: isDark,
                         onTap: onCommitmentsTap,
                       ),
@@ -478,7 +491,7 @@ class _DialGauge3D extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '$daysRemaining d',
+                  context.trArgs('dial_days_short', {'days': daysRemaining.toString()}),
                   style: GoogleFonts.outfit(
                     fontSize: 8,
                     fontWeight: FontWeight.w700,
@@ -660,13 +673,13 @@ class _HeroCommitmentsTip extends StatelessWidget {
           });
 
     final Color badgeBg = isDeficit
-        ? Colors.redAccent.withValues(alpha: 0.12)
+        ? context.dangerColor.withValues(alpha: 0.12)
         : (isDark ? VelvetBurgundyColors.surfaceDark : context.chipBg);
     final Color borderColor = isDeficit
-        ? Colors.redAccent.withValues(alpha: 0.35)
+        ? context.dangerColor.withValues(alpha: 0.35)
         : (isDark ? VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.25) : context.borderColor);
     final Color iconColor = isDeficit
-        ? Colors.redAccent
+        ? context.dangerColor
         : (isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight);
 
     return InkWell(
@@ -695,7 +708,7 @@ class _HeroCommitmentsTip extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
-                  color: isDeficit ? Colors.redAccent : context.textPrimary,
+                  color: isDeficit ? context.dangerColor : context.textPrimary,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -704,9 +717,9 @@ class _HeroCommitmentsTip extends StatelessWidget {
             if (onTap != null) ...[
               const SizedBox(width: 4),
               Icon(
-                Icons.arrow_forward_ios_rounded,
+                context.isRtl ? Icons.arrow_back_ios_rounded : Icons.arrow_forward_ios_rounded,
                 size: 9,
-                color: isDeficit ? Colors.redAccent : context.textSecondary,
+                color: isDeficit ? context.dangerColor : context.textSecondary,
               ),
             ],
           ],

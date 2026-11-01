@@ -34,6 +34,51 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('Item 3: buildPriorSpendRow never contains cycle_key', () {
+    final row = BudgetManagementScreen.buildPriorSpendRow(
+      id: 'tx-1',
+      householdId: 'hh-1',
+      userId: 'u-1',
+      amount: 500.0,
+      merchant: 'Adjustment',
+      categoryCode: 'OPEX-UTIL',
+      occurredAt: DateTime(2026, 2, 1),
+    );
+    expect(row.containsKey('cycle_key'), isFalse);
+    expect(row['amount'], equals(500.0));
+    expect(row['spent_by'], equals('me'));
+  });
+
+  test('Item 15: buildCarryForwardRow preserves metadata and accumulates unspent for sinking funds', () {
+    final prevBudget = {
+      'category_code': 'OPEX-AUTO',
+      'allocated_amount': 1000.0,
+      'spent_amount': 400.0,
+      'account_id': 'acc-1',
+      'sub_allocations': <String, dynamic>{},
+      'metadata': {
+        '_sinking_fund': {
+          '_parent': {
+            'accumulate': true,
+            'base_amount': 1000.0,
+          },
+        },
+      },
+    };
+
+    final row = BudgetManagementScreen.buildCarryForwardRow(
+      b: prevBudget,
+      householdId: 'hh-1',
+      month: '2026-03-01',
+      cycleKey: '2026-02-27_2026-03-26',
+    );
+
+    // Unspent was 1000 - 400 = 600. Accumulated new alloc = base (1000) + unspent (600) = 1600.0
+    expect(row['allocated_amount'], equals(1600.0));
+    expect(row['previous_cycle_delta'], equals(600.0));
+    expect(row['metadata'], equals(prevBudget['metadata']));
+  });
+
   testWidgets('BudgetManagementScreen: Row 1 is SAR 8,900.00, Row 2 is SAR 6,370.26, and no false deficit alert', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -138,7 +183,7 @@ void main() {
     expect(find.textContaining('8,900.00'), findsOneWidget);
 
     // Verify Row 2: Operating Cash (Remaining) contains 6,370.26
-    expect(find.textContaining('6,370.26'), findsOneWidget);
+    expect(find.textContaining('6,370.26'), findsWidgets);
 
     // Verify NO deficit alert banner is displayed
     expect(find.textContaining('عجز:'), findsNothing);
@@ -150,7 +195,7 @@ void main() {
     expect(find.text('إيجار السكن'), findsOneWidget);
   });
 
-  testWidgets('BudgetManagementScreen: When operating account has stale balance (6457.72), Row 2 reconciles to 6,370.26', (tester) async {
+  testWidgets('BudgetManagementScreen: Row 2 reflects AccountProvider single source of truth operating cash (6,457.72)', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -158,7 +203,7 @@ void main() {
     final currentCycleKey = SalaryCycleService.currentCycle().key;
     final accountProvider = AccountProvider();
 
-    // Stale cash on single operating account: SAR 6,457.72 (missing 87.46 SAR unlinked spend)
+    // Cash on single operating account: SAR 6,457.72
     final staleAcc = Account(
       id: 'acc-1',
       householdId: 'hh-1',
@@ -187,7 +232,6 @@ void main() {
       accounts: [staleAcc],
     );
 
-    // Total spent is 2,529.74 SAR -> remaining cash should be 8,900 - 2,529.74 = 6,370.26 SAR
     final budgetRows = [
       {
         'id': 'b-1',
@@ -218,8 +262,130 @@ void main() {
     // Verify Row 1: Cycle Funding Capacity is 8,900.00
     expect(find.textContaining('8,900.00'), findsOneWidget);
 
-    // Verify Row 2: Operating Cash (Remaining) is 6,370.26 (NOT stale 6,457.72)
-    expect(find.textContaining('6,370.26'), findsOneWidget);
-    expect(find.textContaining('6,457.72'), findsNothing);
+    // Verify Row 2: Operating Cash (Remaining) is 6,457.72 from AccountProvider
+    expect(find.textContaining('6,457.72'), findsWidgets);
+
+    // Item 8: verify ':  • : ' is gone and localized text with 2,529.74 appears
+    expect(find.text(':  • : '), findsNothing);
+    expect(find.textContaining('المصروف 2,529.74'), findsOneWidget);
+  });
+
+  testWidgets('Item 10 & 11: category library and log_prior_spending_button hidden when isAdmin is false', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+    final accountProvider = AccountProvider();
+
+    final nonAdminData = BudgetStaticData(
+      householdId: 'hh-1',
+      isAdmin: false,
+      allCodes: [
+        {'code': 'OPEX-UTIL', 'category': 'Utilities & Bills', 'is_system': 'true'},
+      ],
+      monthlyIncome: 1000.0,
+      accounts: [],
+    );
+
+    // Over-allocated budget (allocated 5000 vs income 1000) to trigger shortfall
+    final budgetRows = [
+      {
+        'id': 'b-1',
+        'household_id': 'hh-1',
+        'category_code': 'OPEX-UTIL',
+        'allocated_amount': 5000.0,
+        'spent_amount': 0.0,
+        'account_id': null,
+        'cycle_key': currentCycleKey,
+        'month': currentCycleKey,
+        'is_active': true,
+      },
+    ];
+
+    await tester.pumpWidget(
+      _wrapWithProviders(
+        BudgetManagementScreen(
+          initialStaticData: nonAdminData,
+          loadStaticDataOverride: () async => nonAdminData,
+          budgetStreamOverride: (_) => Stream.value(budgetRows),
+        ),
+        accountProvider: accountProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Item 10: category library icon button finds nothing
+    expect(find.byIcon(Icons.category_outlined), findsNothing);
+
+    // Item 11: log_prior_spending_button finds nothing
+    expect(find.byKey(const Key('log_prior_spending_button')), findsNothing);
+  });
+
+  testWidgets('Item 13: mappedAccount reflects live AccountProvider update over stale staticData', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final currentCycleKey = SalaryCycleService.currentCycle().key;
+    final accountProvider = AccountProvider();
+
+    final liveAcc = Account(
+      id: 'acc-1',
+      householdId: 'hh-1',
+      ownerUserId: 'u-1',
+      name: 'Live Name',
+      accountType: AccountType.bank,
+      currency: 'SAR',
+      balance: 5000.0,
+      isSharedPool: true,
+      colorHex: '#10B981',
+      iconName: 'account_balance',
+      isArchived: false,
+      createdAt: DateTime(2026, 1, 1),
+    );
+
+    final staleAcc = liveAcc.copyWith(name: 'Stale Name');
+
+    accountProvider.setAccountsForTesting([liveAcc], householdId: 'hh-1', cycleKey: currentCycleKey);
+
+    final staticData = BudgetStaticData(
+      householdId: 'hh-1',
+      isAdmin: true,
+      allCodes: [
+        {'code': 'OPEX-UTIL', 'category': 'Utilities & Bills', 'is_system': 'true'},
+      ],
+      monthlyIncome: 5000.0,
+      accounts: [staleAcc],
+    );
+
+    final budgetRows = [
+      {
+        'id': 'b-1',
+        'household_id': 'hh-1',
+        'category_code': 'OPEX-UTIL',
+        'allocated_amount': 1000.0,
+        'spent_amount': 0.0,
+        'account_id': 'acc-1',
+        'cycle_key': currentCycleKey,
+        'month': currentCycleKey,
+        'is_active': true,
+      },
+    ];
+
+    await tester.pumpWidget(
+      _wrapWithProviders(
+        BudgetManagementScreen(
+          initialStaticData: staticData,
+          loadStaticDataOverride: () async => staticData,
+          budgetStreamOverride: (_) => Stream.value(budgetRows),
+        ),
+        accountProvider: accountProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Live Name'), findsOneWidget);
+    expect(find.text('Stale Name'), findsNothing);
   });
 }

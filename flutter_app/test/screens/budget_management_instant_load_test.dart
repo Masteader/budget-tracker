@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:budget_tracker/models/models.dart';
+import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
 import 'package:budget_tracker/providers/household_role_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
@@ -60,6 +61,7 @@ Widget _wrapWithProviders(
 }) {
   return MultiProvider(
     providers: [
+      ChangeNotifierProvider<AccountProvider>(create: (_) => AccountProvider()),
       ChangeNotifierProvider<TransactionProvider>(create: (_) => TransactionProvider()),
       ChangeNotifierProvider<BudgetProvider>(create: (_) => budgetProvider ?? BudgetProvider()),
       ChangeNotifierProvider<HouseholdRoleProvider>(create: (_) => roleProvider ?? TestHouseholdRoleProvider()),

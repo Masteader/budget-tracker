@@ -34,3 +34,9 @@ Thumbs.db
 # Review & Audit Artifacts
 docs/review/PR_AUDIT_BUNDLE.md
 docs/review/AUDIT_FEEDBACK.md
+docs/review/OPUS_PLAN.md
+docs/review/MASTER_CODEBASE_AUDIT.md
+
+# Audit environment (API keys)
+.env.audit
+docs/review/audit_spend.json

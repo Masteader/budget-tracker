@@ -13,6 +13,7 @@ import '../../models/household_dues.dart';
 import '../../models/household_setup.dart';
 import '../../models/models.dart';
 import '../../models/nafaqah.dart';
+import '../../models/budget_reconcile.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/installment_provider.dart';
@@ -53,8 +54,6 @@ import '../analytics/income_spending_report_screen.dart';
 import '../../widgets/accounts/record_income_sheet.dart';
 import 'transaction_feed_screen.dart';
 import '../accounts/accounts_overview_screen.dart';
-import '../../services/account_service.dart';
-import '../../models/account.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -234,68 +233,19 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     return hid;
   }
 
+  int get _paydayDay => _setup?.paydayDay ?? SalaryCycleService.defaultPaydayDay;
+
   Future<void> _loadDashboardData(String hid) async {
     unawaited(_fetchCycles(hid));
-    await Future.wait([
-      _fetchSetup(hid),
-      _fetchAccountsCount(hid),
-      _fetchCycleIncome(hid, _currentCycleKey),
-    ]);
-  }
-
-  Future<void> _fetchCycleIncome(String hid, String cycleKey) async {
-    try {
-      final records = await AccountService.instance.getCycleIncome(hid, cycleKey);
-      double total = records.fold<double>(0.0, (sum, r) => sum + r.netAmount);
-
-      // If no explicit income records exist yet for this cycle, compute starting capacity
-      // from operating accounts + real cycle spending, or household setup monthly income,
-      // so the dashboard income benchmark never drops or collapses to depleted balance.
-      if (total <= 0.0) {
-        final accounts = await AccountService.instance.getAccounts(hid);
-        final liveOperatingCash = accounts
-            .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-            .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
-
-        double cycleSpend = 0.0;
-        try {
-          final txRes = await supabase
-              .from('transactions')
-              .select('amount, is_settlement, nafaqah_class')
-              .eq('household_id', hid)
-              .eq('cycle_key', cycleKey);
-          for (final t in (txRes as List)) {
-            if (t['is_settlement'] == true) continue;
-            if (t['nafaqah_class'] == 'wife_personal') continue;
-            cycleSpend += (t['amount'] as num?)?.toDouble() ?? 0.0;
-          }
-        } catch (_) {}
-
-        final startingCash = liveOperatingCash + cycleSpend;
-        final setupIncome = _setup?.monthlyIncome ?? 0.0;
-        total = setupIncome > 0 ? setupIncome : (startingCash > 0 ? startingCash : 0.0);
-      }
-
-      if (mounted) {
-        setState(() => _cycleIncome = total > 0 ? total : null);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _fetchAccountsCount(String hid) async {
-    try {
-      await AccountService.instance.reconcileUnlinkedTransactions(hid);
-      final accounts = await AccountService.instance.getAccounts(hid);
-      if (mounted) {
-        final cash = accounts
-            .where((a) => !a.isArchived && a.accountType.isOperatingPool)
-            .fold<double>(0.0, (s, a) => s + (a.balance > 0 ? a.balance : 0.0));
-        setState(() {
-          _accountsCount = accounts.length;
-          _operatingCash = cash > 0 ? cash : null;
-        });
-      }
-    } catch (_) {}
+    final setup = await _fetchSetup(hid);
+    final payday = setup?.paydayDay ?? SalaryCycleService.defaultPaydayDay;
+    if (mounted) {
+      try {
+        context.read<AccountProvider>().bindHousehold(hid, paydayDay: payday);
+        context.read<InstallmentProvider>().init(hid);
+        context.read<BudgetProvider>().init(hid);
+      } catch (_) {}
+    }
   }
 
   Future<void> _fetchCycles(String hid) async {
@@ -332,7 +282,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   String get _currentCycleKey {
     if (_selectedCycle != null) return _selectedCycle!.cycleKey;
-    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
+    return SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: _paydayDay);
   }
 
   /// The cycle dates as Riyadh calendar dates.
@@ -345,7 +295,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         return (DateTime.utc(start.year, start.month, start.day), DateTime.utc(end.year, end.month, end.day));
       }
     }
-    final current = SalaryCycleService.currentCycle();
+    final current = SalaryCycleService.currentCycle(paydayDay: _paydayDay);
     return (current.start, current.end);
   }
 
@@ -372,26 +322,12 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     }
     if (txProvider == null || txProvider.isLoading) return list;
     final (start, end) = _cycleDates();
-    return list.map((b) {
-      final realSpent = txProvider.cycleSpendForCategory(
-        b.categoryCode,
-        _currentCycleKey,
-        cycleStart: start,
-        cycleEnd: end,
-      );
-      return b.copyWith(
-        spentAmount: realSpent,
-        remainingAmount: b.allocatedAmount - realSpent,
-      );
-    }).toList();
+    return reconcileCycleBudgets(list, txProvider, _currentCycleKey, start, end);
   }
 
   final GlobalKey _categoriesKey = GlobalKey();
   final GlobalKey _balancesKey = GlobalKey();
   final GlobalKey _commitmentsKey = GlobalKey();
-  int? _accountsCount;
-  double? _operatingCash;
-  double? _cycleIncome;
 
   /// First-run checklist data (UX-02): payday, income, members. The income is
   /// also the hero's base (UX-07); null until loaded.
@@ -429,9 +365,10 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     }
   }
 
-  Future<void> _fetchSetup(String hid) async {
+  Future<HouseholdSetupData?> _fetchSetup(String hid) async {
     final data = await HouseholdSetupPrefs.load(hid);
     if (mounted) setState(() => _setup = data);
+    return data;
   }
 
   /// The top of the dashboard: the guided setup for a household without
@@ -466,22 +403,24 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
     final installmentPlans = context.watch<InstallmentProvider>().plans;
     final activePlans = installmentPlans.where((p) => !p.isCompleted).toList();
     final today = SalaryCycleService.riyadhToday();
-    final cycleEnd = SalaryCycleService.currentCycle().end;
+    final cycleEnd = SalaryCycleService.currentCycle(paydayDay: _paydayDay).end;
     final totalInstallmentsDues = activePlans.fold<double>(0.0, (sum, p) {
       final due = p.dueDates(today: today, max: 12).where((d) => !d.isBefore(today) && !d.isAfter(cycleEnd));
       return sum + p.installmentAmount * due.length;
     });
 
-    final totalCommitments = (billsSummary?.reservedAmount != null && billsSummary!.reservedAmount > 0)
+    final fallbackCommitments = (billsSummary?.reservedAmount != null && billsSummary!.reservedAmount > 0)
         ? (billsSummary.reservedAmount + totalInstallmentsDues)
         : (totalUnpaidBills + totalInstallmentsDues);
 
     final accountProvider = context.watch<AccountProvider>();
-    final liveOperatingCash = accountProvider.hasLoaded ? accountProvider.operatingCash : _operatingCash;
-    final totalAccountsCount = accountProvider.hasLoaded ? accountProvider.accounts.length : _accountsCount;
-    final effectiveIncome = (accountProvider.cycleIncomeTotal > 0)
-        ? accountProvider.cycleIncomeTotal
-        : (_cycleIncome ?? setup?.monthlyIncome);
+    final snapshot = accountProvider.snapshot;
+    final liveOperatingCash = accountProvider.hasLoaded ? snapshot.operatingCash : null;
+    final totalAccountsCount = accountProvider.hasLoaded ? snapshot.accountsCount : accountProvider.accounts.length;
+    final effectiveIncome = (snapshot.cycleIncome > 0)
+        ? snapshot.cycleIncome
+        : setup?.monthlyIncome;
+    final totalCommitments = accountProvider.hasLoaded ? snapshot.pendingCommitments : fallbackCommitments;
 
     return [
       BudgetHeroCard(
@@ -493,6 +432,8 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
         onDueTap: _scrollToBalances,
         pendingCommitments: totalCommitments,
         onCommitmentsTap: _scrollToCommitments,
+        snapshot: accountProvider.hasLoaded ? snapshot : null,
+        paydayDay: _paydayDay,
       ),
       // UX-08: overspent categories right under the hero.
       OverBudgetAlerts(budgets: budgets, onShowAll: _scrollToCategories),
@@ -583,15 +524,6 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
           );
         }
         final hid = snap.data!;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            try {
-              context.read<InstallmentProvider>().init(hid);
-              context.read<BudgetProvider>().init(hid);
-              context.read<AccountProvider>().init(hid, _currentCycleKey);
-            } catch (_) {}
-          }
-        });
         return Scaffold(
           body: SafeArea(
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -610,7 +542,6 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                         context.read<RecurringBillsProvider>().fetchBills(),
                         context.read<AccountProvider>().refresh(),
                         _fetchSetup(hid),
-                        _fetchAccountsCount(hid),
                       ]);
                     } catch (_) {}
                   },
@@ -651,11 +582,11 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                           hasNext: _cycles.isNotEmpty && _currentCycleIndex > 0,
                           onPrevious: () {
                             setState(() => _currentCycleIndex++);
-                            _fetchCycleIncome(hid, _currentCycleKey);
+                            context.read<AccountProvider>().setCycleKey(_currentCycleKey);
                           },
                           onNext: () {
                             setState(() => _currentCycleIndex--);
-                            _fetchCycleIncome(hid, _currentCycleKey);
+                            context.read<AccountProvider>().setCycleKey(_currentCycleKey);
                           },
                         ),
                       ),
@@ -882,7 +813,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                 ),
               ),
               child: Text(
-                context.isArabic ? 'ذكي' : 'Smart',
+                context.tr('app_title_badge'),
                 style: GoogleFonts.outfit(
                   color: VelvetBurgundyColors.roseGold,
                   fontSize: 9.5,

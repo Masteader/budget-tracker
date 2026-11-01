@@ -63,6 +63,11 @@ class TransactionProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Transaction> get transactions => _transactions;
+
+  @visibleForTesting
+  void setTransactionsForTesting(List<Transaction> txs) {
+    _transactions = txs;
+  }
   List<Transaction> _filteredTransactions = [];
 
   String get searchQuery => _searchQuery;
@@ -376,7 +381,7 @@ class TransactionProvider extends ChangeNotifier {
     DateTime? cycleEnd,
   }) {
     double total = 0.0;
-    for (final t in _transactions) {
+    for (final t in transactions) {
       if (t.isSettlement) continue;
       if (t.nafaqahClass == 'wife_personal') continue;
       if (t.categoryCode != categoryCode) continue;
@@ -399,7 +404,7 @@ class TransactionProvider extends ChangeNotifier {
     DateTime? cycleEnd,
   }) {
     double total = 0.0;
-    for (final t in _transactions) {
+    for (final t in transactions) {
       if (t.isSettlement) continue;
       if (t.nafaqahClass == 'wife_personal') continue;
 

@@ -332,6 +332,7 @@ class StoreAttributionCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       nafaqahBadgeText!,
+                      key: const ValueKey('nafaqah_badge_text'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
