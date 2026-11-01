@@ -1,0 +1,64 @@
+# Sensitive Paths and Operations
+
+This document defines the strict sensitivity boundary for the **Budget Tracker** repository.
+
+Any plan or pull request that touches these paths or performs these operations is classified as **SENSITIVE** automatically.
+
+---
+
+## 1. Automatic Sensitive Paths
+
+The following paths in the repository are classified as sensitive by default:
+
+### Database & Migrations
+- `supabase/migrations/**` (All schema, constraints, triggers, and functions)
+- `supabase/tests/**` (Database security and regression tests)
+
+### Authentication, Security & Permissions
+- `ai_service/household_permissions.py` (Access control, admin/co-admin checks, account debit guards)
+- `flutter_app/lib/providers/household_role_provider.dart` (Client-side role and permission state)
+- `flutter_app/lib/screens/auth/**` (Login, OTP, password updates, account creation)
+- `flutter_app/lib/services/api/` (Preview tokens, token authentication)
+
+### Balances, Money & Ledger Operations
+- `ai_service/supabase_client.py` (Account balance mutations, debit assertions, default debitable account resolution)
+- `ai_service/chat_parser.py` (Transaction commit payloads, expense ledger recording)
+- `ai_service/receipt_scanner.py` (OCR expense commit payloads, ledger recording)
+- `ai_service/salary_cycle.py` (Saudi salary cycle calculation, payday bounds)
+- `flutter_app/lib/models/operating_cash.dart` (Operating cash & liquid balance calculations)
+- `flutter_app/lib/models/payday_outlook.dart` (Payday outlook, safe daily spend, afterCommitments math)
+- `flutter_app/lib/services/account_service.dart` (Balance ledger queries, reconciliation)
+- `flutter_app/lib/services/commitments_service.dart` (Pending recurring bills & installment obligations)
+- `flutter_app/lib/services/salary_cycle_service.dart` (Saudi payday calendar cycle calculation)
+- `flutter_app/lib/providers/account_provider.dart` (Central account balances and commitments state)
+- `flutter_app/lib/widgets/dashboard/budget_hero_card.dart` (Primary financial HUD)
+- `flutter_app/lib/screens/home/budget_management_screen.dart` (Budget allocations, funding, and prior spend)
+
+### Islamic Compliance & Nafaqah
+- `ai_service/nafaqah_service.py` (Wife allowance, personal spend, reimbursement ledger)
+- `flutter_app/lib/models/nafaqah_account.dart` (Wife account debiting isolation)
+- `flutter_app/lib/widgets/settlement/` (Spousal reimbursement & roommate settlement)
+
+### Secrets & Deployment
+- `.env*` (Environment files and configuration templates)
+- `railway.json`, `Dockerfile`, deploy scripts
+
+---
+
+## 2. Sensitive Operational Actions
+
+Regardless of file path, an action is **SENSITIVE** if it:
+1. **Moves money or alters balances:** Modifies accounts, budgets, commitments, debt simplification, or expense ledger math.
+2. **Changes permissions:** Alters user roles, admin privileges, co-admin grants, or membership states.
+3. **Touches security policies:** Modifies PostgreSQL Row Level Security (RLS) policies, JWT validation, or API signatures.
+4. **Deletes data:** Performs destructive operations, drops columns/tables, or archives active accounts.
+5. **Touches secrets:** Deals with API credentials, service-role keys, tokens, or encryption keys.
+
+---
+
+## 3. Governance Invariants
+
+- **Unidirectional Escalation:** The orchestrator or reviewer may raise a task to sensitive, but **never lower it**. When in doubt, it is sensitive.
+- **Plan Requirement:** Every implementation plan must state upfront:
+  > **Sensitive:** yes or no, because [exact justification].
+- **Audit Mandate:** Sensitive tasks mandate an additional **Round 3 review by Fable (effort high)** following Rounds 1 & 2 by Opus 5.5 high.

@@ -1,135 +1,74 @@
 ---
 name: opus-audit-loop
-description: "Use when implementing any task. Orchestrates the full development loop: Claude Opus 5.5 plans → Antigravity implements → Opus reviews → push to main on approval."
+description: "Use when orchestrating any task. Manages the Claude Opus 5.5 Orchestrator workflow: plans and delegates to subagents (Opus 5.5 high / Sonnet high), enforces sensitivity via docs/sensitive.md, multi-round fresh subagent reviews (Round 1 spec fidelity, Round 2 adversarial break, Round 3 Fable for sensitive), and asks user first on external effects."
 ---
 
-# Opus Audit Loop — Automated Development Pipeline
+# Opus Multi-Agent Orchestration & Audit Loop
 
-This skill governs the automated development loop between **Claude Opus 5.5** (External Architect & Auditor via Anthropic API) and **Antigravity** (Gemini 3.8 Flash High — Local Implementer).
+This skill governs the development and verification pipeline orchestrated by the **Claude Opus 5.5 Orchestrator** in chat, delegating all code tasks to specialized subagents.
 
-## Architecture
+## Core Hierarchy
 
 ```
 User (Product Owner)
   │
-  ├─► Claude Opus 5.5 (API)  ── Plans & Reviews
-  │     ↕
-  └─► Antigravity (Gemini)   ── Implements & Tests
-        ↕
-      GitHub main branch      ── Protected, merge on approval
+  ▼
+Orchestrator (Claude Opus 5.5 in Chat)
+  ├─► Implementation Subagent (Opus 5.5 high / Sonnet high for small non-financial)
+  │     └─► Isolated Worktree / Branch (`Workspace: 'branch'`)
+  │     └─► TDD (Tests First -> Code -> Verification Gate)
+  │
+  └─► Fresh Review Subagents (Spec & Diff only, no author rationalization)
+        ├─► Round 1: Opus 5.5 high (Specification fidelity & missing edge cases)
+        ├─► Round 2: Opus 5.5 high (Adversarial break testing: permissions, concurrency, nulls)
+        └─► Round 3: Fable high [Mandatory if Sensitive: yes] (Security, Ledger, Islamic Fintech)
 ```
 
-## The Full Loop (7 Steps)
+---
 
-### Step 1: User Requests a Task
-The user describes what they want built. Examples:
-- "Add installment payment notifications"
-- "Fix the wife reimbursement ledger calculation"
-- "Enhance the receipt OCR to handle Arabic text"
+## Operating Protocol
 
-### Step 2: Opus Creates the Plan
-Run the auditor script to get Opus's implementation plan:
+### 1. Orchestrator Duties
+- The chat assistant is the **Orchestrator**. It talks only to the user.
+- **Never implement code directly.** All implementation, code review, and plan writing are delegated to subagents.
+- Small targeted reads are permitted to understand state; subagents return conclusions and concise summaries, not file dumps.
 
-```powershell
-python scripts/claude_auditor.py --mode plan --task "USER'S TASK DESCRIPTION HERE" --verbose
-```
+### 2. Sensitivity Protocol (`docs/sensitive.md`)
+- Every plan must declare:
+  > **Sensitive: yes or no, because [exact justification].**
+- Automatic sensitive triggers:
+  - Touches paths in [`docs/sensitive.md`](../../../docs/sensitive.md) (migrations, auth, payments, RLS, financial calculations, nafaqah rules).
+  - Moves money, modifies account/ledger balances, changes permissions, deletes data, or touches secrets.
+- Invariant: Orchestrator may raise to sensitive, never lower it. When in doubt, it is sensitive.
 
-**For batch processing (50% off, 15-45 min):**
-```powershell
-python scripts/claude_auditor.py --mode plan --task "USER'S TASK DESCRIPTION HERE" --batch --verbose
-```
+### 3. Model Assignment
+- **Implementation & Planning:** Claude Opus 5.5, effort high.
+- **Small Tasks Only:** Claude Sonnet, effort high (strictly restricted to non-auth, non-financial, non-schema UI/styling or formatting). If scope grows, return to Opus.
 
-The plan is written to `docs/review/OPUS_PLAN.md`. Read it and follow it exactly.
+### 4. Parallel Work & Isolation
+- One git worktree/branch per task (`Workspace: 'branch'`).
+- Two subagents must never edit the same file concurrently.
 
-### Step 3: Antigravity Implements the Plan
-1. Create a feature branch: `git checkout -b feat/<name>`
-2. Follow the plan in `docs/review/OPUS_PLAN.md` step by step.
-3. Write tests FIRST (TDD — Rule 05).
-4. Implement the code changes.
-5. Run the full verification gate:
-   ```powershell
-   cd flutter_app && flutter analyze
-   cd flutter_app && flutter test
-   cd ai_service && .venv\Scripts\pytest -v
-   ```
-6. All checks MUST pass before proceeding.
+### 5. Multi-Round Fresh Review Pipeline
+After implementation and tests pass:
+1. **Round 1 (Opus 5.5 high):** Fresh subagent compares diff against specification. Identifies missing edge cases, unexpected omissions, or requirement deviations.
+2. **Round 2 (Opus 5.5 high):** Fresh subagent assumes bugs exist and attempts adversarial breaking: empty data, role escalation, concurrency, boundary overflows. Every claim must include reproduction steps or failing test.
+3. **Round 3 (Fable high) [For Sensitive Tasks]:** In-depth audit of ledger invariants, security boundaries, RLS policies, and Saudi/Islamic compliance.
+4. **No Repeat Round Without Real Change:** Never re-review without actual code fixes.
 
-### Step 4: Opus Reviews the Implementation
-Trigger the Opus review. Claude Opus outputs **ONLY a straight-forward prompt for Antigravity (Gemini 3.8 Flash High)** with zero human explanations:
+### 6. Supabase MCP Guardrails
+- **Read-Only on Production:** Never perform writes, schema migrations, or test fixtures against live production Supabase.
+- **Writes on Development Only:** Test and verify mutations locally or on development replicas.
+- **Reviewed Migrations:** Database changes must be checked in as timestamped migrations with test proof in `supabase/tests/`. Every new table must verify RLS.
 
-```powershell
-python scripts/claude_auditor.py --mode review --verbose
-```
+### 7. Explicit User Approval Invariants
+Always stop and ask the user first before:
+- Deploying to any environment.
+- Deletion of any data, accounts, or files.
+- Secrets or credential modifications.
+- Spending money or external API costs.
+- Any external side effect.
+- Any blocking note or architectural dispute.
 
-The verdict is written to `docs/review/AUDIT_FEEDBACK.md`.
-
-### Step 5: Antigravity Executes Fixes or Presents Green Light
-
-**If `AUDIT VERDICT: REVISE` (exit code 1):**
-- `docs/review/AUDIT_FEEDBACK.md` contains a direct `PROMPT FOR ANTIGRAVITY (GEMINI 3.8 FLASH HIGH)`.
-- Antigravity immediately executes every fix instruction, writes the tests first, re-runs analyzer & test suite.
-- Antigravity re-triggers `python scripts/claude_auditor.py --mode review --verbose`.
-- Repeat until Opus outputs `AUDIT VERDICT: APPROVED`.
-
-**If `AUDIT VERDICT: APPROVED` (exit code 0):**
-- Antigravity stops and presents the green light directly to the user in chat:
-  > *"Claude Opus 5.5 has approved all changes. All tests pass. Ready for your sign-off to push to main."*
-
-### Step 6: User Approves
-The user reviews the green light and says "Approve" or "Push".
-
-### Step 7: Push Feature Branch & Open PR
-Push the feature branch (`git push -u origin HEAD`) and open or update the PR (`gh pr create --fill`). The merge happens on GitHub after the user's sign-off.
-
-## User Controls
-
-### Choosing Real-Time vs Batch Processing
-The user can control this in the chat:
-- **"use batch"** or **"batch mode"** → Add `--batch` flag to all auditor calls.
-- **"use realtime"** or **"live mode"** → Use standard real-time API (default).
-- **"use batch for planning only"** → `--batch` only on `--mode plan`.
-
-### Running the Initial Full-Project Audit ("First Landing")
-When the user says "review the whole project" or "full audit":
-
-```powershell
-python scripts/claude_auditor.py --mode landing --batch --verbose
-```
-
-This runs 4 architectural passes (Database, Backend, Flutter, Compliance) at 50% batch discount. Results in `docs/review/MASTER_CODEBASE_AUDIT.md`.
-
-## Critical Rules
-
-1. **NEVER skip the Opus review.** Every implementation must be audited before merge.
-2. **NEVER push to main without user approval.** Opus approval alone is not sufficient.
-3. **NEVER ignore CRITICAL findings.** They must be fixed before re-review.
-4. **NEVER modify the auditor script** (`scripts/claude_auditor.py`) without user permission.
-5. **Always use `--verbose`** so the user can see token costs.
-6. **Full file contents, NOT git diff** — the review script sends complete file contents of changed files. This gives Opus better context and avoids diff-syntax token overhead.
-
-## Cost Reference
-
-| Operation | Real-Time Cost | Batch Cost (50% off) |
-|-----------|---------------|---------------------|
-| Plan creation | ~$0.15 - $0.30 | ~$0.08 - $0.15 |
-| PR review (5-10 files) | ~$0.25 - $0.40 | ~$0.12 - $0.20 |
-| Full codebase landing (4 passes) | ~$1.70 - $2.50 | ~$0.85 - $1.25 |
-
-## Error Handling
-
-- **Exit code 0:** Success (APPROVED for review, plan generated for plan).
-- **Exit code 1:** REVISE required (review found issues).
-- **Exit code 2:** Error (missing API key, missing dependencies, API failure).
-- **Exit code 3:** Hard Budget Limit Reached (exceeded $10.00 ceiling).
-
-## Strict Budget Ceiling ($10.00 Max Spend)
-
-A hard stop ceiling of **$10.00 USD** is enforced locally in `scripts/claude_auditor.py` and saved to `docs/review/audit_spend.json`:
-1. Every API call automatically records fresh input, cached reads, and output tokens.
-2. Before making any call, the script checks if `total_spent_usd >= $10.00`. If so, it aborts immediately.
-3. Check the budget balance anytime without calling the API:
-   ```powershell
-   python scripts/claude_auditor.py --spend
-   ```
-4. Warning alert is printed if cumulative spend crosses 90% ($9.00).
-
+### 8. Context Window Threshold (80% Guardrail)
+When context reaches actual 80% capacity without guessing, write a handoff file (`docs/review/HANDOFF_<session>.md`) and continue in a fresh session.

@@ -1,58 +1,49 @@
-# PR & External Opus Audit Pipeline Rules
+# PR & Multi-Agent Audit Pipeline Rules
 
-## 1. Branch Isolation & Main Protection
-- NEVER commit or merge directly to `main` locally.
-- All features, bugfixes, and audit rounds MUST be developed on a dedicated branch (`feat/<name>`, `fix/<name>`, or `audit/<name>`).
-- Merging into `main` is strictly forbidden until:
-  1. Claude Opus 5.5 issues `AUDIT VERDICT: APPROVED` in `docs/review/AUDIT_FEEDBACK.md`.
-  2. The user gives explicit sign-off ("Approve", "Proceed", "Push it").
+## 1. Orchestrator Role & Delegation Model
+- The agent in chat is the **Orchestrator (Claude Opus 5.5)**. The user communicates exclusively with the Orchestrator.
+- **Never implement directly in the main session.** The Orchestrator delegates implementation, code review, and plan writing to subagents.
+- The Orchestrator may perform small targeted file reads to verify status or context. Subagents must return actionable conclusions and concise summaries, **not raw file dumps**.
 
-## 2. Mandatory Pre-PR Verification Gate
-Before triggering the Opus audit or pushing any branch, you MUST run and pass:
-1. `cd flutter_app && flutter analyze` (Zero warnings/errors)
-2. `cd flutter_app && flutter test` (All tests passing)
-3. `cd ai_service && .venv\Scripts\pytest -v` (All backend tests passing)
+## 2. Model Selection & Work Distribution
+- **Implementation & Plans:** Claude Opus 5.5, effort high (Subagent `Model: 'pro'`).
+- **Small Tasks Only:** Claude Sonnet, effort high. Restricted to tasks with **zero** auth, money, data, or schema logic. If a small task expands in scope, it must immediately be returned to Opus.
+- **Parallel Work & Branch Isolation:** One dedicated git worktree/branch per task (`Workspace: 'branch'`). Two agents must **never** edit the same file concurrently.
+- **Order of Execution:** Tests pass first (TDD & verification gate), then review.
 
-## 3. Automated Opus Audit Pipeline
+## 3. Sensitivity Governance
+- Governed by [`docs/sensitive.md`](docs/sensitive.md). Any change touching sensitive paths is sensitive automatically: migrations, auth, payments, RLS policies, moving money, changing permissions, deleting data, or touching secrets.
+- **Unidirectional Escalation:** The Orchestrator may raise a task to sensitive, but **never lower it**. When in doubt, classify as sensitive.
+- **Mandatory Plan Declaration:** Every implementation plan must explicitly state:
+  > **Sensitive:** yes or no, because [exact justification].
 
-### Planning Phase
-- When the user provides a task, generate an implementation plan via Claude Opus:
-  ```powershell
-  python scripts/claude_auditor.py --mode plan --task "<task description>" --verbose
-  ```
-- Read and follow the plan in `docs/review/OPUS_PLAN.md`.
+## 4. Multi-Round Code Review Pipeline
+Every review round is executed by a **fresh subagent** that receives only the task specification and the git diff (not the author's internal reasoning):
+- **Round 1 (Claude Opus 5.5, effort high):** Specification fidelity & gap analysis. Does the code do what the spec says, and what edge case is missing?
+- **Round 2 (Claude Opus 5.5, effort high):** Adversarial break testing. Assume there is a bug and actively attempt to break it: permissions, empty data, null handling, concurrency. **Every claim must be proven** with a failing test or exact reproduction steps.
+- **Round 3 (Fable, effort high):** Mandatory for all **Sensitive** tasks. Deep audit of security, ledger invariants, RLS multi-tenancy, and Islamic fintech compliance.
+- **Review Hygiene:** No repeat review round without a real code change. Any blocking note must be escalated immediately to the user.
 
-### Review Phase
-- After implementation and verification (Step 2), trigger the audit:
-  ```powershell
-  python scripts/claude_auditor.py --mode review --verbose
-  ```
-- The script sends **full file contents** of changed files (NOT git diff) to Claude Opus 5.5 via the Anthropic API with prompt caching.
-- Opus writes findings to `docs/review/AUDIT_FEEDBACK.md`.
+## 5. Supabase MCP Database Rules
+- **Read-Only on Production:** The Supabase MCP server is strictly read-only on live/production databases.
+- **Writes on Development Only:** Live mutations and test fixtures are restricted to the local/development database environment.
+- **Migration Discipline:** Schema changes are permitted **only** as reviewed timestamped migration files (`supabase/migrations/YYYYMMDDHHMMSS_*.sql`) with corresponding proof tests in `supabase/tests/`.
+- **RLS Verification:** Every new table must have Row Level Security (`ENABLE ROW LEVEL SECURITY`) explicitly verified.
 
-### Resolution Phase
-- If `AUDIT VERDICT: REVISE`: fix all CRITICAL/HIGH findings, re-verify (Step 2), and re-audit.
-- If `AUDIT VERDICT: APPROVED`: present the verdict to the user and wait for sign-off.
+## 6. Mandatory Pre-Review Verification Gate
+Before triggering any review round or committing, the implementing subagent must confirm:
+1. `cd flutter_app && flutter analyze` (0 issues)
+2. `cd flutter_app && flutter test` (100% passing)
+3. `cd ai_service && .venv\Scripts\pytest -v` (100% passing)
 
-### Batch Processing
-- The user can request batch processing (50% token discount, 15-45 min turnaround) by saying "use batch" in the chat.
-- Add `--batch` flag: `python scripts/claude_auditor.py --mode review --batch --verbose`
+## 7. Explicit User Approval Invariants
+Always stop and ask the user for explicit confirmation before:
+- Deploying to any environment.
+- Deleting data, files, or accounts.
+- Accessing or updating secrets/credentials.
+- Any action that incurs financial spend.
+- Any external side effect.
+- Any blocking note or architectural dispute.
 
-## 4. Initial Full-Project Audit ("First Landing")
-- On first integration or when the user requests a full review:
-  ```powershell
-  python scripts/claude_auditor.py --mode landing --batch --verbose
-  ```
-- Results written to `docs/review/MASTER_CODEBASE_AUDIT.md`.
-
-## 5. Security Constraints
-- `ANTHROPIC_API_KEY` must be set as a User environment variable or in `.env.audit` (which is gitignored).
-- NEVER commit, log, or expose the API key in code, artifacts, or terminal output.
-- The audit script sends file contents to the Anthropic API -- never send `.env` files, secrets, or service-role keys.
-
-## 6. Strict Budget Ceiling ($10.00 Max Spend)
-- A hard stop ceiling of **$10.00 USD** is strictly enforced by `scripts/claude_auditor.py` and tracked in `docs/review/audit_spend.json`.
-- Before executing ANY call to Anthropic API, the runner verifies cumulative spend. If cumulative spend reaches or exceeds $10.00, it **immediately aborts** with exit code 3 (`CRITICAL HARD STOP: API BUDGET CEILING REACHED`).
-- View current spend anytime without spending tokens: `python scripts/claude_auditor.py --spend`.
-- Warning alert triggers automatically at 90% usage ($9.00).
-- Never attempt to bypass or suppress the budget guardrail.
+## 8. Context Window Threshold (80% Guardrail)
+When conversational context reaches an actual **80% capacity** (without guessing), the Orchestrator must write a structured handoff document (`docs/review/HANDOFF_<session>.md`) and instruct the user to continue in a fresh session.
