@@ -19,6 +19,7 @@ BEGIN
        WHERE a.id = NEW.account_id
          AND a.owner_user_id = NEW.nafaqah_spouse_id
          AND a.is_shared_pool = false
+         AND a.is_archived = false
          AND a.household_id = NEW.household_id
     ) THEN
       RAISE EXCEPTION USING
@@ -39,6 +40,8 @@ BEFORE INSERT OR UPDATE OF account_id, nafaqah_class, nafaqah_spouse_id
 ON public.transactions
 FOR EACH ROW
 EXECUTE FUNCTION public.enforce_wife_class_account();
+
+REVOKE ALL ON FUNCTION public.enforce_wife_class_account() FROM PUBLIC, anon, authenticated;
 
 COMMIT;
 

@@ -276,11 +276,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         accList = await (widget.accountService ?? AccountService.instance).getAccounts(hid);
       }
       if (mounted) {
+        final callerIsAdmin = viewerIsAdminOf(context, hid);
+        final currentUserId = _currentUserId;
+        final debitable = accList.where((a) =>
+            !a.isArchived &&
+            a.accountType.isOperatingPool &&
+            (a.ownerUserId == currentUserId || (a.isSharedPool && callerIsAdmin))
+        ).toList();
         setState(() {
-          _accounts = accList;
-          if (_selectedAccountId == null && accList.isNotEmpty) {
-            _selectedAccountId =
-                accList.where((a) => a.accountType.isOperatingPool).firstOrNull?.id ?? accList.first.id;
+          _accounts = debitable;
+          if (_selectedAccountId == null && debitable.isNotEmpty) {
+            _selectedAccountId = debitable.first.id;
           }
         });
       }

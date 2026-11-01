@@ -9,7 +9,7 @@
 --   2. An update setting account_id on a wife-class row raises check_violation.
 --   3. Wife transactions with account_id IS NULL succeed.
 --   4. Standard transactions with account_id succeed.
---   5. The constraint is marked VALIDATED.
+--   5. trigger trg_enforce_wife_class_account exists (CHECK dropped by 20261101000100).
 -- ============================================================================
 \set ON_ERROR_STOP on
 
@@ -63,7 +63,7 @@ BEGIN
             household_id, user_id, amount, currency, merchant, category_code,
             timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
-            v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-CLOTHING',
+            v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-SHOPPING',
             now(), 'Test wife personal with account', 'wife_personal', v_user_w, v_acc_id
         );
     EXCEPTION
@@ -85,7 +85,7 @@ BEGIN
             household_id, user_id, amount, currency, merchant, category_code,
             timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
-            v_household_id, v_user_w, 75.00, 'SAR', 'Groceries', 'OPEX-GROCERIES',
+            v_household_id, v_user_w, 75.00, 'SAR', 'Groceries', 'OPEX-GROCERY',
             now(), 'Test wife reimbursable with account', 'wife_reimbursable', v_user_w, v_acc_id
         );
     EXCEPTION
@@ -105,7 +105,7 @@ BEGIN
         household_id, user_id, amount, currency, merchant, category_code,
         timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
-        v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-CLOTHING',
+        v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-SHOPPING',
         now(), 'Test wife personal no account', 'wife_personal', v_user_w, NULL
     ) RETURNING id INTO v_tx_id;
 
@@ -132,7 +132,7 @@ BEGIN
         household_id, user_id, amount, currency, merchant, category_code,
         timestamp, raw_sms, nafaqah_class, account_id
     ) VALUES (
-        v_household_id, v_user_h, 100.00, 'SAR', 'Car Fuel', 'OPEX-TRANSPORT',
+        v_household_id, v_user_h, 100.00, 'SAR', 'Car Fuel', 'OPEX-FUEL',
         now(), 'Standard fuel', NULL, v_acc_id
     );
 

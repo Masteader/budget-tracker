@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'api_service.dart';
-import 'salary_cycle_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/account.dart';
 
@@ -82,15 +81,14 @@ class AccountService {
     required String householdId,
     required String name,
     required AccountType accountType,
-    required int paydayDay,
     String currency = 'SAR',
     double initialBalance = 0.0,
     bool isSharedPool = false,
     String colorHex = '#F0A3BC',
     String iconName = 'account_balance_rounded',
-    DateTime? now,
+    @visibleForTesting Future<Map<String, dynamic>> Function(Map<String, dynamic> row)? insertAccountRow,
   }) async {
-    final userId = _client.auth.currentUser?.id ?? '';
+    final userId = _safeClient?.auth.currentUser?.id ?? '';
     final insertData = {
       'household_id': householdId,
       'owner_user_id': userId,
@@ -104,33 +102,10 @@ class AccountService {
       'is_archived': false,
     };
 
-    final res = await _client.from('accounts').insert(insertData).select().single();
-    final acc = Account.fromMap(res);
-
-    if (initialBalance > 0) {
-      try {
-        final cycleKey = SalaryCycleService.cycleKeyForInstant(now ?? DateTime.now(), paydayDay: paydayDay);
-        await logIncome(
-          householdId: householdId,
-          accountId: acc.id,
-          cycleKey: cycleKey,
-          sourceType: IncomeSourceType.other,
-          title: 'Opening Balance - ${name.trim()}',
-          baseAmount: initialBalance,
-          notes: 'Initial account balance recorded upon account creation',
-        );
-        return acc.copyWith(balance: initialBalance);
-      } catch (e) {
-        try {
-          await updateBalance(acc.id, initialBalance);
-          return acc.copyWith(balance: initialBalance);
-        } catch (err) {
-          debugPrint('[AccountService] Failed to set initial balance via RPC: $err');
-          return acc;
-        }
-      }
-    }
-    return acc;
+    final res = insertAccountRow != null
+        ? await insertAccountRow(insertData)
+        : await _client.from('accounts').insert(insertData).select().single();
+    return Account.fromMap(res);
   }
 
   /// Update account details (name, color, icon, etc.).

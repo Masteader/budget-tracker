@@ -306,3 +306,55 @@ def test_scan_receipt_success_returns_stored_account_id_none_for_household_accou
         resp = client.post("/agent/scan-receipt", headers=bearer(WIFE), json=body)
     assert resp.status_code == 200, resp.text
     assert resp.json()["account_id"] is None
+
+
+def test_insert_never_updates_account_balance_directly(family):
+    from supabase_client import insert_transaction
+    bal_before = [a["balance"] for a in family.tables["accounts"] if a["id"] == ACC_ID][0]
+    tx_id = insert_transaction(
+        household_id=HH,
+        amount=100.0,
+        currency="SAR",
+        merchant="Gas",
+        category_code="OPEX-FUEL",
+        timestamp="2026-10-01T12:00:00Z",
+        raw_sms="Fuel",
+        account_id=ACC_ID,
+        user_id=HUSBAND,
+    )
+    assert tx_id is not None
+    acc_after = [a["balance"] for a in family.tables["accounts"] if a["id"] == ACC_ID][0]
+    assert acc_after == bal_before
+
+
+def test_member_expense_without_account_id_is_not_linked_to_shared_pool(family):
+    shared_bal_before = [a["balance"] for a in family.tables["accounts"] if a["id"] == ACC_ID][0]
+    body = {
+        "household_id": HH,
+        "message": "غداء 80 ريال",
+        "allow_duplicate": True,
+        "nafaqah_class": "none",
+    }
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(WIFE), json=body)
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    assert tx.get("account_id") is None
+    shared_bal_after = [a["balance"] for a in family.tables["accounts"] if a["id"] == ACC_ID][0]
+    assert shared_bal_after == shared_bal_before
+
+
+def test_husband_cannot_debit_wife_personal_account_without_spouse_id(family):
+    wife_acc = "c3333333-2222-3333-4444-555555555555"
+    tx_count_before = len(family.tables.get("transactions", []))
+    body = {
+        "household_id": HH,
+        "message": "عطر 300 ريال",
+        "allow_duplicate": True,
+        "nafaqah_class": "wife_personal",
+        "account_id": wife_acc,
+    }
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(HUSBAND), json=body)
+    assert resp.status_code == 403, resp.text
+    assert len(family.tables.get("transactions", [])) == tx_count_before

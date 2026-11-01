@@ -122,14 +122,6 @@ async def scan_receipt(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
-        effective_account_id = account_id
-        if overrides.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
-            effective_account_id = account_for_wife_class(
-                household_id, account_id, overrides.get("nafaqah_spouse_id") or user_id
-            )
-        if effective_account_id is not None:
-            await asyncio.to_thread(assert_account_debitable, household_id, user_id, effective_account_id)
-
         # Strict rate limit & quota: 10 invoices per 10 minutes maximum per user
         await check_api_quota(
             user_id=user_id,

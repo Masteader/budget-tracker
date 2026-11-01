@@ -349,7 +349,8 @@ class StoreAttributionCard extends StatelessWidget {
           if (accounts.isNotEmpty) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: selectedAccountId,
+              key: const ValueKey('store_attribution_account_dropdown'),
+              initialValue: accounts.any((a) => a.id == selectedAccountId) ? selectedAccountId : null,
               dropdownColor: context.cardBg,
               style: TextStyle(color: context.textPrimary, fontSize: 12),
               decoration: InputDecoration(

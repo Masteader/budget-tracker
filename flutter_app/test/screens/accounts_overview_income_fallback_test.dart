@@ -1,33 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import 'package:budget_tracker/models/account.dart';
+import 'package:budget_tracker/models/operating_cash.dart';
+import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/screens/accounts/accounts_overview_screen.dart';
 import 'package:budget_tracker/services/account_service.dart';
+import 'package:budget_tracker/services/commitments_service.dart';
 import '../support/localized_app.dart';
 
 class _MockAccountService extends AccountService {
-  final List<Account> testAccounts;
-  final double testConfiguredIncome;
   final Map<String, double> testCommitted;
+  final List<Account> testAccounts;
+  final double testIncome;
 
   _MockAccountService({
-    required this.testAccounts,
-    required this.testConfiguredIncome,
     required this.testCommitted,
+    required this.testAccounts,
+    required this.testIncome,
   });
-
-  @override
-  Stream<List<Account>> streamAccounts(String householdId) => Stream.value(testAccounts);
 
   @override
   Future<List<Account>> getAccounts(String householdId) async => testAccounts;
 
   @override
-  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async => [];
+  Future<double> getHouseholdConfiguredIncome(String householdId) async => testIncome;
 
   @override
-  Future<double> getHouseholdConfiguredIncome(String householdId) async => testConfiguredIncome;
+  Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async => [];
 
   @override
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async => testCommitted;
@@ -43,8 +44,18 @@ class _MockAccountService extends AccountService {
   }) async {}
 }
 
+class _MockCommitmentsService extends CommitmentsService {
+  @override
+  Future<List<PendingCommitment>> getPendingCommitments({
+    required String householdId,
+    required int paydayDay,
+    required String cycleKey,
+    DateTime? today,
+  }) async => [];
+}
+
 void main() {
-  testWidgets('AccountsOverviewScreen: displays configured income and remaining commitments when records are empty', (tester) async {
+  testWidgets('AccountsOverviewScreen: displays configured income from AccountProvider and remaining commitments', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -67,24 +78,34 @@ void main() {
       createdAt: DateTime(2026, 1, 1),
     );
 
-    AccountService.instance = _MockAccountService(
-      testAccounts: [acc],
-      testConfiguredIncome: 8900.0,
+    final mockService = _MockAccountService(
       testCommitted: {'acc-rajhi': 4882.26},
+      testAccounts: [acc],
+      testIncome: 8900.0,
     );
+    AccountService.instance = mockService;
+
+    final accountProvider = AccountProvider(
+      accounts: mockService,
+      commitments: _MockCommitmentsService(),
+    );
+    accountProvider.bindHousehold('hh-1', paydayDay: 27);
+    accountProvider.setAccountsForTesting([acc], householdId: 'hh-1');
+    accountProvider.setConfiguredMonthlyIncomeForTesting(8900.0);
 
     await tester.pumpWidget(
-      localizedApp(
-        const AccountsOverviewScreen(householdId: 'hh-1'),
-        scaffold: false,
+      ChangeNotifierProvider<AccountProvider>.value(
+        value: accountProvider,
+        child: localizedApp(
+          const AccountsOverviewScreen(householdId: 'hh-1'),
+          scaffold: false,
+        ),
       ),
     );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
 
-    // Verify Cycle Income displays configured income 8,900.00 (not 0.00)
+    // Verify Cycle Income displays configured income 8,900.00 from AccountProvider
     expect(find.textContaining('8,900.00'), findsOneWidget);
 
     // Verify Rajhi Main account balance is 6,370.26

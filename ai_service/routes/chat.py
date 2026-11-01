@@ -200,14 +200,6 @@ async def chat_transaction(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
-        effective_account_id = account_id
-        if nafaqah_class in ("wife_personal", "wife_reimbursable"):
-            effective_account_id = account_for_wife_class(
-                household_id, account_id, overrides.get("nafaqah_spouse_id") or user_id
-            )
-        if effective_account_id is not None:
-            await asyncio.to_thread(assert_account_debitable, household_id, user_id, effective_account_id)
-
         # Persistent DB quota & sliding window rate limit (strictly verified user_id)
         await check_api_quota(
             user_id=user_id,

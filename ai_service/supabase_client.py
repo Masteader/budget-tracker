@@ -633,52 +633,6 @@ def insert_transaction(
     if nafaqah_class in ("wife_personal", "wife_reimbursable"):
         account_id = account_for_wife_class(household_id, account_id, nafaqah_spouse_id)
 
-    # Automatically resolve account_id if not supplied
-    if not account_id and nafaqah_class not in ("wife_personal", "wife_reimbursable"):
-        try:
-            b_res = (
-                client.table("budgets")
-                .select("account_id")
-                .eq("household_id", household_id)
-                .eq("category_code", category_code)
-                .eq("is_active", True)
-                .execute()
-            )
-            if b_res.data:
-                for b_row in b_res.data:
-                    if b_row.get("account_id"):
-                        account_id = b_row["account_id"]
-                        break
-        except Exception as e:
-            logger.debug("Failed checking budget account: %s", e)
-
-        if not account_id:
-            try:
-                accs_res = (
-                    client.table("accounts")
-                    .select("id, account_type, is_shared_pool, balance")
-                    .eq("household_id", household_id)
-                    .eq("is_archived", False)
-                    .execute()
-                )
-                if accs_res.data:
-                    pool_acc = next(
-                        (a for a in accs_res.data if a.get("is_shared_pool") or a.get("account_type") in ("checking", "primary_operating")),
-                        accs_res.data[0]
-                    )
-                    account_id = pool_acc.get("id")
-            except Exception as e:
-                logger.debug("Failed finding default operating account: %s", e)
-
-    bal_before = None
-    if account_id:
-        try:
-            cur_acc = client.table("accounts").select("balance").eq("id", account_id).execute()
-            if cur_acc.data:
-                bal_before = float(cur_acc.data[0].get("balance") or 0.0)
-        except Exception:
-            pass
-
     payload = {
         "household_id": household_id,
         "user_id": user_id,
@@ -723,12 +677,6 @@ def insert_transaction(
         else {}
     )
     payload.update(nafaqah_fields)
-
-    if payload.get('nafaqah_class') in ('wife_personal', 'wife_reimbursable'):
-        payload['account_id'] = account_for_wife_class(
-            household_id, payload.get('account_id'), payload.get('nafaqah_spouse_id')
-        )
-
 
     # A constraint or permission refusal (an unknown category code, E2E-03; a family without a
     # provider; RLS) is final, never a schema mismatch: retrying with a pruned payload cannot help,
@@ -783,23 +731,6 @@ def insert_transaction(
                 raise
 
     transaction_id = response.data[0]["id"]
-
-    # Synchronize account balance if the database trigger did not decrement it
-    if account_id and bal_before is not None and nafaqah_class not in ("wife_personal", "wife_reimbursable"):
-        try:
-            cur_acc_after = client.table("accounts").select("balance").eq("id", account_id).execute()
-            if cur_acc_after.data:
-                bal_after = float(cur_acc_after.data[0].get("balance") or 0.0)
-                if abs(bal_after - bal_before) < 0.001:
-                    new_bal = max(0.0, round(bal_before - float(amount), 2))
-                    from utils import utc_now
-                    client.table("accounts").update({
-                        "balance": new_bal,
-                        "updated_at": utc_now().isoformat()
-                    }).eq("id", account_id).execute()
-                    logger.info("Synchronized account %s balance from %.2f to %.2f", account_id, bal_before, new_bal)
-        except Exception as e:
-            logger.warning("Failed balance synchronization for account %s: %s", account_id, e)
 
     logger.info(
         "Transaction inserted: id=%s amount=%.2f %s merchant=%s category=%s sub_category=%s cycle=%s reallocated=%s source=%s",

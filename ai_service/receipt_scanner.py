@@ -26,6 +26,7 @@ from nafaqah_service import resolve_expense_nafaqah
 
 from supabase_client import (
     account_for_wife_class,
+    assert_account_debitable,
     get_client,
     fetch_all_cost_control_codes,
     fetch_household_cost_control_codes,
@@ -986,6 +987,16 @@ def process_receipt_scan(
             "message": f"Scanned invoice: SAR {total_amount:.2f} at {merchant} ({len(items)} items).",
         }
 
+    stored_account_id = account_id
+    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        stored_account_id = account_for_wife_class(
+            household_id=household_id,
+            account_id=account_id,
+            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+        )
+    if stored_account_id is not None:
+        assert_account_debitable(household_id, user_id, stored_account_id)
+
     # Who paid and for whom, as columns; refused (422) before any budget is touched when
     # 'partner' names nobody in this household.
     # A classified expense in a family without a provider is refused here (409 no_provider).
@@ -1025,14 +1036,6 @@ def process_receipt_scan(
         f"Receipt Scan: {merchant} ({len(items)} items)",
         f"Items: [{items_summary}]",
     )
-
-    stored_account_id = account_id
-    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
-        stored_account_id = account_for_wife_class(
-            household_id=household_id,
-            account_id=account_id,
-            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
-        )
 
     tx_id = insert_transaction(
         household_id=household_id,

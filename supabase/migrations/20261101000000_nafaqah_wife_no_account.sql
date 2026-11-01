@@ -15,7 +15,14 @@ BEGIN
     INTO v_count, v_sum
     FROM public.transactions
    WHERE nafaqah_class IN ('wife_personal', 'wife_reimbursable')
-     AND account_id IS NOT NULL;
+     AND account_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.accounts a
+        WHERE a.id = transactions.account_id
+          AND a.owner_user_id = transactions.nafaqah_spouse_id
+          AND a.is_shared_pool = false
+          AND a.household_id = transactions.household_id
+     );
   RAISE NOTICE 'Unlinking % legacy wife transaction(s) totalling % SAR to restore account balance(s)', v_count, v_sum;
 END $$;
 
@@ -23,7 +30,14 @@ END $$;
 UPDATE public.transactions
    SET account_id = NULL
  WHERE nafaqah_class IN ('wife_personal', 'wife_reimbursable')
-   AND account_id IS NOT NULL;
+   AND account_id IS NOT NULL
+   AND NOT EXISTS (
+     SELECT 1 FROM public.accounts a
+      WHERE a.id = transactions.account_id
+        AND a.owner_user_id = transactions.nafaqah_spouse_id
+        AND a.is_shared_pool = false
+        AND a.household_id = transactions.household_id
+   );
 
 ALTER TABLE public.transactions VALIDATE CONSTRAINT transactions_wife_class_no_account;
 COMMIT;

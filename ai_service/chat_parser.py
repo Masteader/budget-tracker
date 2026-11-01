@@ -29,6 +29,7 @@ from supabase_client import (
     category_code_in_taxonomy,
     household_attribution,
     account_for_wife_class,
+    assert_account_debitable,
     UnknownCategoryError,
 )
 
@@ -1136,6 +1137,16 @@ def process_chat_transaction(
                 ),
             }
 
+    stored_account_id = override_account_id
+    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        stored_account_id = account_for_wife_class(
+            household_id=household_id,
+            account_id=override_account_id,
+            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
+        )
+    if stored_account_id is not None:
+        assert_account_debitable(household_id, user_id, stored_account_id)
+
     # Who paid and for whom, as columns; refused (422) before any budget is touched when
     # 'partner' names nobody in this household.
     # A classified expense in a family without a provider is refused here (409 no_provider).
@@ -1174,14 +1185,6 @@ def process_chat_transaction(
         f"Chat: {sanitize_audit_text(message, 1000)}",
         f"Items: [{items_summary}]" if items_summary else "",
     )
-
-    stored_account_id = override_account_id
-    if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
-        stored_account_id = account_for_wife_class(
-            household_id=household_id,
-            account_id=override_account_id,
-            nafaqah_spouse_id=nafaqah.get("nafaqah_spouse_id"),
-        )
 
     # Insert transaction
     tx_id = insert_transaction(

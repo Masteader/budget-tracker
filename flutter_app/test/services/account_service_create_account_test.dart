@@ -1,11 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/services/account_service.dart';
-import 'package:budget_tracker/services/salary_cycle_service.dart';
 
-class _FakeAccountServiceWithCycleKeyCapture extends AccountService {
-  String? capturedCycleKey;
-  Map<String, dynamic>? capturedRecordIncomeParams;
+class _RecordingAccountService extends AccountService {
+  int logIncomeCalls = 0;
 
   @override
   Future<IncomeRecord> logIncome({
@@ -21,15 +19,7 @@ class _FakeAccountServiceWithCycleKeyCapture extends AccountService {
     DateTime? receivedAt,
     String? notes,
   }) async {
-    capturedCycleKey = cycleKey;
-    capturedRecordIncomeParams = {
-      'p_household_id': householdId,
-      'p_account_id': accountId,
-      'p_cycle_key': cycleKey,
-      'p_source_type': sourceType.name,
-      'p_title': title,
-      'p_base_amount': baseAmount,
-    };
+    logIncomeCalls++;
     return IncomeRecord(
       id: 'inc-1',
       householdId: householdId,
@@ -46,24 +36,35 @@ class _FakeAccountServiceWithCycleKeyCapture extends AccountService {
 }
 
 void main() {
-  group('AccountService.createAccount cycle_key', () {
-    test('payday 10 on 12 Oct 2026 yields p_cycle_key == 2026-10', () async {
-      final oct12 = DateTime.utc(2026, 10, 12, 10, 0, 0);
-      final key = SalaryCycleService.cycleKeyForInstant(oct12, paydayDay: 10);
-      expect(key, equals('2026-10'));
+  group('AccountService.createAccount', () {
+    test('createAccount with initialBalance: 1000 performs exactly one accounts insert with balance: 1000 and 0 logIncome calls', () async {
+      final service = _RecordingAccountService();
+      Map<String, dynamic>? insertedRow;
 
-      final fakeService = _FakeAccountServiceWithCycleKeyCapture();
-      await fakeService.logIncome(
-        householdId: 'hh-1',
-        accountId: 'acc-1',
-        cycleKey: key,
-        sourceType: IncomeSourceType.other,
-        title: 'Opening Balance - Test',
-        baseAmount: 1000.0,
+      final acc = await service.createAccount(
+        householdId: 'hh-123',
+        name: 'Savings Account',
+        accountType: AccountType.savings,
+        initialBalance: 1000.0,
+        insertAccountRow: (row) async {
+          insertedRow = row;
+          return {
+            'id': 'acc-new-1',
+            ...row,
+            'created_at': DateTime.now().toIso8601String(),
+          };
+        },
       );
 
-      expect(fakeService.capturedCycleKey, equals('2026-10'));
-      expect(fakeService.capturedRecordIncomeParams?['p_cycle_key'], equals('2026-10'));
+      expect(insertedRow, isNotNull);
+      expect(insertedRow!['household_id'], equals('hh-123'));
+      expect(insertedRow!['name'], equals('Savings Account'));
+      expect(insertedRow!['account_type'], equals('savings'));
+      expect(insertedRow!['balance'], equals(1000.0));
+      expect(acc.balance, equals(1000.0));
+
+      // Rule 02 & Rule 03: opening balance is NOT logged as cycle income
+      expect(service.logIncomeCalls, equals(0));
     });
   });
 }

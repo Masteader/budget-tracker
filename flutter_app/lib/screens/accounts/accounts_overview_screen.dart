@@ -1,7 +1,6 @@
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/household_role_provider.dart';
-import '../../widgets/dashboard/household_setup_card.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -35,71 +34,28 @@ class AccountsOverviewScreen extends StatefulWidget {
 class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   bool _hideBalances = false;
   Map<String, double> _committedBudgets = {};
-  StreamSubscription<List<Account>>? _accountsSub;
-  List<Account> _cachedAccounts = [];
-  bool _isLoadingAccounts = true;
-  List<IncomeRecord> _cycleIncomeRecords = [];
-  double? _configuredMonthlyIncome;
-  bool _isLoadingIncome = true;
-
-  double get _totalCycleIncome {
-    final recordSum = _cycleIncomeRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
-    if (recordSum > 0) return recordSum;
-    if (_configuredMonthlyIncome != null && _configuredMonthlyIncome! > 0) {
-      return _configuredMonthlyIncome!;
-    }
-    try {
-      final provInc = context.read<AccountProvider>().cycleIncomeTotal;
-      if (provInc > 0) return provInc;
-    } catch (_) {}
-    return 0.0;
-  }
 
   @override
   void initState() {
     super.initState();
-    _initStream();
     _refreshAll();
-  }
-
-  void _initStream() {
-    _accountsSub?.cancel();
-    _accountsSub = AccountService.instance.streamAccounts(widget.householdId).listen(
-      (data) {
-        if (mounted) {
-          setState(() {
-            _cachedAccounts = data;
-            _isLoadingAccounts = false;
-          });
-        }
-      },
-      onError: (err) {
-        if (mounted && _cachedAccounts.isEmpty) {
-          setState(() {
-            _isLoadingAccounts = false;
-          });
-        }
-      },
-    );
   }
 
   @override
   void didUpdateWidget(covariant AccountsOverviewScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.householdId != widget.householdId) {
-      _initStream();
       _refreshAll();
     }
   }
 
-  @override
-  void dispose() {
-    _accountsSub?.cancel();
-    super.dispose();
-  }
-
   String get _currentCycleKey {
-    return SalaryCycleService.cycleKeyForInstant(DateTime.now());
+    try {
+      final prov = context.read<AccountProvider>();
+      return prov.cycleKey ?? SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: prov.paydayDay);
+    } catch (_) {
+      return SalaryCycleService.cycleKeyForInstant(DateTime.now());
+    }
   }
 
   Future<void> _loadCommittedBudgets() async {
@@ -116,53 +72,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
     } catch (_) {}
   }
 
-  Future<void> _fetchAccountsDirectly() async {
-    try {
-      final list = await AccountService.instance.getAccounts(widget.householdId);
-      if (mounted) {
-        setState(() {
-          _cachedAccounts = list;
-          _isLoadingAccounts = false;
-        });
-      }
-    } catch (_) {
-      if (mounted && _cachedAccounts.isEmpty) {
-        setState(() {
-          _isLoadingAccounts = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadCycleIncome() async {
-    try {
-      final recordsFuture = AccountService.instance.getCycleIncome(
-        widget.householdId,
-        _currentCycleKey,
-      );
-      final cfgFuture = AccountService.instance.getHouseholdConfiguredIncome(widget.householdId);
-      final results = await Future.wait([recordsFuture, cfgFuture]);
-      double cfg = results[1] as double;
-      if (cfg <= 0) {
-        try {
-          final setup = await HouseholdSetupPrefs.load(widget.householdId);
-          if (setup.monthlyIncome != null && setup.monthlyIncome! > 0) {
-            cfg = setup.monthlyIncome!;
-          }
-        } catch (_) {}
-      }
-      if (mounted) {
-        setState(() {
-          _cycleIncomeRecords = results[0] as List<IncomeRecord>;
-          _configuredMonthlyIncome = cfg;
-          _isLoadingIncome = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingIncome = false);
-    }
-  }
-
   Future<void> _refreshAll() async {
     try {
       await AccountService.instance.reconcileUnlinkedTransactions(
@@ -170,11 +79,14 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         callerIsAdmin: viewerIsAdminOf(context, widget.householdId),
       );
     } catch (_) {}
-    await Future.wait([
-      _loadCommittedBudgets(),
-      _fetchAccountsDirectly(),
-      _loadCycleIncome(),
-    ]);
+    if (mounted) {
+      try {
+        await Future.wait([
+          _loadCommittedBudgets(),
+          context.read<AccountProvider>().refresh(force: true),
+        ]);
+      } catch (_) {}
+    }
   }
 
   @override
@@ -226,7 +138,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   Widget _buildBody(BuildContext context, bool isDark) {
-    if (_isLoadingAccounts && _cachedAccounts.isEmpty) {
+    final accProvider = context.watch<AccountProvider>();
+    final accounts = accProvider.accounts;
+    final isLoadingAccounts = accProvider.isLoading && !accProvider.hasLoaded;
+
+    if (isLoadingAccounts && accounts.isEmpty) {
       return Center(
         child: CircularProgressIndicator(
           strokeWidth: 2,
@@ -235,7 +151,6 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
       );
     }
 
-    final accounts = _cachedAccounts;
 
     if (accounts.isEmpty) {
       return Center(
@@ -531,6 +446,11 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
   }
 
   Widget _buildCycleIncomeCard(BuildContext context, List<Account> accounts) {
+    final accProvider = context.watch<AccountProvider>();
+    final cycleIncomeRecords = accProvider.cycleIncomeRecords;
+    final totalCycleIncome = accProvider.cycleIncomeTotal;
+    final isLoadingIncome = accProvider.isLoading;
+
     return ThreeDSurfaceCard(
       borderRadius: 18.0,
       padding: const EdgeInsets.all(16),
@@ -555,7 +475,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                 ],
               ),
               Text(
-                _hideBalances ? '••••••' : context.sar(_totalCycleIncome),
+                _hideBalances ? '••••••' : context.sar(totalCycleIncome),
                 style: GoogleFonts.outfit(
                   color: context.electricTeal,
                   fontSize: 16,
@@ -564,22 +484,22 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               ),
             ],
           ),
-          if (_cycleIncomeRecords.isNotEmpty) ...[
+          if (cycleIncomeRecords.isNotEmpty) ...[
             const SizedBox(height: 12),
             Divider(color: context.borderColor, height: 1),
             const SizedBox(height: 10),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _cycleIncomeRecords.length,
+              itemCount: cycleIncomeRecords.length,
               separatorBuilder: (_, __) => Divider(color: context.borderColor.withValues(alpha: 0.4), height: 16),
               itemBuilder: (ctx, idx) {
-                final rec = _cycleIncomeRecords[idx];
+                final rec = cycleIncomeRecords[idx];
                 final accountName = accounts.where((a) => a.id == rec.accountId).firstOrNull?.name ?? '';
                 return _buildIncomeRow(context, rec, accountName);
               },
             ),
-          ] else if (!_isLoadingIncome) ...[
+          ] else if (!isLoadingIncome) ...[
             const SizedBox(height: 10),
             Text(
               context.tr('no_income_records_cycle'),
