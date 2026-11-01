@@ -227,11 +227,11 @@ def _run_git(*args: str) -> str:
     """Run a git command and return stdout."""
     result = subprocess.run(
         ["git"] + list(args),
-        capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT),
     )
     if result.returncode != 0:
         print(f"git {' '.join(args)} failed:\n{result.stderr}", file=sys.stderr)
-    return result.stdout.strip()
+    return (result.stdout or "").strip()
 
 
 def _should_exclude(path: str) -> bool:
