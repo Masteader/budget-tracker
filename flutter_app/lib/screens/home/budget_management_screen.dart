@@ -19,6 +19,7 @@ import '../../widgets/app_shimmer.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
 import '../../widgets/budgets/link_account_sheet.dart';
+import '../../widgets/dashboard/household_setup_card.dart';
 import '../../widgets/budgets/rebalance_budget_sheet.dart';
 import '../../widgets/accounts/account_transfer_sheet.dart';
 import '../accounts/accounts_overview_screen.dart';
@@ -223,7 +224,10 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     double income = 0.0;
     List<Account> accounts = [];
     try {
-      await accProvider.ensureLoaded(hid);
+      final setup = await HouseholdSetupPrefs.load(hid);
+      final payday = setup.paydayDay ?? accProvider.paydayDay;
+      accProvider.bindHousehold(hid, paydayDay: payday);
+      await accProvider.ensureLoaded();
       if (!mounted) {
         return _lastStaticData ??
             _BudgetStaticData(

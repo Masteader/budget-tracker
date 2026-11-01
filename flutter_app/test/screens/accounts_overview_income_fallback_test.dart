@@ -33,7 +33,12 @@ class _MockAccountService extends AccountService {
   Future<Map<String, double>> getCommittedBudgetsByAccount(String householdId, String cycleKey) async => testCommitted;
 
   @override
-  Future<void> reconcileUnlinkedTransactions(String householdId) async {}
+  Future<void> reconcileUnlinkedTransactions(
+    String householdId, {
+    Future<List<Account>> Function(String p1)? fetchAccounts,
+    Future<List<Map<String, dynamic>>> Function(String p1)? fetchUnlinked,
+    Future<void> Function(String p1, String p2)? linkTransaction,
+  }) async {}
 }
 
 void main() {

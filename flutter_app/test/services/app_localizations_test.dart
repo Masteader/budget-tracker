@@ -47,6 +47,14 @@ void main() {
       }
     });
 
+    test('insufficient_funds_title and insufficient_funds_msg exist in all three locales (Item 6)', () {
+      for (final lang in ['en', 'ar', 'ur']) {
+        final loc = AppLocalizations(Locale(lang));
+        expect(loc.get('insufficient_funds_title'), isNot(equals('insufficient_funds_title')));
+        expect(loc.get('insufficient_funds_msg'), isNot(equals('insufficient_funds_msg')));
+      }
+    });
+
     test('AppLocalizationsDelegate supports en, ar, ur', () {
       const delegate = AppLocalizationsDelegate();
       expect(delegate.isSupported(const Locale('en')), isTrue);

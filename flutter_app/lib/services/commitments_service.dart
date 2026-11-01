@@ -89,7 +89,12 @@ class CommitmentsService {
       if (plan.isCompleted || plan.status != 'ACTIVE') continue;
 
       if (plan.nextDueAt != null) {
-        final dueKey = cycleKeyForDueDate(plan.nextDueAt!, paydayDay);
+        var dueKey = cycleKeyForDueDate(plan.nextDueAt!, paydayDay);
+        // Overdue unpaid installments from an earlier cycle are rolled forward into
+        // the current cycle so they are not dropped from pending commitments.
+        if (dueKey.compareTo(cycleKey) < 0) {
+          dueKey = cycleKey;
+        }
         commitments.add(PendingCommitment(
           id: '${plan.id}_${plan.nextDueAt!.toIso8601String()}',
           kind: CommitmentKind.installment,

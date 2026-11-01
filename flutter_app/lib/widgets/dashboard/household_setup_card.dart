@@ -26,6 +26,9 @@ class HouseholdSetupPrefs {
   static String paydayConfirmedKey(String householdId) => 'setup_payday_confirmed_$householdId';
   static String hiddenKey(String householdId) => 'setup_hidden_$householdId';
 
+  @visibleForTesting
+  static Future<HouseholdSetupData> Function(String householdId)? loadOverride;
+
   static Future<void> setPaydayConfirmed(String householdId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -52,6 +55,9 @@ class HouseholdSetupPrefs {
   /// Loads the checklist's data from the existing endpoints (payday, income,
   /// members). A value that cannot be read stays null.
   static Future<HouseholdSetupData> load(String householdId, {ApiService? api}) async {
+    if (loadOverride != null) {
+      return await loadOverride!(householdId);
+    }
     final service = api ?? ApiService.instance;
     Future<T?> attempt<T>(Future<T> Function() call) async {
       try {

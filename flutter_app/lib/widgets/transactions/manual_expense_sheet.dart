@@ -35,6 +35,7 @@ class ManualExpenseSheet extends StatefulWidget {
   final String? initialMerchant;
   final double? initialAmount;
   final String? initialCategory;
+  final DateTime? initialOccurredAt;
   final InstallmentPlan? installmentPlan;
 
   /// Test seams; default to the API / Supabase / the offline queue.
@@ -61,6 +62,7 @@ class ManualExpenseSheet extends StatefulWidget {
     this.initialMerchant,
     this.initialAmount,
     this.initialCategory,
+    this.initialOccurredAt,
     this.installmentPlan,
     this.loadMembers,
     this.loadRoster,
@@ -116,12 +118,23 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
   DateTime _recordedAt = DateTime.now();
   bool _useCustomRecordedDate = false;
 
-  SaudiCycle get _currentCycle => SalaryCycleService.currentCycle();
+  int get _paydayDay {
+    try {
+      return context.read<AccountProvider>().paydayDay;
+    } catch (_) {
+      return SalaryCycleService.defaultPaydayDay;
+    }
+  }
+
+  SaudiCycle get _currentCycle => SalaryCycleService.currentCycle(paydayDay: _paydayDay);
   SaudiCycle get _previousCycle {
     final curr = _currentCycle;
-    return SalaryCycleService.cycleForInstant(curr.start.subtract(const Duration(days: 1)));
+    return SalaryCycleService.cycleForInstant(
+      curr.start.subtract(const Duration(days: 1)),
+      paydayDay: _paydayDay,
+    );
   }
-  SaudiCycle get _targetCycle => SalaryCycleService.cycleForInstant(_occurredAt);
+  SaudiCycle get _targetCycle => SalaryCycleService.cycleForInstant(_occurredAt, paydayDay: _paydayDay);
 
   // Role-Aware Attribution & Living Model State
   bool _isRoommateMode = false;
@@ -193,6 +206,9 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
           : '',
     );
     _selectedCategory = initialCat ?? 'OPEX-GROCERY';
+    if (widget.initialOccurredAt != null) {
+      _occurredAt = widget.initialOccurredAt!;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
@@ -211,9 +227,19 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
     final hid = widget.householdId;
     if (hid == null || hid.isEmpty) return;
     try {
-      final list = widget.loadAccounts != null
-          ? await widget.loadAccounts!(hid)
-          : await AccountService.instance.getAccounts(hid);
+      List<Account> list;
+      AccountProvider? accProv;
+      try {
+        accProv = context.read<AccountProvider>();
+      } catch (_) {}
+
+      if (accProv != null && accProv.hasLoaded && accProv.accounts.isNotEmpty) {
+        list = accProv.accounts;
+      } else if (widget.loadAccounts != null) {
+        list = await widget.loadAccounts!(hid);
+      } else {
+        list = await AccountService.instance.getAccounts(hid);
+      }
       if (mounted) {
         setState(() {
           _accounts = list;
@@ -447,21 +473,51 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
 
     final String? rowAccountId = accountForNafaqahClass(nafaqahClass, _selectedAccountId);
 
-    // Zero-Balance Overdraft Guard: prevent spending more than available account balance.
-    // Skips wife-classified expenses (paid by her, never debited from household accounts).
-    if (rowAccountId != null && _accounts.isNotEmpty) {
-      final selectedAcc = _accounts.where((a) => a.id == rowAccountId).firstOrNull;
-      if (selectedAcc != null && amount > selectedAcc.balance) {
-        AppSnackBar.showError(
-          context,
-          context.trArgs('insufficient_funds_msg', {
-            'account': selectedAcc.name,
-            'balance': context.sar(selectedAcc.balance),
-            'amount': context.sar(amount),
-          }),
-          title: context.tr('insufficient_funds_title'),
+    List<Account> accountsSource = _accounts;
+    try {
+      final accProv = context.read<AccountProvider>();
+      if (accProv.hasLoaded && accProv.accounts.isNotEmpty) {
+        accountsSource = accProv.accounts;
+      }
+    } catch (_) {}
+
+    // Zero-Balance Overdraft Guard: soft confirmation when expense exceeds balance.
+    // Skips wife-classified expenses (paid by her, never debited from household accounts)
+    // and non-SAR accounts (currency mismatch).
+    if (rowAccountId != null && accountsSource.isNotEmpty) {
+      final selectedAcc = accountsSource.where((a) => a.id == rowAccountId).firstOrNull;
+      if (selectedAcc != null &&
+          selectedAcc.currency.toUpperCase() == 'SAR' &&
+          amount > selectedAcc.balance) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            key: const ValueKey('overdraft_confirm_dialog'),
+            title: Text(dialogCtx.tr('insufficient_funds_title')),
+            content: Text(
+              dialogCtx.trArgs('insufficient_funds_msg', {
+                'account': selectedAcc.name,
+                'balance': dialogCtx.sar(selectedAcc.balance),
+                'amount': dialogCtx.sar(amount),
+              }),
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey('overdraft_cancel_button'),
+                onPressed: () => Navigator.of(dialogCtx).pop(false),
+                child: Text(dialogCtx.tr('cancel')),
+              ),
+              FilledButton(
+                key: const ValueKey('overdraft_confirm_button'),
+                onPressed: () => Navigator.of(dialogCtx).pop(true),
+                child: Text(dialogCtx.tr('record_expense')),
+              ),
+            ],
+          ),
         );
-        return;
+        if (confirmed != true) {
+          return;
+        }
       }
     }
 

@@ -43,11 +43,13 @@ import '../../theme/app_themes.dart';
 class ReceiptScannerSheet extends StatefulWidget {
   final String householdId;
   final Map<String, dynamic>? initialScanResult;
+  final ApiService? apiService;
 
   const ReceiptScannerSheet({
     super.key,
     required this.householdId,
     this.initialScanResult,
+    this.apiService,
   });
 
   static Future<void> show(BuildContext context, String householdId) {
@@ -76,6 +78,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   Map<String, dynamic>? _scanResult;
   String? _errorMessage;
 
+  ApiService get _apiService => widget.apiService ?? ApiService.instance;
   late final TextEditingController _merchantController;
   String _selectedSpentBy = 'me';
   String _selectedPaidBy = 'me';
@@ -142,6 +145,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   // it) or a personal purchase from her allowance; never split.
   NafaqahPreview _nafaqah = const NafaqahPreview();
   String? _nafaqahClass;
+  String? _userOverrideClass;
   String? _nafaqahWifeId;
   bool _showWifeRequired = false;
 
@@ -154,9 +158,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     if (!_isFamily) return null;
     final role = _nafaqah.recorderRole ??
         _scanResult?['recorder_role'] as String? ??
-        _scanResult?['caller_role'] as String? ??
-        'husband';
-    return classifyNafaqah(role, _selectedPaidBy, _selectedBeneficiary);
+        _scanResult?['caller_role'] as String?;
+    if (role == null) return _userOverrideClass;
+    return _userOverrideClass ?? classifyNafaqah(role, _selectedPaidBy, _selectedBeneficiary);
   }
 
   (String, IconData, Color)? _nafaqahBadgeInfo(BuildContext context) {
@@ -164,30 +168,28 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     final cls = _computedNafaqahClass;
     final role = _nafaqah.recorderRole ??
         _scanResult?['recorder_role'] as String? ??
-        _scanResult?['caller_role'] as String? ??
-        'husband';
-    final isWifePayer = (role == 'wife' && _selectedPaidBy == 'me') ||
-        (role == 'husband' && _selectedPaidBy == 'partner');
-
-    if (!isWifePayer || cls == null) {
-      return (
-        context.tr('scan_nafaqah_husband_badge'),
-        Icons.family_restroom_rounded,
-        VelvetBurgundyColors.roseGoldGlow,
-      );
-    } else if (cls == kWifePersonal) {
+        _scanResult?['caller_role'] as String?;
+    if (role == null && cls == null) return null;
+    if (cls == kWifePersonal) {
       return (
         context.tr('scan_nafaqah_wife_personal_badge'),
         Icons.favorite_rounded,
         context.infoColor,
       );
-    } else {
+    } else if (cls == kWifeReimbursable) {
       return (
         context.trArgs('scan_nafaqah_wife_reimbursable_badge', {'amount': context.sar(_scannedAmount)}),
         Icons.assignment_return_rounded,
         context.warnText,
       );
+    } else if (role != null) {
+      return (
+        context.tr('scan_nafaqah_husband_badge'),
+        Icons.family_restroom_rounded,
+        VelvetBurgundyColors.roseGoldGlow,
+      );
     }
+    return null;
   }
 
   void _applyNafaqahPreview(Map<String, dynamic>? res) {
@@ -210,6 +212,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     _nafaqahClass = _nafaqah.suggestedClass;
     _nafaqahWifeId = _nafaqah.defaultSpouseId ?? prevWifeId;
     _showWifeRequired = false;
+    _userOverrideClass = null;
     if (res['paid_by'] != null) {
       _selectedPaidBy = (res['paid_by'] as String).toLowerCase();
     }
@@ -236,6 +239,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       final m = _scanResult!['merchant'] as String?;
       if (m != null && m.isNotEmpty) _merchantController.text = m;
       _applyNafaqahPreview(_scanResult);
+      _resetReview();
     }
     _loadInitialContext();
   }
@@ -635,7 +639,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   /// the sync worker sends them to the receipt reader when back online.
   Future<void> _saveOfflineDraft() async {
     if (_isAnalyzing) return;
-    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+    final role = _nafaqah.recorderRole ??
+        _scanResult?['recorder_role'] as String? ??
+        _scanResult?['caller_role'] as String?;
+    if (_isFamily && role == null && _computedNafaqahClass == null) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    if (!NafaqahReviewSection.hasRequiredWife(_nafaqah, _computedNafaqahClass, _nafaqahWifeId)) {
       setState(() => _showWifeRequired = true);
       return;
     }
@@ -694,7 +705,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _confirmSave({bool allowDuplicate = false, String? enrichTxId}) async {
     if (_isAnalyzing) return;
-    if (enrichTxId == null && !NafaqahReviewSection.hasRequiredWife(_nafaqah, _nafaqahClass, _nafaqahWifeId)) {
+    final role = _nafaqah.recorderRole ??
+        _scanResult?['recorder_role'] as String? ??
+        _scanResult?['caller_role'] as String?;
+    if (_isFamily && role == null && _computedNafaqahClass == null) {
+      setState(() => _showWifeRequired = true);
+      return;
+    }
+    if (enrichTxId == null && !NafaqahReviewSection.hasRequiredWife(_nafaqah, _computedNafaqahClass, _nafaqahWifeId)) {
       setState(() => _showWifeRequired = true);
       return;
     }
@@ -726,7 +744,10 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         final bytes = await file.readAsBytes();
         base64List.add(base64Encode(bytes));
       }
-      final user = supabase.auth.currentUser;
+      String? userId;
+      try {
+        userId = supabase.auth.currentUser?.id;
+      } catch (_) {}
       final confirmedMerchant = _merchantController.text.trim();
       final nafaqah = _nafaqahFields;
       final confirmedClass = _isFamily ? (_computedNafaqahClass ?? 'none') : nafaqah['nafaqah_class'];
@@ -739,11 +760,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       // unchanged; an expired token re-runs the preview once.
       final res = await commitWithPreviewToken(
         token: previewTokenOf(_scanResult),
-        commit: (token) => ApiService.instance.scanReceipt(
+        commit: (token) => _apiService.scanReceipt(
           imagesBase64: base64List,
           qrCodeRaw: _zatcaQrRaw,
           householdId: widget.householdId,
-          userId: user?.id,
+          userId: userId,
           allowDuplicate: allowDuplicate,
           enrichTxId: enrichTxId,
           merchant: confirmedMerchant.isNotEmpty ? confirmedMerchant : null,
@@ -760,11 +781,11 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           previewToken: token,
           accountId: rowAccountId,
         ),
-        rePreview: () => ApiService.instance.scanReceipt(
+        rePreview: () => _apiService.scanReceipt(
           imagesBase64: base64List,
           qrCodeRaw: _zatcaQrRaw,
           householdId: widget.householdId,
-          userId: user?.id,
+          userId: userId,
           previewOnly: true,
           accountId: rowAccountId,
         ),
@@ -1263,12 +1284,14 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                   onSpentByChanged: (v) => setState(() {
                     _selectedPaidBy = v;
                     _selectedSpentBy = v;
+                    _userOverrideClass = null;
                     _nafaqahClass = _computedNafaqahClass;
                   }),
                   isFamily: _isFamily,
                   selectedBeneficiary: _selectedBeneficiary,
                   onBeneficiaryChanged: (v) => setState(() {
                     _selectedBeneficiary = v;
+                    _userOverrideClass = null;
                     _nafaqahClass = _computedNafaqahClass;
                   }),
                   dependents: _dependents,
@@ -1469,16 +1492,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           merchantController: _merchantController,
           selectedSpentBy: _selectedPaidBy,
           onSpentByChanged: (v) => setState(() {
-            _selectedPaidBy = v;
-            _selectedSpentBy = v;
-            _nafaqahClass = _computedNafaqahClass;
-          }),
+                    _selectedPaidBy = v;
+                    _selectedSpentBy = v;
+                    _userOverrideClass = null;
+                    _nafaqahClass = _computedNafaqahClass;
+                  }),
           isFamily: _isFamily,
           selectedBeneficiary: _selectedBeneficiary,
           onBeneficiaryChanged: (v) => setState(() {
-            _selectedBeneficiary = v;
-            _nafaqahClass = _computedNafaqahClass;
-          }),
+                    _selectedBeneficiary = v;
+                    _userOverrideClass = null;
+                    _nafaqahClass = _computedNafaqahClass;
+                  }),
           dependents: _dependents,
           nafaqahBadgeText: _nafaqahBadgeInfo(context)?.$1,
           nafaqahBadgeIcon: _nafaqahBadgeInfo(context)?.$2,
@@ -1487,14 +1512,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           selectedAccountId: _selectedAccountId,
           onAccountChanged: (id) => setState(() => _selectedAccountId = id),
         ),
-        if (_nafaqah.canClassify && _nafaqah.wives.length > 1) ...[
+        if (_nafaqah.canClassify && (_nafaqah.wives.length > 1 || (_isFamily && ((_nafaqah.recorderRole ?? _scanResult?['recorder_role'] ?? _scanResult?['caller_role']) == null || _showWifeRequired)))) ...[
           NafaqahReviewSection(
             key: const ValueKey('receipt_nafaqah_review'),
             preview: _nafaqah,
-            value: _isFamily ? _computedNafaqahClass : _nafaqahClass,
+            value: _computedNafaqahClass,
             wifeId: _nafaqahWifeId,
             showWifeRequired: _showWifeRequired,
-            onChanged: (cls) => setState(() => _nafaqahClass = cls),
+            onChanged: (cls) => setState(() {
+              _userOverrideClass = cls;
+              _nafaqahClass = cls;
+            }),
             onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
           ),
           const SizedBox(height: 12),
@@ -1733,12 +1761,18 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             merchantController: _merchantController,
             selectedSpentBy: _selectedPaidBy,
             onSpentByChanged: (v) => setState(() {
-              _selectedPaidBy = v;
-              _selectedSpentBy = v;
-            }),
+                    _selectedPaidBy = v;
+                    _selectedSpentBy = v;
+                    _userOverrideClass = null;
+                    _nafaqahClass = _computedNafaqahClass;
+                  }),
             isFamily: _isFamily,
             selectedBeneficiary: _selectedBeneficiary,
-            onBeneficiaryChanged: (v) => setState(() => _selectedBeneficiary = v),
+            onBeneficiaryChanged: (v) => setState(() {
+                    _selectedBeneficiary = v;
+                    _userOverrideClass = null;
+                    _nafaqahClass = _computedNafaqahClass;
+                  }),
             dependents: _dependents,
             nafaqahBadgeText: _nafaqahBadgeInfo(context)?.$1,
             nafaqahBadgeIcon: _nafaqahBadgeInfo(context)?.$2,
@@ -1747,14 +1781,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             selectedAccountId: _selectedAccountId,
             onAccountChanged: (id) => setState(() => _selectedAccountId = id),
           ),
-          if (_nafaqah.canClassify && _nafaqah.wives.length > 1) ...[
-            NafaqahReviewSection(
-              key: const ValueKey('receipt_nafaqah_review'),
+          if (_nafaqah.canClassify && (_nafaqah.wives.length > 1 || (_isFamily && ((_nafaqah.recorderRole ?? _scanResult?['recorder_role'] ?? _scanResult?['caller_role']) == null || _showWifeRequired)))) ...[
+          NafaqahReviewSection(
+            key: const ValueKey('receipt_nafaqah_review'),
               preview: _nafaqah,
-              value: _isFamily ? _computedNafaqahClass : _nafaqahClass,
+              value: _computedNafaqahClass,
               wifeId: _nafaqahWifeId,
               showWifeRequired: _showWifeRequired,
-              onChanged: (cls) => setState(() => _nafaqahClass = cls),
+              onChanged: (cls) => setState(() {
+              _userOverrideClass = cls;
+              _nafaqahClass = cls;
+            }),
               onWifeChanged: (id) => setState(() => _nafaqahWifeId = id),
             ),
             const SizedBox(height: 12),
@@ -1794,7 +1831,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           // Family: what the Nafaqah choice makes of it, not "shared" (UX-04).
           attributionBadge: _nafaqah.isFamily
               ? NafaqahFeedBadge(
-                  kind: nafaqahBadgeKindForClass(_nafaqahClass),
+                  kind: nafaqahBadgeKindForClass(_computedNafaqahClass),
                   wifeName: _nafaqah.wifeNameFor(_nafaqahWifeId),
                   viewerIsWife: _nafaqah.viewerIsWife,
                 )
@@ -1822,6 +1859,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           const SizedBox(height: 8),
         ] else if (!isCandidate) ...[
           ElevatedButton.icon(
+            key: const ValueKey('receipt_confirm_save_button'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppThemes.success,
               foregroundColor: Colors.black,

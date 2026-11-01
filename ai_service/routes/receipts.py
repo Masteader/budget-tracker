@@ -85,6 +85,9 @@ async def scan_receipt(request: Request):
         )
     }
     qr_code_raw = overrides["qr_code_raw"]
+    account_id = overrides.get("account_id")
+    if overrides.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
+        account_id = None
     # The amount and category the user corrected in the review (UX-12), validated like any edit.
     override_amount = optional_amount(body)
     override_category_code = bounded_text(body, "category_code", 100)
@@ -136,7 +139,7 @@ async def scan_receipt(request: Request):
             preview_token=preview_token,
             override_amount=override_amount,
             override_category_code=override_category_code,
-            account_id=overrides.get("account_id"),
+            account_id=account_id,
         )
     except (InvalidPreviewToken, PreviewTokenExpired) as exc:
         if use_idempotency:

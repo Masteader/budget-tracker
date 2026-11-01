@@ -8,3 +8,4 @@ String? accountForNafaqahClass(String? nafaqahClass, String? accountId) =>
     (nafaqahClass == 'wife_personal' || nafaqahClass == 'wife_reimbursable')
         ? null
         : accountId;
+

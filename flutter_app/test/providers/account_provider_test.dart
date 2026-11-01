@@ -765,9 +765,77 @@ void main() {
       expect(provider.accounts.length, equals(1));
       expect(provider.accounts.first.balance, equals(450.0));
       expect(provider.operatingCash, equals(450.0));
+      expect(provider.hasLoaded, isFalse);
+
+      await streamController.close();
+    });
+
+    test('stream emits first, then ensureLoaded is called, fetching accounts and commitments', () async {
+      final streamController = StreamController<List<Account>>.broadcast();
+      final fakeAccounts = _StreamFakeAccountService(streamController.stream);
+      final fakeCommitments = _FakeCommitmentsService();
+      final fakeIncome = _FakeIncomeSource();
+
+      final provider = AccountProvider(
+        accounts: fakeAccounts,
+        commitments: fakeCommitments,
+        income: fakeIncome,
+      );
+
+      provider.bindHousehold('h1', paydayDay: 27);
+
+      final testAccount = Account(
+        id: 'acc-stream',
+        householdId: 'h1',
+        ownerUserId: 'u-1',
+        name: 'Streamed Wallet',
+        accountType: AccountType.eWallet,
+        currency: 'SAR',
+        balance: 450.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'account_balance',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+
+      streamController.add([testAccount]);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(provider.hasLoaded, isFalse);
+
+      await provider.ensureLoaded();
+
+      expect(fakeAccounts.getAccountsCalls, equals(1));
+      expect(fakeCommitments.getCommitmentsCalls, equals(1));
       expect(provider.hasLoaded, isTrue);
 
       await streamController.close();
+    });
+
+    test('bindHousehold resets isLoading to false even if in-flight load was pending', () async {
+      final c = Completer<List<Account>>();
+      final fakeAccounts = _FakeAccountService();
+      fakeAccounts.nextGetAccountsCompleter = c;
+
+      final fakeCommitments = _FakeCommitmentsService();
+      final fakeIncome = _FakeIncomeSource();
+
+      final provider = AccountProvider(
+        accounts: fakeAccounts,
+        commitments: fakeCommitments,
+        income: fakeIncome,
+      );
+
+      provider.bindHousehold('h1', paydayDay: 27);
+      final future = provider.ensureLoaded();
+      expect(provider.isLoading, isTrue);
+
+      provider.bindHousehold('h2', paydayDay: 27);
+      expect(provider.isLoading, isFalse);
+
+      c.complete([]);
+      await future;
     });
 
     test('dispose during in-flight load completes safely without throwing', () async {

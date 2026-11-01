@@ -1,17 +1,60 @@
 import 'package:budget_tracker/screens/scanner/receipt_scanner_sheet.dart';
+import 'package:budget_tracker/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../support/localized_app.dart';
+
+class _FakeReceiptApiService extends ApiService {
+  _FakeReceiptApiService() : super();
+  Map<String, dynamic>? lastCommitArgs;
+
+  @override
+  Future<Map<String, dynamic>> scanReceipt({
+    List<String>? imagesBase64,
+    String? imageBase64,
+    String? qrCodeRaw,
+    required String householdId,
+    String? userId,
+    bool allowDuplicate = false,
+    String? enrichTxId,
+    bool previewOnly = false,
+    String? merchant,
+    String? spentBy,
+    String? receiptUrl,
+    String? paidBy,
+    String? beneficiary,
+    String? nafaqahClass,
+    String? nafaqahSpouseId,
+    String? idempotencyKey,
+    DateTime? occurredAt,
+    String? previewToken,
+    double? amount,
+    String? categoryCode,
+    String? accountId,
+  }) async {
+    if (!previewOnly) {
+      lastCommitArgs = {
+        'nafaqah_class': nafaqahClass,
+        'nafaqah_spouse_id': nafaqahSpouseId,
+        'account_id': accountId,
+      };
+      return {'status': 'success', 'message': 'Saved successfully'};
+    }
+    return {'status': 'preview'};
+  }
+}
 
 void main() {
   Widget testSheet({
     Map<String, dynamic>? initialScanResult,
     String lang = 'en',
+    ApiService? apiService,
   }) {
     return localizedApp(
       Scaffold(
         body: ReceiptScannerSheet(
           householdId: 'hh-test-family',
+          apiService: apiService,
           initialScanResult: initialScanResult ??
               {
                 'status': 'preview',
@@ -71,7 +114,9 @@ void main() {
     expect(find.descendant(of: find.byKey(const ValueKey('nafaqah_badge_text')), matching: find.textContaining('%')), findsNothing);
 
     // Tap For Whom = Wife / Partner
-    await tester.tap(find.byKey(const ValueKey('beneficiary_partner')));
+    final partnerBeneficiary = find.byKey(const ValueKey('beneficiary_partner'));
+    await tester.ensureVisible(partnerBeneficiary);
+    await tester.tap(partnerBeneficiary, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     // Now Paid by Partner, For Whom = Wife -> Wife Personal Allowance
@@ -85,11 +130,14 @@ void main() {
     // Tap Paid by Partner (Wife) + Beneficiary Partner
     await tester.tap(find.byKey(const ValueKey('spent_by_partner')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('beneficiary_partner')));
+    final partnerBeneficiary2 = find.byKey(const ValueKey('beneficiary_partner'));
+    await tester.ensureVisible(partnerBeneficiary2);
+    await tester.tap(partnerBeneficiary2, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(find.textContaining('From wife\'s personal allowance'), findsOneWidget);
 
     // Switch back to Paid by Me
+    await tester.ensureVisible(find.byKey(const ValueKey('spent_by_me')));
     await tester.tap(find.byKey(const ValueKey('spent_by_me')));
     await tester.pumpAndSettle();
 
@@ -113,5 +161,81 @@ void main() {
     expect(find.textContaining('مستحقات للزوجة:'), findsOneWidget);
     expect(find.textContaining('100%'), findsNothing);
     expect(find.descendant(of: find.byKey(const ValueKey('nafaqah_badge_text')), matching: find.textContaining('%')), findsNothing);
+  });
+
+  testWidgets('ReceiptScannerSheet: preview without recorder_role/caller_role does not show husband badge and blocks save until class chosen', (tester) async {
+    await tester.pumpWidget(testSheet(
+      initialScanResult: {
+        'status': 'preview',
+        'merchant': 'Tamimi Markets',
+        'amount': 250.0,
+        'category_code': 'OPEX-GROCERY',
+        'household_mode': 'family_nafaqah',
+        'is_family': true,
+        'can_classify': true,
+        'wives': [
+          {'id': 'w-1', 'display_name': 'Sara'}
+        ],
+        // No recorder_role or caller_role
+        'items': [
+          {'name': 'Groceries', 'quantity': 1.0, 'price': 250.0}
+        ],
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    // Husband badge must NOT be shown
+    expect(find.textContaining('Paid by husband'), findsNothing);
+
+    // Save button should be present
+    final saveButton = find.byKey(const ValueKey('receipt_confirm_save_button'));
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // Sheet should not have popped (save was blocked) and review section should show
+    expect(find.byType(ReceiptScannerSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('receipt_nafaqah_review')), findsOneWidget);
+  });
+
+  testWidgets('ReceiptScannerSheet: choosing wife_reimbursable in review section makes commit payload carry nafaqah_class == wife_reimbursable', (tester) async {
+    final fakeApi = _FakeReceiptApiService();
+    await tester.pumpWidget(testSheet(
+      apiService: fakeApi,
+      initialScanResult: {
+        'status': 'preview',
+        'merchant': 'Tamimi Markets',
+        'amount': 250.0,
+        'category_code': 'OPEX-GROCERY',
+        'household_mode': 'family_nafaqah',
+        'is_family': true,
+        'can_classify': true,
+        'wives': [
+          {'id': 'w-1', 'display_name': 'Sara'}
+        ],
+        // No recorder_role or caller_role
+        'items': [
+          {'name': 'Groceries', 'quantity': 1.0, 'price': 250.0}
+        ],
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('receipt_nafaqah_review')), findsOneWidget);
+
+    // Tap the wife reimbursable option
+    final reimbOption = find.byKey(const ValueKey('nafaqah_option_wife_reimbursable'));
+    await tester.ensureVisible(reimbOption);
+    await tester.tap(reimbOption, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // Tap confirm save
+    final saveButton = find.byKey(const ValueKey('receipt_confirm_save_button'));
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(fakeApi.lastCommitArgs, isNotNull);
+    expect(fakeApi.lastCommitArgs!['nafaqah_class'], equals('wife_reimbursable'));
   });
 }

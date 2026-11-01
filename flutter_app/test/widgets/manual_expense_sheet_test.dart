@@ -6,6 +6,8 @@ import 'package:budget_tracker/widgets/nafaqah/nafaqah_class_selector.dart';
 import 'package:budget_tracker/widgets/transactions/manual_expense_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:budget_tracker/providers/account_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 const _husband = {'id': 'u-husband', 'display_name': 'Abu Fahad', 'financial_role': 'provider'};
@@ -362,5 +364,43 @@ void main() {
     await tapSave(tester);
     expect(saved, isNotNull);
     expect(saved!['created_at'], isNotNull);
+  });
+
+  testWidgets('AccountProvider bound with paydayDay 10 and occurred-at of 12 Oct makes books_to_cycle badge contain 2026-10', (tester) async {
+    final accProvider = AccountProvider();
+    accProvider.bindHousehold('h1', paydayDay: 10);
+
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AccountProvider>.value(
+        value: accProvider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ManualExpenseSheet(
+              householdId: 'h1',
+              initialMerchant: 'Panda',
+              initialAmount: 120,
+              initialOccurredAt: DateTime(2026, 10, 12),
+              loadMembers: (_) async => [_husband],
+              loadAccounts: (_) async => [],
+              currentUserId: () => 'u-husband',
+              loadNafaqah: (_) async => const NafaqahSummary(
+                mode: 'not_family',
+                callerUserId: 'u-husband',
+                callerRole: 'admin',
+                husbandName: 'Abu Fahad',
+                canSetProvider: true,
+                wives: [],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('2026-10'), findsOneWidget);
   });
 }

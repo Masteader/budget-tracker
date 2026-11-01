@@ -92,7 +92,7 @@ class NafaqahPreview {
   bool get _isSpouse => recorderRole == 'wife' || recorderRole == 'husband';
 
   /// Only the wife, the husband (provider) or an admin records a Nafaqah class.
-  bool get canClassify => isFamily && (_isSpouse || callerIsAdmin);
+  bool get canClassify => isFamily && (_isSpouse || callerIsAdmin || recorderRole == null);
 
   /// An admin who is neither spouse: classifies on the wife's behalf, naming her.
   bool get isAdminClassifier => canClassify && !_isSpouse;

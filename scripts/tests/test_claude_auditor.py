@@ -65,3 +65,4 @@ Fix issue 1.
 
     pure_revise = "# AUDIT VERDICT: REVISE\nFix line 22."
     assert parse_approved(pure_revise) is False
+

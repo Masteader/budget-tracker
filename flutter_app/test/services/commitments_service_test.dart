@@ -199,6 +199,51 @@ void main() {
       final hasPastDue = commitments.any((c) => c.id.contains('2026-11-01'));
       expect(hasPastDue, isFalse);
     });
+
+    test('active plan with nextDueAt in an earlier cycle has cycleKey rolled forward to current cycleKey', () async {
+      final overduePlan = InstallmentPlan(
+        id: 'inst-overdue',
+        householdId: 'hh-1',
+        merchant: 'eXtra',
+        provider: 'Tabby',
+        totalAmount: 1200.0,
+        installmentCount: 4,
+        monthlyAmount: 300.0,
+        paidInstallments: 1,
+        dayOfMonth: 28,
+        startDate: '2026-08-01',
+        status: 'ACTIVE',
+        nextDueAt: DateTime.utc(2026, 9, 28), // Cycle 2026-10 with payday 27
+      );
+
+      const emptyBills = RecurringBillsSummary(
+        cycleKey: '2026-11',
+        cycleLabel: 'November 2026',
+        totalRecurringMonthly: 0.0,
+        paidThisCycle: 0.0,
+        reservedAmount: 0.0,
+        bills: [],
+      );
+
+      final service = CommitmentsService(
+        installments: FakeInstallmentSource([overduePlan]),
+        bills: FakeRecurringBillSource(emptyBills),
+      );
+
+      final commitments = await service.getPendingCommitments(
+        householdId: 'hh-1',
+        paydayDay: 27,
+        cycleKey: '2026-11',
+      );
+
+      expect(commitments.length, equals(1));
+      final item = commitments.first;
+      expect(item.id, contains('inst-overdue'));
+      expect(item.amountHalalas, equals(30000));
+      expect(item.isPaid, isFalse);
+      expect(item.cycleKey, equals('2026-11'));
+    });
   });
 }
+
 

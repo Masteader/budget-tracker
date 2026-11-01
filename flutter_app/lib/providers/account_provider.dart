@@ -123,6 +123,7 @@ class AccountProvider extends ChangeNotifier {
       _snapshot = OperatingCashSnapshot.empty;
       _configuredMonthlyIncome = null;
       _hasLoaded = false;
+      _isLoading = false;
       _error = null;
       _generation++;
       _inFlight = null;
@@ -307,7 +308,6 @@ class AccountProvider extends ChangeNotifier {
       (list) {
         if (_householdId != householdId) return;
         _accounts = list;
-        _hasLoaded = true;
         _publishSnapshot(
           householdId: householdId,
           cycleKey: _cycleKey ?? '',

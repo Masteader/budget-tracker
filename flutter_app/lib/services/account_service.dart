@@ -346,22 +346,28 @@ class AccountService {
 
   /// Automatically links any unlinked transactions to the category's budget account
   /// or primary operating account, and adjusts the account balance if it was not deducted yet.
-  Future<void> reconcileUnlinkedTransactions(String householdId) async {
+  Future<void> reconcileUnlinkedTransactions(
+    String householdId, {
+    Future<List<Account>> Function(String householdId)? fetchAccounts,
+    Future<List<Map<String, dynamic>>> Function(String householdId)? fetchUnlinked,
+    Future<void> Function(String txId, String targetAccId)? linkTransaction,
+  }) async {
     try {
-      final accounts = await getAccounts(householdId);
+      final accounts = fetchAccounts != null ? await fetchAccounts(householdId) : await getAccounts(householdId);
       if (accounts.isEmpty) return;
 
-      final unlinked = await _client
+      final List<dynamic> unlinked = fetchUnlinked != null ? await fetchUnlinked(householdId) : await _client
           .from('transactions')
           .select('id, amount, category_code, nafaqah_class')
           .eq('household_id', householdId)
-          .isFilter('account_id', null);
+          .isFilter('account_id', null)
+          .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)');
 
       final operatingAccounts = accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).toList();
       final defaultAcc = operatingAccounts.firstOrNull ?? accounts.first;
 
       if (unlinked.isNotEmpty) {
-        for (final row in (unlinked as List)) {
+        for (final row in unlinked) {
           final txId = row['id'] as String?;
           final txAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
           final catCode = row['category_code'] as String?;
@@ -389,6 +395,11 @@ class AccountService {
                 targetAccId = bRes['account_id'] as String;
               }
             } catch (_) {}
+          }
+
+          if (linkTransaction != null) {
+            await linkTransaction(txId, targetAccId);
+            continue;
           }
 
           // Check target account balance before linking

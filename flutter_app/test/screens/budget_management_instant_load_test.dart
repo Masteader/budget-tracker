@@ -13,6 +13,8 @@ import 'package:budget_tracker/providers/household_role_provider.dart';
 import 'package:budget_tracker/providers/transaction_provider.dart';
 import 'package:budget_tracker/screens/home/budget_management_screen.dart';
 import 'package:budget_tracker/widgets/app_shimmer.dart';
+import 'package:budget_tracker/models/household_setup.dart';
+import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
 import '../support/localized_app.dart';
 
 class TestHouseholdRoleProvider extends HouseholdRoleProvider {
@@ -171,6 +173,40 @@ void main() {
       // AppShimmer skeleton must NOT be rendered when cached static data exists
       expect(find.byType(AppShimmer), findsNothing);
       expect(find.byType(AppBar), findsOneWidget);
+    });
+    testWidgets('BudgetManagementScreen binds unbound AccountProvider with payday from HouseholdSetupPrefs', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.reset();
+        HouseholdSetupPrefs.loadOverride = null;
+      });
+
+      HouseholdSetupPrefs.loadOverride = (hid) async => const HouseholdSetupData(paydayDay: 10);
+      final accProvider = AccountProvider();
+      expect(accProvider.householdId, isNull);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AccountProvider>.value(value: accProvider),
+            ChangeNotifierProvider<TransactionProvider>(create: (_) => TransactionProvider()),
+            ChangeNotifierProvider<BudgetProvider>(create: (_) => MockBudgetProvider()),
+            ChangeNotifierProvider<HouseholdRoleProvider>(create: (_) => TestHouseholdRoleProvider(householdId: 'test-hid')),
+          ],
+          child: localizedApp(
+            BudgetManagementScreen(
+              budgetStreamOverride: (_) => Stream.value([]),
+            ),
+            scaffold: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(accProvider.householdId, isNotNull);
+      expect(accProvider.householdId, equals('test-hid'));
+      expect(accProvider.paydayDay, equals(10));
     });
   });
 }

@@ -172,6 +172,9 @@ async def chat_transaction(request: Request):
             detail="nafaqah_class must be 'wife_reimbursable', 'wife_personal' or 'none'.",
         )
 
+    if nafaqah_class in ("wife_personal", "wife_reimbursable"):
+        account_id = None
+
     preview_token = body.get("preview_token")
     if preview_token is not None and not isinstance(preview_token, str):
         raise HTTPException(status_code=422, detail={"code": InvalidPreviewToken.CODE})
