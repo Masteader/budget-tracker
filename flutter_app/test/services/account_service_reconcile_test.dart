@@ -1,6 +1,15 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/services/account_service.dart';
+
+class _SpyAccountService extends AccountService {
+  int updateBalanceCalls = 0;
+  @override
+  Future<void> updateBalance(String accountId, double newBalance) async {
+    updateBalanceCalls++;
+  }
+}
 
 void main() {
   group('AccountService.reconcileUnlinkedTransactions', () {
@@ -88,6 +97,31 @@ void main() {
       );
 
       expect(linkedTxIds, isEmpty);
+    });
+
+    test('reconcileUnlinkedTransactions never calls updateBalance (relies on DB trigger)', () async {
+      final spy = _SpyAccountService();
+      await spy.reconcileUnlinkedTransactions(
+        householdId,
+        fetchAccounts: (_) async => [primaryAccount],
+        fetchUnlinked: (_) async => [
+          {
+            'id': 'tx-standard',
+            'amount': 100.0,
+            'category_code': 'OPEX-TRANSPORT',
+            'nafaqah_class': null,
+          },
+        ],
+        linkTransaction: (_, __) async {},
+      );
+      expect(spy.updateBalanceCalls, equals(0));
+    });
+
+    test('source guard: account_service.dart does not contain forged cycle_key or direct balance update', () {
+      final src = File('lib/services/account_service.dart').readAsStringSync();
+      expect(src.contains("'cycle_key': currentKey"), isFalse);
+      expect(src.contains('reconciledBalance'), isFalse);
+      expect(src.contains(".update({'balance'"), isFalse);
     });
   });
 }

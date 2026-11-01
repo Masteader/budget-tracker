@@ -1186,7 +1186,7 @@ def process_chat_transaction(
         nafaqah_class=nafaqah["nafaqah_class"],
         nafaqah_spouse_id=nafaqah["nafaqah_spouse_id"],
         user_id=user_id,
-        account_id=override_account_id,
+        account_id=None if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable") else override_account_id,
     )
 
     # Attach items fallback if needed

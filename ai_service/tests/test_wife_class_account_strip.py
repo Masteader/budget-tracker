@@ -151,3 +151,39 @@ def test_chat_transaction_husband_preserves_account_id(family):
     assert resp.status_code == 200, resp.text
     tx = _last_tx(family)
     assert tx.get("account_id") == ACC_ID
+
+
+def test_chat_transaction_derived_wife_class_strips_account_id(family):
+    body = {
+        "household_id": HH,
+        "message": "مقاضي البيت 350 ريال",
+        "allow_duplicate": True,
+        "paid_by": "partner",
+        "beneficiary": "both",
+        "nafaqah_spouse_id": WIFE,
+        "account_id": ACC_ID,
+    }
+    with patch("chat_parser.litellm.completion", side_effect=RuntimeError("offline")), patch("chat_parser.fetch_budget", return_value=None):
+        resp = client.post("/agent/chat-transaction", headers=bearer(HUSBAND), json=body)
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == "wife_reimbursable"
+    assert tx.get("account_id") is None
+
+
+def test_scan_receipt_derived_wife_class_strips_account_id(family):
+    body = {
+        "household_id": HH,
+        "qr_code_raw": _zatca_qr(),
+        "allow_duplicate": True,
+        "paid_by": "partner",
+        "beneficiary": "both",
+        "nafaqah_spouse_id": WIFE,
+        "account_id": ACC_ID,
+    }
+    with patch("receipt_scanner.fetch_budget", return_value=None):
+        resp = client.post("/agent/scan-receipt", headers=bearer(HUSBAND), json=body)
+    assert resp.status_code == 200, resp.text
+    tx = _last_tx(family)
+    assert tx["nafaqah_class"] == "wife_reimbursable"
+    assert tx.get("account_id") is None

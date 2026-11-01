@@ -1038,7 +1038,7 @@ def process_receipt_scan(
         receipt_url=receipt_url,
         qr_code_raw=resolved_qr,
         user_id=user_id,
-        account_id=account_id,
+        account_id=None if nafaqah.get("nafaqah_class") in ("wife_personal", "wife_reimbursable") else account_id,
     )
 
     if items:

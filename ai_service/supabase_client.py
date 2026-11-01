@@ -669,6 +669,9 @@ def insert_transaction(
     )
     payload.update(nafaqah_fields)
 
+    if payload.get('nafaqah_class') in ('wife_personal', 'wife_reimbursable'):
+        payload['account_id'] = None
+
 
     # A constraint or permission refusal (an unknown category code, E2E-03; a family without a
     # provider; RLS) is final, never a schema mismatch: retrying with a pruned payload cannot help,

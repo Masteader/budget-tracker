@@ -67,10 +67,11 @@ class HouseholdSetupPrefs {
       }
     }
 
+    final payday = await attempt(() => service.getHouseholdPayday(householdId));
+
     final results = await Future.wait<Object?>([
-      attempt(() => service.getHouseholdPayday(householdId)),
       attempt(() async {
-        final currentKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
+        final currentKey = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: payday);
         final records = await AccountService.instance.getCycleIncome(householdId, currentKey);
         final sum = records.fold<double>(0.0, (s, r) => s + r.netAmount);
         if (sum > 0) return sum;
@@ -85,13 +86,12 @@ class HouseholdSetupPrefs {
       confirmed = prefs.getBool(paydayConfirmedKey(householdId)) ?? false;
       hidden = prefs.getBool(hiddenKey(householdId)) ?? false;
     } catch (_) {}
-    final payday = results[0] as int?;
     return HouseholdSetupData(
       paydayDay: payday,
       // A payday other than the default was chosen on purpose.
       paydayConfirmed: confirmed || (payday != null && payday != SalaryCycleService.defaultPaydayDay),
-      monthlyIncome: results[1] as double?,
-      roster: results[2] as HouseholdRoster?,
+      monthlyIncome: results[0] as double?,
+      roster: results[1] as HouseholdRoster?,
       hidden: hidden,
     );
   }

@@ -121,8 +121,11 @@ class AccountService {
       } catch (e) {
         try {
           await updateBalance(acc.id, initialBalance);
-        } catch (_) {}
-        return acc.copyWith(balance: initialBalance);
+          return acc.copyWith(balance: initialBalance);
+        } catch (err) {
+          debugPrint('[AccountService] Failed to set initial balance via RPC: $err');
+          return acc;
+        }
       }
     }
     return acc;
@@ -144,21 +147,10 @@ class AccountService {
   Future<void> updateBalance(String accountId, double newBalance) async {
     final client = _safeClient;
     if (client == null) return;
-    try {
-      await client.rpc('reconcile_account_balance', params: {
-        'p_account_id': accountId,
-        'p_new_balance': newBalance,
-      });
-      return;
-    } catch (e) {
-      debugPrint('[AccountService] reconcile_account_balance rpc failed: $e, attempting fallback');
-    }
-    try {
-      await client
-          .from('accounts')
-          .update({'balance': newBalance})
-          .eq('id', accountId);
-    } catch (_) {}
+    await client.rpc('reconcile_account_balance', params: {
+      'p_account_id': accountId,
+      'p_new_balance': newBalance,
+    });
   }
 
   /// Archive an account (soft delete).
@@ -356,12 +348,23 @@ class AccountService {
       final accounts = fetchAccounts != null ? await fetchAccounts(householdId) : await getAccounts(householdId);
       if (accounts.isEmpty) return;
 
-      final List<dynamic> unlinked = fetchUnlinked != null ? await fetchUnlinked(householdId) : await _client
-          .from('transactions')
-          .select('id, amount, category_code, nafaqah_class')
-          .eq('household_id', householdId)
-          .isFilter('account_id', null)
-          .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)');
+      final currentUserId = _safeClient?.auth.currentUser?.id;
+      final List<dynamic> unlinked = fetchUnlinked != null
+          ? await fetchUnlinked(householdId)
+          : await (currentUserId != null && currentUserId.isNotEmpty
+              ? _client
+                  .from('transactions')
+                  .select('id, amount, category_code, nafaqah_class')
+                  .eq('household_id', householdId)
+                  .eq('user_id', currentUserId)
+                  .isFilter('account_id', null)
+                  .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)')
+              : _client
+                  .from('transactions')
+                  .select('id, amount, category_code, nafaqah_class')
+                  .eq('household_id', householdId)
+                  .isFilter('account_id', null)
+                  .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)'));
 
       final operatingAccounts = accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).toList();
       final defaultAcc = operatingAccounts.firstOrNull ?? accounts.first;
@@ -369,7 +372,6 @@ class AccountService {
       if (unlinked.isNotEmpty) {
         for (final row in unlinked) {
           final txId = row['id'] as String?;
-          final txAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
           final catCode = row['category_code'] as String?;
           final nafaqahClass = row['nafaqah_class'] as String?;
           if (txId == null) continue;
@@ -402,99 +404,12 @@ class AccountService {
             continue;
           }
 
-          // Check target account balance before linking
-          final targetAccBefore = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
-
-          // Link the transaction
+          // Link the transaction: DB trigger automatically handles balance adjustment
           await _client.from('transactions').update({'account_id': targetAccId}).eq('id', txId);
-
-          // Check target account balance after linking
-          final targetAccAfter = (await getAccounts(householdId)).where((a) => a.id == targetAccId).firstOrNull;
-
-          if (targetAccBefore != null && targetAccAfter != null) {
-            // If the database trigger did not decrement the balance, deduct it directly
-            if ((targetAccAfter.balance - targetAccBefore.balance).abs() < 0.001) {
-              final newBal = (targetAccBefore.balance - txAmt).clamp(0.0, double.infinity);
-              await updateBalance(targetAccId, newBal);
-            }
-          }
         }
       }
-
-      // If the household has a single active operating pool account (e.g. Rajhi Main account),
-      // reconcile its balance to effectiveCycleIncome - totalHouseholdCycleSpent so that
-      // operating cash never drifts from Spent.
-      if (operatingAccounts.length == 1) {
-        final singleOpAcc = operatingAccounts.first;
-        final currentKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
-
-        // Get effective income: cycle income records if any, else configured monthly income
-        final incRecords = await getCycleIncome(householdId, currentKey);
-        double cycleIncome = incRecords.fold<double>(0.0, (s, r) => s + r.netAmount);
-        if (cycleIncome <= 0) {
-          cycleIncome = await getHouseholdConfiguredIncome(householdId);
-        }
-
-        if (cycleIncome > 0) {
-          // 1. Calculate budget spent amount from active budgets
-          double budgetSpent = 0.0;
-          try {
-            final bRows = await _client
-                .from('budgets')
-                .select('spent_amount')
-                .eq('household_id', householdId)
-                .eq('is_active', true);
-            for (final b in (bRows as List)) {
-              budgetSpent += (b['spent_amount'] as num?)?.toDouble() ?? 0.0;
-            }
-          } catch (_) {}
-
-          // 2. Query transactions matching cycle_key or within cycle calendar date range
-          final cycle = SalaryCycleService.currentCycle();
-          final startIso = cycle.startIso;
-          final endIso = cycle.endIso;
-
-          double txSpent = 0.0;
-          try {
-            final allTxs = await _client
-                .from('transactions')
-                .select('id, amount, nafaqah_class, is_settlement, cycle_key, timestamp, account_id')
-                .eq('household_id', householdId);
-
-            for (final t in (allTxs as List)) {
-              if (t['is_settlement'] == true) continue;
-              if (t['nafaqah_class'] == 'wife_personal') continue;
-
-              final tKey = t['cycle_key'] as String?;
-              final tTime = t['timestamp'] as String?;
-              final inCycle = (tKey == currentKey) ||
-                  (tTime != null && tTime.compareTo(startIso) >= 0 && tTime.compareTo(endIso) <= 0);
-
-              if (inCycle) {
-                txSpent += (t['amount'] as num?)?.toDouble() ?? 0.0;
-
-                // Backfill missing cycle_key or account_id
-                if (tKey == null || tKey.isEmpty) {
-                  try {
-                    await _client.from('transactions').update({'cycle_key': currentKey}).eq('id', t['id']);
-                  } catch (_) {}
-                }
-                if (t['account_id'] == null) {
-                  try {
-                    await _client.from('transactions').update({'account_id': singleOpAcc.id}).eq('id', t['id']);
-                  } catch (_) {}
-                }
-              }
-            }
-          } catch (_) {}
-
-          final cycleSpent = budgetSpent > txSpent ? budgetSpent : txSpent;
-          final reconciledBalance = (cycleIncome - cycleSpent).clamp(0.0, double.infinity);
-          if ((singleOpAcc.balance - reconciledBalance).abs() >= 0.01) {
-            await updateBalance(singleOpAcc.id, reconciledBalance);
-          }
-        }
-      }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[AccountService] reconcileUnlinkedTransactions failed: $e');
+    }
   }
 }
