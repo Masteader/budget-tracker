@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/account.dart';
+import '../../providers/account_provider.dart';
 import '../../services/account_service.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
@@ -97,10 +99,15 @@ class _AddEditAccountDialogState extends State<AddEditAccountDialog> {
           await AccountService.instance.updateBalance(widget.existingAccount!.id, balance);
         }
       } else {
+        int paydayDay = 27;
+        try {
+          paydayDay = context.read<AccountProvider>().paydayDay;
+        } catch (_) {}
         await AccountService.instance.createAccount(
           householdId: widget.householdId,
           name: name,
           accountType: _type,
+          paydayDay: paydayDay,
           currency: _currency,
           initialBalance: balance,
           isSharedPool: _isSharedPool,

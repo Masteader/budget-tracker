@@ -45,3 +45,27 @@ Commitments = Σ (amount_due − amount_paid)
   FROM bills + installments (+ credit card statement dues)
   WHERE status IN ('unpaid', 'partial', 'overdue')
     AND due_date <= period_end        -- include overdue
+```
+
+### C. Operating Cash (Spendable Headroom)
+**Definition:** Net liquid cash available for discretionary allocation after reserving funds for all period commitments. Spent amount is strictly excluded from this formula because transaction triggers already reduce `accounts.balance` at write time.
+
+```
+Operating Cash = Liquid Balance − Commitments
+```
+
+**Implementation SSOT:**
+- Represented in Flutter code by `OperatingCashCalculator.calculate(liquidAccounts, commitments)`.
+- Represented in PostgreSQL by zero-based trigger accounting ensuring `accounts.balance` remains the canonical live balance.
+```
+
+### C. Operating Cash (Spendable Headroom)
+**Definition:** Net liquid cash available for discretionary allocation after reserving funds for all period commitments. Spent amount is strictly excluded from this formula because transaction triggers already reduce `accounts.balance` at write time.
+
+```
+Operating Cash = Liquid Balance − Commitments
+```
+
+**Implementation SSOT:**
+- Represented in Flutter code by `OperatingCashCalculator.calculate(liquidAccounts, commitments)`.
+- Represented in PostgreSQL by zero-based trigger accounting ensuring `accounts.balance` remains the canonical live balance.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -13,7 +14,13 @@ from auth import verify_household_access, get_current_user_id
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
+from supabase_client import (
+    ForbiddenAccountError,
+    InvalidAttributionError,
+    TransactionRejectedError,
+    UnknownCategoryError,
+    assert_account_debitable,
+)
 from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota
 from receipt_scanner import ReceiptImageTooLarge, process_receipt_scan
@@ -86,6 +93,11 @@ async def scan_receipt(request: Request):
     }
     qr_code_raw = overrides["qr_code_raw"]
     account_id = overrides.get("account_id")
+    if account_id is not None:
+        try:
+            UUID(account_id)
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=422, detail="account_id must be a valid UUID string.")
     if overrides.get("nafaqah_class") in ("wife_personal", "wife_reimbursable"):
         account_id = None
     # The amount and category the user corrected in the review (UX-12), validated like any edit.
@@ -111,6 +123,9 @@ async def scan_receipt(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
+        if account_id is not None:
+            await asyncio.to_thread(assert_account_debitable, household_id, user_id, account_id)
+
         # Strict rate limit & quota: 10 invoices per 10 minutes maximum per user
         await check_api_quota(
             user_id=user_id,
@@ -141,6 +156,10 @@ async def scan_receipt(request: Request):
             override_category_code=override_category_code,
             account_id=account_id,
         )
+    except ForbiddenAccountError as exc:
+        if use_idempotency:
+            await idempotency_store.release(user_id, "scan-receipt", idem_key)
+        raise HTTPException(status_code=403, detail=exc.PUBLIC_MESSAGE)
     except (InvalidPreviewToken, PreviewTokenExpired) as exc:
         if use_idempotency:
             await idempotency_store.release(user_id, "scan-receipt", idem_key)

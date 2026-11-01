@@ -178,6 +178,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   late Future<String> _householdId;
   List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
   int _currentCycleIndex = 0;
+  bool _userNavigatedManually = false;
 
   /// Bumped by "Try again" to subscribe to the budgets stream afresh.
   int _budgetStreamGeneration = 0;
@@ -185,7 +186,11 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
   @override
   void initState() {
     super.initState();
-    final initialCycles = SalaryCycleService.getAvailableCycles();
+    int initialPayday = 27;
+    try {
+      initialPayday = context.read<AccountProvider>().paydayDay;
+    } catch (_) {}
+    final initialCycles = SalaryCycleService.getAvailableCycles(paydayDay: initialPayday);
     final idx = initialCycles.indexWhere((c) => c.isCurrent);
     _cycles = initialCycles;
     _currentCycleIndex = idx != -1 ? idx : 0;
@@ -354,7 +359,17 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
 
   Future<HouseholdSetupData?> _fetchSetup(String hid) async {
     final data = await HouseholdSetupPrefs.load(hid);
-    if (mounted) setState(() => _setup = data);
+    if (mounted) {
+      setState(() {
+        _setup = data;
+        final payday = data.paydayDay;
+        if (!_userNavigatedManually) {
+          _cycles = SalaryCycleService.getAvailableCycles(paydayDay: payday);
+          final idx = _cycles.indexWhere((c) => c.isCurrent);
+          _currentCycleIndex = idx != -1 ? idx : 0;
+        }
+      });
+    }
     return data;
   }
 
@@ -568,10 +583,16 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                           hasPrevious: _cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1,
                           hasNext: _cycles.isNotEmpty && _currentCycleIndex > 0,
                           onPrevious: () {
-                            setState(() => _currentCycleIndex++);
+                            setState(() {
+                              _userNavigatedManually = true;
+                              _currentCycleIndex++;
+                            });
                           },
                           onNext: () {
-                            setState(() => _currentCycleIndex--);
+                            setState(() {
+                              _userNavigatedManually = true;
+                              _currentCycleIndex--;
+                            });
                           },
                         ),
                       ),

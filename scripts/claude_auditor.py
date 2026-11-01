@@ -73,7 +73,7 @@ MAX_BUDGET_USD = float(os.environ.get("AUDIT_MAX_BUDGET_USD", str(DEFAULT_MAX_BU
 # Model -- configurable via env var for future upgrades
 DEFAULT_MODEL = "claude-opus-5-5"
 MODEL = os.environ.get("OPUS_MODEL", DEFAULT_MODEL)
-DEFAULT_EFFORT = "medium"
+DEFAULT_EFFORT = "high"
 EFFORT = os.environ.get("OPUS_EFFORT", DEFAULT_EFFORT)
 
 # Token pricing for cost estimates (Claude Opus 5.5 as of Nov 2026)

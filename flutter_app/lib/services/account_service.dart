@@ -82,11 +82,13 @@ class AccountService {
     required String householdId,
     required String name,
     required AccountType accountType,
+    required int paydayDay,
     String currency = 'SAR',
     double initialBalance = 0.0,
     bool isSharedPool = false,
     String colorHex = '#F0A3BC',
     String iconName = 'account_balance_rounded',
+    DateTime? now,
   }) async {
     final userId = _client.auth.currentUser?.id ?? '';
     final insertData = {
@@ -107,7 +109,7 @@ class AccountService {
 
     if (initialBalance > 0) {
       try {
-        final cycleKey = SalaryCycleService.cycleKeyForInstant(DateTime.now());
+        final cycleKey = SalaryCycleService.cycleKeyForInstant(now ?? DateTime.now(), paydayDay: paydayDay);
         await logIncome(
           householdId: householdId,
           accountId: acc.id,
@@ -349,22 +351,20 @@ class AccountService {
       if (accounts.isEmpty) return;
 
       final currentUserId = _safeClient?.auth.currentUser?.id;
+      if (fetchUnlinked == null && (currentUserId == null || currentUserId.isEmpty)) return;
+
+      final tenMinutesAgo = DateTime.now().toUtc().subtract(const Duration(minutes: 10)).toIso8601String();
       final List<dynamic> unlinked = fetchUnlinked != null
           ? await fetchUnlinked(householdId)
-          : await (currentUserId != null && currentUserId.isNotEmpty
-              ? _client
-                  .from('transactions')
-                  .select('id, amount, category_code, nafaqah_class')
-                  .eq('household_id', householdId)
-                  .eq('user_id', currentUserId)
-                  .isFilter('account_id', null)
-                  .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)')
-              : _client
-                  .from('transactions')
-                  .select('id, amount, category_code, nafaqah_class')
-                  .eq('household_id', householdId)
-                  .isFilter('account_id', null)
-                  .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)'));
+          : await _client
+              .from('transactions')
+              .select('id, amount, category_code, nafaqah_class, source, merchant')
+              .eq('household_id', householdId)
+              .eq('user_id', currentUserId!)
+              .isFilter('account_id', null)
+              .inFilter('source', ['chat', 'receipt_scan'])
+              .gte('created_at', tenMinutesAgo)
+              .or('nafaqah_class.is.null,nafaqah_class.not.in.(wife_personal,wife_reimbursable)');
 
       final operatingAccounts = accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).toList();
       final defaultAcc = operatingAccounts.firstOrNull ?? accounts.first;
@@ -374,7 +374,12 @@ class AccountService {
           final txId = row['id'] as String?;
           final catCode = row['category_code'] as String?;
           final nafaqahClass = row['nafaqah_class'] as String?;
+          final source = row['source'] as String?;
+          final merchant = (row['merchant'] as String? ?? '').toLowerCase();
           if (txId == null) continue;
+          if (source == 'prior_adjustment' || merchant.startsWith('prior') || merchant.startsWith('سابق')) {
+            continue;
+          }
 
           // Rule 02.3: Wife personal allowance and wife reimbursable are isolated from operating pool
           if (nafaqahClass == 'wife_personal' || nafaqahClass == 'wife_reimbursable') {

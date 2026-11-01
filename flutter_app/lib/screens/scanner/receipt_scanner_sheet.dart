@@ -101,7 +101,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         existing['quantity'] = existingQty + qty;
       } else {
         merged[key] = {
-          'name': name.isEmpty ? 'Item' : name,
+          'name': name.isEmpty ? context.tr('item_generic') : name,
           'quantity': qty > 0 ? qty : 1.0,
           'price': price,
         };
@@ -441,12 +441,12 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
               Navigator.pop(ctx);
               if (text.isEmpty) return;
               final decoded = ZatcaDecoder.decodeTlv(text);
-              final sellerName = decoded?['seller'] as String? ?? 'Store Name';
+              final sellerName = decoded?['seller'] as String?;
               setState(() {
                 _zatcaQrRaw = text;
                 _zatcaDecoded = decoded;
-                if (sellerName.isNotEmpty && sellerName != 'Store Name') {
-                  _merchantController.text = sellerName;
+                if (sellerName != null && sellerName.trim().isNotEmpty) {
+                  _merchantController.text = sellerName.trim();
                 }
               });
               _analyzeReceipt();
@@ -512,13 +512,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     );
     if (scannedCode != null && scannedCode.isNotEmpty) {
       final decoded = ZatcaDecoder.decodeTlv(scannedCode);
-      final sellerName = decoded?['seller'] as String? ?? 'Store Name';
+      final sellerName = decoded?['seller'] as String?;
 
       _safeSetState(() {
         _zatcaQrRaw = scannedCode;
         _zatcaDecoded = decoded;
-        if (sellerName.isNotEmpty && sellerName != 'Store Name') {
-          _merchantController.text = sellerName;
+        if (sellerName != null && sellerName.trim().isNotEmpty) {
+          _merchantController.text = sellerName.trim();
         }
       });
       _analyzeReceipt();
@@ -590,16 +590,19 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   /// reads once the device is back online. Nothing is guessed (R8).
   Future<void> _applyOfflineFallback(Object? error) async {
     if (_zatcaDecoded != null) {
-      final sellerName = _zatcaDecoded!['seller'] as String? ?? 'Store Name';
+      final sellerName = (_zatcaDecoded!['seller'] as String?)?.trim();
+      final effectiveSeller = (sellerName != null && sellerName.isNotEmpty) ? sellerName : '';
       final total = (_zatcaDecoded!['total'] as num?)?.toDouble() ?? 0.0;
       final vat = (_zatcaDecoded!['vat'] as num?)?.toDouble() ?? 0.0;
-      final isDup = await _checkFallbackDuplicateCandidate(sellerName, total, vat);
+      final isDup = effectiveSeller.isNotEmpty
+          ? await _checkFallbackDuplicateCandidate(effectiveSeller, total, vat)
+          : false;
       if (!isDup && mounted) {
         setState(() {
           _isAnalyzing = false;
           _scanResult = {
             'status': 'preview',
-            'merchant': sellerName,
+            'merchant': effectiveSeller,
             'amount': total,
             'vat_amount': vat,
             'category_code': 'OPEX-GROCERY',
@@ -796,13 +799,17 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       if (mounted) {
         if (res['status'] == 'success' || res['status'] == 'enriched') {
           final finalAmount = edits.amount ?? _scannedAmount;
-          try {
-            context.read<AccountProvider>().deductExpense(
-              accountId: _selectedAccountId,
-              amount: finalAmount,
-              nafaqahClass: confirmedClass,
-            );
-          } catch (_) {}
+          final serverNafaqahClass = (res['nafaqah_class'] as String?) ?? confirmedClass;
+          final effectiveAccountId = (res['account_id'] as String?) ?? rowAccountId;
+          if (effectiveAccountId != null) {
+            try {
+              context.read<AccountProvider>().deductExpense(
+                accountId: effectiveAccountId,
+                amount: finalAmount,
+                nafaqahClass: serverNafaqahClass,
+              );
+            } catch (_) {}
+          }
           AppSnackBar.showSuccess(
             context,
             res['message'] ?? context.tr('scan_invoice_saved_msg'),
@@ -883,6 +890,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         } catch (_) {}
       }
       if (!mounted) return;
+      final defaultItemName = context.tr('item_generic');
 
       final merchant = _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
@@ -1003,7 +1011,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
           try {
             await supabase.from('transaction_items').insert({
               'transaction_id': txId,
-              'name': it['name'] ?? 'Item',
+              'name': (it['name'] as String?)?.trim().isNotEmpty == true
+                  ? (it['name'] as String).trim()
+                  : defaultItemName,
               'quantity': it['quantity'] ?? 1.0,
               'price': it['price'] ?? 0.0,
             });
@@ -1014,13 +1024,15 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       _safeSetState(() => _isAnalyzing = false);
 
       if (mounted) {
-        try {
-          context.read<AccountProvider>().deductExpense(
-            accountId: accountId,
-            amount: total,
-            nafaqahClass: confirmedNafaqahClass,
-          );
-        } catch (_) {}
+        if (accountId != null) {
+          try {
+            context.read<AccountProvider>().deductExpense(
+              accountId: accountId,
+              amount: total,
+              nafaqahClass: confirmedNafaqahClass,
+            );
+          } catch (_) {}
+        }
         AppSnackBar.showSuccess(
           context,
           context.trArgs('scan_saved_amount_at', {'amount': context.sar(total), 'merchant': merchant}),

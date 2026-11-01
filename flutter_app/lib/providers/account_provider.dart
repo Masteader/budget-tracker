@@ -362,8 +362,7 @@ class AccountProvider extends ChangeNotifier {
       target = _accounts.where((a) => a.id == accountId).firstOrNull;
       if (target == null) return;
     } else {
-      target = _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull ??
-          _accounts.where((a) => !a.isArchived).firstOrNull;
+      target = _accounts.where((a) => !a.isArchived && a.accountType.isOperatingPool).firstOrNull;
     }
 
     if (target != null) {

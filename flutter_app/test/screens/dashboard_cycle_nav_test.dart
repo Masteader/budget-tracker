@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:budget_tracker/models/account.dart';
+import 'package:budget_tracker/models/household_setup.dart';
 import 'package:budget_tracker/models/operating_cash.dart';
 import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/providers/budget_provider.dart';
@@ -14,6 +15,9 @@ import 'package:budget_tracker/providers/transaction_provider.dart';
 import 'package:budget_tracker/screens/home/dashboard_screen.dart';
 import 'package:budget_tracker/services/account_service.dart';
 import 'package:budget_tracker/services/commitments_service.dart';
+import 'package:budget_tracker/services/salary_cycle_service.dart';
+import 'package:budget_tracker/widgets/dashboard/household_setup_card.dart';
+import 'package:budget_tracker/widgets/dashboard/salary_cycle_selector_bar.dart';
 import '../support/localized_app.dart';
 
 class _CountingAccountService extends AccountService {
@@ -132,5 +136,43 @@ void main() {
     // Verify setCycleKey was never called and provider cycleKey is unchanged
     expect(spyProvider.setCycleKeyCalls, equals(0));
     expect(spyProvider.cycleKey, equals(initialCycleKey));
+  });
+
+  testWidgets('Dashboard cycle key matches household payday 10 from HouseholdSetupPrefs', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    HouseholdSetupPrefs.loadOverride = (hid) async => const HouseholdSetupData(paydayDay: 10);
+    addTearDown(() => HouseholdSetupPrefs.loadOverride = null);
+
+    final countingService = _CountingAccountService();
+    final commitmentsService = _EmptyCommitmentsService();
+    final accountProvider = AccountProvider(
+      accounts: countingService,
+      commitments: commitmentsService,
+      income: AccountServiceIncomeSource(countingService),
+    );
+
+    await tester.pumpWidget(
+      _wrapWithProviders(
+        BudgetDashboard(
+          householdId: 'test-hid',
+          fetchHouseholdIdOverride: () async => 'test-hid',
+          budgetStreamOverride: (_) => Stream.value([]),
+        ),
+        accountProvider: accountProvider,
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final expectedKey = SalaryCycleService.cycleKeyForInstant(DateTime.now(), paydayDay: 10);
+    final selectorFinder = find.byType(SalaryCycleSelectorBar);
+    expect(selectorFinder, findsOneWidget);
+    final selectorWidget = tester.widget<SalaryCycleSelectorBar>(selectorFinder);
+    expect(selectorWidget.currentCycle?.cycleKey, equals(expectedKey));
   });
 }

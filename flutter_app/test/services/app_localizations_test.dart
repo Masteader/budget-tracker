@@ -55,6 +55,39 @@ void main() {
       }
     });
 
+    test('budget management and prior spend keys exist in all three locales (Item 9 & 10)', () {
+      const keys = [
+        'prior_spend_spouse_blocked',
+        'bm_spent_vs_cash',
+        'account_capacity_deficit',
+        'bm_toggle_failed',
+        'bm_prior_spend_failed',
+        'bm_deactivate_title',
+        'item_generic',
+      ];
+      for (final lang in ['en', 'ar', 'ur']) {
+        final loc = AppLocalizations(Locale(lang));
+        for (final key in keys) {
+          expect(loc.get(key), isNot(equals(key)), reason: 'Missing translation for $key in $lang');
+        }
+      }
+    });
+
+    test('prior_spend_spouse_blocked has updated natural copy in en/ar/ur', () {
+      expect(
+        AppLocalizations(const Locale('en')).get('prior_spend_spouse_blocked'),
+        'Prior spending cannot be logged from a spouse account.',
+      );
+      expect(
+        AppLocalizations(const Locale('ar')).get('prior_spend_spouse_blocked'),
+        'لا يمكن تسجيل المصاريف السابقة من حساب الزوجة.',
+      );
+      expect(
+        AppLocalizations(const Locale('ur')).get('prior_spend_spouse_blocked'),
+        'شریکِ حیات کے اکاؤنٹ سے سابقہ اخراجات درج نہیں کیے جا سکتے۔',
+      );
+    });
+
     test('AppLocalizationsDelegate supports en, ar, ur', () {
       const delegate = AppLocalizationsDelegate();
       expect(delegate.isSupported(const Locale('en')), isTrue);

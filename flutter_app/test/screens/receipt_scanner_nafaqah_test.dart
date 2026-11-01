@@ -1,11 +1,16 @@
+import 'package:budget_tracker/models/account.dart';
+import 'package:budget_tracker/providers/account_provider.dart';
 import 'package:budget_tracker/screens/scanner/receipt_scanner_sheet.dart';
+import 'package:budget_tracker/services/account_service.dart';
 import 'package:budget_tracker/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import '../support/localized_app.dart';
 
 class _FakeReceiptApiService extends ApiService {
-  _FakeReceiptApiService() : super();
+  final Map<String, dynamic>? commitResponse;
+  _FakeReceiptApiService({this.commitResponse}) : super();
   Map<String, dynamic>? lastCommitArgs;
 
   @override
@@ -38,9 +43,35 @@ class _FakeReceiptApiService extends ApiService {
         'nafaqah_spouse_id': nafaqahSpouseId,
         'account_id': accountId,
       };
-      return {'status': 'success', 'message': 'Saved successfully'};
+      return commitResponse ?? {'status': 'success', 'message': 'Saved successfully'};
     }
     return {'status': 'preview'};
+  }
+}
+
+class _StubAccountService extends AccountService {
+  _StubAccountService(this.accounts);
+  final List<Account> accounts;
+
+  @override
+  Future<List<Account>> getAccounts(String householdId) async => accounts;
+
+  @override
+  Stream<List<Account>> streamAccounts(String householdId) => const Stream.empty();
+}
+
+class _RecordingAccountProvider extends AccountProvider {
+  _RecordingAccountProvider({super.accounts});
+  int deductExpenseCalls = 0;
+
+  @override
+  Future<void> deductExpense({
+    String? accountId,
+    required double amount,
+    String? nafaqahClass,
+  }) async {
+    deductExpenseCalls++;
+    return super.deductExpense(accountId: accountId, amount: amount, nafaqahClass: nafaqahClass);
   }
 }
 
@@ -49,31 +80,35 @@ void main() {
     Map<String, dynamic>? initialScanResult,
     String lang = 'en',
     ApiService? apiService,
+    AccountProvider? accountProvider,
   }) {
-    return localizedApp(
-      Scaffold(
-        body: ReceiptScannerSheet(
-          householdId: 'hh-test-family',
-          apiService: apiService,
-          initialScanResult: initialScanResult ??
-              {
-                'status': 'preview',
-                'merchant': 'Tamimi Markets',
-                'amount': 250.0,
-                'category_code': 'OPEX-GROCERY',
-                'household_mode': 'family_nafaqah',
-                'is_family': true,
-                'recorder_role': 'husband',
-                'caller_role': 'husband',
-                'items': [
-                  {'name': 'Groceries', 'quantity': 1.0, 'price': 250.0}
-                ],
-              },
-        ),
+    final sheet = Scaffold(
+      body: ReceiptScannerSheet(
+        householdId: 'hh-test-family',
+        apiService: apiService,
+        initialScanResult: initialScanResult ??
+            {
+              'status': 'preview',
+              'merchant': 'Tamimi Markets',
+              'amount': 250.0,
+              'category_code': 'OPEX-GROCERY',
+              'household_mode': 'family_nafaqah',
+              'is_family': true,
+              'recorder_role': 'husband',
+              'caller_role': 'husband',
+              'items': [
+                {'name': 'Groceries', 'quantity': 1.0, 'price': 250.0}
+              ],
+            },
       ),
-      lang: lang,
-      scaffold: false,
     );
+    if (accountProvider != null) {
+      return ChangeNotifierProvider<AccountProvider>.value(
+        value: accountProvider,
+        child: localizedApp(sheet, scaffold: false, lang: lang),
+      );
+    }
+    return localizedApp(sheet, scaffold: false, lang: lang);
   }
 
   testWidgets('ReceiptScannerSheet in Family mode: payer has Me and Partner, never Both (Shared)', (tester) async {
@@ -237,5 +272,81 @@ void main() {
 
     expect(fakeApi.lastCommitArgs, isNotNull);
     expect(fakeApi.lastCommitArgs!['nafaqah_class'], equals('wife_reimbursable'));
+  });
+
+  testWidgets('ReceiptScannerSheet: server returning wife_reimbursable leaves AccountProvider balance unchanged', (tester) async {
+    final fakeApi = _FakeReceiptApiService(
+      commitResponse: {
+        'status': 'success',
+        'nafaqah_class': 'wife_reimbursable',
+        'account_id': null,
+      },
+    );
+    final householdAcc = Account(
+      id: 'acc-main',
+      householdId: 'hh-test-family',
+      ownerUserId: 'u-h',
+      name: 'Household Account',
+      accountType: AccountType.bank,
+      currency: 'SAR',
+      balance: 1000.0,
+      isSharedPool: true,
+      colorHex: '#10B981',
+      iconName: 'account_balance',
+      isArchived: false,
+      createdAt: DateTime(2026, 1, 1),
+    );
+    final stubAccounts = _StubAccountService([householdAcc]);
+    final accountProvider = _RecordingAccountProvider(accounts: stubAccounts);
+    accountProvider.setAccountsForTesting([householdAcc], householdId: 'hh-test-family');
+
+    await tester.pumpWidget(testSheet(
+      apiService: fakeApi,
+      accountProvider: accountProvider,
+      initialScanResult: {
+        'status': 'preview',
+        'merchant': 'Tamimi Markets',
+        'amount': 250.0,
+        'category_code': 'OPEX-GROCERY',
+        'household_mode': 'family_nafaqah',
+        'is_family': true,
+        'recorder_role': 'husband',
+        'caller_role': 'husband',
+        'items': [
+          {'name': 'Groceries', 'quantity': 1.0, 'price': 250.0}
+        ],
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('receipt_confirm_save_button'));
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(accountProvider.deductExpenseCalls, equals(0));
+    expect(accountProvider.accounts.first.balance, equals(1000.0));
+  });
+
+  testWidgets('ReceiptScannerSheet: empty item name renders Arabic generic fallback صنف under lang: ar', (tester) async {
+    await tester.pumpWidget(testSheet(
+      lang: 'ar',
+      initialScanResult: {
+        'status': 'preview',
+        'merchant': 'Tamimi Markets',
+        'amount': 50.0,
+        'category_code': 'OPEX-GROCERY',
+        'household_mode': 'family_nafaqah',
+        'is_family': true,
+        'recorder_role': 'husband',
+        'caller_role': 'husband',
+        'items': [
+          {'name': '', 'quantity': 1.0, 'price': 50.0}
+        ],
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('صنف'), findsWidgets);
   });
 }

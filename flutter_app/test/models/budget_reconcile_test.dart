@@ -14,7 +14,7 @@ class _FakeTransactions extends TransactionProvider {
 
 void main() {
   group('reconcileCycleBudgets Tests', () {
-    const cycleKey = '2026-01-27_2026-02-26';
+    const cycleKey = '2026-02';
     final now = DateTime(2026, 2, 1);
 
     test('a wife_personal 300 tx in OPEX-SHOPPING does not raise shopping spent', () {

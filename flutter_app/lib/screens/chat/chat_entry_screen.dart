@@ -652,14 +652,17 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
           _messages.add(confirmedMsg);
         }
         final finalAmount = (res['amount'] as num?)?.toDouble() ?? edits.amount ?? (pending['amount'] as num?)?.toDouble() ?? 0.0;
-        final targetAccountId = edits.accountId ?? pending['account_id'] as String?;
-        try {
-          context.read<AccountProvider>().deductExpense(
-            accountId: targetAccountId,
-            amount: finalAmount,
-            nafaqahClass: nafaqahClass,
-          );
-        } catch (_) {}
+        final serverNafaqahClass = (res['nafaqah_class'] as String?) ?? nafaqahClass;
+        final effectiveAccountId = (res['account_id'] as String?) ?? edits.accountId ?? pending['account_id'] as String?;
+        if (effectiveAccountId != null) {
+          try {
+            context.read<AccountProvider>().deductExpense(
+              accountId: effectiveAccountId,
+              amount: finalAmount,
+              nafaqahClass: serverNafaqahClass,
+            );
+          } catch (_) {}
+        }
         _refreshGlobalProviders();
         unawaited(AccountService.instance.reconcileUnlinkedTransactions(householdId));
       } else {

@@ -247,6 +247,28 @@ void main() {
       expect(provider.accounts.first.balance, equals(1000.0));
     });
 
+    test('deductExpense with only a savings account does not debit it', () async {
+      final provider = AccountProvider();
+      final savingsAcc = Account(
+        id: 'acc-savings',
+        householdId: 'hh-1',
+        ownerUserId: 'u-1',
+        name: 'Emergency Savings',
+        accountType: AccountType.savings,
+        currency: 'SAR',
+        balance: 5000.0,
+        isSharedPool: true,
+        colorHex: '#10B981',
+        iconName: 'savings',
+        isArchived: false,
+        createdAt: DateTime(2026, 1, 1),
+      );
+      provider.setAccountsForTesting([savingsAcc], householdId: 'hh-1');
+
+      await provider.deductExpense(amount: 200.0);
+      expect(provider.accounts.first.balance, equals(5000.0));
+    });
+
     test('deductExpense skips deduction when nafaqahClass is wife_reimbursable', () async {
       final provider = AccountProvider();
       final acc = Account(
@@ -679,10 +701,10 @@ void main() {
       await provider.ensureLoaded();
       expect(fakeAccounts.getAccountsCalls, equals(1));
 
-      await provider.setCycleKey('2026-12-27_2027-01-26');
+      await provider.setCycleKey('2027-01');
       expect(fakeAccounts.getAccountsCalls, equals(2));
-      expect(fakeCommitments.lastCycleKey, equals('2026-12-27_2027-01-26'));
-      expect(provider.cycleKey, equals('2026-12-27_2027-01-26'));
+      expect(fakeCommitments.lastCycleKey, equals('2027-01'));
+      expect(provider.cycleKey, equals('2027-01'));
     });
 
     test('bindHousehold honours non-27 payday', () {

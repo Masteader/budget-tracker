@@ -91,6 +91,7 @@ class BudgetManagementScreen extends StatefulWidget {
       occurredAt: occurredAt,
     );
     row.remove('cycle_key');
+    row['source'] = 'prior_adjustment';
     return row;
   }
 
@@ -115,7 +116,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
     if (widget.initialStaticData != null) {
       _lastStaticData = widget.initialStaticData;
     }
-    final initialCycles = SalaryCycleService.getAvailableCycles();
+    int initialPayday = 27;
+    try {
+      initialPayday = context.read<AccountProvider>().paydayDay;
+    } catch (_) {}
+    final initialCycles = SalaryCycleService.getAvailableCycles(paydayDay: initialPayday);
     final idx = initialCycles.indexWhere((c) => c.isCurrentCycle || c.isCurrent);
     _cycles = initialCycles;
     _currentCycleIndex = idx != -1 ? idx : 0;

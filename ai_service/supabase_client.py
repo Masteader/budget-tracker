@@ -404,6 +404,21 @@ class TransactionRejectedError(ValueError):
         return self._STATUS.get(self.sqlstate, 422)
 
 
+class ForbiddenAccountError(Exception):
+    PUBLIC_MESSAGE = "account_id is not an account you may pay from in this household."
+
+
+def assert_account_debitable(household_id: str, user_id: str, account_id: str) -> None:
+    row = (get_client().table("accounts")
+           .select("id, household_id, owner_user_id, is_shared_pool, is_archived")
+           .eq("id", account_id).eq("household_id", household_id).limit(1).execute()).data
+    if not row or row[0].get("is_archived"):
+        raise ForbiddenAccountError()
+    acc = row[0]
+    if acc.get("owner_user_id") != user_id and not acc.get("is_shared_pool"):
+        raise ForbiddenAccountError()
+
+
 # SQLSTATEs of refusals that a pruned payload cannot fix (check/trigger constraint, invalid
 # parameter, foreign key, row-level security / forbidden, unique violation).
 FINAL_DB_REFUSAL_CODES = frozenset({"23514", "22023", "23503", "42501", "23505"})

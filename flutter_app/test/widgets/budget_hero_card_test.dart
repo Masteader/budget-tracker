@@ -224,7 +224,7 @@ void main() {
   testWidgets('snapshot liquid 10,000 with 2,000 commitments shows left 8,000.00 and tip 8,000.00', (tester) async {
     const snapshot = OperatingCashSnapshot(
       householdId: 'h1',
-      cycleKey: '2026-11-27_2026-12-26',
+      cycleKey: '2026-12',
       liquidHalalas: 1000000, // 10,000.00 SAR
       pendingCommitmentsHalalas: 200000, // 2,000.00 SAR
       cycleIncomeHalalas: 0,

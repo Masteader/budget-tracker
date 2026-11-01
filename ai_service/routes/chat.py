@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -14,7 +15,13 @@ from auth import verify_household_access, get_current_user_id, get_verified_clai
 from household_permissions import PermissionDeniedError
 from nafaqah_service import NafaqahError
 from routes.nafaqah import nafaqah_http_error
-from supabase_client import InvalidAttributionError, TransactionRejectedError, UnknownCategoryError
+from supabase_client import (
+    ForbiddenAccountError,
+    InvalidAttributionError,
+    TransactionRejectedError,
+    UnknownCategoryError,
+    assert_account_debitable,
+)
 from utils import bounded_text, optional_amount, safe_error_response, validate_uuid
 from rate_limiter import check_api_quota, is_chat_locked_out, record_offtopic_strike, get_offtopic_history
 from mail_service import OutboundEmail, send_email
@@ -160,9 +167,10 @@ async def chat_transaction(request: Request):
 
     account_id = body.get("account_id")
     if account_id is not None:
-        if not isinstance(account_id, str):
+        try:
+            UUID(account_id)
+        except (ValueError, AttributeError):
             raise HTTPException(status_code=422, detail="account_id must be a UUID string.")
-        validate_uuid(account_id)
 
     nafaqah_class = body.get("nafaqah_class")
     if nafaqah_class is not None and nafaqah_class not in ("wife_reimbursable", "wife_personal", "none"):
@@ -192,6 +200,9 @@ async def chat_transaction(request: Request):
             return JSONResponse(content=cached, headers={"Idempotent-Replayed": "true"})
 
     try:
+        if account_id is not None:
+            await asyncio.to_thread(assert_account_debitable, household_id, user_id, account_id)
+
         # Persistent DB quota & sliding window rate limit (strictly verified user_id)
         await check_api_quota(
             user_id=user_id,
@@ -221,6 +232,10 @@ async def chat_transaction(request: Request):
             override_amount=override_amount,
             override_account_id=account_id,
         )
+    except ForbiddenAccountError as exc:
+        if use_idempotency:
+            await idempotency_store.release(user_id, "chat-transaction", idem_key)
+        raise HTTPException(status_code=403, detail=exc.PUBLIC_MESSAGE)
     except InvalidPreviewToken:
         if use_idempotency:
             await idempotency_store.release(user_id, "chat-transaction", idem_key)

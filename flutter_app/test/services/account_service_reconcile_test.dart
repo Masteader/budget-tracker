@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/services/account_service.dart';
+import 'package:budget_tracker/screens/home/budget_management_screen.dart';
 
 class _SpyAccountService extends AccountService {
   int updateBalanceCalls = 0;
@@ -122,6 +123,43 @@ void main() {
       expect(src.contains("'cycle_key': currentKey"), isFalse);
       expect(src.contains('reconciledBalance'), isFalse);
       expect(src.contains(".update({'balance'"), isFalse);
+    });
+
+    test('prior_adjustment rows are never linked', () async {
+      final linkedTxIds = <String>[];
+      final service = AccountService();
+
+      await service.reconcileUnlinkedTransactions(
+        householdId,
+        fetchAccounts: (_) async => [primaryAccount],
+        fetchUnlinked: (_) async => [
+          {
+            'id': 'tx-prior-1',
+            'amount': 500.0,
+            'category_code': 'OPEX-GROCERIES',
+            'nafaqah_class': null,
+            'source': 'prior_adjustment',
+          },
+        ],
+        linkTransaction: (txId, accId) async {
+          linkedTxIds.add(txId);
+        },
+      );
+
+      expect(linkedTxIds, isEmpty);
+    });
+
+    test('source guard: buildPriorSpendRow emits source == prior_adjustment', () {
+      final row = BudgetManagementScreen.buildPriorSpendRow(
+        id: 'test-id',
+        householdId: 'test-hh',
+        userId: 'test-user',
+        amount: 100.0,
+        merchant: 'Prior Spending',
+        categoryCode: 'OPEX-GROCERY',
+        occurredAt: DateTime.now(),
+      );
+      expect(row['source'], equals('prior_adjustment'));
     });
   });
 }
