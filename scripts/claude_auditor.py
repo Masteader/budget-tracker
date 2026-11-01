@@ -73,6 +73,8 @@ MAX_BUDGET_USD = float(os.environ.get("AUDIT_MAX_BUDGET_USD", str(DEFAULT_MAX_BU
 # Model -- configurable via env var for future upgrades
 DEFAULT_MODEL = "claude-opus-5-5"
 MODEL = os.environ.get("OPUS_MODEL", DEFAULT_MODEL)
+DEFAULT_EFFORT = "medium"
+EFFORT = os.environ.get("OPUS_EFFORT", DEFAULT_EFFORT)
 
 # Token pricing for cost estimates (Claude Opus 5.5 as of Nov 2026)
 PRICING = {
@@ -398,7 +400,7 @@ def _call_realtime(client: anthropic.Anthropic, user_prompt: str, verbose: bool 
     response = client.messages.create(
         model=MODEL,
         max_tokens=16384,
-        output_config={"effort": "high"},
+        output_config={"effort": EFFORT},
         system=[
             {
                 "type": "text",
@@ -448,8 +450,8 @@ def _call_batch(client: anthropic.Anthropic, requests_list: list[dict], verbose:
             "custom_id": req.get("id", f"audit-pass-{i+1}"),
             "params": {
                 "model": MODEL,
-                "max_tokens": 8192,
-                "output_config": {"effort": "high"},
+                "max_tokens": 16384,
+                "output_config": {"effort": EFFORT},
                 "system": system_block,
                 "messages": [{"role": "user", "content": req["prompt"]}],
             },
