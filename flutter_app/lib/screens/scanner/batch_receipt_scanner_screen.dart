@@ -50,35 +50,35 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
 
   Future<void> _capturePhoto() async {
     if (_isCapturing) return;
-
-    if (widget.onCapturePhoto != null) {
-      final file = await widget.onCapturePhoto!();
-      if (file != null && mounted) {
-        setState(() {
-          _queuedImages.add(file);
-          _errorMessage = null;
-        });
-      }
-      return;
-    }
-
-    // Check camera permission defensively
-    try {
-      final status = await Permission.camera.status;
-      if (!status.isGranted && !status.isLimited) {
-        final req = await Permission.camera.request();
-        if (!req.isGranted && !req.isLimited) {
-          // Do not abort early - on Android 14/15 permission_handler status
-          // may be desynchronized even though native camera access is allowed.
-          debugPrint('Camera permission not granted according to permission_handler ($req), proceeding to native pickImage');
-        }
-      }
-    } catch (e) {
-      debugPrint('Defensive camera permission check failed: $e');
-    }
-
     setState(() => _isCapturing = true);
+
     try {
+      if (widget.onCapturePhoto != null) {
+        final file = await widget.onCapturePhoto!();
+        if (file != null && mounted) {
+          setState(() {
+            _queuedImages.add(file);
+            _errorMessage = null;
+          });
+        }
+        return;
+      }
+
+      // Check camera permission defensively
+      try {
+        final status = await Permission.camera.status;
+        if (!status.isGranted && !status.isLimited) {
+          final req = await Permission.camera.request();
+          if (!req.isGranted && !req.isLimited) {
+            // Do not abort early - on Android 14/15 permission_handler status
+            // may be desynchronized even though native camera access is allowed.
+            debugPrint('Camera permission not granted according to permission_handler ($req), proceeding to native pickImage');
+          }
+        }
+      } catch (e) {
+        debugPrint('Defensive camera permission check failed: $e');
+      }
+
       HapticFeedback.mediumImpact();
       final picked = await _picker.pickImage(
         source: ImageSource.camera,
@@ -111,18 +111,21 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    if (widget.onPickGallery != null) {
-      final files = await widget.onPickGallery!();
-      if (mounted) {
-        setState(() {
-          _queuedImages.addAll(files);
-          _errorMessage = null;
-        });
-      }
-      return;
-    }
+    if (_isCapturing) return;
+    setState(() => _isCapturing = true);
 
     try {
+      if (widget.onPickGallery != null) {
+        final files = await widget.onPickGallery!();
+        if (mounted) {
+          setState(() {
+            _queuedImages.addAll(files);
+            _errorMessage = null;
+          });
+        }
+        return;
+      }
+
       final pickedFiles = await _picker.pickMultiImage(
         imageQuality: 82,
         maxWidth: 1600,
@@ -138,6 +141,8 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
       }
     } catch (e) {
       _safeSetState(() => _errorMessage = context.trArgs('mp_gallery_error', {'error': e}));
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
     }
   }
 

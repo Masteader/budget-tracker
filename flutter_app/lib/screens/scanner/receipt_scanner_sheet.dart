@@ -82,6 +82,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   String? _zatcaQrRaw;
   Map<String, dynamic>? _zatcaDecoded;
 
+  bool _isPickingImage = false;
   bool _isAnalyzing = false;
   Map<String, dynamic>? _scanResult;
   String? _errorMessage;
@@ -351,28 +352,30 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
   }
 
   Future<void> _addPhoto(ImageSource source) async {
+    if (_isPickingImage) return;
+    _isPickingImage = true;
     setState(() => _errorMessage = null);
 
-    if (source == ImageSource.camera) {
-      try {
-        final status = await Permission.camera.status;
-        if (!status.isGranted && !status.isLimited) {
-          final requested = await Permission.camera.request();
-          if (!requested.isGranted && !requested.isLimited) {
-            // Note: On Android 14/15, permission_handler status can desynchronize
-            // from the OS or report denied even when OS permission is granted.
-            // DO NOT abort early with return! Proceed to native pickImage fallback.
-            // If the system actually denies camera access, PlatformException
-            // will be caught below and display the settings action.
-            debugPrint('Defensive camera permission check: permission_handler status is $requested, proceeding to pickImage fallback');
-          }
-        }
-      } catch (e) {
-        debugPrint('Defensive camera permission check failed: $e');
-      }
-    }
-
     try {
+      if (source == ImageSource.camera) {
+        try {
+          final status = await Permission.camera.status;
+          if (!status.isGranted && !status.isLimited) {
+            final requested = await Permission.camera.request();
+            if (!requested.isGranted && !requested.isLimited) {
+              // Note: On Android 14/15, permission_handler status can desynchronize
+              // from the OS or report denied even when OS permission is granted.
+              // DO NOT abort early with return! Proceed to native pickImage fallback.
+              // If the system actually denies camera access, PlatformException
+              // will be caught below and display the settings action.
+              debugPrint('Defensive camera permission check: permission_handler status is $requested, proceeding to pickImage fallback');
+            }
+          }
+        } catch (e) {
+          debugPrint('Defensive camera permission check failed: $e');
+        }
+      }
+
       final picked = await _picker.pickImage(
         source: source,
         imageQuality: 78,
@@ -398,6 +401,8 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
       }
     } catch (e) {
       _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
+    } finally {
+      _isPickingImage = false;
     }
   }
 

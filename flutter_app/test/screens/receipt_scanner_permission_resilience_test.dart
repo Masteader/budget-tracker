@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,9 +65,11 @@ class _StubApiService extends ApiService {
 
 class _MockImagePicker extends Fake implements ImagePicker {
   final Future<XFile?> Function(ImageSource source)? onPickImage;
+  final Future<List<XFile>> Function()? onPickMultiImage;
   int pickCallCount = 0;
+  int pickMultiCallCount = 0;
 
-  _MockImagePicker({this.onPickImage});
+  _MockImagePicker({this.onPickImage, this.onPickMultiImage});
 
   @override
   Future<XFile?> pickImage({
@@ -82,6 +85,21 @@ class _MockImagePicker extends Fake implements ImagePicker {
       return onPickImage!(source);
     }
     return null;
+  }
+
+  @override
+  Future<List<XFile>> pickMultiImage({
+    double? maxWidth,
+    double? maxHeight,
+    int? imageQuality,
+    int? limit,
+    bool requestFullMetadata = true,
+  }) async {
+    pickMultiCallCount++;
+    if (onPickMultiImage != null) {
+      return onPickMultiImage!();
+    }
+    return [];
   }
 }
 
@@ -175,6 +193,46 @@ void main() {
       expect(find.text('Open Settings'), findsOneWidget);
       expect(find.text('Try Again'), findsOneWidget);
     });
+
+    testWidgets(
+        'drops concurrent/rapid double-tap camera calls via re-entrancy lock',
+        (tester) async {
+      final completer = Completer<XFile?>();
+      final mockPicker = _MockImagePicker(
+        onPickImage: (source) => completer.future,
+      );
+
+      await tester.pumpWidget(
+        localizedApp(
+          ReceiptScannerSheet(
+            householdId: 'hh-100',
+            imagePicker: mockPicker,
+            accountService: _StubAccountService(),
+            apiService: _StubApiService(),
+          ),
+          lang: 'en',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cameraBtn = find.widgetWithText(ElevatedButton, 'Snap Photo');
+      // Tap first time - starts capture
+      await tester.tap(cameraBtn);
+      await tester.pump();
+
+      // Tap second time while first is still pending
+      await tester.tap(cameraBtn);
+      await tester.pump();
+
+      // Due to re-entrancy lock, only one pickImage call occurred
+      expect(mockPicker.pickCallCount, 1);
+
+      // Now complete the first pick
+      completer.complete(XFile('test_photo.jpg'));
+      await tester.pumpAndSettle();
+
+      expect(mockPicker.pickCallCount, 1);
+    });
   });
 
   group('BatchReceiptScannerScreen Permission Resilience', () {
@@ -247,6 +305,85 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Open Settings'), findsOneWidget);
+    });
+
+    testWidgets(
+        'synchronous re-entrancy lock drops rapid double-tap shutter presses before async permission check finishes',
+        (tester) async {
+      final completer = Completer<XFile?>();
+      final mockPicker = _MockImagePicker(
+        onPickImage: (source) => completer.future,
+      );
+
+      await tester.pumpWidget(
+        localizedApp(
+          BatchReceiptScannerScreen(
+            householdId: 'hh-100',
+            imagePicker: mockPicker,
+          ),
+          lang: 'en',
+          scaffold: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final shutterBtn = find.byKey(const Key('batch_shutter_button'));
+      // Tap shutter button
+      await tester.tap(shutterBtn);
+      await tester.pump();
+
+      // Immediate second tap while first is awaiting
+      await tester.tap(shutterBtn);
+      await tester.pump();
+
+      // Shutter should only have called pickImage once
+      expect(mockPicker.pickCallCount, 1);
+
+      completer.complete(XFile('test_batch_photo.jpg'));
+      await tester.pumpAndSettle();
+
+      expect(mockPicker.pickCallCount, 1);
+    });
+
+    testWidgets(
+        'synchronous re-entrancy lock drops gallery picking when capture is active',
+        (tester) async {
+      final completer = Completer<XFile?>();
+      final mockPicker = _MockImagePicker(
+        onPickImage: (source) => completer.future,
+        onPickMultiImage: () async => [XFile('gallery_receipt.jpg')],
+      );
+
+      await tester.pumpWidget(
+        localizedApp(
+          BatchReceiptScannerScreen(
+            householdId: 'hh-100',
+            imagePicker: mockPicker,
+          ),
+          lang: 'en',
+          scaffold: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final shutterBtn = find.byKey(const Key('batch_shutter_button'));
+      await tester.tap(shutterBtn);
+      await tester.pump();
+
+      // Tap gallery while capturing is active
+      final galleryBtn = find.widgetWithIcon(TextButton, Icons.photo_library_rounded);
+      expect(galleryBtn, findsOneWidget);
+      await tester.tap(galleryBtn);
+      await tester.pump();
+
+      // pickMultiImage should not be called because _isCapturing is active!
+      expect(mockPicker.pickMultiCallCount, 0);
+
+      completer.complete(XFile('test_photo.jpg'));
+      await tester.pumpAndSettle();
+
+      expect(mockPicker.pickCallCount, 1);
+      expect(mockPicker.pickMultiCallCount, 0);
     });
   });
 }
