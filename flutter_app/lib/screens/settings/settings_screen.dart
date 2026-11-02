@@ -89,19 +89,35 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _checkPermissions() async {
-    try {
-      final camera = await Permission.camera.status;
-      final microphone = await Permission.microphone.status;
-      final notification = await Permission.notification.status;
+    PermissionStatus? camera;
+    PermissionStatus? microphone;
+    PermissionStatus? notification;
 
-      if (mounted) {
-        setState(() {
-          _cameraStatus = camera;
-          _microphoneStatus = microphone;
-          _notificationStatus = notification;
-        });
-      }
-    } catch (_) {}
+    try {
+      camera = await Permission.camera.status;
+    } catch (e) {
+      debugPrint('Failed to query camera permission: $e');
+    }
+
+    try {
+      microphone = await Permission.microphone.status;
+    } catch (e) {
+      debugPrint('Failed to query microphone permission: $e');
+    }
+
+    try {
+      notification = await Permission.notification.status;
+    } catch (e) {
+      debugPrint('Failed to query notification permission: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        if (camera != null) _cameraStatus = camera;
+        if (microphone != null) _microphoneStatus = microphone;
+        if (notification != null) _notificationStatus = notification;
+      });
+    }
   }
 
   Future<void> _loadUserInfo() async {
@@ -246,13 +262,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     final status = await Permission.camera.request();
     if (mounted) {
       setState(() => _cameraStatus = status);
-      if (status.isGranted) {
+      if (status.isGranted || status.isLimited) {
         AppSnackBar.showSuccess(
           context,
           context.tr('set_camera_permission_granted_ready_scan'),
           title: context.tr('set_camera_enabled'),
         );
-      } else if (status.isPermanentlyDenied) {
+      } else {
         _showPermissionDialog(
           title: context.tr('set_camera_permission_denied'),
           message:
@@ -266,13 +282,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     final status = await Permission.microphone.request();
     if (mounted) {
       setState(() => _microphoneStatus = status);
-      if (status.isGranted) {
+      if (status.isGranted || status.isLimited) {
         AppSnackBar.showSuccess(
           context,
           context.tr('set_microphone_permission_granted_ready_voice'),
           title: context.tr('set_microphone_enabled'),
         );
-      } else if (status.isPermanentlyDenied) {
+      } else {
         _showPermissionDialog(
           title: context.tr('set_microphone_permission_denied'),
           message:
@@ -291,7 +307,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           children: [
             Icon(Icons.settings_suggest_rounded, color: context.accentText),
             const SizedBox(width: 8),
-            Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+            Expanded(
+              child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+            ),
           ],
         ),
         content: Text(message, style: TextStyle(color: context.textSecondary, fontSize: 13)),
@@ -953,7 +971,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   status: _cameraStatus,
                   onRequest: _requestCameraPermission,
                   onOpenSettings: openAppSettings,
-                  testAction: _cameraStatus.isGranted
+                  testAction: _cameraStatus.isGranted || _cameraStatus.isLimited
                       ? () => Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
@@ -1592,7 +1610,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     VoidCallback? testAction,
     String? testLabel,
   }) {
-    final isGranted = status.isGranted;
+    final isGranted = status.isGranted || status.isLimited;
     final activeColor = context.electricTeal;
 
     return Padding(

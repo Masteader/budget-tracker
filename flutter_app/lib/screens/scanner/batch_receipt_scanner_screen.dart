@@ -16,6 +16,7 @@ class BatchReceiptScannerScreen extends StatefulWidget {
   final List<File>? initialFiles;
   final Future<File?> Function()? onCapturePhoto;
   final Future<List<File>> Function()? onPickGallery;
+  final ImagePicker? imagePicker;
 
   const BatchReceiptScannerScreen({
     super.key,
@@ -23,6 +24,7 @@ class BatchReceiptScannerScreen extends StatefulWidget {
     this.initialFiles,
     this.onCapturePhoto,
     this.onPickGallery,
+    this.imagePicker,
   });
 
   @override
@@ -31,7 +33,7 @@ class BatchReceiptScannerScreen extends StatefulWidget {
 
 class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
   late final List<File> _queuedImages;
-  final ImagePicker _picker = ImagePicker();
+  late final ImagePicker _picker = widget.imagePicker ?? ImagePicker();
   bool _isCapturing = false;
   String? _errorMessage;
 
@@ -60,18 +62,19 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
       return;
     }
 
-    // Check camera permission
-    final status = await Permission.camera.status;
-    if (!status.isGranted) {
-      final req = await Permission.camera.request();
-      if (!req.isGranted) {
-        _safeSetState(() {
-          _errorMessage = req.isPermanentlyDenied
-              ? context.tr('scan_cam_perm_permanent')
-              : context.tr('scan_cam_perm_needed');
-        });
-        return;
+    // Check camera permission defensively
+    try {
+      final status = await Permission.camera.status;
+      if (!status.isGranted && !status.isLimited) {
+        final req = await Permission.camera.request();
+        if (!req.isGranted && !req.isLimited) {
+          // Do not abort early - on Android 14/15 permission_handler status
+          // may be desynchronized even though native camera access is allowed.
+          debugPrint('Camera permission not granted according to permission_handler ($req), proceeding to native pickImage');
+        }
       }
+    } catch (e) {
+      debugPrint('Defensive camera permission check failed: $e');
     }
 
     setState(() => _isCapturing = true);
@@ -90,6 +93,15 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
           _errorMessage = null;
         });
         HapticFeedback.lightImpact();
+      }
+    } on PlatformException catch (pe) {
+      if (pe.code.toLowerCase().contains('camera_access_denied') ||
+          (pe.message?.toLowerCase().contains('camera') ?? false)) {
+        _safeSetState(() {
+          _errorMessage = context.tr('scan_cam_denied_by_system');
+        });
+      } else {
+        _safeSetState(() => _errorMessage = context.trArgs('scan_camera_error', {'error': pe.message ?? pe.code}));
       }
     } catch (e) {
       _safeSetState(() => _errorMessage = context.trArgs('scan_capture_error', {'error': e}));
@@ -262,6 +274,27 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                         style: GoogleFonts.outfit(color: Colors.red, fontSize: 12),
                       ),
                     ),
+                    if (_errorMessage == context.tr('scan_cam_denied_by_system') ||
+                        _errorMessage == context.tr('scan_cam_perm_permanent') ||
+                        _errorMessage == context.tr('scan_cam_perm_needed') ||
+                        _errorMessage!.toLowerCase().contains('camera') ||
+                        _errorMessage!.contains('كاميرا') ||
+                        _errorMessage!.contains('کیمرے'))
+                      TextButton(
+                        onPressed: openAppSettings,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(
+                          context.tr('open_settings'),
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

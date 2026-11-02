@@ -54,7 +54,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
 
   Future<void> _checkPermissionAndRestart() async {
     final status = await Permission.camera.status;
-    if (status.isGranted) {
+    if (status.isGranted || status.isLimited) {
       try {
         await _controller.start();
         if (mounted) setState(() {});
@@ -64,7 +64,7 @@ class _ZatcaQrCameraScannerState extends State<ZatcaQrCameraScanner>
 
   Future<void> _requestPermission() async {
     final status = await Permission.camera.request();
-    if (status.isGranted) {
+    if (status.isGranted || status.isLimited) {
       try {
         await _controller.start();
         if (mounted) setState(() {});

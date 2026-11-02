@@ -47,6 +47,7 @@ class ReceiptScannerSheet extends StatefulWidget {
   final AccountService? accountService;
   final Future<Map<String, dynamic>> Function(Map<String, dynamic> row)? fallbackInsert;
   final String? currentUserId;
+  final ImagePicker? imagePicker;
 
   const ReceiptScannerSheet({
     super.key,
@@ -56,6 +57,7 @@ class ReceiptScannerSheet extends StatefulWidget {
     this.accountService,
     this.fallbackInsert,
     this.currentUserId,
+    this.imagePicker,
   });
 
   static Future<void> show(BuildContext context, String householdId) {
@@ -75,7 +77,7 @@ class ReceiptScannerSheet extends StatefulWidget {
 }
 
 class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
-  final ImagePicker _picker = ImagePicker();
+  late final ImagePicker _picker = widget.imagePicker ?? ImagePicker();
   final List<File> _imageFiles = [];
   String? _zatcaQrRaw;
   Map<String, dynamic>? _zatcaDecoded;
@@ -352,17 +354,21 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
     setState(() => _errorMessage = null);
 
     if (source == ImageSource.camera) {
-      final status = await Permission.camera.status;
-      if (!status.isGranted) {
-        final requested = await Permission.camera.request();
-        if (!requested.isGranted) {
-          _safeSetState(() {
-            _errorMessage = requested.isPermanentlyDenied
-                ? context.tr('scan_cam_perm_permanent')
-                : context.tr('scan_cam_perm_needed');
-          });
-          return;
+      try {
+        final status = await Permission.camera.status;
+        if (!status.isGranted && !status.isLimited) {
+          final requested = await Permission.camera.request();
+          if (!requested.isGranted && !requested.isLimited) {
+            // Note: On Android 14/15, permission_handler status can desynchronize
+            // from the OS or report denied even when OS permission is granted.
+            // DO NOT abort early with return! Proceed to native pickImage fallback.
+            // If the system actually denies camera access, PlatformException
+            // will be caught below and display the settings action.
+            debugPrint('Defensive camera permission check: permission_handler status is $requested, proceeding to pickImage fallback');
+          }
         }
+      } catch (e) {
+        debugPrint('Defensive camera permission check failed: $e');
       }
     }
 
@@ -493,9 +499,9 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
 
   Future<void> _scanZatcaQrWithCamera() async {
     final status = await Permission.camera.status;
-    if (!status.isGranted) {
+    if (!status.isGranted && !status.isLimited) {
       final res = await Permission.camera.request();
-      if (!res.isGranted) {
+      if (!res.isGranted && !res.isLimited) {
         if (mounted) {
           showDialog(
             context: context,
@@ -1507,8 +1513,13 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                         ),
                       ],
                     ),
-                    if (_errorMessage!.toLowerCase().contains('camera') ||
-                        _errorMessage!.toLowerCase().contains('permission')) ...[
+                    if (_errorMessage == context.tr('scan_cam_denied_by_system') ||
+                        _errorMessage == context.tr('scan_cam_perm_needed') ||
+                        _errorMessage == context.tr('scan_cam_perm_permanent') ||
+                        _errorMessage!.toLowerCase().contains('camera') ||
+                        _errorMessage!.toLowerCase().contains('permission') ||
+                        _errorMessage!.contains('كاميرا') ||
+                        _errorMessage!.contains('کیمرے')) ...[
                       const SizedBox(height: 12),
                       Row(
                         children: [
