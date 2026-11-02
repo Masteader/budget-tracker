@@ -1359,7 +1359,7 @@ def record_household_reimbursement(
     Records a roommate/partner settlement payment (``payer_id`` paid ``recipient_id``).
 
     Only columns that exist on ``public.transactions`` are written (FR-B-01: there is no
-    ``paid_by`` or ``notes`` column and no ``OPEX-SETTLEMENT`` category, so the previous payload
+    ``paid_by`` column and no ``OPEX-SETTLEMENT`` category, so the previous payload
     was rejected on every call). The payer is kept in the ``PaidBy:`` audit tag of ``notes``
     (the tag chat entries use), the recipient in ``beneficiary_id`` / ``settlement_target_id``,
     and ``category_code`` stays NULL so a settlement is never counted as spending in a budget

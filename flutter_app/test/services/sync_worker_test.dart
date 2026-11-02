@@ -199,5 +199,31 @@ void main() {
       expect(await worker.drainQueue(), 1);
       expect(sentKey, 'online-attempt-key');
     });
+
+    test('legacy raw_sms field is sanitized to notes on kTransactionInsertOperation', () async {
+      Map<String, dynamic>? insertedRow;
+      await queueManager.enqueue(
+        operationType: kTransactionInsertOperation,
+        payload: {
+          'amount': 25.0,
+          'raw_sms': 'legacy sms body',
+        },
+        householdId: 'h-1',
+      );
+
+      worker = SyncWorker(
+        queueManager: queueManager,
+        interItemDelay: Duration.zero,
+        transactionInserter: (row) async {
+          insertedRow = row;
+        },
+      );
+
+      final count = await worker.drainQueue();
+      expect(count, equals(1));
+      expect(insertedRow, isNotNull);
+      expect(insertedRow!['notes'], equals('legacy sms body'));
+      expect(insertedRow!.containsKey('raw_sms'), isFalse);
+    });
   });
 }

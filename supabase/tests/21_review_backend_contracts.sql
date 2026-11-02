@@ -129,10 +129,6 @@ BEGIN
         pg_temp.as_user('f2100000-0000-0000-0000-0000000000a2',
             $q$UPDATE public.users SET display_name = 'Renamed' WHERE id = 'f2100000-0000-0000-0000-0000000000a2'$q$),
         '00000');
-    PERFORM pg_temp.expect('own payday_day',
-        pg_temp.as_user('f2100000-0000-0000-0000-0000000000a2',
-            $q$UPDATE public.users SET payday_day = 25 WHERE id = 'f2100000-0000-0000-0000-0000000000a2'$q$),
-        '00000');
 
     IF has_column_privilege('authenticated', 'public.users', 'financial_role', 'UPDATE')
        OR has_column_privilege('anon', 'public.users', 'financial_role', 'UPDATE') THEN

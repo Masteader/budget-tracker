@@ -351,6 +351,9 @@ class SyncWorker {
     switch (item.operationType) {
       case kTransactionInsertOperation:
         final row = Map<String, dynamic>.from(payload);
+        if (row.containsKey('raw_sms')) {
+          row['notes'] ??= row.remove('raw_sms');
+        }
         row['household_id'] = hid;
         row['id'] ??= item.id;
         row['timestamp'] ??= item.createdAt.toUtc().toIso8601String();
