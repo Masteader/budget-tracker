@@ -233,5 +233,41 @@ void main() {
       expect(find.text('Groceries & Supermarkets').last, findsOneWidget);
       expect(find.text('Fuel').last, findsOneWidget);
     });
+
+    testWidgets('defensively trims category codes with whitespace', (tester) async {
+      final tx = _makeTx(
+        id: 'tx-trim',
+        categoryCode: '  OPEX-GROCERY  ',
+        amount: 45.0,
+        merchant: 'Tamimi',
+      );
+
+      final fakeBudgetProvider = _FakeBudgetProvider(
+        activeCategories: const [
+          CategoryItem(
+            code: ' OPEX-GROCERY ',
+            name: 'Groceries & Supermarkets',
+            isSystem: true,
+            isActive: true,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _wrapWithApp(
+          budgetProvider: fakeBudgetProvider,
+          child: EditTransactionSheet(
+            transaction: tx,
+            loadNafaqahFields: (_) async => null,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Should not throw or crash, and renders dropdown cleanly
+      final dropdownFinder = find.byType(DropdownButtonFormField<String>).first;
+      expect(dropdownFinder, findsOneWidget);
+      expect(find.text('Groceries & Supermarkets'), findsOneWidget);
+    });
   });
 }

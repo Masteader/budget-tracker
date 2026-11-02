@@ -578,7 +578,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } catch (_) {}
 
     final List<String> activeCodes = activeCategories
-        .map((c) => c.code)
+        .map((c) => c.code.trim())
         .where((code) => code.isNotEmpty)
         .toSet()
         .toList();
@@ -588,22 +588,24 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
 
     if (activeCodes.isEmpty) {
       // Graceful fallback when active categories are not loaded yet
-      codesToDisplay = CategoryCatalog.pickerCodesIncluding(_selectedCategory);
+      codesToDisplay = CategoryCatalog.pickerCodesIncluding(_selectedCategory.trim());
     } else {
       final activeSet = activeCodes.toSet();
       final ordered = <String>[...activeCodes];
+      final normalizedInitial = _initialCategory.trim();
+      final normalizedSelected = _selectedCategory.trim();
 
-      if (_initialCategory.isNotEmpty && !activeSet.contains(_initialCategory)) {
-        if (!ordered.contains(_initialCategory)) {
-          ordered.insert(0, _initialCategory);
+      if (normalizedInitial.isNotEmpty && !activeSet.contains(normalizedInitial)) {
+        if (!ordered.contains(normalizedInitial)) {
+          ordered.insert(0, normalizedInitial);
         }
-        unbudgetedCodes.add(_initialCategory);
+        unbudgetedCodes.add(normalizedInitial);
       }
-      if (_selectedCategory.isNotEmpty && !activeSet.contains(_selectedCategory)) {
-        if (!ordered.contains(_selectedCategory)) {
-          ordered.insert(0, _selectedCategory);
+      if (normalizedSelected.isNotEmpty && !activeSet.contains(normalizedSelected)) {
+        if (!ordered.contains(normalizedSelected)) {
+          ordered.insert(0, normalizedSelected);
         }
-        unbudgetedCodes.add(_selectedCategory);
+        unbudgetedCodes.add(normalizedSelected);
       }
       codesToDisplay = ordered;
     }
@@ -615,15 +617,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     final items = <DropdownMenuItem<String>>[];
 
     for (final code in codesToDisplay) {
-      if (!seen.add(code)) continue;
+      final trimmedCode = code.trim();
+      if (!seen.add(trimmedCode)) continue;
 
-      final baseLabel = context.trCat(code);
-      final isUnbudgeted = unbudgetedCodes.contains(code);
+      final baseLabel = context.trCat(trimmedCode);
+      final isUnbudgeted = unbudgetedCodes.contains(trimmedCode);
       final displayLabel = isUnbudgeted ? '$baseLabel $tagLabel' : baseLabel;
 
       items.add(
         DropdownMenuItem<String>(
-          value: code,
+          value: trimmedCode,
           child: Text(
             displayLabel,
             overflow: TextOverflow.ellipsis,

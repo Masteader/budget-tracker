@@ -80,6 +80,75 @@ void main() {
       expect(outlook.safeDaily, closeTo(2208.26 / 10, 0.001));
     });
 
+    test('operatingCash == 0.0 reports left 0.0 and does NOT fall back to monthlyIncome', () {
+      final budgets = [
+        const Budget(
+          id: 'b1',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 5000,
+          spentAmount: 1500,
+          remainingAmount: 3500,
+          month: '2026-11-01',
+          isActive: true,
+        ),
+      ];
+
+      final today = DateTime.utc(2026, 11, 17);
+
+      final outlook = PaydayOutlook.compute(
+        budgets: budgets,
+        monthlyIncome: 10000.0,
+        operatingCash: 0.0, // Depleted bank account
+        pendingCommitments: 500.0,
+        today: today,
+        cycleStart: cycleStart,
+        cycleEnd: cycleEnd,
+      );
+
+      // Left must be 0.0, NOT 10,000 - 1500 = 8500
+      expect(outlook.left, 0.0);
+      expect(outlook.left, isNot(8500.0));
+      // Base = 0.0 + 1500 = 1500
+      expect(outlook.base, 1500.0);
+      expect(outlook.afterCommitments, -500.0);
+      expect(outlook.safeDaily, 0.0);
+    });
+
+    test('operatingCash < 0.0 reports negative left and evaluates to PaydayVerdict.overspent', () {
+      final budgets = [
+        const Budget(
+          id: 'b1',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 5000,
+          spentAmount: 1500,
+          remainingAmount: 3500,
+          month: '2026-11-01',
+          isActive: true,
+        ),
+      ];
+
+      final today = DateTime.utc(2026, 11, 17);
+
+      final outlook = PaydayOutlook.compute(
+        budgets: budgets,
+        monthlyIncome: 10000.0,
+        operatingCash: -250.0, // Overdraft
+        pendingCommitments: 100.0,
+        today: today,
+        cycleStart: cycleStart,
+        cycleEnd: cycleEnd,
+      );
+
+      // Left must be -250.0, NOT 8500
+      expect(outlook.left, -250.0);
+      expect(outlook.base, 1250.0); // -250 + 1500 = 1250
+      expect(outlook.verdict, PaydayVerdict.overspent);
+      expect(outlook.afterCommitments, -350.0);
+      expect(outlook.safeDaily, 0.0);
+    });
+
     test('left with income null reflects liquid balance gross of commitments', () {
       final budgets = [
         const Budget(

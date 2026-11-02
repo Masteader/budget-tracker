@@ -86,11 +86,14 @@ class BudgetHeroCard extends StatelessWidget {
     final s = snapshot;
     final effectiveCommitments = pendingCommitments ?? s?.pendingCommitments;
     final effectiveMonthlyIncome = monthlyIncome ?? ((s != null && s.cycleIncome > 0) ? s.cycleIncome : null);
+    final effectiveOperatingCash = s != null
+        ? (s.accountsCount > 0 ? s.liquidBalance : null)
+        : operatingCash;
 
     final outlook = PaydayOutlook.compute(
       budgets: budgets,
       monthlyIncome: effectiveMonthlyIncome,
-      operatingCash: s != null ? s.liquidBalance : operatingCash,
+      operatingCash: effectiveOperatingCash,
       pendingCommitments: effectiveCommitments,
       today: today,
       cycleStart: start,

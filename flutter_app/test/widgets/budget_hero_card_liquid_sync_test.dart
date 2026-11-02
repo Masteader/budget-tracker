@@ -126,5 +126,106 @@ void main() {
       expect(find.textContaining('2,191.75'), findsOneWidget);
       expect(find.textContaining('1,162.00'), findsOneWidget);
     });
+
+    testWidgets('BudgetHeroCard renders 0.00 cash cleanly without reverting to income', (tester) async {
+      final budgets = [
+        const Budget(
+          id: 'b1',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 4000.0,
+          spentAmount: 1500.0,
+          remainingAmount: 2500.0,
+          month: '2026-11-01',
+          isActive: true,
+        ),
+      ];
+
+      const snapshot = OperatingCashSnapshot(
+        householdId: 'h1',
+        cycleKey: '2026-11',
+        liquidHalalas: 0, // 0.00 SAR in bank
+        pendingCommitmentsHalalas: 0,
+        cycleIncomeHalalas: 1000000, // 10,000.00 SAR monthly income
+        accountsCount: 1, // Bank account exists and is tracked!
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizationsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: BudgetHeroCard(
+                budgets: budgets,
+                now: now,
+                monthlyIncome: snapshot.cycleIncome,
+                snapshot: snapshot,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Big number must display 0.00, NOT 8,500.00!
+      expect(find.text('0.00'), findsOneWidget);
+      expect(find.text('8,500.00'), findsNothing);
+    });
+
+    testWidgets('BudgetHeroCard renders overdraft negative balance cleanly with overspent verdict', (tester) async {
+      final budgets = [
+        const Budget(
+          id: 'b1',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 4000.0,
+          spentAmount: 1500.0,
+          remainingAmount: 2500.0,
+          month: '2026-11-01',
+          isActive: true,
+        ),
+      ];
+
+      const snapshot = OperatingCashSnapshot(
+        householdId: 'h1',
+        cycleKey: '2026-11',
+        liquidHalalas: -25000, // -250.00 SAR in bank
+        pendingCommitmentsHalalas: 0,
+        cycleIncomeHalalas: 1000000, // 10,000.00 SAR monthly income
+        accountsCount: 1, // Bank account exists and is tracked!
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizationsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: BudgetHeroCard(
+                budgets: budgets,
+                now: now,
+                monthlyIncome: snapshot.cycleIncome,
+                snapshot: snapshot,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Overspent headline: Over by SAR 250.00
+      expect(find.textContaining('Over by SAR 250.00'), findsOneWidget);
+      expect(find.text('-250.00'), findsOneWidget);
+      expect(find.text('8,500.00'), findsNothing);
+    });
   });
 }
