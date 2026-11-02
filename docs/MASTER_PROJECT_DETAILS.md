@@ -1,0 +1,629 @@
+# MASTER PROJECT DETAILS — BUDGET TRACKER
+
+> **Document Version:** 2.0.0 (Master Unified Reference)  
+> **Effective Date:** November 2026  
+> **Project Repository:** `Masteader/budget-tracker`  
+> **Primary Target Market:** Kingdom of Saudi Arabia (KSA) & GCC Households  
+> **Authoritative Baseline:** Unified synthesis of `PROJECT_DETAILS.md`, `MASTER_CODEBASE_AUDIT.md`, `FORMULA_VERDICT.md`, and Engineering Rules 01–06.
+
+---
+
+## Table of Contents
+
+1. [Executive Summary & Product Mission](#1-executive-summary--product-mission)
+2. [System Architecture & Tech Stack](#2-system-architecture--tech-stack)
+3. [Database Schema, Migrations, Triggers & RLS Policies](#3-database-schema-migrations-triggers--rls-policies)
+4. [Saudi Fintech & Islamic Household Finance Operating Engine](#4-saudi-fintech--islamic-household-finance-operating-engine)
+5. [UI/UX Design System & Client Ecosystem](#5-uiux-design-system--client-ecosystem)
+6. [Security, Privacy & Zero-SMS Hardening](#6-security-privacy--zero-sms-hardening)
+7. [Comprehensive Codebase Audit Findings & Remediation Matrix](#7-comprehensive-codebase-audit-findings--remediation-matrix)
+8. [Testing, Verification Gate & Orchestrator Governance Matrix](#8-testing-verification-gate--orchestrator-governance-matrix)
+9. [Complete API Endpoints Directory](#9-complete-api-endpoints-directory)
+10. [Strategic Roadmap (v1.1 – v1.4)](#10-strategic-roadmap-v11--v14)
+
+---
+
+## 1. Executive Summary & Product Mission
+
+**Budget Tracker** is an autonomous, high-integrity household financial operating system engineered specifically for Saudi citizens, resident expat families, and shared roommate living groups in the Kingdom of Saudi Arabia (KSA) and the wider Gulf Cooperation Council (GCC).
+
+Mainstream global budgeting platforms (e.g., YNAB, Mint, Monarch, Copilot) are fundamentally incompatible with the socioeconomic and legal realities of GCC households:
+1. **Misaligned Payday Cycles:** Generic tools assume calendar months (1st to 30th/31st). Saudi government and corporate payrolls predominantly disburse on the **27th of each month** (or the preceding business day). Budget Tracker operates entirely on dynamic, household-configured salary cycles (`households.payday_day`, default 27th), calculating all category allocations, spending caps, and rollovers relative to the Hijri-aligned Gregorian payday.
+2. **Islamic Family Finance (*Nafaqah* vs. Roommate Living):** Sharia jurisprudence places full financial maintenance (*Nafaqah*) of housing, food, sustenance, and dependents upon the husband. Automatic 50/50 spousal expense splitting is culturally and legally inappropriate for Saudi family units. Budget Tracker enforces the **4 Golden Nafaqah Rules**: spousal expenses paid by the wife are tracked as an explicit, repayable debt owed by the husband; her personal purchases are charged against her per-cycle allowance ("مصروفها"); and shared expenses paid by the husband are ordinary household overhead. For shared bachelor/student flats, the app switches to **Roommate Mode**, deploying multi-way graph debt simplification.
+3. **ZATCA Phase 2 E-Invoicing Standard:** Saudi Arabia mandates electronic tax invoices featuring Base64 TLV (Tag-Length-Value) QR codes. Budget Tracker features an on-device TLV decoder and high-speed Gemini Vision OCR scanner that extracts seller identity, 15-digit VAT number, transaction timestamp, invoice total, and 15% VAT halalas without server round-trips.
+4. **Multi-Source Financial Ecosystem:** GCC users maintain assets across traditional commercial banks (Al Rajhi, SNB, Riyad Bank, Alinma), digital fintech wallets (STC Pay, Urpay, Tiqmo), cash, and crypto exchanges. Budget Tracker implements a zero-based cash management engine linking every budget category directly to its funding account, surfaced through real-time liquidity indicators.
+5. **Zero-SMS Hardening:** In strict compliance with modern privacy principles and Google Play / Apple App Store financial safety guidelines, the app strictly forbids background SMS reading or interception permissions. Ingestion is 100% user-directed via camera QR scan, OCR photo capture, conversational Saudi-dialect voice/text entry, or manual entry.
+
+---
+
+## 2. System Architecture & Tech Stack
+
+Budget Tracker employs a decoupled client-server architecture built on four specialized tiers:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             CLIENT ECOSYSTEM                                │
+├──────────────────────────────────────┬──────────────────────────────────────┤
+│          Flutter Mobile App          │       React Web App (web_app/)       │
+│    (iOS / Android - Velvet Burgundy) │  (Daylight Coastal Exploding Flow)   │
+│  • Flutter 3.22+, Dart 3.x           │  • React 19, TypeScript, Vite        │
+│  • Provider / ChangeNotifier         │  • TailwindCSS, Lucide React         │
+│  • Camera, Speech, Google Fonts      │  • Payday Simulator, VIP Form        │
+│  • Offline SQLite (`sqflite`)        │  • Built into ai_service/static/     │
+└──────┬──────────────────────┬────────┴──────────────────┬───────────────────┘
+       │ publishable key,     │ HTTPS + user JWT          │ POST /public/inquiries
+       │ RLS, Realtime        ▼                           ▼
+       │            ┌───────────────────────────────────────────────┐
+       │            │     Python AI Microservice (FastAPI + ASGI)   │
+       │            │  • LiteLLM (Gemini 2.5 Flash / Vision OCR)    │
+       │            │  • Saudi salary cycle & rollover math         │
+       │            │  • Roommate debt graph & Nafaqah service      │
+       │            │  • Recurring bill & price anomaly detector    │
+       │            │  • Hermetic pytest suite (584+ tests)         │
+       │            └──────────────────────┬────────────────────────┘
+       ▼                                   ▼ secret service key + in-code RBAC
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Supabase Platform (PostgreSQL 15+)                      │
+│  • 100% Row Level Security (RLS) multi-tenancy on all public tables         │
+│  • SECURITY DEFINER RPCs with pinned search_path = public, pg_temp          │
+│  • Private 'receipts' storage bucket with household folder isolation        │
+│  • Realtime replication streams for multi-device synchronization            │
+│  • 53 timestamped migrations (supabase/migrations/)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.1 Technology Stack Matrix
+
+| Layer | Framework / Runtime | Key Libraries / Modules | Primary Responsibility |
+|---|---|---|---|
+| **Mobile Client** | Flutter 3.22+, Dart 3.x | `provider`, `sqflite`, `camera`, `speech_to_text`, `google_fonts`, `intl`, `uuid` | Cross-platform Android & iOS app. Velvet Burgundy HUD design system (with legacy Sovereign OS compatibility layer). Local offline transaction buffer and auto-sync. |
+| **Web Portal** | React 19, TypeScript, Vite | `tailwindcss`, `clsx`, `lucide-react` | Daylight Coastal Exploding Flow marketing portal. Illustrative Saudi payday cycle countdown simulator and VIP early-access lead capture. Committed build served by FastAPI at `/`. |
+| **AI Microservice** | Python 3.11, FastAPI, Uvicorn | `litellm`, `pydantic v2`, `httpx`, `reportlab`, `postgrest`, `python-dotenv` | Vision receipt OCR, Saudi dialect conversational expense parsing, recurring bill detection, graph debt simplification, PDF statement generation. |
+| **Database & Auth** | Supabase (PostgreSQL 15+) | `pgcrypto`, `supabase-py`, PostgREST | Multi-tenant relational storage, RLS security policies, `SECURITY DEFINER` atomic RPCs, database triggers, storage buckets. |
+| **Offline Cache** | SQLite (`sqflite`) | `budget_tracker_offline.db` | Local queue for offline expense capture with transactional flush and idempotency upon network reconnect. |
+
+### 2.2 Component Contract & Communication Boundaries
+
+1. **Client to Supabase Platform:**
+   - Flutter communicates directly with Supabase via PostgREST using `SUPABASE_PUBLISHABLE_KEY` (alias `SUPABASE_ANON_KEY`).
+   - Every single query, mutation, and realtime channel is governed by PostgreSQL Row Level Security (RLS).
+   - Money movements, balance adjustments, and role updates NEVER execute via raw client `UPDATE` queries; they must invoke audited `SECURITY DEFINER` RPCs.
+2. **Client to AI Microservice:**
+   - Server-side capabilities (Vision OCR receipt scanning, conversational dialect parsing, affordability simulation, PDF statements) are called via HTTPS.
+   - Every non-public request requires `Authorization: Bearer <Supabase_JWT>`. The Python service verifies the JWT algorithm, expiration, issuer, audience, and active household membership before executing any logic.
+   - `X-Signature` (HMAC-SHA256 with `WEBHOOK_SECRET`) provides optional defense-in-depth: if a valid JWT is present, an invalid or missing signature logs a warning and allows the request to succeed.
+3. **AI Microservice to Supabase:**
+   - FastAPI connects using `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`), which bypasses RLS.
+   - **Strict Governance:** Because service-role bypasses RLS, the Python application layer explicitly validates household tenancy, member status, and admin rights on every single route via `household_permissions.py` before executing database calls.
+   - Migrations are applied exclusively in PostgreSQL; `ai_service` never runs schema alterations.
+4. **Web Portal to Backend:**
+   - The React web application does not possess Supabase credentials and makes no direct database calls. It interacts solely with the anonymous public lead capture endpoint: `POST /public/inquiries`.
+5. **Deployment Invariant:**
+   - Database schema migrations apply first $\to$ AI microservice deploys second $\to$ Web & Flutter client builds publish third.
+
+---
+
+## 3. Database Schema, Migrations, Triggers & RLS Policies
+
+### 3.1 Complete Migrations Catalog (53 Migrations)
+
+All database evolution is captured in chronological, timestamped migration scripts in `supabase/migrations/`:
+
+| # | Migration File | Target Objects | Core Purpose |
+|---|---|---|---|
+| 01 | `20260925_add_line_items_and_sources.sql` | `transactions` | Adds line items JSONB and input source attribution. |
+| 02 | `20260925_add_transaction_edit_delete_triggers.sql` | `transactions` triggers | Decrements and recomputes category budget spent totals. |
+| 03 | `20260930_fix_transactions_rls_and_columns.sql` | `transactions`, RLS | Enforces household-scoped multi-tenancy and user binding. |
+| 04 | `20261002_add_sub_allocations_to_budgets.sql` | `budgets` | Adds `sub_allocations` JSONB for granular sub-category budgeting. |
+| 05 | `20261002_salary_cycle_and_sub_budgets.sql` | `budgets`, `transactions` | Establishes `cycle_key`, `previous_cycle_delta`, and sub-category catalog. |
+| 06 | `20261003_allow_select_sub_categories.sql` | `cost_control_sub_categories` | Grants SELECT policy for sub-category taxonomy. |
+| 07 | `20261005_add_installment_plans.sql` | `installment_plans` | Tables and RLS for BNPL providers (Tabby, Tamara, bank plans). |
+| 08 | `20261005_query_performance_and_indexes.sql` | Indexes | Covering and composite lookup indexes on foreign keys. |
+| 09 | `20261008_add_household_payday.sql` | `households`, `users` | Adds `payday_day` (1–31, default 27). |
+| 10 | `20261008_add_qr_code_raw_to_transactions.sql` | `transactions` | Adds `qr_code_raw` for ZATCA TLV payload storage. |
+| 11 | `20261008_create_receipts_bucket_and_policies.sql` | Supabase Storage | Creates `receipts` bucket and access policies. |
+| 12 | `20261009_fix_storage_policies_and_receipt_cleanup.sql` | Storage, triggers | Automatically removes receipt image when transaction is deleted. |
+| 13 | `20261009_hardened_security_and_storage_policies.sql` | Storage, RLS | Enforces household folder path isolation on receipt images. |
+| 14 | `20261010_add_household_monthly_income.sql` | `households` | Adds `monthly_income` baseline for budget ratios. |
+| 15 | `20261011_household_dependents_and_subcategories.sql` | `household_dependents` | Introduces dependents (children, elderly) and sub-allocations. |
+| 16 | `20261011_hybrid_category_lifecycle.sql` | `cost_control_codes` | Standard vs. custom household categories and archival flags. |
+| 17 | `20261015_family_nafaqah_and_multi_roommate_settlement.sql` | `users`, `transactions` | Introduces `financial_role` and role-aware settlement columns. |
+| 18 | `20261015_manual_members_and_claim_merge.sql` | `household_invites` | Placeholder members and targeted claim-on-join merging. |
+| 19 | `20261018_household_memberships_and_switching.sql` | `household_memberships` | Multi-household membership and `switch_active_household` RPC. |
+| 20 | `20261018_multi_source_income_and_accounts.sql` | `accounts`, `income_records` | Multi-source accounts, transfers, and append-only income ledger. |
+| 21 | `20261018_membership_sync_and_shared_account_policies.sql` | Policies, triggers | Membership sync and shared pool permission rules. |
+| 22 | `20261019030000_sec01_sec02_household_takeover_prevention.sql`| RPCs, invites | SEC-01/02: Prevents self-promotion; single-use expiring invites. |
+| 23 | `20261019060000_sec06_private_receipts_bucket.sql` | Storage | SEC-06: Configures private storage bucket with signed URLs. |
+| 24 | `20261019070000_sec07_api_quota_and_rate_limits.sql` | `api_quota` | SEC-07: Persistent API quota tracking table. |
+| 25 | `20261019080000_bug02_payday_cycle_parity_and_triggers.sql` | Triggers, functions | BUG-02: Parity across SQL/Python `cycle_key` generation. |
+| 26 | `20261019090000_sec05_accounts_security_and_transfers.sql` | `accounts`, RPCs | SEC-05: Atomic transfers and account balance triggers. |
+| 27 | `20261019100000_sec08_round6_hardening.sql` | Core schema | SEC-08: General security and constraint hardening. |
+| 28 | `20261020005000_preflight_live_alignment.sql` | Catalog alignment | Captures live schema drift prior to audit batch. |
+| 29 | `20261020010000_audit_invites_rls_and_targeted_claims.sql` | `household_invites` | DB-01: RLS on invites and targeted member claims. |
+| 30 | `20261020020000_audit_membership_policy_recursion.sql` | `household_memberships` | DB-02: Eliminates recursive RLS evaluation on memberships. |
+| 31 | `20261020030000_audit_reallocate_budget_authz.sql` | `reallocate_budget` | DB-03: Admin-only authorization on budget reallocations. |
+| 32 | `20261020040000_audit_cost_control_codes_policies.sql` | `cost_control_codes` | DB-04: Enforces tenant scoping on custom category writes. |
+| 33 | `20261020050000_audit_ledger_precision_and_income_append_only.sql`| `income_records` | DB-06: `numeric(14,2)` precision; income ledger append-only. |
+| 34 | `20261020060000_audit_transaction_cycle_key_integrity.sql` | `transactions` triggers | DB-08: Ensures clients cannot forge or tamper with `cycle_key`. |
+| 35 | `20261020070000_audit_definer_search_path_and_household_insert.sql`| Functions | DB-09/10: Pins `search_path = public, pg_temp` on functions. |
+| 36 | `20261020080000_audit_receipts_bucket_limits.sql` | Storage | DB-11: 10MB file size limit and image MIME-type whitelist. |
+| 37 | `20261020090000_audit_sole_admin_account_deletion.sql` | Auth triggers | DB-12: Prevents orphaned households when sole admin deletes account. |
+| 38 | `20261020100000_audit_rls_initplan_and_fk_indexes.sql` | Indexes, RLS | DB-13: InitPlan `(SELECT auth.uid())` wrap; missing FK indexes. |
+| 39 | `20261020200000_remove_sms_artifacts.sql` | Schema | API-25: Purges legacy SMS columns; rejects `source = 'sms'`. |
+| 40 | `20261020300000_nafaqah_wife_allowance_and_reimbursements.sql`| RPCs, ledgers | UI-24: `spouse_reimbursements` append-only ledger and allowances. |
+| 41 | `20261020400000_admin_permissions_and_co_admins.sql` | RBAC RPCs | DB-16/18: Primary admin, co-admins, creator-bound transactions. |
+| 42 | `20261020500000_review_lock_financial_role.sql` | `users` | Locks `financial_role` to prevent self-escalation by members. |
+| 43 | `20261020600000_e2e_helper_rpcs_and_sub_category_visibility.sql`| RPCs | Hardens helper RPCs against unauthorized global enumeration. |
+| 44 | `20261020700000_fable_db_hardening.sql` | Constraints | FABLE-DB hardening: cascade rules, FK indexes, and null guards. |
+| 45 | `20261020750000_installment_pay_atomic.sql` | `installment_plans` | FABLE-API-10: Atomic single-statement installment payment RPC. |
+| 46 | `20261020800000_household_roles_and_nafaqah_integrity.sql` | `households` | Explicit `nafaqah_provider_user_id` and wife allowance guards. |
+| 47 | `20261020900000_household_type_and_round2_fixes.sql` | `households` | Explicit `household_type` ('family' vs 'roommates') constraint. |
+| 48 | `20261021000000_saudi_taxonomy_and_bnpl_schedule.sql` | Taxonomy | Saudi standard cost taxonomy (`OPEX-HOUSING`, `OPEX-DOMESTIC`, etc.). |
+| 49 | `20261024000000_create_inquiries_table.sql` | `inquiries` | Persistent lead capture for VIP early access and support inquiries. |
+| 50 | `20261026000000_add_savings_account_type.sql` | `accounts` | Adds `savings` type to protect emergency vaults from daily budgets. |
+| 51 | `20261026120000_household_autonomous_taxonomy.sql` | Categories | Household autonomous taxonomy, template catalog, and replace RPC. |
+| 52 | `20261101000000_nafaqah_wife_no_account.sql` | `transactions` | Initial CHECK constraint isolating wife-class transactions. |
+| 53 | `20261101000100_nafaqah_wife_account_owner_guard.sql` | `transactions` | Upgrades CHECK to dynamic trigger `trg_enforce_wife_class_account`. |
+
+### 3.2 Core Database Entities & Invariants
+
+```
+┌─────────────────────┐       ┌───────────────────────────┐       ┌────────────────────────┐
+│     households      │1     *│   household_memberships   │*     1│         users          │
+├─────────────────────┤───────├───────────────────────────┤───────├────────────────────────┤
+│ id (PK)             │       │ id (PK)                   │       │ id (PK)                │
+│ name                │       │ household_id (FK)         │       │ display_name           │
+│ payday_day (1-31)   │       │ user_id (FK)              │       │ email                  │
+│ owner_user_id (FK)  │       │ role (admin/member)       │       │ payday_day             │
+│ nafaqah_provider_id │       │ financial_role            │       │ financial_role (cache) │
+│ household_type      │       │ joined_at                 │       │ created_at             │
+│ rollover_rule       │       └───────────────────────────┘       └────────────────────────┘
+└──────────┬──────────┘
+           │1
+           │*
+┌──────────┴──────────┐       ┌───────────────────────────┐       ┌────────────────────────┐
+│      accounts       │1     *│       transactions        │*     1│        budgets         │
+├─────────────────────┤───────├───────────────────────────┤───────├────────────────────────┤
+│ id (PK)             │       │ id (PK)                   │       │ id (PK)                │
+│ household_id (FK)   │       │ household_id (FK)         │       │ household_id (FK)      │
+│ owner_user_id (FK)  │       │ account_id (FK, nullable) │       │ account_id (FK)        │
+│ account_type        │       │ user_id (FK) [creator]    │       │ cycle_key (YYYY-MM)    │
+│ balance numeric     │       │ amount numeric(14,2)      │       │ category_code          │
+│ is_shared_pool bool │       │ cycle_key (trigger-set)   │       │ allocated_amount       │
+│ is_archived bool    │       │ nafaqah_class             │       │ spent_amount (trigger) │
+│ currency (SAR default)      │ nafaqah_spouse_id (FK)    │       │ sub_allocations JSONB  │
+└─────────────────────┘       └───────────────────────────┘       └────────────────────────┘
+```
+
+### 3.3 Critical Database Triggers & Single Sources of Truth (SSOT)
+
+1. **Cycle Key Integrity (`trg_populate_transaction_cycle_key`):**
+   - Attached to `transactions` ON INSERT OR UPDATE of `timestamp`, `household_id`.
+   - Derives `cycle_key` automatically via `public.get_saudi_cycle_for_timestamp(NEW.timestamp, h.payday_day)` where `h.id = NEW.household_id`.
+   - **Security Invariant:** Client-supplied `cycle_key` values are overwritten unconditionally. Clients cannot forge cycle keys.
+2. **Account Balance SSOT (`trg_update_account_balance_on_transaction`):**
+   - Attached to `transactions` ON INSERT, UPDATE, OR DELETE.
+   - On INSERT: decrements `accounts.balance = balance - NEW.amount` for `NEW.account_id`.
+   - On DELETE: increments `accounts.balance = balance + OLD.amount` for `OLD.account_id`.
+   - On UPDATE: atomically reverses old amount and applies new amount.
+   - **Architectural Rule:** Neither Python nor Flutter ever writes `accounts.balance` directly for transaction activity. Triggers are the sole authority.
+3. **Wife Account Owner & Debit Isolation Guard (`trg_enforce_wife_class_account`):**
+   - Attached to `transactions` BEFORE INSERT OR UPDATE of `account_id`, `nafaqah_class`, `nafaqah_spouse_id`.
+   - Rule: When `nafaqah_class IN ('wife_personal', 'wife_reimbursable')` and `account_id IS NOT NULL`, the target account **MUST** be owned by the designated wife (`a.owner_user_id = NEW.nafaqah_spouse_id`), must belong to the household, must not be archived, and **CANNOT BE A SHARED POOL** (`a.is_shared_pool = false`).
+   - If an unauthorized account is provided, raises `check_violation` with constraint `transactions_wife_class_no_account`.
+4. **Budget Spent Aggregator (`trg_adjust_budget_spent`):**
+   - Recomputes `budgets.spent_amount` for the corresponding `(household_id, cycle_key, category_code)`.
+   - **Compliance Filter:** Transactions with `is_settlement = true` or `nafaqah_class = 'wife_personal'` are strictly excluded from budget category spend.
+5. **Wife Allowance Overpayment Advisory Lock (`record_spouse_reimbursement` RPC):**
+   - Acquires transaction-level lock `PERFORM pg_advisory_xact_lock(hashtext('reimburse_' || p_household_id::text))`.
+   - Calculates total reimbursable debt from `transactions` minus already repaid amounts in `spouse_reimbursements`.
+   - Rejects any payment that exceeds outstanding debt (`RAISE EXCEPTION 'ledger_would_be_overpaid'`).
+
+### 3.4 Row Level Security (RLS) Multi-Tenancy Architecture
+
+- **100% RLS Coverage:** Enabled on every table in the `public` schema (`supabase/tests/14_audit_catalog_guardrails.sql` tests this via `information_schema.tables`).
+- **InitPlan Optimization (DB-13):** Every tenant policy wraps the helper in a `SELECT` statement:
+  ```sql
+  household_id = (SELECT public.get_auth_user_household_id())
+  ```
+  This forces PostgreSQL query planner to execute the function once per query execution (InitPlan) rather than once per row evaluated (SubPlan), improving query performance by orders of magnitude.
+- **Account Visibility & Debit Rules:**
+  - Personal accounts: visible only to owner (`owner_user_id = (SELECT auth.uid())`).
+  - Shared pools: visible to all household members (`is_shared_pool = true AND household_id = (SELECT public.get_auth_user_household_id())`).
+  - Shared pool debits: restricted strictly to users with `role = 'admin'` via `assert_can_debit_account` in FastAPI and RPC guards.
+- **Function Hardening:**
+  - All `SECURITY DEFINER` functions enforce `SET search_path = public, pg_temp` to prevent malicious search-path hijacking.
+  - `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon;` is applied to all sensitive business RPCs.
+
+---
+
+## 4. Saudi Fintech & Islamic Household Finance Operating Engine
+
+### 4.1 Saudi Payday Cycle Arithmetic
+
+The Saudi salary cycle is the foundational temporal unit of the system.
+- **Cycle Identification (`cycle_key`, `YYYY-MM`):**
+  - Configured per household in `households.payday_day` (range 1–31, default 27).
+  - Calculated on the **Asia/Riyadh** calendar date.
+  - If a month has fewer days than `payday_day` (e.g. 31st in February or April), it is clamped to the month's final day.
+  - **Naming Convention:**
+    - If `payday_day > 15`: The cycle is named after the month in which it **ends**. For example, with payday 27, the period spanning 27 October 2026 to 26 November 2026 is designated `2026-11`.
+    - If `payday_day <= 15`: The cycle is named after the month in which it **starts**.
+    - If `payday_day = 1`: The cycle corresponds exactly to the calendar month.
+- **Cycle Rollover Handling (`households.rollover_rule`):**
+  1. `send_to_savings` (Default): Leftover funds at the end of the salary cycle are swept into `households.accumulated_savings`. Category allocations reset fresh for the new cycle.
+  2. `rollover_to_categories`: Unspent positive/negative deltas are rolled forward into the same categories in the new cycle (`previous_cycle_delta`).
+  3. `fresh_start`: Zero carryover; allocations reset to baseline.
+
+### 4.2 ZATCA Phase 2 E-Invoicing Engine
+
+The mobile client includes a native, on-device TLV decoder (`flutter_app/lib/services/zatca_decoder.dart`) conforming to ZATCA Phase 2 specifications:
+
+```
+┌────────────────────────────────────────────────────────┐
+│                ZATCA Phase 2 TLV Barcode               │
+├─────┬──────────────────────────┬───────────────────────┤
+│ Tag │ Meaning                  │ Data Type / Rule      │
+├─────┼──────────────────────────┼───────────────────────┤
+│ 01  │ Seller Legal Name        │ UTF-8 String          │
+│ 02  │ VAT Registration Number  │ 15 Digits (Starts &   │
+│     │                          │ Ends with '3')        │
+│ 03  │ Invoice Timestamp        │ ISO 8601 String       │
+│ 04  │ Invoice Total (with VAT) │ Decimal String (SAR)  │
+│ 05  │ VAT Total Amount         │ Decimal String (15%)  │
+└─────┴──────────────────────────┴───────────────────────┘
+```
+- **One-Model-Call Preview Token:**
+  - Receipt scans and conversational chat inputs generate an ephemeral preview token signed with `PREVIEW_TOKEN_SECRET` (HMAC-SHA256, 15-minute TTL).
+  - The token encapsulates extracted merchant, total, line items, and VAT.
+  - Upon user confirmation, the client presents the `preview_token` to `POST /agent/chat-transaction` or `POST /agent/scan-receipt`. The server verifies the cryptographic signature and saves the record without issuing a second LLM inference call.
+- **De-duplication Protection:**
+  - Receipts generate a SHA-256 fingerprint combining merchant name, total halalas, and timestamp. Matches prompt the `DuplicateResolutionCard` to avoid double-charging.
+
+### 4.3 Islamic Family Finance (Nafaqah) vs. Roommate Living Groups
+
+The platform automatically configures its operating engine based on `households.household_type` ('family' vs 'roommates') and the presence of `financial_role = 'spouse'`:
+
+#### The 4 Golden Nafaqah Rules (Family Mode)
+1. **Nafaqah is Exclusively on the Husband:** Shared living expenses (rent, groceries, utilities, school tuition, domestic staff, family health) are the husband's sole legal responsibility. Automatic 50/50 splits or spousal percentage ratios are **strictly prohibited** across the database, APIs, mobile UI, and PDF statements.
+2. **Wife Pays Shared Expense $\to$ Reimbursable Debt:** If the wife pays for shared family necessities from her personal funds:
+   - The transaction is recorded with `transactions.nafaqah_class = 'wife_reimbursable'` and `nafaqah_spouse_id = <wife_user_id>`.
+   - It is recorded as debt owed by the husband.
+   - The wife or husband views the outstanding balance on the Family Reimbursement Card.
+   - Repayments are logged via the append-only `spouse_reimbursements` ledger. Overpayment beyond outstanding debt is rejected under database lock.
+3. **Wife Buys Personal Items $\to$ Allowance Deduction:** If the wife buys personal items for herself:
+   - Tagged as `transactions.nafaqah_class = 'wife_personal'`.
+   - This is NOT debt and does NOT hit category budgets.
+   - It is charged directly against her personal monthly allowance ("مصروفها") in `member_allowances` for that cycle.
+   - The allowance is configured exclusively by the husband/admin (the wife cannot set her own allowance). Overspending reflects as a negative remainder and is never blocked.
+   - **Account Isolation:** Wife-class transactions may only debit her own personal non-shared account or remain unlinked (`trg_enforce_wife_class_account`).
+4. **Husband Pays Shared / Personal $\to$ Standard Expense:** Normal household expenditure with no debt or special classification. Tabarru' (voluntary wife contribution without reimbursement) requires an explicit opt-in flag.
+
+#### Roommate Living Mode (Shared Flats)
+- In bachelor/student households (`household_type = 'roommates'`), shared expenses (rent, cleaning, fiber internet) use the Multi-Roommate Settlement Engine.
+- Deploys graph debt simplification (`settlement_engine.simplify_debts`), converting complex $N \times N$ pairwise debts into the minimal set of bilateral settlements, preventing circular cash transfers.
+- Generates 1-tap formatted settlement summaries for WhatsApp.
+
+### 4.4 Operating Cash & Zero-Based Balance Ledger SSOT
+
+#### The Operating Cash Formula SSOT (`FORMULA_VERDICT.md`)
+A common architectural error in budgeting systems is subtracting Category Spent from Live Cash. Because Budget Tracker's database trigger `trg_update_account_balance_on_transaction` **already decrements `accounts.balance` on write**, subtracting spent amounts again constitutes double-deduction.
+
+The canonical formulas enforced across Flutter and PostgreSQL are:
+
+$$\text{Liquid Balance} = \sum \text{accounts.balance} \quad \Big[\text{where } \text{isOperatingPool} = \text{true}, \text{currency} = \text{'SAR'}, \text{isArchived} = \text{false}\Big]$$
+
+$$\text{Commitments} = \sum (\text{amount\_due} - \text{amount\_paid}) \quad \Big[\text{unpaid bills and installments due } \le \text{cycle end}\Big]$$
+
+$$\mathbf{Operating\ Cash} = \mathbf{Liquid\ Balance} - \mathbf{Commitments}$$
+
+> [!IMPORTANT]
+> **SSOT Rule:** Category Spent belongs exclusively to the **budget allocation engine** (Planned vs. Actual). It NEVER enters the **operating cash headroom formula**.
+
+- **Zero-Based Budget Invariant:**
+  - Total committed category budgets for an account must never exceed that account's actual liquid balance:
+  $$\text{Capacity Margin} = \text{Account Balance} - \sum \text{Allocated Budgets}$$
+  - Surfaced through dynamic HUD indicators:
+    - `🟢 Zero-Based (100% Allocated)`
+    - `🔵 Surplus Buffer (+SAR X.XX)`
+    - `🔴 Deficit Shortfall (-SAR X.XX)` with 1-tap `[⚡ Quick Transfer]` pre-filled from the surplus account.
+
+---
+
+## 5. UI/UX Design System & Client Ecosystem
+
+### 5.1 Mobile HUD Design System Evolution: Velvet Burgundy
+
+The mobile app was originally drafted under the *Sovereign OS & Iced Ocean* aesthetic and subsequently upgraded to the **Velvet Burgundy Master Design System** (`flutter_app/lib/core/theme/velvet_burgundy_theme.dart`). 
+
+To preserve architectural integrity across all views, `flutter_app/lib/theme/app_themes.dart` provides an authoritative compatibility layer mapping all legacy Sovereign OS tokens directly into Velvet Burgundy tokens:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Velvet Burgundy HUD Color Palette                      │
+├──────────────────────────┬──────────────────────────┬───────────────────────┤
+│ Token Name               │ Hex Code                 │ Semantic Purpose      │
+├──────────────────────────┼──────────────────────────┼───────────────────────┤
+│ canvasDark (Obsidian)    │ #110509                  │ Main Scaffold Dark    │
+│ surfaceDark (Plum Card)  │ #1E0B12                  │ 3D Glass Surface Dark │
+│ canvasLight (Alabaster)  │ #F8F3F5                  │ Main Scaffold Light   │
+│ surfaceLight (Ceramic)   │ #FFFFFF                  │ 3D Ceramic Card Light │
+│ primaryLight (Burgundy)  │ #4A0E1E                  │ Primary Brand Ink     │
+│ roseGold / roseGoldGlow  │ #E598B0 / #F0A3BC        │ Primary Glow Accent   │
+│ emeraldSafe              │ #10B981                  │ Surplus / Safe State  │
+│ amberCaution             │ #F59E0B                  │ Pending / Due Warning │
+│ coralDanger              │ #F43F5E                  │ Deficit / Danger      │
+└──────────────────────────┴──────────────────────────┴───────────────────────┘
+```
+
+- **Elevation & Glassmorphism:** Subtle 1px borders using `Colors.white.withValues(alpha: 0.08)` in dark mode and `Color(0xFFF2DCE2)` in light mode. Strictly no legacy `withOpacity()`.
+- **Typography:** Google Fonts pairing `Outfit` (Latin figures and English typography) with `Cairo` and `Tajawal` (Arabic typography).
+
+### 5.2 Floating Dock & Speed Dial FAB
+
+Bottom navigation centers around an elevated floating dock featuring the speed-dial Floating Action Button (FAB) executing the 3 core financial actions:
+1. **Add Expense:** Opens `ManualExpenseSheet` with automatic role-aware payer tagging.
+2. **Record Income:** Opens `RecordIncomeSheet` for salary, overtime, bonus, or gig receipts.
+3. **Transfer Funds:** Opens `AccountTransferSheet` for atomic intra-household liquidity rebalancing.
+
+Receipt scanning and voice dictation are housed directly on the top Tactical Action Bar and `DashboardActionSheet`.
+
+### 5.3 Privacy Eye Masking
+
+To ensure comfort when using the application in public spaces (airports, cafes, offices), a global Privacy Eye Toggle instantly masks:
+- Net worth and total liquidity metrics.
+- Individual bank and wallet account balances.
+- Surplus buffer and deficit shortfall figures in status pills and cover buttons (`•••••• SAR`).
+
+### 5.4 Trilingual Arabic-First & RTL Architecture
+
+- **Primary Locale:** Arabic (`ar`) with native RTL (Right-to-Left) directional flow. English (`en`) and Urdu (`ur`) are first-class supported locales.
+- **Zero Hardcoding Rule:** No user-facing text is permitted in code. All strings are accessed through `context.tr('key')` or `context.trArgs('key', {...})` via `flutter_app/lib/l10n/app_localizations.dart`.
+- **RTL Directionality:** All paddings use `EdgeInsetsDirectional.only()`. Chevron navigation icons mirror naturally without manual ternary flips that cause double-mirroring.
+
+### 5.5 Daylight Coastal Web Landing Page
+
+The web presence (`web_app/`) is an ultra-fast, responsive landing page using the **Daylight Coastal Exploding Flow** aesthetic (crisp marine teal on fresh white). It features:
+- Interactive Payday Cycle Calculator: Users choose their payday (1–31) and view real-time countdowns, active cycle dates, and sample budget allocations.
+- Real Copy & AI Disclosure: Explicitly discloses Google Gemini as the underlying OCR and language intelligence engine.
+- VIP Early Access Form: Connects directly to `POST /public/inquiries` for lead acquisition.
+
+---
+
+## 6. Security, Privacy & Zero-SMS Hardening
+
+### 6.1 Zero-SMS Policy
+
+Budget Tracker enforces a zero-tolerance policy against SMS interception:
+- Android manifest strictly excludes `android.permission.RECEIVE_SMS` and `android.permission.READ_SMS`.
+- No background broadcast receivers or native SMS listening services exist in the codebase.
+- The database schema rejects any transaction with `source = 'sms'` (`supabase/migrations/20261020200000_remove_sms_artifacts.sql`).
+- All financial inputs are verified and confirmed by the user.
+
+### 6.2 API Key Segregation & Storage Hardening
+
+1. **Publishable / Anon Key (`SUPABASE_PUBLISHABLE_KEY`):**
+   - Safe for compilation into client binaries.
+   - Constrained 100% by PostgreSQL RLS.
+2. **Secret / Service-Role Key (`SUPABASE_SECRET_KEY`):**
+   - Strictly confined to backend environment variables (`ai_service`).
+   - Flutter app explicitly checks for and refuses to boot if an `sb_secret_` or service-role key is detected in client configuration.
+3. **Storage Bucket Hardening:**
+   - The `receipts` Supabase Storage bucket is marked private.
+   - Folder structure enforces `/receipts/{household_id}/{transaction_id}.jpg`. RLS ensures only members of the specified household can download receipt images.
+   - Size limit: 10MB. Whitelisted MIME types: `image/jpeg`, `image/png`, `image/webp`.
+
+### 6.3 Authentication & Request Signatures
+
+- **JWT Validation:** Every authenticated endpoint verifies the caller's Supabase JWT via asymmetric JWKS validation, enforcing `exp`, `iat`, `sub`, and issuer checks.
+- **Signature Defense-in-Depth (`X-Signature`):** Client requests sign payloads using HMAC-SHA256 with `WEBHOOK_SECRET`. When a valid JWT is present, signature discrepancies are logged without failing the request (preventing service disruption during secret rotation on mobile builds). Genuine webhook routes without JWT mandate a valid signature.
+- **Firewall Middleware:** Reverse proxy endpoints enforce constant-time token comparison.
+
+---
+
+## 7. Comprehensive Codebase Audit Findings & Remediation Matrix
+
+In November 2026, an exhaustive multi-pass audit of the entire codebase was conducted across four specialized passes. Below is the authoritative register of findings, root causes, and remediation statuses:
+
+### 7.1 Database & Migrations Security (Pass 1)
+
+| Audit ID | Severity | Affected Component | Finding Description & Vulnerability | Remediation Status |
+|---|---|---|---|---|
+| **S-1** | CRITICAL | `schema.sql` $\to$ `reallocate_budget` | Unprotected `SECURITY DEFINER` function without user or household authorization allowed any user to alter budget allocations across any household. | **RESOLVED:** Dropped in `20261020030000_audit_reallocate_budget_authz.sql` and replaced with admin-only RPC with actor validation. |
+| **S-2** | CRITICAL | `20261011_hybrid_category_lifecycle.sql` | `cost_control_codes` INSERT/UPDATE policies checked only `household_id IS NOT NULL`, allowing cross-tenant category pollution. | **RESOLVED:** Replaced in `20261020040000_audit_cost_control_codes_policies.sql` with strict household scoping. |
+| **S-3** | CRITICAL | `20261019080000_bug02...` | Trigger on `cycle_key` fired only on `UPDATE OF timestamp, household_id`. A direct `UPDATE transactions SET cycle_key = '...'` could forge cycle keys. | **RESOLVED:** Enforced unconditional trigger overwrite in `20261020060000_audit_transaction_cycle_key_integrity.sql`. |
+| **S-4** | CRITICAL | `20261018_household_memberships...` | `memberships_admin_manage` policy had self-referencing SELECT causing potential infinite recursion and allowed direct client inserts. | **RESOLVED:** Dropped in `20261020020000_audit_membership_policy_recursion.sql`; membership mutations restricted to RPCs. |
+| **S-5** | CRITICAL | `20261019030000` / `20261019100000` | Any member could update or delete other members' transactions; creator `user_id` was not bound at insert. | **RESOLVED:** Bound `user_id = auth.uid()` at insert and enforced creator-or-admin edit policy in `20261020400000`. |
+| **S-6** | HIGH | `20261019030000` | Client could update `users.financial_role` directly, allowing members to force or escape family mode arbitrarily. | **RESOLVED:** Column permissions revoked in `20261020500000_review_lock_financial_role.sql`. |
+| **S-7** | HIGH | `20261019090000` | Non-admin members could debit shared pool accounts through direct transfers or transaction balance triggers. | **RESOLVED:** Restricted pool debits to admins in `20261020400000` and `assert_can_debit_account`. |
+| **S-8** | HIGH | `20261019030000` | Members could read plaintext household invite codes. | **RESOLVED:** Restricted invite SELECT policies to admins only in `20261020010000_audit_invites_rls_and_targeted_claims.sql`. |
+| **S-9** | HIGH | `20261020010000` | Existing members could claim invites to their own household; sync trigger demoted co-admins on join. | **RESOLVED:** Added membership checks and safe update logic in `20261020800000_household_roles_and_nafaqah_integrity.sql`. |
+| **S-10** | HIGH | `20261019090000` | Direct client insert to `income_records` bypassed account ownership checks. | **RESOLVED:** Made `income_records` append-only via RPC and enforced account ownership in `20261020050000`. |
+| **S-11** | HIGH | `20261011_household_dependents...` | Members could update `linked_user_id` on dependents, spoofing claim-merge. | **RESOLVED:** Restricted dependent updates to admins in `20261020010000`. |
+| **S-12** | MEDIUM | `20261005_add_installment_plans.sql` | Unscoped RLS allowed any member to delete installment plans. | **RESOLVED:** Enforced household and creator scoping in `20261020700000_fable_db_hardening.sql`. |
+| **S-14** | MEDIUM | `20261019060000` | Receipts storage bucket lacked file size and MIME-type constraints. | **RESOLVED:** Applied 10MB limit and MIME whitelist in `20261020080000_audit_receipts_bucket_limits.sql`. |
+| **S-17** | LOW | `get_saudi_cycle_for_timestamp` | Function mutable search path warning. | **RESOLVED:** Pinned `search_path = public, pg_temp` in `20261020070000`. |
+
+### 7.2 AI Microservice Backend Architecture (Pass 2)
+
+| Audit ID | Severity | Affected Route / Function | Finding Description & Vulnerability | Remediation Status |
+|---|---|---|---|---|
+| **C1** | CRITICAL | `routes/chat.py`, `routes/receipts.py`, `supabase_client.py` | **Cross-Tenant Account IDOR:** Client-supplied `account_id` was not validated against caller tenancy or ownership, allowing users to debit foreign accounts. | **RESOLVED:** Added `assert_can_debit_account` in `household_permissions.py` validating household tenancy and admin rights. |
+| **C2** | CRITICAL | `pdf_statement_generator.py` | Statement printed `"50 / 50 Shared Split"` and computed spousal percentages in family mode, violating Rule 02 §3.1. | **RESOLVED:** Segregated statement templates; family statements omit spousal split metrics and show Nafaqah ledger. |
+| **H1** | HIGH | `supabase_client.insert_transaction` | Automatic account fallback defaulted to shared pool or first account, debiting shared pool without admin privilege. Python balance sync clamped deficits to 0. | **RESOLVED:** Deleted Python balance mutation; fallback requires caller-owned account; trigger handles balance updates. |
+| **H2** | HIGH | `routes/budgets.py` | Non-admin members could pass query parameter `payday_day` and forge budget cycle forecasts. | **RESOLVED:** Stripped client override; payday is read strictly from household configuration in database. |
+| **H3** | HIGH | `salary_cycle.get_cycle_breakdown` | Global unscoped query on `cost_control_codes` leaked custom categories across households. | **RESOLVED:** Scoped queries strictly to system codes (`household_id IS NULL`) and active household custom codes. |
+| **H4** | HIGH | `routes/budgets.py` | Installment plan PUT endpoint did not verify caller permission on original transaction. | **RESOLVED:** Enforced `assert_can_modify_transaction` on plan updates. |
+| **H5** | HIGH | `supabase_client.ensure_household_cycle_budgets` | Concurrency race condition on first-of-cycle budget generation caused duplicate rows and double savings sweeps. | **RESOLVED:** Replaced with atomic PostgreSQL RPC using transactional advisory locks. |
+| **H6** | HIGH | `salary_cycle.rename_sub_category` | Sub-category override allowed cross-tenant keyword injection under shared parent codes. | **RESOLVED:** Isolated sub-category taxonomy scoping to `owner_household_id`. |
+| **H7** | HIGH | `chat_parser.process_chat_transaction` | Previews (`preview_only=True`) with enrichment wrote item modifications to transaction rows. | **RESOLVED:** Gated enrichment writes strictly to commit phase (`preview_only=False`). |
+| **M1** | MEDIUM | Multiple budget modules | Floating point math used for monetary amounts, risking halala rounding drift. | **RESOLVED:** Standardized on integer halalas / `Decimal` arithmetic. |
+| **M2** | MEDIUM | `salary_cycle.py` | UTC vs. Asia/Riyadh timezone boundary caused transactions within 3 hours of midnight to double-count across cycles. | **RESOLVED:** Standardized all boundary parsing on explicit Asia/Riyadh calendar dates. |
+
+### 7.3 Flutter Mobile App Architecture (Pass 3)
+
+| Audit ID | Severity | Affected Provider / Client | Finding Description & Vulnerability | Remediation Status |
+|---|---|---|---|---|
+| **S1** | HIGH | API Clients (`ChatApiClient`, `ReceiptApiClient`, etc.) | Client sent `user_id` in request payloads, creating potential IDOR regression vectors. | **RESOLVED:** Stripped body `user_id`; backend resolves acting user strictly from verified Bearer JWT. |
+| **S2** | HIGH | `TransactionProvider.deleteTransaction` | Treats 0 rows deleted (due to RLS rejection) as success and removes item from local UI. | **RESOLVED:** Checks returned rows; if empty, sets `lastWriteDenied = true` and rolls back local UI state. |
+| **S3** | HIGH | `AccountProvider.deductExpense` | Defaulted target to shared pool for non-admins and updated balance via raw client write. | **RESOLVED:** Filtered targets by ownership; removed client-side balance write in favor of database triggers. |
+| **N1** | CRITICAL | `BudgetApiClient.fetchPartnerSettlement` | Defaulted `splitRatio = 0.5` in family mode. | **RESOLVED:** Made `splitRatio` required only for roommates mode; throws client exception in family mode. |
+| **N2** | HIGH | `RecurringBillsProvider.buildBillPaymentRow` | Paid bills by wife lacked `nafaqah_class = 'wife_reimbursable'`, losing debt tracking. | **RESOLVED:** Wired `NafaqahPreview` and role prompt to bill payment creation. |
+| **N4** | HIGH | `Transaction.toMap` | Undo action erased `nafaqah_class` and `nafaqah_spouse_id`. | **RESOLVED:** Added full Nafaqah attribute serialization to `toMap()`. |
+| **N6** | HIGH | `BudgetApiClient.fetchHouseholdPayday` | Returned fallback `27` on network failure, overwriting real payday in local cache. | **RESOLVED:** Throws `ApiRequestException`; cache retains previous valid value on failure. |
+| **N7** | HIGH | `manual_expense_row.dart` | Client derived and sent `cycle_key`. | **RESOLVED:** Removed client `cycle_key` derivation; database trigger populates it authoritatively. |
+| **Z1** | HIGH | `AccountProvider.deductExpense` | Clamped balance to 0, hiding deficit alerts. | **RESOLVED:** Removed clamp; deficits propagate to reveal `🔴 Deficit Shortfall`. |
+| **Locale** | MEDIUM | `LocaleProvider` | Defaulted to English instead of Arabic. | **RESOLVED:** Reordered locales; Arabic (`ar`) is default initial state. |
+
+### 7.4 Cross-Cutting Compliance & UI System (Pass 4)
+
+| Audit ID | Severity | Affected Widget / File | Finding Description & Vulnerability | Remediation Status |
+|---|---|---|---|---|
+| **Theme** | HIGH | `theme/app_themes.dart` | Theme tokens aliased to Velvet Burgundy without rule update, creating documentation discrepancy. | **RESOLVED:** Formalized Velvet Burgundy design system with backward-compatible token bridges in Master Details. |
+| **S1** | CRITICAL | `rebalance_budget_sheet.dart` | Widget executed non-atomic loop of client updates to `budgets` table directly. | **RESOLVED:** Migrated to atomic `rebalance_budgets` RPC with admin validation. |
+| **S2/S3** | HIGH | `add_edit_account_dialog.dart`, `reconcile_balance_dialog.dart` | Non-admin members could edit or reconcile shared pool balances. | **RESOLVED:** Gated controls via `HouseholdRoleProvider`; non-admins are shown disabled states. |
+| **Zero-Based** | HIGH | `computeProportionalRebalance` | Floating-point rounding resulted in allocation totals exceeding target by halalas. | **RESOLVED:** Standardized on integer halala flooring with remainder allocation. |
+| **Currency** | HIGH | `accounts_summary_card.dart` | Summed mixed currencies (SAR, USD, USDT) into a single total labelled SAR. | **RESOLVED:** Restricts total liquidity to SAR accounts; renders non-SAR assets in distinct currency pills. |
+| **Privacy** | HIGH | `account_card.dart` | Privacy eye toggle masked balance digits but leaked amounts in surplus/deficit status badges. | **RESOLVED:** Status badges and action buttons mask amounts (`•••••• SAR`) when privacy eye is active. |
+| **Speed Dial** | HIGH | `app_speed_dial_fab.dart` | Speed dial offered Scan/Voice/Manual instead of mandated Add Expense / Record Income / Transfer Funds. | **RESOLVED:** Reconfigured speed dial to 3 primary financial actions. |
+
+---
+
+## 8. Testing, Verification Gate & Orchestrator Governance Matrix
+
+### 8.1 Verification Gate Commands
+
+Before any pull request, commit, or subagent task sign-off, the workspace must satisfy the **Mandatory Pre-Review Verification Gate**:
+
+| Verification Tier | Command | Acceptance Criteria |
+|---|---|---|
+| **Flutter Static Analysis** | `cd flutter_app && flutter analyze` | **0 errors, 0 warnings, 0 linter hints** (`No issues found!`) |
+| **Flutter Unit & Widget Tests** | `cd flutter_app && flutter test` | **100% passing** (511+ tests green) |
+| **FastAPI Backend Tests** | `cd ai_service && pytest -v` | **100% passing** (584+ tests green, hermetic execution) |
+| **Database Migrations & Proofs** | `python3 supabase/tests/run_tests.py --psql --rebuild --db <local_test_db>` | **100% passing** across all SQL test suites |
+| **Web Portal Quality** | `cd web_app && npm run lint && npm run build` | **0 lint errors**, clean production bundle build |
+
+### 8.2 Orchestrator Governance Matrix & Delegation Pipeline
+
+Development in the repository is governed by the **Claude Opus 5.5 Orchestrator & Subagent Delegation Model**:
+
+```
+                       ┌──────────────────────────────────────────────┐
+                       │   USER / HUMAN STAKEHOLDER                   │
+                       └──────────────────────┬───────────────────────┘
+                                              │ Prompts & Review Decisions
+                                              ▼
+                       ┌──────────────────────────────────────────────┐
+                       │   CLAUDE OPUS 5.5 ORCHESTRATOR               │
+                       │   (Chat Coordinator, Plan Architect)         │
+                       └──────┬───────────────────────────────┬───────┘
+                              │ Task Delegation               │ Review Invocation
+                              ▼                               ▼
+       ┌───────────────────────────────────────────┐   ┌───────────────────────────────────────────┐
+       │   IMPLEMENTATION SUBAGENT                 │   │   MULTI-ROUND AUDIT REVIEWERS             │
+       │   (Claude Opus 5.5 High / Branch Worktree)│   │   (Fresh subagent per round)              │
+       │   • Strict TDD: Failing tests first       │   │                                           │
+       │   • Minimal clean code implementation     │   │   • Round 1: Opus 5.5 Spec Fidelity       │
+       │   • Pre-review verification gate pass     │   │   • Round 2: Opus 5.5 Adversarial Break   │
+       │   • Return concise summary + commit hash  │   │   • Round 3: Fable High (Sensitive Tasks) │
+       └───────────────────────────────────────────┘   └───────────────────────────────────────────┘
+```
+
+#### Governance Principles & Rules
+1. **Never Implement Directly in the Main Session:** The Orchestrator plans, monitors, and delegates; implementation executes on isolated branches.
+2. **Strict Sensitivity Boundary (`docs/sensitive.md`):** Any task touching migrations, permissions, money, account balances, RLS policies, secrets, or data deletion is classified as **SENSITIVE** automatically.
+   - Classification is **unidirectional**: The Orchestrator may escalate a task to sensitive, but never lower it.
+   - Sensitive tasks mandate **Round 3 review by Fable High**.
+3. **Multi-Round Code Review:**
+   - **Round 1 (Claude Opus 5.5 High):** Specification fidelity and gap analysis.
+   - **Round 2 (Claude Opus 5.5 High):** Adversarial break testing (permissions, race conditions, edge cases). Every claim must be proven with a failing test.
+   - **Round 3 (Fable High):** Security, ledger invariants, RLS multi-tenancy, and Islamic compliance audit.
+4. **Explicit User Approval Invariants:** The Orchestrator must stop and request explicit user confirmation before:
+   - Deploying to any production environment.
+   - Deleting data, files, or user accounts.
+   - Updating secrets, keys, or environment files.
+   - Incurring financial spend or third-party API costs.
+5. **Context Window Guardrail (80% Threshold):** When session context reaches 80% capacity, the Orchestrator must write a structured handoff artifact (`docs/review/HANDOFF_<session>.md`) and direct the user to continue in a fresh session.
+
+---
+
+## 9. Complete API Endpoints Directory
+
+Generated from the OpenAPI 3.1 specification (`ENV=development`). All endpoints except the `ops` group and `POST /public/inquiries` require `Authorization: Bearer <Supabase_JWT>`.
+
+| Route Area | Method | Endpoint Path | Auth / Role Constraint | Functional Description |
+|---|---|---|---|---|
+| **Operations** | `GET` | `/` | Public | Serves production build of web landing page. |
+| | `GET` | `/health` | Public | System health check and database ping. |
+| | `GET` | `/auth/confirm` | Public | Email auth confirmation redirect handler. |
+| | `GET` | `/auth/callback` | Public | OAuth callback redirect handler. |
+| **Budgets** | `GET` | `/budgets/salary-cycle-forecast` | Household Member | Payday cycle forecast, burn rate, and daily spend pace. |
+| | `GET` | `/budgets/cycles` | Household Member | List historical and upcoming salary cycles. |
+| | `POST` | `/budgets/recalculate` | Household Admin | Recalculate spent amounts across all categories for cycle. |
+| | `GET` | `/budgets/breakdown` | Household Member | Category allocations, spent amounts, and remaining halalas. |
+| | `POST` | `/budgets/categories` | Household Admin | Create custom category in active household. |
+| | `DELETE` | `/budgets/categories/{code}` | Household Admin | Archive custom category. |
+| | `POST` | `/budgets/sub-allocations` | Household Admin | Save sub-category spending limits. |
+| | `GET` | `/budgets/sub-categories` | Household Member | List sub-category catalog for active household. |
+| | `POST` | `/budgets/sub-categories` | Household Admin | Create household custom sub-category. |
+| | `PATCH` | `/budgets/sub-categories/{code}`| Household Admin | Rename custom sub-category. |
+| | `DELETE` | `/budgets/sub-categories/{code}`| Household Admin | Delete custom sub-category. |
+| | `POST` | `/budgets/simulate-affordability`| Household Member | Discretionary purchase impact simulation on safe daily spend. |
+| **Recurring & BNPL** | `GET` | `/budgets/recurring-bills` | Household Member | List detected recurring monthly obligations. |
+| | `POST` | `/budgets/recurring-bills/toggle`| Household Admin | Enable/disable recurring bill reservation. |
+| | `GET` | `/budgets/recurring-bills/candidates`| Household Member | Suggest recurring bill candidates from transaction history. |
+| | `GET` | `/budgets/installments` | Household Member | List active BNPL installment plans (Tabby, Tamara, etc.). |
+| | `POST` | `/budgets/installments` | Household Member | Record new BNPL plan linked to transaction. |
+| | `POST` | `/budgets/installments/{id}/pay` | Household Member | Atomic payment increment for installment plan. |
+| **Households** | `GET` | `/households/{id}/payday` | Household Member | Retrieve configured payday day (1–31). |
+| | `PUT` | `/households/{id}/payday` | Household Admin | Update household payday setting. |
+| | `GET` | `/households/{id}/income` | Household Member | Retrieve monthly income baseline. |
+| | `PUT` | `/households/{id}/income` | Household Admin | Update monthly income baseline. |
+| | `GET` | `/households/{id}/rollover-rule` | Household Member | Retrieve active rollover rule. |
+| | `PUT` | `/households/{id}/rollover-rule` | Household Admin | Set rollover rule (`send_to_savings`, etc.). |
+| | `GET` | `/households/{id}/savings-summary`| Household Member | Retrieve total accumulated savings reserve. |
+| | `POST` | `/households/{id}/invites` | Household Admin | Generate single-use expiring invite code. |
+| | `GET` | `/households/invites/{code}` | Public | Inspect invite validity and target household name. |
+| | `POST` | `/households/invites/{code}/claim` | Authenticated User | Claim invite and join household. |
+| **Members & Admins** | `GET` | `/households/{id}/members` | Household Member | List all household members, roles, and profiles. |
+| | `POST` | `/households/{id}/members/{uid}/admin` | Household Admin | Promote member to Co-Admin. |
+| | `DELETE` | `/households/{id}/members/{uid}/admin` | Household Admin | Revoke Co-Admin role (cannot demote Primary Admin). |
+| | `POST` | `/households/{id}/primary-admin`| Primary Admin | Transfer Primary Admin ownership. |
+| **Dependents** | `GET` | `/households/{id}/dependents` | Household Member | List dependents (children, elderly) and allowances. |
+| | `POST` | `/households/{id}/dependents` | Household Admin | Create dependent profile. |
+| | `DELETE` | `/households/{id}/dependents/{did}`| Household Admin | Delete dependent profile. |
+| **Settlement & Nafaqah**| `GET` | `/households/{id}/settlement` | Roommates Mode | Pairwise debt matrix for flatmates. |
+| | `GET` | `/households/{id}/settlement-v2` | Roommates Mode | Multi-way simplified graph settlement paths. |
+| | `POST` | `/households/{id}/reimbursements` | Family Mode | Record spousal reimbursement payment in Nafaqah ledger. |
+| | `GET` | `/households/{id}/nafaqah` | Family Mode | Summary of outstanding spousal debt and allowances. |
+| | `GET` | `/households/{id}/nafaqah/reimbursements` | Family Mode | Historical ledger of spousal repayments. |
+| | `GET` | `/households/{id}/nafaqah/allowance` | Family Mode | Wife personal monthly allowance and remaining halalas. |
+| | `PUT` | `/households/{id}/nafaqah/allowance` | Husband / Admin | Set wife monthly personal allowance for cycle. |
+| **AI Intelligence** | `POST` | `/agent/scan-receipt` | Household Member | Gemini Vision OCR receipt page extraction & line items. |
+| | `POST` | `/agent/chat-transaction` | Household Member | Conversational dialect parsing & expense classification. |
+| **Analytics & Reports** | `GET` | `/analytics/price-history` | Household Member | Historical item price intelligence across Saudi grocery chains. |
+| | `POST` | `/analytics/shopping-basket-optimize`| Household Member | Smart shopping basket bill estimation & store comparison. |
+| | `GET` | `/reports/statement-pdf` | Household Member | Generate monthly PDF statement with verified Nafaqah tables. |
+| **Support & Inquiries** | `POST` | `/support/chat` | Authenticated User | In-app support assistant conversational agent. |
+| | `POST` | `/agent/support-chat` | Authenticated User | Tier-2 support problem resolution agent. |
+| | `POST` | `/support/inquiries` | Authenticated User | Submit authenticated support ticket via Resend/SMTP. |
+| | `POST` | `/public/inquiries` | Public (Rate Limited) | VIP early-access lead capture from web landing page. |
+
+---
+
+## 10. Strategic Roadmap (v1.1 – v1.4)
+
+| Milestone | Capability | Description | Architectural Dependencies |
+|---|---|---|---|
+| **v1.1** | **SAMA Open Banking Integration** | Direct read-only transaction feeds from major Saudi retail banks via the Saudi Central Bank (SAMA) Open Banking Framework. | SAMA sandbox partnership, OAuth2 PKCE provider (Lean Tech / Tarabut Gateway). |
+| **v1.1** | **Live Multi-Currency FX Engine** | Real-time exchange rate conversions between SAR, USD, EUR, and USDT with halala-precision tracking for multi-currency wallets. | Open FX feed with Redis caching and offline fallback. |
+| **v1.2** | **WhatsApp Deep-Linking & Reminders** | 1-tap WhatsApp deep link (`https://wa.me/?text=...`) pre-populating roommate settlement balances and spousal reimbursement receipts. | URI launcher integration on client. |
+| **v1.2** | **ML Bill Spike & Anomaly Detector** | Statistical anomaly detection alerting households when a DEWA, SEC electricity, or telecom bill deviates by $> 25\%$ from 3-cycle rolling average. | Python statistical worker in `ai_service`. |
+| **v1.3** | **Automated Push Notifications (FCM)** | Server-side push notifications for impending BNPL installments (Tabby/Tamara), payday check-in arrival, and deficit warnings. | Supabase Database Webhooks + Firebase Cloud Messaging (FCM). |
+| **v1.4** | **Smartwatch Companion App** | Apple Watch & WearOS micro-app for instant 1-tap voice expense logging and quick balance glances. | Flutter Wear OS / watchOS extension module. |
+
+---
+
+## Conclusion & Document Governance
+
+This document, **`docs/MASTER_PROJECT_DETAILS.md`**, represents the definitive, unified master technical specification for the Budget Tracker repository. Any proposed architectural changes, schema migrations, or rule modifications must be reflected in this document following successful completion of the three-round audit review pipeline.
