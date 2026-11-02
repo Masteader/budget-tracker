@@ -98,13 +98,13 @@ def test_partner_settlement_2d_attribution(mock_client):
     # public.transactions has no paid_by/beneficiary columns: attribution lives in raw_sms tags.
     mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = [
         # 1. Groceries 300 SAR for both, I paid -> Partner owes me 150 (50%)
-        {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: both", "timestamp": "2026-09-28T10:00:00Z"},
+        {"id": "1", "amount": 300.0, "category_code": "OPEX-GROCERY", "notes": "Chat: test | PaidBy: me | Beneficiary: both", "timestamp": "2026-09-28T10:00:00Z"},
         # 2. Partner dress 200 SAR, I paid -> Partner owes me 200 (100%)
-        {"id": "2", "amount": 200.0, "category_code": "OPEX-SHOPPING", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: partner", "timestamp": "2026-09-28T11:00:00Z"},
+        {"id": "2", "amount": 200.0, "category_code": "OPEX-SHOPPING", "notes": "Chat: test | PaidBy: me | Beneficiary: partner", "timestamp": "2026-09-28T11:00:00Z"},
         # 3. Gym shoes 100 SAR for me, Partner paid -> I owe partner 100 (100%)
-        {"id": "3", "amount": 100.0, "category_code": "OPEX-SHOPPING", "raw_sms": "Chat: test | PaidBy: partner | Beneficiary: me", "timestamp": "2026-09-28T12:00:00Z"},
+        {"id": "3", "amount": 100.0, "category_code": "OPEX-SHOPPING", "notes": "Chat: test | PaidBy: partner | Beneficiary: me", "timestamp": "2026-09-28T12:00:00Z"},
         # 4. Personal coffee 18 SAR, I paid -> 0 debt impact
-        {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "raw_sms": "Chat: test | PaidBy: me | Beneficiary: me", "timestamp": "2026-09-28T13:00:00Z"},
+        {"id": "4", "amount": 18.0, "category_code": "OPEX-DINING", "notes": "Chat: test | PaidBy: me | Beneficiary: me", "timestamp": "2026-09-28T13:00:00Z"},
     ]
 
     with patch("settlement_engine.load_family_context") as mock_ctx:

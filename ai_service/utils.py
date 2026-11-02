@@ -239,7 +239,7 @@ def verify_signature(body: bytes, signature_header: str | None) -> bool:
         return False
 
 
-# ─── Audit notes (transactions.raw_sms) ─────────────────────────────────────────
+# ─── Audit notes (transactions.notes) ─────────────────────────────────────────
 # The note is for humans. Money attribution lives in structured columns (spent_by,
 # beneficiary_type, beneficiary_id); legacy rows written before that kept it in "Tag: value"
 # parts of the note, so user text placed in a note must never look like a tag (FABLE-API-01).

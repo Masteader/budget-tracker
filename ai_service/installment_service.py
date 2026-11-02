@@ -530,18 +530,18 @@ class InstallmentService:
         # Fetch existing transaction
         tx = (
             sb.table("transactions")
-            .select("raw_sms, household_id")
+            .select("notes, household_id")
             .eq("id", tx_id)
             .eq("household_id", household_id)
             .single()
             .execute()
         )
-        base_sms = re.sub(r"\s*\[Financed via [^\]]+\]", "", (tx.data.get("raw_sms") or "")).strip()
+        base_sms = re.sub(r"\s*\[Financed via [^\]]+\]", "", (tx.data.get("notes") or tx.data.get("raw_sms") or "")).strip()
         raw_sms = (base_sms + " " + note_suffix).strip() if base_sms else note_suffix.strip()
 
         sb.table("transactions").update({
             "amount": monthly_amount,
-            "raw_sms": raw_sms,
+            "notes": raw_sms,
         }).eq("id", tx_id).eq("household_id", household_id).execute()
 
         logger.info(
@@ -667,7 +667,7 @@ class InstallmentService:
         sb = supabase_client.get_client()
         plan_query = sb.table("installment_plans").select("original_transaction_id")
         tx_query = sb.table("transactions").select(
-            "id, household_id, merchant, amount, raw_sms, category_code, timestamp")
+            "id, household_id, merchant, amount, notes, category_code, timestamp")
         if household_id:
             plan_query = plan_query.eq("household_id", household_id)
             tx_query = tx_query.eq("household_id", household_id)
@@ -677,7 +677,7 @@ class InstallmentService:
         candidates: List[Dict[str, Any]] = []
         for tx in (tx_query.execute().data or []):
             tx_id = tx.get("id")
-            match = _LEGACY_NOTE.search(tx.get("raw_sms") or "")
+            match = _LEGACY_NOTE.search(tx.get("notes") or tx.get("raw_sms") or "")
             if not tx_id or tx_id in linked or not match:
                 continue
             provider = match.group(1).strip()[:40] or "Other"

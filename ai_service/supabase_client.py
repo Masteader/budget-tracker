@@ -663,7 +663,7 @@ def insert_transaction(
     merchant: str,
     category_code: str,
     timestamp: str,
-    raw_sms: str,
+    notes: Optional[str] = None,
     is_reallocated: bool = False,
     reallocated_from_budget_id: Optional[str] = None,
     source: str = "manual",
@@ -682,6 +682,7 @@ def insert_transaction(
     beneficiary_type: Optional[str] = None,
     beneficiary_id: Optional[str] = None,
     account_id: Optional[str] = None,
+    raw_sms: Optional[str] = None,
 ) -> str:
     """
     Insert a new transaction row and return its UUID.
@@ -691,14 +692,14 @@ def insert_transaction(
     ``beneficiary_id`` the beneficiary (settlement_engine.structured_attribution). Callers pass
     the three columns, or ``paid_by`` / ``beneficiary`` and they are derived here (raising
     InvalidAttributionError when 'partner' names nobody). The settlement engines read these
-    columns, never the free text of ``raw_sms``.
+    columns, never the free text of ``notes``.
 
     ``user_id`` is the creator: the verified JWT subject of the request (DB-18). The service
     role bypasses RLS, so request-driven callers must always pass it; it is never pruned by the
     fallbacks below, and only that user or a household admin may later edit or delete the row.
     The on_transaction_insert trigger automatically updates budgets.spent_amount.
 
-    ``raw_sms`` is the free-text audit note column (chat text, receipt summary, manual
+    ``notes`` is the free-text audit note column (chat text, receipt summary, manual
     note); the name is historical — the app never reads SMS. ``source`` must be one of
     ``TRANSACTION_SOURCES``: there is no SMS ingestion channel (zero-SMS policy).
     ``nafaqah_class``/``nafaqah_spouse_id`` (family households) are never pruned by the
@@ -711,6 +712,8 @@ def insert_transaction(
         spent_by = attribution["spent_by"]
         beneficiary_type, beneficiary_id = attribution["beneficiary_type"], attribution["beneficiary_id"]
     client = get_client()
+
+    resolved_notes = notes if notes is not None else (raw_sms or "")
 
     # Automatically derive cycle_key from timestamp if not supplied
     # Mirrors the DB trigger populate_transaction_cycle_key: Riyadh calendar date of the
@@ -729,7 +732,7 @@ def insert_transaction(
     if not sub_category and category_code:
         try:
             from salary_cycle import match_sub_category
-            sub_category = match_sub_category(category_code, f"{merchant} {raw_sms}", items, household_id=household_id)
+            sub_category = match_sub_category(category_code, f"{merchant} {resolved_notes}", items, household_id=household_id)
         except Exception:
             pass
 
@@ -746,7 +749,7 @@ def insert_transaction(
         "merchant": merchant,
         "category_code": category_code,
         "timestamp": timestamp,
-        "raw_sms": raw_sms,
+        "notes": resolved_notes,
         "is_reallocated": is_reallocated,
         "reallocated_from_budget_id": reallocated_from_budget_id,
         "source": source,
@@ -811,7 +814,7 @@ def insert_transaction(
                 "merchant": merchant,
                 "category_code": category_code,
                 "timestamp": timestamp,
-                "raw_sms": raw_sms,
+                "notes": resolved_notes,
                 "is_reallocated": is_reallocated,
                 "reallocated_from_budget_id": reallocated_from_budget_id,
                 "source": source,
@@ -1357,7 +1360,7 @@ def record_household_reimbursement(
 
     Only columns that exist on ``public.transactions`` are written (FR-B-01: there is no
     ``paid_by`` or ``notes`` column and no ``OPEX-SETTLEMENT`` category, so the previous payload
-    was rejected on every call). The payer is kept in the ``PaidBy:`` audit tag of ``raw_sms``
+    was rejected on every call). The payer is kept in the ``PaidBy:`` audit tag of ``notes``
     (the tag chat entries use), the recipient in ``beneficiary_id`` / ``settlement_target_id``,
     and ``category_code`` stays NULL so a settlement is never counted as spending in a budget
     category. ``recorded_by`` (the verified caller) is the transaction's creator (DB-18).
@@ -1390,7 +1393,7 @@ def record_household_reimbursement(
         "settlement_target_id": recipient_id,
         "is_settlement": True,
         "source": "manual",
-        "raw_sms": audit,
+        "notes": audit,
         "timestamp": now_iso,
     }
 

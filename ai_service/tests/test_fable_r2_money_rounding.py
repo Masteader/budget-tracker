@@ -66,7 +66,7 @@ def _shared(fake, w, amount, who="omar"):
     fake.seed("transactions", [{
         "id": str(uuid.uuid4()), "household_id": w.hid, "user_id": w.users[who], "amount": amount, "merchant": "x",
         "category_code": "OPEX-MISC", "spent_by": "me", "timestamp": f"{riyadh_today().isoformat()}T09:00:00+00:00",
-        "raw_sms": "", "source": "chat", "beneficiary_type": "household", "beneficiary_id": "household",
+        "notes": "", "source": "chat", "beneficiary_type": "household", "beneficiary_id": "household",
         "is_settlement": False, "settlement_target_id": None, "nafaqah_class": None, "nafaqah_spouse_id": None,
         "line_items": [],
     }])

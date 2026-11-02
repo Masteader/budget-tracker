@@ -56,7 +56,7 @@ def two_households(fake_supabase):
         {"user_id": USER_B, "household_id": HH_B, "role": "admin"},
     ])
     fake_supabase.seed("transactions", [
-        {"id": TX_B, "household_id": HH_B, "amount": 500.0, "merchant": "Jarir", "raw_sms": "manual", "items": []},
+        {"id": TX_B, "household_id": HH_B, "amount": 500.0, "merchant": "Jarir", "notes": "manual", "items": []},
     ])
     return fake_supabase
 
@@ -186,7 +186,7 @@ def test_installment_creation_requires_household_and_auth(two_households):
 
 def test_installment_adjusts_own_transaction_and_recalculates(two_households):
     tx_a = "cccccccc-0000-4000-8000-0000000000a9"
-    two_households.seed("transactions", [{"id": tx_a, "household_id": HH_A, "amount": 400.0, "raw_sms": "", "items": []}])
+    two_households.seed("transactions", [{"id": tx_a, "household_id": HH_A, "amount": 400.0, "notes": "", "items": []}])
     payload = {
         "household_id": HH_A, "merchant": "eXtra", "provider": "Tamara", "total_amount": 400.0,
         "installment_count": 4, "original_transaction_id": tx_a, "adjust_original_transaction": True,
@@ -195,7 +195,7 @@ def test_installment_adjusts_own_transaction_and_recalculates(two_households):
     assert resp.status_code == 200
     row = next(t for t in two_households.tables["transactions"] if t["id"] == tx_a)
     assert row["amount"] == 100.0
-    assert "Financed via Tamara" in row["raw_sms"]
+    assert "Financed via Tamara" in row["notes"]
 
 
 # ─── API-06: cross-tenant category tampering ─────────────────────────────────

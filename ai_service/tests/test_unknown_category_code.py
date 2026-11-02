@@ -64,7 +64,7 @@ def _insert(code: str):
 
     return insert_transaction(
         household_id=HH, amount=12.0, currency="SAR", merchant="Mystery", category_code=code,
-        timestamp="2026-10-20T10:00:00+00:00", raw_sms="Chat: mystery 12", source="chat",
+        timestamp="2026-10-20T10:00:00+00:00", notes="Chat: mystery 12", source="chat",
         user_id="00000000-0000-0000-0000-000000000001",
     )
 

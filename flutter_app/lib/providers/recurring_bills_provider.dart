@@ -128,7 +128,7 @@ class RecurringBillsProvider extends ChangeNotifier {
       'source': 'manual',
       ...attribution,
       // A manual row's payer is read from the end of its note.
-      'raw_sms': manualAuditNote(
+      'notes': manualAuditNote(
         head: 'Manual: ${bill.merchant}',
         payer: 'me',
         beneficiaryId: attribution['beneficiary_id']!,

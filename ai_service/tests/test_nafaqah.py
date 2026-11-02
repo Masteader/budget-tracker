@@ -817,7 +817,7 @@ def _attribution(tx):
     from settlement_engine import audit_tag
 
     assert "paid_by" not in tx and "beneficiary" not in tx
-    return audit_tag(tx["raw_sms"], "paidby"), audit_tag(tx["raw_sms"], "beneficiary")
+    return audit_tag(tx["notes"], "paidby"), audit_tag(tx["notes"], "beneficiary")
 
 
 def test_chat_class_without_attribution_recomputes_paid_by_and_beneficiary(family):

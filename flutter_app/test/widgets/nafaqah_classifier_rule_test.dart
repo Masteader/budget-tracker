@@ -184,7 +184,7 @@ void main() {
       final row = await save(tester, role: 'admin', tapShared: true);
       expect(row?['nafaqah_class'], kWifeReimbursable);
       expect(row?['nafaqah_spouse_id'], 'u-wife');
-      expect(row?['raw_sms'], endsWith('| PaidBy: u-wife | Beneficiary: household | SpentBy: partner'));
+      expect(row?['notes'], endsWith('| PaidBy: u-wife | Beneficiary: household | SpentBy: partner'));
     });
   });
 

@@ -30,7 +30,7 @@ def test_insert_transaction_with_account_id_stores_account_id(fake_supabase):
         merchant="Hunger Station AL-Baik Restaurant",
         category_code="OPEX-DINING",
         timestamp="2026-10-30T00:00:00Z",
-        raw_sms="Manual: Hunger Station AL-Baik Restaurant",
+        notes="Manual: Hunger Station AL-Baik Restaurant",
         account_id=account_id,
     )
 
@@ -67,7 +67,7 @@ def test_insert_transaction_leaves_account_id_none_if_none_passed(fake_supabase)
         merchant="Hunger Station AL-Baik Restaurant",
         category_code="OPEX-DINING",
         timestamp="2026-10-30T00:00:00Z",
-        raw_sms="Manual: Hunger Station AL-Baik Restaurant",
+        notes="Manual: Hunger Station AL-Baik Restaurant",
     )
 
     # Transaction must NOT automatically resolve to operating pool account (Item 7)
@@ -153,7 +153,7 @@ def test_insert_transaction_wife_personal_isolates_account_balance(fake_supabase
         merchant="Sephora",
         category_code="OPEX-PERSONAL",
         timestamp="2026-10-30T00:00:00Z",
-        raw_sms="Manual: Sephora",
+        notes="Manual: Sephora",
         account_id=account_id,
         nafaqah_class="wife_personal",
     )
@@ -190,7 +190,7 @@ def test_insert_transaction_wife_reimbursable_does_not_deduct_account_balance(fa
         merchant="Panda Supermarket",
         category_code="OPEX-GROCERY",
         timestamp="2026-10-30T00:00:00Z",
-        raw_sms="Manual: Panda Supermarket",
+        notes="Manual: Panda Supermarket",
         account_id=account_id,
         nafaqah_class="wife_reimbursable",
         nafaqah_spouse_id="u2222222-3333-4444-5555-666666666666",

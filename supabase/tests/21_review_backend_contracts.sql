@@ -5,7 +5,7 @@
 --            who is the husband and whether a household is a family at all
 --            (20261020300000 / 20261020400000). Members must not be able to
 --            change it on their own row: only the invite RPCs (SECURITY
---            DEFINER) set it. display_name and payday_day stay editable.
+--            DEFINER) set it. display_name stays editable.
 --   FR-B-01  The roommate settlement row written by ai_service
 --            (supabase_client.record_household_reimbursement) uses only
 --            columns that exist on public.transactions, passes every trigger
@@ -153,7 +153,7 @@ BEGIN
         pg_temp.as_service($q$
             INSERT INTO public.transactions (
                 id, household_id, user_id, amount, currency, merchant, category_code,
-                beneficiary_type, beneficiary_id, settlement_target_id, is_settlement, source, raw_sms, timestamp)
+                beneficiary_type, beneficiary_id, settlement_target_id, is_settlement, source, notes, timestamp)
             VALUES (
                 'f21c0000-0000-0000-0000-000000000001', 'f21a0000-0000-0000-0000-000000000001',
                 'f2100000-0000-0000-0000-0000000000a2', '30.00', 'SAR', 'Settlement Reimbursement (STC_PAY)', NULL,

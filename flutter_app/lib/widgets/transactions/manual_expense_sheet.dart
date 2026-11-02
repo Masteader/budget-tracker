@@ -565,8 +565,8 @@ class _ManualExpenseSheetState extends State<ManualExpenseSheet> {
 
     if (widget.installmentPlan != null) {
       final noteSuffix = ' [Financed via ${widget.installmentPlan!.provider}: Installment ${widget.installmentPlan!.paidInstallments + 1} of ${widget.installmentPlan!.installmentCount}]';
-      final currentNotes = row['raw_sms'] as String? ?? '';
-      row['raw_sms'] = '$currentNotes$noteSuffix';
+      final currentNotes = (row['notes'] ?? row['raw_sms']) as String? ?? '';
+      row['notes'] = '$currentNotes$noteSuffix';
     }
 
     Object? insertError;

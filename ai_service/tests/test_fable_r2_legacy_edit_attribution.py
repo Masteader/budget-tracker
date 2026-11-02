@@ -60,28 +60,28 @@ def test_helper_reproduces_the_exact_old_sheet_strings():
     ("PaidBy: partner | Chat: x | PaidBy: me | Beneficiary: both | SubCategory:  | SpentBy: both", "me"),
 ])
 def test_api_row_with_spent_by_both_reads_the_payer_from_the_tags(raw_sms, expected_payer):
-    tx = {"source": "chat", "spent_by": "both", "raw_sms": raw_sms,
+    tx = {"source": "chat", "spent_by": "both", "notes": raw_sms,
           "beneficiary_type": "household", "beneficiary_id": "household"}
     assert transaction_attribution(tx) == (expected_payer, "shared")
 
 
 def test_api_row_with_spent_by_both_and_no_tail_uses_the_server_head_tag():
     tx = {"source": "receipt_scan", "spent_by": "both", "beneficiary_type": "household", "beneficiary_id": "household",
-          "raw_sms": "PaidBy: partner | Beneficiary: both | SpentBy: partner | Receipt Scan: Panda"}
+          "notes": "PaidBy: partner | Beneficiary: both | SpentBy: partner | Receipt Scan: Panda"}
     assert transaction_attribution(tx) == ("partner", "shared")
 
 
 def test_api_row_tags_never_name_an_arbitrary_member():
     member = "11111111-1111-4111-8111-111111111111"
     tx = {"source": "chat", "spent_by": "both", "beneficiary_type": "household", "beneficiary_id": "household",
-          "raw_sms": f"PaidBy: me | Chat: x | PaidBy: {member} | Beneficiary: both | SubCategory:  | SpentBy: both"}
+          "notes": f"PaidBy: me | Chat: x | PaidBy: {member} | Beneficiary: both | SubCategory:  | SpentBy: both"}
     assert transaction_attribution(tx)[0] == "me"
 
 
 def test_structured_spent_by_still_wins_for_api_rows():
     # A row written by the API (or the fixed sheet) keeps its column: a stale tail is not read.
     tx = {"source": "chat", "spent_by": "me", "beneficiary_type": "household", "beneficiary_id": "household",
-          "raw_sms": "PaidBy: me | Chat: x | PaidBy: partner | Beneficiary: both | SubCategory:  | SpentBy: both"}
+          "notes": "PaidBy: me | Chat: x | PaidBy: partner | Beneficiary: both | SubCategory:  | SpentBy: both"}
     assert transaction_attribution(tx) == ("me", "shared")
 
 
@@ -93,21 +93,21 @@ def test_manual_row_edited_by_the_old_sheet_keeps_the_tail_payer():
     assert note == (f"Manual: Groceries | PaidBy: {ahmed} | PaidBy: partner | Beneficiary: me | SubCategory:  "
                     f"| SpentBy: me")
     assert spent_by == "me"
-    tx = {"source": "manual", "spent_by": spent_by, "raw_sms": note,
+    tx = {"source": "manual", "spent_by": spent_by, "notes": note,
           "beneficiary_type": "all_peers", "beneficiary_id": "all_peers"}
     assert transaction_attribution(tx)[0] == "partner"
 
 
 def test_manual_tail_with_a_sub_category_value():
     tx = {"source": "manual", "spent_by": "both", "beneficiary_type": "household", "beneficiary_id": "household",
-          "raw_sms": "Manual: SEC | PaidBy: partner | Beneficiary: both | SubCategory: electricity_sec | SpentBy: both"}
+          "notes": "Manual: SEC | PaidBy: partner | Beneficiary: both | SubCategory: electricity_sec | SpentBy: both"}
     assert transaction_attribution(tx) == ("partner", "shared")
 
 
 def test_legacy_row_without_columns_reads_the_sheet_tail_after_the_items():
     # No beneficiary columns (pre-structured row) and the tail sits after " | Items: [...]".
     tx = {"source": "chat", "spent_by": "both", "beneficiary_id": None, "category_code": "OPEX-DINING",
-          "raw_sms": "PaidBy: me | Chat: dinner | Items: [1x Dinner (90 SAR)]"
+          "notes": "PaidBy: me | Chat: dinner | Items: [1x Dinner (90 SAR)]"
                      " | PaidBy: partner | Beneficiary: me | SubCategory:  | SpentBy: me"}
     assert transaction_attribution(tx) == ("partner", "me")
 
@@ -126,7 +126,7 @@ def test_settlement_v2_follows_the_old_sheet_edit(fake_supabase):
     fake_supabase.seed("transactions", [{
         "id": str(uuid.uuid4()), "household_id": w.hid, "user_id": w.users["omar"], "amount": 200.0,
         "merchant": "Groceries", "category_code": "OPEX-GROCERY", "spent_by": spent_by,
-        "timestamp": f"{riyadh_today().isoformat()}T09:00:00+00:00", "raw_sms": note, "source": "chat",
+        "timestamp": f"{riyadh_today().isoformat()}T09:00:00+00:00", "notes": note, "source": "chat",
         "beneficiary_type": "household", "beneficiary_id": "household", "is_settlement": False,
         "settlement_target_id": None, "nafaqah_class": None, "nafaqah_spouse_id": None, "line_items": [],
     }])

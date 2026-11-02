@@ -33,7 +33,7 @@ def test_insert_does_not_recalculate_budgets(fake_supabase, monkeypatch):
     monkeypatch.setattr(fakes.FakeQuery, "execute", execute)
     tx_id = supabase_client.insert_transaction(
         household_id=HH, amount=25.0, currency="SAR", merchant="Albaik", category_code="OPEX-DINING",
-        timestamp="2026-10-21T10:00:00+00:00", raw_sms="Chat: test", sub_category="restaurants_dinners",
+        timestamp="2026-10-21T10:00:00+00:00", notes="Chat: test", sub_category="restaurants_dinners",
     )
     assert tx_id
     assert calls == [], "insert_transaction must not recalculate budgets"

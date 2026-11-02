@@ -66,7 +66,7 @@ BEGIN
     -- Insert legacy wife_personal row (150 SAR) linked to v_acc_id
     INSERT INTO public.transactions (
         household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+        timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
         v_household_id, v_user_w, 150.00, 'SAR', 'Salon', 'OPEX-SHOPPING',
         now(), 'Legacy wife personal row', 'wife_personal', v_user_w, v_acc_id
@@ -75,7 +75,7 @@ BEGIN
     -- Insert legacy wife_reimbursable row (250 SAR) linked to v_acc_id
     INSERT INTO public.transactions (
         household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+        timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
         v_household_id, v_user_w, 250.00, 'SAR', 'Groceries', 'OPEX-GROCERY',
         now(), 'Legacy wife reimbursable row', 'wife_reimbursable', v_user_w, v_acc_id
@@ -84,7 +84,7 @@ BEGIN
     -- Insert wife_personal row (100 SAR) correctly linked to wife's own personal account
     INSERT INTO public.transactions (
         household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+        timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
         v_household_id, v_user_w, 100.00, 'SAR', 'Boutique', 'OPEX-SHOPPING',
         now(), 'Wife own personal row', 'wife_personal', v_user_w, v_wife_acc_id

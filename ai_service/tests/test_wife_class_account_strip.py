@@ -318,7 +318,7 @@ def test_insert_never_updates_account_balance_directly(family):
         merchant="Gas",
         category_code="OPEX-FUEL",
         timestamp="2026-10-01T12:00:00Z",
-        raw_sms="Fuel",
+        notes="Fuel",
         account_id=ACC_ID,
         user_id=HUSBAND,
     )

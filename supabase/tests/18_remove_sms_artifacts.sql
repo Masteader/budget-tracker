@@ -33,7 +33,7 @@ BEGIN
         RAISE EXCEPTION 'BUG (API-25): transactions.source CHECK still allows sms (or is missing): %', v_check;
     END IF;
 
-    -- raw_sms is the documented legacy name of the audit-note column; nothing else may mention SMS.
+    -- Zero SMS policy: no column, table, function, or trigger may mention SMS.
     SELECT string_agg(obj, ', ') INTO v_objects FROM (
         SELECT 'relation ' || c.relname AS obj
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -50,16 +50,15 @@ BEGIN
         SELECT 'column ' || table_name || '.' || column_name
         FROM information_schema.columns
         WHERE table_schema = 'public' AND column_name ILIKE '%sms%'
-          AND NOT (table_name = 'transactions' AND column_name = 'raw_sms')
     ) s;
     IF v_objects IS NOT NULL THEN
         RAISE EXCEPTION 'BUG (API-25): SMS objects present: %', v_objects;
     END IF;
 
     IF col_description('public.transactions'::regclass,
-           (SELECT attnum FROM pg_attribute WHERE attrelid = 'public.transactions'::regclass AND attname = 'raw_sms'))
+           (SELECT attnum FROM pg_attribute WHERE attrelid = 'public.transactions'::regclass AND attname = 'notes'))
        NOT ILIKE '%never reads SMS%' THEN
-        RAISE EXCEPTION 'BUG (API-25): transactions.raw_sms is still documented as SMS text';
+        RAISE EXCEPTION 'BUG (API-25): transactions.notes is still documented as SMS text';
     END IF;
 
     SELECT string_agg(d.objoid::regclass::text || COALESCE('.' || a.attname, ''), ', ') INTO v_objects

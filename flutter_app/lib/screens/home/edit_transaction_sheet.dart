@@ -311,7 +311,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       ? _nafaqah?.callerUserId
       : (_storedSpouseId ?? _nafaqah?.primaryWife?.id);
 
-  /// Payer to write: the `raw_sms` tail value (a manual row may name a member)
+  /// Payer to write: the `notes` tail value (a manual row may name a member)
   /// and `spent_by` ('me' | 'partner', relative to the creator). Null when it
   /// cannot be expressed for the creator.
   ({String tail, String spentBy})? _resolvedPayer() {
@@ -370,8 +370,8 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       'beneficiary_id': ben.id,
       // The server reads a manual row's payer from the end of its note.
       if (_isStoredManual)
-        'raw_sms': manualAuditNote(
-          head: auditNoteHead(widget.transaction.rawSms, fallback: 'Manual: $merchant'),
+        'notes': manualAuditNote(
+          head: auditNoteHead(widget.transaction.notes, fallback: 'Manual: $merchant'),
           payer: payer.tail,
           beneficiaryId: ben.id,
           spentBy: payer.spentBy,
@@ -1091,7 +1091,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       setModalState(() => isProcessing = true);
                       try {
                         final noteSuffix = ' [Financed via $selectedProvider: Installment 1 of $selectedCount. Full price: SAR ${amount.toStringAsFixed(2)}]';
-                        final updatedNotes = '${widget.transaction.rawSms ?? ''}$noteSuffix';
+                        final updatedNotes = '${widget.transaction.notes ?? ''}$noteSuffix';
 
                         await ApiService.instance.createInstallmentPlan({
                           'household_id': widget.transaction.householdId,
@@ -1109,7 +1109,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                         try {
                           await supabase.from('transactions').update({
                             'amount': monthly,
-                            'raw_sms': updatedNotes,
+                            'notes': updatedNotes,
                           }).eq('id', widget.transaction.id);
                         } catch (_) {}
 

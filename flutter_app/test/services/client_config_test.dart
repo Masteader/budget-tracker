@@ -150,7 +150,7 @@ void main() {
     });
 
     test('zero SMS policy: no SMS reading, parsing or SMS channel in app code', () {
-      // `raw_sms` is the historical name of the transactions audit-note column, not SMS data.
+      // `notes` is the transactions audit-note column, not SMS data.
       final smsCode = RegExp(
         r"webhook/sms|telephony|SmsMessage|SmsQuery|readSms|sms_advanced|flutter_sms|'sms'|" r'"sms"',
         caseSensitive: false,

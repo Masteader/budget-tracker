@@ -55,7 +55,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, source, account_id
+            timestamp, notes, source, account_id
         ) VALUES (
             v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERIES',
             '2026-11-01 12:00:00+03', 'Prior spend', 'prior_adjustment', NULL
@@ -69,7 +69,7 @@ BEGIN
     -- 2. source = 'manual' and account_id = NULL succeeds
     INSERT INTO public.transactions (
         id, household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, source, account_id
+        timestamp, notes, source, account_id
     ) VALUES (
         gen_random_uuid(), v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERIES',
         '2026-11-01 12:00:00+03', 'Prior spend adjustment', 'manual', NULL
@@ -84,7 +84,7 @@ BEGIN
     -- 4. Client-supplied wrong cycle_key is overwritten by trigger
     INSERT INTO public.transactions (
         id, household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, source, account_id, cycle_key
+        timestamp, notes, source, account_id, cycle_key
     ) VALUES (
         gen_random_uuid(), v_household_id, v_user, 50.00, 'SAR', 'Coffee', 'OPEX-DINING',
         '2026-11-02 10:00:00+03', 'Coffee', 'manual', NULL, '1999-01'

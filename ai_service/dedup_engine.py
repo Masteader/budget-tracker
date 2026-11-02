@@ -177,11 +177,11 @@ def enrich_transaction_items(
         # If columns don't exist yet, append items to the raw_sms audit-note column
         logger.warning("Failed to update items column directly (%s), trying audit-note fallback.", exc)
         try:
-            current = _scoped(client.table("transactions").select("raw_sms")).single().execute()
-            existing_note = (current.data or {}).get("raw_sms") or ""
+            current = _scoped(client.table("transactions").select("notes")).single().execute()
+            existing_note = (current.data or {}).get("notes") or (current.data or {}).get("raw_sms") or ""
             items_str = ", ".join(f"{it.get('quantity', 1)}x {it.get('name')} (SAR {it.get('price', 0)})" for it in items)
             enriched_note = f"{existing_note} | Items: [{items_str}]"
-            _scoped(client.table("transactions").update({"raw_sms": enriched_note})).execute()
+            _scoped(client.table("transactions").update({"notes": enriched_note})).execute()
             return True
         except Exception as fallback_exc:
             logger.error("Failed fallback enrichment: %s", fallback_exc)

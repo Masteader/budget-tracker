@@ -175,7 +175,7 @@ def test_installment_update_adjusts_linked_transaction(fake_supabase):
         "id": tx_id,
         "household_id": hid,
         "amount": 1000.0,
-        "raw_sms": "Purchase at Extra",
+        "notes": "Purchase at Extra",
     }])
 
     plan_req = InstallmentPlanCreate(
@@ -194,7 +194,7 @@ def test_installment_update_adjusts_linked_transaction(fake_supabase):
     # Verify transaction was adjusted to 250.0
     tx_rows = fake_supabase.table("transactions").select("*").eq("id", tx_id).execute().data
     assert tx_rows[0]["amount"] == 250.0
-    assert "Financed via Tamara" in tx_rows[0]["raw_sms"]
+    assert "Financed via Tamara" in tx_rows[0]["notes"]
 
     # Now update plan monthly_amount to 300.0 and total to 1200.0
     update_req = InstallmentPlanUpdate(
@@ -213,6 +213,6 @@ def test_installment_update_adjusts_linked_transaction(fake_supabase):
     # Linked transaction must be adjusted to 300.0
     tx_updated = fake_supabase.table("transactions").select("*").eq("id", tx_id).execute().data
     assert tx_updated[0]["amount"] == 300.0
-    assert "Full price: SAR 1,200.00" in tx_updated[0]["raw_sms"]
+    assert "Full price: SAR 1,200.00" in tx_updated[0]["notes"]
 
 

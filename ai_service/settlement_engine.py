@@ -47,15 +47,15 @@ def _cycle_dates(household_id: str) -> Dict[str, Any]:
 # receipt row's payer can only be 'me' or 'partner' there (the API never wrote a member id).
 # Settlement rows carry the payer in their server-authored head "Settlement | PaidBy: <id> |".
 _PARTNER_TX_COLUMNS = (
-    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, source, "
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, notes, source, "
     "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, nafaqah_class"
 )
 _PARTNER_TX_COLUMNS_PRE_NAFAQAH = (
-    "id, user_id, amount, merchant, category_code, spent_by, timestamp, raw_sms, source, "
+    "id, user_id, amount, merchant, category_code, spent_by, timestamp, notes, source, "
     "beneficiary_type, beneficiary_id, is_settlement, settlement_target_id"
 )
 _V2_TX_COLUMNS = (
-    "id, user_id, amount, raw_sms, source, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, "
+    "id, user_id, amount, notes, source, beneficiary_type, beneficiary_id, is_settlement, settlement_target_id, "
     "line_items, timestamp, category_code, spent_by, nafaqah_class, nafaqah_spouse_id"
 )
 
@@ -76,14 +76,14 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 _SETTLEMENT_HEAD_RE = re.compile(r"^\s*Settlement\s*\|\s*PaidBy:\s*([^|]+?)\s*\|", re.IGNORECASE)
 
 
-def audit_tag(raw_sms: Any, tag: str) -> str:
+def audit_tag(notes: Any, tag: str) -> str:
     """
     Lower-cased value of the first ``<tag>: value`` part of a ``|``-separated audit note. For
     display and tests only: notes written by the API start with the server's tags, but money is
     never attributed from a note's free text (see transaction_attribution).
     """
     prefix = f"{tag.lower()}:"
-    for part in str(raw_sms or "").split("|"):
+    for part in str(notes or "").split("|"):
         text = part.strip().lower()
         if text.startswith(prefix):
             return text[len(prefix):].strip()
@@ -146,9 +146,9 @@ def _beneficiary_ref(beneficiary_type: Any, beneficiary_id: Any) -> str:
     return bid
 
 
-def _legacy_tags(raw_sms: Any) -> Dict[str, str]:
+def _legacy_tags(notes: Any) -> Dict[str, str]:
     """Tags of a pre-structured note: the server's segment (last occurrence, before the items)."""
-    text = str(raw_sms or "")
+    text = str(notes or "")
     cut = text.rfind(" | Items: [")
     if cut != -1:
         text = text[:cut]
@@ -168,7 +168,7 @@ def transaction_attribution(tx: Dict[str, Any]) -> Tuple[str, str]:
     means the whole household. Resolve them with resolve_member_ref.
     """
     source = str(tx.get("source") or "").strip().lower()
-    raw = str(tx.get("raw_sms") or "")
+    raw = str(tx.get("notes") or tx.get("raw_sms") or "")
     tail = _MANUAL_TAIL_RE.search(raw)
     if str(tx.get("beneficiary_id") or "").strip():
         beneficiary = _beneficiary_ref(tx.get("beneficiary_type"), tx.get("beneficiary_id"))
@@ -221,7 +221,7 @@ def _item_beneficiary(item: Dict[str, Any], creator: Optional[str], ctx: FamilyC
 
 def settlement_payer_ref(tx: Dict[str, Any]) -> str:
     """Payer of a settlement row: the member id in its server-authored head, else the creator."""
-    head = _SETTLEMENT_HEAD_RE.match(str(tx.get("raw_sms") or ""))
+    head = _SETTLEMENT_HEAD_RE.match(str(tx.get("notes") or tx.get("raw_sms") or ""))
     return head.group(1).strip().lower() if head else "me"
 
 

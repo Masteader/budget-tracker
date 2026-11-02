@@ -42,7 +42,10 @@ class Transaction {
   final String? receiptUrl;
   final String? dedupFingerprint;
   final String? qrCodeRaw;
-  final String? rawSms;
+  final String? notes;
+
+  /// Transitional non-breaking getter for rawSms -> notes.
+  String? get rawSms => notes;
 
   /// Creator of the transaction (`transactions.user_id`, bound to the signed-in
   /// user by the database). Null for legacy rows: only admins may change those.
@@ -90,14 +93,15 @@ class Transaction {
     this.receiptUrl,
     this.dedupFingerprint,
     this.qrCodeRaw,
-    this.rawSms,
+    String? notes,
+    String? rawSms,
     this.userId,
     this.nafaqahClass,
     this.nafaqahSpouseId,
     this.hasNafaqahFields = false,
     this.isSettlement = false,
     this.cycleKey,
-  });
+  }) : notes = notes ?? rawSms;
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
     List<Map<String, dynamic>> parsedItems = [];
@@ -109,7 +113,7 @@ class Transaction {
           .toList();
     }
 
-    final raw = map['raw_sms'] as String? ?? '';
+    final raw = (map['notes'] as String?) ?? (map['raw_sms'] as String?) ?? '';
 
     // Fallback: parse itemized breakdown from audit raw_sms if items column is empty
     if (parsedItems.isEmpty && raw.contains('Items: [')) {
@@ -246,7 +250,7 @@ class Transaction {
       dedupFingerprint: map['dedup_fingerprint'] as String?,
       qrCodeRaw: map['qr_code_raw'] as String? ??
           (raw.contains('ZATCA QR: ') ? raw.substring(raw.indexOf('ZATCA QR: ') + 10).trim() : null),
-      rawSms: raw,
+      notes: raw,
       userId: map['user_id'] as String?,
       nafaqahClass: map['nafaqah_class'] as String?,
       nafaqahSpouseId: map['nafaqah_spouse_id']?.toString(),
@@ -257,7 +261,7 @@ class Transaction {
   }
 
   bool get isInstallment {
-    final raw = rawSms ?? '';
+    final raw = notes ?? '';
     final m = (merchant ?? '').toLowerCase();
     return raw.contains('Financed via') ||
         raw.toLowerCase().contains('tamara') ||
@@ -267,7 +271,7 @@ class Transaction {
   }
 
   String? get installmentBadgeText {
-    final raw = rawSms ?? '';
+    final raw = notes ?? '';
     final regex = RegExp(r'Financed via\s+([^:]+):\s*Installment\s*(\d+)\s*of\s*(\d+)', caseSensitive: false);
     final match = regex.firstMatch(raw);
     if (match != null) {
@@ -286,7 +290,7 @@ class Transaction {
   }
 
   String get installmentProvider {
-    final raw = (rawSms ?? '').toLowerCase();
+    final raw = (notes ?? '').toLowerCase();
     final m = (merchant ?? '').toLowerCase();
     if (raw.contains('tabby') || m.contains('tabby')) return 'Tabby';
     return 'Tamara';
@@ -308,7 +312,7 @@ class Transaction {
       'source': source,
       'spent_by': spentBy,
       // Only real columns: transactions has no paid_by / beneficiary (the
-      // payer of a manual row is in raw_sms, FABLE2-APP-05).
+      // payer of a manual row is in notes, FABLE2-APP-05).
       if (beneficiaryType != null) 'beneficiary_type': beneficiaryType,
       if (beneficiaryId != null) 'beneficiary_id': beneficiaryId,
       'items': items,
@@ -316,7 +320,7 @@ class Transaction {
       'receipt_url': receiptUrl,
       'dedup_fingerprint': dedupFingerprint,
       'qr_code_raw': qrCodeRaw,
-      'raw_sms': rawSms,
+      'notes': notes,
       if (userId != null) 'user_id': userId,
       if (cycleKey != null) 'cycle_key': cycleKey,
     };
@@ -347,6 +351,7 @@ class Transaction {
     String? receiptUrl,
     String? dedupFingerprint,
     String? qrCodeRaw,
+    String? notes,
     String? rawSms,
     String? userId,
     String? cycleKey,
@@ -376,7 +381,7 @@ class Transaction {
       receiptUrl: receiptUrl ?? this.receiptUrl,
       dedupFingerprint: dedupFingerprint ?? this.dedupFingerprint,
       qrCodeRaw: qrCodeRaw ?? this.qrCodeRaw,
-      rawSms: rawSms ?? this.rawSms,
+      notes: notes ?? rawSms ?? this.notes,
       userId: userId ?? this.userId,
       nafaqahClass: nafaqahClass,
       nafaqahSpouseId: nafaqahSpouseId,

@@ -91,7 +91,7 @@ class TransactionProvider extends ChangeNotifier {
     _filteredTransactions = _transactions.where((tx) {
       if (hasSearch) {
         final merchantMatch = (tx.merchant ?? '').toLowerCase().contains(q);
-        final rawMatch = (tx.rawSms ?? '').toLowerCase().contains(q);
+        final rawMatch = (tx.notes ?? '').toLowerCase().contains(q);
         final itemMatch = tx.items.any((it) => (it['name']?.toString() ?? '').toLowerCase().contains(q));
         if (!merchantMatch && !rawMatch && !itemMatch) return false;
       }

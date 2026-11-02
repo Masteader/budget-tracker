@@ -28,7 +28,7 @@ def w(fake_supabase):
     w = World(fake_supabase, {"ahmed": ("admin", "peer"), "omar": ("member", "peer")})
     fake_supabase.seed("transactions", [{
         "id": "aaaaaaaa-0000-4000-8000-0000000000aa", "household_id": w.hid, "user_id": w.users["ahmed"],
-        "amount": 1200.0, "merchant": "Jarir", "raw_sms": "Chat: Jarir 1200", "category_code": "OPEX-SHOPPING",
+        "amount": 1200.0, "merchant": "Jarir", "notes": "Chat: Jarir 1200", "category_code": "OPEX-SHOPPING",
     }])
     return w
 
@@ -73,7 +73,7 @@ def test_failed_insert_fails_the_request_and_keeps_the_transaction(api, fake_sup
     r = api.post("/budgets/installments", json=_plan(w), headers=w.hdr("ahmed"))
     assert r.status_code >= 500, r.text
     assert fake_supabase.tables["transactions"][0]["amount"] == 1200.0
-    assert "Financed via" not in fake_supabase.tables["transactions"][0]["raw_sms"]
+    assert "Financed via" not in fake_supabase.tables["transactions"][0]["notes"]
 
 
 def test_pay_is_one_atomic_rpc_call(api, fake_supabase, w):

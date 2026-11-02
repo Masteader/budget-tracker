@@ -6,7 +6,7 @@ import 'package:budget_tracker/models/models.dart';
 /// (verified against the migrated local audit database).
 const _transactionColumns = {
   'id', 'household_id', 'user_id', 'amount', 'currency', 'merchant', 'category_code',
-  'timestamp', 'raw_sms', 'is_reallocated', 'reallocated_from_budget_id', 'created_at',
+  'timestamp', 'notes', 'is_reallocated', 'reallocated_from_budget_id', 'created_at',
   'source', 'items', 'receipt_url', 'dedup_fingerprint', 'spent_by', 'sub_category',
   'cycle_key', 'qr_code_raw', 'beneficiary_type', 'beneficiary_id', 'is_settlement',
   'settlement_target_id', 'line_items', 'account_id',

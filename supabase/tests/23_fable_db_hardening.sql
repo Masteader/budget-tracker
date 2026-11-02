@@ -117,8 +117,8 @@ BEGIN
     -- The profile insert the policy allows still works (with or without the policy's own values).
     PERFORM pg_temp.expect('new user inserts own profile',
         pg_temp.as_user('f2300000-0000-0000-0000-0000000000c1',
-            $q$INSERT INTO public.users (id, display_name, payday_day, household_id, role)
-               VALUES ('f2300000-0000-0000-0000-0000000000c1', 'N', 25, NULL, 'member')$q$),
+            $q$INSERT INTO public.users (id, display_name, household_id, role)
+               VALUES ('f2300000-0000-0000-0000-0000000000c1', 'N', NULL, 'member')$q$),
         '00000');
     SELECT financial_role INTO v_role FROM public.users WHERE id = 'f2300000-0000-0000-0000-0000000000c1';
     IF v_role = 'spouse' THEN

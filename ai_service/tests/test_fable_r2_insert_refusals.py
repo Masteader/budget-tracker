@@ -49,7 +49,7 @@ def refuse(fake_supabase, monkeypatch):
 def _insert(hid="aaaa0000-0000-4000-8000-0000000000a1"):
     return supabase_client.insert_transaction(
         household_id=hid, amount=10.0, currency="SAR", merchant="Panda", category_code="OPEX-GROCERY",
-        timestamp="2026-10-21T10:00:00+00:00", raw_sms="Chat: x", source="chat", cycle_key="2026-10",
+        timestamp="2026-10-21T10:00:00+00:00", notes="Chat: x", source="chat", cycle_key="2026-10",
         dedup_fingerprint="fp", qr_code_raw="qr", sub_category="groceries",
     )
 

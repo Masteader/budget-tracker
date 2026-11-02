@@ -61,7 +61,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+            timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
             v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-SHOPPING',
             now(), 'Test wife personal with account', 'wife_personal', v_user_w, v_acc_id
@@ -83,7 +83,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+            timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
             v_household_id, v_user_w, 75.00, 'SAR', 'Groceries', 'OPEX-GROCERY',
             now(), 'Test wife reimbursable with account', 'wife_reimbursable', v_user_w, v_acc_id
@@ -103,7 +103,7 @@ BEGIN
     -- 3. Insert wife_personal with NULL account_id MUST SUCCEED
     INSERT INTO public.transactions (
         household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+        timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
         v_household_id, v_user_w, 50.00, 'SAR', 'Test Merchant', 'OPEX-SHOPPING',
         now(), 'Test wife personal no account', 'wife_personal', v_user_w, NULL
@@ -130,7 +130,7 @@ BEGIN
     -- 5. Standard transaction with account_id MUST SUCCEED
     INSERT INTO public.transactions (
         household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, account_id
+        timestamp, notes, nafaqah_class, account_id
     ) VALUES (
         v_household_id, v_user_h, 100.00, 'SAR', 'Car Fuel', 'OPEX-FUEL',
         now(), 'Standard fuel', NULL, v_acc_id

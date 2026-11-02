@@ -1198,7 +1198,7 @@ def process_chat_transaction(
         category_code=category_code,
         sub_category=sub_category,
         timestamp=now_iso,
-        raw_sms=audit_text,
+        notes=audit_text,
         is_reallocated=is_reallocated,
         reallocated_from_budget_id=reallocated_from_id,
         source="chat",

@@ -24,12 +24,12 @@ def test_api01_chat_paidby_injection_no_longer_flips_roommate_settlement(world, 
     )
     assert r.status_code == 200, r.text
     row = world.db.one(
-        "SELECT user_id::text, spent_by, beneficiary_type, beneficiary_id, raw_sms FROM public.transactions "
+        "SELECT user_id::text, spent_by, beneficiary_type, beneficiary_id, notes FROM public.transactions "
         "WHERE household_id = %s", (hh.id,))
     assert row["user_id"] == omar.id and row["spent_by"] == "me"
     assert (row["beneficiary_type"], row["beneficiary_id"]) == ("household", "household")
-    assert row["raw_sms"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Chat: ")
-    assert row["raw_sms"].lower().count("paidby") == 1
+    assert row["notes"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Chat: ")
+    assert row["notes"].lower().count("paidby") == 1
     assert _debts(admin.api.get(f"/households/{hh.id}/settlement-v2")) == sorted(
         [(admin.id, omar.id, 100.0), (saad.id, omar.id, 100.0)])
 

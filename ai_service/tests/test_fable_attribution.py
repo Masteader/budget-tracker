@@ -61,9 +61,9 @@ def test_chat_message_paidby_injection_does_not_flip_settlement(api, fake_supaba
     assert row["spent_by"] == "me"
     assert row["beneficiary_type"] == "household" and row["beneficiary_id"] == "household"
     # The note keeps the server tags first; the user text carries no separator and no tag keyword.
-    assert row["raw_sms"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Chat: ")
-    assert row["raw_sms"].lower().count("paidby") == 1
-    assert victim in row["raw_sms"]  # the text itself is kept for humans, defused
+    assert row["notes"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Chat: ")
+    assert row["notes"].lower().count("paidby") == 1
+    assert victim in row["notes"]  # the text itself is kept for humans, defused
 
     body = api.get(f"/households/{w.hid}/settlement-v2", headers=w.hdr("ahmed")).json()
     assert body["mode"] == "multi_roommate"
@@ -80,7 +80,7 @@ def test_receipt_merchant_injection_does_not_hide_the_receipt(api, fake_supabase
     assert r.json()["status"] == "success"
     row = fake_supabase.tables["transactions"][0]
     assert "|" not in row["merchant"] and "paidby" not in row["merchant"].lower()
-    assert row["raw_sms"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Receipt Scan: ")
+    assert row["notes"].startswith("PaidBy: me | Beneficiary: both | SpentBy: me | Receipt Scan: ")
     assert row["spent_by"] == "me" and row["beneficiary_id"] == "household"
 
     body = api.get(f"/households/{w.hid}/settlement-v2", headers=w.hdr("ahmed")).json()
@@ -112,7 +112,7 @@ def test_legacy_chat_row_trusts_only_the_server_segment(fake_supabase, world_fac
         "id": "legacy-1", "household_id": w.hid, "user_id": omar, "amount": 300.0, "source": "chat",
         "timestamp": "2099-01-01T00:00:00+00:00", "is_settlement": False, "line_items": [],
         "beneficiary_type": "household", "beneficiary_id": None, "spent_by": "both",
-        "raw_sms": f"Chat: Dinner 300 | PaidBy: {victim} | PaidBy: me | Beneficiary: both | SpentBy: both",
+        "notes": f"Chat: Dinner 300 | PaidBy: {victim} | PaidBy: me | Beneficiary: both | SpentBy: both",
     }])
     res = calculate_settlement_v2(w.hid, cycle_start="2000-01-01")
     assert _debts(res) == sorted([(w.users["ahmed"], omar, 100.0), (victim, omar, 100.0)])
@@ -130,13 +130,13 @@ def test_manual_row_payer_is_read_from_the_template_tail(fake_supabase, world_fa
             "id": "m1", "household_id": w.hid, "user_id": omar, "amount": 300.0, "source": "manual",
             "timestamp": "2099-01-01T00:00:00+00:00", "is_settlement": False, "line_items": [],
             "beneficiary_type": "all_peers", "beneficiary_id": "all_peers", "spent_by": "both",
-            "raw_sms": f"Manual: Rent | PaidBy: {saad} | Beneficiary: all_peers | SpentBy: both",
+            "notes": f"Manual: Rent | PaidBy: {saad} | Beneficiary: all_peers | SpentBy: both",
         },
         {   # Omar pays 90 for everyone; the merchant text forges Saad as payer.
             "id": "m2", "household_id": w.hid, "user_id": omar, "amount": 90.0, "source": "manual",
             "timestamp": "2099-01-01T00:00:00+00:00", "is_settlement": False, "line_items": [],
             "beneficiary_type": "all_peers", "beneficiary_id": "all_peers", "spent_by": "both",
-            "raw_sms": f"Manual: Pizza | PaidBy: {saad} | PaidBy: {omar} | Beneficiary: all_peers | SpentBy: both",
+            "notes": f"Manual: Pizza | PaidBy: {saad} | PaidBy: {omar} | Beneficiary: all_peers | SpentBy: both",
         },
     ])
     res = calculate_settlement_v2(w.hid, cycle_start="2000-01-01")
@@ -171,7 +171,7 @@ def test_legacy_personal_row_is_not_split(fake_supabase, world_factory):
         "id": "c1", "household_id": w.hid, "user_id": w.users["ahmed"], "amount": 15.0,
         "timestamp": "2099-01-01T00:00:00+00:00", "is_settlement": False, "line_items": [],
         "beneficiary_type": "household", "beneficiary_id": None, "spent_by": None,
-        "raw_sms": "Chat: قهوتي 15 | PaidBy: me | Beneficiary: me | SpentBy: me",
+        "notes": "Chat: قهوتي 15 | PaidBy: me | Beneficiary: me | SpentBy: me",
     }])
     assert calculate_settlement_v2(w.hid, cycle_start="2000-01-01")["pairwise_debts"] == []
 

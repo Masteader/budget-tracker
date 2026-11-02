@@ -338,7 +338,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(writes, hasLength(1), reason: 'the raw_sms fallback would be refused the same way');
+      expect(writes, hasLength(1), reason: 'the notes fallback would be refused the same way');
       expect(find.textContaining('the husband has already repaid part of the wife'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
     });

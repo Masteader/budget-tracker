@@ -56,7 +56,7 @@ def test_api01_husband_expense_without_provider_is_still_recorded(world, db, llm
 # ─── FABLE2-LOGIC-01: rows re-saved by the old edit sheet ─────────────────────
 
 def _edit_like_the_old_app(user, tx_id, raw, paid_by, beneficiary, merchant="Groceries"):
-    """edit_transaction_sheet.dart at 84e264f: structured attempt (fails), then the raw_sms fallback."""
+    """edit_transaction_sheet.dart at 84e264f: structured attempt (fails), then the notes fallback."""
     if beneficiary == "both":
         spent_by = "both"
     elif paid_by == beneficiary:
@@ -72,7 +72,7 @@ def _edit_like_the_old_app(user, tx_id, raw, paid_by, beneficiary, merchant="Gro
         "merchant": merchant, "paid_by": paid_by, "beneficiary": beneficiary, "spent_by": spent_by}, headers=REPR)
     assert first.status_code >= 400, first.text  # paid_by / beneficiary are not columns
     second = user.rest.patch(f"/transactions?id=eq.{tx_id}", json={
-        "merchant": merchant, "raw_sms": new_raw, "spent_by": spent_by}, headers=REPR)
+        "merchant": merchant, "notes": new_raw, "spent_by": spent_by}, headers=REPR)
     assert second.status_code == 200, second.text
     return second.json()[0]
 
@@ -83,8 +83,8 @@ def test_logic01_old_app_edit_of_a_chat_row_keeps_the_payer(world, db, llm):
     res = world.chat_commit(omar, flat, llm, merchant="Groceries", amount=200, paid_by="partner", beneficiary="both")
     assert res.status_code == 200, res.text
     tx_id = res.json()["transaction_id"]
-    row = db.one("SELECT raw_sms FROM public.transactions WHERE id = %s", (tx_id,))
-    edited = _edit_like_the_old_app(omar, tx_id, row["raw_sms"], paid_by="partner", beneficiary="both")
+    row = db.one("SELECT notes FROM public.transactions WHERE id = %s", (tx_id,))
+    edited = _edit_like_the_old_app(omar, tx_id, row["notes"], paid_by="partner", beneficiary="both")
     assert edited["spent_by"] == "both"
     v1 = omar.api.get(f"/households/{flat.id}/settlement").json()
     assert v1["who_owes"] == "me_owes_partner" and v1["settlement_amount"] == 100.0, v1
@@ -98,13 +98,13 @@ def test_logic01_old_app_edit_of_a_manual_row_keeps_the_new_payer(world, db):
         "id": str(uuid.uuid4()), "household_id": flat.id, "user_id": omar.id, "amount": 200, "currency": "SAR",
         "merchant": "Groceries", "category_code": "OPEX-GROCERY", "spent_by": "both", "beneficiary_type": "all_peers",
         "beneficiary_id": "all_peers", "account_id": None, "source": "manual", "timestamp": "2026-10-21T10:00:00Z",
-        "raw_sms": f"Manual: Groceries | PaidBy: {omar.id} | Beneficiary: all_peers | SpentBy: both",
+        "notes": f"Manual: Groceries | PaidBy: {omar.id} | Beneficiary: all_peers | SpentBy: both",
         "items": [{"name": "Groceries", "price": 200, "quantity": 1}],
     }
     assert omar.rest.post("/transactions", json=row, headers=REPR).status_code == 201
     assert _debts(omar.api.get(f"/households/{flat.id}/settlement-v2")) == [(ahmed.id, omar.id, 100.0)]
     # Old sheet: "partner paid, for both" → Ahmed paid the shared 200.
-    _edit_like_the_old_app(omar, row["id"], row["raw_sms"], paid_by="partner", beneficiary="both")
+    _edit_like_the_old_app(omar, row["id"], row["notes"], paid_by="partner", beneficiary="both")
     assert _debts(omar.api.get(f"/households/{flat.id}/settlement-v2")) == [(omar.id, ahmed.id, 100.0)]
 
 

@@ -39,7 +39,7 @@ final Map<String, dynamic> _dbRow = {
   'receipt_url': _receipt,
   'qr_code_raw': 'AQ...',
   'cycle_key': '2026-09',
-  'raw_sms': null,
+  'notes': null,
 };
 
 Transaction _tx() => Transaction.fromMap(_dbRow);

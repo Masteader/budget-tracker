@@ -117,10 +117,10 @@ def homes(fake_supabase):
         {"id": OTHER, "payday_day": 27, "owner_user_id": OUTSIDER},
     ])
     fake_supabase.seed("transactions", [
-        {"id": TX_PRIMARY, "household_id": ROOM, "user_id": PRIMARY, "amount": 120.0, "merchant": "Rent", "raw_sms": "", "items": []},
-        {"id": TX_MEM, "household_id": ROOM, "user_id": MEM, "amount": 40.0, "merchant": "Panda", "raw_sms": "", "items": []},
-        {"id": TX_HUSBAND, "household_id": FAMILY, "user_id": HUSBAND, "amount": 300.0, "merchant": "Danube", "raw_sms": "", "items": []},
-        {"id": TX_WIFE, "household_id": FAMILY, "user_id": WIFE, "amount": 80.0, "merchant": "Nahdi", "raw_sms": "", "items": []},
+        {"id": TX_PRIMARY, "household_id": ROOM, "user_id": PRIMARY, "amount": 120.0, "merchant": "Rent", "notes": "", "items": []},
+        {"id": TX_MEM, "household_id": ROOM, "user_id": MEM, "amount": 40.0, "merchant": "Panda", "notes": "", "items": []},
+        {"id": TX_HUSBAND, "household_id": FAMILY, "user_id": HUSBAND, "amount": 300.0, "merchant": "Danube", "notes": "", "items": []},
+        {"id": TX_WIFE, "household_id": FAMILY, "user_id": WIFE, "amount": 80.0, "merchant": "Nahdi", "notes": "", "items": []},
     ])
     _install_role_rpcs(fake_supabase)
     return fake_supabase
@@ -366,7 +366,7 @@ def test_installment_linking_is_an_edit(homes):
 
     _membership(homes, ROOM, CO)["role"] = "admin"
     homes.seed("transactions", [{"id": "dddd0000-0000-4000-8000-000000000009", "household_id": ROOM, "user_id": MEM,
-                                 "amount": 80.0, "raw_sms": "", "items": []}])
+                                 "amount": 80.0, "notes": "", "items": []}])
     resp = client.post("/budgets/installments", headers=bearer(CO), json={
         **payload, "total_amount": 80.0, "original_transaction_id": "dddd0000-0000-4000-8000-000000000009"})
     assert resp.status_code == 200

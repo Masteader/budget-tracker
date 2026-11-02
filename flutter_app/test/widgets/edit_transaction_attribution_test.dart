@@ -94,7 +94,7 @@ void main() {
   testWidgets('case 1: a merchant-only edit keeps a manual roommate row paid by another member', (tester) async {
     final row = _row({
       'source': 'manual', 'spent_by': 'both', 'beneficiary_type': 'all_peers', 'beneficiary_id': 'all_peers',
-      'raw_sms': 'Manual: Dinner | PaidBy: $_b | Beneficiary: all_peers | SpentBy: both',
+      'notes': 'Manual: Dinner | PaidBy: $_b | Beneficiary: all_peers | SpentBy: both',
     });
     final r = await _editAndSave(tester, row, merchant: 'Dinner at Najd');
 
@@ -102,7 +102,7 @@ void main() {
     expectNoFakeColumns(r.writes);
     expect(r.writes.single['merchant'], 'Dinner at Najd');
     expect(r.writes.single.containsKey('spent_by'), isFalse);
-    expect(r.writes.single.containsKey('raw_sms'), isFalse);
+    expect(r.writes.single.containsKey('notes'), isFalse);
     expect(storedPayerRef(r.after), _b, reason: 'B still paid');
     expect(r.after['beneficiary_id'], 'all_peers');
   });
@@ -110,7 +110,7 @@ void main() {
   testWidgets('case 2: a manual personal row (B for B) changed to shared keeps B as payer', (tester) async {
     final row = _row({
       'source': 'manual', 'spent_by': 'me', 'beneficiary_type': 'individual', 'beneficiary_id': _b,
-      'raw_sms': 'Manual: Coffee | PaidBy: $_b | Beneficiary: $_b | SpentBy: me',
+      'notes': 'Manual: Coffee | PaidBy: $_b | Beneficiary: $_b | SpentBy: me',
     });
     final r = await _editAndSave(tester, row, taps: ['Both (Shared)'],
         roster: _roster([_a, _b, _c]));
@@ -121,31 +121,31 @@ void main() {
     expect(w['beneficiary_id'], 'household');
     expect(w['spent_by'], 'partner');
     expect(storedPayerRef(r.after), _b);
-    final tail = manualTailPattern.firstMatch(w['raw_sms'] as String)!;
+    final tail = manualTailPattern.firstMatch(w['notes'] as String)!;
     expect(tail.group(1), _b);
     expect(tail.group(2), 'household');
-    expect((w['raw_sms'] as String).startsWith('Manual: Coffee | PaidBy:'), isTrue);
+    expect((w['notes'] as String).startsWith('Manual: Coffee | PaidBy:'), isTrue);
   });
 
   testWidgets('case 3: a legacy chat row edited without touching attribution is still read the same way', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': null,
       'category_code': 'OPEX-GROCERY', 'merchant': 'Panda',
-      'raw_sms': 'Chat: Panda | PaidBy: me | Beneficiary: me | Items: [1x Panda (50 SAR)]',
+      'notes': 'Chat: Panda | PaidBy: me | Beneficiary: me | Items: [1x Panda (50 SAR)]',
     });
     final r = await _editAndSave(tester, row, merchant: 'Panda Hyper');
 
     expectNoFakeColumns(r.writes);
-    expect(r.writes.single.keys, isNot(contains('raw_sms')), reason: 'tags appended after Items were dropped by the server');
+    expect(r.writes.single.keys, isNot(contains('notes')), reason: 'tags appended after Items were dropped by the server');
     expect(r.writes.single.keys, isNot(contains('beneficiary_id')));
     expect(storedPayerRef(r.after), 'me');
-    expect(legacyAuditTags(r.after['raw_sms'] as String)['beneficiary'], 'me');
+    expect(legacyAuditTags(r.after['notes'] as String)['beneficiary'], 'me');
   });
 
   testWidgets('case 3b: confirming the same choices on a legacy row writes them structurally', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_id': null, 'category_code': 'OPEX-GROCERY', 'merchant': 'Panda',
-      'raw_sms': 'Chat: Panda | PaidBy: me | Beneficiary: me | Items: [1x Panda (50 SAR)]',
+      'notes': 'Chat: Panda | PaidBy: me | Beneficiary: me | Items: [1x Panda (50 SAR)]',
     });
     final r = await _editAndSave(tester, row, taps: ['I Paid', 'Me (Solo)']);
 
@@ -153,13 +153,13 @@ void main() {
     expect(w['spent_by'], 'me');
     expect(w['beneficiary_type'], 'individual');
     expect(w['beneficiary_id'], _a);
-    expect(w.containsKey('raw_sms'), isFalse, reason: 'API rows: attribution lives in the columns only');
+    expect(w.containsKey('notes'), isFalse, reason: 'API rows: attribution lives in the columns only');
   });
 
   testWidgets('case 4: a structured chat row changed to "partner" updates beneficiary_id', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'individual', 'beneficiary_id': _a,
-      'raw_sms': 'Chat: X | PaidBy: me | Beneficiary: me',
+      'notes': 'Chat: X | PaidBy: me | Beneficiary: me',
     });
     final r = await _editAndSave(tester, row, taps: ['Partner'], roster: _roster([_a, _b]));
 
@@ -172,7 +172,7 @@ void main() {
   testWidgets('FABLE2-APP-02: a dependent beneficiary saves with a valid spent_by', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'merchant': 'Jarir', 'category_code': 'OPEX-SHOPPING', 'amount': 50.0,
-      'raw_sms': 'Chat: Jarir | PaidBy: me | Beneficiary: both | Items: [1x Jarir (50 SAR)]',
+      'notes': 'Chat: Jarir | PaidBy: me | Beneficiary: both | Items: [1x Jarir (50 SAR)]',
     });
     final r = await _editAndSave(tester, row, deps: const ['Sarah'], taps: ['Sarah']);
 
@@ -188,7 +188,7 @@ void main() {
   testWidgets("the partner editing the creator's row: 'I paid' is stored relative to the creator", (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': 'household',
-      'raw_sms': 'Chat: Dinner | PaidBy: me | Beneficiary: both',
+      'notes': 'Chat: Dinner | PaidBy: me | Beneficiary: both',
     });
     final r = await _editAndSave(tester, row, viewer: _b, taps: ['I Paid'], roster: _roster([_a, _b]));
 
@@ -200,7 +200,7 @@ void main() {
   testWidgets('a third member cannot re-attribute a row whose "partner" is unknown', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': 'household',
-      'raw_sms': 'Chat: Dinner | PaidBy: me | Beneficiary: both',
+      'notes': 'Chat: Dinner | PaidBy: me | Beneficiary: both',
     });
     final r = await _editAndSave(tester, row, viewer: _c, taps: ['The other person paid'], roster: _roster([_a, _b, _c]));
 
@@ -212,7 +212,7 @@ void main() {
   testWidgets('family: the husband marking the wife as payer stores her as the creator\'s partner', (tester) async {
     final row = _row({
       'source': 'chat', 'spent_by': 'me', 'beneficiary_type': 'household', 'beneficiary_id': 'household',
-      'category_code': 'OPEX-GROCERY', 'raw_sms': 'Chat: Panda | PaidBy: me | Beneficiary: both',
+      'category_code': 'OPEX-GROCERY', 'notes': 'Chat: Panda | PaidBy: me | Beneficiary: both',
     });
     const summary = NafaqahSummary(
       mode: 'family_nafaqah', callerRole: 'husband', callerUserId: _a, husbandId: _a,

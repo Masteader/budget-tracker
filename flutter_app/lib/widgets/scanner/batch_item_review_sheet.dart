@@ -271,7 +271,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             // `transactions` has no `date`/`vat_amount` columns: an insert
             // naming them always failed and diverted every save offline.
             'timestamp': DateTime.now().toUtc().toIso8601String(),
-            'raw_sms': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR',
+            'notes': 'Receipt Scan: $merchant | VAT: ${parsedVat.toStringAsFixed(2)} SAR',
             // Family Nafaqah: the wife's debt or allowance spending (both columns together).
             ..._nafaqah.transactionColumns(
               _nafaqahClass,

@@ -1052,7 +1052,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         'category_code': categoryCode,
         if (accountId != null) 'account_id': accountId,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'raw_sms': auditText,
+        'notes': auditText,
         'source': 'receipt_scan',
         'items': items,
         // Who paid and for whom in the columns the settlement engine reads,

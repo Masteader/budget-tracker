@@ -1047,7 +1047,7 @@ def process_receipt_scan(
         merchant=merchant,
         category_code=category_code,
         timestamp=now_iso,
-        raw_sms=audit_text,
+        notes=audit_text,
         is_reallocated=is_reallocated,
         reallocated_from_budget_id=reallocated_from_id,
         source="receipt_scan",

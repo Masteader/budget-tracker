@@ -30,7 +30,7 @@ ISSUER = "https://mockproject.supabase.co/auth/v1"
 # public.transactions columns on live and in the local rebuild (information_schema order).
 TRANSACTION_COLUMNS = {
     "id", "household_id", "user_id", "amount", "currency", "merchant", "category_code", "timestamp",
-    "raw_sms", "is_reallocated", "reallocated_from_budget_id", "created_at", "source", "items",
+    "notes", "is_reallocated", "reallocated_from_budget_id", "created_at", "source", "items",
     "receipt_url", "dedup_fingerprint", "spent_by", "sub_category", "cycle_key", "qr_code_raw",
     "beneficiary_type", "beneficiary_id", "is_settlement", "settlement_target_id", "line_items",
     "account_id", "nafaqah_class", "nafaqah_spouse_id",
@@ -85,7 +85,7 @@ def test_strict_fake_rejects_unknown_transaction_columns(db):
     with pytest.raises(FakeSchemaError):
         db.table("transactions").select("id, paid_by").execute()
     with pytest.raises(FakeSchemaError):
-        db.table("transactions").insert({"household_id": ROOM, "notes": "x"}).execute()
+        db.table("transactions").insert({"household_id": ROOM, "raw_sms": "x"}).execute()
 
 
 # ─── FR-B-01: roommate settlement recording ───────────────────────────────────
@@ -112,7 +112,7 @@ def test_roommate_settlement_is_recorded_with_existing_columns(db):
     assert row["settlement_target_id"] == A and row["beneficiary_id"] == A
     assert row["category_code"] is None  # a settlement is not spending in any budget category
     assert row["source"] == "manual"
-    assert f"PaidBy: {B}" in row["raw_sms"]
+    assert f"PaidBy: {B}" in row["notes"]
     assert Decimal(str(row["amount"])) == Decimal("30.00")
 
 
@@ -126,7 +126,7 @@ def test_roommate_settlement_appears_in_settlement_v2(db):
     # A paid 90 for everyone (chat entry by A); B then pays A back 30.
     db.seed("transactions", [{
         "id": "r1", "household_id": ROOM, "user_id": A, "amount": 90.0, "timestamp": NOW,
-        "raw_sms": "Chat: groceries 90 | PaidBy: me | Beneficiary: both | SpentBy: me",
+        "notes": "Chat: groceries 90 | PaidBy: me | Beneficiary: both | SpentBy: me",
         "beneficiary_type": "household", "is_settlement": False, "line_items": [],
     }])
     before = client.get(f"/households/{ROOM}/settlement-v2", headers=bearer(B), params={"cycle_start": "2000-01-01"})
@@ -147,9 +147,9 @@ def test_settlement_v2_roommate_debts_use_creator_as_payer(db):
 
     db.seed("transactions", [
         {"id": "r1", "household_id": ROOM, "user_id": B, "amount": 60.0, "timestamp": NOW,
-         "raw_sms": "Manual entry", "beneficiary_type": "household", "is_settlement": False},
+         "notes": "Manual entry", "beneficiary_type": "household", "is_settlement": False},
         {"id": "r2", "household_id": ROOM, "user_id": None, "amount": 99.0, "timestamp": NOW,
-         "raw_sms": "legacy row without creator or payer", "beneficiary_type": "household"},
+         "notes": "legacy row without creator or payer", "beneficiary_type": "household"},
     ])
     res = calculate_settlement_v2(ROOM, cycle_start="2000-01-01")
     assert res["mode"] == "multi_roommate"
@@ -164,7 +164,7 @@ def test_partner_settlement_reads_nafaqah_class(db):
 
     db.seed("transactions", [{
         "id": "w1", "household_id": FAMILY, "user_id": WIFE, "amount": 100.0, "timestamp": NOW,
-        "category_code": "OPEX-GROCERY", "raw_sms": "Chat: groceries | PaidBy: me | Beneficiary: both",
+        "category_code": "OPEX-GROCERY", "notes": "Chat: groceries | PaidBy: me | Beneficiary: both",
         "nafaqah_class": "wife_reimbursable", "nafaqah_spouse_id": WIFE,
     }])
     res = calculate_partner_settlement(FAMILY, cycle_start="2000-01-01", caller_user_id=HUSBAND)
@@ -181,7 +181,7 @@ def test_partner_settlement_counts_recorded_roommate_settlements(db):
     db.tables["household_memberships"] = [m for m in db.tables["household_memberships"] if m["user_id"] != C]
     db.seed("transactions", [{
         "id": "g1", "household_id": ROOM, "user_id": A, "amount": 100.0, "timestamp": NOW,
-        "category_code": "OPEX-GROCERY", "raw_sms": "Chat: groceries | PaidBy: me | Beneficiary: both",
+        "category_code": "OPEX-GROCERY", "notes": "Chat: groceries | PaidBy: me | Beneficiary: both",
     }])
     assert _settle(B, A, 50.0).status_code == 200
     res = calculate_partner_settlement(ROOM, cycle_start="2000-01-01", caller_user_id=A)
@@ -325,7 +325,7 @@ def test_insert_transaction_fits_the_schema_first_time(db, caplog):
     with caplog.at_level("WARNING", logger="supabase_client"):
         tx_id = insert_transaction(
             household_id=ROOM, amount=12.5, currency="SAR", merchant="Cafe", category_code="OPEX-DINING",
-            timestamp=NOW, raw_sms="Chat: coffee | PaidBy: me | Beneficiary: both", source="chat",
+            timestamp=NOW, notes="Chat: coffee | PaidBy: me | Beneficiary: both", source="chat",
             paid_by="me", beneficiary="both", user_id=B,
         )
     # No failed first attempt naming the non-existent paid_by / beneficiary columns.
@@ -355,7 +355,7 @@ def test_receipt_commit_records_who_paid_in_the_audit_tags(db, monkeypatch):
                                paid_by="partner", beneficiary="both")
     assert res["status"] == "success", res
     row = next(t for t in db.tables["transactions"] if t["id"] == res["transaction_id"])
-    assert row["raw_sms"].startswith("PaidBy: partner | Beneficiary: both")
+    assert row["notes"].startswith("PaidBy: partner | Beneficiary: both")
     # Structured attribution, which the settlement engines read.
     assert row["spent_by"] == "partner"
     assert (row["beneficiary_type"], row["beneficiary_id"]) == ("household", "household")
@@ -393,7 +393,7 @@ def test_partner_settlement_tags_are_relative_to_the_creator(db):
     db.tables["household_memberships"] = [m for m in db.tables["household_memberships"] if m["user_id"] != C]
     db.seed("transactions", [{
         "id": "g1", "household_id": ROOM, "user_id": A, "amount": 100.0, "timestamp": NOW,
-        "category_code": "OPEX-GROCERY", "raw_sms": "Chat: groceries | PaidBy: me | Beneficiary: both",
+        "category_code": "OPEX-GROCERY", "notes": "Chat: groceries | PaidBy: me | Beneficiary: both",
     }])
     a_view = calculate_partner_settlement(ROOM, cycle_start="2000-01-01", caller_user_id=A)
     b_view = calculate_partner_settlement(ROOM, cycle_start="2000-01-01", caller_user_id=B)

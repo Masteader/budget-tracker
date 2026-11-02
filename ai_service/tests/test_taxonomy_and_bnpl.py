@@ -160,21 +160,21 @@ def test_plan_rows_from_an_older_database_still_load():
 LEGACY_TX = {
     "id": "aaaaaaaa-0000-4000-8000-0000000000aa", "household_id": HID, "merchant": "eXtra",
     "amount": 300.0, "category_code": "OPEX-SHOPPING", "timestamp": "2026-09-10T12:00:00+03:00",
-    "raw_sms": "Chat: eXtra 1200 [Financed via Tamara: Installment 1 of 4. Full price: SAR 1,200.00]",
+    "notes": "Chat: eXtra 1200 [Financed via Tamara: Installment 1 of 4. Full price: SAR 1,200.00]",
 }
 
 
 def test_list_plans_reads_rows_only(fake_supabase):
     fake_supabase.seed("transactions", [LEGACY_TX, {
         "id": "bbbbbbbb-0000-4000-8000-0000000000bb", "household_id": HID, "merchant": "Tabby",
-        "amount": 50.0, "raw_sms": "Paid Tabby", "category_code": "OPEX-SHOPPING"}])
+        "amount": 50.0, "notes": "Paid Tabby", "category_code": "OPEX-SHOPPING"}])
     assert InstallmentService.list_plans(HID) == []
 
 
 def test_legacy_backfill_is_explicit_and_idempotent(fake_supabase):
     fake_supabase.seed("transactions", [LEGACY_TX, {
         "id": "bbbbbbbb-0000-4000-8000-0000000000bb", "household_id": HID, "merchant": "Tabby",
-        "amount": 50.0, "raw_sms": "Paid Tabby", "category_code": "OPEX-SHOPPING"}])
+        "amount": 50.0, "notes": "Paid Tabby", "category_code": "OPEX-SHOPPING"}])
 
     dry = InstallmentService.backfill_plans_from_legacy_notes(HID)
     assert dry["candidates"] == 1 and dry["created"] == 0 and not fake_supabase.tables.get("installment_plans")

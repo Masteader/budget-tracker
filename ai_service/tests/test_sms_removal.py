@@ -35,7 +35,7 @@ def test_sms_webhook_endpoint_removed():
     """POST /webhook/sms must not exist."""
     response = client.post(
         "/webhook/sms",
-        json={"raw_sms": "test", "sender": "SNB", "received_at": "2026-01-01", "household_id": "test"},
+        json={"notes": "test", "sender": "SNB", "received_at": "2026-01-01", "household_id": "test"},
     )
     assert response.status_code in (404, 405)
 
@@ -89,7 +89,7 @@ def test_insert_transaction_rejects_sms_source():
             merchant="Panda",
             category_code="OPEX-GROCERY",
             timestamp="2026-10-20T09:00:00Z",
-            raw_sms="note",
+            notes="note",
             source="sms",
         )
 
@@ -104,7 +104,7 @@ def test_insert_transaction_defaults_to_manual_source(fake_supabase):
         merchant="Panda",
         category_code="OPEX-GROCERY",
         timestamp="2026-10-20T09:00:00Z",
-        raw_sms="Manual: Panda",
+        notes="Manual: Panda",
     )
     assert fake_supabase.tables["transactions"][0]["source"] == "manual"
 

@@ -743,7 +743,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
               'timestamp': t.timestamp.toIso8601String(),
               'source': t.source,
               'spent_by': t.spentBy,
-              'raw_sms': t.rawSms,
+              'notes': t.notes,
             })
         .toList();
     CsvExportService.showExportDialog(context, exportList, monthLabel: 'All Records');

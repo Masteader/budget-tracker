@@ -71,7 +71,7 @@ void main() {
     expect(row['beneficiary_type'], 'household');
     expect(row['beneficiary_id'], 'household');
     expect(row['category_code'], 'OPEX-UTILITIES');
-    expect(row['raw_sms'], 'Manual: SEC Electricity | PaidBy: me | Beneficiary: household | SpentBy: me');
+    expect(row['notes'], 'Manual: SEC Electricity | PaidBy: me | Beneficiary: household | SpentBy: me');
     expect(storedPayerRef(row), 'me');
     expect(row.containsKey('paid_by'), isFalse);
   });

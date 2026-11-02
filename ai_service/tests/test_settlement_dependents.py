@@ -17,7 +17,7 @@ def test_dependent_beneficiary_treated_as_shared_family_expense(monkeypatch):
             "beneficiary": "sarah",  # Child expense
             "spent_by": "both",
             "timestamp": "2026-10-10T12:00:00Z",
-            "raw_sms": "Clothes for Sarah"
+            "notes": "Clothes for Sarah"
         }
     ]
     mock_client.table.return_value.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = mock_txs

@@ -60,7 +60,7 @@ def test_insert_transaction_derives_cycle_from_riyadh_date_and_household_payday(
     monkeypatch.setattr("installment_service.InstallmentService.recalculate_budgets", lambda *a, **k: None)
     insert_transaction(
         household_id=hid, amount=10.0, currency="SAR", merchant="Panda", category_code="OPEX-GROCERY",
-        timestamp="2026-10-24T21:30:00Z", raw_sms="chat",  # 00:30 on the 25th in Riyadh
+        timestamp="2026-10-24T21:30:00Z", notes="chat",  # 00:30 on the 25th in Riyadh
     )
     assert fake_supabase.tables["transactions"][0]["cycle_key"] == "2026-11"
 

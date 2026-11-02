@@ -42,25 +42,25 @@ void main() {
     final rows = <String, (Map<String, dynamic>, String)>{
       'manual structured row: payer from the tail': ({
         'source': 'manual', 'spent_by': 'partner', 'beneficiary_type': 'household', 'beneficiary_id': 'household',
-        'user_id': _a, 'raw_sms': 'Manual: Dinner | PaidBy: $_b | Beneficiary: household | SpentBy: partner',
+        'user_id': _a, 'notes': 'Manual: Dinner | PaidBy: $_b | Beneficiary: household | SpentBy: partner',
       }, _b),
       'manual dependent row': ({
         'source': 'manual', 'spent_by': 'me', 'beneficiary_type': 'dependent', 'beneficiary_id': 'Sarah',
-        'user_id': _a, 'raw_sms': 'Manual: Jarir | PaidBy: me | Beneficiary: Sarah | SpentBy: me',
+        'user_id': _a, 'notes': 'Manual: Jarir | PaidBy: me | Beneficiary: Sarah | SpentBy: me',
       }, 'me'),
       'chat structured row: payer from spent_by': ({
         'source': 'chat', 'spent_by': 'partner', 'beneficiary_type': 'individual', 'beneficiary_id': _a,
-        'raw_sms': 'Chat: X | PaidBy: me | Beneficiary: me',
+        'notes': 'Chat: X | PaidBy: me | Beneficiary: me',
       }, 'partner'),
       'legacy chat row: the server-authored tag': ({
         'source': 'chat', 'spent_by': 'me', 'beneficiary_id': null,
-        'raw_sms': 'Chat: Jarir | PaidBy: me | Beneficiary: me | Items: [1x Jarir (50 SAR)]',
+        'notes': 'Chat: Jarir | PaidBy: me | Beneficiary: me | Items: [1x Jarir (50 SAR)]',
       }, 'me'),
       'legacy chat row naming a member: me': ({
-        'source': 'chat', 'spent_by': 'me', 'beneficiary_id': null, 'raw_sms': 'Chat: X | PaidBy: $_b | Beneficiary: both',
+        'source': 'chat', 'spent_by': 'me', 'beneficiary_id': null, 'notes': 'Chat: X | PaidBy: $_b | Beneficiary: both',
       }, 'me'),
       'untagged legacy row: spent_by': ({
-        'source': 'manual', 'spent_by': 'partner', 'beneficiary_id': null, 'raw_sms': '',
+        'source': 'manual', 'spent_by': 'partner', 'beneficiary_id': null, 'notes': '',
       }, 'partner'),
     };
     rows.forEach((name, c) {

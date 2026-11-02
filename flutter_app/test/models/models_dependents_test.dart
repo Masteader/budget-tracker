@@ -50,7 +50,7 @@ void main() {
       'spent_by': 'me',
       'beneficiary_type': 'dependent',
       'beneficiary_id': 'Sarah',
-      'raw_sms': 'Chat: Jarir | PaidBy: me | Beneficiary: both',
+      'notes': 'Chat: Jarir | PaidBy: me | Beneficiary: both',
     });
     expect(tx.paidBy, 'me');
     expect(tx.beneficiary, 'Sarah', reason: 'the columns win over the stale note');

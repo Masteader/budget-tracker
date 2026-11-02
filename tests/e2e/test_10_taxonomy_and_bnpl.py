@@ -73,7 +73,7 @@ def test_legacy_notes_are_not_reconstructed_into_plans(world, db, llm):
     hh = world.roommates("bn4", n_members=0)
     r = world.chat_commit(hh.admin, hh, llm, merchant="eXtra", amount=300)
     assert r.status_code == 200, r.text
-    db.query("UPDATE public.transactions SET raw_sms = raw_sms || %s WHERE id = %s",
+    db.query("UPDATE public.transactions SET notes = notes || %s WHERE id = %s",
              (" [Financed via Tamara: Installment 1 of 4. Full price: SAR 1,200.00]", r.json()["transaction_id"]))
     assert hh.admin.api.get("/budgets/installments", params={"household_id": hh.id}).json()["plans"] == []
 

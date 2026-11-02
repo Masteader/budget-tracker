@@ -9,7 +9,7 @@ Map<String, dynamic> _row(String? source, String? note) => {
       'timestamp': '2026-10-20T12:00:00Z',
       'created_at': '2026-10-20T12:00:00Z',
       'source': source,
-      'raw_sms': note,
+      'notes': note,
     };
 
 void main() {

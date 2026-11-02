@@ -77,7 +77,7 @@ BEGIN
     -- (a) A wife_personal row with the wife's own personal account succeeds and debits that account
     INSERT INTO public.transactions (
         id, household_id, user_id, amount, currency, merchant, category_code,
-        timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+        timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
     ) VALUES (
         gen_random_uuid(), v_household_id, v_user_w, 250.00, 'SAR', 'Sephora', 'OPEX-SHOPPING',
         now(), 'Wife salon/beauty', 'wife_personal', v_user_w, v_wife_personal_acc
@@ -91,7 +91,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+            timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
             v_household_id, v_user_w, 100.00, 'SAR', 'Cosmetics', 'OPEX-SHOPPING',
             now(), 'Cosmetics on shared', 'wife_personal', v_user_w, v_shared_acc
@@ -113,7 +113,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+            timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
             v_household_id, v_user_w, 400.00, 'SAR', 'Groceries', 'OPEX-GROCERY',
             now(), 'Reimbursable groceries on husband account', 'wife_reimbursable', v_user_w, v_husband_personal_acc
@@ -153,7 +153,7 @@ BEGIN
     BEGIN
         INSERT INTO public.transactions (
             household_id, user_id, amount, currency, merchant, category_code,
-            timestamp, raw_sms, nafaqah_class, nafaqah_spouse_id, account_id
+            timestamp, notes, nafaqah_class, nafaqah_spouse_id, account_id
         ) VALUES (
             v_household_id, v_user_w, 50.00, 'SAR', 'Pharmacy', 'OPEX-SHOPPING',
             now(), 'Archived account debit', 'wife_personal', v_user_w, v_wife_archived_acc

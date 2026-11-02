@@ -33,7 +33,7 @@ def family(fake_supabase):
     fake_supabase.tables["households"][0]["nafaqah_provider_user_id"] = w.users["husband"]
     fake_supabase.seed("transactions", [{
         "id": TX, "household_id": w.hid, "user_id": w.users["wife"], "amount": 300.0, "merchant": "Extra",
-        "raw_sms": "PaidBy: me | Beneficiary: both | SpentBy: me | Chat: Extra 300", "category_code": "OPEX-SHOPPING",
+        "notes": "PaidBy: me | Beneficiary: both | SpentBy: me | Chat: Extra 300", "category_code": "OPEX-SHOPPING",
         "nafaqah_class": "wife_reimbursable", "nafaqah_spouse_id": w.users["wife"], "source": "chat",
     }])
     return w
@@ -65,7 +65,7 @@ def test_ledger_guard_refusal_is_409_and_no_plan_is_left(api, fake_supabase, fam
     assert r.json()["detail"]["code"] == "ledger_would_be_overpaid"
     assert not fake_supabase.tables.get("installment_plans")
     tx = fake_supabase.tables["transactions"][0]
-    assert tx["amount"] == 300.0 and "Financed via" not in tx["raw_sms"]
+    assert tx["amount"] == 300.0 and "Financed via" not in tx["notes"]
 
 
 def test_other_adjustment_failure_removes_the_plan_and_is_not_200(api, fake_supabase, family, monkeypatch):

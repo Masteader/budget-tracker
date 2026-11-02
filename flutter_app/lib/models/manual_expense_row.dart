@@ -7,7 +7,7 @@
 /// * `timestamp` is an explicit UTC instant (a bare local ISO string would be
 ///   read by Postgres as UTC and shift Riyadh evenings into the next day and,
 ///   on the 26th, into the next salary cycle);
-/// * the payer is kept in the `raw_sms` audit trail (`PaidBy:` tag) that the
+/// * the payer is kept in the `notes` audit trail (`PaidBy:` tag) that the
 ///   app and the settlement engine already parse, because `transactions` has
 ///   no `paid_by` column. The tail format is shared with the edit sheet
 ///   ([manualAuditNote]) so both write exactly what the server parses.
@@ -51,7 +51,7 @@ Map<String, dynamic> buildManualExpenseRow({
     'timestamp': occurredAt.toUtc().toIso8601String(),
     'cycle_key': SalaryCycleService.cycleKeyForInstant(occurredAt),
     if (recordedAt != null) 'created_at': recordedAt.toUtc().toIso8601String(),
-    'raw_sms': manualAuditNote(
+    'notes': manualAuditNote(
       head: 'Manual: $merchant',
       payer: auditPayer,
       beneficiaryId: beneficiaryId,

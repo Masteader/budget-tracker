@@ -55,13 +55,21 @@ BEGIN
 END $$;
 
 -- 1. Relabel historical 'sms' rows (label only; see header).
-UPDATE public.transactions
-SET source = CASE
-        WHEN raw_sms LIKE 'Chat:%' THEN 'chat'
-        WHEN raw_sms LIKE 'Receipt Scan:%' THEN 'receipt_scan'
-        ELSE 'manual'
-    END
-WHERE source = 'sms';
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'transactions' AND column_name = 'raw_sms'
+    ) THEN
+        UPDATE public.transactions
+        SET source = CASE
+                WHEN raw_sms LIKE 'Chat:%' THEN 'chat'
+                WHEN raw_sms LIKE 'Receipt Scan:%' THEN 'receipt_scan'
+                ELSE 'manual'
+            END
+        WHERE source = 'sms';
+    END IF;
+END $$;
 
 -- 2. No SMS channel for new rows.
 ALTER TABLE public.transactions ALTER COLUMN source SET DEFAULT 'manual';
@@ -74,8 +82,16 @@ COMMENT ON COLUMN public.transactions.source IS
 
 -- 3. Re-document the audit note column (name kept for installed clients) and
 --    the tables whose comments described an SMS pipeline.
-COMMENT ON COLUMN public.transactions.raw_sms IS
-    'Free-text audit note (chat text, receipt summary, manual/installment/settlement tags). Historical column name; the app never reads SMS.';
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'transactions' AND column_name = 'raw_sms'
+    ) THEN
+        COMMENT ON COLUMN public.transactions.raw_sms IS
+            'Free-text audit note (chat text, receipt summary, manual/installment/settlement tags). Historical column name; the app never reads SMS.';
+    END IF;
+END $$;
 COMMENT ON TABLE public.transactions IS
     'Every household expense transaction (chat/voice, receipt or QR scan, manual entry).';
 COMMENT ON TABLE public.cost_control_codes IS

@@ -7,7 +7,7 @@
 /// * `beneficiary_type` / `beneficiary_id` say for whom: 'household'/'household'
 ///   (everyone), 'individual'/<member id> or 'dependent'/<name>;
 /// * a row from the manual sheet (`source` 'manual') carries its payer in the
-///   fixed tail of `raw_sms` ("… | PaidBy: <x> | Beneficiary: <y> | SpentBy: <z>"),
+///   fixed tail of `notes` ("… | PaidBy: <x> | Beneficiary: <y> | SpentBy: <z>"),
 ///   read right-anchored by the server.
 library;
 
@@ -34,7 +34,7 @@ bool isMemberUuid(String value) => _uuidPattern.hasMatch(value.trim());
 /// A tail field: no separator or line break can shift the right-anchored match.
 String _tailField(String value) => value.replaceAll(RegExp(r'[|\r\n]'), ' ').trim();
 
-/// The `raw_sms` note of a manual row: the human-readable [head] followed by
+/// The `notes` audit note of a manual row: the human-readable [head] followed by
 /// the fixed tail the server reads the payer from.
 String manualAuditNote({
   required String head,
@@ -47,8 +47,8 @@ String manualAuditNote({
 /// The human-readable part of an existing note: every segment except the
 /// attribution tags (`PaidBy`, `Beneficiary`, `SpentBy`, `SubCategory`), so a
 /// rebuilt tail is never shadowed by an older one.
-String auditNoteHead(String? rawSms, {required String fallback}) {
-  final parts = (rawSms ?? '')
+String auditNoteHead(String? notes, {required String fallback}) {
+  final parts = (notes ?? '')
       .split('|')
       .map((p) => p.trim())
       .where((p) => p.isNotEmpty)
@@ -130,8 +130,8 @@ Map<String, String> directInsertAttribution({String? paidBy, String? beneficiary
 
 /// Tags of a note written before the structured columns: the server-authored
 /// segment (last occurrence, before the trailing item summary).
-Map<String, String> legacyAuditTags(String? rawSms) {
-  var text = rawSms ?? '';
+Map<String, String> legacyAuditTags(String? notes) {
+  var text = notes ?? '';
   final cut = text.lastIndexOf(' | Items: [');
   if (cut != -1) text = text.substring(0, cut);
   final tags = <String, String>{};
@@ -150,7 +150,7 @@ Map<String, String> legacyAuditTags(String? rawSms) {
 /// member id.
 String storedPayerRef(Map<String, dynamic> row) {
   final source = (row['source'] as String? ?? '').trim().toLowerCase();
-  final raw = row['raw_sms'] as String? ?? '';
+  final raw = (row['notes'] as String?) ?? (row['raw_sms'] as String?) ?? '';
   final spentBy = (row['spent_by'] as String? ?? '').trim().toLowerCase();
   if ((row['beneficiary_id']?.toString() ?? '').trim().isNotEmpty) {
     if (source == 'manual') {
