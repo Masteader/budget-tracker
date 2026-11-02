@@ -97,15 +97,18 @@ class PaydayOutlook {
     final incomeBased = hasIncome || hasOperatingCash;
 
     // Total cycle income / funding capacity:
-    // If monthlyIncome is known (> 0), base is monthlyIncome.
-    // Otherwise, if operating accounts exist, base reflects initial cycle capacity (operating cash + spent).
+    // When operating accounts are tracked (hasOperatingCash is true with operatingCash > 0),
+    // operating cash provides the ground-truth physical liquidity for left.
+    // Base reflects cycle capacity: base = operatingCash! + totalSpent.
+    // Otherwise, if monthlyIncome is known (> 0), base is monthlyIncome.
     // Otherwise, falls back to totalAllocated budgets.
-    final base = hasIncome
-        ? monthlyIncome!
-        : (hasOperatingCash ? (operatingCash! + totalSpent) : totalAllocated);
+    final base = hasOperatingCash
+        ? (operatingCash! + totalSpent)
+        : (hasIncome ? monthlyIncome! : totalAllocated);
 
     // Left represents what is remaining until payday:
-    // Strictly base - totalSpent so LeftUntilPayday + Spent == Income to the exact halala.
+    // When operating accounts are tracked, left reflects verified physical cash (operatingCash!).
+    // In all cases, strictly base - totalSpent so LeftUntilPayday + Spent == Base to the exact halala.
     final left = base - totalSpent;
 
     final cycleDays = end.difference(start).inDays + 1;

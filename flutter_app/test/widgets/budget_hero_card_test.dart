@@ -107,13 +107,27 @@ void main() {
       [_budget('OPEX-DINING', 3000, 1000)],
       DateTime.utc(2026, 11, 6, 9),
       income: 12000,
-      operatingCash: 8000,
     ));
     await tester.pumpAndSettle();
     expect(find.text('Left until payday'), findsOneWidget);
     // 12,000 income - 1,000 spent = 11,000.00 left
     expect(find.text('11,000.00'), findsOneWidget);
     expect(find.text('of SAR 12,000 income'), findsOneWidget);
+    expect(find.text('On track for payday'), findsOneWidget);
+  });
+
+  testWidgets('physical cash sync: left reflects operatingCash when both income and operatingCash exist', (tester) async {
+    await tester.pumpWidget(_host(
+      [_budget('OPEX-DINING', 3000, 1000)],
+      DateTime.utc(2026, 11, 6, 9),
+      income: 12000,
+      operatingCash: 8000,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Left until payday'), findsOneWidget);
+    // 8,000 operating cash + 1,000 spent = 9,000 capacity; left is 8,000.00
+    expect(find.text('8,000.00'), findsOneWidget);
+    expect(find.text('of SAR 9,000 income'), findsOneWidget);
     expect(find.text('On track for payday'), findsOneWidget);
   });
 

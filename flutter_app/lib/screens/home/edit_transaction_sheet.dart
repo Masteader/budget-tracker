@@ -109,6 +109,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
   late TextEditingController _merchantCtrl;
   late TextEditingController _amountCtrl;
   late String _selectedCategory;
+  late String _initialCategory;
   late String? _selectedSubCategory;
   late String _selectedPaidBy;
   late String _selectedBeneficiary;
@@ -160,6 +161,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     // Keep the stored category (new system codes included); only known
     // aliases are normalised, never remapped to another category.
     _selectedCategory = CategoryCatalog.normalize(initialCat);
+    _initialCategory = _selectedCategory;
     _selectedSubCategory = widget.transaction.subCategory;
     _selectedPaidBy = widget.transaction.paidBy.isNotEmpty ? widget.transaction.paidBy : 'me';
     _selectedBeneficiary = widget.transaction.beneficiary.isNotEmpty ? widget.transaction.beneficiary : 'both';
@@ -198,6 +200,16 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     } else if (widget.transaction.householdId.isNotEmpty) {
       _loadNafaqah();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        final bp = context.read<BudgetProvider>();
+        final hid = widget.transaction.householdId;
+        if (bp.activeCategories.isEmpty && hid.isNotEmpty) {
+          bp.getHouseholdCategories(hid);
+        }
+      } catch (_) {}
+    });
   }
 
   // ── Who paid / for whom (FABLE2-APP-01) ────────────────────────────────────
@@ -555,6 +567,72 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       return const {'nafaqah_class': null, 'nafaqah_spouse_id': null};
     }
     return {'nafaqah_class': cls, 'nafaqah_spouse_id': spouseId};
+  }
+
+
+  List<DropdownMenuItem<String>> _buildCategoryDropdownItems(BuildContext context) {
+    List<CategoryItem> activeCategories = const [];
+    try {
+      final bp = Provider.of<BudgetProvider>(context, listen: true);
+      activeCategories = bp.activeCategories;
+    } catch (_) {}
+
+    final List<String> activeCodes = activeCategories
+        .map((c) => c.code)
+        .where((code) => code.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final List<String> codesToDisplay;
+    final Set<String> unbudgetedCodes = <String>{};
+
+    if (activeCodes.isEmpty) {
+      // Graceful fallback when active categories are not loaded yet
+      codesToDisplay = CategoryCatalog.pickerCodesIncluding(_selectedCategory);
+    } else {
+      final activeSet = activeCodes.toSet();
+      final ordered = <String>[...activeCodes];
+
+      if (_initialCategory.isNotEmpty && !activeSet.contains(_initialCategory)) {
+        if (!ordered.contains(_initialCategory)) {
+          ordered.insert(0, _initialCategory);
+        }
+        unbudgetedCodes.add(_initialCategory);
+      }
+      if (_selectedCategory.isNotEmpty && !activeSet.contains(_selectedCategory)) {
+        if (!ordered.contains(_selectedCategory)) {
+          ordered.insert(0, _selectedCategory);
+        }
+        unbudgetedCodes.add(_selectedCategory);
+      }
+      codesToDisplay = ordered;
+    }
+
+    final unbudgetedTag = context.tr('unbudgeted');
+    final tagLabel = unbudgetedTag == 'unbudgeted' ? '(Unbudgeted)' : '($unbudgetedTag)';
+
+    final seen = <String>{};
+    final items = <DropdownMenuItem<String>>[];
+
+    for (final code in codesToDisplay) {
+      if (!seen.add(code)) continue;
+
+      final baseLabel = context.trCat(code);
+      final isUnbudgeted = unbudgetedCodes.contains(code);
+      final displayLabel = isUnbudgeted ? '$baseLabel $tagLabel' : baseLabel;
+
+      items.add(
+        DropdownMenuItem<String>(
+          value: code,
+          child: Text(
+            displayLabel,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    return items;
   }
 
   Future<void> _loadSubCategories(String catCode) async {
@@ -1440,12 +1518,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                 fillColor: context.inputBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              items: CategoryCatalog.pickerCodesIncluding(_selectedCategory).map((code) {
-                return DropdownMenuItem(
-                  value: code,
-                  child: Text(context.trCat(code)),
-                );
-              }).toList(),
+              items: _buildCategoryDropdownItems(context),
               onChanged: (val) {
                 if (val != null) {
                   setState(() {

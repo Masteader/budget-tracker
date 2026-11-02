@@ -78,6 +78,7 @@ class AccountProvider extends ChangeNotifier {
   double? get configuredMonthlyIncome => _configuredMonthlyIncome;
 
   OperatingCashSnapshot get snapshot => _snapshot;
+  OperatingCashSnapshot get operatingCashSnapshot => _snapshot;
 
   bool get isLoading => _isLoading;
   bool get hasLoaded => _hasLoaded;

@@ -16,6 +16,8 @@ import '../../models/installment_plan.dart';
 import '../../models/recurring_bill.dart';
 import '../../providers/installment_provider.dart';
 import '../../providers/recurring_bills_provider.dart';
+import '../../models/operating_cash.dart';
+import '../../providers/account_provider.dart';
 
 /// Dashboard summary card displaying total liquidity across all accounts
 /// and horizontal account pills. Tapping navigates to AccountsOverviewScreen.
@@ -29,6 +31,7 @@ class AccountsSummaryCard extends StatefulWidget {
   final VoidCallback? onCommitmentsTap;
   final RecurringBillsSummary? billsSummaryOverride;
   final List<InstallmentPlan>? installmentPlansOverride;
+  final OperatingCashSnapshot? snapshotOverride;
 
   const AccountsSummaryCard({
     super.key,
@@ -37,6 +40,7 @@ class AccountsSummaryCard extends StatefulWidget {
     this.onCommitmentsTap,
     this.billsSummaryOverride,
     this.installmentPlansOverride,
+    this.snapshotOverride,
   });
 
   @override
@@ -112,23 +116,53 @@ class _AccountsSummaryCardState extends State<AccountsSummaryCard> {
             accounts.fold<double>(0.0, (acc, item) => acc + item.balance);
 
         final hasDeficit = accounts.any((a) => a.balance < 0);
-        RecurringBillsSummary? billsSummary = widget.billsSummaryOverride;
-        List<InstallmentPlan>? installmentPlans = widget.installmentPlansOverride;
-        if (billsSummary == null) {
+        final hasOverrides = widget.billsSummaryOverride != null || widget.installmentPlansOverride != null;
+        final double totalCommitments;
+
+        if (hasOverrides) {
+          RecurringBillsSummary? billsSummary = widget.billsSummaryOverride;
+          List<InstallmentPlan>? installmentPlans = widget.installmentPlansOverride;
+          if (billsSummary == null) {
+            try {
+              billsSummary = Provider.of<RecurringBillsProvider>(context, listen: true).summary;
+            } catch (_) {}
+          }
+          if (installmentPlans == null) {
+            try {
+              installmentPlans = Provider.of<InstallmentProvider>(context, listen: true).plans;
+            } catch (_) {}
+          }
+          final unpaidBills = (billsSummary?.bills ?? []).where((b) => !b.isPaid).toList();
+          final totalUnpaidBills = unpaidBills.fold<double>(0.0, (acc, b) => acc + b.averageAmount);
+          final activePlans = (installmentPlans ?? []).where((p) => !p.isCompleted).toList();
+          final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
+          totalCommitments = totalUnpaidBills + totalInstallmentsDues;
+        } else if (widget.snapshotOverride != null) {
+          totalCommitments = widget.snapshotOverride!.pendingCommitments;
+        } else {
+          AccountProvider? accountProvider;
           try {
-            billsSummary = Provider.of<RecurringBillsProvider>(context, listen: true).summary;
+            accountProvider = Provider.of<AccountProvider>(context, listen: true);
           } catch (_) {}
+
+          if (accountProvider != null && accountProvider.hasLoaded) {
+            totalCommitments = accountProvider.snapshot.pendingCommitments;
+          } else {
+            RecurringBillsSummary? billsSummary;
+            List<InstallmentPlan>? installmentPlans;
+            try {
+              billsSummary = Provider.of<RecurringBillsProvider>(context, listen: true).summary;
+            } catch (_) {}
+            try {
+              installmentPlans = Provider.of<InstallmentProvider>(context, listen: true).plans;
+            } catch (_) {}
+            final unpaidBills = (billsSummary?.bills ?? []).where((b) => !b.isPaid).toList();
+            final totalUnpaidBills = unpaidBills.fold<double>(0.0, (acc, b) => acc + b.averageAmount);
+            final activePlans = (installmentPlans ?? []).where((p) => !p.isCompleted).toList();
+            final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
+            totalCommitments = totalUnpaidBills + totalInstallmentsDues;
+          }
         }
-        if (installmentPlans == null) {
-          try {
-            installmentPlans = Provider.of<InstallmentProvider>(context, listen: true).plans;
-          } catch (_) {}
-        }
-        final unpaidBills = (billsSummary?.bills ?? []).where((b) => !b.isPaid).toList();
-        final totalUnpaidBills = unpaidBills.fold<double>(0.0, (acc, b) => acc + b.averageAmount);
-        final activePlans = (installmentPlans ?? []).where((p) => !p.isCompleted).toList();
-        final totalInstallmentsDues = activePlans.fold<double>(0.0, (acc, p) => acc + p.installmentAmount);
-        final totalCommitments = totalUnpaidBills + totalInstallmentsDues;
         final actualAvailable = totalLiquidity - totalCommitments;
 
         return ThreeDSurfaceCard(

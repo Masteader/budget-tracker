@@ -7,7 +7,7 @@ void main() {
     final cycleStart = DateTime.utc(2026, 10, 27);
     final cycleEnd = DateTime.utc(2026, 11, 26);
 
-    test('left, afterCommitments, safeDaily with income set', () {
+    test('left, afterCommitments, safeDaily with income set and no operatingCash', () {
       final budgets = [
         const Budget(
           id: 'b1',
@@ -27,7 +27,7 @@ void main() {
       final outlook = PaydayOutlook.compute(
         budgets: budgets,
         monthlyIncome: 10000.0,
-        operatingCash: 6370.26,
+        operatingCash: null,
         pendingCommitments: 4162.0,
         today: today,
         cycleStart: cycleStart,
@@ -41,6 +41,43 @@ void main() {
       expect(outlook.daysLeft, 10);
       // safeDaily = afterCommitments / daysLeft = 2838 / 10 = 283.8
       expect(outlook.safeDaily, 283.8);
+    });
+
+    test('operatingCash takes precedence over monthlyIncome as verified physical cash SSOT', () {
+      final budgets = [
+        const Budget(
+          id: 'b1',
+          householdId: 'h1',
+          categoryCode: 'OPEX-GROCERY',
+          allocatedAmount: 5000,
+          spentAmount: 3000,
+          remainingAmount: 2000,
+          month: '2026-11-01',
+          isActive: true,
+        ),
+      ];
+
+      final today = DateTime.utc(2026, 11, 17);
+
+      final outlook = PaydayOutlook.compute(
+        budgets: budgets,
+        monthlyIncome: 10000.0,
+        operatingCash: 6370.26,
+        pendingCommitments: 4162.0,
+        today: today,
+        cycleStart: cycleStart,
+        cycleEnd: cycleEnd,
+      );
+
+      // Base reflects cycle capacity: operatingCash + totalSpent = 6370.26 + 3000 = 9370.26
+      expect(outlook.base, 9370.26);
+      // Left reflects verified physical cash = 6370.26
+      expect(outlook.left, 6370.26);
+      // Invariant: left + totalSpent == base
+      expect(outlook.left + outlook.totalSpent, outlook.base);
+      // afterCommitments = 6370.26 - 4162.0 = 2208.26
+      expect(outlook.afterCommitments, closeTo(2208.26, 0.001));
+      expect(outlook.safeDaily, closeTo(2208.26 / 10, 0.001));
     });
 
     test('left with income null reflects liquid balance gross of commitments', () {

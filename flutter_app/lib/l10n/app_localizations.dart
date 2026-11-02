@@ -415,6 +415,7 @@ class AppLocalizations {
   static const _localizedValues = <String, Map<String, String>>{
     'en': {
       'app_title_badge': 'Smart',
+      'unbudgeted': 'Unbudgeted',
       'dial_days_short': '{days}d',
       'bm_spent_vs_cash': 'Spent {spent} • Cash {cash}',
       'bm_toggle_failed': 'Failed to update category',
@@ -2126,6 +2127,7 @@ class AppLocalizations {
     },
     'ar': {
       'app_title_badge': 'ذكي',
+      'unbudgeted': 'غير مدرج في الميزانية',
       'dial_days_short': '{days} ي',
       'bm_spent_vs_cash': 'المصروف {spent} • النقد {cash}',
       'bm_toggle_failed': 'فشل تحديث الفئة',
@@ -3837,6 +3839,7 @@ class AppLocalizations {
     },
 'ur': {
       'app_title_badge': 'سمارٹ',
+      'unbudgeted': 'بجٹ میں شامل نہیں',
       'dial_days_short': '{days} دن',
       'bm_spent_vs_cash': 'خرچ {spent} • نقد {cash}',
       'bm_toggle_failed': 'زمرہ کو اپ ڈیٹ کرنے میں ناکامی',
