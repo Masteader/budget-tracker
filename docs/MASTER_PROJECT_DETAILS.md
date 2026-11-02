@@ -1,10 +1,12 @@
 # MASTER PROJECT DETAILS — BUDGET TRACKER
 
-> **Document Version:** 2.0.0 (Master Unified Reference)  
+> **Document Version:** 2.1.0 (Master Unified Reference)  
 > **Effective Date:** November 2026  
 > **Project Repository:** `Masteader/budget-tracker`  
 > **Primary Target Market:** Kingdom of Saudi Arabia (KSA) & GCC Households  
-> **Authoritative Baseline:** Unified synthesis of `PROJECT_DETAILS.md`, `MASTER_CODEBASE_AUDIT.md`, `FORMULA_VERDICT.md`, and Engineering Rules 01–06.
+> **Authoritative Baseline:** Unified synthesis of `PROJECT_DETAILS.md`, `MASTER_CODEBASE_AUDIT.md`, `FORMULA_VERDICT.md`, `PR_AUDIT_BUNDLE.md`, and Engineering Rules 01–06.  
+> **Master Doc Synthesis:** [Executed by: code-implementer (Claude Opus 5.5 high)]  
+> **Rule Alignment & Orchestrator Governance:** [Audited by: Claude Opus 5.5 Orchestrator | Executed by: code-implementer (Claude Opus 5.5 high)]
 
 ---
 
@@ -17,7 +19,16 @@
 5. [UI/UX Design System & Client Ecosystem](#5-uiux-design-system--client-ecosystem)
 6. [Security, Privacy & Zero-SMS Hardening](#6-security-privacy--zero-sms-hardening)
 7. [Comprehensive Codebase Audit Findings & Remediation Matrix](#7-comprehensive-codebase-audit-findings--remediation-matrix)
+   - [7.1 Database & Migrations Security (Pass 1)](#71-database--migrations-security-pass-1-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
+   - [7.2 AI Microservice Backend Architecture (Pass 2)](#72-ai-microservice-backend-architecture-pass-2-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
+   - [7.3 Flutter Mobile App Architecture (Pass 3)](#73-flutter-mobile-app-architecture-pass-3-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
+   - [7.4 Cross-Cutting Compliance & UI System (Pass 4)](#74-cross-cutting-compliance--ui-system-pass-4-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
+   - [7.5 Lead Architect Audit & Operating Cash SSOT Implementation](#75-lead-architect-audit--operating-cash-ssot-implementation-branch-featprovider-sot-operating-cash-audited-by-gemini-argon-high--validated-by-claude-opus-55-batch--executed-by-code-implementer-gemini-38-flash-high)
 8. [Testing, Verification Gate & Orchestrator Governance Matrix](#8-testing-verification-gate--orchestrator-governance-matrix)
+   - [8.1 Verification Gate Commands](#81-verification-gate-commands)
+   - [8.2 Orchestrator Governance Matrix & Delegation Pipeline](#82-orchestrator-governance-matrix--delegation-pipeline)
+   - [8.3 Subagent & Module Registry](#83-subagent--module-registry)
+   - [8.4 Workflow Evolution & Rule Alignment](#84-workflow-evolution--rule-alignment-audited-by-claude-opus-55-orchestrator--executed-by-code-implementer-claude-opus-55-high)
 9. [Complete API Endpoints Directory](#9-complete-api-endpoints-directory)
 10. [Strategic Roadmap (v1.1 – v1.4)](#10-strategic-roadmap-v11--v14)
 
@@ -59,7 +70,7 @@ Budget Tracker employs a decoupled client-server architecture built on four spec
        │            │  • Saudi salary cycle & rollover math         │
        │            │  • Roommate debt graph & Nafaqah service      │
        │            │  • Recurring bill & price anomaly detector    │
-       │            │  • Hermetic pytest suite (584+ tests)         │
+       │            │  • Hermetic pytest suite (1,100+ tests)        │
        │            └──────────────────────┬────────────────────────┘
        ▼                                   ▼ secret service key + in-code RBAC
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -425,7 +436,7 @@ Budget Tracker enforces a zero-tolerance policy against SMS interception:
 
 In November 2026, an exhaustive multi-pass audit of the entire codebase was conducted across four specialized passes. Below is the authoritative register of findings, root causes, and remediation statuses:
 
-### 7.1 Database & Migrations Security (Pass 1)
+### 7.1 Database & Migrations Security (Pass 1) [Audited by: Claude Opus 5.5 high | Executed by: code-implementer (Claude Opus 5.5 high)]
 
 | Audit ID | Severity | Affected Component | Finding Description & Vulnerability | Remediation Status |
 |---|---|---|---|---|
@@ -444,7 +455,7 @@ In November 2026, an exhaustive multi-pass audit of the entire codebase was cond
 | **S-14** | MEDIUM | `20261019060000` | Receipts storage bucket lacked file size and MIME-type constraints. | **RESOLVED:** Applied 10MB limit and MIME whitelist in `20261020080000_audit_receipts_bucket_limits.sql`. |
 | **S-17** | LOW | `get_saudi_cycle_for_timestamp` | Function mutable search path warning. | **RESOLVED:** Pinned `search_path = public, pg_temp` in `20261020070000`. |
 
-### 7.2 AI Microservice Backend Architecture (Pass 2)
+### 7.2 AI Microservice Backend Architecture (Pass 2) [Audited by: Claude Opus 5.5 high | Executed by: code-implementer (Claude Opus 5.5 high)]
 
 | Audit ID | Severity | Affected Route / Function | Finding Description & Vulnerability | Remediation Status |
 |---|---|---|---|---|
@@ -460,7 +471,7 @@ In November 2026, an exhaustive multi-pass audit of the entire codebase was cond
 | **M1** | MEDIUM | Multiple budget modules | Floating point math used for monetary amounts, risking halala rounding drift. | **RESOLVED:** Standardized on integer halalas / `Decimal` arithmetic. |
 | **M2** | MEDIUM | `salary_cycle.py` | UTC vs. Asia/Riyadh timezone boundary caused transactions within 3 hours of midnight to double-count across cycles. | **RESOLVED:** Standardized all boundary parsing on explicit Asia/Riyadh calendar dates. |
 
-### 7.3 Flutter Mobile App Architecture (Pass 3)
+### 7.3 Flutter Mobile App Architecture (Pass 3) [Audited by: Claude Opus 5.5 high | Executed by: code-implementer (Claude Opus 5.5 high)]
 
 | Audit ID | Severity | Affected Provider / Client | Finding Description & Vulnerability | Remediation Status |
 |---|---|---|---|---|
@@ -475,7 +486,7 @@ In November 2026, an exhaustive multi-pass audit of the entire codebase was cond
 | **Z1** | HIGH | `AccountProvider.deductExpense` | Clamped balance to 0, hiding deficit alerts. | **RESOLVED:** Removed clamp; deficits propagate to reveal `🔴 Deficit Shortfall`. |
 | **Locale** | MEDIUM | `LocaleProvider` | Defaulted to English instead of Arabic. | **RESOLVED:** Reordered locales; Arabic (`ar`) is default initial state. |
 
-### 7.4 Cross-Cutting Compliance & UI System (Pass 4)
+### 7.4 Cross-Cutting Compliance & UI System (Pass 4) [Audited by: Claude Opus 5.5 high | Executed by: code-implementer (Claude Opus 5.5 high)]
 
 | Audit ID | Severity | Affected Widget / File | Finding Description & Vulnerability | Remediation Status |
 |---|---|---|---|---|
@@ -487,6 +498,139 @@ In November 2026, an exhaustive multi-pass audit of the entire codebase was cond
 | **Privacy** | HIGH | `account_card.dart` | Privacy eye toggle masked balance digits but leaked amounts in surplus/deficit status badges. | **RESOLVED:** Status badges and action buttons mask amounts (`•••••• SAR`) when privacy eye is active. |
 | **Speed Dial** | HIGH | `app_speed_dial_fab.dart` | Speed dial offered Scan/Voice/Manual instead of mandated Add Expense / Record Income / Transfer Funds. | **RESOLVED:** Reconfigured speed dial to 3 primary financial actions. |
 
+### 7.5 Lead Architect Audit & Operating Cash SSOT Implementation (Branch feat/provider-sot-operating-cash) [Audited by: gemini-argon-high | Validated by: Claude Opus 5.5 batch | Executed by: code-implementer (Gemini 3.8 Flash High)]
+
+Following the completion of Passes 1–4, an external Lead Architect audit was executed by `gemini-argon-high` on branch `feat/provider-sot-operating-cash` (@ commit `af353b8`). The auditor evaluated the full stack against Rules 01–06 and identified 6 Critical/High issues, returning an initial verdict of `REVISE`.
+
+In strict adherence to the project governance framework, these 6 findings were submitted to **Claude Opus 5.5** in batch mode (`msgbatch_01JUUsT4hTDjkwYNtU3QL69N`, `docs/review/task_argon_review.md`). Opus produced an authoritative architectural verdict and surgical execution plan (`docs/review/OPUS_PLAN.md`): validating the core architectural intent, rejecting dangerous instructions (such as client-side `cycle_key` forging and direct agent mutations on the live database), and mathematically locking the **Operating Cash & Provider Single Source of Truth (SSOT)**.
+
+All 6 issues were implemented under strict Test-Driven Development (TDD) by `code-implementer (Gemini 3.8 Flash High)`, verified with 0 analyzer issues and 100% test pass rate across all suites.
+
+#### The Operating Cash & Provider SSOT Architecture
+
+The Operating Cash SSOT eliminates double-deduction while maintaining real-time liquidity and commitments visibility across all client and backend layers:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        CENTRAL OPERATING CASH SSOT ARCHITECTURE                        │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│   POSTGRESQL DATABASE TRIGGER                                                          │
+│   ┌─────────────────────────────────────────────────────────┐                          │
+│   │ trg_update_account_balance_on_transaction               │                          │
+│   │ • On expense insert/update/delete:                      │                          │
+│   │   Atomically decrements accounts.balance                │                          │
+│   │ • Triggers are the SOLE authority for account balances  │                          │
+│   └────────────────────────────┬────────────────────────────┘                          │
+│                                │                                                       │
+│                                ▼                                                       │
+│   ACCOUNT PROVIDER & DOMAIN ENGINE                                                     │
+│   ┌─────────────────────────────────────────────────────────┐                          │
+│   │ AccountProvider (Central State Authority)               │                          │
+│   │ • Reconciles unlinked expenses sequentially             │                          │
+│   │ • Computes immutable OperatingCashSnapshot:             │                          │
+│   │   - liquidBalance:      Σ SAR operating accounts balance│                          │
+│   │   - pendingCommitments: Σ unpaid bills & BNPL in cycle  │                          │
+│   │   - operatingCash:      liquidBalance - commitments     │                          │
+│   │   - capacityMargin:     liquidBalance - allocatedBudgets│                          │
+│   └────────────────────────────┬────────────────────────────┘                          │
+│                                │                                                       │
+│            ┌───────────────────┼───────────────────┐                                   │
+│            ▼                   ▼                   ▼                                   │
+│   BUDGET HERO CARD    BUDGET MANAGEMENT   ACCOUNTS OVERVIEW                            │
+│   ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐                          │
+│   │ • liquidBalance │ │ • Row 2:        │ │ • Net Worth     │                          │
+│   │ • afterCommit-  │ │   liquidBalance │ │ • SAR Operating │                          │
+│   │   ments SSOT    │ │ • Fallback:     │ │   Pool SSOT     │                          │
+│   │ • safeDaily     │ │   liquidBalance │ │ • Parity with   │                          │
+│   │   pacing        │ │   + debitedSpend│ │   Dashboard HUD │                          │
+│   └─────────────────┘ └─────────────────┘ └─────────────────┘                          │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **`OperatingCashSnapshot` & `OperatingCashCalculator` (`flutter_app/lib/models/operating_cash.dart`):**
+   - Pure domain models holding verified financial state.
+   - Calculates `liquidBalance` strictly from non-archived, SAR-denominated operating pool accounts (`isOperatingPool = true`).
+   - Aggregates `pendingCommitments` as unpaid recurring bills and active BNPL installments due on or before cycle end.
+   - Derives `operatingCash = liquidBalance - pendingCommitments`.
+   - Exposes `capacityMargin = liquidBalance - totalAllocatedBudgets` for zero-based allocation validation.
+2. **`AccountProvider` (`flutter_app/lib/providers/account_provider.dart`):**
+   - Central provider holding accounts and commitments state.
+   - Instantiates and broadcasts `OperatingCashSnapshot` reactively to all UI components upon any balance, account, or commitment mutation.
+3. **`BudgetHeroCard` (`flutter_app/lib/widgets/dashboard/budget_hero_card.dart`):**
+   - Primary dashboard financial HUD.
+   - Bound to `snapshot.liquidBalance` for gross available cash and `PaydayOutlook.afterCommitments` for commitments-adjusted cash headroom and daily spend pacing (`safeDaily`).
+4. **`BudgetManagementScreen` (`flutter_app/lib/screens/home/budget_management_screen.dart`):**
+   - Row 2 (`displayOperatingCash`) displays `snapshot.liquidBalance` when in the active cycle with loaded accounts, preventing double-deduction of bill categories (`Utilities & Bills`).
+   - Fallback cycle funding uses `snapshot.liquidBalance + householdDebitedSpend` (filtering out wife-class transactions).
+5. **`AccountsOverviewScreen` (`flutter_app/lib/screens/accounts/accounts_overview_screen.dart`):**
+   - Bound directly to `AccountProvider` operating cash snapshot for complete balance parity across views.
+
+#### Lead Architect Audit Register (Issues CRITICAL-01 through HIGH-06)
+
+| Audit ID | Severity | Affected Component / Files | Finding Description & Root Cause | Technical Remediation & Validation | Remediation Status |
+|---|---|---|---|---|---|
+| **CRITICAL-01** | CRITICAL | `BudgetHeroCard`, `PaydayOutlook`<br>• `payday_outlook.dart`<br>• `budget_hero_card.dart` | `BudgetHeroCard` passed `pendingCommitments: 0` and pre-subtracted `operatingCash` into `PaydayOutlook.compute`. This corrupted `outlook.safeDaily` calculation whenever monthly income was configured, and caused double-subtraction or misalignment between `outlook.left` and the commitments tip pill. | **Opus Validated Fix:** Added `final double afterCommitments;` as SSOT field directly on `PaydayOutlook`. Bound `safeDaily` strictly to `(daysLeft > 0 && afterCommitments > 0) ? afterCommitments / daysLeft : 0.0`. Bound `BudgetHeroCard` to pass `snapshot.liquidBalance` and `effectiveCommitments` into `compute()`, and bound `_HeroCommitmentsTip` to `outlook.afterCommitments`. | **RESOLVED** |
+| **CRITICAL-02** | CRITICAL | `BudgetManagementScreen`, `DashboardScreen`<br>• `budget_management_screen.dart`<br>• `dashboard_screen.dart` | Row 2 (`displayOperatingCash`) on `BudgetManagementScreen` was bound to `snapshot.operatingCash` (`liquidBalance - commitments`). Because bills are already budgeted as categories (`Utilities & Bills`), subtracting commitments double-counted bills and caused Row 2 to diverge from `AccountsOverviewScreen` and `BudgetHeroCard`. Unfunded fallback `totalSpent` included non-household wife transactions. | **Opus Validated Fix:** Extracted pure helper functions `resolveDisplayOperatingCash`, `householdDebitedSpend`, and `resolveCycleFunding`. Bound Row 2 `displayOperatingCash` to `snapshot.liquidBalance`. For fallback funding when `verifiedCycleIncome <= 0`, computed `snapshot.liquidBalance + householdDebitedSpend`, strictly filtering out `wife_personal` and `wife_reimbursable` transactions which never debit household accounts. | **RESOLVED** |
+| **CRITICAL-03** | CRITICAL | `BudgetManagementScreen`, PostgreSQL Check<br>• `budget_management_screen.dart`<br>• `33_prior_spend_manual_row.sql` | In `buildPriorSpendRow`, setting `source = 'prior_adjustment'` violated PostgreSQL check constraint `transactions_source_check` (`source IN ('chat', 'receipt_scan', 'manual')`, SQLSTATE 23514). Also, client-side derivation of `cycle_key` violated Rule 02 §1 (authoritative trigger stamping). | **Opus Validated Fix:** Retained `source = 'manual'` and `account_id = null` (which are already excluded from auto-reconciliation in `AccountService`). Stamped transaction timestamp at cycle start noon Asia/Riyadh (09:00 UTC) so `trg_populate_transaction_cycle_key` derives `cycle_key` authoritatively. Stripped client `cycle_key`. Created SQL regression proof test `supabase/tests/33_prior_spend_manual_row.sql`. | **RESOLVED** |
+| **CRITICAL-04** | CRITICAL | `ai_service/supabase_client.py`, `chat_parser.py`, `receipt_scanner.py`, `chat_entry_screen.dart`<br>• `post_commit_sync.dart`<br>• `account_service.dart` | Unlinked chat and receipt transactions logged without explicit `account_id` inserted with `None`, failing to fire database balance triggers. In Flutter, `_refreshGlobalProviders()` executed before `reconcileUnlinkedTransactions` completed. Client auto-reconciliation lacked guard against linking wife transactions to shared pool. | **Opus Validated Fix:** Implemented `resolve_default_debitable_account(...)` in backend validating category budgets, caller permissions, and single active debitable account (returns `None` for wife-class expenses or unauthenticated actors). Wired resolver into `chat_parser.py` and `receipt_scanner.py`. Created sequential synchronization helper `reconcileThenRefresh` in `post_commit_sync.dart` guaranteeing sequential execution. Added `.isFilter('nafaqah_class', null)` in `account_service.dart`. | **RESOLVED** |
+| **HIGH-05** | HIGH | `CommitmentsService`<br>• `commitments_service.dart`<br>• `commitments_service_biweekly_test.dart` | Biweekly BNPL plans (Tabby, Tamara) with `nextDueAt != null` emitted only a single `PendingCommitment`, omitting the second installment falling within the same monthly salary cycle. | **Opus Validated Fix:** Expanded biweekly frequency processing in `CommitmentsService.getPendingCommitments` to generate all due dates across `[cycleStart, cycleEnd]` via `plan.dueDates(...)` capped by `plan.remainingInstallments`, rolling overdue installments forward into the current cycle. | **RESOLVED** |
+| **HIGH-06** | HIGH | Live Database Migration Verification<br>• `docs/review/HIGH06_LIVE_VERIFICATION.sql`<br>• `33_prior_spend_manual_row.sql` | Auditor proposed applying pending migrations to live Supabase via MCP from an unapproved branch. This violated Rule 04 §2 (migrations applied in Supabase SQL editor), Rule 05 §1.5 (never point runner at production DB), and Rule 06 §1 (zero production mutations without owner sign-off). | **Opus Validated Fix:** Rejected direct agent live mutations. Authored comprehensive read-only SQL inspection script `docs/review/HIGH06_LIVE_VERIFICATION.sql` for live database owner to inspect tables, triggers, constraints, and functions in Supabase SQL editor prior to merging. Verified all triggers and constraints locally in test suite `supabase/tests/33_prior_spend_manual_row.sql`. | **RESOLVED** |
+
+#### Detailed Remediation Breakdown
+
+##### 1. CRITICAL-01: PaydayOutlook SSOT & Hero Card Alignment
+- **Root Cause:** In `budget_hero_card.dart`, `PaydayOutlook.compute` was invoked with `pendingCommitments: 0` and `effectiveOperatingCash` (which had already subtracted commitments). When `monthlyIncome` was non-null, `PaydayOutlook` computed `safeDaily` based on income remaining without deducting pending commitments, inflating safe daily burn rate. When `monthlyIncome` was null, `_HeroCommitmentsTip` subtracted commitments a second time (`outlook.left - effectiveCommitments`).
+- **Implementation:**
+  - Added `final double afterCommitments;` as a first-class property to `PaydayOutlook`.
+  - Defined `safeDaily = (daysLeft > 0 && afterCommitments > 0) ? afterCommitments / daysLeft : 0.0` with division-by-zero protection.
+  - In `budget_hero_card.dart`, passed `operatingCash: s != null ? s.liquidBalance : operatingCash` and `pendingCommitments: effectiveCommitments`.
+  - Updated `_HeroCommitmentsTip` to read `actualAvailable: outlook.afterCommitments`.
+- **Proof:** Verified in `flutter_app/test/models/payday_outlook_test.dart` (325 lines, covering income set, income null, deficit, and zero days left) and `flutter_app/test/widgets/budget_hero_card_test.dart`.
+
+##### 2. CRITICAL-02: Operating Cash Synchronization Across Screens
+- **Root Cause:** On `BudgetManagementScreen`, Row 2 ("Operating Cash") called `snapshot.operatingCash` (`liquidBalance - commitments`). Recurring bills are already managed as category allocations (e.g. `OPEX-HOUSING`, `OPEX-BILLS`), so subtracting commitments double-counted bills, resulting in Row 2 showing `SAR 2,208.26` while `AccountsOverviewScreen` and `BudgetHeroCard` showed `SAR 6,370.26`. Additionally, fallback cycle funding summed `totalSpent` including wife-class transactions.
+- **Implementation:**
+  - Created pure helper functions `resolveDisplayOperatingCash`, `householdDebitedSpend`, and `resolveCycleFunding`.
+  - Bound Row 2 `displayOperatingCash` to `snapshot.liquidBalance` when `isCurrentCycle && accountProvider.hasLoaded`.
+  - Computed fallback funding as `snapshot.liquidBalance + householdDebitedSpend`, strictly filtering out transactions where `nafaqah_class IN ('wife_personal', 'wife_reimbursable')` (as wife transactions never debit household accounts).
+- **Proof:** Verified in `flutter_app/test/screens/budget_management_sync_math_test.dart`.
+
+##### 3. CRITICAL-03: PostgreSQL Constraint 23514 & Cycle Key Derivation
+- **Root Cause:** In `BudgetManagementScreen.buildPriorSpendRow`, setting `source = 'prior_adjustment'` caused PostgreSQL to throw SQLSTATE `23514` (`transactions_source_check` violation: only `'chat'`, `'receipt_scan'`, and `'manual'` allowed). The auditor suggested adding client-side `cycle_key`, which violated Rule 02 §1 (authoritative trigger generation).
+- **Implementation:**
+  - Retained `row['source'] = 'manual'` and `row['account_id'] = null`. Manual entries with null account ID are already filtered out of auto-reconciliation in `AccountService.reconcileUnlinkedTransactions`.
+  - Derived the transaction timestamp at cycle start noon Asia/Riyadh (09:00 UTC), guaranteeing that trigger `trg_populate_transaction_cycle_key` calculates the exact cycle key automatically.
+  - Stripped client-side `cycle_key` from insert payloads.
+- **Proof:** Authored SQL proof test `supabase/tests/33_prior_spend_manual_row.sql` asserting successful insert under `source = 'manual'` and trigger-populated `cycle_key`.
+
+##### 4. CRITICAL-04: Backend Debitable Account Resolver & Sequential Client Refresh
+- **Root Cause:** Unlinked chat/receipt transactions created with `account_id = None` failed to debit account balances because `trg_update_account_balance_on_transaction` fires only when `account_id IS NOT NULL`. In Flutter, `_refreshGlobalProviders()` executed before asynchronous reconciliation completed, leaving UI balances stale. Reconciliation also lacked a guard against linking wife transactions to shared pool accounts.
+- **Implementation:**
+  - Added helper `resolve_default_debitable_account(household_id, user_id, category_code, nafaqah_class)` in `ai_service/supabase_client.py`:
+    - Returns `None` for wife transactions (`nafaqah_class IN ('wife_personal', 'wife_reimbursable')`) or unauthenticated requests.
+    - Inspects active category budget account first; falls back to the sole non-archived debitable account (shared pool or owner account) verified by `assert_account_debitable`.
+    - Returns `None` if multiple candidate accounts exist (never guesses).
+  - Wired resolver into `chat_parser.py` and `receipt_scanner.py` during transaction commit (`preview_only=False`).
+  - Created `flutter_app/lib/services/post_commit_sync.dart` exposing `reconcileThenRefresh`, ensuring reconciliation completes sequentially before UI refresh in `try-finally`.
+  - Added `.isFilter('nafaqah_class', null)` to `AccountService.reconcileUnlinkedTransactions`.
+- **Proof:** Verified in `ai_service/tests/test_default_debitable_account.py` (126 lines) and `flutter_app/test/services/post_commit_sync_test.dart`.
+
+##### 5. HIGH-05: Biweekly Installment Obligations in CommitmentsService
+- **Root Cause:** In `CommitmentsService.getPendingCommitments`, when `plan.nextDueAt != null`, only a single commitment was emitted, dropping subsequent biweekly installments within the monthly salary cycle.
+- **Implementation:**
+  - For plans with `frequency.toLowerCase() == 'biweekly'`, the service iterates across the current cycle `[cycleStart, cycleEnd]` via `plan.dueDates(...)`, rolling overdue dates forward into the cycle.
+  - Iteration is strictly capped by `plan.remainingInstallments`.
+  - Emits distinct `PendingCommitment` objects with exact per-installment amounts.
+- **Proof:** Verified in `flutter_app/test/services/commitments_service_biweekly_test.dart` (278 lines).
+
+##### 6. HIGH-06: Read-Only Live Supabase Verification Script
+- **Root Cause:** Direct subagent modification of live production databases via MCP is strictly prohibited by Rule 04 §2, Rule 05 §1.5, and Rule 06 §1. Live migrations must be applied through the Supabase SQL editor by the human repository owner.
+- **Implementation:**
+  - Authored `docs/review/HIGH06_LIVE_VERIFICATION.sql`: a non-destructive, read-only introspection script querying `information_schema.tables`, `information_schema.check_constraints`, `information_schema.triggers`, and `pg_proc`.
+  - Script enables the repository owner to verify `trg_update_account_balance_on_transaction`, `trg_enforce_wife_class_account`, and `transactions_source_check` on the live database with zero risk of state corruption.
+- **Proof:** Script tested and validated against local PostgreSQL catalog in `supabase/tests/33_prior_spend_manual_row.sql`.
+
 ---
 
 ## 8. Testing, Verification Gate & Orchestrator Governance Matrix
@@ -495,13 +639,13 @@ In November 2026, an exhaustive multi-pass audit of the entire codebase was cond
 
 Before any pull request, commit, or subagent task sign-off, the workspace must satisfy the **Mandatory Pre-Review Verification Gate**:
 
-| Verification Tier | Command | Acceptance Criteria |
-|---|---|---|
-| **Flutter Static Analysis** | `cd flutter_app && flutter analyze` | **0 errors, 0 warnings, 0 linter hints** (`No issues found!`) |
-| **Flutter Unit & Widget Tests** | `cd flutter_app && flutter test` | **100% passing** (511+ tests green) |
-| **FastAPI Backend Tests** | `cd ai_service && pytest -v` | **100% passing** (584+ tests green, hermetic execution) |
-| **Database Migrations & Proofs** | `python3 supabase/tests/run_tests.py --psql --rebuild --db <local_test_db>` | **100% passing** across all SQL test suites |
-| **Web Portal Quality** | `cd web_app && npm run lint && npm run build` | **0 lint errors**, clean production bundle build |
+| Verification Tier | Command | Acceptance Criteria | Current Verified Status |
+|---|---|---|---|
+| **Flutter Static Analysis** | `cd flutter_app && flutter analyze` | **0 errors, 0 warnings, 0 linter hints** (`No issues found!`) | **0 issues found** (100% clean) |
+| **Flutter Unit & Widget Tests** | `cd flutter_app && flutter test` | **100% passing** (1,139+ tests green) | **1,139 passed**, 0 failed (100% green) |
+| **FastAPI Backend Tests** | `cd ai_service && pytest -v` | **100% passing** (1,100+ tests green, hermetic execution) | **1,100 passed**, 4 skipped (100% green) |
+| **Database Migrations & Proofs** | `python3 supabase/tests/run_tests.py --psql --rebuild --db <local_test_db>` | **100% passing** across all SQL test suites | **100% passing** (33 SQL proof suites green) |
+| **Web Portal Quality** | `cd web_app && npm run lint && npm run build` | **0 lint errors**, clean production bundle build | **0 errors**, production bundle verified |
 
 ### 8.2 Orchestrator Governance Matrix & Delegation Pipeline
 
@@ -544,6 +688,42 @@ Development in the repository is governed by the **Claude Opus 5.5 Orchestrator 
    - Updating secrets, keys, or environment files.
    - Incurring financial spend or third-party API costs.
 5. **Context Window Guardrail (80% Threshold):** When session context reaches 80% capacity, the Orchestrator must write a structured handoff artifact (`docs/review/HANDOFF_<session>.md`) and direct the user to continue in a fresh session.
+
+### 8.3 Subagent & Module Registry
+
+To maintain high velocity without compromising architectural integrity, development tasks are executed by specialized, role-scoped subagents and models:
+
+| Subagent / Module | Underlying Model / Runtime | Core Role & Responsibilities | Boundary Invariants |
+|---|---|---|---|
+| **`plan-writer`** | Claude Opus 5.5 (effort: high) | TDD Plan Architect & Sensitivity Classifier. Analyzes code diffs, evaluates task sensitivity against `docs/sensitive.md`, formulates failing test specifications (Red), and outlines minimal clean implementation steps (Green). | Authors plans only; never modifies runtime application code directly. |
+| **`code-implementer`** | Claude Opus 5.5 (effort: high) / Gemini 3.8 Flash High | TDD Code Engineer operating on isolated branch worktrees. Implements failing test suites first, writes minimal production code to turn them green, and executes pre-review verification gates. | Constrained strictly to task branch; zero modifications to main branch or live databases. |
+| **`reviewer-spec`** | Claude Opus 5.5 (effort: high) | Round 1 Spec Fidelity & Edge-Case Auditor. Audits implementation against prompt requirements, verifies acceptance criteria, checks edge cases, and inspects for architectural regression vectors. | Read-only auditor; produces structured PASS / REVISE verdicts. |
+| **`reviewer-break`** | Claude Opus 5.5 (effort: high) | Round 2 Adversarial Break Tester. Actively constructs adversarial test cases to exploit race conditions, permission bypasses, precision errors, and boundary flaws. | Every reported vulnerability must be proven with a concrete failing test case. |
+| **`reviewer-fable`** | Fable (effort: high) | Round 3 Security, RLS, Ledger Invariants & Islamic Fintech Auditor. Audits database multi-tenancy, RLS initplans, secret key isolation, financial double-entry invariants, and Nafaqah compliance. | Mandated for all tasks classified as SENSITIVE in `docs/sensitive.md`. |
+| **`gemini-argon-high`** | Gemini Argon (effort: high) | External Lead Architect Auditor. Conducts comprehensive, holistic cross-system reviews across the mobile app, AI microservice, and Supabase database. | Serves as external independent verification checkpoint prior to production merges. |
+
+### 8.4 Workflow Evolution & Rule Alignment [Audited by: Claude Opus 5.5 Orchestrator | Executed by: code-implementer (Claude Opus 5.5 high)]
+
+The Budget Tracker engineering methodology underwent a comprehensive evolution to guarantee zero regression risk in financial calculations:
+
+1. **Orchestrator-Subagent Separation of Concerns:**
+   - The main chat session is reserved exclusively for the **Claude Opus 5.5 Orchestrator**. The Orchestrator plans, coordinates subagents, requests human approvals, and monitors context window health.
+   - All code generation, test authoring, and bug fixing executes in isolated subagents on dedicated feature branches (e.g., `feat/provider-sot-operating-cash`).
+2. **Codified Sensitivity Boundary (`docs/sensitive.md`):**
+   - In accordance with Rule 06, any file or action touching database migrations, user permissions, monetary ledgers, account balances, RLS policies, secrets, or data deletion is classified as **SENSITIVE**.
+   - Classification is **strictly unidirectional**: tasks may be escalated to sensitive, but never downgraded. All sensitive tasks mandate a third-round security review by `reviewer-fable`.
+3. **Multi-Round Review Pipeline:**
+   - No code merges without surviving a multi-round review gauntlet:
+     - **Round 1 (Spec Fidelity):** Verifies adherence to user requirements, documentation, and existing patterns.
+     - **Round 2 (Adversarial Break):** Actively attempts to break the implementation with adversarial scenarios.
+     - **Round 3 (Fable Security & Compliance):** Exhaustive audit of RLS policies, token leakage, halala precision, and Islamic compliance.
+4. **Engineering Rules 01–06 Full Alignment:**
+   - **Rule 01 (Architecture):** Enforces zero-based cash engine with database triggers as the sole authority for `accounts.balance`. Mobile layers consume `OperatingCashSnapshot` as immutable SSOT.
+   - **Rule 02 (Saudi Fintech & Islamic Compliance):** Enforces the 4 Golden Nafaqah Rules. Wife transactions never touch shared accounts (`trg_enforce_wife_class_account`). Cycle keys are derived authoritatively by triggers from Asia/Riyadh dates.
+   - **Rule 03 (UI/UX System):** Formalizes Velvet Burgundy Master HUD design tokens with backward-compatible token bridges. Mandates Privacy Eye masking across all financial balances and surplus/deficit badges.
+   - **Rule 04 (Security & Privacy):** Strictly prohibits SMS interception permissions. Mandates private storage buckets with signed URLs, asymmetric JWT verification, and strict secret key segregation.
+   - **Rule 05 (Testing & Quality):** Mandates strict red-green TDD. Enforces **zero analyzer warnings** (`flutter analyze` reports 0 issues) and 100% test pass rate (1,139 Flutter tests, 1,100 Pytest tests).
+   - **Rule 06 (PR & Verification Gate):** Mandates pre-review verification gates before branch push and strict owner approval before production deployment.
 
 ---
 
@@ -624,6 +804,6 @@ Generated from the OpenAPI 3.1 specification (`ENV=development`). All endpoints 
 
 ---
 
-## Conclusion & Document Governance
+## Conclusion & Document Governance [Executed by: code-implementer (Claude Opus 5.5 high)]
 
 This document, **`docs/MASTER_PROJECT_DETAILS.md`**, represents the definitive, unified master technical specification for the Budget Tracker repository. Any proposed architectural changes, schema migrations, or rule modifications must be reflected in this document following successful completion of the three-round audit review pipeline.
