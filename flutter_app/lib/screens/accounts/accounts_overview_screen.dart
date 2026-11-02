@@ -602,13 +602,31 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              '+${_hideBalances ? "••••" : context.sar(rec.netAmount)}',
-              style: GoogleFonts.outfit(
-                color: context.successText,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '+${_hideBalances ? "••••" : context.sar(rec.netAmount)}',
+                  style: GoogleFonts.outfit(
+                    color: context.successText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: context.dangerColor.withValues(alpha: 0.7),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: context.tr('void_income_title'),
+                  onPressed: () => _confirmVoidIncome(rec, accountName),
+                ),
+              ],
             ),
           ],
         ),
@@ -650,5 +668,76 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmVoidIncome(IncomeRecord rec, String accountName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: ctx.dangerColor, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                ctx.tr('void_income_title'),
+                style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: ctx.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          ctx.trArgs('void_income_confirmation', {
+            'title': rec.title,
+            'amount': ctx.sar(rec.netAmount),
+            'account': accountName.isNotEmpty ? accountName : ctx.tr('account_name'),
+          }),
+          style: TextStyle(fontSize: 13.5, color: ctx.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(ctx.tr('cancel'), style: TextStyle(color: ctx.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ctx.dangerColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(ctx.tr('void_income_action')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      final successMsg = context.tr('income_voided_success');
+      final errorMsg = context.tr('void_income_error');
+      final successBg = context.successText;
+      final dangerBg = context.dangerColor;
+      try {
+        await context.read<AccountProvider>().voidIncomeRecord(rec.id, widget.householdId);
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(successMsg),
+            backgroundColor: successBg,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: dangerBg,
+          ),
+        );
+      }
+    }
   }
 }

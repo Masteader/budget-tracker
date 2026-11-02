@@ -367,6 +367,15 @@ class AccountProvider extends ChangeNotifier {
     optimisticUpdateBalance(target.id, newBal);
   }
 
+  /// Voids an income record, reverses the credited account balance, and forces a refresh of snapshot and accounts.
+  Future<void> voidIncomeRecord(String incomeId, [String? householdId]) async {
+    if (householdId != null && householdId.isNotEmpty && householdId != _householdId) {
+      bindHousehold(householdId, paydayDay: _paydayDay);
+    }
+    await _accountsService.voidIncomeRecord(incomeId);
+    await refresh(force: true);
+  }
+
   /// Clean teardown on sign-out or household switch.
   void reset() {
     _bindEpoch++;

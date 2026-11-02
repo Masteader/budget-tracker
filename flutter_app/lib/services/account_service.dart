@@ -190,6 +190,19 @@ class AccountService {
     return IncomeRecord.fromMap(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Void an income record and atomically decrement the credited account balance.
+  Future<Map<String, dynamic>> voidIncomeRecord(
+    String incomeId, {
+    @visibleForTesting Future<dynamic> Function(String fn, Map<String, dynamic> params)? rpcHandler,
+  }) async {
+    final res = rpcHandler != null
+        ? await rpcHandler('void_income_record', {'p_income_id': incomeId})
+        : await _client.rpc('void_income_record', params: {
+            'p_income_id': incomeId,
+          });
+    return Map<String, dynamic>.from(res as Map);
+  }
+
   /// Fetch income records for a specific cycle.
   Future<List<IncomeRecord>> getCycleIncome(String householdId, String cycleKey) async {
     final client = _safeClient;

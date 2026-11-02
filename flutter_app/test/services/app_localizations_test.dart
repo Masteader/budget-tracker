@@ -132,5 +132,33 @@ void main() {
         }
       }
     });
+
+    test('void_income keys exist in all three locales and format properly', () {
+      const keys = [
+        'void_income_title',
+        'void_income_confirmation',
+        'void_income_action',
+        'income_voided_success',
+        'void_income_error',
+      ];
+
+      for (final lang in ['en', 'ar', 'ur']) {
+        final loc = AppLocalizations(Locale(lang));
+        for (final key in keys) {
+          final val = loc.get(key);
+          expect(val, isNot(equals(key)), reason: 'Key $key missing in $lang');
+          expect(val.isNotEmpty, isTrue, reason: 'Key $key empty in $lang');
+        }
+
+        final formatted = loc.format('void_income_confirmation', {
+          'title': 'Salary Nov',
+          'amount': '500.00 SAR',
+          'account': 'Al Rajhi',
+        });
+        expect(formatted.contains('Salary Nov'), isTrue);
+        expect(formatted.contains('500.00 SAR'), isTrue);
+        expect(formatted.contains('Al Rajhi'), isTrue);
+      }
+    });
   });
 }
