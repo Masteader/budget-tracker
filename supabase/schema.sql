@@ -36,13 +36,16 @@ COMMENT ON COLUMN public.households.payday_day IS 'Configured monthly salary day
 
 -- =============================================================================
 -- 2. TABLE: users
--- Extends Supabase auth.users with household profile. (Zombie payday_day removed).
+-- Extends Supabase auth.users with household profile.
+-- Historical payday_day is restored here for migration replay chain compatibility
+-- and dropped in migration 20261102000000_cleanup_database_jargon_and_zombie_columns.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.users (
     id             UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     household_id   UUID REFERENCES public.households(id) ON DELETE SET NULL,
     display_name   TEXT NOT NULL,
     role           TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    payday_day     INT DEFAULT 27 CHECK (payday_day >= 1 AND payday_day <= 31),
     financial_role TEXT DEFAULT 'provider',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

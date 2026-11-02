@@ -236,8 +236,17 @@ GRANT UPDATE (name, avatar_icon, relationship, monthly_allowance)
     ON public.household_dependents TO authenticated;
 
 REVOKE INSERT ON public.users FROM PUBLIC, anon, authenticated;
-GRANT INSERT (id, household_id, display_name, role, payday_day, created_at)
-    ON public.users TO authenticated;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'payday_day'
+    ) THEN
+        EXECUTE 'GRANT INSERT (id, household_id, display_name, role, payday_day, created_at) ON public.users TO authenticated';
+    ELSE
+        EXECUTE 'GRANT INSERT (id, household_id, display_name, role, created_at) ON public.users TO authenticated';
+    END IF;
+END $$;
 
 -- 6. FABLE-DB-08: privileges PostgREST never needs ---------------------------------
 DO $$
