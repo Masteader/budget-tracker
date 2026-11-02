@@ -24,6 +24,7 @@
    - [7.3 Flutter Mobile App Architecture (Pass 3)](#73-flutter-mobile-app-architecture-pass-3-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
    - [7.4 Cross-Cutting Compliance & UI System (Pass 4)](#74-cross-cutting-compliance--ui-system-pass-4-audited-by-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high)
    - [7.5 Lead Architect Audit & Operating Cash SSOT Implementation](#75-lead-architect-audit--operating-cash-ssot-implementation-branch-featprovider-sot-operating-cash-audited-by-gemini-argon-high--validated-by-claude-opus-55-batch--executed-by-code-implementer-gemini-38-flash-high)
+   - [7.6 Database Schema Consolidation & Jargon Elimination](#76-database-schema-consolidation--jargon-elimination-branch-featprovider-sot-operating-cash-planned-by-plan-writer-claude-opus-55-high--executed-by-code-implementer-claude-opus-55-high--reviewed-by-reviewer-spec-reviewer-break-reviewer-fable)
 8. [Testing, Verification Gate & Orchestrator Governance Matrix](#8-testing-verification-gate--orchestrator-governance-matrix)
    - [8.1 Verification Gate Commands](#81-verification-gate-commands)
    - [8.2 Orchestrator Governance Matrix & Delegation Pipeline](#82-orchestrator-governance-matrix--delegation-pipeline)
@@ -631,6 +632,26 @@ The Operating Cash SSOT eliminates double-deduction while maintaining real-time 
   - Script enables the repository owner to verify `trg_update_account_balance_on_transaction`, `trg_enforce_wife_class_account`, and `transactions_source_check` on the live database with zero risk of state corruption.
 - **Proof:** Script tested and validated against local PostgreSQL catalog in `supabase/tests/33_prior_spend_manual_row.sql`.
 
+### 7.6 Database Schema Consolidation & Jargon Elimination (Branch `feat/provider-sot-operating-cash`) [Planned by: plan-writer (Claude Opus 5.5 High) | Executed by: code-implementer (Claude Opus 5.5 High) | Reviewed by: reviewer-spec (Opus 5.5 High), reviewer-break (Opus 5.5 High), reviewer-fable (Fable High)]
+
+Following explicit single-user authorization to address architectural root causes directly, the database schema, backend services, and client applications underwent full jargon elimination and baseline consolidation:
+
+1. **Jargon Purge (`transactions.raw_sms` $\to$ `transactions.notes`):**
+   - **Root Cause:** Historical SMS scraper jargon lingered in database column names despite the project's strict Zero-SMS Policy (Rule 04). In reality, this column stores free-text audit trail notes (Chat entries, OCR receipt summaries, manual attribution tags like `PaidBy:`, `Beneficiary:`, `[Financed via ...]`).
+   - **Migration:** `supabase/migrations/20261102000000_cleanup_database_jargon_and_zombie_columns.sql` idempotently renames `raw_sms` to `notes` (type `TEXT`) and updates column documentation.
+   - **Backend & Client:** All write and read paths across FastAPI (`supabase_client.py`, `chat_parser.py`, `receipt_scanner.py`, `settlement_engine.py`, `installment_service.py`, `dedup_engine.py`) and Flutter (`Transaction` model, `manual_expense_row.dart`, `edit_transaction_sheet.dart`, `receipt_scanner_sheet.dart`, `sync_worker.dart`) were refactored to `notes`.
+2. **Zombie Column Elimination (`users.payday_day` Dropped):**
+   - **Root Cause:** Obsolete column created in initial prototype. Payday cycle calculation strictly relies on `households.payday_day` as the Single Source of Truth (Rule 02). Zero production queries referenced `users.payday_day`.
+   - **Action:** Dropped via `ALTER TABLE public.users DROP COLUMN IF EXISTS payday_day;`.
+3. **Consolidation of Authoritative Baseline (`supabase/schema.sql`):**
+   - Replaced obsolete 5-table prototype with complete 15-table modern baseline (`households`, `users`, `cost_control_codes`, `cost_control_sub_categories`, `cost_control_templates`, `household_category_settings`, `budgets`, `transactions`, `accounts`, `account_transfers`, `income_records`, `installment_plans`, `household_dependents`, `household_invites`, `household_memberships`), RLS policies, triggers, and publications.
+4. **Offline Replay Hardening (`SyncWorker`):**
+   - Sanitized queued offline SQLite payloads in `sync_worker.dart` so legacy cached rows with `'raw_sms'` map seamlessly to `'notes'` upon post-migration sync.
+5. **Multi-Round Review Approvals:**
+   - **Round 1 (Spec Fidelity - Opus 5.5 High):** Caught stale `payday_day` assertion in test 21, resolved and APPROVED.
+   - **Round 2 (Adversarial Break Testing - Opus 5.5 High):** Caught replay chain permission grant dependency on baseline schema, resolved and APPROVED.
+   - **Round 3 (Security & Invariants - Fable High):** Validated RLS multi-tenancy, Islamic Nafaqah spousal isolation, and zero-based ledger arithmetic. APPROVED.
+
 ---
 
 ## 8. Testing, Verification Gate & Orchestrator Governance Matrix
@@ -642,9 +663,9 @@ Before any pull request, commit, or subagent task sign-off, the workspace must s
 | Verification Tier | Command | Acceptance Criteria | Current Verified Status |
 |---|---|---|---|
 | **Flutter Static Analysis** | `cd flutter_app && flutter analyze` | **0 errors, 0 warnings, 0 linter hints** (`No issues found!`) | **0 issues found** (100% clean) |
-| **Flutter Unit & Widget Tests** | `cd flutter_app && flutter test` | **100% passing** (1,139+ tests green) | **1,139 passed**, 0 failed (100% green) |
+| **Flutter Unit & Widget Tests** | `cd flutter_app && flutter test` | **100% passing** (1,140+ tests green) | **1,140 passed**, 0 failed (100% green) |
 | **FastAPI Backend Tests** | `cd ai_service && pytest -v` | **100% passing** (1,100+ tests green, hermetic execution) | **1,100 passed**, 4 skipped (100% green) |
-| **Database Migrations & Proofs** | `python3 supabase/tests/run_tests.py --psql --rebuild --db <local_test_db>` | **100% passing** across all SQL test suites | **100% passing** (33 SQL proof suites green) |
+| **Database Migrations & Proofs** | `python3 supabase/tests/run_tests.py --psql --rebuild --db <local_test_db>` | **100% passing** across all SQL test suites | **100% passing** (34 SQL proof suites green) |
 | **Web Portal Quality** | `cd web_app && npm run lint && npm run build` | **0 lint errors**, clean production bundle build | **0 errors**, production bundle verified |
 
 ### 8.2 Orchestrator Governance Matrix & Delegation Pipeline
