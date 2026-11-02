@@ -5,7 +5,7 @@
 ```
                       ┌───────────────────────────────────────┐
                       │            Flutter Mobile App         │
-                      │  (Android / iOS - Sovereign OS Theme) │
+                      │ (Android / iOS - Velvet Burgundy HUD) │
                       └───────┬───────────────────────┬───────┘
           HTTPS + user JWT    │                       │ supabase_flutter: CRUD under RLS,
           (X-Signature opt.)  ▼                       │ RPCs, Realtime (publishable key)
@@ -24,7 +24,7 @@
 
 | Layer | Technology | Primary Role |
 |---|---|---|
-| **Mobile Client** | Flutter 3.22+, Dart 3.x | Cross-platform mobile app (Android & iOS). Sovereign OS & Iced Ocean HUD design. |
+| **Mobile Client** | Flutter 3.22+, Dart 3.x | Cross-platform mobile app (Android & iOS). Velvet Burgundy HUD design language (with legacy Sovereign OS compatibility token layer). |
 | **Web Portal / Landing** | React 19, TypeScript, Vite, TailwindCSS | Daylight Coastal RTL web landing page (the only one), payday countdown example, VIP early-access form. Built into `ai_service/static/`. |
 | **AI Microservice** | Python 3.11, FastAPI, Uvicorn, LiteLLM | Receipt OCR and dialect chat agent (model from `LITELLM_MODEL`, Gemini by default), salary cycles, settlements and Nafaqah, recurring bill detector, price tracker, PDF statements, support/inquiry email. |
 | **Database & Storage** | Supabase (PostgreSQL 15+) | Multi-tenant relational storage, Row Level Security (RLS), Supabase Storage (receipt images), Realtime subscriptions. |
@@ -41,7 +41,7 @@ budget-tracker/
 │   │   ├── providers/   # State management (ChangeNotifier / Provider)
 │   │   ├── screens/     # Screen-level views
 │   │   ├── services/    # Network, Supabase & SQLite API clients
-│   │   ├── theme/       # App themes (Iced Ocean, Sovereign OS, Dark/Light)
+│   │   ├── theme/       # App themes (Velvet Burgundy, Sovereign OS bridge, Dark/Light)
 │   │   └── widgets/     # Modular, reusable UI components
 │   └── test/            # Unit and widget tests
 ├── ai_service/          # Python microservice

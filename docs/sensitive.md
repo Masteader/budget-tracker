@@ -62,3 +62,4 @@ Regardless of file path, an action is **SENSITIVE** if it:
 - **Plan Requirement:** Every implementation plan must state upfront:
   > **Sensitive:** yes or no, because [exact justification].
 - **Audit Mandate:** Sensitive tasks mandate an additional **Round 3 review by Fable (effort high)** following Rounds 1 & 2 by Opus 5.5 high.
+

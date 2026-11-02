@@ -1,16 +1,19 @@
 # UI/UX & Design System Rules
 
-## 1. Sovereign OS & Iced Ocean Mobile Design Language
+## 1. Velvet Burgundy Mobile Design Language (Primary Mobile HUD)
 
-- **Visual Concept:** Deep, premium, oceanic tactical interface reminiscent of modern aerospace glass-cockpits and high-end fintech.
+- **Visual Concept:** Luxurious, tactical, high-contrast Velvet Burgundy interface tailored for elite Middle Eastern fintech experiences.
 - **Core Color Palette:**
-  - Background (Dark): `#0A0F1D` (Deep Abyssal Midnight)
-  - Surface & Card (Dark): `#111827` / `#1E293B` (Glacial Slate Glass)
-  - Background (Light): `#F0FDF4` / `#F8FAFC` (Crisp Iced Arctic White)
-  - Primary Accent: `#00E5BF` (Electric Glacial Turquoise / Mint Cyan)
-  - Secondary Accent: `#38BDF8` (Sky Blue Ice)
-  - Warning / Deficit: `#F43F5E` (Vibrant Coral Rose)
-  - Surplus / Safe: `#10B981` (Emerald Glow)
+  - Background Canvas (Dark): `#110509` (Deep Obsidian Wine)
+  - Card & Surface (Dark): `#1E0B12` (Plum Surface)
+  - Background Canvas (Light): `#F8F3F5` (Crisp Blush-Alabaster)
+  - Card & Surface (Light): `#FFFFFF` (Pure White 3D Ceramic Card)
+  - Primary Brand Ink: `#4A0E1E` (Velvet Burgundy)
+  - Primary Glow Accent: `#E598B0` (Rose Gold Glow)
+  - Safe / Surplus: `#10B981` (Emerald Glow)
+  - Danger / Deficit: `#F43F5E` (Vibrant Coral Rose)
+- **Backward-Compatible Token Bridge:**
+  - `flutter_app/lib/theme/app_themes.dart` acts as a token bridge maintaining legacy Sovereign OS tokens (`icedHeroGradient`, `primaryCyan`, etc.) aliased to their Velvet Burgundy equivalents so existing screens render flawlessly.
 - **Typography:**
   - Modern sans-serif via Google Fonts (`Outfit`, `Cairo`, or `Tajawal` for Arabic text).
 - **Glassmorphism & Elevation:**

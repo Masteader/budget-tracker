@@ -6,7 +6,9 @@
 - **Cycle Identification (`cycle_key`, `YYYY-MM`):**
   - A cycle runs from the payday of one month to the day before the next payday, on the **Asia/Riyadh** calendar date. A payday beyond the month's length is clamped to its last day; payday 1 means the calendar month.
   - With payday > 15 the key names the month the cycle **ends** in (payday 27: 27 Oct → 26 Nov is `2026-11`); with payday ≤ 15 it names the month it starts in.
-  - SQL (`get_saudi_cycle_for_timestamp`), Python (`salary_cycle.get_cycle_for_date`) and Dart compute the same key; triggers fill `transactions.cycle_key` and clients cannot forge it.
+  - SQL (`get_saudi_cycle_for_timestamp`), Python (`salary_cycle.get_cycle_for_date`) and Dart compute the same key; database triggers fill `transactions.cycle_key` and clients cannot forge it.
+- **Client & API Callers Prohibition:**
+  - Clients and API callers MUST NOT forge, compute, or send `cycle_key` or `payday_day` query overrides; the database trigger `trg_populate_transaction_cycle_key` and household configuration are the sole authoritative sources of truth.
 - **Payday Check-In:**
   - When the household payday arrives, prompt the user with the Payday Check-in Sheet to record their salary, overtime, bonus, and deductions.
   - Offer the 1-tap Salary Distribution Assistant to fund secondary wallets and bank accounts.
@@ -37,6 +39,9 @@
   2. **Wife pays for something shared** (household, children/dependents, the husband) from her own money → `transactions.nafaqah_class = 'wife_reimbursable'` with `nafaqah_spouse_id` = the wife. It is a debt the husband owes her. The app shows the outstanding balance and history, and records partial or full repayments in the append-only `spouse_reimbursements` ledger (`record_spouse_reimbursement`); paying back more than is outstanding is rejected.
   3. **Wife buys something personal for herself** → `nafaqah_class = 'wife_personal'`. Not a debt: it is charged to her personal allowance ("مصروفها") for the salary cycle (`cycle_key`, household payday to the day before the next). The husband or a household admin (never the wife herself) sets the amount per cycle (`member_allowances`, `set_member_allowance`); the app shows allocated / spent / remaining, and overspend shows a negative remainder (never blocked).
   4. **Husband pays for shared things** (or buys something for his wife) → an ordinary household expense: no class, no debt.
+  - **Wife Expense Account Isolation (`trg_enforce_wife_class_account`):**
+    - Under migration `20261101000100`, wife-class transactions (`wife_personal`, `wife_reimbursable`) CANNOT debit a shared pool or husband's account.
+    - They must link exclusively to a personal, non-shared, non-archived account owned by the designated wife (`owner_user_id = nafaqah_spouse_id`) or remain unlinked (`account_id IS NULL`).
   - A wife's voluntary contribution (Tabarru') is only ever an explicit opt-in flag (`is_tabarru` on a settlement input); it is never assumed or defaulted.
   - Money is `numeric(14,2)` in SQL, `Decimal`/integer halalas in Python. Ledger writes go only through the `SECURITY DEFINER` RPCs with a pinned `search_path` and actor checks; the API passes the verified JWT subject as `p_actor_user_id` and checks the wife belongs to the URL's household (no IDOR).
   - Roommate mode (peers, no spouse) is unaffected: equal splits and multi-roommate debt simplification as below.
@@ -48,6 +53,11 @@
 ## 4. Multi-Source Income & Zero-Based Account Balances
 
 - Users maintain real accounts across Banks (Al Rajhi, SNB, Riyad Bank), E-Wallets (STC Pay, Urpay, Tiqmo), Crypto (Binance), and Cash.
+- **Operating Cash Single Source of Truth:**
+  $$\text{Operating Cash} = \text{Liquid Balance} - \text{Pending Commitments}$$
+  - `Liquid Balance` is the exact sum of balances across non-archived, SAR-denominated operating pool accounts.
+  - `Pending Commitments` is the sum of unpaid recurring bills and active cycle installment plan obligations.
+  - Category *Spent Amount* is strictly EXCLUDED from the operating cash subtraction because the database trigger `trg_update_account_balance_on_transaction` already decrements `accounts.balance` at write time. Python and Flutter must NEVER manually decrement or clamp balances.
 - **Zero-Based Budget Invariant:**
   - Total committed budgets for an account must never exceed that account's actual liquid balance.
   - Display dynamic status indicators:

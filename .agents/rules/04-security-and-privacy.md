@@ -1,27 +1,25 @@
 # Security & Privacy Rules
 
-## 1. Zero SMS Interception Policy
+## 1. Zero SMS Policy
 
-- **Core Privacy Invariant:** The application is strictly standalone and privacy-first.
-- **Strict Prohibition:**
-  - DO NOT implement background SMS interceptors, SMS listeners, or broadcast receivers.
-  - DO NOT request `READ_SMS` or `RECEIVE_SMS` Android permissions.
-  - All expense tracking happens via ZATCA Phase 2 QR camera scan, Gemini Vision receipt OCR, natural voice dictation, conversational chat, or manual entry.
+- **Manifest-Level Zero-SMS Policy:**
+  - The Flutter application MUST NOT declare, request, or use any SMS-related permissions (`RECEIVE_SMS`, `READ_SMS`, `SEND_SMS`).
+  - Google Play and Apple App Store compliance: the application strictly ingests financial data via user-initiated channels (camera scan, photo upload, voice transcription, or direct form entry).
+  - Legacy `raw_sms` columns in the database are retained exclusively as free-text audit trail notes (e.g. Chat entry text, OCR extraction summaries).
 
-## 2. Supabase API Key Segregation
+## 2. API Key & Secret Management
 
-- **Publishable / Anon Key (`SUPABASE_PUBLISHABLE_KEY`, alias `SUPABASE_ANON_KEY`):**
-  - Safe for client distribution (the Flutter app; `web_app` does not talk to Supabase at all).
-  - All queries are strictly constrained by PostgreSQL Row Level Security (RLS).
-- **Secret / Service Role Key (`SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`):**
-  - An `sb_secret_…` key or a legacy `service_role` JWT, in either variable (`ai_service/supabase_client.py` `describe_supabase_key`: an `sb_secret_` key wins over a legacy JWT; anon/publishable values are never used and are logged as ignored). Requires `supabase>=2.16.0`.
-  - STRICTLY FORBIDDEN from being embedded or compiled into the Flutter mobile app or client-side assets (the app rejects such keys at startup).
-  - Only stored in server-side environment variables and used exclusively by the Python `ai_service`, which bypasses RLS and therefore re-checks the verified JWT user's household membership and admin rights on every route. Migrations are applied in the Supabase SQL editor (database first, then backend, then app), never by the service.
+- **Client-Side Restrictions:**
+  - The Flutter application and web app must ONLY hold the Supabase **Publishable (Anon) Key** (`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY`).
+  - NEVER embed the `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`), `WEBHOOK_SECRET`, or AI model keys in client-side code, configuration files, or committed assets.
+- **Backend Secrets:**
+  - The Python AI microservice accesses Supabase using the service role key and stores secrets in environment variables (`.env`).
+  - Never commit `.env` files to git. Use `.env.example` templates with redacted placeholders.
 
-## 3. Household Multi-Tenancy & Row Level Security (RLS)
+## 3. Database Multi-Tenancy & Row Level Security (RLS)
 
-- **Every** `public` table MUST have Row Level Security enabled (today: `users`, `households`, `household_memberships`, `household_invites`, `invite_attempt_log`, `household_dependents`, `household_category_settings`, `cost_control_codes`, `cost_control_sub_categories`, `transactions`, `budgets`, `accounts`, `account_transfers`, `income_records`, `installment_plans`, `member_allowances`, `spouse_reimbursements`, `api_quota`). `supabase/tests/14_audit_catalog_guardrails.sql` checks the catalog.
-- Policies scope rows to the caller's active household through the helper, wrapped in `SELECT` so it is evaluated once per statement (DB-13):
+- **100% RLS Coverage:** Every table in the `public` schema must have Row Level Security enabled (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`).
+- **InitPlan Optimization:** Policies must wrap helper functions in `(SELECT ...)` to prevent per-row evaluation:
   ```sql
   household_id = (SELECT public.get_auth_user_household_id())
   ```
@@ -32,6 +30,7 @@
   ```
 - `SECURITY DEFINER` functions pin `search_path`; no policy targets `PUBLIC`/`anon`, and `anon` can execute no function in `public` (same guardrail test).
 - Never bypass RLS in client requests.
+- **Client-Side RLS Deletion Verification:** Providers must not treat 0 deleted rows (caused by RLS denial) as success. They must verify row mutation count, roll back optimistic UI mutations on 0-row response, and set `lastWriteDenied` to inform the user.
 
 ## 4. Household Roles & Permissions (owner decision on DB-16 / DB-18)
 
