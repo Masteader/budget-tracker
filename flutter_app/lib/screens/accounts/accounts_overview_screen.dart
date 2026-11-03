@@ -260,12 +260,12 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                             decoration: BoxDecoration(
                               color: deficitCount == 0
                                   ? context.alertSuccessBg
-                                  : Colors.redAccent.withValues(alpha: 0.2),
+                                  : (isDark ? Colors.redAccent.withValues(alpha: 0.2) : Colors.red.shade100),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: deficitCount == 0
                                     ? context.alertSuccessBorder
-                                    : Colors.redAccent.withValues(alpha: 0.4),
+                                    : (isDark ? Colors.redAccent.withValues(alpha: 0.4) : Colors.red.shade300),
                               ),
                             ),
                             child: Row(
@@ -273,17 +273,21 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 Icon(
                                   deficitCount == 0 ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                                   size: 13,
-                                  color: deficitCount == 0 ? context.successText : Colors.redAccent,
+                                  color: deficitCount == 0
+                                      ? context.successText
+                                      : (isDark ? Colors.redAccent : Colors.red.shade800),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   deficitCount == 0
                                       ? context.tr('funded')
                                       : '$deficitCount ${context.tr("deficit_label")}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: deficitCount == 0
+                                        ? context.successText
+                                        : (isDark ? Colors.redAccent : Colors.red.shade800),
                                   ),
                                 ),
                               ],

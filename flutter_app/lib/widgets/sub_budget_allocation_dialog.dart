@@ -849,7 +849,9 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.trCat(widget.categoryCode),
+                          widget.categoryName.trim().isNotEmpty
+                              ? widget.categoryName
+                              : context.trCat(widget.categoryCode),
                           style: GoogleFonts.inter(
                             color: context.textPrimary,
                             fontSize: 18,
@@ -858,7 +860,7 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${context.trCat(widget.categoryCode)} • ${widget.cycleKey != null ? context.cycleLabel(widget.cycleKey!) : context.tr('sba_current')}',
+                          '${widget.categoryName.trim().isNotEmpty ? widget.categoryName : context.trCat(widget.categoryCode)} • ${widget.cycleKey != null ? context.cycleLabel(widget.cycleKey!) : context.tr('sba_current')}',
                           style: GoogleFonts.inter(
                             color: context.textSecondary,
                             fontSize: 12,

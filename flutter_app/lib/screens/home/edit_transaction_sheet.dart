@@ -620,7 +620,31 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
       final trimmedCode = code.trim();
       if (!seen.add(trimmedCode)) continue;
 
-      final baseLabel = context.trCat(trimmedCode);
+      String baseLabel;
+      final matchedCat = activeCategories
+          .where((c) => c.code.trim() == trimmedCode)
+          .firstOrNull;
+      if (matchedCat != null && matchedCat.categoryName.trim().isNotEmpty) {
+        final name = matchedCat.categoryName.trim();
+        if (name.startsWith('CUSTOM-') ||
+            name.startsWith('custom_') ||
+            name.startsWith('custom-')) {
+          baseLabel = _humanizeCategoryCode(name);
+        } else {
+          baseLabel = name;
+        }
+      } else {
+        final localized = context.trCat(trimmedCode);
+        if (localized == trimmedCode ||
+            trimmedCode.startsWith('CUSTOM-') ||
+            trimmedCode.startsWith('custom_') ||
+            trimmedCode.startsWith('custom-')) {
+          baseLabel = _humanizeCategoryCode(localized);
+        } else {
+          baseLabel = localized;
+        }
+      }
+
       final isUnbudgeted = unbudgetedCodes.contains(trimmedCode);
       final displayLabel = isUnbudgeted ? '$baseLabel $tagLabel' : baseLabel;
 
@@ -638,12 +662,108 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
     return items;
   }
 
+  String _humanizeCategoryCode(String code) {
+    var cleaned = code.trim();
+    if (cleaned.startsWith('CUSTOM-') || cleaned.startsWith('custom-')) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith('CUSTOM_') || cleaned.startsWith('custom_')) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith('sub-') || cleaned.startsWith('sub_')) {
+      cleaned = cleaned.substring(4);
+    }
+    cleaned = cleaned.replaceAll(RegExp(r'[-_]+'), ' ').trim();
+    if (cleaned.isEmpty) return code;
+    return cleaned.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + (word.length > 1 ? word.substring(1).toLowerCase() : '');
+    }).join(' ');
+  }
+
   Future<void> _loadSubCategories(String catCode) async {
     try {
-      final subs = await ApiService.instance.getSubCategories(catCode);
+      final subs = await ApiService.instance.getSubCategories(
+        catCode,
+        householdId: widget.transaction.householdId.isNotEmpty
+            ? widget.transaction.householdId
+            : null,
+      );
+      final existingSubCodes = subs
+          .map((s) => (s['sub_code'] as String?)?.trim() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
+      final List<Map<String, dynamic>> synthesized = [...subs];
+
+      // Inspect BudgetProvider activeCategories & breakdown for sub-allocations
       if (mounted) {
+        try {
+          final bp = Provider.of<BudgetProvider>(context, listen: false);
+          for (final cat in bp.activeCategories) {
+            if (cat.code.trim() == catCode.trim()) {
+              for (final subKey in cat.subAllocations.keys) {
+                final sc = subKey.trim();
+                if (!sc.startsWith('_') && sc.isNotEmpty && !existingSubCodes.contains(sc)) {
+                  existingSubCodes.add(sc);
+                  synthesized.add({
+                    'sub_code': sc,
+                    'name_en': _humanizeCategoryCode(sc),
+                    'name_ar': '',
+                    'is_custom': true,
+                  });
+                }
+              }
+            }
+          }
+          for (final cat in bp.categories) {
+            if (cat.categoryCode.trim() == catCode.trim()) {
+              for (final sub in cat.subCategories) {
+                final sc = sub.subCode?.trim();
+                if (sc != null && sc.isNotEmpty && !sc.startsWith('_') && !existingSubCodes.contains(sc)) {
+                  existingSubCodes.add(sc);
+                  synthesized.add({
+                    'sub_code': sc,
+                    'name_en': sub.name.trim().isNotEmpty ? sub.name.trim() : _humanizeCategoryCode(sc),
+                    'name_ar': '',
+                    'is_custom': true,
+                  });
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Also inspect Supabase budgets table directly if householdId is available
+      if (widget.transaction.householdId.isNotEmpty) {
+        try {
+          final bDataList = await supabase
+              .from('budgets')
+              .select('sub_allocations')
+              .eq('household_id', widget.transaction.householdId)
+              .eq('category_code', catCode.trim());
+          for (final row in bDataList) {
+            if (row['sub_allocations'] is Map) {
+              final rawMap = row['sub_allocations'] as Map<String, dynamic>;
+              for (final entry in rawMap.entries) {
+                final key = entry.key.trim();
+                if (!key.startsWith('_') && key.isNotEmpty && !existingSubCodes.contains(key)) {
+                  existingSubCodes.add(key);
+                  synthesized.add({
+                    'sub_code': key,
+                    'name_en': _humanizeCategoryCode(key),
+                    'name_ar': '',
+                    'is_custom': true,
+                  });
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (mounted && _selectedCategory.trim() == catCode.trim()) {
         setState(() {
-          _subCategories = subs;
+          _subCategories = synthesized;
         });
       }
     } catch (_) {}

@@ -459,10 +459,14 @@ class BudgetApiClient {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode) async {
+  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode, {String? householdId}) async {
+    final queryParams = <String, String>{'parent_code': parentCode};
+    if (householdId != null && householdId.isNotEmpty) {
+      queryParams['household_id'] = householdId;
+    }
     final res = await baseClient.get(
       '/budgets/sub-categories',
-      queryParams: {'parent_code': parentCode},
+      queryParams: queryParams,
       timeout: const Duration(seconds: 10),
     );
     if (res['status'] == 'success' && res['sub_categories'] is List) {
