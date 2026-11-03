@@ -7,29 +7,86 @@ to send to Claude as a structured-output format.
 
 from __future__ import annotations
 
+import ipaddress
 import re
-from datetime import date
-from typing import Annotated, Literal
+from datetime import date, timedelta
+from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from core.config import NonEmptyStr
+from core.brand_gate import contains_withdrawn_name, has_invisible_characters
+from core.config import strings_in
 from core.render_props import ClipFolder, ReelLanguage, Template
+from core.safe_text import at_most, bounded_text, display_text
 
 Tier = Literal["global", "regional", "saudi"]
 
-_WEB_URL = re.compile(r"https?://[^\s/]+\S*")
+_MAX_URL_CHARS = 2048
+_WEB_URL = re.compile(r"https?://[^\s/]+(?:/\S*)?")  # the two parts cannot overlap: linear time
+_PRIVATE_HOST_SUFFIXES = (".local", ".internal", ".localhost")
 _CLAIM_ID = re.compile(r"C\d{2}")
 _RULE_ID = re.compile(r"G([1-9]|1\d|2[0-2])")
 
 
 def _is_web_url(value: str) -> str:
-    if not _WEB_URL.fullmatch(value):
-        raise ValueError(f"must be an http or https address, got {value!r}")
+    """A public web address. These come from model output and get shown to the owner, so
+    credentials, private hosts and hidden direction characters are refused."""
+    if len(value) > _MAX_URL_CHARS or not _WEB_URL.fullmatch(value):
+        raise ValueError(f"must be an http or https address, got {value[:80]!r}")
+    if has_invisible_characters(value):
+        raise ValueError("address contains invisible characters")
+    parts = urlsplit(value)
+    host = (parts.hostname or "").casefold()
+    if parts.username or parts.password:
+        raise ValueError("address must not carry credentials")
+    if "." not in host and ":" not in host:
+        raise ValueError(f"address must have a public host name, got {host!r}")
+    if host.endswith(_PRIVATE_HOST_SUFFIXES):
+        raise ValueError(f"address points at a private host: {host!r}")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return value
+    raise ValueError(f"address must use a host name, not an IP address: {host!r}")
+
+
+def _iso_date_only(value: Any) -> Any:
+    """Without this, lax date parsing would read the integer 0 as a date in 1970."""
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    raise ValueError("must be an ISO date")
+
+
+def _not_in_the_future(value: date) -> date:
+    if value > date.today() + timedelta(days=1):  # a day of grace for time zones
+        raise ValueError(f"access date is in the future: {value}")
     return value
 
 
 WebUrl = Annotated[str, AfterValidator(_is_web_url)]
+AccessDate = Annotated[
+    date,
+    BeforeValidator(_iso_date_only),
+    AfterValidator(_not_in_the_future),
+    Field(strict=False),
+]
+
+
+def _refuse_withdrawn_name(model: BaseModel) -> None:
+    for where, text in strings_in(model.model_dump(), ""):
+        if contains_withdrawn_name(text):
+            raise ValueError(f"{where} uses the withdrawn brand name (D1)")
 
 
 class _Strict(BaseModel):
@@ -37,32 +94,32 @@ class _Strict(BaseModel):
 
 
 class ScriptNumber(_Strict):
-    value: NonEmptyStr
+    value: Annotated[str, display_text(64)]
     source_url: WebUrl
 
 
 class ScriptSource(_Strict):
-    publisher: NonEmptyStr
+    publisher: Annotated[str, display_text(200)]
     url: WebUrl
 
 
 class Script(_Strict):
-    topic_id: NonEmptyStr
+    topic_id: Annotated[str, bounded_text(64)]
     tier: Tier
     template: Template
     language: ReelLanguage
-    hook_ar: NonEmptyStr
-    voice_script: NonEmptyStr
-    on_screen_en: list[NonEmptyStr]
-    subtitles_en: NonEmptyStr
+    hook_ar: Annotated[str, display_text(200)]
+    voice_script: Annotated[str, display_text(2000)]
+    on_screen_en: Annotated[list[Annotated[str, display_text(160)]], at_most(20)]
+    subtitles_en: Annotated[str, display_text(2000)]
     feature_clip_folder: ClipFolder | None
-    claim_ids: list[str]
-    numbers: list[ScriptNumber]
-    sources: list[ScriptSource]
-    caption_ar: NonEmptyStr
-    caption_en: NonEmptyStr
-    hashtags: list[NonEmptyStr]
-    speech_seconds_estimate: Annotated[float, Field(gt=0)]
+    claim_ids: Annotated[list[str], at_most(30)]
+    numbers: Annotated[list[ScriptNumber], at_most(50)]
+    sources: Annotated[list[ScriptSource], at_most(20)]
+    caption_ar: Annotated[str, display_text(2200)]  # 2200 is Instagram's caption limit
+    caption_en: Annotated[str, display_text(2200)]
+    hashtags: Annotated[list[Annotated[str, display_text(64)]], at_most(30)]
+    speech_seconds_estimate: Annotated[float, Field(gt=0, le=600, allow_inf_nan=False)]
 
     @field_validator("claim_ids")
     @classmethod
@@ -73,38 +130,45 @@ class Script(_Strict):
             raise ValueError("each claim id can appear only once")
         return value
 
+    @model_validator(mode="after")
+    def _script_is_consistent(self) -> Script:
+        if self.template == "FeatureDemo" and self.feature_clip_folder is None:
+            raise ValueError("FeatureDemo needs a feature_clip_folder, as RenderProps needs a clip")
+        _refuse_withdrawn_name(self)
+        return self
+
 
 class ResearchFact(_Strict):
-    claim: NonEmptyStr
+    claim: Annotated[str, display_text(2000)]
     source_url: WebUrl
-    publisher: NonEmptyStr
-    accessed: Annotated[date, Field(strict=False)]  # an ISO date in model output
-    paraphrase_ar: NonEmptyStr
-    paraphrase_en: NonEmptyStr
+    publisher: Annotated[str, display_text(200)]
+    accessed: AccessDate  # an ISO date in model output
+    paraphrase_ar: Annotated[str, display_text(2000)]
+    paraphrase_en: Annotated[str, display_text(2000)]
 
 
 class ResearchResult(_Strict):
-    facts: Annotated[list[ResearchFact], Field(min_length=1)]
+    facts: Annotated[list[ResearchFact], Field(min_length=1), at_most(50)]
 
 
 class GuardrailFinding(_Strict):
     rule: str
     source: Literal["deterministic", "claude_review"]
-    location: NonEmptyStr
-    message: NonEmptyStr
+    location: Annotated[str, bounded_text(200)]
+    message: Annotated[str, bounded_text(2000)]
 
     @field_validator("rule")
     @classmethod
     def _rule_exists(cls, value: str) -> str:
         if not _RULE_ID.fullmatch(value):
-            raise ValueError(f"no such guardrail: {value!r}")
+            raise ValueError(f"no such guardrail: {value[:20]!r}")
         return value
 
 
 class GuardrailReport(_Strict):
     passed: bool
-    hard_failures: list[GuardrailFinding]
-    soft_flags: list[GuardrailFinding]
+    hard_failures: Annotated[list[GuardrailFinding], at_most(200)]
+    soft_flags: Annotated[list[GuardrailFinding], at_most(200)]
 
     @model_validator(mode="after")
     def _passed_matches_the_findings(self) -> GuardrailReport:
@@ -117,7 +181,7 @@ class ReviewVerdict(_Strict):
     """The separate Claude review: pass or fail with reasons (spec Section 6.5)."""
 
     passed: bool
-    reasons: list[NonEmptyStr]
+    reasons: Annotated[list[Annotated[str, bounded_text(2000)]], at_most(50)]
 
     @model_validator(mode="after")
     def _a_failure_gives_reasons(self) -> ReviewVerdict:

@@ -15,12 +15,17 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from core.paths import RAW_RECORDING_FOLDERS
+from core.safe_text import at_most
 
 MASKED_FOLDER = "smart_basket"
 
 _CLIP_PATH = re.compile(r"([a-z_]+)/[A-Za-z0-9][A-Za-z0-9._-]*")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _FLOAT_TOLERANCE = 1e-9
+MIN_MASK_WIDTH = 0.05
+MIN_MASK_HEIGHT = 0.01
+MIN_MASK_AREA = 0.002
+MAX_MASK_REGIONS = 32
 
 
 class ClipRejected(ValueError):
@@ -56,19 +61,36 @@ class _Strict(BaseModel):
 
 class MaskRegion(_Strict):
     """A rectangle to blur, as fractions of the clip's width and height, so it holds at any
-    recording resolution."""
+    recording resolution.
 
-    x: Annotated[float, Field(ge=0, le=1)]
-    y: Annotated[float, Field(ge=0, le=1)]
-    width: Annotated[float, Field(gt=0, le=1)]
-    height: Annotated[float, Field(gt=0, le=1)]
+    The minimums come from the smallest legible store name on a 1080x1920 recording: a line
+    of about 20 px high and a name of about 200 px wide, which is 1% of the height, about 20%
+    of the width and 0.2% of the frame. The sides may trade off, down to 5% of the width for
+    a short name, but a region under the area limit cannot hide a whole name. So a tiny mask
+    signed off by mistake fails here. Whether a real mask makes the names unreadable remains
+    the owner's check (G19).
+    """
+
+    x: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    y: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    width: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]
+    height: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]
 
     @model_validator(mode="after")
-    def _inside_the_clip(self) -> MaskRegion:
+    def _inside_the_clip_and_big_enough(self) -> MaskRegion:
         limit = 1 + _FLOAT_TOLERANCE
         if self.x + self.width > limit or self.y + self.height > limit:
             raise ValueError("mask region runs outside the clip")
+        if (
+            self.width < MIN_MASK_WIDTH - _FLOAT_TOLERANCE
+            or self.height < MIN_MASK_HEIGHT - _FLOAT_TOLERANCE
+            or self.width * self.height < MIN_MASK_AREA - _FLOAT_TOLERANCE
+        ):
+            raise ValueError("mask region is too small to hide a store name")
         return self
+
+
+MaskRegions = Annotated[list[MaskRegion], at_most(MAX_MASK_REGIONS)]
 
 
 def check_masks(folder: str, mask_regions: list[MaskRegion]) -> None:
@@ -85,7 +107,7 @@ class ClipEntry(_Strict):
     privacy_checked: Annotated[bool, AfterValidator(_is_signed)]  # strict, so 1 is not true
     app_version: Annotated[str, Field(min_length=1)]
     store_names_masked: bool = False
-    mask_regions: list[MaskRegion] = []
+    mask_regions: MaskRegions = []
 
     @property
     def folder(self) -> str:

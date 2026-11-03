@@ -28,7 +28,7 @@
     },
     "MaskRegion": {
       "additionalProperties": false,
-      "description": "A rectangle to blur, as fractions of the clip's width and height, so it holds at any\nrecording resolution.",
+      "description": "A rectangle to blur, as fractions of the clip's width and height, so it holds at any\nrecording resolution.\n\nThe minimums come from the smallest legible store name on a 1080x1920 recording: a line\nof about 20 px high and a name of about 200 px wide, which is 1% of the height, about 20%\nof the width and 0.2% of the frame. The sides may trade off, down to 5% of the width for\na short name, but a region under the area limit cannot hide a whole name. So a tiny mask\nsigned off by mistake fails here. Whether a real mask makes the names unreadable remains\nthe owner's check (G19).",
       "properties": {
         "height": {
           "exclusiveMinimum": 0,
@@ -228,6 +228,7 @@
     },
     "duration_ms": {
       "exclusiveMinimum": 0,
+      "maximum": 180000,
       "title": "Duration Ms",
       "type": "integer"
     },

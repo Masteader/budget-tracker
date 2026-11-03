@@ -3,6 +3,8 @@
 import copy
 import hashlib
 import json
+import time
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -623,6 +625,388 @@ def test_props_are_read_only():
     props = RenderProps.model_validate(valid_props())
     with pytest.raises(ValidationError):
         props.watermark = False
+
+
+# --- Text that could carry account data or hide itself (spec Section 5.2) ---------------
+
+WITHDRAWN_EN = "Wa" + "feer"
+WITHDRAWN_AR = "وف" + "يير"
+TEXT_FIELDS_THAT_MUST_REFUSE = ("hook_text", "subtitles_en")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "حسابي SA0380000000608010167519 الراتب",
+        "IBAN SA03 8000 0000 6080 1016 7519",
+        "iban sa0380000000608010167519",
+        "GB29 NWBK 6016 1331 9268 19",
+        "اتصل عل\u0649 0555123456",
+        "call 055 512 3456",
+        "call +966 55 512 3456",
+        "call 00966555123456",
+        "call 966-55-512-3456",
+        "رقم ٠٥٥٥١٢٣٤٥٦",
+        "card 4111 1111 1111 1111",
+        "write to someone@example.com",
+        "AB12 CD34 EF56 GH78 IJ90 KL12",  # an IBAN with no long run of digits
+    ],
+)
+@pytest.mark.parametrize("field", TEXT_FIELDS_THAT_MUST_REFUSE)
+def test_props_refuse_account_data_in_text(field, text):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), field: text})
+
+
+def test_on_screen_text_and_words_refuse_account_data():
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(
+            {**valid_props(), "on_screen_text": ["SA0380000000608010167519"]}
+        )
+    data = valid_props()
+    data["words"][0]["text"] = "0555123456"
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "راتبك وين يروح كل شهر؟",
+        "Save 1,250 riyals by the 25th",
+        "3 خطوات بسيطة",
+        "2026 budget, 15 tips",
+        "#budgeting and {brand_ar}",
+        "FY26 budget plan here",  # the IBAN shape, with almost no digits
+        "@brand on every.platform",
+    ],
+)
+def test_ordinary_text_with_small_numbers_passes(text):
+    assert RenderProps.model_validate({**valid_props(), "hook_text": text}).hook_text == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "\u202e", "\u200f", "\u200b", "\u2066", "\ufeff", "\u200f\u200e ",
+        "a\u202eb", "a\u2066b", "a\x07b",
+    ],
+)
+@pytest.mark.parametrize("field", ["hook_text", "subtitles_en"])
+def test_props_refuse_bidi_only_and_control_text(field, text):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), field: text})
+
+
+def test_a_direction_mark_inside_real_text_is_allowed():
+    text = "راتبك\u200f Salary"
+    assert RenderProps.model_validate({**valid_props(), "hook_text": text}).hook_text == text
+
+
+def test_on_screen_text_refuses_bidi_only_items():
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), "on_screen_text": ["\u200f"]})
+
+
+@pytest.mark.parametrize(
+    "reel_id",
+    ["NUL", "nul", "CON", "aux", "COM1", "--help", "-", "-x", "x-", "a..b", "a b", "a" * 41],
+)
+def test_reel_ids_that_are_devices_or_flags_are_refused(reel_id):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), "reel_id": reel_id})
+
+
+@pytest.mark.parametrize("path", ["NUL", "aux", "a/CON.wav", "a./b", "a /b", "a/b.", "x" * 300])
+def test_props_paths_refuse_windows_tricks_and_huge_names(path):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), "audio_src": path})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("duration_ms", 10**30),
+        ("duration_ms", 180_001),
+        ("hook_text", "x" * 201),
+        ("hook_text", "x" * 10_000_000),
+        ("subtitles_en", "x" * 2001),
+        ("on_screen_text", ["x"] * 21),
+        ("on_screen_text", ["x" * 161]),
+        ("words", [{"text": "x", "start_ms": 0, "end_ms": 1}] * 2001),
+    ],
+)
+def test_props_have_size_limits(field, value):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), field: value})
+
+
+def test_props_limit_the_number_of_clips_and_masks():
+    data = valid_props()
+    data["clips"] = [data["clips"][0]] * 21
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(data)
+    data = valid_props()
+    data["clips"][1]["mask_regions"] = data["clips"][1]["mask_regions"] * 33
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(data)
+
+
+# --- Test and real reels ---------------------------------------------------------------
+
+
+def real_brand() -> dict:
+    return {
+        "name_ar": "قوام المال",
+        "name_en": "Qawam Money",
+        "hashtag": "#QawamMoney",
+        "logo_src": "logo.svg",
+    }
+
+
+def test_a_test_brand_with_no_watermark_is_refused():
+    with pytest.raises(ValidationError, match="watermark"):
+        RenderProps.model_validate({**valid_props(), "watermark": False})
+
+
+def test_the_real_brand_with_no_watermark_is_accepted():
+    props = RenderProps.model_validate(
+        {**valid_props(), "watermark": False, "brand": real_brand()}
+    )
+    assert props.watermark is False
+
+
+def test_the_real_brand_with_a_watermark_is_refused():
+    # A test reel uses the test brand (spec Section 13), so this is a mix-up.
+    with pytest.raises(ValidationError, match="watermark"):
+        RenderProps.model_validate({**valid_props(), "brand": real_brand()})
+
+
+@pytest.mark.parametrize("change", [{"name_en": "Qawam"}, {"name_ar": "قوام"}])
+def test_a_bare_name_with_no_watermark_is_refused(change):
+    brand = {**real_brand(), **change}
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), "watermark": False, "brand": brand})
+
+
+def test_the_test_logo_with_no_watermark_is_refused():
+    brand = {**real_brand(), "logo_src": "test_logo.svg"}
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate({**valid_props(), "watermark": False, "brand": brand})
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"hook_text": f"With {WITHDRAWN_EN}"},
+        {"hook_text": f"مع {WITHDRAWN_AR}"},
+        {"hook_text": "وف\u0640" + "يير"},
+        {"subtitles_en": WITHDRAWN_EN.upper()},
+        {"on_screen_text": [f"W\u00e1{WITHDRAWN_EN[2:]}"]},
+        {"audio_src": f"audio/{WITHDRAWN_EN.lower()}.wav"},
+    ],
+)
+def test_props_refuse_the_withdrawn_name(change):
+    with pytest.raises(ValidationError, match="withdrawn"):
+        RenderProps.model_validate({**valid_props(), **change})
+
+
+def test_props_refuse_the_withdrawn_name_in_the_brand_and_words():
+    data = valid_props()
+    data["brand"]["name_en"] = WITHDRAWN_EN
+    with pytest.raises(ValidationError, match="withdrawn"):
+        RenderProps.model_validate(data)
+    data = valid_props()
+    data["words"][0]["text"] = WITHDRAWN_AR
+    with pytest.raises(ValidationError, match="withdrawn"):
+        RenderProps.model_validate(data)
+
+
+# --- Timing and masks ------------------------------------------------------------------
+
+
+def test_a_clip_that_runs_past_the_end_is_refused():
+    data = valid_props()
+    data["clips"][1]["end_ms"] = data["duration_ms"] + 1
+    with pytest.raises(ValidationError, match="past the end"):
+        RenderProps.model_validate(data)
+
+
+def test_a_clip_ending_exactly_at_the_end_passes():
+    data = valid_props()
+    data["clips"][1]["end_ms"] = data["duration_ms"]
+    assert RenderProps.model_validate(data).clips[1].end_ms == data["duration_ms"]
+
+
+def test_a_word_that_runs_past_the_end_is_refused():
+    data = valid_props()
+    data["words"][-1]["end_ms"] = data["duration_ms"] + 1
+    with pytest.raises(ValidationError, match="past the end"):
+        RenderProps.model_validate(data)
+
+
+def test_a_clip_src_cannot_sit_deeper_than_its_folder():
+    data = valid_props()
+    data["clips"][0]["src"] = "clips/payday_cycle/sub/clip_01.mp4"
+    with pytest.raises(ValidationError, match="folder"):
+        RenderProps.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "region",
+    [
+        {"x": 0.0, "y": 0.0, "width": 1e-9, "height": 1e-9},
+        {"x": 0.0, "y": 0.0, "width": 0.04, "height": 0.9},  # too narrow to cover a store name
+        {"x": 0.0, "y": 0.0, "width": 1.0, "height": 0.009},  # too short to cover a line
+        {"x": 0.0, "y": 0.0, "width": 0.1, "height": 0.01},  # under the minimum area
+        {"x": float("nan"), "y": 0.0, "width": 0.5, "height": 0.1},
+        {"x": 0.0, "y": float("inf"), "width": 0.5, "height": 0.1},
+    ],
+)
+def test_a_mask_too_small_to_hide_a_store_name_is_refused(region):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(_props_with_mask(region))
+    with pytest.raises(ValidationError):
+        ClipEntry.model_validate(basket_clip() | {"mask_regions": [region]})
+
+
+@pytest.mark.parametrize(
+    "region",
+    [
+        {"x": 0.0, "y": 0.0, "width": 0.2, "height": 0.01},  # exactly the minimum area
+        {"x": 0.5, "y": 0.0, "width": 0.5, "height": 1.0},
+    ],
+)
+def test_a_mask_at_or_above_the_minimum_passes(region):
+    assert RenderProps.model_validate(_props_with_mask(region))
+    assert ClipEntry.model_validate(basket_clip() | {"mask_regions": [region]})
+
+
+def _props_with_mask(region: dict) -> dict:
+    data = valid_props()
+    data["clips"][1]["mask_regions"] = [region]
+    return data
+
+
+def test_manifest_save_is_atomic(recordings, tmp_path, monkeypatch):
+    # A crash while writing must leave the signed manifest as it was.
+    path = tmp_path / "manifest.json"
+    ClipManifest(clips=[]).save(path)
+    before = path.read_text("utf-8")
+
+    def crash(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("core.manifest.os.replace", crash)
+    entry = ClipEntry.model_validate(clip())
+    with pytest.raises(OSError):
+        ClipManifest(clips=[entry]).save(path)
+    assert path.read_text("utf-8") == before
+
+
+# --- Script: the same limits, and agreement with RenderProps ----------------------------
+
+
+def test_feature_demo_needs_a_clip_folder_in_the_script_as_well():
+    with pytest.raises(ValidationError, match="clip"):
+        Script.model_validate({**VALID_SCRIPT, "template": "FeatureDemo"})
+    script = Script.model_validate(
+        {**VALID_SCRIPT, "template": "FeatureDemo", "feature_clip_folder": "payday_cycle"}
+    )
+    assert script.template == "FeatureDemo"
+
+
+@pytest.mark.parametrize("template", ["DailyTip", "MythVsFact"])
+def test_the_other_templates_can_have_no_clip_in_either_contract(template):
+    assert Script.model_validate({**VALID_SCRIPT, "template": template})
+    data = {**valid_props(), "template": template, "clips": []}
+    assert RenderProps.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("hook_ar", "x" * 201),
+        ("hook_ar", "\u200f"),
+        ("hook_ar", "SA0380000000608010167519"),
+        ("voice_script", "x" * 2001),
+        ("voice_script", "اتصل عل\u0649 0555123456"),
+        ("voice_script", "a\u202eb"),
+        ("subtitles_en", "x" * 2001),
+        ("caption_ar", "x" * 2201),
+        ("caption_en", "call +966 55 512 3456"),
+        ("on_screen_en", ["x"] * 21),
+        ("on_screen_en", ["\u200b"]),
+        ("hashtags", ["#x"] * 31),
+        ("sources", [{"publisher": "x", "url": "https://x.example/a"}] * 21),
+        ("numbers", [{"value": "1", "source_url": "https://x.example/a"}] * 51),
+        ("claim_ids", [f"C{n:02d}" for n in range(1, 32)]),
+        ("speech_seconds_estimate", float("inf")),
+        ("speech_seconds_estimate", float("nan")),
+        ("voice_script", f"مع {WITHDRAWN_AR}"),
+        ("caption_en", f"With W\u00e1{WITHDRAWN_EN[2:]}"),
+        ("topic_id", WITHDRAWN_EN),
+    ],
+)
+def test_script_limits_and_refusals(field, value):
+    with pytest.raises(ValidationError):
+        Script.model_validate({**VALID_SCRIPT, field: value})
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://" + "a" * 30_000 + " ",
+        "https://" + "a" * 3000 + ".example/",
+        "http://169.254.169.254/latest/meta-data",
+        "http://localhost:8080/",
+        "http://127.0.0.1/",
+        "http://[::1]/",
+        "https://intranet/page",
+        "https://printer.local/page",
+        "https://wiki.internal/page",
+        "https://app.localhost/page",
+        "https://evil.example\u202egro.lanoitan",
+        "https://user:pw@example.com/",
+    ],
+    ids=lambda url: url[:30],
+)
+def test_source_urls_must_be_public_web_addresses(url):
+    started = time.perf_counter()
+    with pytest.raises(ValidationError):
+        Script.model_validate({**VALID_SCRIPT, "sources": [{"publisher": "x", "url": url}]})
+    assert time.perf_counter() - started < 1.0
+
+
+def test_url_checks_take_linear_time_on_the_review_input():
+    fact = {**VALID_RESEARCH["facts"][0], "source_url": "https://" + "a" * 30_000 + " "}
+    started = time.perf_counter()
+    with pytest.raises(ValidationError):
+        ResearchResult.model_validate({"facts": [fact]})
+    assert time.perf_counter() - started < 1.0
+
+
+@pytest.mark.parametrize("accessed", [0, 20261103, True, "2099-01-01", date(2099, 1, 1)])
+def test_research_access_dates_must_be_real_and_not_in_the_future(accessed):
+    fact = {**VALID_RESEARCH["facts"][0], "accessed": accessed}
+    with pytest.raises(ValidationError):
+        ResearchResult.model_validate({"facts": [fact]})
+
+
+def test_research_refuses_oversized_text_and_lists():
+    fact = VALID_RESEARCH["facts"][0]
+    with pytest.raises(ValidationError):
+        ResearchResult.model_validate({"facts": [{**fact, "claim": "x" * 2001}]})
+    with pytest.raises(ValidationError):
+        ResearchResult.model_validate({"facts": [fact] * 51})
+
+
+def test_report_and_verdict_have_size_limits():
+    finding = {**VALID_REPORT["hard_failures"][0], "message": "x" * 2001}
+    with pytest.raises(ValidationError):
+        GuardrailReport.model_validate({**VALID_REPORT, "hard_failures": [finding]})
+    with pytest.raises(ValidationError):
+        ReviewVerdict.model_validate({"passed": False, "reasons": ["x"] * 51})
 
 
 # --- The exported JSON schema ----------------------------------------------------------
