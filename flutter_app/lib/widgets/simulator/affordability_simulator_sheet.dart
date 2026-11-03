@@ -285,6 +285,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         context.tr('can_i_afford_this'),
@@ -373,6 +374,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
 
                   // Category Selector
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _selectedCategory,
                     dropdownColor: context.cardBg,
                     style: TextStyle(color: context.textPrimary),
@@ -431,12 +433,17 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                             )
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.flash_on_rounded, size: 20, color: context.primaryButtonFg),
                                 const SizedBox(width: 8),
-                                Text(
-                                  context.tr('simulate'),
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                Flexible(
+                                  child: Text(
+                                    context.tr('simulate'),
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
@@ -513,6 +520,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Verdict Header
           Row(
@@ -527,6 +535,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (isOffline)
@@ -573,6 +583,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
               children: [
                 Expanded(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         context.tr('before_purchase'),
@@ -591,6 +602,7 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
                 Icon(Icons.arrow_forward_rounded, color: context.textSecondary, size: 16),
                 Expanded(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         context.tr('after_purchase'),
@@ -649,17 +661,30 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
           ],
 
           // Action CTA: Log Expense
-          ElevatedButton.icon(
+          ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.cardBg,
               foregroundColor: context.successText,
               side: BorderSide(color: context.successText),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            icon: const Icon(Icons.add_task_rounded, size: 18),
-            label: Text(context.tr('record_expense')),
             onPressed: _onProceedToLogExpense,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add_task_rounded, size: 18),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    context.tr('record_expense'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

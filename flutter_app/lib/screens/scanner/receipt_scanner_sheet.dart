@@ -1526,37 +1526,69 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                         _errorMessage!.contains('كاميرا') ||
                         _errorMessage!.contains('کیمرے')) ...[
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppThemes.success,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.settings, size: 16),
-                              label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              onPressed: () => openAppSettings(),
+                      if (MediaQuery.textScalerOf(context).scale(1.0) > 1.3) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppThemes.success,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
+                            icon: const Icon(Icons.settings, size: 16),
+                            label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () => openAppSettings(),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: context.textPrimary,
-                                side: BorderSide(color: context.borderColor),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: Text(context.tr('try_again'), style: const TextStyle(fontSize: 12)),
-                              onPressed: () => _addPhoto(ImageSource.camera),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: context.textPrimary,
+                              side: BorderSide(color: context.borderColor),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: Text(context.tr('try_again'), style: const TextStyle(fontSize: 12)),
+                            onPressed: () => _addPhoto(ImageSource.camera),
                           ),
-                        ],
-                      ),
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppThemes.success,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.settings, size: 16),
+                                label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                onPressed: () => openAppSettings(),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: context.textPrimary,
+                                  side: BorderSide(color: context.borderColor),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: Text(context.tr('try_again'), style: const TextStyle(fontSize: 12)),
+                                onPressed: () => _addPhoto(ImageSource.camera),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ] else ...[
                       const SizedBox(height: 10),
                       OutlinedButton(

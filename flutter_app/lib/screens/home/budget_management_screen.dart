@@ -553,10 +553,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
               children: [
                 Icon(Icons.history_toggle_off_rounded, color: context.electricTeal, size: 22),
                 const SizedBox(width: 8),
-                Flexible(
+                Expanded(
                   child: Text(
                     merchantLabel,
                     style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

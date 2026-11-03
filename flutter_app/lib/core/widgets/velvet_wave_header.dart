@@ -31,10 +31,12 @@ class VelvetWaveHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final topPadding = MediaQuery.paddingOf(context).top;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final effectiveHeight = textScale > 1.1 ? (height * (1.0 + (textScale - 1.0) * 0.45)) : height;
 
     final headerContent = Container(
       width: double.infinity,
-      height: height + topPadding,
+      height: effectiveHeight + topPadding,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -85,6 +87,7 @@ class VelvetWaveHeader extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
