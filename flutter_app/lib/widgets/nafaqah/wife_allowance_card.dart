@@ -63,7 +63,9 @@ class WifeAllowanceCard extends StatelessWidget {
     final key = cycleKey ?? st.cycleKey;
     final cycle = AppLocalizations.of(context).cycleLabel(key, fallback: key);
     final remainingColor = st.isOverspent ? context.dangerColor : context.successText;
-    final barColor = st.isOverspent ? context.dangerColor : AppThemes.iceCyan;
+    final barColor = st.isOverspent
+        ? context.dangerColor
+        : (context.isDark ? context.accentText : VelvetBurgundyColors.primaryLight);
     final title = viewerIsWife ? context.tr('allowance_title_mine') : context.tr('allowance_title');
 
     return Container(
@@ -323,8 +325,8 @@ class _AllowanceEditorSheetState extends State<_AllowanceEditorSheet> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppThemes.iceCyan,
-              foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
+              backgroundColor: context.primaryButtonBg,
+              foregroundColor: context.primaryButtonFg,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),

@@ -1507,7 +1507,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 child: ElevatedButton.icon(
                                   onPressed: _isCopying ? null : () => _copyFromPreviousMonth(staticData.householdId),
                                   icon: _isCopying
-                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                      ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg))
                                       : const Icon(Icons.copy_rounded, size: 16),
                                   label: Text(_isCopying ? context.tr('bm_copying') : context.tr('copy_previous')),
                                   style: ElevatedButton.styleFrom(

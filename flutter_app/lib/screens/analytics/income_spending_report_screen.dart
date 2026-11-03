@@ -145,7 +145,7 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
               ),
               actions: [
                 IconButton(
-                  icon: Icon(Icons.savings_outlined, color: context.electricTeal),
+                  icon: Icon(Icons.savings_outlined, color: context.isDark ? context.electricTeal : Colors.white),
                   tooltip: context.tr('record_income'),
                   onPressed: () async {
                     await RecordIncomeSheet.show(context, householdId: widget.householdId);

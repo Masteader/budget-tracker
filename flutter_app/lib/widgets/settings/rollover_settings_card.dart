@@ -374,10 +374,10 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                 color: isSelected ? iconColor : Colors.transparent,
               ),
               child: isSelected
-                  ? const Icon(
+                  ? Icon(
                       Icons.check,
                       size: 14,
-                      color: Colors.black,
+                      color: context.isDark ? Colors.black : Colors.white,
                     )
                   : null,
             ),

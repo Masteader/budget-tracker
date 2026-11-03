@@ -1612,6 +1612,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }) {
     final isGranted = status.isGranted || status.isLimited;
     final activeColor = context.electricTeal;
+    final notGrantedColor = context.warnText;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1622,12 +1623,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: isGranted ? activeColor.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+              color: isGranted ? activeColor.withValues(alpha: 0.12) : notGrantedColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: isGranted ? activeColor : Colors.orange,
+              color: isGranted ? activeColor : notGrantedColor,
               size: 18,
             ),
           ),
@@ -1648,13 +1649,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isGranted ? activeColor.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                        color: isGranted ? activeColor.withValues(alpha: 0.15) : notGrantedColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(5),
                       ),
                       child: Text(
                         isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
                         style: TextStyle(
-                          color: isGranted ? activeColor : Colors.orange,
+                          color: isGranted ? activeColor : notGrantedColor,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1676,8 +1677,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           if (!isGranted)
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: activeColor,
-                foregroundColor: context.isDark ? Colors.black : Colors.white,
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 minimumSize: const Size(48, 40),

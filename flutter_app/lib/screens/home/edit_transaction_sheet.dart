@@ -1049,7 +1049,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         text = context.tr('nafaqah_banner_husband');
         icon = Icons.shield_outlined;
       }
-      color = NafaqahClassSelector.colorFor(cls);
+      color = NafaqahClassSelector.colorFor(cls, context: context);
     } else if (_selectedPaidBy == 'me' && _selectedBeneficiary == 'both') {
       final half = amount * 0.5;
       text = context.trArgs('settle_shared_partner_owes', {'amount': context.sar(half)});
@@ -1341,7 +1341,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
                       }
                     },
                     child: isProcessing
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg))
                         : Text(context.tr('confirm_installment_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],

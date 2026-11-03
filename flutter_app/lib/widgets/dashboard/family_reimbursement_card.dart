@@ -394,7 +394,7 @@ class _ReimbursementPanel extends StatelessWidget {
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: gold,
-                      foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
+                      foregroundColor: context.isDark ? AppThemes.deepGlacial : const Color(0xFF4A0E1E),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -782,7 +782,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppThemes.champagneGold,
-                  foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
+                  foregroundColor: context.isDark ? AppThemes.deepGlacial : const Color(0xFF4A0E1E),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),

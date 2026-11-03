@@ -471,8 +471,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                   labelStyle: TextStyle(color: context.textSecondary),
                   prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
                   filled: true,
-                  fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  fillColor: context.inputBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.borderColor),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -489,8 +496,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                         labelStyle: TextStyle(color: context.textSecondary),
                         prefixIcon: const Icon(Icons.receipt_long_rounded, size: 20),
                         filled: true,
-                        fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        fillColor: context.inputBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
                       ),
                     ),
                   ),
@@ -504,8 +518,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                         labelText: context.tr('bir_vat'),
                         labelStyle: TextStyle(color: context.textSecondary),
                         filled: true,
-                        fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        fillColor: context.inputBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
                       ),
                     ),
                   ),
@@ -521,8 +542,15 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                   labelStyle: TextStyle(color: context.textSecondary),
                   prefixIcon: const Icon(Icons.category_rounded, size: 20),
                   filled: true,
-                  fillColor: context.isDark ? AppThemes.deepGlacial : Colors.grey.shade100,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  fillColor: context.inputBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.borderColor),
+                  ),
                 ),
                 items: _categories.map((c) {
                   return DropdownMenuItem<String>(
@@ -578,17 +606,17 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                       key: const Key('batch_save_next_button'),
                       onPressed: _saveAndNext,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: context.electricTeal,
-                        foregroundColor: AppThemes.brandDarkBg,
+                        backgroundColor: context.primaryButtonBg,
+                        foregroundColor: context.primaryButtonFg,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         elevation: 2,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isSaving
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                             )
                           : Text(
                               isLast ? context.tr('save_and_finish') : context.tr('save_and_next'),
@@ -757,8 +785,8 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             child: ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.electricTeal,
-                foregroundColor: AppThemes.brandDarkBg,
+                backgroundColor: context.primaryButtonBg,
+                foregroundColor: context.primaryButtonFg,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

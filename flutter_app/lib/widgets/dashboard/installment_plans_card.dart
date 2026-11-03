@@ -905,7 +905,7 @@ class _InstallmentPlansCardState extends State<InstallmentPlansCard> {
                         }
                       },
                 child: isSubmitting
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg))
                     : Text(context.tr('confirm_plan'), style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],

@@ -136,19 +136,17 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppThemes.electricTeal, AppThemes.iceCyan],
-                        ),
+                        gradient: context.icedHeroGradient,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: AppThemes.electricTeal.withValues(alpha: 0.25),
+                            color: context.primaryButtonBg.withValues(alpha: 0.25),
                             blurRadius: 18,
                             offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.lock_reset_rounded, color: AppThemes.brandDarkBg, size: 36),
+                      child: Icon(Icons.lock_reset_rounded, color: context.primaryButtonFg, size: 36),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -195,7 +193,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppThemes.electricTeal),
+                          borderSide: BorderSide(color: context.accentText, width: 1.5),
                         ),
                       ),
                       validator: (v) => v != null && v.length >= 6 ? null : context.tr('auth_min_6_chars'),
@@ -229,7 +227,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppThemes.electricTeal),
+                          borderSide: BorderSide(color: context.accentText, width: 1.5),
                         ),
                       ),
                       validator: (v) {
@@ -246,16 +244,16 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppThemes.electricTeal,
-                          foregroundColor: AppThemes.brandDarkBg,
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                         child: _loading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 22,
                                 height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.brandDarkBg),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                               )
                             : Text(
                                 context.tr('auth_set_new_password'),

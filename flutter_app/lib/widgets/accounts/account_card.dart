@@ -109,7 +109,7 @@ class AccountCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppThemes.electricTeal.withValues(alpha: 0.15),
+                                color: context.accentText.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -299,7 +299,7 @@ class AccountCard extends StatelessWidget {
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
                   label: Text(context.tr('transfer_out'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
-                    foregroundColor: AppThemes.electricTeal,
+                    foregroundColor: context.accentText,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
                 ),

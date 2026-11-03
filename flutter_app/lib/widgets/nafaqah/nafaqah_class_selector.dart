@@ -47,12 +47,13 @@ class NafaqahClassSelector extends StatelessWidget {
     this.showHusbandOption = true,
   });
 
-  static Color colorFor(String? nafaqahClass) {
+  static Color colorFor(String? nafaqahClass, {BuildContext? context, bool? isDark}) {
+    final dark = context != null ? Theme.of(context).brightness == Brightness.dark : (isDark ?? true);
     switch (nafaqahClass) {
       case kWifeReimbursable:
         return AppThemes.champagneGold;
       case kWifePersonal:
-        return AppThemes.iceCyan;
+        return dark ? (context?.accentText ?? AppThemes.iceCyan) : VelvetBurgundyColors.primaryLight;
       default:
         return AppThemes.success;
     }
@@ -110,7 +111,7 @@ class NafaqahClassSelector extends StatelessWidget {
       kWifePersonal => 'nafaqah_wife_personal_hint',
       _ => 'nafaqah_me_hint',
     };
-    final activeColor = colorFor(value);
+    final activeColor = colorFor(value, context: context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -126,7 +127,7 @@ class NafaqahClassSelector extends StatelessWidget {
             key: ValueKey('nafaqah_option_${options[i].$1 ?? 'husband'}'),
             label: optionLabel(context, options[i].$1, role: _role, wifeName: wifeName, husbandName: husbandName),
             icon: options[i].$2,
-            color: colorFor(options[i].$1),
+            color: colorFor(options[i].$1, context: context),
             selected: value == options[i].$1,
             onTap: () => onChanged(options[i].$1),
           ),

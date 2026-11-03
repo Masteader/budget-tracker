@@ -593,8 +593,8 @@ class _BatchReceiptScannerScreenState extends State<BatchReceiptScannerScreen> {
                     key: const Key('process_batch_queue_button'),
                     onPressed: _queuedImages.isNotEmpty ? _processQueue : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: context.electricTeal,
-                      foregroundColor: AppThemes.brandDarkBg,
+                      backgroundColor: context.primaryButtonBg,
+                      foregroundColor: context.primaryButtonFg,
                       disabledBackgroundColor: Colors.white12,
                       disabledForegroundColor: Colors.white30,
                       padding: const EdgeInsets.symmetric(vertical: 14),
