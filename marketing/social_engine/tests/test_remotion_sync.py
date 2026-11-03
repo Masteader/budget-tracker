@@ -1,11 +1,14 @@
 """Copy the studio out of OneDrive before npm runs (spec Section 4, plan Section 2.3, task A6)."""
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+from conftest import make_junction
 
 import core.remotion_sync as sync_module
 from core.remotion_sync import RemotionSyncError, main, pull_lock, sync
@@ -212,6 +215,114 @@ def test_npm_never_runs_inside_the_repo(engine, data_root, npm):
     assert engine not in Path(npm.calls[0][1]["cwd"]).parents
 
 
+def test_a_real_npm_child_sees_no_secret_and_its_output_is_not_repeated(
+    engine, data_root, monkeypatch, tmp_path
+):
+    secrets = {
+        "CLAUDE_CODE_OAUTH_TOKEN": "SECRET-1",
+        "NPM_TOKEN": "SECRET-2",
+        "VITE_" + FORBIDDEN_ENV_PREFIX + "ANON_KEY": "SECRET-3",
+        "GEM" + "INI_API_KEY": "SECRET-4",
+        "WEBHOOK_SECRET": "SECRET-5",
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    seen = tmp_path / "seen.txt"
+    echoed = " ".join(f"%{name}%" for name in secrets)
+    fake = tmp_path / "npm.cmd"
+    fake.write_text(
+        f'@echo off\r\necho RAN {echoed} > "{seen}"\r\n'
+        "echo PATH=%PATH% LEAK-MARKER 1>&2\r\nexit /b 3\r\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sync_module.shutil, "which", lambda name: str(fake))
+    with pytest.raises(RemotionSyncError) as caught:
+        sync(engine, data_root)
+    assert "RAN" in seen.read_text("utf-8"), "the child did not run"
+    assert "SECRET" not in seen.read_text("utf-8"), "the child saw a secret"
+    message = str(caught.value)
+    assert "exit code 3" in message
+    assert "LEAK-MARKER" not in message
+    assert os.environ["PATH"] not in message
+
+
+def test_a_failed_lockfile_update_cannot_pass_for_the_old_install(engine, data_root, npm):
+    # v1 installed, v2 fails halfway, then the repo goes back to v1. node_modules is unknown
+    # by then, so npm ci has to run again.
+    sync(engine, data_root)
+    lockfile = engine / "remotion_studio" / "package-lock.json"
+    lockfile.write_text('{"v": 2}', encoding="utf-8")
+    npm.returncode = 1
+    with pytest.raises(RemotionSyncError):
+        sync(engine, data_root)
+    npm.returncode = 0
+    lockfile.write_text('{"v": 1}', encoding="utf-8")
+    assert sync(engine, data_root).ran_npm_ci is True
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+def test_a_junction_in_the_work_folder_is_removed_without_touching_its_target(
+    engine, data_root, npm, tmp_path
+):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep", encoding="utf-8")
+    work(data_root).mkdir(parents=True)
+    link = work(data_root) / "link"
+    make_junction(link, outside)
+    sync(engine, data_root)
+    assert not link.exists()
+    assert (outside / "keep.txt").read_text("utf-8") == "keep"
+
+
+def test_a_symlink_in_the_work_folder_is_removed_without_touching_its_target(
+    engine, data_root, npm, tmp_path
+):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep", encoding="utf-8")
+    work(data_root).mkdir(parents=True)
+    link = work(data_root) / "link"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("creating symlinks needs developer mode on Windows")
+    sync(engine, data_root)
+    assert not link.is_symlink()
+    assert (outside / "keep.txt").exists()
+
+
+def test_a_link_to_a_folder_is_unlinked_rather_than_emptied(monkeypatch):
+    # Creating a real symlink needs developer mode, so the decision is checked directly too.
+    calls = []
+
+    class Link:
+        def is_junction(self):
+            return False
+
+        def is_symlink(self):
+            return True
+
+        def is_dir(self):
+            return True
+
+        def unlink(self):
+            calls.append("unlink")
+
+    monkeypatch.setattr(sync_module.shutil, "rmtree", lambda path: calls.append("rmtree"))
+    sync_module._remove(Link())
+    assert calls == ["unlink"]
+
+
+def test_a_file_system_error_is_a_clear_sync_error(engine, data_root, npm, monkeypatch):
+    def refuse(*args, **kwargs):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(sync_module.shutil, "copytree", refuse)
+    with pytest.raises(RemotionSyncError, match="locked"):
+        sync(engine, data_root)
+
+
 # --- Pre-flight ------------------------------------------------------------------------
 
 
@@ -264,6 +375,23 @@ def test_the_command_line_syncs(engine, data_root, npm, monkeypatch):
     monkeypatch.setattr(sync_module, "ENGINE_ROOT", engine)
     assert main(["--data-root", str(data_root)]) == 0
     assert (work(data_root) / "src" / "Root.tsx").exists()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [FORBIDDEN_ENV_PREFIX + "URL", "VITE_" + FORBIDDEN_ENV_PREFIX + "ANON_KEY"],
+)
+def test_the_command_line_stops_on_a_forbidden_variable(
+    engine, data_root, npm, monkeypatch, capsys, name
+):
+    monkeypatch.setattr(sync_module, "ENGINE_ROOT", engine)
+    monkeypatch.setenv(name, "very-secret-value")
+    assert main(["--data-root", str(data_root)]) == 1
+    error = capsys.readouterr().err
+    assert name in error
+    assert "very-secret-value" not in error
+    assert npm.count == 0
+    assert not work(data_root).exists()
 
 
 def test_the_command_line_pulls_the_lock(engine, data_root, npm, monkeypatch):

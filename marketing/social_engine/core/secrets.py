@@ -1,7 +1,9 @@
-"""Startup guard and scrubbed subprocess environment (spec Sections 6.3, 11.1, 11.2).
+"""Startup guard and subprocess environment (spec Sections 6.3, 11.1, 11.2).
 
-This file holds the one allowed mention of the forbidden prefix: the engine never touches
-that service, and refuses to start if a variable for it is in its environment.
+Subprocesses get an allowlist, not a denylist: a new token in the environment stays out
+without anyone having to remember its name. This file holds the one allowed mention of the
+forbidden marker: the engine never touches that service, and refuses to start if a variable
+for it is in its environment, under any prefix.
 """
 
 from __future__ import annotations
@@ -13,17 +15,43 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 FORBIDDEN_ENV_PREFIX = "SUPABASE_"
+_FORBIDDEN_MARKER = FORBIDDEN_ENV_PREFIX.rstrip("_")
 
-# Removed from every subprocess. Claude Code would bill ANTHROPIC_AUTH_TOKEN silently, so it
-# goes as well, and ANTHROPIC_API_KEY stays only for `auth: api_key`.
-SECRET_ENV_VARS = frozenset(
+# What a Windows child process needs to start, find programs and use temp and profile
+# folders. Proxy settings are out, since they can hold a password, and NODE_OPTIONS is out,
+# since it can load code into npm.
+SUBPROCESS_ENV_ALLOWLIST = frozenset(
     {
-        "TELEGRAM_BOT_TOKEN",
-        "TELEGRAM_OWNER_USER_ID",
-        "AZURE_SPEECH_KEY",
-        "AZURE_SPEECH_REGION",
-        "PUBLISHER_API_KEY",
-        "ANTHROPIC_AUTH_TOKEN",
+        "APPDATA",
+        "COMMONPROGRAMFILES",
+        "COMMONPROGRAMFILES(X86)",
+        "COMMONPROGRAMW6432",
+        "COMPUTERNAME",
+        "COMSPEC",
+        "HOME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LANG",
+        "LC_ALL",
+        "LOCALAPPDATA",
+        "NUMBER_OF_PROCESSORS",
+        "OS",
+        "PATH",
+        "PATHEXT",
+        "PROCESSOR_ARCHITECTURE",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TZ",
+        "USERDOMAIN",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
     }
 )
 _API_KEY_VAR = "ANTHROPIC_API_KEY"
@@ -34,7 +62,7 @@ class ForbiddenEnvironment(RuntimeError):
 
 
 def _is_forbidden(name: str) -> bool:
-    return name.upper().startswith(FORBIDDEN_ENV_PREFIX)
+    return _FORBIDDEN_MARKER in name.upper()
 
 
 def check_startup_environment(env: Mapping[str, str] | None = None) -> None:
@@ -47,15 +75,11 @@ def check_startup_environment(env: Mapping[str, str] | None = None) -> None:
 
 
 def scrubbed_env(auth: str | None, env: Mapping[str, str] | None = None) -> dict[str, str]:
-    """A copy of the environment that is safe to hand to a subprocess. Anything other than
-    exactly `api_key` removes the API key, which `claude -p` would otherwise always use."""
+    """A new environment holding only what a subprocess needs. The API key passes only for
+    exactly `api_key`, because `claude -p` always uses that key when it is present."""
     source = os.environ if env is None else env
-    removed = SECRET_ENV_VARS if auth == "api_key" else SECRET_ENV_VARS | {_API_KEY_VAR}
-    return {
-        name: value
-        for name, value in source.items()
-        if name.upper() not in removed and not _is_forbidden(name)
-    }
+    allowed = SUBPROCESS_ENV_ALLOWLIST | ({_API_KEY_VAR} if auth == "api_key" else set())
+    return {name: value for name, value in source.items() if name.upper() in allowed}
 
 
 def load_env_file(data_root: Path) -> dict[str, str]:

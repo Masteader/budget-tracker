@@ -27,6 +27,14 @@ RAW_RECORDING_FOLDERS = (
 
 _WINDOWS_VARIABLE = re.compile(r"%([^%/\\]+)%")
 _ONEDRIVE_VARIABLES = ("ONEDRIVE", "ONEDRIVECONSUMER", "ONEDRIVECOMMERCIAL")
+_WINDOWS_DEVICE_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{n}" for n in range(1, 10)),
+    *(f"LPT{n}" for n in range(1, 10)),
+}
 
 
 class PathConfigError(ValueError):
@@ -51,22 +59,51 @@ def expand_path(raw: str, env: Mapping[str, str] | None = None) -> Path:
     return Path(_WINDOWS_VARIABLE.sub(replace, raw))
 
 
-def _is_inside(path: Path, folder: Path) -> bool:
-    return os.path.normcase(path).startswith(os.path.normcase(folder) + os.sep) or (
-        os.path.normcase(path) == os.path.normcase(folder)
+def is_windows_safe_name(name: str) -> bool:
+    """False for a path part that Windows would silently change or treat as a device: NUL,
+    `a.`, `a ` (Windows drops the trailing character) and `a:b` (an alternate data stream)."""
+    return (
+        bool(name)
+        and name[-1] not in ". "
+        and ":" not in name
+        and name.split(".", 1)[0].rstrip(" ").upper() not in _WINDOWS_DEVICE_NAMES
     )
+
+
+def _is_inside(path: Path, folder: Path) -> bool:
+    inner, outer = os.path.normcase(path), os.path.normcase(folder).rstrip("\\/")
+    return inner == outer or inner.startswith(outer + os.sep)
+
+
+def _check_written_form(raw: str, expanded: Path) -> None:
+    text = str(expanded)
+    if text.startswith(("\\\\", "//")):
+        raise PathConfigError(f"data_root must be a plain local folder, got {raw!r}")
+    if not expanded.is_absolute():
+        raise PathConfigError(f"data_root must be an absolute path, got {raw!r}")
+    for part in expanded.parts[1:]:
+        if part != ".." and not is_windows_safe_name(part):
+            raise PathConfigError(f"data_root has a part Windows would change: {part!r}")
+
+
+def _repo_folders() -> list[Path]:
+    """The engine plus every git checkout around it, including a worktree's outer checkout."""
+    engine = Path(os.path.realpath(ENGINE_ROOT))
+    return [engine, *(parent for parent in engine.parents if (parent / ".git").exists())]
 
 
 def resolve_data_root(raw: str, env: Mapping[str, str] | None = None) -> Path:
     """OneDrive syncing a live database risks corruption, and heavy media does not belong
-    in git, so a data_root inside either one is refused."""
-    root = Path(os.path.normpath(expand_path(raw, env)))
-    if not root.is_absolute():
-        raise PathConfigError(f"data_root must be an absolute path, got {raw!r}")
-    if _is_inside(root, ENGINE_ROOT):
-        raise PathConfigError(f"data_root must be outside marketing/social_engine, got {root}")
+    in git, so a data_root inside either one is refused, as is one that holds the repo. The
+    checks run on the real path, after junctions and `..`, so a link cannot get round them."""
+    expanded = expand_path(raw, env)
+    _check_written_form(raw, expanded)
+    root = Path(os.path.realpath(expanded))
+    engine = Path(os.path.realpath(ENGINE_ROOT))
+    if _is_inside(engine, root) or any(_is_inside(root, repo) for repo in _repo_folders()):
+        raise PathConfigError(f"data_root must be outside the social_engine repo, got {root}")
     known = _upper_keys(env)
-    synced = [Path(known[name]) for name in _ONEDRIVE_VARIABLES if known.get(name)]
+    synced = [Path(os.path.realpath(known[n])) for n in _ONEDRIVE_VARIABLES if known.get(n)]
     in_named_folder = any(part.casefold().startswith("onedrive") for part in root.parts)
     if in_named_folder or any(_is_inside(root, folder) for folder in synced):
         raise PathConfigError(f"data_root must be outside OneDrive, got {root}")

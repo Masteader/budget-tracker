@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.paths import ENGINE_ROOT, PathConfigError, resolve_data_root
-from core.secrets import scrubbed_env
+from core.secrets import ForbiddenEnvironment, check_startup_environment, scrubbed_env
 
 LOCKFILE = "package-lock.json"
 _STAMP = ".synced-lock.sha256"  # the lockfile that `npm ci` last installed
@@ -54,10 +55,13 @@ def _preflight(engine_root: Path) -> Path:
 
 
 def _remove(path: Path) -> None:
-    if path.is_dir() and not path.is_symlink():
-        shutil.rmtree(path)
-    else:
+    """A link is removed on its own, and the folder it points at stays untouched."""
+    if path.is_junction():
+        os.rmdir(path)
+    elif path.is_symlink() or not path.is_dir():
         path.unlink()
+    else:
+        shutil.rmtree(path)
 
 
 def _copy_into(source_dir: Path, target_dir: Path) -> None:
@@ -101,7 +105,11 @@ def _run_npm_ci(work: Path) -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RemotionSyncError(f"npm ci failed in {work}:\n{result.stderr}")
+        # npm's own output stays out of this message, because it can echo its environment.
+        raise RemotionSyncError(
+            f"npm ci failed with exit code {result.returncode} in {work}. "
+            "Run it there by hand to see why."
+        )
 
 
 def sync(engine_root: Path, data_root: Path) -> SyncResult:
@@ -109,7 +117,10 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
     if not (Path(engine_root) / _FIXTURE).is_file():
         raise RemotionSyncError(f"{_FIXTURE.as_posix()} is missing from {engine_root}")
     work = _work_dir(data_root)
-    _rebuild_work_dir(studio, engine_root, work)
+    try:
+        _rebuild_work_dir(studio, engine_root, work)
+    except OSError as error:
+        raise RemotionSyncError(f"could not copy the studio to {work}: {error}") from error
 
     repo_lock = studio / LOCKFILE
     if not repo_lock.is_file():
@@ -146,13 +157,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        check_startup_environment()
         data_root = resolve_data_root(args.data_root)
         if args.pull_lock:
             print(f"pulled {pull_lock(ENGINE_ROOT, data_root)}")
         else:
             result = sync(ENGINE_ROOT, data_root)
             print(f"synced to {result.work_dir}, npm ci ran: {result.ran_npm_ci}")
-    except (RemotionSyncError, PathConfigError) as error:
+    except (ForbiddenEnvironment, RemotionSyncError, PathConfigError, OSError) as error:
         print(error, file=sys.stderr)
         return 1
     return 0

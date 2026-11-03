@@ -1,13 +1,24 @@
 """Paths, startup guard, environment scrub and log redaction (spec Section 11, task A3)."""
 
 import io
+import json
 import logging
 import os
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
+from conftest import make_junction
 
-from core.logging_setup import RedactingFilter, configure_logging, redact
+from core.logging_setup import (
+    RedactingFilter,
+    configure_logging,
+    forget_known_secrets,
+    redact,
+)
 from core.paths import RAW_RECORDING_FOLDERS, EnginePaths, PathConfigError, expand_path
 from core.paths import resolve_data_root as resolve
 from core.secrets import (
@@ -72,6 +83,106 @@ def test_a_data_root_under_the_onedrive_variable_is_refused(tmp_path):
     synced = tmp_path / "Synced"
     with pytest.raises(PathConfigError, match="OneDrive"):
         resolve(str(synced / "SocialEngine"), env={"OneDrive": str(synced)})
+
+
+def _engine_as_text() -> str:
+    return str(ENGINE_ROOT)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        lambda: _engine_as_text() + r".\zz_probe",
+        lambda: _engine_as_text() + r"..\zz_probe",
+        lambda: _engine_as_text() + r" \zz_probe",
+        lambda: "\\\\?\\" + _engine_as_text() + r"\data",
+        lambda: "\\\\.\\" + _engine_as_text() + r"\data",
+        lambda: "//?/" + _engine_as_text() + "/data",
+        lambda: str(ENGINE_ROOT.parent),
+        lambda: str(ENGINE_ROOT.parents[1]),
+        lambda: str(ENGINE_ROOT.parents[1] / "data"),
+        lambda: str(ENGINE_ROOT.parents[1] / "ai_service" / "data"),
+        lambda: _engine_as_text().upper() + r"\data",
+    ],
+    ids=[
+        "trailing dot",
+        "two trailing dots",
+        "trailing space",
+        "extended prefix",
+        "device prefix",
+        "forward extended prefix",
+        "parent of the engine",
+        "repo root",
+        "inside the repo",
+        "another part of the repo",
+        "upper case",
+    ],
+)
+def test_tricks_that_land_in_the_repo_are_refused(raw):
+    with pytest.raises(PathConfigError):
+        resolve(raw(), env={})
+
+
+def test_a_folder_holding_the_repo_is_refused():
+    with pytest.raises(PathConfigError):
+        resolve(ENGINE_ROOT.anchor, env={})
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        r"\\?\D:\Cloud\x",
+        r"D:\Cloud.\x",
+        r"D:\Cloud \x",
+        r"D:\Cloud\..\Cloud\x",
+        r"\\server\share\x",
+        r"D:\plain\NUL\x",
+        r"D:\plain\file.txt:stream",
+    ],
+)
+def test_tricks_around_the_onedrive_variable_are_refused(raw):
+    with pytest.raises(PathConfigError):
+        resolve(raw, env={"ONEDRIVE": r"D:\Cloud"})
+
+
+@pytest.mark.parametrize("variable", ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"])
+def test_each_onedrive_variable_counts(tmp_path, variable):
+    synced = tmp_path / "Synced"
+    with pytest.raises(PathConfigError, match="OneDrive"):
+        resolve(str(synced / "x"), env={variable: str(synced)})
+
+
+def test_a_sibling_whose_name_starts_like_a_synced_folder_is_fine(tmp_path):
+    # D:\Cloud must not catch D:\CloudBackup.
+    root = tmp_path / "SyncedBackup" / "x"
+    assert resolve(str(root), env={"OneDrive": str(tmp_path / "Synced")}) == root
+
+
+def test_parent_steps_are_resolved_before_checking(tmp_path):
+    with pytest.raises(PathConfigError, match="OneDrive"):
+        resolve(str(tmp_path / "plain" / ".." / "OneDrive" / "x"), env={})
+    assert resolve(str(tmp_path / "a" / ".." / "b"), env={}) == tmp_path / "b"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+def test_a_junction_into_onedrive_is_refused(tmp_path):
+    target = tmp_path / "OneDrive" / "x"
+    target.mkdir(parents=True)
+    link = tmp_path / "plain"
+    make_junction(link, target)
+    with pytest.raises(PathConfigError, match="OneDrive"):
+        resolve(str(link / "data"), env={})
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+def test_a_junction_into_the_repo_is_refused(tmp_path):
+    link = tmp_path / "plain"
+    make_junction(link, ENGINE_ROOT)
+    try:
+        with pytest.raises(PathConfigError):
+            resolve(str(link / "data"), env={})
+    finally:
+        link.rmdir()
 
 
 def test_engine_paths_follow_spec_section_4(tmp_path):
@@ -150,7 +261,23 @@ def test_the_refusal_names_the_variable_but_never_its_value():
 
 
 def test_a_clean_environment_starts():
-    check_startup_environment({"PATH": "x", "NOT_" + FORBIDDEN_ENV_PREFIX + "URL": "x"})
+    check_startup_environment({"PATH": "x", "DATABASE_URL_NOTE": "x"})
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "VITE_" + FORBIDDEN_ENV_PREFIX + "ANON_KEY",
+        "NEXT_PUBLIC_" + FORBIDDEN_ENV_PREFIX + "URL",
+        "MY_" + FORBIDDEN_ENV_PREFIX + "SERVICE_ROLE_KEY",
+        FORBIDDEN_ENV_PREFIX.lower() + "x",
+        FORBIDDEN_ENV_PREFIX.rstrip("_"),
+    ],
+)
+def test_the_guard_catches_the_name_anywhere_in_a_variable(name):
+    with pytest.raises(ForbiddenEnvironment):
+        check_startup_environment({name: "x"})
+    assert name not in scrubbed_env(None, {name: "x"})
 
 
 # --- Scrubbed environment --------------------------------------------------------------
@@ -200,10 +327,41 @@ def test_scrub_does_not_change_its_input():
 
 def test_scrub_reads_the_process_environment_by_default(monkeypatch):
     monkeypatch.setenv("AZURE_SPEECH_KEY", "x")
-    monkeypatch.setenv("SOME_PLAIN_SETTING", "keep")
+    monkeypatch.setenv("TEMP", "keep")
     result = scrubbed_env("subscription")
     assert "AZURE_SPEECH_KEY" not in result
-    assert result["SOME_PLAIN_SETTING"] == "keep"
+    assert result["TEMP"] == "keep"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "NPM_TOKEN",
+        "npm_config__authToken",
+        "NODE_AUTH_TOKEN",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "AWS_SECRET_ACCESS_KEY",
+        "GEM" + "INI_API_KEY",
+        "WEBHOOK_SECRET",
+        "DATABASE_URL",
+        "HTTPS_PROXY",
+        "NODE_OPTIONS",
+        "ANY_NAME_NOBODY_THOUGHT_OF",
+    ],
+)
+@pytest.mark.parametrize("auth", [None, "subscription", "api_key"])
+def test_scrub_is_an_allowlist_so_unknown_variables_never_pass(auth, name):
+    assert scrubbed_env(auth, {name: "x", "PATH": "keep"}) == {"PATH": "keep"}
+
+
+def test_scrub_keeps_what_a_windows_child_process_needs():
+    needed = ["PATH", "PATHEXT", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP", "USERPROFILE"]
+    needed += ["APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "HOMEDRIVE", "HOMEPATH"]
+    env = {name: "keep" for name in needed}
+    assert scrubbed_env(None, env) == env
+    assert scrubbed_env(None, {"Path": "keep"}) == {"Path": "keep"}
 
 
 # --- The .env file, always a temporary one here ----------------------------------------
@@ -220,6 +378,13 @@ def test_env_file_values_are_returned_and_not_put_in_the_process_environment(
 
 def test_a_missing_env_file_is_an_empty_mapping(tmp_path):
     assert load_env_file(tmp_path) == {}
+
+
+def test_env_file_values_are_not_interpolated(tmp_path, monkeypatch):
+    # A value holding ${...} must stay as typed, and must not pull in another variable.
+    monkeypatch.setenv("SOME_OTHER_VALUE", "leaked")
+    (tmp_path / ".env").write_text("A_KEY=abc${SOME_OTHER_VALUE}def\n", encoding="utf-8")
+    assert load_env_file(tmp_path) == {"A_KEY": "abc${SOME_OTHER_VALUE}def"}
 
 
 def test_a_forbidden_variable_in_the_env_file_stops_startup(tmp_path):
@@ -271,8 +436,92 @@ def test_ordinary_log_text_is_left_alone():
     assert redact(text) == text
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "monkey: banana",
+        "keyboard: arabic",
+        "the token expired, please log in",
+        "for key, value in items",
+    ],
+)
+def test_ordinary_words_near_secret_names_keep_their_meaning(text):
+    assert redact(text) == text
+
+
 def test_a_known_secret_is_redacted_even_when_it_has_no_recognised_shape():
     assert "plain-looking" not in redact("value plain-looking here", ["plain-looking"])
+
+
+def test_a_very_short_known_secret_does_not_shred_the_log():
+    assert redact("abcdef", ["abc"]) == "abcdef"
+
+
+def test_the_longest_known_secret_is_redacted_first():
+    assert "ef" not in redact("abcdef", ["abcd", "abcdef"])
+
+
+LEAK = "s3cretv4lue"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        repr({"token": [LEAK]}),
+        repr({"token": (LEAK,)}),
+        repr({"token": {"value": LEAK}}),
+        repr({"token": [{"a": "b"}, {"c": LEAK}]}),
+        repr({"api_key": LEAK}),
+        json.dumps({"api_key": [LEAK]}),
+        json.dumps(json.dumps({"api_key": LEAK})),
+        f"token=b'{LEAK}'",
+        f'token=b"{LEAK}"',
+        f"Authorization: Basic {LEAK}",
+        f"authorization: Bearer {LEAK}",
+        f"authorization: {LEAK}",
+        f"Cookie: session={LEAK}",
+        f"pwd={LEAK}",
+        f"passwd: {LEAK}",
+        f"credential: {LEAK}",
+        f"tokens={LEAK}",
+        f"TELEGRAM_BOT_TOKEN_OLD={LEAK}",
+        f"apikey={LEAK}",
+        f"token%3D{LEAK}",
+        repr(("AZURE_SPEECH_KEY", LEAK)),
+    ],
+)
+def test_structured_and_encoded_secret_values_are_redacted(text):
+    assert LEAK not in redact(text), redact(text)
+
+
+def test_a_url_encoded_telegram_token_is_redacted():
+    number, secret = TELEGRAM_TOKEN.split(":")
+    url = f"https://api.telegram.org/bot{number}%3A{secret}/getMe"
+    assert secret not in redact(url)
+    assert secret not in redact(url.replace("%3A", "%3a"))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a" * 200_000,
+        "1" * 200_000,
+        "f" * 200_000,
+        "key" * 70_000,
+        "key_" * 50_000,
+        "key=" * 50_000,
+        "token:[" * 30_000,
+        "token: '" * 25_000,
+        "bearer " * 30_000,
+        "sk-" * 70_000,
+        "123456:" * 30_000,
+    ],
+    ids=lambda text: text[:8],
+)
+def test_redaction_takes_linear_time(text):
+    started = time.perf_counter()
+    redact(text)
+    assert time.perf_counter() - started < 2.0
 
 
 @pytest.fixture
@@ -280,6 +529,8 @@ def clean_logging():
     root = logging.getLogger()
     handlers, level = list(root.handlers), root.level
     watched = {name: logging.getLogger(name).level for name in ("httpx", "httpx2", "httpcore")}
+    factory = logging.getLogRecordFactory()
+    excepthook, threading_hook = sys.excepthook, threading.excepthook
     root.handlers = []
     yield root
     for handler in root.handlers:
@@ -287,6 +538,10 @@ def clean_logging():
     root.handlers, root.level = handlers, level
     for name, previous in watched.items():
         logging.getLogger(name).setLevel(previous)
+    logging.setLogRecordFactory(factory)
+    sys.excepthook, threading.excepthook = excepthook, threading_hook
+    logging.captureWarnings(False)
+    forget_known_secrets()
 
 
 def _captured(root) -> io.StringIO:
@@ -365,3 +620,128 @@ def test_a_broken_log_call_does_not_raise_through_the_filter(clean_logging):
     stream = _captured(clean_logging)
     logging.getLogger("engine.test").warning("%d is not a number", "x")
     assert "%d is not a number" in stream.getvalue()
+
+
+def _record_with(**fields) -> logging.LogRecord:
+    return logging.LogRecord(
+        "engine.test", logging.ERROR, __file__, 1, "msg", None, fields.pop("exc_info", None),
+        **fields,
+    )
+
+
+def test_the_filter_formats_and_redacts_exc_info_itself():
+    # On its own, with no earlier handler having cached the traceback text.
+    try:
+        raise RuntimeError(f"boom {TELEGRAM_TOKEN}")
+    except RuntimeError:
+        record = _record_with(exc_info=sys.exc_info())
+    assert RedactingFilter().filter(record) is True
+    assert record.exc_text and "boom" in record.exc_text
+    assert TELEGRAM_TOKEN not in record.exc_text
+    assert TELEGRAM_TOKEN not in logging.Formatter().format(record)
+
+
+def test_the_filter_redacts_an_already_cached_traceback():
+    record = _record_with()
+    record.exc_text = f"cached {TELEGRAM_TOKEN}"
+    RedactingFilter().filter(record)
+    assert TELEGRAM_TOKEN not in record.exc_text
+
+
+def test_the_filter_redacts_stack_info():
+    record = _record_with(sinfo=f"frame with {TELEGRAM_TOKEN}")
+    RedactingFilter().filter(record)
+    assert record.stack_info == "frame with [REDACTED]"
+    assert TELEGRAM_TOKEN not in logging.Formatter().format(record)
+
+
+def test_a_real_stack_trace_is_redacted(clean_logging):
+    configure_logging(known_secrets=["UNIQUE_FRAME_NAME"])
+    stream = _captured(clean_logging)
+
+    def UNIQUE_FRAME_NAME():  # noqa: N802 - the name is the secret here
+        logging.getLogger("engine.test").warning("stack", stack_info=True)
+
+    UNIQUE_FRAME_NAME()
+    assert "UNIQUE_FRAME_NAME" not in stream.getvalue()
+    assert "Stack (most recent call last)" in stream.getvalue()
+
+
+def test_a_record_that_skipped_the_factory_is_still_redacted_by_the_handler(clean_logging):
+    # Queue listeners rebuild records with makeLogRecord, which goes round the factory.
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    clean_logging.addHandler(handler)
+    configure_logging()
+    record = logging.makeLogRecord({"msg": TELEGRAM_TOKEN, "levelno": logging.WARNING})
+    handler.handle(record)
+    assert stream.getvalue() == "[REDACTED]\n"
+
+
+def test_a_handler_on_a_child_logger_gets_a_redacted_record(clean_logging):
+    configure_logging()
+    stream = io.StringIO()
+    child = logging.getLogger("engine.child")
+    child.addHandler(logging.StreamHandler(stream))
+    try:
+        child.warning("token %s", TELEGRAM_TOKEN)
+    finally:
+        child.handlers.clear()
+    assert TELEGRAM_TOKEN not in stream.getvalue()
+
+
+def _run_engine_python(code: str) -> subprocess.CompletedProcess:
+    setup = (
+        "import logging, warnings\n"
+        "from core.logging_setup import configure_logging\n"
+        f"configure_logging(known_secrets=[{LEAK!r}])\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", setup + code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=ENGINE_ROOT,
+        timeout=60,
+    )
+
+
+def test_an_uncaught_exception_is_redacted():
+    result = _run_engine_python(
+        f"raise RuntimeError('https://api.telegram.org/bot{TELEGRAM_TOKEN}/x {LEAK}')"
+    )
+    assert result.returncode == 1
+    assert "RuntimeError" in result.stderr
+    assert TELEGRAM_TOKEN not in result.stderr
+    assert LEAK not in result.stderr
+
+
+def test_an_uncaught_exception_in_a_thread_is_redacted():
+    result = _run_engine_python(
+        "import threading\n"
+        "def boom():\n"
+        f"    raise RuntimeError({LEAK!r})\n"
+        "thread = threading.Thread(target=boom)\n"
+        "thread.start()\n"
+        "thread.join()\n"
+    )
+    assert "RuntimeError" in result.stderr
+    assert LEAK not in result.stderr
+
+
+def test_a_warning_is_redacted():
+    result = _run_engine_python(f"warnings.warn('careful {LEAK}')")
+    assert "careful" in result.stderr
+    assert LEAK not in result.stderr
+
+
+def test_a_second_configure_keeps_known_secrets():
+    result = _run_engine_python(f"configure_logging()\nlogging.getLogger('x').warning({LEAK!r})")
+    assert LEAK not in result.stderr
+
+
+def test_keyboard_interrupt_is_left_to_python():
+    result = _run_engine_python("raise KeyboardInterrupt")
+    assert "KeyboardInterrupt" in result.stderr
+    assert "CRITICAL" not in result.stderr

@@ -1,4 +1,4 @@
-﻿"""The suite-wide network ban and environment scrub (spec Section 12, task A1)."""
+"""The suite-wide network ban and environment scrub (spec Section 12, task A1)."""
 
 import asyncio
 import os

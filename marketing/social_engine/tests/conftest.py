@@ -136,6 +136,13 @@ def _install_network_ban() -> None:
         _replace(IocpProactor, "connect", proactor_connect)
 
 
+def make_junction(link, target) -> None:
+    """A Windows directory junction. Needs no admin rights, unlike a symlink."""
+    import _winapi
+
+    _winapi.CreateJunction(str(target), str(link))
+
+
 def _uninstall_network_ban() -> None:
     while _originals:
         owner, name, original = _originals.pop()
