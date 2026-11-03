@@ -73,7 +73,7 @@ Future<void> main() async {
 
     runApp(const BudgetTrackerApp());
   } catch (error, stackTrace) {
-    debugPrint('Fatal Budget Tracker startup initialization error: $error\n$stackTrace');
+    debugPrint('Fatal Qawam Money startup initialization error: $error\n$stackTrace');
     final problems = validateClientConfig(
       supabaseUrl: supabaseUrl,
       supabaseKey: supabasePublishableKey,
@@ -114,7 +114,7 @@ class BudgetTrackerApp extends StatelessWidget {
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (context, themeProvider, localeProvider, child) {
           return MaterialApp(
-            title: 'Budget Tracker',
+            onGenerateTitle: (context) => context.tr('app_title_short'),
             debugShowCheckedModeBanner: false,
             theme: AppThemes.lightTheme,
             darkTheme: AppThemes.darkTheme,
