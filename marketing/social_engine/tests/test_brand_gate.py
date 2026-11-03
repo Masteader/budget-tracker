@@ -1,7 +1,7 @@
 """The launch gate at the function level ("Brand gate" row, spec Sections 12 and 13, task A2)."""
 
 import copy
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 import yaml
@@ -19,6 +19,8 @@ from core.brand_gate import (
 from core.config import DEFAULT_CONFIG_PATH, EngineConfig, load_config
 
 CALLERS_AFTER_RENDER = [approve_button_allowed, approval_allowed, publish_allowed]
+
+NAME_CHOSEN_ON = date(2026, 11, 3)  # decision D1 in the spec
 
 
 def shipped_data() -> dict:
@@ -38,10 +40,10 @@ def complete_live_data() -> dict:
     }
     data["brand"]["hashtags"] = ["#QawamMoney", "#قوام_المال"]
     data["brand"]["clearance"] = {
-        "google_play_checked_on": date(2026, 12, 1),
-        "app_store_checked_on": date(2026, 12, 1),
-        "saip_checked_on": date(2026, 12, 2),
-        "approved_by_owner_on": date(2026, 12, 3),
+        "google_play_checked_on": NAME_CHOSEN_ON,
+        "app_store_checked_on": NAME_CHOSEN_ON,
+        "saip_checked_on": NAME_CHOSEN_ON,
+        "approved_by_owner_on": NAME_CHOSEN_ON,
     }
     return data
 
@@ -240,3 +242,192 @@ def test_an_unknown_language_is_refused():
     brand = brand_for_reel(load_config(), test_reel=True)
     with pytest.raises(ValueError):
         brand_display(brand, "ur")
+
+
+# --- Values that look filled in and are not --------------------------------------------
+
+
+def live_with(**brand_fields) -> EngineConfig:
+    data = complete_live_data()
+    data["brand"].update(brand_fields)
+    return build(data)
+
+
+def handles(value: str) -> dict:
+    return {key: value for key in ("instagram", "facebook", "tiktok", "youtube")}
+
+
+INVISIBLE = ["\u200b", "\u200c", "\u200f", "\u2060", "\ufeff", "\u202e", "\u00ad", " \u200b "]
+
+
+@pytest.mark.parametrize("char", INVISIBLE)
+@pytest.mark.parametrize(
+    "field", ["name_en", "name_ar", "logo_path", "hashtags", "handles"]
+)
+def test_invisible_only_values_fail_the_gate(field, char):
+    value = {"hashtags": [char], "handles": handles(char)}.get(field, char)
+    assert not is_gate_met(live_with(**{field: value}))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name_en", "Qawam\u200b Money"),
+        ("name_ar", "قوام\u200f المال"),
+        ("hashtags", ["#Qawam\u200bMoney"]),
+        ("handles", handles("@qawam\u200bmoney")),
+        ("logo_path", "assets/branding/logo\u202e.svg"),
+    ],
+)
+def test_an_invisible_character_inside_a_value_fails_the_gate(field, value):
+    assert not is_gate_met(live_with(**{field: value}))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("logo_path", "TBD"),
+        ("logo_path", "todo"),
+        ("logo_path", "N/A"),
+        ("logo_path", "none"),
+        ("logo_path", "null"),
+        ("logo_path", "-"),
+        ("logo_path", "TBD.svg"),
+        ("logo_path", "assets/branding/placeholder.png"),
+        ("logo_path", "assets/branding/logo.txt"),
+        ("name_en", "null"),
+        ("name_en", "TBD"),
+        ("hashtags", ["#"]),
+        ("hashtags", ["TBD"]),
+        ("hashtags", ["QawamMoney"]),
+        ("hashtags", ["#QawamMoney", "#"]),
+        ("handles", handles("TBD")),
+        ("handles", handles("-")),
+        ("handles", handles("N/A")),
+        ("handles", handles("none")),
+        ("handles", handles("@")),
+    ],
+)
+def test_placeholders_fail_the_gate(field, value):
+    assert not is_gate_met(live_with(**{field: value}))
+
+
+def _in_days(days: int) -> date:
+    return date.today() + timedelta(days=days)
+
+
+@pytest.mark.parametrize(
+    "when",
+    [date(1, 1, 1), date(2026, 11, 2), date(2099, 12, 31), _in_days(2)],
+    ids=["year 1", "the day before the name was chosen", "2099", "in two days"],
+)
+@pytest.mark.parametrize(
+    "field",
+    ["google_play_checked_on", "app_store_checked_on", "saip_checked_on", "approved_by_owner_on"],
+)
+def test_implausible_clearance_dates_fail_the_gate(field, when):
+    data = complete_live_data()
+    data["brand"]["clearance"][field] = when
+    config = build(data)
+    assert not is_gate_met(config)
+    assert field in " ".join(gate_failures(config))
+
+
+@pytest.mark.parametrize("when", [NAME_CHOSEN_ON, date.today()], ids=["first day", "today"])
+def test_clearance_dates_from_the_first_day_to_today_pass(when):
+    data = complete_live_data()
+    data["brand"]["clearance"]["saip_checked_on"] = when
+    assert is_gate_met(build(data))
+
+
+# --- G18: always the full name ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name_en", "Qawam"),
+        ("name_en", "Money"),
+        ("name_ar", "قوام"),
+        ("name_ar", "بقوام"),
+        ("hashtags", ["#قوام"]),
+        ("hashtags", ["#qawam"]),
+        ("hashtags", ["#QawamMoney", "#qawam"]),
+        ("handles", handles("@qawam")),
+        ("handles", handles("قوام")),
+        ("handles", {**handles("@qawam_money"), "youtube": "@qawam"}),
+    ],
+)
+def test_the_bare_name_fails_the_gate(field, value):
+    config = live_with(**{field: value})
+    assert not is_gate_met(config)
+    assert not render_decision(config, test_reel=False).allowed
+    assert not publish_allowed(config, test_reel=False)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("hashtags", ["#QawamMoney"]),
+        ("hashtags", ["#قوام_المال"]),
+        ("hashtags", ["#Qawam_Money", "#قوام_المال"]),
+        ("handles", handles("@qawam.money")),
+        ("handles", handles("@qawammoney")),
+        ("handles", handles("@قوام_المال")),
+    ],
+)
+def test_the_full_name_passes_the_gate(field, value):
+    assert is_gate_met(live_with(**{field: value}))
+
+
+# --- Test assets cannot satisfy the live gate ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name_en", "TEST BRAND"),
+        ("name_ar", "علامة تجريبية"),
+        ("hashtags", ["#test"]),
+        ("logo_path", "other/place/test_logo.png"),
+        ("logo_path", "OTHER\\place\\TEST_LOGO.SVG"),
+    ],
+)
+def test_test_assets_fail_the_gate(field, value):
+    assert not is_gate_met(live_with(**{field: value}))
+
+
+@pytest.mark.parametrize(
+    "logo",
+    ["assets/branding/test_logo.svg", "ASSETS\\branding\\TEST_LOGO.SVG"],
+)
+def test_the_shipped_test_logo_as_the_real_logo_does_not_even_load(logo):
+    with pytest.raises(ValueError, match="test_brand"):
+        live_with(logo_path=logo)
+
+
+def test_the_configured_test_logo_is_refused_whatever_it_is_called():
+    data = complete_live_data()
+    data["test_brand"]["logo_path"] = "assets/branding/mark.svg"
+    data["brand"]["logo_path"] = "assets/branding/mark.svg"
+    with pytest.raises(ValueError, match="test_brand"):
+        build(data)
+
+
+def test_the_reproducer_from_review_fails_end_to_end(tmp_path):
+    text = DEFAULT_CONFIG_PATH.read_text("utf-8").replace("mode: test ", "mode: live ")
+    for key in ("instagram", "facebook", "tiktok", "youtube"):
+        text = text.replace(f'{key}: ""', f'{key}: "\\u200b"')
+    text = text.replace("hashtags: []", 'hashtags: ["\\u200b"]')
+    text = text.replace('logo_path: ""', 'logo_path: "\\u200b"')
+    for key in ("google_play", "app_store", "saip", "approved_by_owner"):
+        text = text.replace(f"{key}_checked_on: null", f"{key}_checked_on: 2099-12-31")
+        text = text.replace(f"{key}_on: null", f"{key}_on: 2099-12-31")
+    path = tmp_path / "config.yaml"
+    path.write_text(text, "utf-8")
+    config = load_config(path)
+    assert not is_gate_met(config)
+    assert not render_decision(config, test_reel=False).allowed
+    assert not publish_allowed(config, test_reel=False)
+    with pytest.raises(ValueError, match="gate"):
+        brand_for_reel(config, test_reel=False)

@@ -63,18 +63,22 @@ render:
   audio_kbps: 192
   max_mb: 48
   ffmpeg_path: ""        # empty: use Remotion's bundled FFmpeg (plan Section 2.4)
-  safe_zones:            # hypothesis in px, checked against each platform in LIVE-5
-    top: 220
-    bottom: 380
-    left: 60
-    right: 140
+  safe_zones:            # hypotheses in px, checked against each platform's interface in LIVE-5
+    instagram: {top: 220, bottom: 420, left: 60, right: 140}
+    facebook: {top: 220, bottom: 420, left: 60, right: 140}
+    tiktok: {top: 160, bottom: 480, left: 60, right: 160}
+    youtube: {top: 140, bottom: 340, left: 60, right: 140}
 
 captions:
   digits: western        # western | arabic_indic
   # Wording for the owner to read at LIVE-6.
   disclaimer: "معلومات عامة وليست نصيحة مالية · General information, not financial advice"
   ai_voice_disclosure: "صوت مولّد بالذكاء الاصطناعي · AI-generated voice"
-  max_hashtags: 5        # hypothesis. Hashtags must be relevant, and no borrowed trending tags
+  max_hashtags:          # hypotheses per platform. Relevant tags only, no borrowed trending tags
+    instagram: 5
+    facebook: 3
+    tiktok: 4
+    youtube: 3
 
 audio:
   music_enabled: false   # D25; enabling music needs a licensed library named

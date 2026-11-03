@@ -25,14 +25,27 @@ from pydantic import (
     model_validator,
 )
 
-from core.brand_gate import contains_withdrawn_name, is_withdrawn_logo_path
+from core.brand_gate import (
+    contains_real_brand,
+    contains_withdrawn_name,
+    is_withdrawn_logo_path,
+    letters_only,
+)
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.yaml"
 
+_MAX_CONFIG_BYTES = 256 * 1024
 _CLAUDE_ALIASES = {"opus", "sonnet", "haiku", "fable"}
 _CLAUDE_MODEL_ID = re.compile(r"claude-[a-z0-9][a-z0-9.\-]*")
 _CLOCK = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
-_HTTPS_URL = re.compile(r"https://[^\s/]+\S*")
+_HTTPS_URL = re.compile(r"https://[^\s/]+(?:/\S*)?")
+_VOICE_NAME = re.compile(r"[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural(?::[A-Za-z0-9]+)?")
+_MULTILINGUAL = "Multilingual"
+_PERCENT = r"[+-]?\d{1,3}(?:\.\d{1,2})?%"
+_SPEECH_RATE = re.compile(rf"{_PERCENT}|x-slow|slow|medium|fast|x-fast|default")
+_SPEECH_PITCH = re.compile(
+    rf"{_PERCENT}|[+-]?\d{{1,3}}(?:st|Hz)|x-low|low|medium|high|x-high|default"
+)
 
 _MODE_NEEDS_WORDING = ("early_access", "store")
 
@@ -56,7 +69,8 @@ def _is_clock(value: str) -> str:
 NonEmptyStr = Annotated[str, AfterValidator(_not_blank)]
 Clock = Annotated[str, AfterValidator(_is_clock)]
 PositiveInt = Annotated[int, Field(gt=0)]
-Fraction = Annotated[float, Field(ge=0, le=1)]
+Fraction = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+HashtagCount = Annotated[int, Field(ge=1, le=30)]  # 30 is Instagram's own ceiling
 Weekday = Literal["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
 ClearanceDate = date | None
 
@@ -119,7 +133,7 @@ class Llm(_Section):
     claude_path: str
     claude_version: str
     max_turns: PositiveInt
-    max_budget_usd: Annotated[float, Field(gt=0)]
+    max_budget_usd: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]  # D20's credits
 
     @field_validator("model")
     @classmethod
@@ -137,10 +151,45 @@ class Voice(_Section):
     rate: str
     pitch: str
     output_format: NonEmptyStr
-    monthly_char_cap: PositiveInt
+    monthly_char_cap: Annotated[int, Field(gt=0, le=10_000_000)]  # $150 a month at $15 per million
     allow_public_on_f0: bool
-    chars_per_second: Annotated[float, Field(gt=0)]
+    chars_per_second: Annotated[float, Field(gt=0, le=40, allow_inf_nan=False)]
     pronunciation: dict[str, str]
+
+    @field_validator("arabic_voice")
+    @classmethod
+    def _arabic_voice_is_real(cls, value: str) -> str:
+        return _check_voice(value, "ar-")
+
+    @field_validator("english_voice")
+    @classmethod
+    def _english_voice_is_real_or_unset(cls, value: str) -> str:
+        return value if value == "" else _check_voice(value, "en-")
+
+    @field_validator("rate")
+    @classmethod
+    def _rate_is_valid(cls, value: str) -> str:
+        return _check_prosody(value, _SPEECH_RATE, "rate")
+
+    @field_validator("pitch")
+    @classmethod
+    def _pitch_is_valid(cls, value: str) -> str:
+        return _check_prosody(value, _SPEECH_PITCH, "pitch")
+
+
+def _check_voice(value: str, locale_prefix: str) -> str:
+    if not _VOICE_NAME.fullmatch(value):
+        raise ValueError(f"must be an Azure neural voice name, got {value!r}")
+    if not value.startswith(locale_prefix) and _MULTILINGUAL not in value:
+        raise ValueError(f"must be a {locale_prefix} or multilingual voice, got {value!r}")
+    return value
+
+
+def _check_prosody(value: str, pattern: re.Pattern[str], what: str) -> str:
+    # These values go into SSML, so a free string here could inject markup.
+    if not pattern.fullmatch(value):
+        raise ValueError(f"invalid speech {what}: {value!r}")
+    return value
 
 
 class SafeZones(_Section):
@@ -156,20 +205,48 @@ class SafeZones(_Section):
         return self
 
 
+class PlatformSafeZones(_Section):
+    """Margins differ per platform (spec Section 8.2), and one reel goes to all of them."""
+
+    instagram: SafeZones
+    facebook: SafeZones
+    tiktok: SafeZones
+    youtube: SafeZones
+
+    def strictest(self) -> SafeZones:
+        """The margins for the one render: clear of every platform's interface at once."""
+        zones = (self.instagram, self.facebook, self.tiktok, self.youtube)
+        return SafeZones(
+            top=max(zone.top for zone in zones),
+            bottom=max(zone.bottom for zone in zones),
+            left=max(zone.left for zone in zones),
+            right=max(zone.right for zone in zones),
+        )
+
+
+class PlatformHashtagCounts(_Section):
+    """Counts per platform are a hypothesis to test (spec Section 6.7)."""
+
+    instagram: HashtagCount
+    facebook: HashtagCount
+    tiktok: HashtagCount
+    youtube: HashtagCount
+
+
 class Render(_Section):
     fps: Literal[30, 60]
     video_kbps_cap: PositiveInt
     audio_kbps: PositiveInt
     max_mb: Annotated[int, Field(gt=0, le=50)]  # Telegram bots cannot send more than 50 MB
     ffmpeg_path: str
-    safe_zones: SafeZones
+    safe_zones: PlatformSafeZones
 
 
 class Captions(_Section):
     digits: Literal["western", "arabic_indic"]
     disclaimer: NonEmptyStr
     ai_voice_disclosure: NonEmptyStr
-    max_hashtags: PositiveInt
+    max_hashtags: PlatformHashtagCounts
 
 
 class Audio(_Section):
@@ -301,16 +378,17 @@ class Retention(_Section):
     auto_delete: bool
 
 
-def _strings_in(node: Any, where: str) -> Iterator[tuple[str, str]]:
+def strings_in(node: Any, where: str) -> Iterator[tuple[str, str]]:
+    """Every string in a dumped model, map keys included, with where it was found."""
     if isinstance(node, str):
         yield where, node
     elif isinstance(node, dict):
         for key, value in node.items():
             yield where, str(key)
-            yield from _strings_in(value, f"{where}.{key}" if where else str(key))
+            yield from strings_in(value, f"{where}.{key}" if where else str(key))
     elif isinstance(node, list):
         for value in node:
-            yield from _strings_in(value, where)
+            yield from strings_in(value, where)
 
 
 class EngineConfig(_Section):
@@ -334,7 +412,7 @@ class EngineConfig(_Section):
 
     @model_validator(mode="after")
     def _withdrawn_brand_is_refused(self) -> EngineConfig:
-        for where, text in _strings_in(self.model_dump(), ""):
+        for where, text in strings_in(self.model_dump(), ""):
             if contains_withdrawn_name(text):
                 raise ValueError(f"{where} uses the withdrawn brand name (D1)")
         for where, path in [
@@ -343,6 +421,21 @@ class EngineConfig(_Section):
         ]:
             if is_withdrawn_logo_path(path):
                 raise ValueError(f"{where} points at a withdrawn logo or launcher icon (D1)")
+        return self
+
+    @model_validator(mode="after")
+    def _test_and_real_brands_stay_apart(self) -> EngineConfig:
+        test = self.test_brand
+        real_logo = self.brand.logo_path
+        for where, text in [
+            ("name_en", test.name_en),
+            ("name_ar", test.name_ar),
+            ("hashtag", test.hashtag),
+        ]:
+            if contains_real_brand(text):
+                raise ValueError(f"test_brand.{where} must not carry the real brand name")
+        if real_logo.strip() and letters_only(real_logo) == letters_only(test.logo_path):
+            raise ValueError("test_brand.logo_path must not be the real logo")
         return self
 
 
@@ -376,12 +469,18 @@ def _describe(error: ValidationError) -> str:
 def load_config(path: Path | None = None) -> EngineConfig:
     config_path = DEFAULT_CONFIG_PATH if path is None else Path(path)
     try:
-        text = config_path.read_text(encoding="utf-8")
+        if config_path.stat().st_size > _MAX_CONFIG_BYTES:
+            raise ConfigError(f"Config {config_path} is too large")
+        text = config_path.read_bytes().decode("utf-8")
     except FileNotFoundError as error:
         raise ConfigError(f"Config file not found: {config_path}") from error
+    except UnicodeDecodeError as error:
+        raise ConfigError(f"Config {config_path} must be UTF-8 text") from error
+    except OSError as error:
+        raise ConfigError(f"Config {config_path} cannot be read: {error}") from error
     try:
         data = yaml.load(text, Loader=_NoDuplicateKeysLoader)  # a SafeLoader subclass
-    except yaml.YAMLError as error:
+    except (yaml.YAMLError, RecursionError, TypeError, ValueError) as error:
         raise ConfigError(f"Config {config_path} is not valid YAML: {error}") from error
     if not isinstance(data, dict):
         raise ConfigError(f"Config {config_path} must be a YAML mapping of sections")

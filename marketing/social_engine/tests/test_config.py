@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from core.brand_gate import contains_withdrawn_name, is_withdrawn_logo_path
 from core.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -236,7 +237,7 @@ def test_a_voice_provider_other_than_azure_is_refused(tmp_path, shipped, provide
 
 
 @pytest.mark.parametrize(
-    "backend", [OTHER_LLM, OTHER_LLM_ROUTER, "openai", "ollama", "", None]
+    "backend", [OTHER_LLM, OTHER_LLM_ROUTER, "open" + "ai", "oll" + "ama", "", None]
 )
 def test_a_non_claude_backend_is_refused(tmp_path, shipped, backend):
     refused(tmp_path, changed(shipped, "llm.backend", backend), "llm.backend")
@@ -291,7 +292,7 @@ def test_an_unknown_auth_route_is_refused(tmp_path, shipped):
         ("brand.name_en", WITHDRAWN_EN.upper()),
         ("brand.name_en", f"{WITHDRAWN_EN} Money"),
         ("brand.name_ar", WITHDRAWN_AR),
-        ("brand.name_ar", "وَف" + "ِيير"),
+        ("brand.name_ar", "و\u064eف" + "\u0650يير"),
         ("brand.tagline_en", f"Spend with {WITHDRAWN_EN}"),
         ("brand.handles.instagram", f"@{WITHDRAWN_EN.lower()}_app"),
         ("brand.hashtags", [f"#{WITHDRAWN_EN}"]),
@@ -458,3 +459,223 @@ def test_the_config_is_read_only_once_loaded():
     config = load_config()
     with pytest.raises(ValueError):
         config.engine.mode = "live"
+
+
+# --- Withdrawn name, however it is written ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        WITHDRAWN_EN,
+        WITHDRAWN_EN.upper(),
+        "Wa" + " feer",
+        " ".join(WITHDRAWN_EN),
+        ".".join(WITHDRAWN_EN),
+        "Wa" + "\u200bfeer",
+        "W\u00e1" + "feer",
+        "Wa\u0301" + "feer",
+        "W\u0430" + "feer",  # Cyrillic a
+        "".join(chr(ord(ch) + 0xFEE0) for ch in WITHDRAWN_EN),  # full width
+        WITHDRAWN_AR,
+        "وف\u0640" + "يير",  # kashida
+        "وف" + "\u0640\u0640\u0640" + "يير",
+        "وف" + "\u06cc\u06cc" + "ر",  # Persian yeh
+        "وف" + "\u0649\u0649" + "ر",  # alef maksura
+        "و\u064eف" + "\u0650يير",
+        "و ف" + " ي ي ر",
+        "و\u200dف" + "يير",
+    ],
+)
+def test_the_withdrawn_name_is_caught_however_it_is_written(text):
+    assert contains_withdrawn_name(text), repr(text)
+
+
+@pytest.mark.parametrize("text", ["توفير", "#توفير_المال", "وفير", "Qawam Money", "waffles"])
+def test_ordinary_words_are_not_the_withdrawn_name(text):
+    # "توفير" (saving) is a common word in these reels, and it holds the single-yeh spelling.
+    assert not contains_withdrawn_name(text)
+
+
+def test_the_withdrawn_name_in_a_map_key_is_refused(tmp_path, shipped):
+    data = changed(shipped, "voice.pronunciation", {WITHDRAWN_EN: "x"})
+    refused(tmp_path, data, "withdrawn")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "flutter_app\\assets\\images\\anything.png",
+        "FLUTTER_APP/assets/images/anything.png",
+        "assets/branding/IC_LAUNCHER.PNG",
+        f"assets/branding/{WITHDRAWN_EN.lower()}.png",
+    ],
+)
+def test_withdrawn_logo_paths_are_recognised_directly(path):
+    assert is_withdrawn_logo_path(path)
+
+
+def test_a_new_logo_is_not_a_withdrawn_logo_path():
+    assert not is_withdrawn_logo_path("assets/branding/logo.svg")
+
+
+# --- The test brand stays apart from the real one --------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("dotted", "value"),
+    [
+        ("test_brand.name_en", "Qawam Money"),
+        ("test_brand.name_en", "QAWAM MONEY test"),
+        ("test_brand.name_en", "Qawam"),
+        ("test_brand.name_en", "قوام المال"),
+        ("test_brand.name_ar", "قوام المال"),
+        ("test_brand.name_ar", "تجربة قوام المال"),
+        ("test_brand.name_ar", "قوام"),
+        ("test_brand.name_ar", "Qawam Money"),
+        ("test_brand.hashtag", "#QawamMoney"),
+        ("test_brand.hashtag", "#قوام_المال"),
+    ],
+)
+def test_the_test_brand_cannot_carry_the_real_brand(tmp_path, shipped, dotted, value):
+    refused(tmp_path, changed(shipped, dotted, value), "test_brand")
+
+
+def test_the_test_brand_cannot_use_the_real_logo(tmp_path, shipped):
+    data = changed(shipped, "brand.logo_path", "assets/branding/logo.svg")
+    data = changed(data, "test_brand.logo_path", "assets/branding/logo.svg")
+    refused(tmp_path, data, "test_brand")
+
+
+# --- Values with limits ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("dotted", "value"),
+    [
+        ("llm.max_budget_usd", float("inf")),
+        ("llm.max_budget_usd", float("-inf")),
+        ("llm.max_budget_usd", float("nan")),
+        ("llm.max_budget_usd", -1.0),
+        ("llm.max_budget_usd", 0.0),
+        ("llm.max_budget_usd", 100.01),
+        ("voice.chars_per_second", float("inf")),
+        ("voice.chars_per_second", float("nan")),
+        ("voice.monthly_char_cap", 10**12),
+        ("audio.duck_under_voice", float("nan")),
+        ("content.english_audio_share", float("nan")),
+        ("voice.arabic_voice", ""),
+        ("voice.arabic_voice", "   "),
+        ("voice.arabic_voice", "en-US-AvaNeural"),
+        ("voice.arabic_voice", 'ar-SA-HamedNeural"><x'),
+        ("voice.english_voice", "ar-SA-HamedNeural"),
+        ("voice.rate", ""),
+        ("voice.rate", "fast!"),
+        ("voice.rate", "10"),
+        ("voice.rate", '0%"><break/>'),
+        ("voice.rate", "1000%"),
+        ("voice.pitch", ""),
+        ("voice.pitch", "loud"),
+        ("voice.pitch", '0%"><break/>'),
+    ],
+)
+def test_values_with_limits_are_refused(tmp_path, shipped, dotted, value):
+    refused(tmp_path, changed(shipped, dotted, value), dotted)
+
+
+@pytest.mark.parametrize("rate", ["0%", "+10%", "-5%", "12.5%", "slow", "x-fast", "default"])
+def test_valid_speech_rates_load(tmp_path, shipped, rate):
+    assert load(tmp_path, changed(shipped, "voice.rate", rate)).voice.rate == rate
+
+
+@pytest.mark.parametrize("pitch", ["0%", "+5%", "-2st", "+50Hz", "low", "x-high", "default"])
+def test_valid_pitches_load(tmp_path, shipped, pitch):
+    assert load(tmp_path, changed(shipped, "voice.pitch", pitch)).voice.pitch == pitch
+
+
+@pytest.mark.parametrize("voice", ["", "en-US-AvaMultilingualNeural", "en-GB-RyanNeural"])
+def test_the_english_voice_may_stay_empty_until_the_bake_off(tmp_path, shipped, voice):
+    data = changed(shipped, "voice.english_voice", voice)
+    assert load(tmp_path, data).voice.english_voice == voice
+
+
+def test_a_posting_window_cannot_start_when_it_ends(tmp_path, shipped):
+    window = {"name": "x", "start": "13:00", "end": "13:00"}
+    refused(tmp_path, changed(shipped, "schedule.windows", [window]), "schedule")
+
+
+# --- A bad file is always a ConfigError ------------------------------------------------
+
+
+@pytest.mark.parametrize("text", ["? [a, b]\n: 1\n", "? {a: 1}\n: 2\n", "[" * 20000])
+def test_a_hostile_yaml_file_is_a_config_error(tmp_path, text):
+    path = tmp_path / "config.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_a_file_that_is_not_utf8_is_a_config_error(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_bytes(DEFAULT_CONFIG_PATH.read_text("utf-8").encode("utf-16"))
+    with pytest.raises(ConfigError, match="UTF-8"):
+        load_config(path)
+
+
+def test_a_folder_instead_of_a_file_is_a_config_error(tmp_path):
+    with pytest.raises(ConfigError):
+        load_config(tmp_path)
+
+
+def test_a_huge_file_is_a_config_error(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("# x\n" * 1_000_000, encoding="utf-8")
+    with pytest.raises(ConfigError, match="too large"):
+        load_config(path)
+
+
+# --- Per-platform settings (spec Sections 6.7, 8.2, 10.4) ------------------------------
+
+PLATFORMS = {"instagram", "facebook", "tiktok", "youtube"}
+
+
+def test_hashtag_counts_are_per_platform(shipped):
+    assert set(shipped["captions"]["max_hashtags"]) == PLATFORMS
+
+
+def test_safe_zones_are_per_platform(shipped):
+    assert set(shipped["render"]["safe_zones"]) == PLATFORMS
+
+
+@pytest.mark.parametrize("dotted", ["captions.max_hashtags", "render.safe_zones"])
+def test_a_single_value_is_no_longer_accepted(tmp_path, shipped, dotted):
+    refused(tmp_path, changed(shipped, dotted, 5), dotted)
+
+
+@pytest.mark.parametrize("dotted", ["captions.max_hashtags", "render.safe_zones"])
+def test_each_platform_is_required(tmp_path, shipped, dotted):
+    data = copy.deepcopy(shipped)
+    section, key = dotted.split(".")
+    del data[section][key]["tiktok"]
+    refused(tmp_path, data, "tiktok")
+
+
+@pytest.mark.parametrize("value", [0, 31, "5", 2.5])
+def test_hashtag_counts_have_limits(tmp_path, shipped, value):
+    data = changed(shipped, "captions.max_hashtags.instagram", value)
+    refused(tmp_path, data, "max_hashtags")
+
+
+def test_safe_zones_must_fit_the_canvas_on_each_platform(tmp_path, shipped):
+    data = changed(shipped, "render.safe_zones.tiktok.top", 1900)
+    data = changed(data, "render.safe_zones.tiktok.bottom", 100)
+    refused(tmp_path, data, "safe_zones")
+
+
+def test_one_reel_uses_the_strictest_margin_of_every_platform():
+    zones = load_config().render.safe_zones
+    strictest = zones.strictest()
+    for side in ("top", "bottom", "left", "right"):
+        assert getattr(strictest, side) == max(
+            platform[side] for platform in zones.model_dump().values()
+        )
