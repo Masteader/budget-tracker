@@ -43,6 +43,13 @@ FORMER_NAME_CLAUSE = (
     "If the user calls this app Budget Tracker or ميزانية الأسرة, that is this app's former name; "
     "reply using the correct name."
 )
+# Urdu only: it also names the Urdu-script form, because that is the one Urdu users saw.
+FORMER_NAME_CLAUSE_UR = (
+    "If the user calls this app Budget Tracker, ميزانية الأسرة or بجٹ ٹریکر, that is this app's former name; "
+    "reply using the correct name."
+)
+FORMER_NAME_CLAUSES = {"en": FORMER_NAME_CLAUSE, "ar": FORMER_NAME_CLAUSE, "ur": FORMER_NAME_CLAUSE_UR}
+URDU_OLD_NAME = "بجٹ ٹریکر"
 
 
 _NOT_BACKEND_DIRS = {"tests", "static", "venv", "__pycache__"}
@@ -110,14 +117,22 @@ def test_support_prompt_does_not_ask_for_an_introduction_on_every_reply(lang):
 @pytest.mark.parametrize("lang", ["en", "ar", "ur"])
 def test_former_name_clause_names_the_former_names_and_nothing_wider(lang):
     prompt = support_agent.build_support_prompt(lang, None)
-    assert FORMER_NAME_CLAUSE in prompt
-    assert "Budget Tracker" in FORMER_NAME_CLAUSE
-    assert "ميزانية الأسرة" in FORMER_NAME_CLAUSE
+    clause = FORMER_NAME_CLAUSES[lang]
+    assert clause in prompt
+    assert "Budget Tracker" in clause
+    assert "ميزانية الأسرة" in clause
     assert prompt.count("former name") == 1
     for catch_all in ("a different name", "another name", "other name", "any name", "same app", "other app", "another app"):
-        assert catch_all not in FORMER_NAME_CLAUSE, catch_all
+        assert catch_all not in clause, catch_all
     for catch_all in ("a different name", "another name", "same app", "other app", "another app"):
         assert catch_all not in prompt, catch_all
+
+
+def test_only_the_urdu_prompt_names_the_urdu_former_name():
+    assert URDU_OLD_NAME in FORMER_NAME_CLAUSE_UR
+    assert URDU_OLD_NAME in support_agent.build_support_prompt("ur", None)
+    assert URDU_OLD_NAME not in support_agent.build_support_prompt("en", None)
+    assert URDU_OLD_NAME not in support_agent.build_support_prompt("ar", None)
 
 
 def test_arabic_prompt_requires_the_arabic_name_in_arabic_replies():
@@ -296,7 +311,7 @@ _ALLOWED_IDENTIFIERS = (
 # Exact text allowed in one file only, keyed by its path under ai_service/.
 _ALLOWED_PHRASES = {
     "chat_parser.py": ("Saudi budget tracker",),  # a generic description in a money module, not the brand
-    "support_agent.py": (FORMER_NAME_CLAUSE,),
+    "support_agent.py": (FORMER_NAME_CLAUSE, FORMER_NAME_CLAUSE_UR),
 }
 _ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍"))
 
@@ -462,17 +477,38 @@ def test_withdrawn_name_guard_sees_through_zero_width_characters(leak):
     assert _has_withdrawn_name(leak), repr(leak)
 
 
-def test_former_name_clause_is_allowed_only_in_the_support_agent():
-    assert not _has_old_name(FORMER_NAME_CLAUSE, "support_agent.py")
-    assert _has_old_name(FORMER_NAME_CLAUSE, "routes/chat.py")
-    assert _has_old_name(FORMER_NAME_CLAUSE, "landing_page.py")
-    assert _has_old_name(FORMER_NAME_CLAUSE)
+@pytest.mark.parametrize("clause", [FORMER_NAME_CLAUSE, FORMER_NAME_CLAUSE_UR], ids=["en-ar", "ur"])
+def test_former_name_clause_is_allowed_only_in_the_support_agent(clause):
+    assert not _has_old_name(clause, "support_agent.py")
+    assert _has_old_name(clause, "routes/chat.py")
+    assert _has_old_name(clause, "landing_page.py")
+    assert _has_old_name(clause)
 
 
-@pytest.mark.parametrize("leak", ["Welcome to Budget Tracker", "مرحبا في ميزانية الأسرة", "Budget Tracker or ميزانية الأسرة"])
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "Welcome to Budget Tracker",
+        "مرحبا في ميزانية الأسرة",
+        "Budget Tracker or ميزانية الأسرة",
+        URDU_OLD_NAME,
+        f"{URDU_OLD_NAME} سپورٹ میں خوش آمدید",
+        f"Budget Tracker, ميزانية الأسرة or {URDU_OLD_NAME}",
+    ],
+)
 def test_support_agent_allowance_does_not_cover_other_uses_of_the_old_names(leak):
     assert _has_old_name(leak, "support_agent.py")
     assert _has_old_name(f"{FORMER_NAME_CLAUSE} {leak}", "support_agent.py")
+    assert _has_old_name(f"{FORMER_NAME_CLAUSE_UR} {leak}", "support_agent.py")
+
+
+def test_urdu_old_name_elsewhere_in_the_real_support_agent_file_still_fails():
+    source = _read("support_agent.py")
+    assert not _old_name_in_runtime_strings(source, "support_agent.py")
+    # The same real file with one new string that shows the old Urdu name.
+    leaked = f'{source}\nWELCOME = "{URDU_OLD_NAME} سپورٹ میں خوش آمدید"\n'
+    assert _old_name_in_runtime_strings(leaked, "support_agent.py")
+    assert _has_old_name(leaked, "support_agent.py")
 
 
 @pytest.mark.parametrize(
