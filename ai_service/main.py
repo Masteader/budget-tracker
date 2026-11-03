@@ -1,5 +1,5 @@
 """
-FastAPI entry point for the Budget Tracker AI microservice.
+FastAPI entry point for the Qawam Money AI microservice.
 
 Architecture:
 - Modular routers under `routes/`
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Budget Tracker AI Service",
+    title="Qawam Money AI Service",
     description="Modular AI service and budget manager for Saudi personal finance.",
     version="1.0.2",
     docs_url="/docs",
