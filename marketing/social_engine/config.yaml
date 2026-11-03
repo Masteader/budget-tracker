@@ -1,0 +1,131 @@
+# Social engine settings (spec Section 11.3). No secrets here: they live only in
+# %LOCALAPPDATA%\SocialEngine\.env. Unknown keys and invalid values stop the engine.
+
+engine:
+  mode: test             # test | live; live needs the launch gate in spec Section 13
+
+brand:
+  name_en: "Qawam Money"
+  name_ar: "قوام المال"
+  tagline_en: "Spend in balance"
+  tagline_ar: "لا إسراف ولا تقتير"
+  handles:               # unset until vetted
+    instagram: ""
+    facebook: ""
+    tiktok: ""
+    youtube: ""
+  hashtags: []           # unset until vetted
+  logo_path: ""          # unset: old logo withdrawn, new one not ready
+  tokens: "assets/branding/brand_tokens.json"
+  clearance:             # empty: no evidence of vetting yet. Only the owner records it
+    google_play_checked_on: null
+    app_store_checked_on: null
+    saip_checked_on: null
+    approved_by_owner_on: null
+
+test_brand:              # used only for test reels
+  name_en: "TEST BRAND"
+  name_ar: "علامة تجريبية"
+  hashtag: "#test"
+  logo_path: "assets/branding/test_logo.svg"
+
+paths:
+  data_root: "%LOCALAPPDATA%/SocialEngine"   # outside OneDrive and git
+
+capture:
+  adb_path: "%LOCALAPPDATA%/Android/Sdk/platform-tools/adb.exe"
+
+llm:
+  backend: claude_cli    # claude_cli | anthropic_api
+  auth: subscription     # claude_cli only: subscription | api_key. A scheduled run refuses subscription (D20)
+  model: opus            # alias or full Claude model name, owner can change
+  claude_path: ""        # absolute path, required under Task Scheduler
+  claude_version: ""     # pinned after the LIVE-2 check (spec Section 6.3)
+  max_turns: 12
+  max_budget_usd: 2.00   # enforced for api_key use
+
+voice:
+  provider: azure_speech           # only value accepted in Phase 1
+  azure_tier: F0                   # F0 | S0, must match the resource you created
+  arabic_voice: ar-SA-HamedNeural  # set by the bake-off
+  english_voice: ""                # set by the bake-off
+  rate: "0%"
+  pitch: "0%"
+  output_format: riff-48khz-16bit-mono-pcm
+  monthly_char_cap: 400000         # engine stops itself below the free 500,000
+  allow_public_on_f0: false        # spec Section 7.3
+  chars_per_second: 9.0            # one informal sample (spec Section 6.2), re-measured in S2
+  pronunciation: {}                # <sub> or phoneme fixes found in the bake-off
+
+render:
+  fps: 30
+  video_kbps_cap: 8000
+  audio_kbps: 192
+  max_mb: 48
+  ffmpeg_path: ""        # empty: use Remotion's bundled FFmpeg (plan Section 2.4)
+  safe_zones:            # hypothesis in px, checked against each platform in LIVE-5
+    top: 220
+    bottom: 380
+    left: 60
+    right: 140
+
+captions:
+  digits: western        # western | arabic_indic
+  # Wording for the owner to read at LIVE-6.
+  disclaimer: "معلومات عامة وليست نصيحة مالية · General information, not financial advice"
+  ai_voice_disclosure: "صوت مولّد بالذكاء الاصطناعي · AI-generated voice"
+  max_hashtags: 5        # hypothesis. Hashtags must be relevant, and no borrowed trending tags
+
+audio:
+  music_enabled: false   # D25; enabling music needs a licensed library named
+  music_library: null
+  duck_under_voice: 0.12
+  duck_in_pauses: 0.25
+
+content:
+  mix:
+    global: 50
+    regional: 30
+    saudi: 20
+  english_audio_share: 0.2   # D28: 1 reel in 5
+
+cta:
+  mode: coming_soon      # coming_soon | early_access | store
+  landing_url: null      # empty means no link of any kind
+  coming_soon:
+    bio_ar: "{brand_ar} {brand_en} · لا إسراف ولا تقتير · قريبًا: الوصول المبكر"
+    bio_en: "{brand_en} {brand_ar} · Spend in balance · Early access coming soon"
+    caption_ar: "{brand_ar} {brand_en} قريبًا. نجهّز الوصول المبكر."
+    caption_en: "{brand_en} {brand_ar} is coming soon. Early access is on the way."
+    voice_ar: "{brand_ar}، قريبًا."
+    voice_en: "{brand_en}, coming soon."
+  early_access: null     # owner adds wording with the URL; config refuses the mode without both
+  store: null            # owner adds wording with a real store URL; refused without both
+
+approval:
+  expire_after_hours: 72
+  max_regenerations: 3
+  max_waiting: 3
+
+guardrails:
+  max_copied_words: 12
+
+publishing_mode: telegram_only
+
+schedule:                # all hypotheses, no evidence yet (spec Section 10.5)
+  timezone: Asia/Riyadh
+  generate_after: "09:00"
+  cadence:               # D24: owner raises reels_per_week to 7 once stable
+    reels_per_week: 3
+    generation_days: [sun, tue, thu]
+  windows:
+    - {name: midday, start: "13:00", end: "14:00"}
+    - {name: evening, start: "20:30", end: "22:30"}
+  payday_boost:
+    enabled: false       # switch on as an A/B test in Phase 3
+    days_of_month: [24, 25, 26, 27, 28, 29]
+    reels_per_day: 2
+  ramadan_windows: null  # to be set before Ramadan; likely different
+
+retention:
+  auto_delete: false     # rule 06: deleting data is the owner's call
