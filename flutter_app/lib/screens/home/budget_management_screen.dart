@@ -1383,18 +1383,22 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                             })
                           : null,
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          headerTitle,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary),
-                        ),
-                        Text(
-                          headerSub,
-                          style: TextStyle(color: context.textSecondary, fontSize: 11),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            headerTitle,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.textPrimary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            headerSub,
+                            style: TextStyle(color: context.textSecondary, fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       tooltip: context.tr('a11y_next'),
@@ -1475,9 +1479,11 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               children: [
                                 const Icon(Icons.info_outline, color: Colors.orange, size: 20),
                                 const SizedBox(width: 8),
-                                Text(
-                                  context.tr('no_allocations_set'),
-                                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                                Expanded(
+                                  child: Text(
+                                    context.tr('no_allocations_set'),
+                                    style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
                                 ),
                               ],
                             ),
@@ -1641,28 +1647,32 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${context.tr('total_allocated')} ($headerTitle)',
-                                        style: TextStyle(
-                                          color: context.textSecondary,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${context.tr('total_allocated')} ($headerTitle)',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: context.textSecondary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        context.sar(totalAllocated),
-                                        style: GoogleFonts.outfit(
-                                          color: context.accentText,
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          context.sar(totalAllocated),
+                                          style: GoogleFonts.outfit(
+                                            color: context.accentText,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Builder(
                                     builder: (context) {
                                       final setCodes = budgets.where((b) => b.isActive).map((b) => b.categoryCode).toSet();
@@ -1857,8 +1867,12 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                     ),
                                   ),
                                 ] else ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  Wrap(
+                                    alignment: WrapAlignment.spaceBetween,
+                                    runAlignment: WrapAlignment.center,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 8,
+                                    runSpacing: 4,
                                     children: [
                                       Text(
                                         context.trArgs('within_income_capacity', {'amount': context.sar(fundingMargin)}),
@@ -1926,6 +1940,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                         context,
                         householdId: staticData.householdId,
                         categoryCode: code,
+                        categoryName: displayName,
                         cycleKey: _currentCycleKey,
                         allocatedAmount: allocated,
                         spentAmount: spent,
@@ -2075,7 +2090,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                       budget: existing,
                                       categoryCode: code,
                                       cycleKey: _currentCycleKey,
-                                      categoryName: context.trCat(code),
+                                      categoryName: displayName,
                                       onMapped: () {
                                         setState(() {
                                           _staticFuture = _loadStaticData();

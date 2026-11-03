@@ -466,8 +466,8 @@ class ApiService {
         cycleKey: cycleKey,
       );
 
-  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode) =>
-      budget.getSubCategories(parentCode);
+  Future<List<Map<String, dynamic>>> getSubCategories(String parentCode, {String? householdId}) =>
+      budget.getSubCategories(parentCode, householdId: householdId);
 
   Future<Map<String, dynamic>> renameSubCategory({
     required String parentCode,

@@ -812,6 +812,7 @@ class CategoryItem {
   final bool isActive;
   final String? householdId;
   final List<String> keywords;
+  final Map<String, double> subAllocations;
 
   const CategoryItem({
     required this.code,
@@ -820,9 +821,24 @@ class CategoryItem {
     this.isActive = true,
     this.householdId,
     this.keywords = const [],
+    this.subAllocations = const {},
   });
 
+  String get categoryName => name;
+
   factory CategoryItem.fromJson(Map<String, dynamic> json) {
+    Map<String, double> subAllocs = const {};
+    if (json['sub_allocations'] is Map) {
+      final rawMap = json['sub_allocations'] as Map;
+      final parsed = <String, double>{};
+      for (final entry in rawMap.entries) {
+        if (entry.value is num) {
+          parsed[entry.key.toString()] = (entry.value as num).toDouble();
+        }
+      }
+      subAllocs = parsed;
+    }
+
     return CategoryItem(
       code: json['code'] as String? ?? '',
       name: json['category'] as String? ?? json['name'] as String? ?? '',
@@ -833,6 +849,7 @@ class CategoryItem {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+      subAllocations: subAllocs,
     );
   }
 
