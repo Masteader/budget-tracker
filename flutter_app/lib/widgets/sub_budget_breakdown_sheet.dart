@@ -141,7 +141,9 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
       // Fallback CategoryBreakdownItem if API returned no matching item
       matched ??= CategoryBreakdownItem(
         categoryCode: widget.categoryCode,
-        categoryName: widget.categoryCode,
+        categoryName: (widget.categoryName != null && widget.categoryName!.trim().isNotEmpty)
+            ? widget.categoryName!
+            : widget.categoryCode,
         allocatedAmount: widget.allocatedAmount,
         spentAmount: widget.spentAmount,
         remainingAmount: widget.allocatedAmount - widget.spentAmount,
@@ -242,6 +244,14 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
         ? widget.previousCycleDelta
         : (_categoryData?.previousCycleDelta ?? 0.0);
 
+    final effectiveCategoryName = (widget.categoryName != null && widget.categoryName!.trim().isNotEmpty)
+        ? widget.categoryName!
+        : (_categoryData?.categoryName != null &&
+                _categoryData!.categoryName.trim().isNotEmpty &&
+                _categoryData!.categoryName != widget.categoryCode)
+            ? _categoryData!.categoryName
+            : context.trCat(widget.categoryCode);
+
     return SafeArea(
       child: Container(
         constraints: BoxConstraints(
@@ -285,11 +295,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        (_categoryData?.categoryName != null && _categoryData!.categoryName.trim().isNotEmpty)
-                            ? _categoryData!.categoryName
-                            : (widget.categoryName != null && widget.categoryName!.trim().isNotEmpty)
-                                ? widget.categoryName!
-                                : context.trCat(widget.categoryCode),
+                        effectiveCategoryName,
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -340,11 +346,7 @@ class _SubBudgetBreakdownSheetState extends State<SubBudgetBreakdownSheet> {
                       context,
                       householdId: widget.householdId,
                       categoryCode: widget.categoryCode,
-                      categoryName: (_categoryData?.categoryName != null && _categoryData!.categoryName.trim().isNotEmpty)
-                          ? _categoryData!.categoryName
-                          : (widget.categoryName != null && widget.categoryName!.trim().isNotEmpty)
-                              ? widget.categoryName!
-                              : widget.categoryCode,
+                      categoryName: effectiveCategoryName,
                       existingBudget: existing,
                       cycleKey: widget.cycleKey,
                     );

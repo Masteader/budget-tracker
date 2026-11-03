@@ -191,5 +191,62 @@ void main() {
       expect(find.text('Gas').last, findsOneWidget);
       expect(find.text('Maintenance').last, findsOneWidget);
     });
+
+    testWidgets('Category race condition: stale subcategories are dropped if category changed', (tester) async {
+      final activeCategories = [
+        const CategoryItem(
+          code: 'CUSTOM-CAR_TRANSPORT',
+          name: 'Car and Transport',
+          isSystem: false,
+          isActive: true,
+          subAllocations: {'sub-gas': 400.0},
+        ),
+        const CategoryItem(
+          code: 'OPEX-GROCERY',
+          name: 'Groceries & Supermarkets',
+          isSystem: true,
+          isActive: true,
+          subAllocations: {'sub-produce': 150.0},
+        ),
+      ];
+
+      final fakeBudgetProvider = _FakeBudgetProvider(
+        activeCategories: activeCategories,
+      );
+
+      final tx = _makeTx(
+        id: 'tx-race-1',
+        categoryCode: 'CUSTOM-CAR_TRANSPORT',
+        amount: 50.0,
+      );
+
+      await tester.pumpWidget(
+        _wrapWithApp(
+          budgetProvider: fakeBudgetProvider,
+          child: EditTransactionSheet(
+            transaction: tx,
+            loadNafaqahFields: (_) async => null,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Change category to OPEX-GROCERY
+      final catDropdownFinder = find.byType(DropdownButtonFormField<String>).first;
+      await tester.tap(catDropdownFinder);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Groceries & Supermarkets').last);
+      await tester.pumpAndSettle();
+
+      // Open subcategory dropdown
+      final subCatDropdownFinder = find.byType(DropdownButtonFormField<String?>).last;
+      await tester.tap(subCatDropdownFinder);
+      await tester.pumpAndSettle();
+
+      // "Produce" from OPEX-GROCERY should be present, "Gas" from stale CAT should NOT be present
+      expect(find.text('Produce').last, findsOneWidget);
+      expect(find.text('Gas'), findsNothing);
+    });
   });
 }

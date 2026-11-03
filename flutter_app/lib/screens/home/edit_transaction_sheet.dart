@@ -761,7 +761,7 @@ class _EditTransactionSheetState extends State<EditTransactionSheet> {
         } catch (_) {}
       }
 
-      if (mounted) {
+      if (mounted && _selectedCategory.trim() == catCode.trim()) {
         setState(() {
           _subCategories = synthesized;
         });
