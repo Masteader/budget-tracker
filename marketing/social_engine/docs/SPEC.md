@@ -1172,7 +1172,7 @@ Per rule 05: tests first, confirm they fail for the right reason, minimal code, 
 
 **Manual Phase 0 checks** are real-service spikes, run by the owner or with the owner's approval, never in the test suite.
 
-Before review, each batch runs the suites above. The app's Flutter and `ai_service` gates in rule 06 apply only to a batch that touches those areas, as `docs/PLAN.md` sets out.
+Before review, each batch runs the suites above. Rule 06 section 6 applies as written, including its Flutter and `ai_service` gates, unless the owner waives it. Batches do not change `flutter_app/` or `ai_service/`.
 
 ---
 

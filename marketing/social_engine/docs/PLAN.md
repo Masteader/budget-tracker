@@ -99,7 +99,7 @@ Pop-Location
 
 The first `npm install` happens in `remotion_work\`. `core.remotion_sync --pull-lock` then copies `package-lock.json` back to the repo. The first render downloads Remotion's headless browser, which is a free tool download, once, and is not a test dependency of the Python suite.
 
-**App gates.** Rule 06 section 6 lists `flutter analyze`, `flutter test` and `ai_service` pytest. For this plan they apply only if a batch touches `flutter_app/` or `ai_service/`, per rule 05 section 1 ("every suite the change touches"), and no batch here should. If a batch does touch them, it is out of scope: stop and ask.
+**App gates.** Rule 06 section 6 applies as written to every batch, unless the owner waives it: `flutter analyze`, `flutter test` and `ai_service` pytest run before each review round and before committing. Batches still must not change `flutter_app/` or `ai_service/`. If a batch needs to, it is out of scope: stop and ask.
 
 ### 2.4 FFmpeg: no install by default
 
@@ -530,4 +530,4 @@ These do not block Part 1.
 
 - **Smart Basket safeguards (D30, G19)** come from the orchestrator. If the owner overrules them, tasks A4, C5, F5, G1 and H2 change with the spec.
 - **CTA and bio wording (spec Section 6.7)** was drafted to carry out D26. If the owner changes it, only `config.yaml` and the strings in `tests/test_cta.py` change.
-- **Rule 06 section 6** does not itself state the scoping in Section 2.3. It comes from the orchestrator's brief and rule 05. If the owner wants the full app gates on every batch, add them to the gate.
+- **Rule 06 section 6** applies as written to every batch (Section 2.3), unless the owner waives it. Only the owner can waive it.
