@@ -536,6 +536,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
 
               // Category Dropdown
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _selectedCategory,
                 decoration: InputDecoration(
                   labelText: context.tr('category'),
@@ -555,7 +556,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
                 items: _categories.map((c) {
                   return DropdownMenuItem<String>(
                     value: c,
-                    child: Text(context.trCat(c)),
+                    child: Text(context.trCat(c), overflow: TextOverflow.ellipsis),
                   );
                 }).toList(),
                 onChanged: (val) {

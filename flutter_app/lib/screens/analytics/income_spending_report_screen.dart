@@ -207,12 +207,14 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                context.tr('net_cash_flow'),
-                style: GoogleFonts.outfit(
-                  color: context.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  context.tr('net_cash_flow'),
+                  style: GoogleFonts.outfit(
+                    color: context.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               Container(
@@ -371,19 +373,24 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.receipt_long_rounded, size: 18, color: context.electricTeal),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('income_ledger'),
-                    style: GoogleFonts.outfit(
-                      color: context.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long_rounded, size: 18, color: context.electricTeal),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        context.tr('income_ledger'),
+                        style: GoogleFonts.outfit(
+                          color: context.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               InkWell(
                 onTap: () async {
@@ -562,12 +569,14 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
             children: [
               Icon(Icons.pie_chart_outline_rounded, size: 18, color: context.champagneGold),
               const SizedBox(width: 8),
-              Text(
-                context.tr('category_spending'),
-                style: GoogleFonts.outfit(
-                  color: context.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  context.tr('category_spending'),
+                  style: GoogleFonts.outfit(
+                    color: context.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -601,27 +610,33 @@ class _IncomeSpendingReportScreenState extends State<IncomeSpendingReportScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: visual.color.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: visual.color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(visual.icon, size: 15, color: visual.color),
                               ),
-                              child: Icon(visual.icon, size: 15, color: visual.color),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              name,
-                              style: TextStyle(
-                                color: context.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  style: TextStyle(
+                                    color: context.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           context.sar(amt),
                           style: GoogleFonts.outfit(
