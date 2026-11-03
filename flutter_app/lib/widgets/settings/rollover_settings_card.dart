@@ -238,12 +238,12 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
               ),
               onPressed: _saving ? null : _handleSave,
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.black,
+                        color: context.primaryButtonFg,
                       ),
                     )
                   : Row(
@@ -252,7 +252,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                         Icon(
                           Icons.check_circle_outline_rounded,
                           size: 18,
-                          color: hasChanges ? Colors.black : context.textSecondary,
+                          color: hasChanges ? context.primaryButtonFg : context.textSecondary,
                         ),
                         const SizedBox(width: 8),
                         Text(

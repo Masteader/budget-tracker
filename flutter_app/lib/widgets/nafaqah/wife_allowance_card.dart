@@ -85,10 +85,10 @@ class WifeAllowanceCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppThemes.iceCyan.withValues(alpha: 0.15),
+                  color: context.accentText.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.account_balance_wallet_outlined, color: AppThemes.iceCyan, size: 20),
+                child: Icon(Icons.account_balance_wallet_outlined, color: context.accentText, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -167,8 +167,8 @@ class WifeAllowanceCard extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppThemes.iceCyan,
-                  side: BorderSide(color: AppThemes.iceCyan.withValues(alpha: 0.5)),
+                  foregroundColor: context.accentText,
+                  side: BorderSide(color: context.accentText.withValues(alpha: 0.5)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -324,15 +324,15 @@ class _AllowanceEditorSheetState extends State<_AllowanceEditorSheet> {
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppThemes.iceCyan,
-              foregroundColor: AppThemes.deepGlacial,
+              foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: _saving
-                ? const SizedBox(
+                ? SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.deepGlacial),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                   )
                 : const Icon(Icons.check_rounded, size: 18),
             label: Text(context.tr('allowance_save'), style: const TextStyle(fontWeight: FontWeight.bold)),

@@ -1000,8 +1000,16 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: context.warnText),
-            child: Text(context.tr('deactivate'), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.isDark ? context.warnText : VelvetBurgundyColors.amberCautionBgLight,
+            ),
+            child: Text(
+              context.tr('deactivate'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: context.isDark ? Colors.black : VelvetBurgundyColors.amberCautionTextLight,
+              ),
+            ),
           ),
         ],
       ),
