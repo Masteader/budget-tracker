@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import base64
 import hashlib
+import json
 import pathlib
 import re
 import zlib
@@ -21,6 +22,7 @@ from email.utils import parseaddr
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import FastAPI
 
 import landing_page
 import mail_service
@@ -35,7 +37,28 @@ NAME_AR = "قوام المال"
 SENDER_ADDRESS = "fmscoinfo@fmsco.com.sa"
 
 SERVICE_DIR = pathlib.Path(__file__).resolve().parent.parent
-BACKEND_MODULES = sorted([*SERVICE_DIR.glob("*.py"), *(SERVICE_DIR / "routes").glob("*.py")])
+# The one place the old names may appear: it tells the support model they are this app's former
+# names. It names them on purpose: a catch-all would also cover other apps, such as Tabby or Tamara.
+FORMER_NAME_CLAUSE = (
+    "If the user calls this app Budget Tracker or ميزانية الأسرة, that is this app's former name; "
+    "reply using the correct name."
+)
+
+
+_NOT_BACKEND_DIRS = {"tests", "static", "venv", "__pycache__"}
+
+
+def _backend_modules(root: pathlib.Path) -> list[pathlib.Path]:
+    """Every backend .py file, so a new subpackage is covered. Hidden dirs cover .venv and caches."""
+    modules = []
+    for path in root.rglob("*.py"):
+        folders = path.relative_to(root).parts[:-1]
+        if not any(part in _NOT_BACKEND_DIRS or part.startswith(".") for part in folders):
+            modules.append(path)
+    return sorted(modules)
+
+
+BACKEND_MODULES = _backend_modules(SERVICE_DIR)
 # Whole-file checks (comments and docstrings too) for the files that carried the name.
 RENAMED_FILES = [
     "support_agent.py",
@@ -69,8 +92,32 @@ def test_support_prompt_tells_the_assistant_how_to_answer_about_the_name(lang):
     prompt = support_agent.build_support_prompt(lang, None)
     first_line = prompt.splitlines()[0]
     assert first_line.startswith(f"You are the AI Support Assistant for {NAME_EN}")
-    assert "asked what the app is called" in prompt
-    assert "any other name" in prompt
+    assert "The app's name is" in prompt
+    expected = NAME_AR if lang == "ar" else NAME_EN
+    assert f"when asked what the app is called, answer {expected}." in prompt.replace("When asked", "when asked")
+
+
+@pytest.mark.parametrize("lang", ["en", "ar", "ur"])
+def test_support_prompt_does_not_ask_for_an_introduction_on_every_reply(lang):
+    # routes/chat.py sends app_guidance messages here without history, so an unconditional
+    # instruction fires on every reply, and the model cannot tell which contact is the first.
+    prompt = support_agent.build_support_prompt(lang, None).lower()
+    assert "introduce" not in prompt
+    assert "first message" not in prompt
+    assert "first contact" not in prompt
+
+
+@pytest.mark.parametrize("lang", ["en", "ar", "ur"])
+def test_former_name_clause_names_the_former_names_and_nothing_wider(lang):
+    prompt = support_agent.build_support_prompt(lang, None)
+    assert FORMER_NAME_CLAUSE in prompt
+    assert "Budget Tracker" in FORMER_NAME_CLAUSE
+    assert "ميزانية الأسرة" in FORMER_NAME_CLAUSE
+    assert prompt.count("former name") == 1
+    for catch_all in ("a different name", "another name", "other name", "any name", "same app", "other app", "another app"):
+        assert catch_all not in FORMER_NAME_CLAUSE, catch_all
+    for catch_all in ("a different name", "another name", "same app", "other app", "another app"):
+        assert catch_all not in prompt, catch_all
 
 
 def test_arabic_prompt_requires_the_arabic_name_in_arabic_replies():
@@ -233,27 +280,58 @@ def test_api_docs_title_uses_the_new_name():
 
 # ── Guard: the old and the withdrawn name stay out ──────────────────────────────
 
-_OLD_NAME = re.compile(r"budget[\s_\-]*tracker|بجٹ\s*ٹریکر|بجت\s*تراكر", re.IGNORECASE)
-# "وفير" alone also sits inside "توفير" (saving), hence the word boundary on the short forms.
-_WITHDRAWN_NAME = re.compile(
-    r"\bwa+f+(?:ee|ei|ie|i|y)r\b|وفيير|وفّير|وفییر|وافير|وافیر|\bوفير\b|\bوفیر\b",
+_OLD_NAME = re.compile(
+    r"budget[\s_\-]*tracker|بجٹ\s*ٹریکر|بجت\s*تراكر|بدجت\s*تراكر|ميزانية\s*الأسرة",
     re.IGNORECASE,
 )
+# Plain "وفير" is left out on purpose: it is an ordinary word for "abundant", and it sits inside
+# "توفير" (saving). The forms here are not ordinary words, so they match anywhere, prefixed or not.
+_WITHDRAWN_NAME = re.compile(r"wa+f+(?:ee|ei|ie|i|y)r|وفيير|وفّير|وفییر|وافير|وافیر", re.IGNORECASE)
 # Identifiers, not display text. See the "must stay" tests below.
 _ALLOWED_IDENTIFIERS = (
     "budgettracker://",
-    "io.supabase.budgettracker",
     "budget-tracker/preview-token/v1",
     "budget_tracker_ai",
 )
-# A generic description in a sensitive money module, not the brand.
-_ALLOWED_PHRASES = {"chat_parser.py": ("Saudi budget tracker",)}
+# Exact text allowed in one file only, keyed by its path under ai_service/.
+_ALLOWED_PHRASES = {
+    "chat_parser.py": ("Saudi budget tracker",),  # a generic description in a money module, not the brand
+    "support_agent.py": (FORMER_NAME_CLAUSE,),
+}
+_ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍"))
 
 
-def _strip_allowed(text: str, filename: str = "") -> str:
-    for allowed in (*_ALLOWED_IDENTIFIERS, *_ALLOWED_PHRASES.get(filename, ())):
+def _normalize(text: str) -> str:
+    """Spacing that reads as a space, and characters that do not show, must not hide a name."""
+    return text.replace("&nbsp;", " ").replace(" ", " ").translate(_ZERO_WIDTH)
+
+
+def _strip_allowed(text: str, relative: str = "") -> str:
+    for allowed in (*_ALLOWED_IDENTIFIERS, *_ALLOWED_PHRASES.get(relative, ())):
         text = text.replace(allowed, "")
     return text
+
+
+def _has_old_name(text: str, relative: str = "") -> bool:
+    return bool(_OLD_NAME.search(_strip_allowed(_normalize(text), relative)))
+
+
+def _has_withdrawn_name(text: str) -> bool:
+    return bool(_WITHDRAWN_NAME.search(_normalize(text)))
+
+
+def _relative(path: pathlib.Path) -> str:
+    return path.relative_to(SERVICE_DIR).as_posix()
+
+
+def _openapi_text(application: FastAPI) -> str:
+    # ensure_ascii=False: the default escapes Arabic, which the name patterns could then never match.
+    return json.dumps(application.openapi(), ensure_ascii=False)
+
+
+def _container_names(compose: str) -> list[str]:
+    """The container_name values of a compose file: only a real key counts, never a comment."""
+    return re.findall(r"""^[ \t]*container_name:[ \t]*["']?([^\s"'#]+)""", compose, re.MULTILINE)
 
 
 def _runtime_strings(source: str) -> list[str]:
@@ -275,35 +353,66 @@ def _runtime_strings(source: str) -> list[str]:
     return strings
 
 
-def _old_name_in_runtime_strings(source: str, filename: str = "") -> list[str]:
-    return [s for s in _runtime_strings(source) if _OLD_NAME.search(_strip_allowed(s, filename))]
+def _old_name_in_runtime_strings(source: str, relative: str = "") -> list[str]:
+    return [s for s in _runtime_strings(source) if _has_old_name(s, relative)]
 
 
 def test_guard_scans_the_backend_modules():
-    names = {path.name for path in BACKEND_MODULES}
-    assert {"support_agent.py", "landing_page.py", "main.py", "inquiries.py", "chat.py"} <= names
+    names = {_relative(path) for path in BACKEND_MODULES}
+    assert {"support_agent.py", "landing_page.py", "main.py", "routes/inquiries.py", "routes/chat.py"} <= names
+    assert not any(name.startswith(("tests/", "static/")) for name in names)
 
 
-@pytest.mark.parametrize("path", BACKEND_MODULES, ids=lambda p: p.relative_to(SERVICE_DIR).as_posix())
+def test_guard_covers_new_subpackages_but_not_tests_venv_static_or_caches(tmp_path):
+    expected = {"top.py", "routes/a.py", "newpkg/mod.py", "newpkg/deep/mod.py"}
+    excluded = {
+        "tests/test_x.py",
+        ".venv/lib/site.py",
+        "venv/lib/site.py",
+        "static/gen.py",
+        "__pycache__/top.py",
+        "newpkg/__pycache__/mod.py",
+        ".pytest_cache/x.py",
+    }
+    for relative in expected | excluded:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("x = 1\n", encoding="utf-8")
+    assert {p.relative_to(tmp_path).as_posix() for p in _backend_modules(tmp_path)} == expected
+
+
+@pytest.mark.parametrize("path", BACKEND_MODULES, ids=_relative)
 def test_no_module_can_show_the_old_name(path):
-    found = _old_name_in_runtime_strings(path.read_text(encoding="utf-8"), path.name)
-    assert not found, f"{path.name} still shows the old name: {found}"
+    found = _old_name_in_runtime_strings(path.read_text(encoding="utf-8"), _relative(path))
+    assert not found, f"{_relative(path)} still shows the old name: {found}"
 
 
 @pytest.mark.parametrize("relative", RENAMED_FILES)
 def test_renamed_files_do_not_mention_the_old_name_at_all(relative):
-    found = _OLD_NAME.findall(_strip_allowed(_read(relative), pathlib.Path(relative).name))
-    assert not found, f"{relative}: {found}"
+    assert not _has_old_name(_read(relative), relative), relative
 
 
-@pytest.mark.parametrize(
-    "path",
-    [*BACKEND_MODULES, SERVICE_DIR / ".env.example"],
-    ids=lambda p: p.relative_to(SERVICE_DIR).as_posix(),
-)
+@pytest.mark.parametrize("path", [*BACKEND_MODULES, SERVICE_DIR / ".env.example"], ids=_relative)
 def test_withdrawn_name_never_appears(path):
-    found = _WITHDRAWN_NAME.findall(path.read_text(encoding="utf-8"))
-    assert not found, f"{path.name}: {found}"
+    assert not _has_withdrawn_name(path.read_text(encoding="utf-8")), _relative(path)
+
+
+def test_published_api_docs_have_neither_name():
+    text = _openapi_text(app)
+    assert NAME_EN in text
+    assert not _has_old_name(text)
+    assert not _has_withdrawn_name(text)
+
+
+@pytest.mark.parametrize("leak", ["Budget Tracker", "ميزانية الأسرة", "بجٹ ٹریکر", "Wafeer", "وفيير"])
+def test_published_api_docs_guard_catches_a_docstring_leak(leak):
+    def handler():
+        return {}
+
+    sample = FastAPI(title="sample")
+    sample.add_api_route("/sample", handler, description=f"Part of {leak}.")
+    text = _openapi_text(sample)
+    assert _has_old_name(text) or _has_withdrawn_name(text)
 
 
 @pytest.mark.parametrize(
@@ -317,11 +426,53 @@ def test_withdrawn_name_never_appears(path):
         'x = f"[Budget Tracker] {y}"',
         'x = "بجٹ ٹریکر سپورٹ"',
         'x = "بجت تراكر"',
+        'x = "بدجت تراكر"',
+        'x = "ميزانية الأسرة"',
+        'x = "io.supabase.budgettracker"',
+        'x = "Budget&nbsp;Tracker"',
         'def f():\n    return "Welcome to Budget Tracker"',
     ],
 )
 def test_guard_catches_the_old_name(leak):
     assert _old_name_in_runtime_strings(leak)
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "Budget&nbsp;Tracker",
+        "Budget Tracker",
+        "Budget​Tracker",
+        "Bud​get Tracker",
+        "Budget‌ ‍Tracker",
+        "بجٹ‌ٹریکر",
+        "بجٹ&nbsp;ٹریکر",
+        "ميزانية الأسرة",
+        "ميزانية&nbsp;الأسرة",
+        "ميزا‌نية الأسرة",
+        "بدجت‍تراكر",
+    ],
+)
+def test_guard_sees_through_spacing_entities_and_zero_width_characters(leak):
+    assert _has_old_name(leak), repr(leak)
+
+
+@pytest.mark.parametrize("leak", ["Waf​eer", "Wafeer&nbsp;Money", "وفي‌ير", "و‍فيير"])
+def test_withdrawn_name_guard_sees_through_zero_width_characters(leak):
+    assert _has_withdrawn_name(leak), repr(leak)
+
+
+def test_former_name_clause_is_allowed_only_in_the_support_agent():
+    assert not _has_old_name(FORMER_NAME_CLAUSE, "support_agent.py")
+    assert _has_old_name(FORMER_NAME_CLAUSE, "routes/chat.py")
+    assert _has_old_name(FORMER_NAME_CLAUSE, "landing_page.py")
+    assert _has_old_name(FORMER_NAME_CLAUSE)
+
+
+@pytest.mark.parametrize("leak", ["Welcome to Budget Tracker", "مرحبا في ميزانية الأسرة", "Budget Tracker or ميزانية الأسرة"])
+def test_support_agent_allowance_does_not_cover_other_uses_of_the_old_names(leak):
+    assert _has_old_name(leak, "support_agent.py")
+    assert _has_old_name(f"{FORMER_NAME_CLAUSE} {leak}", "support_agent.py")
 
 
 @pytest.mark.parametrize(
@@ -343,16 +494,27 @@ def test_guard_allows_the_generic_phrase_only_in_chat_parser():
     source = 'x = "assistant for a Saudi budget tracker"'
     assert not _old_name_in_runtime_strings(source, "chat_parser.py")
     assert _old_name_in_runtime_strings(source, "support_agent.py")
+    assert _old_name_in_runtime_strings(source, "routes/chat_parser.py")
 
 
-@pytest.mark.parametrize("leak", ["Wafeer", "WAFEER", "Wafir", "Waffeer", "Wafeir", "وفيير", "وفّير", "وفير", "وافير"])
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "Wafeer", "WAFEER", "wafeer", "WafeerApp", "Wafeer_Money", "myWafeer", "wafeer.money",
+        "Wafir", "Waffeer", "Wafeir",
+        "وفيير", "لوفيير", "بوفيير", "ووفيير", "وفّير", "وافير",
+    ],
+)
 def test_guard_catches_the_withdrawn_name(leak):
-    assert _WITHDRAWN_NAME.search(f"Welcome to {leak} support")
+    assert _has_withdrawn_name(f"Welcome to {leak} support"), leak
 
 
-@pytest.mark.parametrize("word", ["توفير", "التوفير", "wafer", "Qawam Money", "قوام المال"])
+@pytest.mark.parametrize(
+    "word",
+    ["رزق وفير", "توفير", "التوفير", "وفير", "وفیر", "wafer", "waffle", "Qawam Money", "قوام المال"],
+)
 def test_withdrawn_name_guard_does_not_flag_ordinary_words(word):
-    assert not _WITHDRAWN_NAME.search(f"text {word} text")
+    assert not _has_withdrawn_name(f"text {word} text"), word
 
 
 # ── Identifiers that must stay: renaming these is a bug, not a cleanup ──────────
@@ -376,4 +538,18 @@ def test_preview_token_key_derivation_label_is_unchanged(monkeypatch):
 
 
 def test_container_name_is_unchanged():
-    assert "container_name: budget_tracker_ai" in _read("docker-compose.yml")
+    assert _container_names(_read("docker-compose.yml")) == ["budget_tracker_ai"]
+
+
+@pytest.mark.parametrize(
+    "compose, expected",
+    [
+        ("services:\n  ai:\n    container_name: budget_tracker_ai\n", ["budget_tracker_ai"]),
+        ('services:\n  ai:\n    container_name: "budget_tracker_ai"  # keep\n', ["budget_tracker_ai"]),
+        ("# container_name: budget_tracker_ai\nservices:\n  ai:\n    container_name: renamed\n", ["renamed"]),
+        ("    # container_name: budget_tracker_ai\nservices:\n  ai:\n    image: x\n", []),
+        ("services:\n  ai:\n    image: x  # container_name: budget_tracker_ai\n", []),
+    ],
+)
+def test_container_name_pin_reads_the_value_not_a_comment(compose, expected):
+    assert _container_names(compose) == expected
