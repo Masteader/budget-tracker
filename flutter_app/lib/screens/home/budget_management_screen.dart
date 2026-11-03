@@ -667,8 +667,8 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.electricTeal,
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
                 ),
                 child: Text(successMsg, style: const TextStyle(fontWeight: FontWeight.bold)),
               ),

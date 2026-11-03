@@ -75,7 +75,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         actions: [
           IconButton(
             tooltip: context.tr('smart_basket_optimizer'),
-            icon: const Icon(Icons.shopping_basket_outlined, color: AppThemes.success),
+            icon: Icon(Icons.shopping_basket_outlined, color: context.successText),
             onPressed: () {
               HapticFeedback.mediumImpact();
               SmartShoppingBasketSheet.show(context, householdId: widget.householdId);
@@ -310,13 +310,13 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (isCheapest) ...[
-                        const Icon(Icons.star_rounded, size: 14, color: AppThemes.success),
+                        Icon(Icons.star_rounded, size: 14, color: context.successText),
                         const SizedBox(width: 4),
                       ],
                       Text(
                         '${entry.key}: ${context.sar(price)}',
                         style: TextStyle(
-                          color: isCheapest ? AppThemes.success : context.textPrimary,
+                          color: isCheapest ? context.successText : context.textPrimary,
                           fontSize: 11,
                           fontWeight: isCheapest ? FontWeight.bold : FontWeight.normal,
                         ),

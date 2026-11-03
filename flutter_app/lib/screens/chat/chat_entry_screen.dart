@@ -733,7 +733,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: AppThemes.success, size: 18),
+            Icon(Icons.auto_awesome, color: context.successText, size: 18),
             const SizedBox(width: 6),
             Flexible(
               child: Text(

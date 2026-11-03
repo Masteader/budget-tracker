@@ -180,7 +180,7 @@ class _ToolTile extends StatelessWidget {
                 icon: tool.icon,
                 size: 42,
                 isSquircle: true,
-                iconColor: tool.color,
+                iconColor: context.isDark ? tool.color : Colors.white,
               ),
               const SizedBox(width: 14),
               Expanded(

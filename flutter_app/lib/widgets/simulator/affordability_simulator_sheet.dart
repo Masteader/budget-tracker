@@ -652,8 +652,8 @@ class _AffordabilitySimulatorSheetState extends State<AffordabilitySimulatorShee
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.cardBg,
-              foregroundColor: AppThemes.success,
-              side: const BorderSide(color: AppThemes.success),
+              foregroundColor: context.successText,
+              side: BorderSide(color: context.successText),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),

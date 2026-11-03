@@ -423,7 +423,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
         backgroundColor: context.cardBg,
         title: Row(
           children: [
-            const Icon(Icons.qr_code_2_rounded, color: AppThemes.success),
+            Icon(Icons.qr_code_2_rounded, color: context.successText),
             const SizedBox(width: 8),
             Text(context.tr('saudi_zatca_vat_qr'), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: context.textPrimary)),
           ],
@@ -1223,7 +1223,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.document_scanner_outlined, color: AppThemes.success, size: 24),
+                Icon(Icons.document_scanner_outlined, color: context.successText, size: 24),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -1545,7 +1545,7 @@ class _ReceiptScannerSheetState extends State<ReceiptScannerSheet> {
                           Expanded(
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
+                                foregroundColor: context.textPrimary,
                                 side: BorderSide(color: context.borderColor),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

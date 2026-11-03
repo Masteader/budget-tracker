@@ -248,7 +248,7 @@ class _MultiPageReceiptScannerScreenState extends State<MultiPageReceiptScannerS
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: AppThemes.success),
+            icon: Icon(Icons.qr_code_scanner, color: context.successText),
             tooltip: context.tr('mp_scan_zatca'),
             onPressed: () => Navigator.push(
               context,

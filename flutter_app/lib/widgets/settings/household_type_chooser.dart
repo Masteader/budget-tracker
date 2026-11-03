@@ -58,7 +58,7 @@ class HouseholdTypeChooser extends StatelessWidget {
                   icon: icon,
                   size: 40,
                   isSquircle: true,
-                  iconColor: selected ? color : context.textSecondary,
+                  iconColor: context.isDark ? (selected ? color : context.textSecondary) : (selected ? Colors.white : Colors.white.withValues(alpha: 0.7)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
