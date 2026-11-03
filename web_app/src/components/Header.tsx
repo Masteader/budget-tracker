@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict, onOpenA
         <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label={`${dict.brand.name} · ${dict.a11y.home}`}>
           <Logo />
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="font-bold text-ink" lang="en" dir="ltr">
+            <span className="font-bold text-ink">
               {dict.brand.name}
             </span>
             <span className="hidden truncate text-xs text-muted sm:block">{dict.brand.tagline}</span>

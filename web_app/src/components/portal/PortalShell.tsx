@@ -46,7 +46,7 @@ export const PortalShell: React.FC<PortalShellProps> = ({
 
       <footer className="border-t border-line/60 bg-white py-6 text-center text-xs text-muted">
         <div className="max-w-6xl mx-auto px-4">
-          Budget Tracker · {dict.footer.rights}
+          {dict.brand.name} · {dict.footer.rights}
         </div>
       </footer>
     </div>

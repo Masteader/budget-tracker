@@ -41,7 +41,7 @@ export const PortalHeader: React.FC<PortalHeaderProps> = ({
           >
             <Logo className="w-8 h-8 shrink-0" />
             <span className="font-bold text-ink text-sm sm:text-base hidden sm:inline">
-              Budget Tracker
+              {dict.brand.name}
             </span>
           </button>
 
