@@ -34,7 +34,7 @@ The Flutter strings still say `Budget Tracker` (`MaterialApp.title`, `app_locali
 | Languages | `CFBundleLocalizations`: en, ar, ur. Arabic and Urdu text needs a native speaker's review `[verify]` |
 | Notifications | `UNUserNotificationCenter` delegate set in `AppDelegate.swift` before launch finishes |
 | Podfile | Committed, with `platform :ios, '15.0'` and `permission_handler` macros (section 6) |
-| Static checks | `flutter_app/test/ios/ios_project_config_test.dart` pins the above |
+| Static checks | `flutter_app/test/ios/ios_project_config_test.dart` parses `Info.plist`, `AndroidManifest.xml`, `project.pbxproj` and `InfoPlist.strings` by structure, using `xml` as a dev dependency (no version or runtime change). `AppDelegate.swift`, `SceneDelegate.swift` and the Podfile stay text-based after stripping comments, since Dart has no Swift or Ruby parser. These checks say nothing about whether the project compiles |
 
 ### Files `flutter create` touched outside `ios/`
 
@@ -87,14 +87,22 @@ Values were read from each plugin's sources at the version in `pubspec.lock`:
 
 **iOS has no host filter.** Android accepts only three hosts under `budgettracker`. `CFBundleURLSchemes` matches on scheme alone, so iOS delivers every `budgettracker://` link to the app.
 
-**Why deep linking is off.** app_links' [iOS docs](https://github.com/llfbandit/app_links/blob/main/doc/README_ios.md) require `FlutterDeepLinkingEnabled=false`. Otherwise Flutter also pushes the URL as a named route. `MaterialApp` here has only `home`, so a route with the auth code in it is an unknown route. app_links 7.2.1 handles scene callbacks, which the generated `SceneDelegate` forwards.
+**Why deep linking is off.** app_links requires `FlutterDeepLinkingEnabled=false`, confirmed at the locked version 7.2.1:
+
+- The published 7.2.1 package sets it in `example/ios/Runner/Info.plist:41-42`. Its pub cache copy has no `doc/` folder.
+- Its [7.x iOS guide](https://github.com/llfbandit/app_links/blob/7.2.0/doc/README_ios_7.md) has a "Disable default Flutter deep linking" step, required since Flutter 3.24. This is read at tag `7.2.0`, because the repository has no `7.2.1` tag.
+
+Otherwise Flutter also pushes the URL as a named route. `MaterialApp` here has only `home`, so a route with the auth code in it is an unknown route. app_links 7.2.1 handles scene callbacks, which the generated `SceneDelegate` forwards.
 
 Android has no matching `flutter_deeplinking_enabled=false` in its manifest. That may be a live bug on Android `[verify]`, and it is out of scope here.
 
 ### Security findings for review
 
 1. **Pre-existing: a crafted link can set a session (found by reading code, not exploited).** With PKCE on, `getSessionFromUrl` in gotrue 2.27.2 throws only if the URL has neither `code` nor `access_token`. A link such as `budgettracker://login?access_token=...&refresh_token=...&expires_in=...&token_type=bearer` carrying valid tokens for an attacker's account gets saved as the session. A victim who taps it could enter financial data into the attacker's account. This already applies on Android, and iOS widens it to every host. A likely fix is `FlutterAuthClientOptions.detectSessionInUriPredicate`, accepting only the expected scheme, host and `code`. It touches auth, so it needs its own sensitive task, and it must first check the `hash` hand-off in `landing_page.py`. **Not changed here.**
-2. **Scheme claiming.** Another app can register the same custom scheme, and iOS doesn't guarantee which one opens. PKCE (default in `supabase` 2.16.1, not overridden in `main.dart`) protects the `code`, because the verifier stays on the device. Universal Links on an owned domain would close this, and are an option for later.
+2. **Pre-existing: a crafted link can reset the signed-in UI (found by reading code, not run).** A link such as `budgettracker://anything?error=x` reaches `getSessionFromUrl`, which throws. `_handleDeeplink` calls `notifyException`, which puts an error on the auth stream, so `AuthGate` sees no session and shows login to a signed-in user. `_handleSignedOut` (`main.dart:204-225`) then resets the providers and cancels reminders, but `signOut` is never called, so the session stays stored. Android limits this to its three `budgettracker` hosts, plus any host under `io.supabase.budgettracker`. iOS accepts any host on both schemes. **Not changed here.**
+3. **Scheme claiming.** Another app can register the same custom scheme, and iOS doesn't guarantee which one opens. PKCE (default in `supabase` 2.16.1, not overridden in `main.dart`) protects the `code`, because the verifier stays on the device. Universal Links on an owned domain would close this, and are an option for later.
+
+Findings 1 and 2 await the owner's decision on a separate task.
 
 ### Supabase allow-list
 
@@ -136,7 +144,7 @@ flutter build ipa --obfuscate --split-debug-info=build/symbols --dart-define-fro
 
 Upload `build/ios/ipa/*.ipa` with Transporter or Xcode ([Flutter guide](https://docs.flutter.dev/deployment/ios)). Each upload needs a new build number, from `version` in `pubspec.yaml`. Release values must be `https://`.
 
-**Commit afterwards:** `ios/Podfile.lock`, and the `project.pbxproj` and workspace changes from `pod install`, Flutter's migrations and your Team ID.
+**Commit afterwards:** `ios/Podfile.lock` (the root `.gitignore` has `*.lock`, with a negation for this one file), and the `project.pbxproj` and workspace changes from `pod install`, Flutter's migrations and your Team ID. `flutter_app/test/ios/ios_project_config_test.dart` should still pass after those changes.
 
 ### First-run checks
 
@@ -149,6 +157,8 @@ Upload `build/ios/ipa/*.ipa` with Transporter or Xcode ([Flutter guide](https://
 - [ ] Camera, gallery, ZATCA QR scan and voice entry work on a device (the simulator has no camera)
 - [ ] A scheduled reminder fires with the app closed and in the foreground
 - [ ] Sign out, delete the app, reinstall: check the sign-in state (section 7)
+- [ ] `[verify]` **Cold-start URL delivery.** With the app fully closed, open a reset link. Unproven: delivery relies on the engine replaying the scene connection options to plugins registered in `didInitializeImplicitFlutterEngine`, which happens after UIKit's launch callback. If the link is lost, password reset from a closed app fails
+- [ ] `[verify]` **`flutter_local_notifications` 17.2.4 under hybrid SwiftPM and UIScene.** Unproven whether it builds and delivers. It has no `Package.swift`, so it is the one plugin built by CocoaPods, and it predates the UIScene lifecycle. Confirm that it compiles, that a scheduled reminder fires, and that it displays in the foreground
 
 ## 5. Apple Developer Program
 
