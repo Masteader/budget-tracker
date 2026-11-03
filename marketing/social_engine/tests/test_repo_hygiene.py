@@ -12,6 +12,16 @@ MUST_BE_IGNORED = [
     ".env.local",
     ".env.production",
     "core/.env",
+    ".env - Copy",
+    ".env.bak",
+    ".envrc",
+    "secrets.env",
+    "core/prod.env",
+    "clip.webm",
+    "state.sqlite",
+    "state.sqlite3",
+    "state.sqlite-wal",
+    "state.sqlite-shm",
     ".venv/Scripts/python.exe",
     "__pycache__/x.pyc",
     "core/__pycache__/x.pyc",
@@ -56,7 +66,20 @@ SECRET_NAMES = {
     "PUBLISHER_API_KEY",
 }
 
-FORBIDDEN_TRACKED_SUFFIXES = {".mp4", ".mov", ".m4a", ".mp3", ".wav", ".db", ".db-wal", ".db-shm"}
+FORBIDDEN_TRACKED_SUFFIXES = {
+    ".mp4",
+    ".mov",
+    ".webm",
+    ".m4a",
+    ".mp3",
+    ".wav",
+    ".db",
+    ".db-wal",
+    ".db-shm",
+    ".sqlite",
+    ".sqlite3",
+    ".env",
+}
 FORBIDDEN_TRACKED_PARTS = {"node_modules", ".venv", "venv", "__pycache__"}
 
 
@@ -109,6 +132,6 @@ def test_nothing_heavy_or_private_is_tracked():
             offenders.append(line)
         elif FORBIDDEN_TRACKED_PARTS.intersection(path.parts):
             offenders.append(line)
-        elif path.name == ".env" or (path.name.startswith(".env.") and path.name != ".env.example"):
+        elif path.name.startswith(".env") and path.name != ".env.example":
             offenders.append(line)
     assert not offenders, f"would be committed: {offenders}"
