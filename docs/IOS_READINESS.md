@@ -18,6 +18,7 @@ Building needs only the Mac steps in section 4. These items stop an App Store re
 | 4 | **No third-party AI consent.** Receipts and chat text go to an AI model through `ai_service`. Guideline 5.1.2(i) requires clear disclosure and explicit permission for sharing with third-party AI. | No consent screen found in `flutter_app/lib/`. `[verify]` with the owner which providers receive data | Owner and dev |
 | 5 | **Apple Developer Program membership, probably as a legal entity.** See section 5. | | Owner |
 | 6 | **Bundle ID availability.** `com.budgettracker` is short and generic, and Apple's bundle IDs are unique across all developers. If someone else holds it, the iOS ID must differ from Android's, which is an owner decision. `[verify]` by registering it. | | Owner |
+| 7 | **Offline financial data is backed up.** The offline ledger database and receipt images sit under `getDatabasesPath()`, which is the Documents folder on iOS, so iCloud and Finder back them up. Android deliberately sets `allowBackup=false` for this data. The fix needs `lib/` and native work in its own task. | `flutter_app/lib/services/offline_queue_manager.dart:63,71`, `SqflitePlugin.m:766` | Dev, in its own task |
 
 The Flutter strings still say `Budget Tracker` (`MaterialApp.title`, `app_localizations.dart`). The rename is owned by `feat/qawam-money-branding`.
 
@@ -43,7 +44,7 @@ The Flutter strings still say `Budget Tracker` (`MaterialApp.title`, `app_locali
 | `pubspec.lock` | **Reverted.** It silently upgraded dependencies (for example `mobile_scanner` 7.4.2 to 7.5.0). Do not re-run `flutter create` without reverting this again |
 | `.metadata` | Restored, then only the `ios` entry added. The tool had removed `android` and rewritten the `root` revisions |
 | `test/widget_test.dart`, `budget_tracker.iml`, `.idea/` | Removed |
-| `analysis_options.yaml` | **Kept** the added `ios/**` exclude. `flutter analyze` writes this line back on every run now that `ios/` exists, so reverting it would leave every checkout dirty |
+| `analysis_options.yaml` | **Kept** the added `ios/**` exclude. Flutter 3.47.8's `AnalysisOptionsMigration` adds a platform exclude only when it is missing. Seen once here: after this line was reverted, `flutter analyze` printed "Upgrading analysis_options.yaml" and added it back. With the line present, analyze leaves the file unchanged, so keeping it avoids that one-time edit in each checkout |
 
 `flutter pub get` also rewrites the line endings of the tracked `android/.../GeneratedPluginRegistrant.java` on Windows. There is no content change, and it is not part of this work.
 
@@ -156,7 +157,7 @@ Upload `build/ios/ipa/*.ipa` with Transporter or Xcode ([Flutter guide](https://
 - [ ] A real password reset email returns to the app and reaches the update-password screen, from both a cold start and the background
 - [ ] Camera, gallery, ZATCA QR scan and voice entry work on a device (the simulator has no camera)
 - [ ] A scheduled reminder fires with the app closed and in the foreground
-- [ ] Sign out, delete the app, reinstall: check the sign-in state (section 7)
+- [ ] Stay signed in, delete the app, reinstall: record what opens. It may open signed in (section 7)
 - [ ] `[verify]` **Cold-start URL delivery.** With the app fully closed, open a reset link. Unproven: delivery relies on the engine replaying the scene connection options to plugins registered in `didInitializeImplicitFlutterEngine`, which happens after UIKit's launch callback. If the link is lost, password reset from a closed app fails
 - [ ] `[verify]` **`flutter_local_notifications` 17.2.4 under hybrid SwiftPM and UIScene.** Unproven whether it builds and delivers. It has no `Package.swift`, so it is the one plugin built by CocoaPods, and it predates the UIScene lifecycle. Confirm that it compiles, that a scheduled reminder fires, and that it displays in the foreground
 
@@ -182,7 +183,7 @@ Text is from the [App Review Guidelines](https://developer.apple.com/app-store/r
 - [ ] **5.1.1(ix), 3.2.1(viii)** who submits (above)
 - [ ] **2.1(a)** a demo account with data, and the backend running during review. Include family and roommate modes
 - [ ] **5.1.1(ii)** purpose strings describe real use. They are written to, and the speech string says Apple processes the audio
-- [ ] **1.6** data security, including the backup gap in section 7
+- [ ] **1.6** data security, including the backup gap (blocker 7) and the reinstall gap in section 7
 - [ ] App Privacy details in App Store Connect: financial info, photos, audio, email `[verify]`
 - [ ] **Export compliance.** `ITSAppUsesNonExemptEncryption` is deliberately **not set**: it is a legal declaration the owner must make ([Apple](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/)). Until then App Store Connect asks on each submission
 - [ ] Age rating questions, and screenshots in Arabic, English and Urdu
@@ -238,8 +239,9 @@ Required-reason APIs must be declared with approved reasons in `PrivacyInfo.xcpr
 | Finding | Where | Effect on iOS | Status |
 |---|---|---|---|
 | Text says "in Android Settings" | `app_localizations.dart:1253,1257` (English) | Wrong instructions shown to iOS users | For the branding branch, which owns these lines |
-| Offline data can be backed up | `offline_queue_manager.dart` uses `getDatabasesPath()`, which is the Documents folder on iOS (`SqflitePlugin.m:766`) | Android sets `allowBackup=false` because this data is financial PII. On iOS the queue and receipt images can reach iCloud and computer backups | Needs native `NSURLIsExcludedFromBackupKey` and a device test |
-| Session outlives uninstall | `secure_session_storage.dart` | Keychain items normally survive app removal, so a reinstall may come back signed in `[verify]` | Consider clearing on first run after install |
+| Offline data is backed up | `offline_queue_manager.dart:63,71` | Release blocker 7 in section 1 | Own task: `lib/` and native work, such as `NSURLIsExcludedFromBackupKey`, and a device test |
+| Session outlives uninstall (iOS-only gap) | `secure_session_storage.dart:30` | Keychain items survive app deletion, which is established iOS behaviour. A reinstalled device may therefore open signed in to a previous user's household | Recommended for a future task: wipe the stored session on the first run after install |
+| No app-switcher or background snapshot protection | No `FLAG_SECURE` or iOS snapshot cover in `flutter_app/` | Dashboard balances can be captured in the app-switcher snapshot. Android has no `FLAG_SECURE` either | Future task |
 | Urdu voice entry | `voice_language_button.dart` (`ur_PK`) | `SFSpeechRecognizer` may not support Urdu, and may return nil `[verify]` | Hide or message if unsupported |
 | Prompts on opening chat | `chat_entry_screen.dart:69` calls `speech.initialize` in `initState` | Speech and microphone prompts appear before the user taps the mic | Move to first mic tap |
 | Android-specific comments | `receipt_scanner_sheet.dart:366`, `batch_receipt_scanner_screen.dart:73` | Continuing after a denied check is safe, because a denial is caught as `camera_access_denied` `[verify]` | None |
