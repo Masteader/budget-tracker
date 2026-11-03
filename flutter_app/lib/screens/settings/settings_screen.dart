@@ -1589,7 +1589,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             child: Text(
               '$flag $label',
               style: TextStyle(
-                color: isSelected ? Colors.black : textColor,
+                color: isSelected ? (context.isDark ? Colors.black : Colors.white) : textColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),

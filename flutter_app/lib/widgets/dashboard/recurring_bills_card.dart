@@ -469,7 +469,7 @@ class _RecurringBillsCardState extends State<RecurringBillsCard> {
               foregroundColor: context.primaryButtonFg,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.tr('rb_confirm_paid'), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: Text(context.tr('rb_confirm_paid'), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -614,7 +614,7 @@ Future<int?> _showDueDayPicker(BuildContext context, int initialDay) async {
                       child: Text(
                         '$day',
                         style: TextStyle(
-                          color: isSelected ? Colors.black : context.textPrimary,
+                          color: isSelected ? (context.isDark ? Colors.black : Colors.white) : context.textPrimary,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                           fontSize: 13,
                         ),

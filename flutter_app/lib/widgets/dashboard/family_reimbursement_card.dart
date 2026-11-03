@@ -280,10 +280,9 @@ class _ReimbursementPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              ThreeDIconPuck(
+              const ThreeDIconPuck(
                 icon: Icons.family_restroom_rounded,
                 size: 44,
-                iconColor: gold,
                 isRoseGold: true,
                 isSquircle: true,
               ),
@@ -395,7 +394,7 @@ class _ReimbursementPanel extends StatelessWidget {
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: gold,
-                      foregroundColor: AppThemes.deepGlacial,
+                      foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -783,15 +782,15 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppThemes.champagneGold,
-                  foregroundColor: AppThemes.deepGlacial,
+                  foregroundColor: context.isDark ? AppThemes.deepGlacial : Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: _isSubmitting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.deepGlacial),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
@@ -810,7 +809,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   Widget _buildMethodChip(String id, IconData icon) {
     final isSelected = _paymentMethod == id;
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? AppThemes.deepGlacial : context.textSecondary),
+      avatar: Icon(icon, size: 14, color: isSelected ? (context.isDark ? context.primaryButtonFg : Colors.white) : context.textSecondary),
       label: Text(context.tr('pay_method_$id')),
       selected: isSelected,
       onSelected: (val) {

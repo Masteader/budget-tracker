@@ -321,7 +321,7 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: context.champagneGold,
-                                foregroundColor: context.primaryButtonBg,
+                                foregroundColor: context.isDark ? context.primaryButtonBg : Colors.white,
                                 elevation: 2,
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -341,10 +341,10 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                               label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white.withValues(alpha: 0.15),
-                                foregroundColor: Colors.white,
+                                backgroundColor: context.isDark ? Colors.white.withValues(alpha: 0.15) : context.chipBg,
+                                foregroundColor: context.isDark ? Colors.white : context.textPrimary,
                                 elevation: 0,
-                                side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                                side: BorderSide(color: context.isDark ? Colors.white.withValues(alpha: 0.25) : context.borderColor),
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),

@@ -43,12 +43,12 @@ class AccountCard extends StatelessWidget {
 
     switch (status) {
       case AccountCapacityStatus.zeroBased:
-        statusColor = AppThemes.electricTeal;
+        statusColor = context.electricTeal;
         statusLabel = context.tr('zero_based_label');
         statusIcon = Icons.check_circle_outline_rounded;
         break;
       case AccountCapacityStatus.surplus:
-        statusColor = AppThemes.iceCyan;
+        statusColor = context.successText;
         statusLabel = '${context.money(margin, account.currency, signed: true)} ${context.tr("surplus_buffer_label")}';
         statusIcon = Icons.savings_outlined;
         break;

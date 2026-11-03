@@ -718,7 +718,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
   Widget _buildMethodChip(String id, String label, IconData icon) {
     final isSelected = _paymentMethod == id;
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? Colors.black : context.textSecondary),
+      avatar: Icon(icon, size: 14, color: isSelected ? (context.isDark ? context.primaryButtonFg : Colors.white) : context.textSecondary),
       label: Text(label),
       selected: isSelected,
       onSelected: (val) {

@@ -126,7 +126,7 @@ class _ThreeDIconPuckState extends State<ThreeDIconPuck> {
                 ? VelvetBurgundyColors.roseGoldGlow
                 : VelvetBurgundyColors.primaryLight)
             : (widget.isRoseGold
-                ? const Color(0xFF4A0E1E)
+                ? (isDark ? Colors.white : const Color(0xFF4A0E1E))
                 : VelvetBurgundyColors.roseGold));
 
     Widget content = widget.child ??

@@ -440,7 +440,7 @@ class _GroceryPriceIntelligenceScreenState extends State<GroceryPriceIntelligenc
         Text(
           value,
           style: TextStyle(
-            color: isHighlight ? AppThemes.success : Colors.white,
+            color: isHighlight ? AppThemes.success : context.textPrimary,
             fontSize: 13,
             fontWeight: FontWeight.bold,
           ),
