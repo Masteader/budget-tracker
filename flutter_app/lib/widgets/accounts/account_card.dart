@@ -84,7 +84,7 @@ class AccountCard extends StatelessWidget {
                   icon: account.accountType.defaultIcon,
                   size: 42,
                   isSquircle: true,
-                  iconColor: statusColor,
+                  iconColor: context.isDark ? statusColor : Colors.white,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -149,35 +149,54 @@ class AccountCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(context.tr('current_balance'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 2),
-                        Text(
-                          displayBalance,
-                          style: GoogleFonts.outfit(
-                            color: context.textPrimary,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(context.tr('current_balance'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            alignment: AlignmentDirectional.centerStart,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              displayBalance,
+                              style: GoogleFonts.outfit(
+                                color: context.textPrimary,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(context.tr('remaining_commitments'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 2),
-                        Text(
-                          displayCommitted,
-                          style: TextStyle(
-                            color: context.textSecondary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            context.tr('remaining_commitments'),
+                            style: TextStyle(color: context.textSecondary, fontSize: 11),
+                            textAlign: TextAlign.end,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            alignment: AlignmentDirectional.centerEnd,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              displayCommitted,
+                              style: TextStyle(
+                                color: context.textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -196,9 +215,12 @@ class AccountCard extends StatelessWidget {
                     children: [
                       Icon(statusIcon, size: 14, color: statusColor),
                       const SizedBox(width: 6),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),

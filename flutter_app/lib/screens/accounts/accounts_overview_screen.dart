@@ -246,15 +246,19 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            context.tr('total_net_worth'),
-                            style: GoogleFonts.outfit(
-                              color: context.champagneGold,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.1,
+                          Expanded(
+                            child: Text(
+                              context.tr('total_net_worth'),
+                              style: GoogleFonts.outfit(
+                                color: context.champagneGold,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
@@ -318,12 +322,19 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 ).then((_) => _refreshAll());
                               },
                               icon: const Icon(Icons.savings_rounded, size: 16),
-                              label: Text(context.tr('record_income'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  context.tr('record_income'),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  maxLines: 1,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: context.champagneGold,
                                 foregroundColor: context.isDark ? context.primaryButtonBg : Colors.white,
                                 elevation: 2,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
                             ),
@@ -339,13 +350,20 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
                                 );
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-                              label: Text(context.tr('transfer_funds'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  context.tr('transfer_funds'),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  maxLines: 1,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: context.isDark ? Colors.white.withValues(alpha: 0.15) : context.chipBg,
                                 foregroundColor: context.isDark ? Colors.white : context.textPrimary,
                                 elevation: 0,
                                 side: BorderSide(color: context.isDark ? Colors.white.withValues(alpha: 0.25) : context.borderColor),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
                             ),
@@ -464,20 +482,26 @@ class _AccountsOverviewScreenState extends State<AccountsOverviewScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.savings_outlined, size: 18, color: context.electricTeal),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('total_cycle_income'),
-                    style: GoogleFonts.outfit(
-                      color: context.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.savings_outlined, size: 18, color: context.electricTeal),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        context.tr('total_cycle_income'),
+                        style: GoogleFonts.outfit(
+                          color: context.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 _hideBalances ? '••••••' : context.sar(totalCycleIncome),
                 style: GoogleFonts.outfit(
