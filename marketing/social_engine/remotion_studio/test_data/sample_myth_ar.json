@@ -1,0 +1,114 @@
+{
+  "revision": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "watermark": true,
+  "device_frame": "generic",
+  "digits": "western",
+  "highlight_color": "#E598B0",
+  "safe_zones": {
+    "top": 220,
+    "bottom": 420,
+    "left": 60,
+    "right": 140
+  },
+  "brand": {
+    "name_ar": "علامة تجريبية",
+    "name_en": "TEST BRAND",
+    "hashtag": "#test",
+    "logo_src": "test_logo.svg"
+  },
+  "audio_src": "audio/voice.wav",
+  "music_src": null,
+  "duck_under_voice": 0.12,
+  "duck_in_pauses": 0.25,
+  "reel_id": "SAMPLE-MYTH-AR",
+  "template": "MythVsFact",
+  "language": "ar",
+  "duration_ms": 9000,
+  "hook_text": "وقف تحسب مصروفاتك في راسك",
+  "on_screen_text": [
+    "Keeping it all in your head",
+    "A clear budget by category"
+  ],
+  "subtitles_en": "Stop keeping your spending in your head. A clear budget by category shows it all.",
+  "words": [
+    {
+      "text": "وقف",
+      "start_ms": 0,
+      "end_ms": 240
+    },
+    {
+      "text": "تحسب",
+      "start_ms": 240,
+      "end_ms": 520
+    },
+    {
+      "text": "مصروفاتك",
+      "start_ms": 520,
+      "end_ms": 1080
+    },
+    {
+      "text": "في",
+      "start_ms": 1080,
+      "end_ms": 1320
+    },
+    {
+      "text": "راسك.",
+      "start_ms": 1320,
+      "end_ms": 1670
+    },
+    {
+      "text": "الذاكرة",
+      "start_ms": 1970,
+      "end_ms": 2460
+    },
+    {
+      "text": "تنسى",
+      "start_ms": 2460,
+      "end_ms": 2740
+    },
+    {
+      "text": "والمصروفات",
+      "start_ms": 2740,
+      "end_ms": 3440
+    },
+    {
+      "text": "ما",
+      "start_ms": 3440,
+      "end_ms": 3680
+    },
+    {
+      "text": "تنسى.",
+      "start_ms": 3680,
+      "end_ms": 4030
+    },
+    {
+      "text": "ميزانية",
+      "start_ms": 4330,
+      "end_ms": 4820
+    },
+    {
+      "text": "واضحة",
+      "start_ms": 4820,
+      "end_ms": 5170
+    },
+    {
+      "text": "مع",
+      "start_ms": 5170,
+      "end_ms": 5410
+    },
+    {
+      "text": "قوام",
+      "start_ms": 5410,
+      "end_ms": 5690
+    },
+    {
+      "text": "المال.",
+      "start_ms": 5690,
+      "end_ms": 6110
+    }
+  ],
+  "clips": []
+}

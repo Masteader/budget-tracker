@@ -1,0 +1,185 @@
+{
+  "revision": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "watermark": true,
+  "device_frame": "generic",
+  "digits": "western",
+  "highlight_color": "#E598B0",
+  "safe_zones": {
+    "top": 220,
+    "bottom": 420,
+    "left": 60,
+    "right": 140
+  },
+  "brand": {
+    "name_ar": "علامة تجريبية",
+    "name_en": "TEST BRAND",
+    "hashtag": "#test",
+    "logo_src": "test_logo.svg"
+  },
+  "audio_src": "audio/voice.wav",
+  "music_src": null,
+  "duck_under_voice": 0.12,
+  "duck_in_pauses": 0.25,
+  "reel_id": "SAMPLE-TIP-EN",
+  "template": "DailyTip",
+  "language": "en",
+  "duration_ms": 9000,
+  "hook_text": "Your salary is gone by the 15th?",
+  "on_screen_text": [
+    "Know your payday cycle",
+    "Plan by category",
+    "Check before you spend"
+  ],
+  "subtitles_en": "Your salary is gone by the 15th? Three moves to hold on to it. With Qawam Money, coming soon.",
+  "words": [
+    {
+      "text": "Your",
+      "start_ms": 0,
+      "end_ms": 240
+    },
+    {
+      "text": "salary",
+      "start_ms": 240,
+      "end_ms": 528
+    },
+    {
+      "text": "is",
+      "start_ms": 528,
+      "end_ms": 768
+    },
+    {
+      "text": "gone",
+      "start_ms": 768,
+      "end_ms": 1008
+    },
+    {
+      "text": "by",
+      "start_ms": 1008,
+      "end_ms": 1248
+    },
+    {
+      "text": "the",
+      "start_ms": 1248,
+      "end_ms": 1488
+    },
+    {
+      "text": "15th?",
+      "start_ms": 1488,
+      "end_ms": 1728
+    },
+    {
+      "text": "Three",
+      "start_ms": 1968,
+      "end_ms": 2208
+    },
+    {
+      "text": "moves",
+      "start_ms": 2208,
+      "end_ms": 2448
+    },
+    {
+      "text": "to",
+      "start_ms": 2448,
+      "end_ms": 2688
+    },
+    {
+      "text": "hold",
+      "start_ms": 2688,
+      "end_ms": 2928
+    },
+    {
+      "text": "on",
+      "start_ms": 2928,
+      "end_ms": 3168
+    },
+    {
+      "text": "to",
+      "start_ms": 3168,
+      "end_ms": 3408
+    },
+    {
+      "text": "it.",
+      "start_ms": 3408,
+      "end_ms": 3648
+    },
+    {
+      "text": "Know",
+      "start_ms": 3888,
+      "end_ms": 4128
+    },
+    {
+      "text": "your",
+      "start_ms": 4128,
+      "end_ms": 4368
+    },
+    {
+      "text": "cycle,",
+      "start_ms": 4368,
+      "end_ms": 4656
+    },
+    {
+      "text": "plan",
+      "start_ms": 4656,
+      "end_ms": 4896
+    },
+    {
+      "text": "by",
+      "start_ms": 4896,
+      "end_ms": 5136
+    },
+    {
+      "text": "category,",
+      "start_ms": 5136,
+      "end_ms": 5568
+    },
+    {
+      "text": "check",
+      "start_ms": 5568,
+      "end_ms": 5808
+    },
+    {
+      "text": "before",
+      "start_ms": 5808,
+      "end_ms": 6096
+    },
+    {
+      "text": "you",
+      "start_ms": 6096,
+      "end_ms": 6336
+    },
+    {
+      "text": "spend.",
+      "start_ms": 6336,
+      "end_ms": 6624
+    },
+    {
+      "text": "With",
+      "start_ms": 6864,
+      "end_ms": 7104
+    },
+    {
+      "text": "Qawam",
+      "start_ms": 7104,
+      "end_ms": 7344
+    },
+    {
+      "text": "Money,",
+      "start_ms": 7344,
+      "end_ms": 7632
+    },
+    {
+      "text": "coming",
+      "start_ms": 7632,
+      "end_ms": 7920
+    },
+    {
+      "text": "soon.",
+      "start_ms": 7920,
+      "end_ms": 8160
+    }
+  ],
+  "clips": []
+}
