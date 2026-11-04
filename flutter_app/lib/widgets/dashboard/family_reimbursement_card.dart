@@ -13,6 +13,7 @@ import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
 import '../card_error_state.dart';
 import '../nafaqah/wife_allowance_card.dart';
+import '../settings/settings_section.dart' show isLargeText;
 
 /// Records a roommate settlement payment (used by the roommate card).
 typedef ReimbursementRecorder = Future<Map<String, dynamic>> Function(ReimbursementRecordRequest request);
@@ -137,11 +138,11 @@ class _FamilyReimbursementCardState extends State<FamilyReimbursementCard> {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: context.borderColor),
         ),
-        child: const Center(
+        child: Center(
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppThemes.champagneGold),
+            child: CircularProgressIndicator(strokeWidth: 2, color: context.goldText),
           ),
         ),
       );
@@ -267,6 +268,61 @@ class _ReimbursementPanel extends StatelessWidget {
     final badgeColor = isSettled ? context.accentText : gold;
     final owedLabel = summary.callerIsWife ? context.tr('nafaqah_owed_to_you') : context.tr('husband_owes_wife');
     final actionLabel = summary.callerIsWife ? context.tr('nafaqah_confirm_received') : context.tr('reimburse_wife');
+    final historyButton = TextButton.icon(
+      style: TextButton.styleFrom(foregroundColor: context.accentText),
+      onPressed: () => _openHistory(context),
+      icon: const Icon(Icons.receipt_long_outlined, size: 18),
+      label: Text(context.tr('nafaqah_history')),
+    );
+    const puck = ThreeDIconPuck(
+      icon: Icons.family_restroom_rounded,
+      size: 44,
+      isRoseGold: true,
+      isSquircle: true,
+    );
+    final headerText = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          showWifeName && (wife.displayName ?? '').isNotEmpty
+              ? '${context.tr('family_nafaqah_title')} · ${wife.displayName}'
+              : context.tr('family_nafaqah_title'),
+          style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          context.tr('family_nafaqah_subtitle'),
+          style: TextStyle(color: context.textSecondary, fontSize: 11),
+        ),
+        const SizedBox(height: 6),
+        // Under the title: beside it, large text or a long label would
+        // squeeze both until words break (UX-14).
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: badgeColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded,
+                size: 12,
+                color: badgeColor,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed'),
+                  style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
 
     return ThreeDSurfaceCard(
       padding: const EdgeInsets.all(18),
@@ -278,63 +334,19 @@ class _ReimbursementPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const ThreeDIconPuck(
-                icon: Icons.family_restroom_rounded,
-                size: 44,
-                isRoseGold: true,
-                isSquircle: true,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      showWifeName && (wife.displayName ?? '').isNotEmpty
-                          ? '${context.tr('family_nafaqah_title')} · ${wife.displayName}'
-                          : context.tr('family_nafaqah_title'),
-                      style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      context.tr('family_nafaqah_subtitle'),
-                      style: TextStyle(color: context.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Flexible: large system text must not push it off the card (UX-14).
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isSettled ? Icons.check_circle_outline_rounded : Icons.history_edu_rounded,
-                        size: 12,
-                        color: badgeColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          isSettled ? context.tr('settle_all_settled') : context.tr('settle_reimbursement_owed'),
-                          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // At very large text the title's longest word needs the whole width.
+          if (isLargeText(context)) ...[
+            puck,
+            const SizedBox(height: 8),
+            headerText,
+          ] else
+            Row(
+              children: [
+                puck,
+                const SizedBox(width: 12),
+                Expanded(child: headerText),
+              ],
+            ),
           const SizedBox(height: 14),
           if (!isSettled) ...[
             Text('$owedLabel:', style: TextStyle(color: context.textSecondary, fontSize: 12)),
@@ -387,14 +399,14 @@ class _ReimbursementPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              if (!isSettled && summary.canRecordReimbursement) ...[
-                Expanded(
-                  child: ElevatedButton.icon(
+          _ActionsRow(
+            primary: !isSettled && summary.canRecordReimbursement
+                ? ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: gold,
-                      foregroundColor: context.isDark ? AppThemes.deepGlacial : const Color(0xFF4A0E1E),
+                      // The fixed rose-gold fill: goldText is an ink colour and is a dark
+                      // amber in light mode, where the maroon label cannot be read on it.
+                      backgroundColor: AppThemes.champagneGold,
+                      foregroundColor: VelvetBurgundyColors.primaryLight,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -405,19 +417,42 @@ class _ReimbursementPanel extends StatelessWidget {
                       HapticFeedback.lightImpact();
                       _openReimburseSheet(context);
                     },
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              TextButton.icon(
-                onPressed: () => _openHistory(context),
-                icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text(context.tr('nafaqah_history')),
-              ),
-            ],
+                  )
+                : null,
+            secondary: historyButton,
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The main action and history: side by side, or stacked at very large text.
+class _ActionsRow extends StatelessWidget {
+  final Widget? primary;
+  final Widget secondary;
+
+  const _ActionsRow({required this.primary, required this.secondary});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLargeText(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (primary != null) primary!,
+          Align(alignment: AlignmentDirectional.centerStart, child: secondary),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        if (primary != null) ...[
+          Expanded(child: primary!),
+          const SizedBox(width: 8),
+        ],
+        secondary,
+      ],
     );
   }
 }
@@ -449,7 +484,7 @@ class _NoticeBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(title, style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
                 Text(message, style: TextStyle(color: context.textSecondary, fontSize: 11)),
               ],
@@ -545,9 +580,9 @@ class _LedgerHistorySheetState extends State<_LedgerHistorySheet> {
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText)),
                   );
                 }
                 if (snap.hasError) {
@@ -694,6 +729,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final full = widget.totalOwed.toStringAsFixed(2);
+    // The fill is fixed rose gold in both modes, so one ink works for both.
+    const onGold = VelvetBurgundyColors.primaryLight;
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -741,6 +778,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: context.tr('settle_payment_amount'),
+                floatingLabelStyle: TextStyle(color: context.accentText),
                 prefixIcon: const Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -763,6 +801,8 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
+                foregroundColor: context.textPrimary,
+                side: BorderSide(color: context.borderColor),
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -782,15 +822,17 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppThemes.champagneGold,
-                  foregroundColor: context.isDark ? AppThemes.deepGlacial : const Color(0xFF4A0E1E),
+                  foregroundColor: onGold,
+                  disabledBackgroundColor: AppThemes.champagneGold,
+                  disabledForegroundColor: onGold,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: _isSubmitting
-                    ? SizedBox(
+                    ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: onGold),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
@@ -809,9 +851,17 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
   Widget _buildMethodChip(String id, IconData icon) {
     final isSelected = _paymentMethod == id;
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? (context.isDark ? context.primaryButtonFg : Colors.white) : context.textSecondary),
+      avatar: Icon(icon, size: 14, color: isSelected ? context.accentText : context.textSecondary),
       label: Text(context.tr('pay_method_$id')),
       selected: isSelected,
+      selectedColor: context.accentSubtleBg,
+      backgroundColor: context.cardBg,
+      checkmarkColor: context.accentText,
+      labelStyle: TextStyle(
+        color: isSelected ? context.accentText : context.textPrimary,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      side: BorderSide(color: isSelected ? context.accentText : context.borderColor),
       onSelected: (val) {
         if (val) setState(() => _paymentMethod = id);
       },

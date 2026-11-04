@@ -232,7 +232,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 hintText: context.tr('ahm_name_hint'),
-                hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6)),
+                hintStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
                 prefixIcon: const Icon(Icons.person_rounded, size: 18),
@@ -290,7 +290,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.2),
+                          color: color.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(opt['icon'] as IconData, color: color, size: 18),
@@ -358,7 +358,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 hintText: '0.00 ${context.tr('sar')}',
-                hintStyle: TextStyle(color: context.textSecondary.withValues(alpha: 0.6)),
+                hintStyle: TextStyle(color: context.textSecondary),
                 filled: true,
                 fillColor: context.inputBg,
                 prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
@@ -390,7 +390,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                     Expanded(
                       child: Text(
                         _errorMessage!,
-                        style: TextStyle(color: context.dangerColor, fontSize: 12),
+                        style: TextStyle(color: context.textPrimary, fontSize: 12),
                       ),
                     ),
                   ],
@@ -408,15 +408,17 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
                 key: const Key('add_member_submit_button'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.primaryButtonBg,
-                  foregroundColor: Colors.white,
+                  foregroundColor: context.primaryButtonFg,
+                  disabledBackgroundColor: context.primaryButtonBg,
+                  disabledForegroundColor: context.primaryButtonFg,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
                 icon: _isSubmitting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                       )
                     : const Icon(Icons.check_rounded, size: 18),
                 label: Text(

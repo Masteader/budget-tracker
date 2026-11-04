@@ -157,7 +157,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.primaryButtonBg,
-                foregroundColor: Colors.white,
+                foregroundColor: context.primaryButtonFg,
               ),
               onPressed: () => Navigator.pop(dCtx, true),
               child: Text(context.tr('roles_transfer_confirm')),
@@ -252,7 +252,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
               key: const ValueKey('household_type_save'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.primaryButtonBg,
-                foregroundColor: Colors.white,
+                foregroundColor: context.primaryButtonFg,
               ),
               onPressed: () => Navigator.pop(dCtx, picked),
               child: Text(context.tr('hh_type_save')),
@@ -370,22 +370,29 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            context.trArgs('hh_type_label', {'type': context.tr(HouseholdTypeChooser.labelKey(type))}),
-            style: TextStyle(color: context.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                context.trArgs('hh_type_label', {'type': context.tr(HouseholdTypeChooser.labelKey(type))}),
+                style: TextStyle(color: context.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+              if (roster.mayChangeHouseholdType)
+                _settingType
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText)),
+                      )
+                    : TextButton(
+                        key: const ValueKey('household_type_change'),
+                        style: TextButton.styleFrom(foregroundColor: context.accentText),
+                        onPressed: _busyUserId == null ? () => _changeHouseholdType(roster) : null,
+                        child: Text(context.tr('hh_type_change')),
+                      ),
+            ],
           ),
         ),
-        if (roster.mayChangeHouseholdType)
-          _settingType
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : TextButton(
-                  key: const ValueKey('household_type_change'),
-                  onPressed: _busyUserId == null ? () => _changeHouseholdType(roster) : null,
-                  child: Text(context.tr('hh_type_change')),
-                ),
       ],
     );
   }
@@ -470,12 +477,13 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
 
   Widget _providerAction(HouseholdRoster roster, String labelKey) {
     if (_settingProvider) {
-      return const Padding(
-        padding: EdgeInsets.all(8),
-        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+      return Padding(
+        padding: const EdgeInsets.all(8),
+        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText)),
       );
     }
     return TextButton(
+      style: TextButton.styleFrom(foregroundColor: context.accentText),
       onPressed: _busyUserId == null ? () => _chooseProvider(roster) : null,
       child: Text(context.tr(labelKey)),
     );
@@ -506,7 +514,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
                 children: [
                   Text(
                     context.tr('nafaqah_provider_missing_title'),
-                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -515,10 +523,14 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
                         : 'nafaqah_provider_missing_member'),
                     style: TextStyle(color: context.textSecondary, fontSize: 11),
                   ),
+                  if (roster.canSetNafaqahProvider)
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: _providerAction(roster, 'nafaqah_provider_choose'),
+                    ),
                 ],
               ),
             ),
-            if (roster.canSetNafaqahProvider) _providerAction(roster, 'nafaqah_provider_choose'),
           ],
         ),
       );
@@ -531,12 +543,18 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         Icon(Icons.family_restroom_rounded, color: context.champagneGold, size: 18),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            context.trArgs('nafaqah_provider_current', {'name': _nameOf(provider)}),
-            style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                context.trArgs('nafaqah_provider_current', {'name': _nameOf(provider)}),
+                style: TextStyle(color: context.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              _providerAction(roster, 'nafaqah_provider_change'),
+            ],
           ),
         ),
-        _providerAction(roster, 'nafaqah_provider_change'),
       ],
     );
   }
@@ -627,9 +645,9 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
             ),
           ),
           if (_busyUserId == m.userId)
-            const Padding(
-              padding: EdgeInsetsDirectional.only(end: 12),
-              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText)),
             )
           else if (actions.isNotEmpty)
             PopupMenuButton<_RoleAction>(
@@ -670,10 +688,10 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
         ),
         const SizedBox(height: 12),
         if (_loading)
-          const Center(
+          Center(
             child: Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              padding: const EdgeInsets.all(12),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText)),
             ),
           )
         else if (_failed || roster == null)
@@ -682,7 +700,11 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
               Expanded(
                 child: Text(context.tr('roles_load_failed'), style: TextStyle(color: context.dangerColor, fontSize: 12)),
               ),
-              TextButton(onPressed: _fetch, child: Text(context.tr('roles_retry'))),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: context.accentText),
+                onPressed: _fetch,
+                child: Text(context.tr('roles_retry')),
+              ),
             ],
           )
         else ...[

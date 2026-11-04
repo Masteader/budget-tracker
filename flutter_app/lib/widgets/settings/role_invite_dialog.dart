@@ -278,28 +278,33 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                 const SizedBox(height: 20),
 
                 // Action Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                // Side by side when they fit, stacked when they do not.
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  spacing: 8,
+                  overflowSpacing: 8,
                   children: [
                     TextButton(
                       child: Text(context.tr('cancel'), style: TextStyle(color: context.textSecondary)),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
-                    const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.primaryButtonBg,
-                        foregroundColor: Colors.white,
+                        foregroundColor: context.primaryButtonFg,
+                        disabledBackgroundColor: context.primaryButtonBg,
+                        disabledForegroundColor: context.primaryButtonFg,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       key: const ValueKey('rid_generate'),
                       onPressed: _isGenerating ? null : _generateInvite,
                       child: _isGenerating
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                             )
                           : Text(
                               context.tr('rid_generate_code'),
@@ -354,7 +359,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                     key: const ValueKey('rid_share_invite'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.primaryButtonBg,
-                      foregroundColor: Colors.white,
+                      foregroundColor: context.primaryButtonFg,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -369,8 +374,11 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                 Row(
                   children: [
                     Expanded(
+                      flex: 3,
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
+                          foregroundColor: context.textPrimary,
+                          side: BorderSide(color: context.borderColor),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -391,15 +399,18 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.primaryButtonBg,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(context.tr('done'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
-                      child: Text(context.tr('done'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),

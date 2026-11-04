@@ -86,7 +86,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                 ),
                 child: Icon(
                   Icons.savings_rounded,
-                  color: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+                  color: context.accentText,
                   size: 22,
                 ),
               ),
@@ -115,26 +115,29 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                 ),
               ),
               // Current Rule Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: context.pillBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
-                    width: 0.8,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 110),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.pillBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: context.borderColor,
+                      width: 0.8,
+                    ),
                   ),
-                ),
-                child: Text(
-                  _selectedRule == 'send_to_savings'
-                      ? context.tr('rsc_badge_savings')
-                      : _selectedRule == 'rollover_to_categories'
-                          ? context.tr('rsc_badge_carryover')
-                          : context.tr('rsc_badge_fresh'),
-                  style: TextStyle(
-                    color: context.accentText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  child: Text(
+                    _selectedRule == 'send_to_savings'
+                        ? context.tr('rsc_badge_savings')
+                        : _selectedRule == 'rollover_to_categories'
+                            ? context.tr('rsc_badge_carryover')
+                            : context.tr('rsc_badge_fresh'),
+                    style: TextStyle(
+                      color: context.accentText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -188,7 +191,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
             title: context.tr('rollover_send_to_savings_title'),
             description: context.tr('rollover_send_to_savings_desc'),
             icon: Icons.savings_rounded,
-            iconColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
+            iconColor: context.accentText,
             isRecommended: true,
           ),
           const SizedBox(height: 10),
@@ -225,7 +228,9 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                 backgroundColor: hasChanges
                     ? (context.primaryButtonBg)
                     : context.cardBg,
-                foregroundColor: hasChanges ? Colors.white : context.textPrimary,
+                foregroundColor: hasChanges ? context.primaryButtonFg : context.textPrimary,
+                disabledBackgroundColor: hasChanges ? context.primaryButtonBg : context.cardBg,
+                disabledForegroundColor: hasChanges ? context.primaryButtonFg : context.textPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
@@ -243,7 +248,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: context.primaryButtonFg,
+                        color: hasChanges ? context.primaryButtonFg : context.textSecondary,
                       ),
                     )
                   : Row(
@@ -333,7 +338,7 @@ class _RolloverSettingsCardState extends State<RolloverSettingsCard> {
                             color: context.pillBg,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
+                              color: context.borderColor,
                               width: 0.8,
                             ),
                           ),

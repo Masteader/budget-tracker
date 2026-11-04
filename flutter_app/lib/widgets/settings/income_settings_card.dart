@@ -143,16 +143,21 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    context.tr('isc_configured'),
-                    style: TextStyle(color: subtextColor, fontSize: 13),
+                  Flexible(
+                    child: Text(
+                      context.tr('isc_configured'),
+                      style: TextStyle(color: subtextColor, fontSize: 13),
+                    ),
                   ),
-                  Text(
-                    currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
-                    style: GoogleFonts.outfit(
-                      color: currentIncome > 0 ? (context.accentText) : subtextColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      currentIncome > 0 ? context.sar(currentIncome) : context.tr('isc_not_configured'),
+                      style: GoogleFonts.outfit(
+                        color: currentIncome > 0 ? (context.accentText) : subtextColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -167,6 +172,7 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
               decoration: InputDecoration(
                 labelText: context.tr('isc_monthly_income_sar'),
                 labelStyle: TextStyle(color: subtextColor),
+                floatingLabelStyle: TextStyle(color: context.accentText),
                 prefixIcon: Icon(Icons.attach_money_rounded, color: context.accentText),
                 suffixText: context.tr('sar'),
                 suffixStyle: TextStyle(color: subtextColor, fontWeight: FontWeight.bold),
@@ -223,15 +229,17 @@ class _IncomeSettingsCardState extends State<IncomeSettingsCard> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: context.primaryButtonBg,
-                    foregroundColor: Colors.white,
+                    foregroundColor: context.primaryButtonFg,
+                    disabledBackgroundColor: context.primaryButtonBg,
+                    disabledForegroundColor: context.primaryButtonFg,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: _saving ? null : _handleSave,
                   child: _saving
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                         )
                       : Text(context.tr('save_income'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),

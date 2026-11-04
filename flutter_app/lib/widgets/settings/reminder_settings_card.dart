@@ -7,6 +7,7 @@ import '../../services/notifications/reminder_planner.dart';
 import '../../services/notifications/reminder_preferences.dart';
 import '../../theme/app_themes.dart';
 import '../app_snackbar.dart';
+import 'settings_section.dart';
 
 /// Asks for the notification permission; true when granted.
 typedef NotificationPermissionRequest = Future<bool> Function();
@@ -68,7 +69,8 @@ class ReminderSettingsCard extends StatelessWidget {
               if (i > 0) Divider(color: context.borderColor, height: 1),
               SwitchListTile(
                 key: ValueKey('reminder_switch_${_items[i].$1.name}'),
-                secondary: Icon(_items[i].$2, color: context.accentText),
+                // At very large text the icon gives its width to the title.
+                secondary: isLargeText(context) ? null : Icon(_items[i].$2, color: context.accentText),
                 title: Text(
                   context.tr(_items[i].$3),
                   style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),

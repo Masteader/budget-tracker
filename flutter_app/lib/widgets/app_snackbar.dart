@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_localizations.dart';
 import '../theme/app_themes.dart';
 
 /// Centralized, premium dark-mode SnackBar design system.
@@ -172,7 +173,7 @@ class AppSnackBar {
                       child: Text(
                         title,
                         style: GoogleFonts.outfit(
-                          color: Colors.white,
+                          color: context.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.2,
@@ -219,7 +220,7 @@ class AppSnackBar {
                       Icon(Icons.undo_rounded, size: 14, color: context.accentText),
                       const SizedBox(width: 4),
                       Text(
-                        'UNDO',
+                        context.tr('undo_action'),
                         style: GoogleFonts.outfit(
                           color: context.accentText,
                           fontSize: 11.5,
