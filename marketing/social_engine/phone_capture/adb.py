@@ -31,6 +31,8 @@ _MAX_DEVICE_TEXT = 300
 _SHELL_ARGUMENT = re.compile(r"[A-Za-z0-9_./:=+-]+")
 _SERIAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _REMOTE_FILE = re.compile(r"/sdcard/[A-Za-z0-9][A-Za-z0-9_.-]*\.mp4")
+_PNG_START = b"\x89PNG\r\n\x1a\n"
+_PNG_END = b"IEND\xaeB`\x82"  # the last chunk and its checksum, so a cut-off picture is caught
 
 
 class AdbError(RuntimeError):
@@ -70,6 +72,10 @@ class RecordingFailed(AdbError):
 
 
 class PullFailed(AdbError):
+    pass
+
+
+class ScreenshotFailed(AdbError):
     pass
 
 
@@ -227,6 +233,47 @@ class Device:
         except KeyboardInterrupt:
             local.unlink(missing_ok=True)
             raise
+
+    def screenshot(self, local: Path) -> None:
+        """`exec-out` keeps the bytes as they are, where `shell` can change line endings, and
+        leaves nothing on the phone. The file counts only once it is a whole PNG, and anything
+        less leaves no file. It must not exist yet, so nothing is written through it."""
+        local = Path(local)
+        try:
+            handle = open(local, "xb")
+        except OSError as error:
+            raise ScreenshotFailed(f"Could not create {local.name}: {error}") from error
+        try:
+            with handle:
+                self._write_screencap(handle)
+            data = local.read_bytes()
+            if not (data.startswith(_PNG_START) and data.endswith(_PNG_END)):
+                raise ScreenshotFailed("The phone did not return a whole PNG. Nothing was saved.")
+        except BaseException:
+            local.unlink(missing_ok=True)
+            raise
+
+    def _write_screencap(self, handle) -> None:
+        command = [str(self.client.adb_path), *self._with_serial("exec-out", "screencap", "-p")]
+        try:
+            result = subprocess.run(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=handle,
+                stderr=subprocess.PIPE,
+                timeout=COMMAND_TIMEOUT_SECONDS,
+                env=scrubbed_env(None),
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ScreenshotFailed(
+                f"adb took over {COMMAND_TIMEOUT_SECONDS} seconds. Nothing was saved."
+            ) from error
+        except OSError as error:
+            raise ScreenshotFailed(f"adb could not start: {error}") from error
+        if result.returncode != 0:
+            detail = _printable(result.stderr.decode("utf-8", errors="replace"))
+            raise ScreenshotFailed(f"adb failed with exit code {result.returncode}: {detail}")
 
     def start_recording(self, remote: str) -> Recording:
         _check_remote_file(remote)

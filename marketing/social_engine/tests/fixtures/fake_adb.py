@@ -17,6 +17,13 @@ CALLS = os.path.join(HOME, "calls")
 STOP_FILE = os.path.join(PHONE, "screenrecord_stop_requested")
 DEMO_FLAG = os.path.join(PHONE, "demo_mode_is_on")
 RECORDING_BYTES = b"recording from the fake phone"
+SCREENSHOT_BYTES = b"\x89PNG\r\n\x1a\n" + b"screen from the fake phone" + b"IEND\xaeB`\x82"
+SCREENCAP_OUTPUT = {
+    "good": SCREENSHOT_BYTES,
+    "empty": b"",
+    "not_a_png": b"error: no screen",
+    "cut_off": SCREENSHOT_BYTES[:-5],
+}
 
 
 def previous_calls() -> list[list[str]]:
@@ -115,6 +122,8 @@ def main() -> None:
         print(scenario.get("devices", "List of devices attached\nFAKE0001\tdevice\n"))
     elif args[:1] == ["shell"]:
         shell(scenario, args[1:])
+    elif args == ["exec-out", "screencap", "-p"]:
+        sys.stdout.buffer.write(SCREENCAP_OUTPUT[scenario.get("screencap", "good")])
     elif args[:1] == ["pull"]:
         if scenario.get("pull_leaves_empty_file"):
             with open(args[2], "wb"):

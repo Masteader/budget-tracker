@@ -17,6 +17,7 @@ from core.config import DEFAULT_CONFIG_PATH, EngineConfig
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RECORDING_BYTES = b"recording from the fake phone"
+SCREENSHOT_BYTES = b"\x89PNG\r\n\x1a\n" + b"screen from the fake phone" + b"IEND\xaeB`\x82"
 NAME_CHOSEN_ON = date(2026, 11, 3)
 
 

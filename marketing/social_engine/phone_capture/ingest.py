@@ -69,6 +69,19 @@ VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".3gp"}
 
 _FINAL_CLIP = re.compile(r"final_clip_\d+\.mp4")
 _NUMBERED_CLIP = re.compile(r"(?:final_)?clip_(\d+)\.mp4(?:\.part)?")
+_TEST_SCREENSHOT = re.compile(r"screen_\d+\.png")
+_FINAL_SCREENSHOT = re.compile(r"final_screen_\d+\.png")
+_NUMBERED_SCREENSHOT = re.compile(r"(?:final_)?screen_(\d+)\.png(?:\.part)?")
+_SCREENSHOT_MANIFEST = "manifest.json"
+_CLIP_MASK_NOTE = (
+    "Smart Basket clip: the mask regions below are blurred at render, and the illustrative "
+    "prices / أسعار توضيحية label is added there too. Neither can be left out."
+)
+_SCREENSHOT_MASK_NOTE = (
+    "Smart Basket screenshot: this file stays unmasked on disk, and nothing masks it yet. The "
+    "regions below are kept with it, and any use has to apply them and the illustrative prices / "
+    "أسعار توضيحية label."
+)
 _APP_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,39}")
 # Survives cmd.exe unread: npx is a batch file, which reads & % ^ ( ) and quotes as code.
 _ARGUMENT_CMD_CANNOT_MISREAD = re.compile(r"[A-Za-z0-9_./:+=-]+")
@@ -156,6 +169,23 @@ def next_clip_path(paths: EnginePaths, feature: str, *, final: bool) -> Path:
     return folder / f"{prefix}clip_{number:02d}.mp4"
 
 
+def screenshot_manifest_path(paths: EnginePaths) -> Path:
+    """Apart from `paths.manifest`, so a picture can never reach the clip allow-list."""
+    return paths.screenshots / _SCREENSHOT_MANIFEST
+
+
+def next_screenshot_path(paths: EnginePaths, feature: str, *, final: bool) -> Path:
+    """As in `next_clip_path`, a number is never used twice."""
+    folder = paths.screenshots / feature
+    manifest = ClipManifest.load(screenshot_manifest_path(paths))
+    names = [entry.name for entry in folder.iterdir()]
+    names += [entry.path.split("/", 1)[1] for entry in manifest.clips if entry.folder == feature]
+    matches = (_NUMBERED_SCREENSHOT.fullmatch(name) for name in names)
+    number = max((int(match.group(1)) for match in matches if match), default=0) + 1
+    prefix = "final_" if final else ""
+    return folder / f"{prefix}screen_{number:02d}.png"
+
+
 # --- Where clips live -------------------------------------------------------------------
 
 
@@ -176,6 +206,20 @@ def prepare_paths(config: EngineConfig) -> EnginePaths:
         if os.path.normcase(os.path.realpath(folder)) != os.path.normcase(expected):
             raise CaptureError(f"{folder} is a link, and clips must stay in the data_root")
     return paths
+
+
+def prepare_screenshot_folder(paths: EnginePaths, feature: str) -> Path:
+    """Checked level by level, so a link above the feature folder has nothing made through it."""
+    real_root = os.path.realpath(paths.data_root)
+    folder = paths.screenshots / feature
+    for part, expected in (
+        (paths.screenshots, os.path.join(real_root, "assets", "screenshots")),
+        (folder, os.path.join(real_root, "assets", "screenshots", feature)),
+    ):
+        part.mkdir(parents=True, exist_ok=True)
+        if os.path.normcase(os.path.realpath(part)) != os.path.normcase(expected):
+            raise CaptureError(f"{part} is a link, and screenshots must stay in the data_root")
+    return folder
 
 
 # --- The sign-off -----------------------------------------------------------------------
@@ -221,25 +265,25 @@ def _ask_masks(ask: Ask, out: Out) -> tuple[MaskRegion, ...]:
     return tuple(regions)
 
 
-def ask_sign_off(feature: str, file: Path, *, ask: Ask, out: Out) -> OwnerAnswers:
+def ask_sign_off(
+    feature: str, file: Path, *, ask: Ask, out: Out, screenshot: bool = False
+) -> OwnerAnswers:
     """Whatever the answers, the caller records nothing unless `privacy_clean` comes back true,
     and a Smart Basket clip also has to have its masks confirmed (D30, G19)."""
-    prompt = f"Watch this file to the end: {file} \nIs it privacy-clean? Type yes to sign off: "
+    look = "Look over this picture" if screenshot else "Watch this file to the end"
+    prompt = f"{look}: {file} \nIs it privacy-clean? Type yes to sign off: "
     if not is_yes(ask, prompt):
         return OwnerAnswers(privacy_clean=False)
     if feature != MASKED_FOLDER:
         return OwnerAnswers(privacy_clean=True)
-    out(
-        "Smart Basket clip: the mask regions below are blurred at render, and the illustrative "
-        "prices / أسعار توضيحية label is added there too. Neither can be left out."
-    )
+    out(_SCREENSHOT_MASK_NOTE if screenshot else _CLIP_MASK_NOTE)
     regions = _ask_masks(ask, out)
     if not regions:
         return OwnerAnswers(privacy_clean=False)
     covered = is_yes(
         ask,
         "Do these regions cover every store name, logo and cheapest store line for the whole "
-        "clip? Type yes to confirm: ",
+        f"{'picture' if screenshot else 'clip'}? Type yes to confirm: ",
     )
     if not covered:
         return OwnerAnswers(privacy_clean=False)
@@ -273,9 +317,52 @@ def record_clip(
     """The only way into the manifest. `sha256` is the hash of what the owner watched, and
     `add_clip` refuses the clip if the file on disk no longer has it."""
     file = Path(file)
+    feature = _checked_sign_off(file, paths.raw_recordings, confirmation, answers, config, final)
+    if is_final_clip(file.name) != final:
+        raise ClipRejected(
+            f"{file.name} has the wrong name: only a final clip is named final_clip_NN.mp4"
+        )
+    return _save_signed_entry(
+        feature, file, sha256, answers, app_version, paths.manifest, paths.raw_recordings
+    )
+
+
+def record_screenshot(
+    paths: EnginePaths,
+    file: Path,
+    *,
+    sha256: str,
+    confirmation: ChecklistConfirmation,
+    answers: OwnerAnswers,
+    app_version: str,
+    config: EngineConfig,
+    final: bool,
+) -> ClipEntry:
+    """The only way into the screenshot manifest, with the same proof as `record_clip`."""
+    file = Path(file)
+    feature = _checked_sign_off(file, paths.screenshots, confirmation, answers, config, final)
+    if not (_FINAL_SCREENSHOT if final else _TEST_SCREENSHOT).fullmatch(file.name):
+        raise ClipRejected(
+            f"{file.name} has the wrong name: use screen_NN.png, or final_screen_NN.png if final"
+        )
+    manifest_path = screenshot_manifest_path(paths)
+    return _save_signed_entry(
+        feature, file, sha256, answers, app_version, manifest_path, paths.screenshots
+    )
+
+
+def _checked_sign_off(
+    file: Path,
+    root: Path,
+    confirmation: ChecklistConfirmation,
+    answers: OwnerAnswers,
+    config: EngineConfig,
+    final: bool,
+) -> str:
+    """What every signature needs. Returns the feature folder the file is in."""
     feature = file.parent.name
-    if feature not in RAW_RECORDING_FOLDERS or file.parent != paths.raw_recordings / feature:
-        raise ClipRejected(f"{file} is not in a feature folder under {paths.raw_recordings}")
+    if feature not in RAW_RECORDING_FOLDERS or file.parent != root / feature:
+        raise ClipRejected(f"{file} is not in a feature folder under {root}")
     if (
         not isinstance(confirmation, ChecklistConfirmation)
         or confirmation.feature != feature
@@ -286,10 +373,18 @@ def record_clip(
         raise ClipRejected("The owner has not signed this clip off as privacy-clean")
     if final and not is_gate_met(config):
         raise ClipRejected("A final clip needs the launch gate to be met (D23)")
-    if is_final_clip(file.name) != final:
-        raise ClipRejected(
-            f"{file.name} has the wrong name: only a final clip is named final_clip_NN.mp4"
-        )
+    return feature
+
+
+def _save_signed_entry(
+    feature: str,
+    file: Path,
+    sha256: str,
+    answers: OwnerAnswers,
+    app_version: str,
+    manifest_path: Path,
+    root: Path,
+) -> ClipEntry:
     try:
         entry = ClipEntry(
             path=f"{feature}/{file.name}",
@@ -301,8 +396,8 @@ def record_clip(
         )
     except ValidationError as error:
         raise ClipRejected(f"This clip cannot be signed off: {error}") from error
-    manifest = ClipManifest.load(paths.manifest)
-    manifest.add_clip(entry, paths.raw_recordings).save(paths.manifest)
+    manifest = ClipManifest.load(manifest_path)
+    manifest.add_clip(entry, root).save(manifest_path)
     return entry
 
 

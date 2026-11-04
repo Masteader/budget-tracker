@@ -1,6 +1,7 @@
 """Record a clip from the phone, or ingest clips recorded by hand (spec Section 5).
 
     python -m phone_capture.capture_cli --feature zatca_receipt_scan
+    python -m phone_capture.capture_cli --feature zatca_receipt_scan --screenshot
     python -m phone_capture.capture_cli --ingest
 
 Run it in a terminal, from `marketing/social_engine`. The questions must be answered by the owner
@@ -36,10 +37,14 @@ from phone_capture.ingest import (
     ask_sign_off,
     check_feature,
     next_clip_path,
+    next_screenshot_path,
     prepare_paths,
+    prepare_screenshot_folder,
     record_clip,
+    record_screenshot,
     require_gate_for_final,
     run_ingest,
+    screenshot_manifest_path,
 )
 
 REMOTE_RECORDING = "/sdcard/social_engine_tmp.mp4"
@@ -71,6 +76,14 @@ class CaptureResult:
     clip: Path
     signed: bool
     test_clip: bool
+    demo_off: bool
+
+
+@dataclass(frozen=True)
+class ScreenshotResult:
+    file: Path
+    signed: bool
+    test_screenshot: bool
     demo_off: bool
 
 
@@ -217,6 +230,65 @@ def run_capture(
     return CaptureResult(clip=target, signed=signed, test_clip=not final, demo_off=demo.off)
 
 
+def run_screenshot(
+    config: EngineConfig,
+    feature: str,
+    *,
+    ask: Ask,
+    out: Out,
+    final: bool = False,
+    app_version: str | None = None,
+) -> ScreenshotResult:
+    """One PNG, under the checklist, demo mode and sign-off that a clip has (spec Section 5). It
+    goes to `screenshots/`, and its manifest stays apart from the clip allow-list that render
+    reads, so a picture is never used as a clip."""
+    check_feature(feature)
+    require_gate_for_final(config, final)
+    paths = prepare_paths(config)
+    prepare_screenshot_folder(paths, feature)
+    ClipManifest.load(screenshot_manifest_path(paths))  # a broken one stops this before the phone
+
+    device = AdbClient(find_adb(config.capture.adb_path)).require_one_device()
+    out(f"This session takes a {'FINAL' if final else 'TEST'} screenshot for {feature}.")
+    if not final:
+        out("Test screenshots stay out of public reels (D23).")
+
+    checklist = Checklist(feature)
+    before_demo = [line for line in CHECKLIST if line != STATUS_BAR_LINE]
+    checklist.confirm(before_demo, ask=ask)
+    version = ask_app_version(app_version, ask=ask)
+
+    target = next_screenshot_path(paths, feature, final=final)
+    part = target.with_name(f"{target.name}.part")
+    with demo_mode(device, out) as demo:
+        checklist.confirm([STATUS_BAR_LINE], ask=ask)
+        confirmation = checklist.confirmation()
+        device.screenshot(part)
+        part.rename(target)
+    out(f"Saved {target}")
+
+    digest = sha256_file(target)
+    answers = ask_sign_off(feature, target, ask=ask, out=out, screenshot=True)
+    signed = answers.privacy_clean
+    if signed:
+        record_screenshot(
+            paths,
+            target,
+            sha256=digest,
+            confirmation=confirmation,
+            answers=answers,
+            app_version=version,
+            config=config,
+            final=final,
+        )
+        out(f"Signed off {feature}/{target.name}.")
+    else:
+        out(f"{target.name} was not signed off, so it cannot be used. Take it again.")
+    return ScreenshotResult(
+        file=target, signed=signed, test_screenshot=not final, demo_off=demo.off
+    )
+
+
 def _use_utf8_console() -> None:
     """The checklist holds Arabic, which an old code page or a redirected stream would crash on."""
     for stream in (sys.stdout, sys.stderr):
@@ -234,6 +306,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--feature", choices=RAW_RECORDING_FOLDERS, help="the shot list folder")
     parser.add_argument(
         "--ingest", action="store_true", help="sign off recordings dropped into the feature folders"
+    )
+    parser.add_argument(
+        "--screenshot", action="store_true", help="take one PNG for --feature instead of a clip"
     )
     parser.add_argument(
         "--final", action="store_true", help="a final clip, which needs the launch gate to be met"
@@ -261,6 +336,16 @@ def _run(args: argparse.Namespace) -> int:
             app_version=args.app_version,
         )
         return EXIT_FAILED if report.failed else 0
+    if args.screenshot:
+        shot = run_screenshot(
+            config,
+            args.feature,
+            ask=input,
+            out=print,
+            final=args.final,
+            app_version=args.app_version,
+        )
+        return 0 if shot.demo_off else EXIT_FAILED
     result = run_capture(
         config,
         args.feature,
@@ -278,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.ingest and args.feature is None:
         parser.error("give --feature, or --ingest")
+    if args.screenshot and args.ingest:
+        parser.error("--screenshot takes a new picture, so it does not go with --ingest")
     _use_utf8_console()
     # Ctrl+Break would otherwise end Python on the spot, with demo mode still on.
     previous_break_handler = signal.signal(signal.SIGBREAK, _raise_interrupt)
