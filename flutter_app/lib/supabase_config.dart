@@ -129,6 +129,6 @@ void ensureValidClientConfig({
     isRelease: isRelease,
   );
   if (problems.isNotEmpty) {
-    throw StateError('Invalid Qawam Money build configuration:\n- ${problems.join('\n- ')}');
+    throw StateError('Invalid Wafeer build configuration:\n- ${problems.join('\n- ')}');
   }
 }

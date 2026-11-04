@@ -26,7 +26,7 @@ const _usageKeys = {
   'NSMicrophoneUsageDescription',
   'NSSpeechRecognitionUsageDescription',
 };
-const _localizedNames = {'en': 'Qawam Money', 'ar': 'قوام المال', 'ur': 'Qawam Money'};
+const _localizedNames = {'en': 'Wafeer', 'ar': 'وفيير', 'ur': 'وفيير'};
 
 String _read(String path) => File(path).readAsStringSync();
 
@@ -431,8 +431,8 @@ void main() {
 
   group('Info.plist', () {
     test('the default display name is the English app name', () {
-      expect(_info['CFBundleDisplayName'], 'Qawam Money');
-      expect(_info['CFBundleName'], 'Qawam Money');
+      expect(_info['CFBundleDisplayName'], 'Wafeer');
+      expect(_info['CFBundleName'], 'Wafeer');
     });
 
     test('declares exactly the usage descriptions the plugins need', () {
@@ -481,7 +481,7 @@ void main() {
       });
 
       test('$lang has no withdrawn names', () {
-        final withdrawn = RegExp('wafeer|budget tracker', caseSensitive: false);
+        final withdrawn = RegExp('qawam money|budget tracker', caseSensitive: false);
         expect(_strings(lang).values.where(withdrawn.hasMatch), isEmpty);
       });
     }
@@ -502,10 +502,10 @@ void main() {
       }
     });
 
-    test('Urdu uses the Latin app name, with no Urdu-script form', () {
+    test('Urdu uses the Arabic-script app name, same as Arabic', () {
       final table = _strings('ur');
       for (final key in _usageKeys) {
-        expect(table[key], contains('Qawam Money'), reason: key);
+        expect(table[key], contains('وفيير'), reason: key);
         expect(table[key], isNot(contains('قوام')), reason: key);
       }
     });

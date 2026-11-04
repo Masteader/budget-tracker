@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Qawam Money</string>
+	<string>Wafeer</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 		<string>ur</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>Qawam Money</string>
+	<string>Wafeer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -60,13 +60,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Qawam Money uses the camera to photograph receipts and scan their QR codes so you can record your expenses.</string>
+	<string>Wafeer uses the camera to photograph receipts and scan their QR codes so you can record your expenses.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Qawam Money uses the microphone to hear what you say when you record your expenses by voice.</string>
+	<string>Wafeer uses the microphone to hear what you say when you record your expenses by voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Qawam Money lets you choose receipt photos from your library so you can record your expenses from them.</string>
+	<string>Wafeer lets you choose receipt photos from your library so you can record your expenses from them.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Qawam Money turns your speech into text so you can record your expenses by voice. Apple's speech recognition service processes the audio.</string>
+	<string>Wafeer turns your speech into text so you can record your expenses by voice. Apple's speech recognition service processes the audio.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

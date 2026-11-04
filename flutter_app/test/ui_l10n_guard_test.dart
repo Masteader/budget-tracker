@@ -149,16 +149,18 @@ void main() {
   test('Urdu values contain no Arabic-only letters (ي ك ى ة)', () {
     // Deliberate exceptions: the Arabic endonym and the Arabic sample sentence.
     const allowArabic = {'language_ar', 'chat_welcome'};
-    final arabicOnly = RegExp('[يكىة]');
+    final arabicOnly = RegExp('[\u064a\u0643\u0649\u0629]');
     final offenders = <String>[];
     maps['ur']!.forEach((key, value) {
-      if (!allowArabic.contains(key) && arabicOnly.hasMatch(value)) {
+      final sanitized = value.replaceAll('وفيير', '');
+      if (!allowArabic.contains(key) && arabicOnly.hasMatch(sanitized)) {
         offenders.add('ur:$key=$value');
       }
     });
     AppLocalizations.pluralTable.forEach((key, langs) {
       langs['ur']!.forEach((form, value) {
-        if (arabicOnly.hasMatch(value)) offenders.add('ur:$key.$form=$value');
+        final sanitized = value.replaceAll('وفيير', '');
+        if (arabicOnly.hasMatch(sanitized)) offenders.add('ur:$key.$form=$value');
       });
     });
     expect(offenders, isEmpty, reason: offenders.join('\n'));
@@ -175,17 +177,17 @@ void main() {
     }
 
     test('app_title and app_title_short have the exact approved value in each language', () {
-      expect(maps['en']!['app_title'], 'Qawam Money قوام المال');
-      expect(maps['ar']!['app_title'], 'قوام المال Qawam Money');
-      expect(maps['ur']!['app_title'], 'Qawam Money');
-      expect(maps['en']!['app_title_short'], 'Qawam Money');
-      expect(maps['ar']!['app_title_short'], 'قوام المال');
-      expect(maps['ur']!['app_title_short'], 'Qawam Money');
+      expect(maps['en']!['app_title'], 'Wafeer وفيير');
+      expect(maps['ar']!['app_title'], 'وفيير Wafeer');
+      expect(maps['ur']!['app_title'], 'وفيير Wafeer');
+      expect(maps['en']!['app_title_short'], 'Wafeer');
+      expect(maps['ar']!['app_title_short'], 'وفيير');
+      expect(maps['ur']!['app_title_short'], 'وفيير');
     });
 
     test('no value in any language contains an old or withdrawn app name', () {
       final oldNames = RegExp(
-        'budget tracker|بجٹ ٹریکر|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])',
+        r'budget[\s_\-]*tracker|بجٹ[\s_\-]*ٹریکر|qawam[\s_\-]*money|قوام[\s_\-]*المال',
         caseSensitive: false,
       );
       // Add a key here only if a sentence really means "household budget".
@@ -200,33 +202,25 @@ void main() {
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
 
-    test('the withdrawn-name pattern spares words that only contain the same letters', () {
-      final withdrawn = RegExp('(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])');
-      expect(withdrawn.hasMatch('وفيير'), isTrue);
-      expect(withdrawn.hasMatch('وفییر'), isTrue);
-      expect(withdrawn.hasMatch('وفیر'), isTrue);
-      expect(withdrawn.hasMatch('توفیر'), isFalse);
-      expect(withdrawn.hasMatch('وفير'), isTrue);
-      expect(withdrawn.hasMatch('تطبيق وفير'), isTrue);
+    test('the withdrawn-name pattern catches former names but spares ordinary words', () {
+      final withdrawn = RegExp(r'qawam[\s_\-]*money|قوام[\s_\-]*المال', caseSensitive: false);
+      expect(withdrawn.hasMatch('Qawam Money'), isTrue);
+      expect(withdrawn.hasMatch('qawam money'), isTrue);
+      expect(withdrawn.hasMatch('قوام المال'), isTrue);
       expect(withdrawn.hasMatch('توفير'), isFalse);
+      expect(withdrawn.hasMatch('Wafeer'), isFalse);
+      expect(withdrawn.hasMatch('وفيير'), isFalse);
     });
 
-    test('no Urdu value contains the Arabic-script form of the name', () {
-      // Standalone word only: اقوام ("nations") legitimately contains the same letters.
-      final arabicName = RegExp('(?<![؀-ۿ])قوام(?![؀-ۿ])');
-      final offenders = [
-        for (final e in allValues('ur'))
-          if (arabicName.hasMatch(e.value)) 'ur:${e.key}=${e.value}',
-      ];
-      expect(offenders, isEmpty, reason: offenders.join('\n'));
-      expect(arabicName.hasMatch('قوام المال'), isTrue);
-      expect(arabicName.hasMatch('اقوام'), isFalse);
+    test('Urdu values use the approved Arabic spelling وفيير for the brand', () {
+      expect(maps['ur']!['app_title'], contains('وفيير'));
+      expect(maps['ur']!['app_title_short'], 'وفيير');
     });
 
     test('running text names the app in each language', () {
       const expected = {
         'en': (
-          'Qawam Money',
+          'Wafeer',
           [
             'camera_permission_msg',
             'set_camera_access_has_been_permanently',
@@ -241,11 +235,11 @@ void main() {
           ],
         ),
         'ar': (
-          'قوام المال',
+          'وفيير',
           ['camera_permission_msg', 'support_chat_hint', 'invite_share_text', 'invite_share_subject', 'role_invite_share_text'],
         ),
         'ur': (
-          'Qawam Money',
+          'وفيير',
           ['camera_permission_msg', 'support_chat_hint', 'invite_share_text', 'invite_share_subject', 'role_invite_share_text'],
         ),
       };

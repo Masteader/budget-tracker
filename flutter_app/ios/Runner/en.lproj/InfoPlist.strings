@@ -1,6 +1,6 @@
-"CFBundleDisplayName" = "Qawam Money";
-"CFBundleName" = "Qawam Money";
-"NSCameraUsageDescription" = "Qawam Money uses the camera to photograph receipts and scan their QR codes so you can record your expenses.";
-"NSPhotoLibraryUsageDescription" = "Qawam Money lets you choose receipt photos from your library so you can record your expenses from them.";
-"NSMicrophoneUsageDescription" = "Qawam Money uses the microphone to hear what you say when you record your expenses by voice.";
-"NSSpeechRecognitionUsageDescription" = "Qawam Money turns your speech into text so you can record your expenses by voice. Apple's speech recognition service processes the audio.";
+"CFBundleDisplayName" = "Wafeer";
+"CFBundleName" = "Wafeer";
+"NSCameraUsageDescription" = "Wafeer uses the camera to photograph receipts and scan their QR codes so you can record your expenses.";
+"NSPhotoLibraryUsageDescription" = "Wafeer lets you choose receipt photos from your library so you can record your expenses from them.";
+"NSMicrophoneUsageDescription" = "Wafeer uses the microphone to hear what you say when you record your expenses by voice.";
+"NSSpeechRecognitionUsageDescription" = "Wafeer turns your speech into text so you can record your expenses by voice. Apple's speech recognition service processes the audio.";

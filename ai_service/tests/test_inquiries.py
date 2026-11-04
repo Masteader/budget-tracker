@@ -82,7 +82,7 @@ def test_vip_signup_is_emailed_with_reply_to_and_clear_subject(client, mailer):
     assert body["reference"]
 
     msg = _sent_message(mailer)
-    assert msg.subject == "[Qawam Money] VIP early access — Fan@example.com"
+    assert msg.subject == "[Wafeer] VIP early access — Fan@example.com"
     assert msg.reply_to == "Fan@example.com"
     assert "VIP early access" in msg.body
     assert "Locale: ar" in msg.body
@@ -103,7 +103,7 @@ def test_support_request_is_emailed_with_message(client, mailer):
     )
     assert res.status_code == 200, res.text
     msg = _sent_message(mailer)
-    assert msg.subject == "[Qawam Money] Support — user@example.com"
+    assert msg.subject == "[Wafeer] Support — user@example.com"
     assert msg.reply_to == "user@example.com"
     assert "Name: Sara" in msg.body
     assert "The app crashes when I scan a receipt.\nPlease help." in msg.body
@@ -308,7 +308,7 @@ def test_app_support_uses_verified_jwt_identity(client, mailer):
     )
     assert res.status_code == 200, res.text
     msg = _sent_message(mailer)
-    assert msg.subject == "[Qawam Money] Support — member@example.com"
+    assert msg.subject == "[Wafeer] Support — member@example.com"
     assert msg.reply_to == "member@example.com"
     assert f"Verified user ID: {USER_ID}" in msg.body
     assert "Locale: ur" in msg.body

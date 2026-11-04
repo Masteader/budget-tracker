@@ -12,7 +12,7 @@ import mail_service
 from mail_service import MailDeliveryError, MailNotConfiguredError, OutboundEmail
 
 MESSAGE = OutboundEmail(
-    subject="[Qawam Money] VIP early access — fan@example.com",
+    subject="[Wafeer] VIP early access — fan@example.com",
     body="New VIP early access request\nEmail: fan@example.com",
     reply_to="fan@example.com",
 )
@@ -65,13 +65,13 @@ async def test_resend_request_shape(monkeypatch):
     assert payload["subject"] == MESSAGE.subject
     assert payload["text"] == MESSAGE.body
     assert payload["reply_to"] == "fan@example.com"
-    assert payload["from"] == "Qawam Money <fmscoinfo@fmsco.com.sa>"
+    assert payload["from"] == "Wafeer <fmscoinfo@fmsco.com.sa>"
 
 
 def test_default_sender_is_company_mailbox():
-    assert mail_service.DEFAULT_SENDER == "Qawam Money <fmscoinfo@fmsco.com.sa>"
-    assert mail_service.sender("SMTP_FROM") == "Qawam Money <fmscoinfo@fmsco.com.sa>"
-    assert mail_service.sender("RESEND_FROM") == "Qawam Money <fmscoinfo@fmsco.com.sa>"
+    assert mail_service.DEFAULT_SENDER == "Wafeer <fmscoinfo@fmsco.com.sa>"
+    assert mail_service.sender("SMTP_FROM") == "Wafeer <fmscoinfo@fmsco.com.sa>"
+    assert mail_service.sender("RESEND_FROM") == "Wafeer <fmscoinfo@fmsco.com.sa>"
 
 
 def test_mail_from_overrides_default_and_provider_var_overrides_mail_from(monkeypatch):
@@ -158,7 +158,7 @@ async def test_smtp_starttls_delivery(monkeypatch, fake_smtp):
     sent = smtp.sent[0]
     assert sent["To"] == "abedmowafaq@gmail.com"
     # No SMTP_FROM / MAIL_FROM set: the company mailbox is the default sender.
-    assert sent["From"] == "Qawam Money <fmscoinfo@fmsco.com.sa>"
+    assert sent["From"] == "Wafeer <fmscoinfo@fmsco.com.sa>"
     assert sent["Message-ID"].endswith("@fmsco.com.sa>")
     assert sent["Reply-To"] == "fan@example.com"
     assert sent["Subject"] == MESSAGE.subject
@@ -169,12 +169,12 @@ async def test_smtp_starttls_delivery(monkeypatch, fake_smtp):
 async def test_smtp_ssl_on_port_465(monkeypatch, fake_smtp):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_PORT", "465")
-    monkeypatch.setenv("SMTP_FROM", "Qawam Money <noreply@example.com>")
+    monkeypatch.setenv("SMTP_FROM", "Wafeer <noreply@example.com>")
     await mail_service.send_email(MESSAGE)
     smtp = fake_smtp.instances[-1]
     assert type(smtp).__name__ == "FakeSSL"
     assert "starttls" not in smtp.calls
-    assert smtp.sent[0]["From"] == "Qawam Money <noreply@example.com>"
+    assert smtp.sent[0]["From"] == "Wafeer <noreply@example.com>"
 
 
 @pytest.mark.asyncio
@@ -195,7 +195,7 @@ async def test_smtp_failure_raises_delivery_error(monkeypatch, fake_smtp):
 @pytest.mark.asyncio
 async def test_smtp_with_invalid_sender_is_not_configured(monkeypatch, fake_smtp):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
-    monkeypatch.setenv("SMTP_FROM", "Qawam Money")
+    monkeypatch.setenv("SMTP_FROM", "Wafeer")
     with pytest.raises(MailNotConfiguredError):
         await mail_service.send_email(MESSAGE)
 

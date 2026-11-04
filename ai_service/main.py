@@ -1,5 +1,5 @@
 """
-FastAPI entry point for the Qawam Money AI microservice.
+FastAPI entry point for the Wafeer AI microservice.
 
 Architecture:
 - Modular routers under `routes/`
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Qawam Money AI Service",
+    title="Wafeer AI Service",
     description="Modular AI service and budget manager for Saudi personal finance.",
     version="1.0.2",
     docs_url="/docs",

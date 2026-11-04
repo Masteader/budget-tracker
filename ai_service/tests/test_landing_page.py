@@ -62,8 +62,8 @@ async def test_root_falls_back_inline_when_the_build_is_missing(monkeypatch, tmp
     monkeypatch.setattr(landing_page, "STATIC_INDEX", tmp_path / "index.html")
     res = await _get("/")
     assert res.status_code == 200
-    assert "Qawam Money" in res.text
-    assert "قوام المال" in res.text
+    assert "Wafeer" in res.text
+    assert "وفيير" in res.text
     assert "fmscoinfo@fmsco.com.sa" in res.text
 
 

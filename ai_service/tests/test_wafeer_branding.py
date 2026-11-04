@@ -1,4 +1,4 @@
-"""The backend's display name is Qawam Money (Arabic: قوام المال, Urdu: Qawam Money in Latin letters).
+"""The backend's display name is Wafeer (Arabic: وفيير, Urdu: Wafeer in Latin letters).
 
 Three groups of tests:
 - every user-visible surface shows the new name;
@@ -32,8 +32,8 @@ from main import app
 from pdf_statement_generator import generate_monthly_pdf_statement
 from routes.inquiries import _compose
 
-NAME_EN = "Qawam Money"
-NAME_AR = "قوام المال"
+NAME_EN = "Wafeer"
+NAME_AR = "وفيير"
 SENDER_ADDRESS = "fmscoinfo@fmsco.com.sa"
 
 SERVICE_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -220,7 +220,7 @@ def statement_text():
 
 
 def test_pdf_header_shows_the_new_name(statement_text):
-    assert "QAWAM MONEY" in statement_text
+    assert "WAFEER" in statement_text
     assert "FINANCIAL STATEMENT" in statement_text
 
 
@@ -301,7 +301,7 @@ _OLD_NAME = re.compile(
 )
 # Plain "وفير" is left out on purpose: it is an ordinary word for "abundant", and it sits inside
 # "توفير" (saving). The forms here are not ordinary words, so they match anywhere, prefixed or not.
-_WITHDRAWN_NAME = re.compile(r"wa+f+(?:ee|ei|ie|i|y)r|وفيير|وفّير|وفییر|وافير|وافیر", re.IGNORECASE)
+_WITHDRAWN_NAME = re.compile(r"qawam[\s_\-\.]*money|myqawam|qawammoney|[لب]?قوام[\s_\-]*المال", re.IGNORECASE)
 # Identifiers, not display text. See the "must stay" tests below.
 _ALLOWED_IDENTIFIERS = (
     "budgettracker://",
@@ -419,7 +419,7 @@ def test_published_api_docs_have_neither_name():
     assert not _has_withdrawn_name(text)
 
 
-@pytest.mark.parametrize("leak", ["Budget Tracker", "ميزانية الأسرة", "بجٹ ٹریکر", "Wafeer", "وفيير"])
+@pytest.mark.parametrize("leak", ["Budget Tracker", "ميزانية الأسرة", "بجٹ ٹریکر", "Qawam Money", "قوام المال"])
 def test_published_api_docs_guard_catches_a_docstring_leak(leak):
     def handler():
         return {}
@@ -472,7 +472,7 @@ def test_guard_sees_through_spacing_entities_and_zero_width_characters(leak):
     assert _has_old_name(leak), repr(leak)
 
 
-@pytest.mark.parametrize("leak", ["Waf​eer", "Wafeer&nbsp;Money", "وفي‌ير", "و‍فيير"])
+@pytest.mark.parametrize("leak", ["Qawam​Money", "Qawam&nbsp;Money", "قوام‌المال", "ق‍وام المال"])
 def test_withdrawn_name_guard_sees_through_zero_width_characters(leak):
     assert _has_withdrawn_name(leak), repr(leak)
 
@@ -536,9 +536,8 @@ def test_guard_allows_the_generic_phrase_only_in_chat_parser():
 @pytest.mark.parametrize(
     "leak",
     [
-        "Wafeer", "WAFEER", "wafeer", "WafeerApp", "Wafeer_Money", "myWafeer", "wafeer.money",
-        "Wafir", "Waffeer", "Wafeir",
-        "وفيير", "لوفيير", "بوفيير", "ووفيير", "وفّير", "وافير",
+        "Qawam Money", "QAWAM MONEY", "qawam money", "QawamMoney", "Qawam_Money", "myQawam", "qawam.money",
+        "قوام المال", "لقوام المال", "بقوام المال",
     ],
 )
 def test_guard_catches_the_withdrawn_name(leak):
@@ -547,7 +546,7 @@ def test_guard_catches_the_withdrawn_name(leak):
 
 @pytest.mark.parametrize(
     "word",
-    ["رزق وفير", "توفير", "التوفير", "وفير", "وفیر", "wafer", "waffle", "Qawam Money", "قوام المال"],
+    ["رزق وفير", "توفير", "التوفير", "وفير", "وفیر", "wafer", "waffle", "Wafeer", "وفيير"],
 )
 def test_withdrawn_name_guard_does_not_flag_ordinary_words(word):
     assert not _has_withdrawn_name(f"text {word} text"), word
