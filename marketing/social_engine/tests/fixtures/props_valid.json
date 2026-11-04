@@ -1,0 +1,56 @@
+{
+  "reel_id": "R-2026-11-03-01",
+  "revision": 1,
+  "template": "FeatureDemo",
+  "language": "ar",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration_ms": 30000,
+  "watermark": true,
+  "device_frame": "generic",
+  "digits": "western",
+  "highlight_color": "#E598B0",
+  "safe_zones": {"top": 220, "bottom": 380, "left": 60, "right": 140},
+  "brand": {
+    "name_ar": "علامة تجريبية",
+    "name_en": "TEST BRAND",
+    "hashtag": "#test",
+    "logo_src": "test_logo.svg"
+  },
+  "hook_text": "راتبك وين يروح كل شهر؟",
+  "on_screen_text": ["Where does your salary go?", "Plan by category"],
+  "subtitles_en": "Where does your salary go every month?",
+  "audio_src": "audio/voice.wav",
+  "music_src": null,
+  "duck_under_voice": 0.12,
+  "duck_in_pauses": 0.25,
+  "words": [
+    {"text": "راتبك", "start_ms": 0, "end_ms": 400},
+    {"text": "وين", "start_ms": 400, "end_ms": 700},
+    {"text": "يروح", "start_ms": 700, "end_ms": 1100},
+    {"text": "كل", "start_ms": 1100, "end_ms": 1300},
+    {"text": "شهر؟", "start_ms": 1300, "end_ms": 1800},
+    {"text": "علامة تجريبية", "start_ms": 2000, "end_ms": 2900}
+  ],
+  "clips": [
+    {
+      "src": "clips/payday_cycle/clip_01.mp4",
+      "folder": "payday_cycle",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "start_ms": 3000,
+      "end_ms": 15000,
+      "mask_regions": [],
+      "focal_point": {"x": 0.5, "y": 0.4}
+    },
+    {
+      "src": "clips/smart_basket/clip_01.mp4",
+      "folder": "smart_basket",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "start_ms": 15000,
+      "end_ms": 27000,
+      "mask_regions": [{"x": 0.05, "y": 0.2, "width": 0.9, "height": 0.08}],
+      "focal_point": null
+    }
+  ]
+}
