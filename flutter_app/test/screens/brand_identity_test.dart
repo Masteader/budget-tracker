@@ -2,6 +2,8 @@
 // narrow screen in every language and direction, native names, web brand
 // strings, and bidi behaviour of the Latin name inside Urdu sentences.
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/account.dart';
@@ -141,6 +143,14 @@ List<String> _misorderedWords(String line) {
   return problems;
 }
 
+/// Decodes a PNG to straight RGBA. Must run inside `tester.runAsync`.
+Future<(int, int, ByteData)> _decode(String path) async {
+  final codec = await ui.instantiateImageCodec(File(path).readAsBytesSync());
+  final image = (await codec.getNextFrame()).image;
+  final data = (await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba))!;
+  return (image.width, image.height, data);
+}
+
 /// Whether the first strong character decides an RTL paragraph, which is how
 /// apps that receive shared text pick a direction.
 bool _firstStrongIsRtl(String line) {
@@ -162,6 +172,16 @@ void main() {
         expect(tester.getSize(_logo), const Size(88, 88));
         expect(tester.widget<Image>(_logo).excludeFromSemantics, isTrue);
         expect(find.text(_value(lang, 'app_title')), findsOneWidget);
+        // A boxed glow would show as a rectangle behind the transparent round mark.
+        final boxedShadow = find.ancestor(
+          of: _logo,
+          matching: find.byWidgetPredicate((w) {
+            if (w is! DecoratedBox) return false;
+            final decoration = w.decoration;
+            return decoration is BoxDecoration && (decoration.boxShadow?.isNotEmpty ?? false);
+          }),
+        );
+        expect(boxedShadow, findsNothing);
       });
 
       for (final direction in _directions) {
@@ -233,6 +253,68 @@ void main() {
       expect(image.excludeFromSemantics, isTrue);
       expect(image.image, isA<ResizeImage>());
       expect((image.image as ResizeImage).width, 78);
+    });
+  });
+
+  group('brand art', () {
+    const res = 'android/app/src/main/res';
+    const densities = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192};
+
+    int alpha(ByteData data, int width, int x, int y) => data.getUint8((y * width + x) * 4 + 3);
+
+    testWidgets('launcher icons are the right size with rounded transparent corners', (tester) async {
+      await tester.runAsync(() async {
+        for (final entry in densities.entries) {
+          final (width, height, data) = await _decode('$res/mipmap-${entry.key}/ic_launcher.png');
+          expect((width, height), (entry.value, entry.value), reason: entry.key);
+          expect(alpha(data, width, 0, 0), 0, reason: entry.key);
+          expect(alpha(data, width, width ~/ 2, height ~/ 2), 255, reason: entry.key);
+        }
+      });
+    });
+
+    testWidgets('a circular launcher mask only removes the cream tile, never the rim or slice', (tester) async {
+      await tester.runAsync(() async {
+        final (size, _, data) = await _decode('$res/mipmap-xxxhdpi/ic_launcher.png');
+        final radius = size / 2;
+        final clipped = <String>[];
+        for (var y = 0; y < size; y++) {
+          for (var x = 0; x < size; x++) {
+            final dx = x + .5 - radius, dy = y + .5 - radius;
+            if (dx * dx + dy * dy < radius * radius) continue;
+            final i = (y * size + x) * 4;
+            final cream = data.getUint8(i) > 215 && data.getUint8(i + 1) > 215 && data.getUint8(i + 2) > 200;
+            // The rim and slice are opaque; faint pixels are the tile's anti-aliased corners.
+            if (data.getUint8(i + 3) > 127 && !cream) clipped.add('$x,$y');
+          }
+        }
+        expect(clipped, isEmpty);
+      });
+    });
+
+    testWidgets('in-app logo is the mark on a transparent background', (tester) async {
+      await tester.runAsync(() async {
+        final (width, height, data) = await _decode(_logoAsset);
+        expect((width, height), (512, 512));
+        for (final (x, y) in [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)]) {
+          expect(alpha(data, width, x, y), 0, reason: '$x,$y');
+        }
+        expect(alpha(data, width, width ~/ 2, height ~/ 2), 255);
+      });
+    });
+
+    test('the master artwork is committed', () {
+      final master = File('../docs/brand/qawam_money_logo.svg').readAsStringSync();
+      expect(master, contains('viewBox="0 0 1024 1024"'));
+      expect(master, contains('#F0553F'));
+    });
+
+    test('the web favicon and logo are the mark, not the old teal calendar', () {
+      for (final path in ['../web_app/public/favicon.svg', '../web_app/src/components/Header.tsx']) {
+        final source = File(path).readAsStringSync();
+        expect(source, contains('#F0553F'), reason: path);
+        expect(source, isNot(contains('#006575')), reason: path);
+      }
     });
   });
 

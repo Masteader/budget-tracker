@@ -118,20 +118,7 @@ class _LoginScreenState extends State<LoginScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Logo
-                    Container(
-                      width: 88, height: 88,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: context.primaryButtonBg.withValues(alpha: 0.35),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const BrandLogo(size: 88, radius: 20),
-                    ),
+                    const BrandLogo(size: 88),
                     const SizedBox(height: 24),
                     Text(
                       context.tr('app_title'),

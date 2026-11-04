@@ -785,7 +785,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const BrandLogo(size: 26, radius: 8),
+              const BrandLogo(size: 26),
               const SizedBox(width: 8),
               Text(
                 context.tr('app_title_short'),
