@@ -175,7 +175,9 @@ def test_the_wrapper_names_the_template_as_the_composition_and_no_entry_point(ri
         rig.add_clip()
         clips = [rig.clip_use()]
     request = rig.request(template=template, clips=clips)
-    render_reel(request, config=rig.config, paths=rig.paths, test_reel=True, engine_root=rig.engine)
+    render_reel(
+        request, store=rig.reels, config=rig.config, paths=rig.paths, engine_root=rig.engine
+    )
     command = rig.fake.renders[0].command
     assert command[1:5] == ["--no", "remotion", "render", template]
     assert command[5].startswith("out/") and command[5].endswith(".mp4")

@@ -23,11 +23,12 @@ def rig(tmp_path, monkeypatch) -> Rig:
 
 
 def render(rig: Rig, request: RenderRequest | None = None, *, test_reel: bool = True):
+    rig.reels.is_test = test_reel  # the flag on the stored row, the only place it comes from
     return render_reel(
         request if request is not None else rig.request(),
+        store=rig.reels,
         config=rig.config,
         paths=rig.paths,
-        test_reel=test_reel,
         engine_root=rig.engine,
     )
 
@@ -175,7 +176,7 @@ def test_a_basket_clip_without_masks_or_sign_off_is_refused(rig, overrides, prob
 
 def test_the_function_has_no_way_to_pass_the_safety_values():
     names = set(inspect.signature(render_reel).parameters)
-    assert names == {"request", "config", "paths", "test_reel", "engine_root"}
+    assert names == {"request", "store", "config", "paths", "engine_root"}
 
 
 @pytest.mark.parametrize(

@@ -93,7 +93,9 @@ def decide_generation(
     max_waiting: int,
 ) -> CadenceDecision:
     """The weekly cap counts reels by the week they were made in, not the week of their slot, so
-    a reel made late from last week's slot still uses up this week's allowance."""
+    a reel made late from last week's slot still uses up this week's allowance. A reel made "after"
+    now means the clock went back, so it counts against the cap too, and a wrong clock cannot buy
+    extra reels."""
     slot = latest_due_slot(now, schedule)
     made = list(generated)
     if any(reel.slot_key == slot.key for reel in made):
@@ -101,7 +103,9 @@ def decide_generation(
     if waiting >= max_waiting:
         return CadenceDecision(None, CadenceReason.WAITING_LIMIT)
     this_week = week_start(now, schedule)
-    made_this_week = sum(week_start(reel.created_at, schedule) == this_week for reel in made)
+    made_this_week = sum(
+        reel.created_at > now or week_start(reel.created_at, schedule) == this_week for reel in made
+    )
     if made_this_week >= schedule.cadence.reels_per_week:
         return CadenceDecision(None, CadenceReason.WEEK_CAP)
     return CadenceDecision(slot, CadenceReason.DUE)

@@ -17,16 +17,21 @@ from pathlib import Path
 
 import yaml
 
+import core.locks
 from core.config import DEFAULT_CONFIG_PATH, EngineConfig, load_config
 from core.locks import EngineLock
 from core.state import (
+    PostClaim,
     PostOutcome,
     PostStatus,
     Reel,
     ReelState,
+    RenderReceipt,
     StateStore,
     TapAction,
     VerifiedOwnerTap,
+    sha256_of_file,
+    write_render_receipt,
 )
 
 OWNER = 777001
@@ -82,6 +87,14 @@ def make_video(folder: Path, content: bytes = b"reel bytes", name: str = "reel.m
     return video
 
 
+def prove_render(
+    video: Path, reel_id: str, revision: int, content_hash: str, *, watermark: bool
+) -> None:
+    """What the render step leaves beside a file that passed its checks."""
+    receipt = RenderReceipt(reel_id, revision, sha256_of_file(video), content_hash, watermark)
+    write_render_receipt(video, receipt)
+
+
 def tap(
     reel: Reel,
     action: TapAction,
@@ -133,8 +146,14 @@ class Bench:
         assert self.store.record_voiced(reel.reel_id, reel.revision, voice_tier)
         return self.refresh(reel)
 
+    def prove(self, reel_id: str, revision: int, content_hash: str = "content-hash") -> None:
+        """A receipt for the video as it is now, with the watermark that the row calls for."""
+        is_test = self.store.get_reel(reel_id).is_test
+        prove_render(self.video, reel_id, revision, content_hash, watermark=is_test)
+
     def rendered(self, voice_tier: str = "S0", *, is_test: bool = False) -> Reel:
         reel = self.voiced(voice_tier, is_test=is_test)
+        self.prove(reel.reel_id, reel.revision)
         assert self.store.record_rendered(
             reel.reel_id, reel.revision, self.video, "content-hash", self.config
         )
@@ -158,12 +177,19 @@ class Bench:
 
     def publishing(self, platforms: tuple[str, ...] = TWO_PLATFORMS) -> Reel:
         reel = self.scheduled()
+        self.clock.now = reel.scheduled_for  # the window arrives
         assert self.store.start_publishing(reel.reel_id, reel.revision, platforms, self.config)
         return self.refresh(reel)
 
+    def claim(self, reel_id: str, platform: str, config: EngineConfig | None = None) -> PostClaim:
+        """A send under the store's own lock. The lock goes when this returns, as if the sender
+        then died, so a test can go on to recovery."""
+        with self.store.engine_lock() as lock:
+            return self.store.begin_post(reel_id, platform, config or self.config, lock)
+
     def needs_attention(self, outcome: PostOutcome = PostOutcome.FAILED) -> Reel:
         reel = self.publishing()
-        claim = self.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], self.config)
+        claim = self.claim(reel.reel_id, TWO_PLATFORMS[0])
         self.store.record_post_result(claim, outcome)
         return self.refresh(reel)
 
@@ -225,7 +251,7 @@ class Bench:
 
     def _posted(self) -> Reel:
         reel = self.publishing(TWO_PLATFORMS[:1])
-        claim = self.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], self.config)
+        claim = self.claim(reel.reel_id, TWO_PLATFORMS[0])
         self.store.record_post_result(claim, PostOutcome.POSTED, remote_id="remote-1")
         return self.refresh(reel)
 
@@ -273,7 +299,7 @@ def run_pipeline(
     after_send=lambda platform: None,
 ) -> Reel:
     """What the tick and the bot do together, written so it is safe to run again from any point.
-    The owner regenerates revision 1 and approves revision 2. The same two taps are delivered
+    The owner regenerates revision 1 and approves revision 2. Each tap already answered is delivered
     again at each start, because Telegram re-sends an update it was not sure we received."""
     video = folder / "reel.mp4"
     provider = Provider(folder)
@@ -291,14 +317,17 @@ def run_pipeline(
         rid = reel.reel_id
         regenerate = owner_tap(rid, 1, TapAction.REGENERATE, REGENERATE_CALLBACK)
         approve = owner_tap(rid, 2, TapAction.APPROVE, APPROVE_CALLBACK)
-        store.apply_tap(regenerate, config)
-        store.apply_tap(approve, config)
+        answered = {row.callback_query_id for row in store.approvals_for(rid)}
+        for delivered in (regenerate, approve):
+            if delivered.callback_query_id in answered:
+                store.apply_tap(delivered, config)
         for _ in range(50):
             reel = store.get_reel(rid)
             match reel.state:
                 case ReelState.DRAFT:
                     store.record_voiced(rid, reel.revision, "S0")
                 case ReelState.VOICED:
+                    prove_render(video, rid, reel.revision, "content-hash", watermark=False)
                     store.record_rendered(rid, reel.revision, video, "content-hash", config)
                 case ReelState.RENDERED:
                     store.offer_for_approval(rid, reel.revision, config)
@@ -307,7 +336,7 @@ def run_pipeline(
                 case ReelState.REGENERATING:
                     store.finish_regeneration(rid, reel.revision)
                 case ReelState.APPROVED:
-                    store.schedule_reel(rid, reel.revision, datetime(2026, 11, 6, tzinfo=UTC))
+                    store.schedule_reel(rid, reel.revision, datetime.now(UTC))
                 case ReelState.SCHEDULED:
                     store.start_publishing(rid, reel.revision, TWO_PLATFORMS, config)
                 case ReelState.PUBLISHING:
@@ -318,7 +347,7 @@ def run_pipeline(
                     ]
                     if not waiting:
                         return reel
-                    claim = store.begin_post(rid, waiting[0], config)
+                    claim = store.begin_post(rid, waiting[0], config, lock)
                     before_send(waiting[0])
                     provider.send(waiting[0])
                     after_send(waiting[0])
@@ -404,8 +433,12 @@ def _child_race(folder: Path, kind: str, argument: str) -> int:
             )
             print(json.dumps({"won": result.applied}))
         elif kind == "begin_post":
+            # The lock is out of the way, so that only the compare-and-swap decides this race.
+            core.locks.msvcrt.locking = lambda *_arguments: None
+            store._clock = lambda: store.get_reel(argument).scheduled_for
             try:
-                store.begin_post(argument, TWO_PLATFORMS[0], config)
+                with store.engine_lock() as lock:
+                    store.begin_post(argument, TWO_PLATFORMS[0], config, lock)
             except Exception as error:
                 print(json.dumps({"won": False, "error": type(error).__name__}))
             else:

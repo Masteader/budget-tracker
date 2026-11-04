@@ -4,6 +4,10 @@ Thousands of small files under `node_modules` would sync through OneDrive all da
 Section 4). The first `npm install` happens by hand in `remotion_work`, and `--pull-lock`
 then copies `package-lock.json` back to the repo.
 
+`npm ci` runs with `--ignore-scripts`, so a tampered lockfile cannot run anything while installing.
+The build needs no install script: esbuild ships its binary as a package of its own for each
+platform, and fsevents is for macOS. Task F6's render check was run this way.
+
     python -m core.remotion_sync --data-root "%LOCALAPPDATA%\\SocialEngine"
     python -m core.remotion_sync --data-root "%LOCALAPPDATA%\\SocialEngine" --pull-lock
 """
@@ -30,6 +34,9 @@ _FIXTURE = Path("tests") / "fixtures" / "props_valid.json"
 _KEPT_FOLDERS = ("node_modules", "out")
 _KEPT_FILES = (LOCKFILE, _STAMP)
 _KEPT_IN_WORK = {*_KEPT_FOLDERS, *_KEPT_FILES}
+# The work folder's own, rebuilt there. A stamp in the repo could skip npm, and only allow-listed
+# files may reach `public/` (spec Section 5.2).
+_NEVER_COPIED_FROM_STUDIO = {_STAMP, "public"}
 
 
 class RemotionSyncError(RuntimeError):
@@ -62,7 +69,8 @@ def _clear_read_only(path: Path, data_root: Path) -> None:
     """OneDrive marks repo folders read-only and the copy keeps that flag, so the next sync could
     not delete it. Only a path really inside the work folder is touched. Its parent is resolved
     and the path itself is not, so a link is judged by where it sits, and `follow_symlinks=False`
-    clears the flag on the link and never on what it points at."""
+    clears the flag on the link and never on what it points at. A hard link has no such way out:
+    the flag belongs to the file and every name it has, so that is refused."""
     work = _checked_work_dir(data_root)
     target = Path(os.path.abspath(path))
     try:
@@ -72,6 +80,12 @@ def _clear_read_only(path: Path, data_root: Path) -> None:
         raise RemotionSyncError(f"could not check {target}: {error}") from error
     if real_parent != real_work and not real_parent.startswith(real_work + os.sep):
         raise RemotionSyncError(f"{target} is outside {work}, so its flags stay as they are.")
+    info = os.lstat(target)
+    if not stat.S_ISDIR(info.st_mode) and info.st_nlink > 1:
+        raise RemotionSyncError(
+            f"{target} is read-only and a hard link, so clearing the flag would change another "
+            "file too. Remove the link by hand, then try again."
+        )
     os.chmod(target, stat.S_IWRITE, follow_symlinks=False)
 
 
@@ -102,6 +116,13 @@ def _remove(path: Path, data_root: Path) -> None:
 
 def _copy_into(source_dir: Path, target_dir: Path) -> None:
     shutil.copytree(source_dir, target_dir, dirs_exist_ok=True)
+
+
+def _copy_studio(studio: Path, work: Path) -> None:
+    def left_out(folder: str, names: list[str]) -> set[str]:
+        return _NEVER_COPIED_FROM_STUDIO & set(names) if Path(folder) == studio else set()
+
+    shutil.copytree(studio, work, dirs_exist_ok=True, ignore=left_out)
 
 
 def _is_link(path: Path, info: os.stat_result) -> bool:
@@ -170,6 +191,11 @@ def _check_kept(work: Path, name: str, data_root: Path, *, folder: bool) -> None
         raise RemotionSyncError(f"{kept} is not a folder.")
     if not folder and not stat.S_ISREG(info.st_mode):
         raise RemotionSyncError(f"{kept} is not a file.")
+    if not folder and info.st_nlink > 1:
+        raise RemotionSyncError(
+            f"{kept} is a hard link, and sync overwrites this file, so another file would change "
+            "with it. Remove the link, then try again."
+        )
     try:
         real_kept = os.path.realpath(kept, strict=True)
         real_root = os.path.realpath(data_root, strict=True)
@@ -211,7 +237,7 @@ def _rebuild_work_dir(studio: Path, engine_root: Path, data_root: Path) -> None:
     for entry in work.iterdir():
         if entry.name not in _KEPT_IN_WORK:
             _remove(entry, data_root)
-    _copy_into(studio, work)
+    _copy_studio(studio, work)
 
     (work / "public").mkdir(exist_ok=True)
     branding = Path(engine_root) / "assets" / "branding"
@@ -226,12 +252,20 @@ def _lock_hash(lockfile: Path) -> str:
     return hashlib.sha256(lockfile.read_bytes()).hexdigest()
 
 
+def _installed_hash(stamp: Path) -> str | None:
+    """A stamp that cannot be read says nothing was installed, so npm runs again."""
+    try:
+        return stamp.read_bytes().decode("ascii")
+    except (FileNotFoundError, UnicodeDecodeError):
+        return None
+
+
 def _run_npm_ci(work: Path) -> None:
     npm = shutil.which("npm")
     if npm is None:
         raise RemotionSyncError("npm was not found on PATH")
     result = subprocess.run(
-        [npm, "ci"],
+        [npm, "ci", "--ignore-scripts"],
         cwd=work,
         env=scrubbed_env(None),
         capture_output=True,
@@ -266,8 +300,7 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
     # Again, right before node_modules and the stamp are trusted or deleted.
     checked_kept_folders(data_root)
     _checked_kept_files(data_root)
-    installed = stamp.read_text(encoding="utf-8") if stamp.is_file() else None
-    if installed == wanted and (work / "node_modules").is_dir():
+    if _installed_hash(stamp) == wanted and (work / "node_modules").is_dir():
         return SyncResult(work, ran_npm_ci=False)
     stamp.unlink(missing_ok=True)
     _run_npm_ci(work)
@@ -281,7 +314,7 @@ def _check_repo_lock_is_not_a_link(target: Path) -> None:
         info = os.lstat(target)
     except FileNotFoundError:
         return
-    if _is_link(target, info):
+    if _is_link(target, info) or info.st_nlink > 1:
         raise RemotionSyncError(
             f"{target} is a link, so pulling would write to the file it points at. Nothing was "
             "copied. Remove the link, then try again."
@@ -289,8 +322,16 @@ def _check_repo_lock_is_not_a_link(target: Path) -> None:
 
 
 def pull_lock(engine_root: Path, data_root: Path) -> Path:
-    """The pulled lockfile came from that `node_modules`, so it needs no reinstall."""
+    """Only `npm ci` finishing may write the stamp. `node_modules` could be half made, or the
+    lockfile edited by hand, and nothing here can tell, so a changed lockfile means a clean install
+    at the next sync. Junctions and symlinks only for the folder: OneDrive's own reparse points on
+    repo folders are not links."""
     studio = _preflight(engine_root)
+    if studio.is_junction() or studio.is_symlink():
+        raise RemotionSyncError(
+            f"{studio} is a link, so pulling would write to the folder it points at. Nothing was "
+            "copied. Remove the link, then try again."
+        )
     work = _checked_work_dir(data_root)
     _checked_kept_files(data_root)
     source = work / LOCKFILE
@@ -299,7 +340,6 @@ def pull_lock(engine_root: Path, data_root: Path) -> Path:
     target = studio / LOCKFILE
     _check_repo_lock_is_not_a_link(target)
     shutil.copy2(source, target)
-    (work / _STAMP).write_text(_lock_hash(target), encoding="utf-8")
     return target
 
 

@@ -2,9 +2,11 @@
 8.3, 8.6, guardrails G15, G16, G19).
 
 `render_reel` is the only way to render. A caller describes the reel, and the safety values
-are not its to give: `watermark` is `ReelBrand.is_test`, and each clip's folder, hash and
-`mask_regions` come from `ClipManifest.verified_clip()`, read from the manifest on disk. So a
-caller cannot pass a different value, and a test reel cannot render without the watermark.
+are not its to give: whether it is a test reel comes from its row in the state store, `watermark`
+is `ReelBrand.is_test`, and each clip's folder, hash and `mask_regions` come from
+`ClipManifest.verified_clip()`, read from the manifest on disk. So a caller cannot pass a different
+value, and a test reel cannot render without the watermark. A finished file gets a receipt beside
+it, which `record_rendered` and the reuse check both compare with the file.
 
 Only allow-listed files reach `public/`, the folder is rebuilt by the sync before every render,
 and each copied file is hashed again, so what renders is what was checked.
@@ -38,6 +40,13 @@ from core.render_props import (
     Template,
 )
 from core.secrets import scrubbed_env
+from core.state import (
+    RenderReceipt,
+    StateStore,
+    read_render_receipt,
+    remove_render_receipt,
+    write_render_receipt,
+)
 
 BYTES_PER_MB = 1_000_000  # the spec's table counts 47 MB as 47,000 kB, the stricter reading
 MAX_RENDERS = 3  # the first, then a lower bitrate up to twice (spec Section 8.6)
@@ -146,6 +155,15 @@ def _describe(error: ValidationError) -> str:
         f"{'.'.join(str(part) for part in item['loc']) or 'value'}: {item['msg']}"
         for item in error.errors()
     )
+
+
+def _stored_test_flag(request: RenderRequest, store: StateStore) -> bool:
+    reel = store.voiced_reel(request.reel_id, request.revision)
+    if reel is None:
+        raise RenderRefused(
+            f"revision {request.revision} of reel {request.reel_id!r} is not waiting to be rendered"
+        )
+    return reel.is_test
 
 
 def _reel_brand(config: EngineConfig, test_reel: bool) -> ReelBrand:
@@ -292,6 +310,9 @@ def _stages_for(
     music = _allowed_audio(paths.bg_music, request.music, "music")
     music_src = f"audio/music/{request.music}"
     stages.append(_Stage(music, music_src, sha256_file(music)))
+    names = [stage.public_path.casefold() for stage in stages]
+    if len(set(names)) != len(names):
+        raise RenderRefused("two inputs would land on one path in public/, and one would be lost")
     return stages, music_src
 
 
@@ -535,8 +556,33 @@ def _output_limits(props: RenderProps, config: EngineConfig) -> dict[str, int]:
     }
 
 
+def _receipt_for(inputs: _Inputs, sha256: str) -> RenderReceipt:
+    props = inputs.props
+    return RenderReceipt(
+        reel_id=props.reel_id,
+        revision=props.revision,
+        sha256=sha256,
+        content_hash=inputs.content_hash,
+        watermark=props.watermark,
+    )
+
+
+def _keep_output(output: Path, final: Path, inputs: _Inputs, paths: EnginePaths) -> str:
+    """The folder is checked again because the render ran for minutes, and the receipt goes first
+    so that a final file never stands without one. A failed move leaves neither."""
+    _checked_renders_folder(paths)
+    sha256 = sha256_file(output)
+    write_render_receipt(final, _receipt_for(inputs, sha256))
+    try:
+        os.replace(output, final)
+    except OSError:
+        remove_render_receipt(final)
+        raise
+    return sha256
+
+
 def _render_until_it_fits(
-    run: _Run, inputs: _Inputs, config: EngineConfig, final: Path
+    run: _Run, inputs: _Inputs, config: EngineConfig, final: Path, paths: EnginePaths
 ) -> RenderResult:
     props = inputs.props
     kbps = video_kbps(props.duration_ms, config.render)
@@ -554,8 +600,7 @@ def _render_until_it_fits(
                 continue
             except Mp4Error as error:
                 raise RenderFailed(f"the output failed its checks: {error}") from error
-            sha256 = sha256_file(output)
-            os.replace(output, final)
+            sha256 = _keep_output(output, final, inputs, paths)
             return RenderResult(
                 path=final,
                 sha256=sha256,
@@ -575,13 +620,16 @@ def _render_until_it_fits(
 
 
 def _reusable(final: Path, inputs: _Inputs, config: EngineConfig) -> RenderResult | None:
-    """The same inputs already gave this file (spec Section 3.5), and it still has to pass."""
+    """The same inputs already gave this file (spec Section 3.5). It still has to pass, and to be
+    the file the receipt names, or a swapped file at this name would be accepted as checked."""
     if not final.is_file():
         return None
     try:
         info = check_output(final, **_output_limits(inputs.props, config))
         sha256 = sha256_file(final)
     except (Mp4Error, OSError):
+        return None
+    if read_render_receipt(final) != _receipt_for(inputs, sha256):
         return None
     return RenderResult(
         path=final,
@@ -597,15 +645,16 @@ def _reusable(final: Path, inputs: _Inputs, config: EngineConfig) -> RenderResul
 def render_reel(
     request: RenderRequest,
     *,
+    store: StateStore,
     config: EngineConfig,
     paths: EnginePaths,
-    test_reel: bool,
     engine_root: Path = ENGINE_ROOT,
 ) -> RenderResult:
     """Raises `RenderRefused` if a gate says no and `RenderFailed` if the render gives no good
-    file. In both cases no new file is left in `renders/`."""
+    file. In both cases no new file is left in `renders/`. The reel has to be in `store`, voiced,
+    at this revision, and its row says whether it is a test reel."""
     root = Path(engine_root)
-    inputs = _checked_inputs(request, config, paths, test_reel, root)
+    inputs = _checked_inputs(request, config, paths, _stored_test_flag(request, store), root)
     props = inputs.props
     stem = f"{props.reel_id}-r{props.revision}-{inputs.content_hash[:_HASH_CHARS]}"
     final = _checked_renders_folder(paths) / f"{stem}.mp4"
@@ -614,4 +663,4 @@ def render_reel(
         return reused
     _prepare_work_folder(inputs, root, paths)
     run = _Run(paths.data_root, paths.remotion_work, stem)
-    return _render_until_it_fits(run, inputs, config, final)
+    return _render_until_it_fits(run, inputs, config, final, paths)

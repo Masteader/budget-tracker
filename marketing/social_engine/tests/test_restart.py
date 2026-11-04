@@ -215,7 +215,7 @@ def bench(tmp_path):
 
 def test_in_flight_becomes_unknown_outcome_at_startup(bench, tmp_path):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
     with EngineLock(tmp_path / "tick.lock") as lock:
         recovered = bench.store.recover_interrupted(lock)
@@ -230,7 +230,7 @@ def test_in_flight_becomes_unknown_outcome_at_startup(bench, tmp_path):
 def test_recovery_refuses_to_run_without_the_lock(bench, tmp_path):
     # Another process could really be mid-send, so this may only run with the lock in hand.
     reel = bench.publishing()
-    bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     released = EngineLock(tmp_path / "tick.lock")
 
     with pytest.raises(StateError, match="lock"):
@@ -254,19 +254,20 @@ def test_an_unknown_outcome_blocks_a_new_send_until_the_owner_answers(bench):
     reel = bench.needs_attention(PostOutcome.UNKNOWN)
 
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert refused.value.reason == RefusalReason.NOT_PUBLISHING
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[1])
 
 
-def test_a_result_arriving_after_recovery_does_not_overrule_it(bench, tmp_path):
+@pytest.mark.parametrize("late", [PostOutcome.FAILED, PostOutcome.UNKNOWN])
+def test_a_late_failure_after_recovery_does_not_overrule_it(bench, tmp_path, late):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     with EngineLock(tmp_path / "tick.lock") as lock:
         bench.store.recover_interrupted(lock)
 
-    assert bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="late") is False
+    assert bench.store.record_post_result(claim, late) is False
 
     assert bench.store.posts_for(reel.reel_id)[0].status == P.UNKNOWN_OUTCOME
 
@@ -276,7 +277,7 @@ def test_a_durable_state_survives_closing_without_a_clean_shutdown(tmp_path):
     store = StateStore(tmp_path / "engine.db", clock=clock)
     bench = Bench(store, live_config(tmp_path), make_video(tmp_path), clock)
     reel = bench.publishing()
-    store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     store.close()
 
     with StateStore(tmp_path / "engine.db") as reopened:
@@ -496,7 +497,9 @@ def test_racing_processes_get_one_claim_on_a_platform(tmp_path):
         assert (post.status, post.attempts) == (P.IN_FLIGHT, 1)
 
 
-def test_threads_with_their_own_connections_race_safely(tmp_path):
+def test_threads_with_their_own_connections_race_safely(tmp_path, monkeypatch):
+    # The lock is out of the way, so that only the compare-and-swap decides this race.
+    monkeypatch.setattr("core.locks.msvcrt.locking", lambda *_arguments: None)
     folder = fresh_folder(tmp_path, "threads")
     reel_id = _prepared_reel(folder, S.PUBLISHING)
     config = live_config(folder)
@@ -506,9 +509,11 @@ def test_threads_with_their_own_connections_race_safely(tmp_path):
 
     def attempt() -> None:
         with StateStore(folder / "engine.db") as store:
+            store._clock = lambda: store.get_reel(reel_id).scheduled_for
             barrier.wait()
             try:
-                wins.append(store.begin_post(reel_id, TWO_PLATFORMS[0], config).platform)
+                with store.engine_lock() as lock:
+                    wins.append(store.begin_post(reel_id, TWO_PLATFORMS[0], config, lock).platform)
             except ActionRefused as error:
                 errors.append(error)
 

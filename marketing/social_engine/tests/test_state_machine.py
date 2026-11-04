@@ -42,6 +42,7 @@ def _record_voiced(bench, reel, _target):
 
 
 def _record_rendered(bench, reel, _target):
+    bench.prove(reel.reel_id, reel.revision)
     assert bench.store.record_rendered(
         reel.reel_id, reel.revision, bench.video, "content-hash", bench.config
     )
@@ -83,17 +84,22 @@ def _schedule(bench, reel, _target):
 
 
 def _start_publishing(bench, reel, _target):
+    bench.clock.now = reel.scheduled_for
     assert bench.store.start_publishing(reel.reel_id, reel.revision, TWO_PLATFORMS, bench.config)
+
+
+def _next_window(bench, reel, _target):
+    assert bench.store.reschedule(reel.reel_id, reel.revision, bench.clock() + timedelta(days=1))
 
 
 def _every_platform_posted(bench, reel, _target):
     for platform in TWO_PLATFORMS:
-        claim = bench.store.begin_post(reel.reel_id, platform, bench.config)
+        claim = bench.claim(reel.reel_id, platform)
         bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="remote-1")
 
 
 def _platform_failed(bench, reel, _target):
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.FAILED)
 
 
@@ -110,7 +116,7 @@ def _file_changed_before_publishing(bench, reel, _target):
     bench.video.write_bytes(b"swapped after the owner approved")
     if reel.state == S.PUBLISHING:
         with pytest.raises(ActionRefused, match="hash_changed"):
-            bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+            bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     elif reel.state == S.SCHEDULED:
         with pytest.raises(ActionRefused, match="hash_changed"):
             bench.store.start_publishing(reel.reel_id, reel.revision, TWO_PLATFORMS, bench.config)
@@ -131,6 +137,8 @@ SPEC_ENGINE_EDGES = {
     (S.REGENERATING, S.DRAFT): _finish_regeneration,
     (S.APPROVED, S.SCHEDULED): _schedule,
     (S.SCHEDULED, S.PUBLISHING): _start_publishing,
+    # Section 3.5: "It moves to the next window", also for a reel a crash left part way out.
+    (S.PUBLISHING, S.SCHEDULED): _next_window,
     (S.PUBLISHING, S.POSTED): _every_platform_posted,
     (S.PUBLISHING, S.NEEDS_ATTENTION): _platform_failed,
     # "Any step before approval on repeated error"
@@ -376,6 +384,7 @@ SPEC_POST_CHANGES = {
     (P.FAILED, P.POSTED),
     (P.UNKNOWN_OUTCOME, P.PENDING),
     (P.UNKNOWN_OUTCOME, P.POSTED),
+    (P.SKIPPED, P.POSTED),
 }
 
 

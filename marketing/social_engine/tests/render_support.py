@@ -8,7 +8,7 @@ import shutil
 import struct
 import subprocess
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import yaml
@@ -18,6 +18,7 @@ from core.config import DEFAULT_CONFIG_PATH, EngineConfig, load_config
 from core.manifest import ClipEntry, ClipManifest, sha256_file
 from core.paths import EnginePaths
 from core.render import ClipUse, RenderRequest
+from core.state import Reel, ReelState
 
 MB = 1_000_000
 _FTYP = b"isom" + b"\x00\x00\x02\x00" + b"isomiso2avc1mp41"
@@ -56,11 +57,14 @@ def trak(
     height: int = 0,
     edit_list: bool = False,
     version: int = 0,
+    samples: int = 1,
 ) -> bytes:
     hdlr = box(b"hdlr", bytes(8) + handler + bytes(12) + b"\x00")
-    entry = box(codec, bytes(16))
+    # A visual sample entry: 6 reserved, 2 index, 16 predefined, then its size, as a real one has.
+    entry = box(codec, bytes(24) + struct.pack(">HH", width, height) + bytes(50))
     stsd = box(b"stsd", bytes(4) + struct.pack(">I", 1) + entry)
-    stbl = box(b"stbl", stsd)
+    stsz = box(b"stsz", bytes(4) + struct.pack(">II", 0, samples) + bytes(4 * samples))
+    stbl = box(b"stbl", stsd + stsz)
     minf = box(b"minf", stbl)
     mdia = box(b"mdia", hdlr + minf)
     edts = box(b"edts", box(b"elst", bytes(8))) if edit_list else b""
@@ -76,12 +80,23 @@ def moov(
     video_codec: bytes = b"avc1",
     audio: bool = True,
     version: int = 0,
+    audio_edit_list: bool = False,
+    video_samples: int = 1,
+    audio_samples: int = 1,
 ) -> bytes:
     tracks = trak(
-        b"vide", video_codec, width=width, height=height, edit_list=edit_list, version=version
+        b"vide",
+        video_codec,
+        width=width,
+        height=height,
+        edit_list=edit_list,
+        version=version,
+        samples=video_samples,
     )
     if audio:
-        tracks += trak(b"soun", b"mp4a", version=version)
+        tracks += trak(
+            b"soun", b"mp4a", version=version, edit_list=audio_edit_list, samples=audio_samples
+        )
     return box(b"moov", mvhd(duration_ms, version=version) + tracks)
 
 
@@ -171,7 +186,7 @@ class FakeRemotion:
         # npm ci during the sync, and taskkill after a timeout.
         command = [str(part) for part in args]
         self.run_calls.append(command)
-        if command[-1] == "ci":
+        if "ci" in command:
             (Path(kwargs["cwd"]) / "node_modules").mkdir(exist_ok=True)
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
@@ -234,6 +249,38 @@ def complete_live_data() -> dict:
     return data
 
 
+class StoredReels:
+    """Answers for the state store: whatever is asked for is voiced and waiting to be rendered, and
+    its row has this test flag."""
+
+    def __init__(self) -> None:
+        self.is_test = True
+
+    def voiced_reel(self, reel_id: str, revision: int) -> Reel:
+        moment = datetime(2026, 11, 5, tzinfo=UTC)
+        return Reel(
+            reel_id=reel_id,
+            slot_key="2026-11-05",
+            state=ReelState.VOICED,
+            revision=revision,
+            tier="global",
+            template="DailyTip",
+            topic_id="topic-1",
+            target_duration=30,
+            language="ar",
+            is_test=self.is_test,
+            created_at=moment,
+            state_changed_at=moment,
+            content_hash=None,
+            mp4_path=None,
+            mp4_sha256=None,
+            voice_tier="S0",
+            regenerations=0,
+            regenerate_kind=None,
+            scheduled_for=None,
+        )
+
+
 class Rig:
     """A throwaway engine and data_root. Nothing outside `tmp_path` is read or written."""
 
@@ -243,6 +290,7 @@ class Rig:
         self.paths = EnginePaths.from_root(self.data_root)
         self.paths.ensure_dirs()
         self.config: EngineConfig = load_config()
+        self.reels = StoredReels()
         self._write_engine()
         self.fake = FakeRemotion(self.paths)
         monkeypatch.setattr(brand_gate_module, "ENGINE_ROOT", self.engine)
