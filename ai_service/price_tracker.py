@@ -133,6 +133,8 @@ def get_grocery_price_history(household_id: str, item_filter: Optional[str] = No
     return summary
 
 
+# TODO(smart-basket-real-prices): these are PLACEHOLDER numbers, not real store prices.
+# Replace with real data before any public claim about store prices (docs/PROJECT_DETAILS.md 4.1).
 BENCHMARK_STORE_PRICES: Dict[str, Dict[str, float]] = {
     "Milk": {"Panda": 14.50, "Danube": 16.00, "Tamimi": 15.50, "Othaim": 14.00, "Lulu": 14.25},
     "Chicken": {"Panda": 38.00, "Danube": 44.50, "Tamimi": 42.00, "Othaim": 36.50, "Lulu": 37.00},
@@ -179,8 +181,12 @@ def optimize_shopping_basket(household_id: str, items: List[str]) -> Dict[str, A
 
     for raw_item in items:
         norm = _normalize_item_name(raw_item)
+        # TODO(smart-basket-real-prices): fallback to BENCHMARK_STORE_PRICES is placeholder data,
+        # not real store prices; replace before any public claim about store prices.
         store_prices = recorded_item_stores.get(norm) or BENCHMARK_STORE_PRICES.get(norm)
         if not store_prices:
+            # TODO(smart-basket-real-prices): 20 SAR default and the store multipliers below are
+            # made-up placeholders, not real store prices; replace before any public price claim.
             default_est = 20.0
             store_prices = {
                 "Panda": default_est,

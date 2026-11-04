@@ -216,6 +216,23 @@ roommate homes in the GCC. It addresses realities that generic budgeting tools i
 
 Removed from the roadmap because it shipped: multi-household switching (§3.8).
 
+### 4.1 Known Gaps & Owner-Approved Exceptions
+
+**Smart Basket uses placeholder store prices** (grep: `TODO(smart-basket-real-prices)`)
+- **What is fake:** the per-store prices for Panda, Danube, Tamimi, Othaim and Lulu are hard-coded
+  numbers, not live or sourced store prices. Items not in that table fall back to a made-up default of
+  20 SAR (with invented per-store multipliers).
+- **Where:** `ai_service/price_tracker.py` — `BENCHMARK_STORE_PRICES` and the fallback branches in
+  `optimize_shopping_basket` (served by `POST /analytics/shopping-basket-optimize`).
+- **User impact:** whenever a household has no recorded price for an item, app users currently see
+  these placeholder numbers as the store comparison and "cheapest store" result.
+- **Decision:** the owner decided on 2026-11-04 to keep them for now, including for filming demo
+  clips, and to fix later. This is a tracked, owner-approved exception to the no-placeholder rule in
+  [`.agents/rules/05-code-quality-and-testing.md`](../.agents/rules/05-code-quality-and-testing.md).
+- **What the fix needs:** a real price source (scraped, licensed or crowd-sourced receipt data) with
+  freshness dates, removal of the 20 SAR default (show "no price data" instead), and no public claim
+  about store prices or savings until this is done.
+
 ---
 
 ## 5. API Endpoints
