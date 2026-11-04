@@ -40,7 +40,8 @@
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
       "start_ms": 3000,
       "end_ms": 15000,
-      "mask_regions": []
+      "mask_regions": [],
+      "focal_point": {"x": 0.5, "y": 0.4}
     },
     {
       "src": "clips/smart_basket/clip_01.mp4",
@@ -48,7 +49,8 @@
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
       "start_ms": 15000,
       "end_ms": 27000,
-      "mask_regions": [{"x": 0.05, "y": 0.2, "width": 0.9, "height": 0.08}]
+      "mask_regions": [{"x": 0.05, "y": 0.2, "width": 0.9, "height": 0.08}],
+      "focal_point": null
     }
   ]
 }

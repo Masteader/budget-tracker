@@ -26,88 +26,313 @@
   "reel_id": "SAMPLE-MYTH-AR",
   "template": "MythVsFact",
   "language": "ar",
-  "duration_ms": 9000,
+  "duration_ms": 28000,
   "hook_text": "وقف تحسب مصروفاتك في راسك",
   "on_screen_text": [
-    "Keeping it all in your head",
-    "A clear budget by category"
+    "تحسب كل شي في راسك وعلى ورق",
+    "ميزانية واضحة لكل فئة مع قوام المال"
   ],
-  "subtitles_en": "Stop keeping your spending in your head. A clear budget by category shows it all.",
+  "subtitles_en": "Stop keeping your spending in your head. Memory forgets, and the spending does not. Every month you say you will work it out later, then the salary is gone and you do not know where it went. Paper gets lost, messages get mixed up, and the sums in your head fool you. The smart way is a clear budget for each category, where you see it all before you spend. Every riyal has its place, and every expense is written down. Keep it simple and keep it clear. A clear budget with Qawam Money.",
   "words": [
     {
       "text": "وقف",
       "start_ms": 0,
-      "end_ms": 240
+      "end_ms": 322
     },
     {
       "text": "تحسب",
-      "start_ms": 240,
-      "end_ms": 520
+      "start_ms": 322,
+      "end_ms": 709
     },
     {
       "text": "مصروفاتك",
-      "start_ms": 520,
-      "end_ms": 1080
+      "start_ms": 709,
+      "end_ms": 1353
     },
     {
       "text": "في",
-      "start_ms": 1080,
-      "end_ms": 1320
+      "start_ms": 1353,
+      "end_ms": 1610
     },
     {
       "text": "راسك.",
-      "start_ms": 1320,
-      "end_ms": 1670
+      "start_ms": 1610,
+      "end_ms": 2061
     },
     {
       "text": "الذاكرة",
-      "start_ms": 1970,
-      "end_ms": 2460
+      "start_ms": 2321,
+      "end_ms": 2901
     },
     {
       "text": "تنسى",
-      "start_ms": 2460,
-      "end_ms": 2740
+      "start_ms": 2901,
+      "end_ms": 3288
     },
     {
       "text": "والمصروفات",
-      "start_ms": 2740,
-      "end_ms": 3440
+      "start_ms": 3288,
+      "end_ms": 4061
     },
     {
       "text": "ما",
-      "start_ms": 3440,
-      "end_ms": 3680
+      "start_ms": 4061,
+      "end_ms": 4318
     },
     {
       "text": "تنسى.",
-      "start_ms": 3680,
-      "end_ms": 4030
+      "start_ms": 4318,
+      "end_ms": 4769
+    },
+    {
+      "text": "كل",
+      "start_ms": 5029,
+      "end_ms": 5287
+    },
+    {
+      "text": "شهر",
+      "start_ms": 5287,
+      "end_ms": 5609
+    },
+    {
+      "text": "تقول",
+      "start_ms": 5609,
+      "end_ms": 5995
+    },
+    {
+      "text": "بعدين",
+      "start_ms": 5995,
+      "end_ms": 6446
+    },
+    {
+      "text": "أحسبها،",
+      "start_ms": 6446,
+      "end_ms": 7026
+    },
+    {
+      "text": "وبعدين",
+      "start_ms": 7026,
+      "end_ms": 7541
+    },
+    {
+      "text": "الراتب",
+      "start_ms": 7541,
+      "end_ms": 8057
+    },
+    {
+      "text": "يخلص",
+      "start_ms": 8057,
+      "end_ms": 8443
+    },
+    {
+      "text": "وأنت",
+      "start_ms": 8443,
+      "end_ms": 8830
+    },
+    {
+      "text": "ما",
+      "start_ms": 8830,
+      "end_ms": 9087
+    },
+    {
+      "text": "تدري",
+      "start_ms": 9087,
+      "end_ms": 9474
+    },
+    {
+      "text": "وين",
+      "start_ms": 9474,
+      "end_ms": 9796
+    },
+    {
+      "text": "راح.",
+      "start_ms": 9796,
+      "end_ms": 10182
+    },
+    {
+      "text": "الورق",
+      "start_ms": 10442,
+      "end_ms": 10893
+    },
+    {
+      "text": "يضيع،",
+      "start_ms": 10893,
+      "end_ms": 11344
+    },
+    {
+      "text": "والرسائل",
+      "start_ms": 11344,
+      "end_ms": 11988
+    },
+    {
+      "text": "تختلط،",
+      "start_ms": 11988,
+      "end_ms": 12504
+    },
+    {
+      "text": "والحساب",
+      "start_ms": 12504,
+      "end_ms": 13084
+    },
+    {
+      "text": "في",
+      "start_ms": 13084,
+      "end_ms": 13341
+    },
+    {
+      "text": "الراس",
+      "start_ms": 13341,
+      "end_ms": 13792
+    },
+    {
+      "text": "يخدعك.",
+      "start_ms": 13792,
+      "end_ms": 14307
+    },
+    {
+      "text": "الطريقة",
+      "start_ms": 14567,
+      "end_ms": 15147
+    },
+    {
+      "text": "الذكية",
+      "start_ms": 15147,
+      "end_ms": 15662
     },
     {
       "text": "ميزانية",
-      "start_ms": 4330,
-      "end_ms": 4820
+      "start_ms": 15662,
+      "end_ms": 16242
     },
     {
       "text": "واضحة",
-      "start_ms": 4820,
-      "end_ms": 5170
+      "start_ms": 16242,
+      "end_ms": 16693
+    },
+    {
+      "text": "لكل",
+      "start_ms": 16693,
+      "end_ms": 17015
+    },
+    {
+      "text": "فئة،",
+      "start_ms": 17015,
+      "end_ms": 17402
+    },
+    {
+      "text": "تشوف",
+      "start_ms": 17402,
+      "end_ms": 17788
+    },
+    {
+      "text": "فيها",
+      "start_ms": 17788,
+      "end_ms": 18175
+    },
+    {
+      "text": "كل",
+      "start_ms": 18175,
+      "end_ms": 18432
+    },
+    {
+      "text": "شي",
+      "start_ms": 18432,
+      "end_ms": 18690
+    },
+    {
+      "text": "قبل",
+      "start_ms": 18690,
+      "end_ms": 19012
+    },
+    {
+      "text": "لا",
+      "start_ms": 19012,
+      "end_ms": 19270
+    },
+    {
+      "text": "تصرف.",
+      "start_ms": 19270,
+      "end_ms": 19721
+    },
+    {
+      "text": "كل",
+      "start_ms": 19981,
+      "end_ms": 20238
+    },
+    {
+      "text": "ريال",
+      "start_ms": 20238,
+      "end_ms": 20625
+    },
+    {
+      "text": "له",
+      "start_ms": 20625,
+      "end_ms": 20883
+    },
+    {
+      "text": "مكان،",
+      "start_ms": 20883,
+      "end_ms": 21333
+    },
+    {
+      "text": "وكل",
+      "start_ms": 21333,
+      "end_ms": 21656
+    },
+    {
+      "text": "مصروف",
+      "start_ms": 21656,
+      "end_ms": 22106
+    },
+    {
+      "text": "مكتوب.",
+      "start_ms": 22106,
+      "end_ms": 22622
+    },
+    {
+      "text": "خلها",
+      "start_ms": 22882,
+      "end_ms": 23268
+    },
+    {
+      "text": "بسيطة،",
+      "start_ms": 23268,
+      "end_ms": 23784
+    },
+    {
+      "text": "وخلها",
+      "start_ms": 23784,
+      "end_ms": 24235
+    },
+    {
+      "text": "واضحة.",
+      "start_ms": 24235,
+      "end_ms": 24750
+    },
+    {
+      "text": "ميزانية",
+      "start_ms": 25010,
+      "end_ms": 25590
+    },
+    {
+      "text": "واضحة",
+      "start_ms": 25590,
+      "end_ms": 26041
     },
     {
       "text": "مع",
-      "start_ms": 5170,
-      "end_ms": 5410
+      "start_ms": 26041,
+      "end_ms": 26298
     },
     {
       "text": "قوام",
-      "start_ms": 5410,
-      "end_ms": 5690
+      "start_ms": 26298,
+      "end_ms": 26685
     },
     {
       "text": "المال.",
-      "start_ms": 5690,
-      "end_ms": 6110
+      "start_ms": 26685,
+      "end_ms": 27200
     }
   ],
   "clips": []

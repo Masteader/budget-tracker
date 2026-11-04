@@ -1,10 +1,10 @@
 import React from 'react';
+import {DEVICE_BEZEL} from '../lib/layout';
 import {colors, withAlpha} from '../lib/tokens';
 import type {Language} from '../props';
 
-const BEZEL = 14;
-const OUTER_RADIUS = 54;
-const INNER_RADIUS = 42;
+const OUTER_RADIUS = 62;
+const INNER_RADIUS = 50;
 
 /**
  * A plain rounded phone with no maker's shape or mark on it (D31). The tilt mirrors with the
@@ -18,10 +18,11 @@ export const DeviceFrame: React.FC<{
 	width: number;
 	height: number;
 	tiltDeg: number;
+	tiltXDeg?: number;
 	scale: number;
 	offsetY: number;
 	children: React.ReactNode;
-}> = ({kind, language, left, top, width, height, tiltDeg, scale, offsetY, children}) => {
+}> = ({kind, language, left, top, width, height, tiltDeg, tiltXDeg = 3, scale, offsetY, children}) => {
 	if (kind !== 'generic') {
 		throw new Error(`only the generic device frame is allowed (D31), got ${String(kind)}`);
 	}
@@ -35,14 +36,14 @@ export const DeviceFrame: React.FC<{
 				top,
 				width,
 				height,
-				padding: BEZEL,
+				padding: DEVICE_BEZEL,
 				boxSizing: 'border-box',
 				borderRadius: OUTER_RADIUS,
-				border: `1px solid ${withAlpha(colors.roseGoldGlow, 0.35)}`,
-				background: `linear-gradient(160deg, ${colors.surfaceDarkGradientStart}, ${colors.surfaceDarkGradientEnd})`,
-				boxShadow: `0 40px 120px ${withAlpha(colors.accentRose, 0.35)}, 0 0 60px ${withAlpha(colors.roseGoldGlow, 0.16)}`,
+				border: `2px solid ${withAlpha(colors.roseGoldGlow, 0.5)}`,
+				background: `linear-gradient(160deg, ${colors.primaryLight}, ${colors.surfaceDarkGradientEnd} 45%, ${colors.canvasDarkBg})`,
+				boxShadow: `0 50px 160px ${withAlpha(colors.accentRose, 0.5)}, 0 0 90px ${withAlpha(colors.roseGoldGlow, 0.24)}, inset 0 0 0 2px ${withAlpha(colors.canvasDarkBg, 0.9)}`,
 				transformOrigin: 'center top',
-				transform: `translateY(${offsetY}px) perspective(1800px) rotateY(${lean}deg) rotateX(3deg) scale(${scale})`,
+				transform: `translateY(${offsetY}px) perspective(2200px) rotateY(${lean}deg) rotateX(${tiltXDeg}deg) scale(${scale})`,
 			}}
 		>
 			<div

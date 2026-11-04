@@ -8,7 +8,7 @@ export const TEST_WATERMARK = 'TEST, not for posting';
 export const ILLUSTRATIVE_EN = 'illustrative prices';
 export const ILLUSTRATIVE_AR = 'أسعار توضيحية';
 
-const LABELS = {
+export const LABELS = {
 	badge: {ar: 'ذكاء مالي', en: 'Money smarts'},
 	stopDoingThis: {ar: 'لا تسوّي كذا', en: 'Stop doing this'},
 	theSmartWay: {ar: 'الطريقة الذكية', en: 'The smart way'},

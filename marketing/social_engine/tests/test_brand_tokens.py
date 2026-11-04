@@ -10,7 +10,9 @@ import re
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
+from core.brand_gate import is_full_brand_name
 from core.render_props import RenderProps
 
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +170,49 @@ def test_each_studio_sample_is_valid_against_the_real_contract(path):
     props = RenderProps.model_validate_json(path.read_text(encoding="utf-8"))
     assert props.watermark is True, "samples are test reels and must carry the watermark"
     assert props.brand.logo_src == "test_logo.svg"
+
+
+def _brand_name_cases() -> list[dict]:
+    return json.loads((STUDIO / "test_data" / "brand_name_cases.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", _brand_name_cases(), ids=lambda case: case["name_en"])
+def test_python_reads_the_brand_cases_the_way_the_studio_test_does(case):
+    """src/__tests__/safety.test.tsx holds the Zod schema to this same table."""
+    assert is_full_brand_name(case["name_en"], case["name_ar"]) is case["real"]
+
+
+def _props_with_focal_point(focal_point) -> dict:
+    props = json.loads((ENGINE_ROOT / "tests" / "fixtures" / "props_valid.json").read_text("utf-8"))
+    props["clips"][0]["focal_point"] = focal_point
+    return props
+
+
+@pytest.mark.parametrize("focal_point", [None, {"x": 0.0, "y": 1.0}, {"x": 0.25, "y": 0.5}])
+def test_a_clip_takes_a_focal_point_or_null(focal_point):
+    assert RenderProps.model_validate(_props_with_focal_point(focal_point))
+
+
+@pytest.mark.parametrize(
+    "focal_point",
+    [
+        {"x": 1.5, "y": 0.5},
+        {"x": -0.1, "y": 0.5},
+        {"x": 0.5},
+        {"x": 0.5, "y": 0.5, "zoom": 3.0},
+        "50%",
+    ],
+)
+def test_a_bad_focal_point_is_refused(focal_point):
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(_props_with_focal_point(focal_point))
+
+
+def test_a_clip_must_say_what_its_focal_point_is():
+    props = _props_with_focal_point(None)
+    del props["clips"][0]["focal_point"]
+    with pytest.raises(ValidationError):
+        RenderProps.model_validate(props)
 
 
 def test_the_studio_never_passes_a_licence_key():

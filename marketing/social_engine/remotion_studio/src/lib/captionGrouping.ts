@@ -1,4 +1,5 @@
 import type {CaptionWord} from '../props';
+import {groupAtoms} from './text';
 
 /**
  * Groups timed words into caption pages. Written here because createTikTokStyleCaptions can split
@@ -104,29 +105,46 @@ export const mergeBrandTokens = (words: CaptionWord[], brandNames: string[]): Ca
 	return tokens;
 };
 
-const startsNewPage = (page: CaptionPage, token: CaptionToken): boolean => {
+/** On-screen text as tokens, so the name is one piece here as it is in the captions. */
+export const textTokens = (text: string, brandNames: string[]): CaptionToken[] =>
+	mergeBrandTokens(
+		text
+			.trim()
+			.split(/\s+/)
+			.filter(Boolean)
+			.map((word) => ({text: word, start_ms: 0, end_ms: 0})),
+		brandNames,
+	);
+
+const startsNewPage = (page: CaptionPage, atom: CaptionToken[]): boolean => {
 	const last = page.tokens[page.tokens.length - 1];
-	if (!last) {
+	const first = atom[0];
+	if (!last || !first) {
 		return false;
 	}
-	const chars = [...page.tokens, token].map((item) => item.text).join(' ').length;
+	const chars = [...page.tokens, ...atom].map((item) => item.text).join(' ').length;
 	return (
-		page.tokens.length >= MAX_TOKENS_PER_PAGE ||
+		page.tokens.length + atom.length > MAX_TOKENS_PER_PAGE ||
 		chars > MAX_CHARS_PER_PAGE ||
 		SENTENCE_END.test(last.text) ||
-		token.startMs - last.endMs >= PAUSE_BREAK_MS
+		first.startMs - last.endMs >= PAUSE_BREAK_MS
 	);
 };
 
 export const groupIntoPages = (tokens: CaptionToken[]): CaptionPage[] => {
 	const pages: CaptionPage[] = [];
-	for (const token of tokens) {
+	for (const atom of groupAtoms(tokens, (token) => token.text)) {
+		const first = atom[0];
+		const last = atom[atom.length - 1];
+		if (!first || !last) {
+			continue;
+		}
 		const page = pages[pages.length - 1];
-		if (page && !startsNewPage(page, token)) {
-			page.tokens.push(token);
-			page.endMs = token.endMs;
+		if (page && !startsNewPage(page, atom)) {
+			page.tokens.push(...atom);
+			page.endMs = last.endMs;
 		} else {
-			pages.push({tokens: [token], startMs: token.startMs, endMs: token.endMs});
+			pages.push({tokens: [...atom], startMs: first.startMs, endMs: last.endMs});
 		}
 	}
 	return pages;

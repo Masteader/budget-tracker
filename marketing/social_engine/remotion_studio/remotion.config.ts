@@ -6,3 +6,6 @@ Config.setAudioCodec('aac');
 Config.setPixelFormat('yuv420p');
 Config.setVideoImageFormat('jpeg');
 Config.setOverwriteOutput(true);
+// A phone recording is about 8 MB a frame once decoded. On a busy laptop the default cache, half of
+// what memory is free, can run so short that the compositor fails with "No frame found".
+Config.setOffthreadVideoCacheSizeInBytes(1_500_000_000);

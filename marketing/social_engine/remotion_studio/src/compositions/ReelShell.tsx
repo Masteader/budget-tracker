@@ -4,20 +4,20 @@ import {spring} from '../lib/motion';
 import {Background} from '../components/Background';
 import {ClipStage} from '../components/ClipStage';
 import {HookBurst} from '../components/HookBurst';
-import {HookTitle, hookLandingFrame} from '../components/HookTitle';
+import {HookTitle, hookLandingFrame, planHook} from '../components/HookTitle';
 import {IllustrativePricesLabel} from '../components/IllustrativePricesLabel';
-import {KineticCaptions} from '../components/KineticCaptions';
+import {EnglishLine, KineticCaptions} from '../components/KineticCaptions';
 import {ProgressHud} from '../components/ProgressHud';
 import {Watermark} from '../components/Watermark';
-import {fontStack, LATIN_FAMILY} from '../lib/fonts';
+import {cameraPose} from '../lib/camera';
+import {fontStack} from '../lib/fonts';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, computeLayout} from '../lib/layout';
 import {label} from '../lib/strings';
 import {englishLineAt, heroEndMs, msToFrame, shownClip, wordsAfterHook} from '../lib/timeline';
 import {colors, withAlpha} from '../lib/tokens';
 import type {RenderProps} from '../props';
 import {MASKED_FOLDER, REAL_BRAND_NAME_AR, REAL_BRAND_NAME_EN} from '../props';
-import {Isolated} from '../components/Isolated';
-import type {ReelMedia, TemplateDefinition} from './media';
+import type {ReelMedia, StageContext, TemplateDefinition} from './media';
 
 /** Paint order. A later layer always covers an earlier one, whatever a template draws. */
 const LAYER = {
@@ -72,10 +72,17 @@ export const ReelShell: React.FC<{
 		[props.brand.name_ar, props.brand.name_en],
 	);
 	const {language, digits, highlight_color: highlightColor} = props;
+	const hook = useMemo(
+		() => planHook(props.hook_text, brandNames, language, digits, layout, media.measure),
+		[props.hook_text, brandNames, language, digits, layout, media.measure],
+	);
 	const ms = (frame * 1000) / fps;
 	const clip = shownClip(props.clips, frame, fps);
 	const heroEndFrame = msToFrame(heroEndMs(props), fps);
-	const stageContext = {
+	const camera = clip
+		? cameraPose({clip, clips: props.clips, frame, fps, layout, motion: template})
+		: null;
+	const stageContext: StageContext = {
 		frame,
 		fps,
 		durationInFrames,
@@ -84,15 +91,22 @@ export const ReelShell: React.FC<{
 		layout,
 		onScreenText: props.on_screen_text,
 		stageStartFrame: heroEndFrame,
+		words: props.words,
+		brandNames,
+		brand: props.brand,
+		highlightColor,
+		media,
+		clips: props.clips,
+		camera,
 	};
 	const captionWords = useMemo(
 		() => wordsAfterHook(props.words, props.hook_text, heroEndMs(props)),
 		[props],
 	);
-	const landing = hookLandingFrame(props.hook_text, brandNames, fps);
+	const landing = hookLandingFrame(hook.tokens.length, fps);
 	const badgeIn = spring({frame: frame + 2, fps, config: {damping: 13, stiffness: 200, mass: 0.6}});
 	const englishLine =
-		language === 'ar' ? englishLineAt(props.subtitles_en, props.words, ms, props.duration_ms) : null;
+		language === 'ar' ? englishLineAt(props.subtitles_en, props.words, ms, props.duration_ms, brandNames) : null;
 
 	return (
 		<div
@@ -114,15 +128,14 @@ export const ReelShell: React.FC<{
 				{template.renderStage(stageContext)}
 			</Layer>
 			<Layer name="clip">
-				{clip ? (
+				{clip && camera ? (
 					<ClipStage
 						clip={clip}
-						clips={props.clips}
-						device={layout.device}
+						layout={layout}
 						language={language}
+						camera={camera}
 						frame={frame}
 						fps={fps}
-						motion={template}
 						media={media}
 					/>
 				) : null}
@@ -134,7 +147,7 @@ export const ReelShell: React.FC<{
 						frame={frame}
 						fps={fps}
 						centerX={layout.content.left + layout.content.width / 2}
-						centerY={layout.content.top + layout.content.height / 2}
+						centerY={hook.heroTop + hook.hero.height / 2}
 						landingFrame={landing}
 					/>
 				) : null}
@@ -148,6 +161,7 @@ export const ReelShell: React.FC<{
 						left: layout.top.left,
 						width: layout.top.width,
 						height: layout.top.height,
+						overflow: 'hidden',
 					}}
 				>
 					<div
@@ -155,9 +169,9 @@ export const ReelShell: React.FC<{
 						style={{
 							display: 'flex',
 							alignItems: 'center',
-							gap: 16,
-							fontFamily: fontStack(language),
-							fontSize: 30,
+							gap: 14,
+							fontFamily: fontStack,
+							fontSize: 26,
 							fontWeight: 600,
 							opacity: interpolate(badgeIn, [0, 0.5], [0, 1], {extrapolateRight: 'clamp'}),
 							transform: `translateY(${interpolate(badgeIn, [0, 1], [-40, 0])}px)`,
@@ -165,8 +179,8 @@ export const ReelShell: React.FC<{
 					>
 						<span
 							style={{
-								padding: '6px 22px',
-								borderRadius: 18,
+								padding: '2px 18px',
+								borderRadius: 16,
 								background: colors.primaryLight,
 								border: `1px solid ${withAlpha(colors.roseGoldGlow, 0.4)}`,
 								color: colors.roseGold,
@@ -181,9 +195,7 @@ export const ReelShell: React.FC<{
 					</div>
 				</div>
 				<HookTitle
-					text={props.hook_text}
-					brandNames={brandNames}
-					language={language}
+					plan={hook}
 					digits={digits}
 					highlightColor={highlightColor}
 					layout={layout}
@@ -205,7 +217,7 @@ export const ReelShell: React.FC<{
 						flexDirection: 'column',
 						justifyContent: 'flex-end',
 						alignItems: 'center',
-						gap: 10,
+						gap: 8,
 					}}
 				>
 					<KineticCaptions
@@ -214,24 +226,20 @@ export const ReelShell: React.FC<{
 						language={language}
 						digits={digits}
 						highlightColor={highlightColor}
+						layout={layout}
+						measure={media.measure}
+						withEnglish={Boolean(englishLine)}
 						frame={frame}
 						fps={fps}
 					/>
 					{englishLine ? (
-						<div
-							data-english-line="true"
-							dir="ltr"
-							style={{
-								fontFamily: LATIN_FAMILY,
-								fontSize: 32,
-								fontWeight: 500,
-								textAlign: 'center',
-								color: colors.textSecondaryDark,
-								textShadow: `0 2px 10px ${colors.canvasDarkBg}`,
-							}}
-						>
-							<Isolated text={englishLine} language="en" digits={digits} />
-						</div>
+						<EnglishLine
+							line={englishLine}
+							brandNames={brandNames}
+							digits={digits}
+							layout={layout}
+							measure={media.measure}
+						/>
 					) : null}
 				</div>
 			</Layer>
@@ -240,6 +248,7 @@ export const ReelShell: React.FC<{
 					brand={props.brand}
 					language={language}
 					rect={layout.hud}
+					narrow={layout.narrow}
 					frame={frame}
 					durationInFrames={durationInFrames}
 					highlightColor={highlightColor}
@@ -248,7 +257,7 @@ export const ReelShell: React.FC<{
 			</Layer>
 			<Layer name="label">
 				{clip?.folder === MASKED_FOLDER ? (
-					<IllustrativePricesLabel area={layout.content} top={layout.labelTop} />
+					<IllustrativePricesLabel band={layout.labelBand} measure={media.measure} />
 				) : null}
 			</Layer>
 			<Layer name="watermark">{props.watermark ? <Watermark layout={layout} /> : null}</Layer>

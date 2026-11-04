@@ -85,6 +85,13 @@ class CaptionWord(_Strict):
         return self
 
 
+class FocalPoint(_Strict):
+    """The feature in a clip the camera zooms to, as fractions of the clip's width and height."""
+
+    x: Fraction
+    y: Fraction
+
+
 class PropsClip(_Strict):
     src: PublicPath  # clips/<folder>/<file>
     folder: ClipFolder
@@ -92,6 +99,7 @@ class PropsClip(_Strict):
     start_ms: NonNegativeInt
     end_ms: NonNegativeInt
     mask_regions: MaskRegions
+    focal_point: FocalPoint | None  # null means the template's default point
 
     @model_validator(mode="after")
     def _is_consistent(self) -> PropsClip:
