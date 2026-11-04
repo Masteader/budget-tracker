@@ -1,0 +1,50 @@
+{
+  "revision": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "watermark": true,
+  "device_frame": "generic",
+  "digits": "western",
+  "highlight_color": "#E598B0",
+  "safe_zones": {
+    "top": 220,
+    "bottom": 420,
+    "left": 60,
+    "right": 140
+  },
+  "brand": {
+    "name_ar": "علامة تجريبية",
+    "name_en": "TEST BRAND",
+    "hashtag": "#test",
+    "logo_src": "test_logo.svg"
+  },
+  "audio_src": "audio/voice.wav",
+  "music_src": null,
+  "duck_under_voice": 0.12,
+  "duck_in_pauses": 0.25,
+  "reel_id": "SAMPLE-CONTROL-AR",
+  "template": "FeatureDemo",
+  "language": "ar",
+  "duration_ms": 4000,
+  "hook_text": "راتبك وين يروح؟",
+  "on_screen_text": [],
+  "subtitles_en": "A sample subtitle line.",
+  "words": [
+    {
+      "text": "كلمة",
+      "start_ms": 200,
+      "end_ms": 700
+    }
+  ],
+  "clips": [
+    {
+      "src": "clips/payday_cycle/clip_01.mp4",
+      "folder": "payday_cycle",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "start_ms": 1000,
+      "end_ms": 3000,
+      "mask_regions": []
+    }
+  ]
+}

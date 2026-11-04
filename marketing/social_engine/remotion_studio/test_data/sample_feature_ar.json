@@ -1,0 +1,474 @@
+{
+  "revision": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "watermark": true,
+  "device_frame": "generic",
+  "digits": "western",
+  "highlight_color": "#E598B0",
+  "safe_zones": {
+    "top": 220,
+    "bottom": 420,
+    "left": 60,
+    "right": 140
+  },
+  "brand": {
+    "name_ar": "علامة تجريبية",
+    "name_en": "TEST BRAND",
+    "hashtag": "#test",
+    "logo_src": "test_logo.svg"
+  },
+  "audio_src": "audio/voice.wav",
+  "music_src": null,
+  "duck_under_voice": 0.12,
+  "duck_in_pauses": 0.25,
+  "reel_id": "SAMPLE-FEATURE-AR",
+  "template": "FeatureDemo",
+  "language": "ar",
+  "duration_ms": 30000,
+  "hook_text": "راتبك وين يروح كل شهر؟",
+  "on_screen_text": [
+    "Where does your salary go?",
+    "Plan by category",
+    "Illustrative sample"
+  ],
+  "subtitles_en": "Where does your salary go every month? Five days after payday and you do not know where it went. Rent, bills and shopping eat it all. Plan your budget with TEST BRAND, by category, and see what is left before you spend. TEST BRAND, coming soon.",
+  "words": [
+    {
+      "text": "راتبك",
+      "start_ms": 0,
+      "end_ms": 300
+    },
+    {
+      "text": "وين",
+      "start_ms": 300,
+      "end_ms": 540
+    },
+    {
+      "text": "يروح",
+      "start_ms": 540,
+      "end_ms": 780
+    },
+    {
+      "text": "كل",
+      "start_ms": 780,
+      "end_ms": 1020
+    },
+    {
+      "text": "شهر؟",
+      "start_ms": 1020,
+      "end_ms": 1260
+    },
+    {
+      "text": "خمسة",
+      "start_ms": 1640,
+      "end_ms": 1880
+    },
+    {
+      "text": "أيام",
+      "start_ms": 1880,
+      "end_ms": 2120
+    },
+    {
+      "text": "بعد",
+      "start_ms": 2120,
+      "end_ms": 2360
+    },
+    {
+      "text": "الراتب",
+      "start_ms": 2360,
+      "end_ms": 2720
+    },
+    {
+      "text": "وما",
+      "start_ms": 2720,
+      "end_ms": 2960
+    },
+    {
+      "text": "تدري",
+      "start_ms": 2960,
+      "end_ms": 3200
+    },
+    {
+      "text": "وين",
+      "start_ms": 3200,
+      "end_ms": 3440
+    },
+    {
+      "text": "راح.",
+      "start_ms": 3440,
+      "end_ms": 3680
+    },
+    {
+      "text": "الالتزامات",
+      "start_ms": 4060,
+      "end_ms": 4660
+    },
+    {
+      "text": "والإيجار",
+      "start_ms": 4660,
+      "end_ms": 5140
+    },
+    {
+      "text": "والمصروفات",
+      "start_ms": 5140,
+      "end_ms": 5740
+    },
+    {
+      "text": "والمستلزمات",
+      "start_ms": 5740,
+      "end_ms": 6400
+    },
+    {
+      "text": "تاكل",
+      "start_ms": 6400,
+      "end_ms": 6640
+    },
+    {
+      "text": "كل",
+      "start_ms": 6640,
+      "end_ms": 6880
+    },
+    {
+      "text": "شي.",
+      "start_ms": 6880,
+      "end_ms": 7120
+    },
+    {
+      "text": "لا",
+      "start_ms": 7500,
+      "end_ms": 7740
+    },
+    {
+      "text": "إسراف",
+      "start_ms": 7740,
+      "end_ms": 8040
+    },
+    {
+      "text": "ولا",
+      "start_ms": 8040,
+      "end_ms": 8280
+    },
+    {
+      "text": "تقتير.",
+      "start_ms": 8280,
+      "end_ms": 8640
+    },
+    {
+      "text": "خطط",
+      "start_ms": 9020,
+      "end_ms": 9260
+    },
+    {
+      "text": "ميزانيتك",
+      "start_ms": 9260,
+      "end_ms": 9740
+    },
+    {
+      "text": "مع",
+      "start_ms": 9740,
+      "end_ms": 9980
+    },
+    {
+      "text": "قوام",
+      "start_ms": 9980,
+      "end_ms": 10220
+    },
+    {
+      "text": "المال.",
+      "start_ms": 10220,
+      "end_ms": 10580
+    },
+    {
+      "text": "قسّم",
+      "start_ms": 10960,
+      "end_ms": 11200
+    },
+    {
+      "text": "راتبك",
+      "start_ms": 11200,
+      "end_ms": 11500
+    },
+    {
+      "text": "على",
+      "start_ms": 11500,
+      "end_ms": 11740
+    },
+    {
+      "text": "الفئات،",
+      "start_ms": 11740,
+      "end_ms": 12160
+    },
+    {
+      "text": "وشوف",
+      "start_ms": 12160,
+      "end_ms": 12400
+    },
+    {
+      "text": "كم",
+      "start_ms": 12400,
+      "end_ms": 12640
+    },
+    {
+      "text": "باقي",
+      "start_ms": 12640,
+      "end_ms": 12880
+    },
+    {
+      "text": "لك",
+      "start_ms": 12880,
+      "end_ms": 13120
+    },
+    {
+      "text": "قبل",
+      "start_ms": 13120,
+      "end_ms": 13360
+    },
+    {
+      "text": "لا",
+      "start_ms": 13360,
+      "end_ms": 13600
+    },
+    {
+      "text": "تصرف.",
+      "start_ms": 13600,
+      "end_ms": 13900
+    },
+    {
+      "text": "مثال:",
+      "start_ms": 14280,
+      "end_ms": 14580
+    },
+    {
+      "text": "2,500",
+      "start_ms": 14580,
+      "end_ms": 14880
+    },
+    {
+      "text": "ريال",
+      "start_ms": 14880,
+      "end_ms": 15120
+    },
+    {
+      "text": "للإيجار،",
+      "start_ms": 15120,
+      "end_ms": 15600
+    },
+    {
+      "text": "و",
+      "start_ms": 15600,
+      "end_ms": 15840
+    },
+    {
+      "text": "800",
+      "start_ms": 15840,
+      "end_ms": 16080
+    },
+    {
+      "text": "للمقاضي.",
+      "start_ms": 16080,
+      "end_ms": 16560
+    },
+    {
+      "text": "Budget",
+      "start_ms": 16940,
+      "end_ms": 17300
+    },
+    {
+      "text": "واضح",
+      "start_ms": 17300,
+      "end_ms": 17540
+    },
+    {
+      "text": "لكل",
+      "start_ms": 17540,
+      "end_ms": 17780
+    },
+    {
+      "text": "شهر.",
+      "start_ms": 17780,
+      "end_ms": 18020
+    },
+    {
+      "text": "دورة",
+      "start_ms": 18400,
+      "end_ms": 18640
+    },
+    {
+      "text": "الراتب",
+      "start_ms": 18640,
+      "end_ms": 19000
+    },
+    {
+      "text": "عندك،",
+      "start_ms": 19000,
+      "end_ms": 19300
+    },
+    {
+      "text": "مو",
+      "start_ms": 19300,
+      "end_ms": 19540
+    },
+    {
+      "text": "يوم",
+      "start_ms": 19540,
+      "end_ms": 19780
+    },
+    {
+      "text": "ثابت",
+      "start_ms": 19780,
+      "end_ms": 20020
+    },
+    {
+      "text": "للكل.",
+      "start_ms": 20020,
+      "end_ms": 20320
+    },
+    {
+      "text": "وكل",
+      "start_ms": 20700,
+      "end_ms": 20940
+    },
+    {
+      "text": "مصروف",
+      "start_ms": 20940,
+      "end_ms": 21240
+    },
+    {
+      "text": "له",
+      "start_ms": 21240,
+      "end_ms": 21480
+    },
+    {
+      "text": "مكان،",
+      "start_ms": 21480,
+      "end_ms": 21780
+    },
+    {
+      "text": "بدون",
+      "start_ms": 21780,
+      "end_ms": 22020
+    },
+    {
+      "text": "ما",
+      "start_ms": 22020,
+      "end_ms": 22260
+    },
+    {
+      "text": "تحسب",
+      "start_ms": 22260,
+      "end_ms": 22500
+    },
+    {
+      "text": "في",
+      "start_ms": 22500,
+      "end_ms": 22740
+    },
+    {
+      "text": "راسك.",
+      "start_ms": 22740,
+      "end_ms": 23040
+    },
+    {
+      "text": "لا",
+      "start_ms": 23420,
+      "end_ms": 23660
+    },
+    {
+      "text": "تخلّي",
+      "start_ms": 23660,
+      "end_ms": 23960
+    },
+    {
+      "text": "الشهر",
+      "start_ms": 23960,
+      "end_ms": 24260
+    },
+    {
+      "text": "يخلص",
+      "start_ms": 24260,
+      "end_ms": 24500
+    },
+    {
+      "text": "قبل",
+      "start_ms": 24500,
+      "end_ms": 24740
+    },
+    {
+      "text": "راتبك.",
+      "start_ms": 24740,
+      "end_ms": 25100
+    },
+    {
+      "text": "جرّب",
+      "start_ms": 25480,
+      "end_ms": 25720
+    },
+    {
+      "text": "تكتب",
+      "start_ms": 25720,
+      "end_ms": 25960
+    },
+    {
+      "text": "مصروفاتك",
+      "start_ms": 25960,
+      "end_ms": 26440
+    },
+    {
+      "text": "أسبوع",
+      "start_ms": 26440,
+      "end_ms": 26740
+    },
+    {
+      "text": "واحد",
+      "start_ms": 26740,
+      "end_ms": 26980
+    },
+    {
+      "text": "بس.",
+      "start_ms": 26980,
+      "end_ms": 27220
+    },
+    {
+      "text": "قوام",
+      "start_ms": 27600,
+      "end_ms": 27840
+    },
+    {
+      "text": "المال،",
+      "start_ms": 27840,
+      "end_ms": 28200
+    },
+    {
+      "text": "قريبًا.",
+      "start_ms": 28200,
+      "end_ms": 28620
+    }
+  ],
+  "clips": [
+    {
+      "src": "clips/payday_cycle/clip_01.mp4",
+      "folder": "payday_cycle",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "start_ms": 3000,
+      "end_ms": 14000,
+      "mask_regions": []
+    },
+    {
+      "src": "clips/smart_basket/clip_01.mp4",
+      "folder": "smart_basket",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "start_ms": 16000,
+      "end_ms": 27000,
+      "mask_regions": [
+        {
+          "x": 0.05,
+          "y": 0.2,
+          "width": 0.9,
+          "height": 0.08
+        }
+      ]
+    }
+  ]
+}
