@@ -43,6 +43,7 @@ export interface LedgerRow {
 export interface TranslationDictionary {
   brand: {
     name: string;
+    shortName: string;
     tagline: string;
   };
   nav: {
@@ -193,6 +194,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   ar: {
     brand: {
       name: 'قوام المال Qawam Money',
+      shortName: 'قوام المال',
       tagline: 'ميزانية البيت على دورة الراتب',
     },
     nav: {
@@ -435,6 +437,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   en: {
     brand: {
       name: 'Qawam Money قوام المال',
+      shortName: 'Qawam Money',
       tagline: 'Household budget by salary cycle',
     },
     nav: {

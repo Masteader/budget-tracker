@@ -55,8 +55,9 @@ export const Header: React.FC<HeaderProps> = ({ lang, setLanguage, dict, onOpenA
         <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label={`${dict.brand.name} · ${dict.a11y.home}`}>
           <Logo className="h-9 w-9 shrink-0" />
           <span className="flex min-w-0 flex-col leading-tight max-[359px]:hidden">
-            <span className="text-sm font-bold text-ink sm:text-base">
-              {dict.brand.name}
+            <span className="text-sm font-bold text-ink sm:whitespace-nowrap sm:text-base">
+              <span className="lg:hidden">{dict.brand.shortName}</span>
+              <span className="hidden lg:inline">{dict.brand.name}</span>
             </span>
             <span className="hidden truncate text-xs text-muted sm:block">{dict.brand.tagline}</span>
           </span>
