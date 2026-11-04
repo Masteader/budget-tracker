@@ -417,7 +417,8 @@ const checkCliFindsEachTemplate = () => {
 	require(result.status === 0, `${command} failed: ${(result.stderr ?? '').slice(-800)}`);
 	const schema = JSON.parse(readFileSync(join(ROOT, 'props.schema.json'), 'utf-8'));
 	const expected = [...schema.properties.template.enum].sort();
-	const found = result.stdout.trim().split(/\s+/).sort();
+	// After a fresh install the CLI first prints a line about caching its bundle. The IDs come last.
+	const found = result.stdout.trim().split(/\r?\n/).at(-1).trim().split(/\s+/).sort();
 	require(found.join() === expected.join(), `the CLI lists ${found}, and the schema lists ${expected}`);
 	pass('composition IDs', `the CLI found the entry point by itself and lists ${found.join(', ')}`);
 };
