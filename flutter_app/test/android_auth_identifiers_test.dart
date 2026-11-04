@@ -4,12 +4,18 @@
 //
 // The real files are parsed with comments removed, so a commented-out value
 // cannot satisfy these tests.
+//
+// Password reset emails redirect to authResetRedirectUrl, so its default must
+// stay one of the deep links the manifest declares. The Kotlin package must
+// match the namespace or Android cannot resolve `.MainActivity`.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 const _manifestPath = 'android/app/src/main/AndroidManifest.xml';
 const _gradlePath = 'android/app/build.gradle.kts';
+const _configPath = 'lib/supabase_config.dart';
+const _kotlinRoot = 'android/app/src/main/kotlin';
 
 Map<String, String> _attributes(String tagBody) => {
       for (final m in RegExp(r'([\w:]+)\s*=\s*"([^"]*)"').allMatches(tagBody)) m.group(1)!: m.group(2)!,
@@ -80,7 +86,49 @@ List<String> _applicationIds(String gradleSource) {
   return _assignments(_block(android, 'defaultConfig'), 'applicationId');
 }
 
+/// Full-line and block comments only: the value itself contains `//`.
+String _stripDartComments(String source) => source
+    .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+    .replaceAll(RegExp(r'^\s*//[^\n]*', multiLine: true), '');
+
+/// The compile-time default of `authResetRedirectUrl`, or null if not declared.
+String? _resetLinkDefault(String source) => RegExp(
+      r"const\s+authResetRedirectUrl\s*=\s*String\.fromEnvironment\(\s*"
+      r"'AUTH_RESET_REDIRECT_URL'\s*,\s*defaultValue:\s*'([^']*)'",
+    ).firstMatch(_stripDartComments(source.replaceAll('\r\n', '\n')))?.group(1);
+
+/// The package a Kotlin source declares, or null if none.
+String? _kotlinPackage(String source) => RegExp(
+      r'^\s*package\s+([\w.]+)\s*$',
+      multiLine: true,
+    ).firstMatch(_stripKotlinComments(source.replaceAll('\r\n', '\n')))?.group(1);
+
+bool _declaresMainActivity(String source) =>
+    RegExp(r'\bclass\s+MainActivity\b').hasMatch(_stripKotlinComments(source));
+
 void main() {
+  group('real Dart and Kotlin sources', () {
+    test('the default reset link is budgettracker://reset-password', () {
+      expect(_resetLinkDefault(File(_configPath).readAsStringSync()), 'budgettracker://reset-password');
+    });
+
+    test('the default reset link is a deep link the manifest declares', () {
+      final link = _resetLinkDefault(File(_configPath).readAsStringSync());
+      expect(_deepLinks(File(_manifestPath).readAsStringSync()), contains(link));
+    });
+
+    test('MainActivity is the only one and lives in package com.budgettracker', () {
+      final activities = Directory(_kotlinRoot)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.kt') && _declaresMainActivity(f.readAsStringSync()))
+          .toList();
+      expect(activities, hasLength(1));
+      expect(_kotlinPackage(activities.single.readAsStringSync()), 'com.budgettracker');
+      expect(activities.single.path.replaceAll(r'\', '/'), '$_kotlinRoot/com/budgettracker/MainActivity.kt');
+    });
+  });
+
   group('real Android files', () {
     test('MainActivity declares exactly the auth deep links', () {
       expect(_deepLinks(File(_manifestPath).readAsStringSync()), _expectedDeepLinks);
@@ -120,6 +168,27 @@ android {
 }''';
       expect(_namespaces(gradle), isEmpty);
       expect(_applicationIds(gradle), isEmpty);
+    });
+
+    test('commented-out reset link defaults are not counted', () {
+      const commented = '''
+// defaultValue: 'budgettracker://reset-password',
+const authResetRedirectUrl = String.fromEnvironment(
+  'AUTH_RESET_REDIRECT_URL',
+  defaultValue: 'other://link', // 'budgettracker://reset-password'
+);''';
+      expect(_resetLinkDefault(commented), 'other://link');
+      expect(_resetLinkDefault("// const authResetRedirectUrl = String.fromEnvironment('AUTH_RESET_REDIRECT_URL', defaultValue: 'x');"), isNull);
+    });
+
+    test('a commented-out Kotlin package or class is not counted', () {
+      const kotlin = '''
+// package com.budgettracker
+/* class MainActivity : FlutterActivity() */
+package com.other
+''';
+      expect(_kotlinPackage(kotlin), 'com.other');
+      expect(_declaresMainActivity(kotlin), isFalse);
     });
   });
 }
