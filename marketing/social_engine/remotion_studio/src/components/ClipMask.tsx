@@ -3,7 +3,7 @@ import type {ReelMedia} from '../compositions/media';
 import {colors, withAlpha} from '../lib/tokens';
 import type {PropsClip} from '../props';
 
-const BLUR_PX = 22;
+const BLUR_PX = 30;
 
 const percent = (fraction: number): string => `${fraction * 100}%`;
 

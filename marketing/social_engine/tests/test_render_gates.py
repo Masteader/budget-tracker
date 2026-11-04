@@ -13,6 +13,7 @@ import core.render as render_module
 from core.brand_gate import FULL_NAME_AR, FULL_NAME_EN, ReelBrand
 from core.manifest import ClipManifest, sha256_file
 from core.render import ClipUse, RenderRefused, RenderRequest, render_reel
+from core.render_props import FocalPoint
 
 SIGNED_MASK = {"x": 0.05, "y": 0.2, "width": 0.9, "height": 0.08}
 
@@ -146,6 +147,21 @@ def basket_entry(rig: Rig, **overrides) -> dict:
     }
     entry.update(overrides)
     return entry
+
+
+def test_the_focal_point_of_a_clip_reaches_the_props(rig):
+    rig.add_basket_clip()
+    use = rig.clip_use("smart_basket/clip_01.mp4").model_copy(
+        update={"focal_point": FocalPoint(x=0.25, y=0.6)}
+    )
+    render(rig, rig.request(clips=[use]))
+    assert props_sent(rig)["clips"][0]["focal_point"] == {"x": 0.25, "y": 0.6}
+
+
+def test_a_clip_with_no_focal_point_sends_null(rig):
+    rig.add_basket_clip()
+    render(rig, rig.request(clips=[rig.clip_use("smart_basket/clip_01.mp4")]))
+    assert props_sent(rig)["clips"][0]["focal_point"] is None
 
 
 def test_a_masked_and_signed_basket_clip_renders_with_its_masks(rig):

@@ -29,9 +29,9 @@
   "duration_ms": 30000,
   "hook_text": "راتبك وين يروح كل شهر؟",
   "on_screen_text": [
-    "Where does your salary go?",
-    "Plan by category",
-    "Illustrative sample"
+    "شوف وين يروح راتبك",
+    "قسّم راتبك على الفئات مع قوام المال",
+    "مثال توضيحي"
   ],
   "subtitles_en": "Where does your salary go every month? Five days after payday and you do not know where it went. Rent, bills and shopping eat it all. Plan your budget with TEST BRAND, by category, and see what is left before you spend. TEST BRAND, coming soon.",
   "words": [
@@ -453,7 +453,11 @@
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
       "start_ms": 3000,
       "end_ms": 14000,
-      "mask_regions": []
+      "mask_regions": [],
+      "focal_point": {
+        "x": 0.36,
+        "y": 0.5
+      }
     },
     {
       "src": "clips/smart_basket/clip_01.mp4",
@@ -468,7 +472,11 @@
           "width": 0.9,
           "height": 0.08
         }
-      ]
+      ],
+      "focal_point": {
+        "x": 0.36,
+        "y": 0.64
+      }
     }
   ]
 }

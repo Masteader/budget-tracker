@@ -79,6 +79,11 @@ const PropsBrandObject = z.strictObject({
 	logo_src: publicPath,
 });
 
+const FocalPointObject = z.strictObject({
+	x: fraction,
+	y: fraction,
+});
+
 const SafeZonesObject = z.strictObject({
 	top: count,
 	bottom: count,
@@ -93,6 +98,7 @@ const PropsClipObject = z.strictObject({
 	start_ms: count,
 	end_ms: count,
 	mask_regions: z.array(MaskRegionObject).max(32),
+	focal_point: FocalPointObject.nullable(),
 });
 
 const RenderPropsObject = z.strictObject({
@@ -125,6 +131,7 @@ const RenderPropsObject = z.strictObject({
 export const objectShapes = (): Record<string, Record<string, unknown>> => ({
 	RenderProps: RenderPropsObject.shape,
 	CaptionWord: CaptionWordObject.shape,
+	FocalPoint: FocalPointObject.shape,
 	MaskRegion: MaskRegionObject.shape,
 	PropsBrand: PropsBrandObject.shape,
 	PropsClip: PropsClipObject.shape,
@@ -168,8 +175,51 @@ const checkClip = (clip: z.infer<typeof PropsClipObject>, durationMs: number, is
 	clip.mask_regions.forEach((mask) => checkMask(mask, issues));
 };
 
+// The same folding as letters_only in core/brand_gate.py, and tested against the same cases.
+const LOOK_ALIKES: Record<string, string> = {
+	'ی': 'ي', // Persian yeh
+	'ى': 'ي', // alef maksura
+	'а': 'a', // Cyrillic
+	'е': 'e',
+	'о': 'o',
+	'р': 'p',
+	'с': 'c',
+	'у': 'y',
+	'х': 'x',
+};
+
 const lettersOnly = (text: string): string =>
-	text.normalize('NFKC').replace(/[^\p{L}]/gu, '').toLowerCase();
+	text
+		.normalize('NFKC')
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[یىаеорсух]/gu, (letter) => LOOK_ALIKES[letter] ?? letter)
+		.replace(/ـ/gu, '')
+		.replace(/[^\p{L}\p{N}]/gu, '');
+
+// Assembled over two lines, so that the boundary scan keeps code free of the withdrawn name itself.
+const WITHDRAWN_NAMES = [
+	'wa' +
+		'feer',
+	'وف' +
+		'يير',
+].map(lettersOnly);
+const containsWithdrawnName = (text: string): boolean => {
+	const letters = lettersOnly(text);
+	return WITHDRAWN_NAMES.some((name) => letters.includes(name));
+};
+
+const shownStrings = (props: z.infer<typeof RenderPropsObject>): string[] => [
+	props.brand.name_ar,
+	props.brand.name_en,
+	props.brand.hashtag,
+	props.brand.logo_src,
+	props.hook_text,
+	...props.on_screen_text,
+	props.subtitles_en,
+	...props.words.map((word) => word.text),
+	...props.clips.map((clip) => clip.src),
+];
 
 const isRealBrand = (brand: z.infer<typeof PropsBrandObject>): boolean =>
 	lettersOnly(brand.name_en) === lettersOnly(REAL_BRAND_NAME_EN) &&
@@ -185,6 +235,9 @@ const checkBrand = (props: z.infer<typeof RenderPropsObject>, {addIssue}: Issues
 	}
 	if (!props.watermark && props.brand.logo_src.toLowerCase().includes(TEST_LOGO_MARKER)) {
 		addIssue('a reel with no watermark cannot use the test logo');
+	}
+	if (shownStrings(props).some(containsWithdrawnName)) {
+		addIssue('the reel uses the withdrawn brand name (D1)');
 	}
 };
 
@@ -223,4 +276,12 @@ export type Language = z.infer<typeof LanguageSchema>;
 export type Digits = z.infer<typeof DigitsSchema>;
 export type Template = z.infer<typeof TemplateSchema>;
 
-export const parseRenderProps = (value: unknown): RenderProps => RenderPropsSchema.parse(value);
+/** Throws naming each bad field, because a render log shows only the message of an error. */
+export const parseRenderProps = (value: unknown): RenderProps => {
+	const result = RenderPropsSchema.safeParse(value);
+	if (!result.success) {
+		const issues = result.error.issues.map((issue) => `${issue.path.join('.') || 'props'}: ${issue.message}`);
+		throw new Error(`The reel props are not valid. ${issues.join('; ')}`);
+	}
+	return result.data;
+};

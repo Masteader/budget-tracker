@@ -33,6 +33,7 @@ from core.paths import ENGINE_ROOT, EnginePaths, PathConfigError, expand_path
 from core.remotion_sync import RemotionSyncError, checked_kept_folders, sync
 from core.render_props import (
     CaptionWord,
+    FocalPoint,
     PropsBrand,
     PublicPath,
     ReelLanguage,
@@ -85,6 +86,7 @@ class ClipUse(_Strict):
     path: str  # <folder>/<file>, as in manifest.json
     start_ms: int
     end_ms: int
+    focal_point: FocalPoint | None = None  # what the camera zooms to in this use of the clip
 
 
 class RenderRequest(_Strict):
@@ -245,6 +247,7 @@ def _props_from(
             "start_ms": use.start_ms,
             "end_ms": use.end_ms,
             "mask_regions": entry.mask_regions,
+            "focal_point": use.focal_point,
         }
         for use, entry in zip(request.clips, entries, strict=True)
     ]

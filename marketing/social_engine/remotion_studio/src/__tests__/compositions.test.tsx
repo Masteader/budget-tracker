@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
 import {DeviceFrame} from '../components/DeviceFrame';
@@ -94,8 +96,9 @@ describe('templates accept valid props', () => {
 	] as const)('%s lets a whole English line read left to right in an Arabic reel', (_name, make, line) => {
 		const props = make({language: 'ar'});
 		const markup = renderReel(props, durationInFrames(props) - 1);
-		const element = new RegExp(`<div[^>]*dir="ltr"[^>]*>${line}</div>`);
-		expect(markup).toMatch(element);
+		const flow = new RegExp(`<div[^>]*data-flow-text="ltr"[^>]*>(?:(?!data-flow-text).)*${line.split(' ')[0]}`, 's');
+		expect(markup).toMatch(flow);
+		expect(visibleText(markup)).toContain(line);
 		expect(markup).not.toContain(`<bdi>${line.split(' ')[0]}</bdi>`);
 	});
 
@@ -388,13 +391,17 @@ describe('a missing font fails the render', () => {
 			addFace: (face) => added.push(face),
 			isAvailable: () => available,
 			fileUrl: (file) => `/public/${file}`,
+			readFont: (file) => {
+				const bytes = readFileSync(resolve(process.cwd(), 'public', file));
+				return Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+			},
 		};
 		return {value, added};
 	};
 
 	it('loads every face when all exist', async () => {
 		const {value, added} = environment(() => false);
-		await loadBrandFonts(value);
+		await loadBrandFonts(value, []);
 		expect(added).toHaveLength(FONT_FACES.length);
 	});
 
@@ -405,12 +412,12 @@ describe('a missing font fails the render', () => {
 
 	it.each(['Cairo-Bold', 'Cairo-Regular', 'Outfit-Variable'])('rejects when %s is missing', async (file) => {
 		const {value} = environment((source) => source.includes(file));
-		await expect(loadBrandFonts(value)).rejects.toThrow(FontLoadError);
+		await expect(loadBrandFonts(value, [])).rejects.toThrow(FontLoadError);
 	});
 
 	it('rejects when the browser says Cairo is not usable', async () => {
 		const {value} = environment(() => false, false);
-		await expect(loadBrandFonts(value)).rejects.toThrow(FontLoadError);
+		await expect(loadBrandFonts(value, [])).rejects.toThrow(FontLoadError);
 	});
 });
 

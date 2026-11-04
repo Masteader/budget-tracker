@@ -10,9 +10,11 @@ import {
 	mergeBrandTokens,
 	pageAt,
 } from '../lib/captionGrouping';
+import {computeLayout} from '../lib/layout';
 import {localizeDigits, splitForIsolation} from '../lib/text';
 import {colors} from '../lib/tokens';
 import type {CaptionWord, Digits, Language} from '../props';
+import {estimateWidth} from './helpers';
 
 const REAL_AR = 'قوام المال';
 const REAL_EN = 'Qawam Money';
@@ -37,6 +39,9 @@ const render = (
 			language={language}
 			digits={digits}
 			highlightColor={colors.roseGold}
+			layout={computeLayout({top: 220, bottom: 420, left: 60, right: 140})}
+			measure={estimateWidth}
+			withEnglish
 			frame={Math.floor((ms * 30) / 1000)}
 			fps={30}
 		/>,

@@ -18,6 +18,7 @@ const basket = (start_ms: number, end_ms: number, regions = [{x: 0.05, y: 0.2, w
 	start_ms,
 	end_ms,
 	mask_regions: regions,
+	focal_point: null,
 });
 
 const plain = (start_ms: number, end_ms: number): PropsClip => ({
@@ -27,6 +28,7 @@ const plain = (start_ms: number, end_ms: number): PropsClip => ({
 	start_ms,
 	end_ms,
 	mask_regions: [],
+	focal_point: null,
 });
 
 const props = (clips: PropsClip[], language: 'ar' | 'en' = 'ar', fps: 30 | 60 = 30): RenderProps =>

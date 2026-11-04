@@ -2,15 +2,26 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {ReelMedia} from '../compositions/media';
+import type {MeasureText} from '../lib/fit';
 import {ReelView} from '../compositions/ReelView';
 import {durationInFrames} from '../lib/timeline';
 import type {RenderProps} from '../props';
 import {parseRenderProps} from '../props';
 
-/** Stands in for Remotion's video and image, which need a running composition. */
+/** A little wider than the real fonts, as a browser's canvas is not there to ask. */
+export const estimateWidth: MeasureText = (text, {size}) => {
+	let ems = 0;
+	for (const character of text) {
+		ems += /\s/.test(character) ? 0.3 : /\p{Script=Arabic}/u.test(character) ? 0.52 : 0.58;
+	}
+	return ems * size;
+};
+
+/** Stands in for Remotion's video and image and the canvas, which need a running composition. */
 export const fakeMedia: ReelMedia = {
 	Clip: ({clip}) => <img data-clip-media={clip.src} alt="" style={{display: 'block', width: '100%'}} />,
 	Logo: ({src, size}) => <img data-logo-src={src} alt="" width={size} height={size} />,
+	measure: estimateWidth,
 };
 
 const fixture = JSON.parse(

@@ -1,5 +1,5 @@
 import React from 'react';
-import {LATIN_FAMILY} from '../lib/fonts';
+import {fontStack} from '../lib/fonts';
 import type {ReelLayout} from '../lib/layout';
 import {CANVAS_HEIGHT, CANVAS_WIDTH} from '../lib/layout';
 import {TEST_WATERMARK} from '../lib/strings';
@@ -17,7 +17,7 @@ export const Watermark: React.FC<{layout: ReelLayout}> = ({layout}) => {
 	return (
 		<div
 			data-watermark="test"
-			style={{position: 'absolute', inset: 0, overflow: 'hidden', fontFamily: LATIN_FAMILY}}
+			style={{position: 'absolute', inset: 0, overflow: 'hidden', fontFamily: fontStack}}
 		>
 			<div
 				style={{
