@@ -4,10 +4,12 @@ to 5.3, decisions D22, D23 and D30, guardrails G15 and G19).
 **Sign-off.** A clip reaches `manifest.json` only through `record_clip`, and that needs a
 confirmation that only a fully answered `Checklist` hands out. Only a typed `yes` counts.
 
-**Test clips.** `ClipEntry` has no field for this, so the file name carries it, and it fails
-closed: a clip is final only when named `final_clip_NN.mp4`. Every other clip is a test clip, and
-that name can only be given while the launch gate is met (D23). `check_clip_for_reel` is the check
-for whoever picks clips for a public reel.
+**Test clips.** A clip is final only when its signed record holds a seal, which `record_clip` and
+`record_screenshot` make while the launch gate is met (D23). The seal is keyed with a file kept
+apart from the manifest and covers the path, hash and app version, so renaming a test clip and
+editing its manifest line cannot promote it. Every other clip is a test clip. Someone who also
+reads the key file can forge a seal, so this stops edits and mistakes, not the machine's owner.
+`check_clip_for_reel` is the check for whoever picks clips or pictures for a public reel.
 
 **Manual fallback.** The owner records with the phone's own recorder and drops files into a feature
 folder. `run_ingest` strips each one by re-encoding and signs the cleaned copy, not the original.
@@ -15,8 +17,10 @@ folder. `run_ingest` strips each one by re-encoding and signs the cleaned copy, 
 
 from __future__ import annotations
 
+import hmac
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -40,6 +44,7 @@ from core.manifest import (
 )
 from core.paths import RAW_RECORDING_FOLDERS, EnginePaths, resolve_data_root
 from core.secrets import scrubbed_env
+from phone_capture import process_tree
 from phone_capture.adb import find_on_path
 
 Ask = Callable[[str], str]
@@ -68,11 +73,14 @@ FFMPEG_TIMEOUT_SECONDS = 600
 VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".3gp"}
 
 _FINAL_CLIP = re.compile(r"final_clip_\d+\.mp4")
-_NUMBERED_CLIP = re.compile(r"(?:final_)?clip_(\d+)\.mp4(?:\.part)?")
+# Without regard to case, because Windows treats CLIP_01.MP4 and clip_01.mp4 as one file.
+_NUMBERED_CLIP = re.compile(r"(?:final_)?clip_(\d+)\.mp4(?:\.part)?", re.IGNORECASE)
 _TEST_SCREENSHOT = re.compile(r"screen_\d+\.png")
 _FINAL_SCREENSHOT = re.compile(r"final_screen_\d+\.png")
-_NUMBERED_SCREENSHOT = re.compile(r"(?:final_)?screen_(\d+)\.png(?:\.part)?")
+_NUMBERED_SCREENSHOT = re.compile(r"(?:final_)?screen_(\d+)\.png(?:\.part)?", re.IGNORECASE)
 _SCREENSHOT_MANIFEST = "manifest.json"
+_SEAL_KEY_FILE = "clip_seal.key"
+_SEAL_KEY_BYTES = 32
 _CLIP_MASK_NOTE = (
     "Smart Basket clip: the mask regions below are blurred at render, and the illustrative "
     "prices / أسعار توضيحية label is added there too. Neither can be left out."
@@ -141,13 +149,64 @@ class Checklist:
 
 
 def is_final_clip(clip_path: str) -> bool:
+    """Whether the name is right for a final clip. Only `is_sealed_final` says that it is one."""
     return bool(_FINAL_CLIP.fullmatch(clip_path.rsplit("/", 1)[-1]))
 
 
-def check_clip_for_reel(clip_path: str, *, test_reel: bool) -> None:
-    """A clip recorded before the launch gate shows the old name, so it stays in test reels."""
-    if not test_reel and not is_final_clip(clip_path):
-        raise ClipRejected(f"{clip_path} is a test clip, and a public reel needs a final clip")
+def _seal_key_path(paths: EnginePaths) -> Path:
+    return paths.state_db.parent / _SEAL_KEY_FILE
+
+
+def _existing_seal_key(paths: EnginePaths) -> bytes | None:
+    """None for anything but a plain, whole key inside the data_root, which leaves every clip a
+    test clip rather than trusting a key that came from somewhere else."""
+    file = _seal_key_path(paths)
+    parts = file.relative_to(paths.data_root).parts
+    expected = os.path.join(os.path.realpath(paths.data_root), *parts)
+    try:
+        if os.path.normcase(os.path.realpath(file)) != os.path.normcase(expected):
+            return None
+        key = file.read_bytes()
+    except OSError:
+        return None
+    return key if len(key) == _SEAL_KEY_BYTES else None
+
+
+def _new_or_existing_seal_key(paths: EnginePaths) -> bytes:
+    file = _seal_key_path(paths)
+    _checked_folder(paths, file.parent, "the seal key")
+    try:
+        with open(file, "xb") as handle:
+            handle.write(secrets.token_bytes(_SEAL_KEY_BYTES))
+    except FileExistsError:
+        pass
+    key = _existing_seal_key(paths)
+    if key is None:
+        raise ClipRejected(f"{file} cannot be used to seal a final clip")
+    return key
+
+
+def _final_seal(key: bytes, path: str, sha256: str, app_version: str) -> str:
+    signed = "\0".join((path, sha256, app_version)).encode("utf-8")
+    return hmac.new(key, signed, "sha256").hexdigest()
+
+
+def is_sealed_final(entry: ClipEntry, paths: EnginePaths) -> bool:
+    """Fails closed: no seal, no key or a seal for another path, hash or version is a test clip."""
+    if entry.final_seal is None:
+        return False
+    key = _existing_seal_key(paths)
+    if key is None:
+        return False
+    expected = _final_seal(key, entry.path, entry.sha256, entry.app_version)
+    return hmac.compare_digest(entry.final_seal, expected)
+
+
+def check_clip_for_reel(entry: ClipEntry, paths: EnginePaths, *, test_reel: bool) -> None:
+    """A clip or picture from before the launch gate shows the old name, so it stays in test
+    reels. Pass the entry from `ClipManifest.verified_clip`, which has checked the file's hash."""
+    if not test_reel and not is_sealed_final(entry, paths):
+        raise ClipRejected(f"{entry.path} is a test clip, and a public reel needs a final clip")
 
 
 def require_gate_for_final(config: EngineConfig, final: bool) -> None:
@@ -194,32 +253,41 @@ def check_feature(feature: str) -> None:
         raise CaptureError(f"{feature!r} is not a folder in the shot list (spec Section 5.4)")
 
 
+def _checked_folder(paths: EnginePaths, folder: Path, what: str) -> Path:
+    """Made and checked level by level from the data_root down, so a link at any level has
+    nothing made or written through it."""
+    paths.data_root.mkdir(parents=True, exist_ok=True)
+    current = paths.data_root
+    expected = os.path.realpath(paths.data_root)
+    for part in folder.relative_to(paths.data_root).parts:
+        current = current / part
+        expected = os.path.join(expected, part)
+        current.mkdir(exist_ok=True)
+        if os.path.normcase(os.path.realpath(current)) != os.path.normcase(expected):
+            raise CaptureError(f"{current} is a link, and {what} must stay in the data_root")
+    return folder
+
+
 def prepare_paths(config: EngineConfig) -> EnginePaths:
     """`resolve_data_root` keeps data out of OneDrive and git. A link further down could still
     lead back there, so each feature folder has to really be where it looks like it is."""
     paths = EnginePaths.from_root(resolve_data_root(config.paths.data_root))
-    real_root = os.path.realpath(paths.data_root)
     for feature in RAW_RECORDING_FOLDERS:
-        folder = paths.raw_recordings / feature
-        folder.mkdir(parents=True, exist_ok=True)
-        expected = os.path.join(real_root, "assets", "raw_recordings", feature)
-        if os.path.normcase(os.path.realpath(folder)) != os.path.normcase(expected):
-            raise CaptureError(f"{folder} is a link, and clips must stay in the data_root")
+        _checked_folder(paths, paths.raw_recordings / feature, "clips")
     return paths
 
 
 def prepare_screenshot_folder(paths: EnginePaths, feature: str) -> Path:
-    """Checked level by level, so a link above the feature folder has nothing made through it."""
-    real_root = os.path.realpath(paths.data_root)
-    folder = paths.screenshots / feature
-    for part, expected in (
-        (paths.screenshots, os.path.join(real_root, "assets", "screenshots")),
-        (folder, os.path.join(real_root, "assets", "screenshots", feature)),
-    ):
-        part.mkdir(parents=True, exist_ok=True)
-        if os.path.normcase(os.path.realpath(part)) != os.path.normcase(expected):
-            raise CaptureError(f"{part} is a link, and screenshots must stay in the data_root")
-    return folder
+    return _checked_folder(paths, paths.screenshots / feature, "screenshots")
+
+
+def _ingest_tmp(paths: EnginePaths) -> Path:
+    return _checked_folder(paths, paths.manifest.parent / "ingest_tmp", "ingest copies")
+
+
+def _originals_folder(paths: EnginePaths, feature: str) -> Path:
+    folder = paths.manifest.parent / "ingest_originals" / feature
+    return _checked_folder(paths, folder, "original recordings")
 
 
 # --- The sign-off -----------------------------------------------------------------------
@@ -322,8 +390,9 @@ def record_clip(
         raise ClipRejected(
             f"{file.name} has the wrong name: only a final clip is named final_clip_NN.mp4"
         )
+    seal = _seal_if_final(paths, final, feature, file, sha256, app_version)
     return _save_signed_entry(
-        feature, file, sha256, answers, app_version, paths.manifest, paths.raw_recordings
+        feature, file, sha256, answers, app_version, seal, paths.manifest, paths.raw_recordings
     )
 
 
@@ -346,8 +415,9 @@ def record_screenshot(
             f"{file.name} has the wrong name: use screen_NN.png, or final_screen_NN.png if final"
         )
     manifest_path = screenshot_manifest_path(paths)
+    seal = _seal_if_final(paths, final, feature, file, sha256, app_version)
     return _save_signed_entry(
-        feature, file, sha256, answers, app_version, manifest_path, paths.screenshots
+        feature, file, sha256, answers, app_version, seal, manifest_path, paths.screenshots
     )
 
 
@@ -376,12 +446,22 @@ def _checked_sign_off(
     return feature
 
 
+def _seal_if_final(
+    paths: EnginePaths, final: bool, feature: str, file: Path, sha256: str, app_version: str
+) -> str | None:
+    if not final:
+        return None
+    key = _new_or_existing_seal_key(paths)
+    return _final_seal(key, f"{feature}/{file.name}", sha256, app_version)
+
+
 def _save_signed_entry(
     feature: str,
     file: Path,
     sha256: str,
     answers: OwnerAnswers,
     app_version: str,
+    final_seal: str | None,
     manifest_path: Path,
     root: Path,
 ) -> ClipEntry:
@@ -393,6 +473,7 @@ def _save_signed_entry(
             app_version=app_version,
             store_names_masked=answers.store_names_masked,
             mask_regions=list(answers.mask_regions),
+            final_seal=final_seal,
         )
     except ValidationError as error:
         raise ClipRejected(f"This clip cannot be signed off: {error}") from error
@@ -468,17 +549,8 @@ def strip_metadata(source: Path, output: Path, config: EngineConfig, paths: Engi
         _relative_argument(output, cwd),
     ]
     try:
-        result = subprocess.run(
-            args,
-            cwd=cwd,
-            env=scrubbed_env(None),
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=FFMPEG_TIMEOUT_SECONDS,
-            check=False,
+        result = process_tree.run(
+            args, cwd=cwd, env=scrubbed_env(None), timeout=FFMPEG_TIMEOUT_SECONDS
         )
     except (subprocess.TimeoutExpired, OSError) as error:
         raise CaptureError(f"FFmpeg could not finish: {type(error).__name__}") from error
@@ -508,11 +580,12 @@ def _new_files(paths: EnginePaths, feature: str | None, out: Out) -> list[tuple[
         for loose in sorted(paths.raw_recordings.iterdir()):
             if loose.is_file() and loose.suffix.casefold() in VIDEO_SUFFIXES:
                 out(f"Skipped {loose.name}: move it into a feature folder first.")
-    known = {entry.path for entry in ClipManifest.load(paths.manifest).clips}
+    known = {entry.path.casefold() for entry in ClipManifest.load(paths.manifest).clips}
     found = []
     for folder in (feature,) if feature else RAW_RECORDING_FOLDERS:
         for file in sorted((paths.raw_recordings / folder).iterdir()):
-            if file.suffix.casefold() not in VIDEO_SUFFIXES or f"{folder}/{file.name}" in known:
+            is_signed = f"{folder}/{file.name}".casefold() in known
+            if file.suffix.casefold() not in VIDEO_SUFFIXES or is_signed:
                 continue
             if _is_link(file):
                 out(f"Skipped {folder}/{file.name}: it is a link, not a recording.")
@@ -527,8 +600,7 @@ def _new_files(paths: EnginePaths, feature: str | None, out: Out) -> list[tuple[
 
 def _keep_original(paths: EnginePaths, feature: str, source: Path) -> Path:
     """Moved out of the way and never deleted, since deleting data is the owner's call."""
-    folder = paths.manifest.parent / "ingest_originals" / feature
-    folder.mkdir(parents=True, exist_ok=True)
+    folder = _originals_folder(paths, feature)
     target = folder / source.name
     count = 1
     while target.exists():
@@ -551,8 +623,8 @@ def _ingest_file(
 ) -> str | None:
     """Returns the signed clip's path, or None when the owner did not sign it off. The working
     folder has a generated name, so the owner's file name never reaches FFmpeg's command line."""
-    staging = paths.manifest.parent / "ingest_tmp" / uuid.uuid4().hex
-    staging.mkdir(parents=True)
+    staging = _ingest_tmp(paths) / uuid.uuid4().hex
+    staging.mkdir()
     try:
         staged_source = staging / f"source{source.suffix.casefold()}"
         shutil.copyfile(source, staged_source)
@@ -589,7 +661,7 @@ def _ingest_file(
             raise
         try:
             _keep_original(paths, feature, source)
-        except OSError as error:
+        except (OSError, CaptureError) as error:
             out(f"Signed off, but {source.name} could not be moved: {error}")
         return f"{feature}/{target.name}"
     finally:
@@ -612,6 +684,10 @@ def run_ingest(
     require_gate_for_final(config, final)
     paths = prepare_paths(config)
     files = _new_files(paths, feature, out)
+    if files:
+        _ingest_tmp(paths)  # refused here, before the owner has answered anything
+    for folder in {folder for folder, _ in files}:
+        _originals_folder(paths, folder)
     report = IngestReport()
     if not files:
         out(f"Nothing to ingest. Drop recordings into a feature folder in {paths.raw_recordings}")

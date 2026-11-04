@@ -13,16 +13,20 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
 
 from core.paths import PathConfigError, expand_path
 from core.secrets import scrubbed_env
+from phone_capture import process_tree
 
 STANDARD_ADB_PATH = r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"
 COMMAND_TIMEOUT_SECONDS = 30
 PULL_TIMEOUT_SECONDS = 300
+STOP_SIGNAL_ATTEMPTS = 2
 
 _DEVICES_HEADER = "List of devices attached"
 _READY_STATE = "device"
@@ -33,6 +37,10 @@ _SERIAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _REMOTE_FILE = re.compile(r"/sdcard/[A-Za-z0-9][A-Za-z0-9_.-]*\.mp4")
 _PNG_START = b"\x89PNG\r\n\x1a\n"
 _PNG_END = b"IEND\xaeB`\x82"  # the last chunk and its checksum, so a cut-off picture is caught
+_MAY_STILL_BE_RECORDING = (
+    "The stop signal did not reach the phone, so screenrecord may still be running there. "
+    "Reconnect the phone and run: adb shell pkill -INT screenrecord"
+)
 
 
 class AdbError(RuntimeError):
@@ -146,16 +154,8 @@ class AdbClient:
 
     def run(self, args: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
         try:
-            return subprocess.run(
-                [str(self.adb_path), *args],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                env=scrubbed_env(None),
-                check=False,
+            return process_tree.run(
+                [str(self.adb_path), *args], timeout=timeout, env=scrubbed_env(None)
             )
         except subprocess.TimeoutExpired as error:
             raise AdbCommandFailed(f"adb {args[-1]} took over {timeout} seconds") from error
@@ -256,14 +256,8 @@ class Device:
     def _write_screencap(self, handle) -> None:
         command = [str(self.client.adb_path), *self._with_serial("exec-out", "screencap", "-p")]
         try:
-            result = subprocess.run(
-                command,
-                stdin=subprocess.DEVNULL,
-                stdout=handle,
-                stderr=subprocess.PIPE,
-                timeout=COMMAND_TIMEOUT_SECONDS,
-                env=scrubbed_env(None),
-                check=False,
+            result = process_tree.run(
+                command, stdout=handle, timeout=COMMAND_TIMEOUT_SECONDS, env=scrubbed_env(None)
             )
         except subprocess.TimeoutExpired as error:
             raise ScreenshotFailed(
@@ -272,25 +266,23 @@ class Device:
         except OSError as error:
             raise ScreenshotFailed(f"adb could not start: {error}") from error
         if result.returncode != 0:
-            detail = _printable(result.stderr.decode("utf-8", errors="replace"))
+            detail = _printable(result.stderr)
             raise ScreenshotFailed(f"adb failed with exit code {result.returncode}: {detail}")
 
     def start_recording(self, remote: str) -> Recording:
         _check_remote_file(remote)
+        output = tempfile.TemporaryFile()
         try:
-            process = subprocess.Popen(
+            process = process_tree.start(
                 [str(self.client.adb_path), *self._with_serial("shell", "screenrecord", remote)],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
                 env=scrubbed_env(None),
+                stdout=output,
+                stderr=subprocess.STDOUT,
             )
         except OSError as error:
+            output.close()
             raise RecordingFailed(f"adb could not start: {error}") from error
-        return Recording(self, process)
+        return Recording(self, process, output)
 
 
 def _check_remote_file(remote: str) -> None:
@@ -300,50 +292,87 @@ def _check_remote_file(remote: str) -> None:
 
 class Recording:
     """`adb shell screenrecord`, running. Ctrl+C on `adb shell` may leave an unfinished file on
-    Windows (spec Section 5.1), so the stop signal goes through a second adb call."""
+    Windows (spec Section 5.1), so the stop signal goes through a second adb call. That call is
+    made even if adb has already gone, because screenrecord lives on the phone: a console Ctrl+C
+    or a USB drop ends adb and can leave the recorder running."""
 
-    def __init__(self, device: Device, process: subprocess.Popen[str]):
+    def __init__(self, device: Device, process: subprocess.Popen, output: IO[bytes]):
         self._device = device
         self._process = process
+        self._output = output
+        self._stopped = False
+        self._signal_failed = False
 
-    def _kill(self) -> None:
-        self._process.kill()
-        self._process.wait()
+    def _text(self) -> str:
+        return _printable(process_tree.read_output(self._output))
+
+    def _finish(self) -> None:
+        self._stopped = True
+        self._output.close()
 
     def wait_started(self, grace_seconds: float) -> None:
         """A recorder still running after the grace time has started. One that ended already
         has failed, since nothing has asked it to stop."""
         try:
-            output, _ = self._process.communicate(timeout=grace_seconds)
+            process_tree.wait_for(self._process, grace_seconds)
         except subprocess.TimeoutExpired:
             return
-        raise RecordingFailed(f"The recording stopped straight away: {_printable(output or '')}")
+        raise RecordingFailed(f"The recording stopped straight away: {self._text()}")
+
+    def _send_stop_signal(self) -> AdbCommandFailed | None:
+        """Tried again once, since a lost stop signal leaves the phone recording."""
+        failure = None
+        for _ in range(STOP_SIGNAL_ATTEMPTS):
+            try:
+                self._device.shell("pkill", "-INT", "screenrecord")
+                self._signal_failed = False
+                return None
+            except AdbCommandFailed as error:
+                failure = error
+        self._signal_failed = True
+        return failure
+
+    def _stop_failure(self, ended_with: int | None, wait_seconds: float) -> RecordingFailed | None:
+        signal_error = self._send_stop_signal()
+        warning = f" {_MAY_STILL_BE_RECORDING}" if signal_error else ""
+        if ended_with is not None:
+            return RecordingFailed(
+                f"The recording failed while it was running: {self._text()}.{warning}"
+            )
+        try:
+            code = process_tree.wait_for(self._process, wait_seconds)
+        except subprocess.TimeoutExpired:
+            process_tree.kill_tree(self._process)
+            return RecordingFailed(
+                f"The recording did not stop, so it may be unfinished. Nothing was saved.{warning}"
+            )
+        if signal_error and code != 0:
+            return RecordingFailed(f"adb lost the phone during the stop: {self._text()}.{warning}")
+        return None
 
     def stop(self, wait_seconds: float) -> None:
         """A non-zero exit after the stop signal is not a failure by itself, because phones
-        differ. The pull and the owner's sign-off judge the file."""
-        if self._process.poll() is not None:
-            output, _ = self._process.communicate()
-            if self._process.returncode != 0:
-                detail = _printable(output or "")
-                raise RecordingFailed(f"The recording failed while it was running: {detail}")
-            return  # screenrecord's own time limit ended it, which leaves a finished file
-        signal_error = None
-        try:
-            self._device.shell("pkill", "-INT", "screenrecord")
-        except AdbCommandFailed as error:
-            signal_error = error
-        try:
-            self._process.communicate(timeout=wait_seconds)
-        except subprocess.TimeoutExpired as error:
-            self._kill()
-            raise RecordingFailed(
-                "The recording did not stop, so it may be unfinished. Nothing was saved."
-            ) from signal_error or error
+        differ. The pull and the owner's sign-off judge the file. An exit of 0 before any signal
+        means screenrecord's own time limit ended it, which leaves a finished file."""
+        if self._stopped:
+            return
+        ended_with = self._process.poll()
+        failure = None if ended_with == 0 else self._stop_failure(ended_with, wait_seconds)
+        self._finish()
+        if failure is not None:
+            raise failure
 
-    def abort(self, wait_seconds: float) -> None:
-        """For use while another error or Ctrl+C is already on its way, so it never raises."""
+    def abort(self, wait_seconds: float) -> str | None:
+        """For use while another error or Ctrl+C is already on its way, so it never raises. It
+        returns what the owner has to be told, if the phone may still be recording."""
+        if self._stopped:
+            return None
         try:
             self.stop(wait_seconds)
+        except RecordingFailed:
+            pass
         except (AdbError, KeyboardInterrupt):
-            self._kill()
+            self._signal_failed = True
+            process_tree.kill_tree(self._process)
+            self._finish()
+        return _MAY_STILL_BE_RECORDING if self._signal_failed else None

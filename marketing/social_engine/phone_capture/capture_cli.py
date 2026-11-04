@@ -24,7 +24,7 @@ from core.config import ConfigError, EngineConfig, load_config
 from core.manifest import ClipManifest, ClipRejected, sha256_file
 from core.paths import RAW_RECORDING_FOLDERS, PathConfigError
 from core.secrets import ForbiddenEnvironment, check_startup_environment
-from phone_capture.adb import AdbClient, AdbError, Device, find_adb
+from phone_capture.adb import AdbClient, AdbError, Device, PullFailed, find_adb
 from phone_capture.ingest import (
     CHECKLIST,
     STATUS_BAR_LINE,
@@ -142,17 +142,26 @@ def _record(device: Device, ask: Ask, out: Out, sleep: Callable[[float], None]) 
             raise CaptureAborted("The terminal closed while recording.") from error
         recording.stop(STOP_WAIT_SECONDS)
     except BaseException:
-        recording.abort(STOP_WAIT_SECONDS)
+        warning = recording.abort(STOP_WAIT_SECONDS)
+        if warning:
+            out(warning)
         raise
     sleep(SETTLE_SECONDS)
 
 
-def _discard_from_phone(device: Device) -> None:
+def _still_on_phone() -> str:
+    return (
+        f"{REMOTE_RECORDING} is still on the phone. To keep it, run: adb pull {REMOTE_RECORDING}. "
+        f"To delete it, run: adb shell rm -f {REMOTE_RECORDING}"
+    )
+
+
+def _discard_from_phone(device: Device, out: Out) -> None:
     """For a recording that was given up on, while an error or Ctrl+C is already on its way."""
     try:
         device.remove(REMOTE_RECORDING)
     except (AdbError, KeyboardInterrupt):
-        pass
+        out(_still_on_phone())
 
 
 def _save_recording(device: Device, target: Path, out: Out) -> None:
@@ -203,11 +212,17 @@ def run_capture(
             _record(device, ask, out, sleep)
     except BaseException:
         if recording_began:
-            _discard_from_phone(device)
+            _discard_from_phone(device, out)
         raise
 
-    target = next_clip_path(paths, feature, final=final)
-    _save_recording(device, target, out)
+    try:
+        target = next_clip_path(paths, feature, final=final)
+        _save_recording(device, target, out)
+    except PullFailed:
+        raise  # its message already says so
+    except BaseException:
+        out(_still_on_phone())
+        raise
     out(f"Saved {target}")
 
     digest = sha256_file(target)
