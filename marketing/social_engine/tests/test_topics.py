@@ -12,13 +12,16 @@ from collections import Counter
 import pytest
 
 from content_engine import denylists
+from content_engine.cta import compose_voice
 from content_engine.guardrails import (
     GuardrailContext,
     check_claim_ids,
+    check_script,
     check_text,
     lexicon_form,
     load_claims_register,
 )
+from content_engine.schemas import Script
 from content_engine.topics import (
     TOPICS_PATH,
     NoTopicAvailable,
@@ -27,6 +30,7 @@ from content_engine.topics import (
     select_next,
     tier_shares,
 )
+from core.brand_gate import ReelBrand
 from core.config import load_config
 from core.paths import RAW_RECORDING_FOLDERS
 
@@ -149,7 +153,7 @@ def _forbidden_in_seeds(text: str) -> list[str]:
         for term in denylists.BANK_AND_WALLET_NAMES + denylists.BANK_WORDS
         if lexicon_form(term) in form.split()
     ]
-    if re.search(r"30\s*%|%\s*30|ثلاثين", form):
+    if re.search(r"30\s*%|%\s*30|ثلاثين|\d\s*/\s*30\s*/\s*\d", form):
         found.append("a 30% figure")
     if re.search(r"\d\s*(click|tap)|(click|tap)s\b|نقرات|ضغطات", form):
         found.append("a click count")
@@ -174,6 +178,59 @@ def test_no_seed_holds_a_rejected_sample():
             assert sample not in raw, f"{row.id}: {sample}"
 
 
+def test_the_budget_rule_seeds_do_not_lead_to_a_30_percent_figure():
+    # 50/30/20 can only be explained by saying 30%, which R01 fails every time.
+    for topic in TOPICS:
+        for field in TEXT_FIELDS:
+            assert "50/30/20" not in getattr(topic, field), topic.id
+    assert {"g021", "g022"} <= {topic.id for topic in TOPICS}
+
+
+CLAIM_FREE = [topic for topic in TOPICS if not topic.claim_ids]
+
+
+def test_most_seeds_are_general_tips():
+    assert len(CLAIM_FREE) >= 76
+
+
+@pytest.mark.parametrize("topic", CLAIM_FREE, ids=lambda topic: topic.id)
+def test_a_general_tip_on_each_claim_free_seed_passes_check_script(topic):
+    # The engine adds the closing line, so a tip with no claims is not a product statement.
+    script = Script(
+        topic_id=topic.id,
+        tier=topic.tier,
+        template=topic.templates[0],
+        language="ar",
+        hook_ar=topic.hook_ar,
+        voice_script=topic.title_ar,
+        on_screen_en=[topic.title_en],
+        subtitles_en=topic.title_en,
+        feature_clip_folder=None,
+        claim_ids=[],
+        numbers=[],
+        sources=[],
+        caption_ar=topic.title_ar,
+        caption_en=topic.title_en,
+        hashtags=["{brand_hashtag}", "#budgeting"],
+        speech_seconds_estimate=32.0,
+    )
+    brand = ReelBrand("قوام المال", "Qawam Money", "#QawamMoney", "logo.svg", is_test=False)
+    config = load_config()
+    report = check_script(script, config=config, brand=brand)
+    assert report.hard_failures == []
+    spoken = compose_voice(script.voice_script, "ar", config, brand)
+    assert spoken.count("قوام المال") == 1
+
+
+@pytest.mark.parametrize("topic_id", ["s007", "s009"])
+def test_the_seeds_that_call_the_qr_al_ramz_still_pass_g21(topic_id):
+    topic = next(topic for topic in TOPICS if topic.id == topic_id)
+    assert "الرمز" in topic.title_ar + topic.hook_ar
+    for field in TEXT_FIELDS:
+        report = check_text(getattr(topic, field), _context(topic))
+        assert "G21" not in {finding.rule for finding in report.hard_failures}
+
+
 def test_a_transfer_fee_topic_stays_general():
     fee_topics = [topic for topic in TOPICS if "transfer" in topic.title_en.casefold()]
     assert fee_topics, "the spec lists remittances and transfer fees for Tier 2"
@@ -185,7 +242,14 @@ def test_a_transfer_fee_topic_stays_general():
 
 @pytest.mark.parametrize(
     "bad",
-    ["Save with Al Rajhi", "Link in bio", "Done in 3 clicks", "Payday on the 27th", "Save 30%"],
+    [
+        "Save with Al Rajhi",
+        "Link in bio",
+        "Done in 3 clicks",
+        "Payday on the 27th",
+        "Save 30%",
+        "50/30/20 explained",
+    ],
 )
 def test_the_seed_checks_would_catch_each_dropped_claim(bad):
     assert _forbidden_in_seeds(bad) or check_text(bad).hard_failures

@@ -33,6 +33,7 @@ BRIEF = ReelBrief(
     language="ar",
     topic_text="Grocery spending in Ramadan",
     feature_clip_folder=None,
+    claim_ids=tuple(REGISTER.claims),
 )
 FACT = {
     "claim": "Grocery spending rises in Ramadan.",
@@ -83,7 +84,7 @@ def prompt_of(request) -> str:
 
 REQUESTS = [
     pytest.param(lambda: writer_request(BRIEF, FACTS, REGISTER, CONFIG), id="writer"),
-    pytest.param(lambda: review_request(script(), REGISTER), id="review"),
+    pytest.param(lambda: review_request(script(), REGISTER, FACTS), id="review"),
 ]
 
 
