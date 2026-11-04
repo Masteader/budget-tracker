@@ -12,10 +12,12 @@ import hashlib
 import os
 import re
 import sqlite3
+import struct
 import time
+import unicodedata
 import uuid
 import wave
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -24,7 +26,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from content_engine.aligner import TimedWord, TokenMatch, timed_tokens
+from content_engine.aligner import TimedWord, TokenMatch, has_words, timed_tokens
+from content_engine.guardrails import GuardrailContext, check_caption_words
 from core.brand_gate import FULL_NAME_AR, FULL_NAME_EN
 from core.secrets import load_env_file
 
@@ -41,6 +44,23 @@ MIN_SPEECH_SECONDS = 15  # "Keep reels 15-45 s" (spec Section 10.4)
 MAX_SPEECH_SECONDS = 45
 
 _AUDIO_RATE_HZ = 48_000
+_AUDIO_CHANNELS = 1
+_AUDIO_SAMPLE_BYTES = 2
+_WAV_READ_FRAMES = 65_536
+# What the standard library's WAV reader raises on a damaged header, besides its own wave.Error.
+_WAV_FAILURES = (
+    wave.Error,
+    EOFError,
+    OSError,
+    RuntimeError,
+    ValueError,
+    ArithmeticError,
+    MemoryError,
+    struct.error,
+)
+_WORD_END_TOLERANCE_MS = 50  # rounding of the last word's end against the end of the audio
+_SILENT_CATEGORIES = {"Mn", "Cf"}  # marks on letters and invisible characters take no time
+_KASHIDA = "\u0640"
 _USAGE_FILE_NAME = "voice_usage.db"
 _AZURE_REGION = re.compile(r"[a-z][a-z0-9]*")
 _APPROVABLE_WITHOUT_OPT_IN = "S0"
@@ -89,6 +109,11 @@ class VoiceServiceError(VoiceError):
         return self.status is not None and 400 <= self.status < 500
 
 
+class VoiceAudioCutOff(VoiceLengthError):
+    """The file holds less sound than its header says, so part of the voiceover is missing. It
+    is not kept, so unlike a script of the wrong length, a later try can succeed."""
+
+
 class VoiceTimingError(VoiceError):
     """Word timing does not cover the script. `result` holds the audio that was paid for."""
 
@@ -121,7 +146,11 @@ class VoiceProvider(Protocol):
 
     def match_tokens(self, text: str, raw_words: list[TimedWord]) -> list[TokenMatch]: ...
 
-    def with_prosody(self, rate: str, pitch: str) -> VoiceProvider: ...
+    def with_prosody(
+        self, rate: str, pitch: str, *, pause: str = "", style: str = ""
+    ) -> VoiceProvider: ...
+
+    def caption_tokens(self, text: str) -> list[str]: ...
 
 
 def reel_voice_may_be_approved(voice: Voice, azure_tier: Any) -> bool:
@@ -135,7 +164,12 @@ def reel_voice_may_be_approved(voice: Voice, azure_tier: Any) -> bool:
 
 def check_script_length(text: str, chars_per_second: float) -> float:
     """The estimated seconds of speech, or a refusal before anything is sent (spec Section 6.2)."""
-    seconds = len(" ".join(text.split())) / chars_per_second
+    spoken = [
+        ch
+        for ch in " ".join(text.split())
+        if unicodedata.category(ch) not in _SILENT_CATEGORIES and ch != _KASHIDA
+    ]
+    seconds = len(spoken) / chars_per_second
     _check_seconds(seconds, "script", "at the configured voice.chars_per_second")
     return seconds
 
@@ -238,17 +272,65 @@ def _sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _audio_length_ms(path: Path) -> int | None:
-    """None unless this is a non-empty 48 kHz WAV file, which is what voice.output_format asks.
-    Whether the SDK's `audio_data` carries a full RIFF header is first seen in LIVE-1 [verify]:
-    if it does not, this refuses loudly rather than passing bad audio on."""
+def _wav_frames(path: Path) -> tuple[int, int] | None:
+    """The frames the header promises and the frames really in the file. None unless this is a
+    non-empty 48 kHz 16-bit mono WAV file, which is what voice.output_format asks. Whether the
+    SDK's `audio_data` carries a full RIFF header is first seen in LIVE-1 [verify]: if it does
+    not, this refuses loudly rather than passing bad audio on."""
     try:
         with wave.open(str(path), "rb") as audio:
-            if audio.getframerate() != _AUDIO_RATE_HZ or audio.getnframes() == 0:
+            promised = audio.getnframes()
+            if (
+                audio.getframerate() != _AUDIO_RATE_HZ
+                or audio.getnchannels() != _AUDIO_CHANNELS
+                or audio.getsampwidth() != _AUDIO_SAMPLE_BYTES
+                or promised == 0
+            ):
                 return None
-            return round(audio.getnframes() * 1000 / _AUDIO_RATE_HZ)
-    except (wave.Error, EOFError, OSError):
+            present = 0
+            while block := audio.readframes(_WAV_READ_FRAMES):
+                present += len(block) // (_AUDIO_CHANNELS * _AUDIO_SAMPLE_BYTES)
+            return promised, present
+    except _WAV_FAILURES:
         return None
+
+
+def _audio_length_ms(path: Path) -> int | None:
+    """How much sound the file really holds, which a truncated file's header overstates."""
+    frames = _wav_frames(path)
+    if frames is None or frames[1] == 0:
+        return None
+    return round(frames[1] * 1000 / _AUDIO_RATE_HZ)
+
+
+def _is_cut_off(path: Path) -> bool:
+    frames = _wav_frames(path)
+    return frames is not None and frames[1] < frames[0]
+
+
+def check_word_times(words: Iterable[TimedWord], audio_ms: int) -> None:
+    """Captions follow these times, so they have to be possible for this audio: each word takes
+    some time, starts after the one before it and ends inside the file. An event with no letters
+    is ignored here, as it is by the aligner."""
+    previous = None
+    for word in words:
+        if not has_words(word.text):
+            continue
+        if word.start_ms < 0 or word.end_ms <= word.start_ms:
+            raise VoiceTimingError(
+                f"word event {word.text!r} runs {word.start_ms}-{word.end_ms} ms, which is no time"
+            )
+        if word.end_ms > audio_ms + _WORD_END_TOLERANCE_MS:
+            raise VoiceTimingError(
+                f"word event {word.text!r} ends at {word.end_ms} ms, and the audio ends at "
+                f"{audio_ms} ms"
+            )
+        if previous is not None and word.start_ms <= previous.start_ms:
+            raise VoiceTimingError(
+                f"word event {word.text!r} starts at {word.start_ms} ms, which is not after "
+                f"{previous.text!r} at {previous.start_ms} ms"
+            )
+        previous = word
 
 
 @dataclass(frozen=True)
@@ -276,8 +358,9 @@ class VoiceEngine:
     def _entry_file(self, key: str) -> Path:
         return self.cache_dir / f"{key}.json"
 
-    def _load(self, key: str, voice: str) -> VoiceResult | None:
-        """A damaged or edited entry is a miss, so a forged tier cannot be read back."""
+    def _load(self, key: str, voice: str, text: str) -> VoiceResult | None:
+        """A damaged or edited entry is a miss, so a forged tier cannot be read back. So is one
+        whose word times do not hold, so bad timing can never block a text for good."""
         audio_path = self._audio_file(key)
         try:
             entry = _CacheEntry.model_validate_json(self._entry_file(key).read_bytes())
@@ -288,12 +371,13 @@ class VoiceEngine:
                 and entry.azure_tier == self.provider.azure_tier
                 and entry.audio_sha256 == _sha256_of(audio_path)
                 and _audio_length_ms(audio_path) is not None
+                and not _is_cut_off(audio_path)
             )
         except (OSError, ValidationError):
             return None
         if not matches:
             return None
-        return VoiceResult(
+        stored = VoiceResult(
             audio_path=audio_path,
             words=[],
             provider=entry.provider,
@@ -303,10 +387,21 @@ class VoiceEngine:
             raw_words=[TimedWord(w.text, w.start_ms, w.end_ms) for w in entry.raw_words],
             cached=True,
         )
+        try:
+            self._finish(stored, text, check_length=False)
+        except VoiceTimingError:
+            return None
+        return stored
 
-    def _store(self, key: str, result: VoiceResult) -> VoiceResult:
-        """Audio first, then the entry that vouches for it, each moved into place whole."""
+    def _place_audio(self, key: str, result: VoiceResult) -> VoiceResult:
+        """Moved into place whole. No entry vouches for it yet, so it is not a cache hit."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        audio_path = self._audio_file(key)
+        os.replace(result.audio_path, audio_path)
+        return replace(result, audio_path=audio_path, cached=False)
+
+    def _vouch(self, key: str, result: VoiceResult) -> None:
+        """The entry that makes the audio a cache hit, moved into place whole."""
         entry = _CacheEntry(
             key=key,
             provider=result.provider,
@@ -319,12 +414,9 @@ class VoiceEngine:
                 for w in result.raw_words
             ],
         )
-        audio_path = self._audio_file(key)
-        os.replace(result.audio_path, audio_path)
         incoming = self.cache_dir / f".incoming-{uuid.uuid4().hex}.json"
         incoming.write_text(entry.model_dump_json(), encoding="utf-8")
         os.replace(incoming, self._entry_file(key))
-        return replace(result, audio_path=audio_path)
 
     def _synthesize(self, text: str, voice: str, language: str) -> VoiceResult:
         """Each try is charged first, so the cap stops a retry as well as a first call."""
@@ -336,7 +428,7 @@ class VoiceEngine:
             except VoiceTimingError as error:
                 if error.result is None:
                     raise
-                return error.result  # billed and kept, so a re-run costs nothing
+                return error.result  # billed, so it comes back with its failure
             except VoiceServiceError as error:
                 if error.definitely_refused:
                     self.ledger.release(held)
@@ -350,14 +442,25 @@ class VoiceEngine:
         raise AssertionError("the loop always returns or raises")
 
     def _finish(self, stored: VoiceResult, text: str, *, check_length: bool) -> VoiceResult:
+        length_ms = _audio_length_ms(stored.audio_path) or 0
+        if check_length:
+            _check_seconds(length_ms / 1000, "audio", "as spoken")
         try:
             words = timed_tokens(self.provider.match_tokens(text, stored.raw_words))
+            check_word_times(stored.raw_words, length_ms)
         except VoiceTimingError as error:
             raise VoiceTimingError(str(error), result=stored) from error
-        if check_length:
-            length_ms = _audio_length_ms(stored.audio_path) or 0
-            _check_seconds(length_ms / 1000, "audio", "as spoken")
         return replace(stored, words=words)
+
+    def _refuse_a_split_brand(self, text: str) -> None:
+        """G18 on the tokens this script would show, before anything is paid for. Only G18: the
+        other rules need the reel's own context, so the caller runs those (plan Batch K)."""
+        report = check_caption_words(
+            self.provider.caption_tokens(text), GuardrailContext(stage="filled")
+        )
+        for finding in report.hard_failures:
+            if finding.rule == "G18":
+                raise VoiceInputError(f"The captions would break G18: {finding.message}")
 
     def voice(
         self,
@@ -372,26 +475,52 @@ class VoiceEngine:
         if check_length:
             check_script_length(text, self.settings.chars_per_second)
         key = self.provider.fingerprint(text, voice, language)
-        stored = self._load(key, voice)
-        if stored is None:
-            fresh = self._synthesize(text, voice, language)
-            if _audio_length_ms(fresh.audio_path) is None:
-                fresh.audio_path.unlink(missing_ok=True)
-                raise VoiceServiceError(None, "Azure Speech did not return 48 kHz WAV audio")
-            stored = replace(self._store(key, fresh), cached=False)
-        return self._finish(stored, text, check_length=check_length)
+        self._refuse_a_split_brand(text)
+        stored = self._load(key, voice, text)
+        if stored is not None:
+            return self._finish(stored, text, check_length=check_length)
+        return self._voice_fresh(key, text, voice, language, check_length=check_length)
+
+    def _voice_fresh(
+        self, key: str, text: str, voice: str, language: str, *, check_length: bool
+    ) -> VoiceResult:
+        """Bad audio is thrown away. Bad timing keeps the audio for this call, since a listener
+        can still score it, but no entry vouches for it, because Azure may send good events next
+        time: the next call asks again. `monthly_char_cap` and the caller's retry budget limit
+        that. Audio of the wrong length is kept, as a new call would most likely bill for the same
+        again."""
+        fresh = self._synthesize(text, voice, language)
+        if _audio_length_ms(fresh.audio_path) is None:
+            fresh.audio_path.unlink(missing_ok=True)
+            raise VoiceServiceError(None, "Azure Speech did not return 48 kHz WAV audio")
+        if _is_cut_off(fresh.audio_path):
+            fresh.audio_path.unlink(missing_ok=True)
+            raise VoiceAudioCutOff("The audio file is cut off: it holds less than its header says")
+        placed = self._place_audio(key, fresh)
+        try:
+            finished = self._finish(placed, text, check_length=check_length)
+        except VoiceLengthError:
+            self._vouch(key, placed)
+            raise
+        self._vouch(key, placed)
+        return finished
 
     def pending_characters(
         self, text: str, language: str, *, voice_name: str | None = None
     ) -> int:
         """What this text would add to the bill: nothing if its file already exists."""
         voice = voice_name or self._voice_for(language)
-        if self._load(self.provider.fingerprint(text, voice, language), voice) is not None:
+        key = self.provider.fingerprint(text, voice, language)
+        self._refuse_a_split_brand(text)
+        if self._load(key, voice, text) is not None:
             return 0
         return self.provider.billable_characters(text, voice, language)
 
-    def with_prosody(self, rate: str, pitch: str) -> VoiceEngine:
-        return replace(self, provider=self.provider.with_prosody(rate, pitch))
+    def with_prosody(
+        self, rate: str, pitch: str, *, pause: str = "", style: str = ""
+    ) -> VoiceEngine:
+        changed = self.provider.with_prosody(rate, pitch, pause=pause, style=style)
+        return replace(self, provider=changed)
 
 
 def _azure_setting(env: dict[str, str], name: str, paths: EnginePaths) -> str:

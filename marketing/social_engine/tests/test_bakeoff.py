@@ -10,6 +10,7 @@ from voice_fakes import FakeSpeechClient, make_engine, spoken_text, wav_bytes, w
 from content_engine import bakeoff
 from content_engine.bakeoff import (
     DEFAULT_MAX_CHARS,
+    DEFAULT_PAUSES,
     DEFAULT_PROSODY,
     DEFAULT_VOICES,
     TEST_WORDS,
@@ -99,7 +100,7 @@ def test_a_plan_with_nothing_to_voice_is_refused():
 
 
 def test_samples_land_under_blind_names_with_a_separate_key(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client)
     samples = plan()
     summary = run_bakeoff(engine, samples, tmp_path / "run", max_chars=DEFAULT_MAX_CHARS)
@@ -115,13 +116,15 @@ def test_samples_land_under_blind_names_with_a_separate_key(tmp_path):
             "voice": s.voice,
             "rate": s.rate,
             "pitch": s.pitch,
+            "pause": "",
+            "style": "",
         }
         for s in samples
     }
 
 
 def test_each_sample_really_uses_its_voice_and_setting(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     samples = plan(prosody=(("0%", "0%"), ("-5%", "+2%")))
     run_bakeoff(make_engine(tmp_path, client), samples, tmp_path / "run", max_chars=9_999)
     assert len(client.calls) == len(samples)
@@ -148,7 +151,7 @@ def test_a_sample_file_holds_its_own_audio(tmp_path):
 
 
 def test_characters_are_counted_before_any_call(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client)
     samples = plan()
     total = count_characters(engine, samples)
@@ -157,7 +160,7 @@ def test_characters_are_counted_before_any_call(tmp_path):
 
 
 def test_it_refuses_to_run_over_the_given_limit(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client)
     samples = plan()
     total = count_characters(engine, samples)
@@ -169,7 +172,7 @@ def test_it_refuses_to_run_over_the_given_limit(tmp_path):
 
 
 def test_it_runs_exactly_at_the_limit(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client)
     samples = plan()
     total = count_characters(engine, samples)
@@ -179,7 +182,7 @@ def test_it_runs_exactly_at_the_limit(tmp_path):
 
 
 def test_it_refuses_up_front_if_the_monthly_cap_cannot_cover_the_whole_run(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     probe = make_engine(tmp_path, FakeSpeechClient())
     samples = plan()
     total = count_characters(probe, samples)
@@ -190,7 +193,7 @@ def test_it_refuses_up_front_if_the_monthly_cap_cannot_cover_the_whole_run(tmp_p
 
 
 def test_a_re_run_counts_nothing_and_bills_nothing(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client)
     samples = plan()
     run_bakeoff(engine, samples, tmp_path / "one", max_chars=DEFAULT_MAX_CHARS)
@@ -205,19 +208,22 @@ def test_a_re_run_counts_nothing_and_bills_nothing(tmp_path):
 
 
 def test_the_default_limit_covers_the_planned_run(tmp_path):
-    """Five scripts of about 400 characters across 10 settings is about 20,000 characters."""
+    """Five scripts of about 400 characters across 10 settings is about 20,000 characters, and
+    the pause setting that spec Section 7.5 also asks for adds a sixth setting per voice."""
     scripts = [script(f"s{n}", "ر" * 400) for n in range(5)]
-    samples = plan(scripts=[*scripts, TEST_WORDS])
+    samples = plan_samples(
+        [*scripts, TEST_WORDS], DEFAULT_VOICES, DEFAULT_PROSODY, seeded(), pauses=DEFAULT_PAUSES
+    )
     total = count_characters(make_engine(tmp_path, FakeSpeechClient()), samples)
     assert 20_000 <= total <= DEFAULT_MAX_CHARS
-    assert DEFAULT_MAX_CHARS <= 25_000  # 5% of the free allowance
+    assert DEFAULT_MAX_CHARS <= 30_000  # 6% of the free allowance
 
 
 # --- Free tier only ---------------------------------------------------------------------
 
 
 def test_the_bake_off_refuses_a_paid_resource(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client, azure_tier="S0")
     with pytest.raises(BakeoffError, match="F0"):
         run_bakeoff(engine, plan(), tmp_path / "run", max_chars=DEFAULT_MAX_CHARS)
@@ -225,7 +231,7 @@ def test_the_bake_off_refuses_a_paid_resource(tmp_path):
 
 
 def test_the_timing_report_refuses_a_paid_resource(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     engine = make_engine(tmp_path, client, azure_tier="S0")
     with pytest.raises(BakeoffError, match="F0"):
         timing_report(engine, TWO_SCRIPTS, DEFAULT_VOICES, max_chars=DEFAULT_MAX_CHARS)
@@ -236,7 +242,7 @@ def test_the_timing_report_refuses_a_paid_resource(tmp_path):
 
 
 def test_a_sample_with_bad_timing_is_still_there_to_listen_to(tmp_path):
-    client = FakeSpeechClient([SpeechOutcome(wav_bytes(0.1), [word("راتبك", 0)])], seconds=0.1)
+    client = FakeSpeechClient([SpeechOutcome(wav_bytes(0.1), [word("راتبك", 0)])], seconds=5.0)
     samples = plan([script(text="راتبك وين")], voices=(HAMED,), prosody=ONE_SETTING)
     summary = run_bakeoff(
         make_engine(tmp_path, client), samples, tmp_path / "run", max_chars=9_999
@@ -245,7 +251,7 @@ def test_a_sample_with_bad_timing_is_still_there_to_listen_to(tmp_path):
 
 
 def test_azure_failing_stops_the_run_with_no_other_tool_tried(tmp_path):
-    client = FakeSpeechClient([VoiceServiceError(401, "bad key")], seconds=0.1)
+    client = FakeSpeechClient([VoiceServiceError(401, "bad key")], seconds=5.0)
     with pytest.raises(VoiceServiceError):
         run_bakeoff(make_engine(tmp_path, client), plan(), tmp_path / "run", max_chars=9_999)
     assert len(client.calls) == 1
@@ -266,7 +272,7 @@ def test_the_test_words_cover_the_hard_ones(needed):
 
 def test_the_report_lists_word_events_against_script_tokens(tmp_path):
     text = "مع قوام المال تخطط؟"
-    engine = make_engine(tmp_path, FakeSpeechClient(seconds=0.1))
+    engine = make_engine(tmp_path, FakeSpeechClient(seconds=2.0))
     report = timing_report(engine, [script("hook", text)], (HAMED,), max_chars=9_999)
     assert report.passed is True
     lines = report.text.splitlines()
@@ -290,7 +296,7 @@ def test_a_word_with_no_event_fails_the_report_and_shows_the_raw_events(tmp_path
 
 def test_a_word_split_across_two_events_is_flagged_for_a_person_to_check(tmp_path):
     events = [word("دفعت", 0), word("1", 300), word("250", 600)]
-    client = FakeSpeechClient([SpeechOutcome(wav_bytes(0.1), events)])
+    client = FakeSpeechClient([SpeechOutcome(wav_bytes(1.0), events)])
     engine = make_engine(tmp_path, client)
     report = timing_report(engine, [script("hook", "دفعت 1,250")], (HAMED,), max_chars=9_999)
     assert report.passed is False
@@ -301,7 +307,7 @@ def test_a_word_split_across_two_events_is_flagged_for_a_person_to_check(tmp_pat
 def test_the_report_covers_both_voices_on_three_arabic_scripts_at_most(tmp_path):
     scripts = [script(f"s{n}", f"راتب{n}") for n in range(5)]
     scripts.append(script("english", "hello there", "en"))
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     report = timing_report(
         make_engine(tmp_path, client), scripts, DEFAULT_VOICES, max_chars=9_999
     )
@@ -312,7 +318,7 @@ def test_the_report_covers_both_voices_on_three_arabic_scripts_at_most(tmp_path)
 
 
 def test_the_report_counts_before_it_spends(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     with pytest.raises(BakeoffError):
         timing_report(make_engine(tmp_path, client), TWO_SCRIPTS, DEFAULT_VOICES, max_chars=1)
     assert client.calls == []
@@ -329,7 +335,7 @@ def test_the_report_needs_an_arabic_script(tmp_path):
 
 
 def test_the_report_skips_a_voice_that_cannot_read_arabic(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     timing_report(
         make_engine(tmp_path, client),
         [script("hook")],
@@ -381,7 +387,7 @@ def test_a_missing_scripts_file_says_where_it_should_be(tmp_path):
 
 
 def test_an_unfilled_brand_token_is_refused_before_any_call(tmp_path):
-    client = FakeSpeechClient(seconds=0.1)
+    client = FakeSpeechClient(seconds=5.0)
     samples = plan([script(text="مع {brand_ar} اليوم")])
     with pytest.raises(VoiceInputError, match="token"):
         run_bakeoff(make_engine(tmp_path, client), samples, tmp_path / "run", max_chars=9_999)
@@ -399,7 +405,7 @@ def data_root(tmp_path):
 
 @pytest.fixture
 def client():
-    return FakeSpeechClient(seconds=0.1)
+    return FakeSpeechClient(seconds=5.0)
 
 
 @pytest.fixture
@@ -417,12 +423,12 @@ def scripts_ready(data_root) -> None:
 def test_the_command_runs_with_no_arguments_like_the_plan(data_root, client, factory, capsys):
     scripts_ready(data_root)
     assert bakeoff.main([], engine_factory=factory) == 0
-    # One script plus the test words, for 2 voices and 5 settings.
-    assert len(client.calls) == 2 * 2 * 5
+    # One script plus the test words, for 2 voices and 5 settings plus the pause setting.
+    assert len(client.calls) == 2 * 2 * 6
     runs = list((data_root / "bakeoff").glob("run-*"))
     assert len(runs) == 1
     assert (runs[0] / "key.json").is_file()
-    assert len(list((runs[0] / "samples").iterdir())) == 20
+    assert len(list((runs[0] / "samples").iterdir())) == 24
     assert "characters" in capsys.readouterr().out
 
 
@@ -472,7 +478,8 @@ def test_the_setting_flag_can_repeat(data_root, client, factory):
     scripts_ready(data_root)
     args = ["--prosody=-10%:0%", "--prosody=+10%:0%", "--voices", HAMED]
     assert bakeoff.main(args, engine_factory=factory) == 0
-    assert len(client.calls) == 2 * 2  # one script plus the test words, for two settings
+    # One script plus the test words, for two settings plus the pause setting.
+    assert len(client.calls) == 2 * 3
 
 
 def test_the_timing_report_command_writes_a_file(data_root, client, factory, capsys):

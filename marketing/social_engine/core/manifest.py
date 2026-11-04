@@ -108,6 +108,7 @@ class ClipEntry(_Strict):
     app_version: Annotated[str, Field(min_length=1)]
     store_names_masked: bool = False
     mask_regions: MaskRegions = []
+    final_seal: Sha256 | None = None  # only on a final clip, checked by phone_capture.ingest
 
     @property
     def folder(self) -> str:

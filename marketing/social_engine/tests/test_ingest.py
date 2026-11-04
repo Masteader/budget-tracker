@@ -66,7 +66,7 @@ class FakeFfmpeg:
 @pytest.fixture
 def ffmpeg(monkeypatch) -> FakeFfmpeg:
     fake = FakeFfmpeg()
-    monkeypatch.setattr(ingest_module.subprocess, "run", fake)
+    monkeypatch.setattr(ingest_module.process_tree, "run", fake)
     monkeypatch.setattr(ingest_module, "find_on_path", lambda name: Path(f"C:/fake/{name}"))
     return fake
 
@@ -740,12 +740,21 @@ def test_a_clip_is_final_only_with_the_exact_final_name(path, final):
     assert is_final_clip(path) is final
 
 
-def test_a_public_reel_refuses_a_test_clip_and_a_test_reel_takes_either():
-    check_clip_for_reel("payday_cycle/final_clip_01.mp4", test_reel=False)
-    check_clip_for_reel("payday_cycle/final_clip_01.mp4", test_reel=True)
-    check_clip_for_reel("payday_cycle/clip_01.mp4", test_reel=True)
+def test_a_public_reel_refuses_a_test_clip_and_a_test_reel_takes_either(
+    ffmpeg, data_root, paths, tmp_path, monkeypatch
+):
+    config = build_gate_met_config(monkeypatch, tmp_path, data_root)
+    drop(paths, "payday_cycle", "a.mp4")
+    ingest(config, signed_answers(), final=True)
+    drop(paths, "payday_cycle", "b.mp4")
+    ingest(config, signed_answers())
+    final, test = manifest_of(paths).clips
+    assert (final.path, test.path) == ("payday_cycle/final_clip_01.mp4", "payday_cycle/clip_02.mp4")
+    check_clip_for_reel(final, paths, test_reel=False)
+    check_clip_for_reel(final, paths, test_reel=True)
+    check_clip_for_reel(test, paths, test_reel=True)
     with pytest.raises(ClipRejected, match="test clip"):
-        check_clip_for_reel("payday_cycle/clip_01.mp4", test_reel=False)
+        check_clip_for_reel(test, paths, test_reel=False)
 
 
 def test_the_saved_entries_still_satisfy_the_shared_schema(ffmpeg, config, paths):

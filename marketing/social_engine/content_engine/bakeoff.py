@@ -2,11 +2,16 @@
 
 Azure voices only, on the free tier. Listeners get blind-labelled samples, and the key sits in
 a separate file. Characters are counted before the first call, and a run that would pass the
-given limit or the monthly cap never starts. Real use is plan step LIVE-1, on the owner's go-ahead:
+given limit or the monthly cap never starts. It paces itself to F0's 20 requests per 60 seconds.
+Real use is plan step LIVE-1, on the owner's go-ahead:
 
     python -m content_engine.bakeoff --count-only
     python -m content_engine.bakeoff --timing-report
     python -m content_engine.bakeoff
+    python -m content_engine.bakeoff --voices ar-XX-OtherNeural --style ar-XX-OtherNeural:cheerful
+
+A style goes only with the voice it is named for, and only a voice that lists it in `voices/list`
+has any (spec Section 7.5). Hamed and Zariyah list none, so they differ by rate, pitch and pauses.
 
 Scripts come from `<data_root>/bakeoff/scripts.json`: a list of `{id, language, text}`, with any
 brand token already filled in.
@@ -20,7 +25,8 @@ import random
 import shutil
 import sys
 import uuid
-from collections.abc import Callable, Sequence
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,8 +49,10 @@ from core.secrets import ForbiddenEnvironment, check_startup_environment
 
 DEFAULT_VOICES = ("ar-SA-HamedNeural", "ar-SA-ZariyahNeural")
 DEFAULT_PROSODY = (("0%", "0%"), ("-5%", "0%"), ("+5%", "0%"), ("0%", "-5%"), ("0%", "+5%"))
-DEFAULT_MAX_CHARS = 25_000  # the planned 20,000, plus markup and the test words
+DEFAULT_PAUSES = ("400ms",)  # tried once on the first setting, against the voice's own pauses
+DEFAULT_MAX_CHARS = 30_000  # the planned 20,000, plus the pause setting, markup and the test words
 TIMING_REPORT_SCRIPTS = 3  # spike S2 uses 3 full scripts
+F0_SECONDS_PER_REQUEST = 3.0  # 20 per 60 seconds, not adjustable (spec Section 7.3)
 
 _ONLY_TIER = "F0"
 _MULTILINGUAL = "Multilingual"
@@ -79,6 +87,8 @@ class Sample:
     voice: str
     rate: str
     pitch: str
+    pause: str = ""
+    style: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,27 +127,45 @@ def plan_samples(
     voices: Sequence[str],
     prosody: Sequence[tuple[str, str]],
     rng: random.Random | None = None,
+    *,
+    pauses: Sequence[str] = (),
+    styles: Mapping[str, Sequence[str]] | None = None,
 ) -> list[Sample]:
-    """Every script with every voice that can read it and every setting. Labels are given out
-    after a shuffle, so a label's number says nothing about what it holds."""
+    """Every script with every voice that can read it and every setting. Each pause, and each
+    style a voice lists, is tried once on the first setting, so the spend stays near the spec's
+    estimate. Labels are given out after a shuffle, so a label's number says nothing about what
+    it holds."""
     combos = [
-        (script, voice, rate, pitch)
+        (script, voice, *setting)
         for script in scripts
         for voice in voices
         if _can_read(voice, script.language)
-        for rate, pitch in prosody
+        for setting in _settings_for(voice, prosody, pauses, styles or {})
     ]
     if not combos:
         raise BakeoffError("None of the voices can read any of the scripts")
     (rng or random.SystemRandom()).shuffle(combos)
     return [
-        Sample(f"sample_{number:03d}", script, voice, rate, pitch)
-        for number, (script, voice, rate, pitch) in enumerate(combos, start=1)
+        Sample(f"sample_{number:03d}", *combo) for number, combo in enumerate(combos, start=1)
     ]
 
 
+def _settings_for(
+    voice: str,
+    prosody: Sequence[tuple[str, str]],
+    pauses: Sequence[str],
+    styles: Mapping[str, Sequence[str]],
+) -> list[tuple[str, str, str, str]]:
+    settings = [(rate, pitch, "", "") for rate, pitch in prosody]
+    if prosody:
+        rate, pitch = prosody[0]
+        settings += [(rate, pitch, pause, "") for pause in pauses]
+        settings += [(rate, pitch, "", style) for style in styles.get(voice, ())]
+    return settings
+
+
 def _sample_engine(engine: VoiceEngine, sample: Sample) -> VoiceEngine:
-    return engine.with_prosody(sample.rate, sample.pitch)
+    return engine.with_prosody(sample.rate, sample.pitch, pause=sample.pause, style=sample.style)
 
 
 def count_characters(engine: VoiceEngine, samples: Sequence[Sample]) -> int:
@@ -172,6 +200,8 @@ def _key_document(samples: Sequence[Sample]) -> str:
             "voice": sample.voice,
             "rate": sample.rate,
             "pitch": sample.pitch,
+            "pause": sample.pause,
+            "style": sample.style,
         }
         for sample in samples
     }
@@ -180,13 +210,17 @@ def _key_document(samples: Sequence[Sample]) -> str:
 
 def _voiced(engine: VoiceEngine, text: str, language: str, voice: str) -> tuple[VoiceResult, str]:
     """The audio, plus the timing failure if there was one. Bad timing does not stop a listener
-    from scoring the voice, so the audio is still used."""
+    from scoring the voice, so the audio is still used. A call to Azure is followed by a pause, so
+    a long run stays inside the free tier's limit instead of living on its retries."""
     try:
-        return engine.voice(text, language, voice_name=voice, check_length=False), ""
+        result, failure = engine.voice(text, language, voice_name=voice, check_length=False), ""
     except VoiceTimingError as error:
         if error.result is None:
             raise
-        return error.result, str(error)
+        result, failure = error.result, str(error)
+    if not result.cached:
+        engine.sleep(F0_SECONDS_PER_REQUEST)
+    return result, failure
 
 
 def run_bakeoff(
@@ -218,16 +252,23 @@ def _timing_lines(engine: VoiceEngine, script: BakeoffScript, voice: str) -> tup
         lines += [f"{w.text}\t{w.start_ms}-{w.end_ms}" for w in result.raw_words]
         return lines, False
     all_single = True
-    for match in engine.provider.match_tokens(script.text, result.raw_words):
+    matches = engine.provider.match_tokens(script.text, result.raw_words)
+    tokens_per_event = Counter(id(event) for match in matches for event in match.events)
+    for match in matches:
         events = len(match.events)
-        all_single = all_single and events == match.word_count
+        shared = any(tokens_per_event[id(event)] > 1 for event in match.events)
+        all_single = all_single and events == match.word_count and not shared
         start = match.events[0].start_ms
         end = max(event.end_ms for event in match.events)
-        lines.append(f"{match.text}\t{events}/{match.word_count}\t{start}-{end}")
+        mark = "*" if shared else ""
+        lines.append(f"{match.text}\t{events}/{match.word_count}{mark}\t{start}-{end}")
     if all_single:
         lines.append("PASS: every word has one event, in order")
     else:
-        lines.append("CHECK: some words do not have exactly one event (events/words above)")
+        lines.append(
+            "CHECK: some words do not have exactly one event (events/words above, and * marks "
+            "one event shared with another token, which gives both the same timing)"
+        )
     return lines, all_single
 
 
@@ -283,12 +324,34 @@ def _prosody_setting(value: str) -> tuple[str, str]:
     return rate, pitch
 
 
+def _style_settings(values: Sequence[str] | None, voices: Sequence[str]) -> dict[str, list[str]]:
+    styles: dict[str, list[str]] = {}
+    for value in values or ():
+        voice, separator, style = value.partition(":")
+        if not separator or voice not in voices:
+            raise BakeoffError(f"A style looks like VOICE:STYLE, with a --voices voice: {value!r}")
+        styles.setdefault(voice, []).append(style)
+    return styles
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m content_engine.bakeoff")
     parser.add_argument("--scripts", type=Path, help="default: <data_root>/bakeoff/scripts.json")
     parser.add_argument("--voices", nargs="+", default=list(DEFAULT_VOICES))
     parser.add_argument(
         "--prosody", action="append", metavar="RATE:PITCH", help="repeatable: --prosody=-5%%:0%%"
+    )
+    parser.add_argument(
+        "--pause",
+        action="append",
+        metavar="MS",
+        help="repeatable: the silence between sentences, such as --pause=400ms",
+    )
+    parser.add_argument(
+        "--style",
+        action="append",
+        metavar="VOICE:STYLE",
+        help="repeatable: a style that this voice lists in voices/list",
     )
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--timing-report", action="store_true", help="the report for spike S2")
@@ -313,6 +376,8 @@ def _run(
         [_prosody_setting(value) for value in args.prosody] if args.prosody else DEFAULT_PROSODY
     )
     _checked_settings(config.voice, args.voices, prosody)
+    styles = _style_settings(args.style, args.voices)
+    pauses = args.pause or DEFAULT_PAUSES
     scripts = load_scripts(args.scripts or bakeoff_root / "scripts.json")
     engine = engine_factory(config, EnginePaths.from_root(data_root))
 
@@ -324,7 +389,9 @@ def _run(
         print(f"{'PASS' if report.passed else 'CHECK OR FAIL'}: timing report in {path}")
         return
 
-    samples = plan_samples([*scripts, TEST_WORDS], args.voices, prosody, rng)
+    samples = plan_samples(
+        [*scripts, TEST_WORDS], args.voices, prosody, rng, pauses=pauses, styles=styles
+    )
     if args.count_only:
         print(f"{count_characters(engine, samples)} characters for {len(samples)} samples")
         return

@@ -313,20 +313,26 @@ def test_a_damaged_or_forged_cache_entry_is_not_trusted(tmp_path, damage):
     assert again.azure_tier == "F0"
 
 
-def test_a_timing_failure_is_billed_once_and_keeps_the_audio(tmp_path):
+def test_a_timing_failure_keeps_the_audio_and_the_next_call_asks_azure_again(tmp_path):
+    """This used to be cached, so one bad answer from Azure blocked the text for good, with no
+    further call that could have fixed it. A re-run now costs a call, which the monthly cap and
+    the caller's retry budget limit, and a good answer ends the failure."""
     client = FakeSpeechClient([SpeechOutcome(wav_bytes(30), [word("راتبك", 0)])])
     engine = make_engine(tmp_path, client)
     with pytest.raises(VoiceTimingError) as first:
         engine.voice(SCRIPT, "ar")
-    charged = used(engine)
+    assert used(engine) == cost(engine)
     assert first.value.result.audio_path.is_file()
+    assert [item.text for item in first.value.result.raw_words] == ["راتبك"]
+    assert engine.pending_characters(SCRIPT, "ar", voice_name="ar-SA-HamedNeural") == cost(engine)
 
-    with pytest.raises(VoiceTimingError) as second:
-        engine.voice(SCRIPT, "ar")
-    assert len(client.calls) == 1
-    assert used(engine) == charged == cost(engine)
-    assert second.value.result.audio_path == first.value.result.audio_path
-    assert [item.text for item in second.value.result.raw_words] == ["راتبك"]
+    second = engine.voice(SCRIPT, "ar")
+    assert len(client.calls) == 2
+    assert used(engine) == 2 * cost(engine)
+    assert second.cached is False
+    assert len(second.words) == 50
+    assert engine.voice(SCRIPT, "ar").cached is True
+    assert len(client.calls) == 2
 
 
 def test_a_cache_hit_applies_the_current_caption_phrases(tmp_path):
@@ -496,7 +502,9 @@ def test_a_script_of_the_wrong_length_never_reaches_azure(tmp_path, change):
 
 @pytest.mark.parametrize("seconds", [46.0, 14.0])
 def test_real_audio_of_the_wrong_length_fails_without_a_second_bill(tmp_path, seconds):
-    client = FakeSpeechClient(seconds=seconds)
+    # 50 words at 250 ms each, which fits both lengths, so only the length is wrong.
+    events = [word("راتبك", index * 250) for index in range(50)]
+    client = FakeSpeechClient([SpeechOutcome(wav_bytes(seconds), events)])
     engine = make_engine(tmp_path, client)
     for _ in range(2):
         with pytest.raises(VoiceLengthError):

@@ -21,7 +21,7 @@ from core.config import EngineConfig
 from core.manifest import ClipManifest, ClipRejected, sha256_file
 from core.paths import ENGINE_ROOT, EnginePaths, PathConfigError
 from core.secrets import FORBIDDEN_ENV_PREFIX
-from phone_capture import capture_cli
+from phone_capture import capture_cli, process_tree
 from phone_capture.adb import (
     AdbClient,
     MultipleDevices,
@@ -277,14 +277,14 @@ def test_a_failed_demo_command_takes_no_picture_and_still_ends_demo_mode(fake, c
 
 
 def test_ctrl_c_at_the_picture_leaves_no_file_and_ends_demo_mode(fake, config, paths, monkeypatch):
-    real_run = subprocess.run
+    real_run = process_tree.run
 
     def interrupted(args, **kwargs):
         if "screencap" in args:
             raise KeyboardInterrupt
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr(subprocess, "run", interrupted)
+    monkeypatch.setattr(process_tree, "run", interrupted)
     answers = Answers(*["yes"] * LINES_BEFORE_DEMO, "1.4.2", "yes")
     with pytest.raises(KeyboardInterrupt):
         shoot(config, answers=answers)
@@ -293,14 +293,14 @@ def test_ctrl_c_at_the_picture_leaves_no_file_and_ends_demo_mode(fake, config, p
 
 
 def test_a_hung_adb_is_a_failure_and_leaves_no_file(fake, tmp_path, monkeypatch):
-    real_run = subprocess.run
+    real_run = process_tree.run
 
     def hung(args, **kwargs):
         if "screencap" in args:
             raise subprocess.TimeoutExpired(args, 1)
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr(subprocess, "run", hung)
+    monkeypatch.setattr(process_tree, "run", hung)
     device = AdbClient(fake.path).require_one_device()
     part = tmp_path / "screen.png.part"
     with pytest.raises(ScreenshotFailed, match="seconds"):

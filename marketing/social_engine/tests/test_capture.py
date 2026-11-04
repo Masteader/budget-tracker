@@ -28,7 +28,7 @@ from core.manifest import ClipManifest, sha256_file
 from core.paths import ENGINE_ROOT, EnginePaths, PathConfigError
 from core.secrets import FORBIDDEN_ENV_PREFIX
 from phone_capture import adb as adb_module
-from phone_capture import capture_cli
+from phone_capture import capture_cli, process_tree
 from phone_capture.adb import (
     AdbClient,
     AdbCommandFailed,
@@ -520,7 +520,7 @@ def test_ctrl_c_during_the_countdown_leaves_demo_mode_off(fake, config):
 def test_ctrl_c_while_demo_mode_is_being_switched_off_still_switches_it_off(
     fake, monkeypatch, config
 ):
-    real_run = subprocess.run
+    real_run = process_tree.run
     tripped = []
 
     def run_that_gets_interrupted_once(args, **kwargs):
@@ -529,7 +529,7 @@ def test_ctrl_c_while_demo_mode_is_being_switched_off_still_switches_it_off(
             raise KeyboardInterrupt
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr(adb_module.subprocess, "run", run_that_gets_interrupted_once)
+    monkeypatch.setattr(process_tree, "run", run_that_gets_interrupted_once)
     with pytest.raises(KeyboardInterrupt):
         capture(config)
     assert tripped
@@ -651,7 +651,7 @@ def test_a_failed_pull_saves_nothing_and_keeps_the_recording_on_the_phone(
 
 
 def test_ctrl_c_during_the_pull_leaves_no_part_file(fake, config, paths, monkeypatch):
-    real_run = subprocess.run
+    real_run = process_tree.run
 
     def run_interrupted_at_the_pull(args, **kwargs):
         if "pull" in args:
@@ -659,7 +659,7 @@ def test_ctrl_c_during_the_pull_leaves_no_part_file(fake, config, paths, monkeyp
             raise KeyboardInterrupt
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr(adb_module.subprocess, "run", run_interrupted_at_the_pull)
+    monkeypatch.setattr(process_tree, "run", run_interrupted_at_the_pull)
     with pytest.raises(KeyboardInterrupt):
         capture(config, answers=Answers(*["yes"] * LINES_BEFORE_DEMO, "1.4.2", "yes", ""))
     assert list((paths.raw_recordings / "payday_cycle").iterdir()) == []

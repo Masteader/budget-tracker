@@ -154,6 +154,14 @@ def test_other_words_do_not_merge(script, events):
     assert texts(align_words(script, timed(*events))) == script.split()
 
 
+def test_two_attached_letters_merge_and_three_do_not():
+    """`_MAX_ATTACHED_PREFIX`: وب in وبقوام is Arabic, and three such letters are not."""
+    two = "وبقوام المال"
+    three = "فوبقوام المال"
+    assert texts(align_words(two, timed(*two.split()))) == [two]
+    assert texts(align_words(three, timed(*three.split()))) == three.split()
+
+
 def test_extra_phrases_such_as_the_test_brand_merge_too():
     result = align_words(
         "علامة تجريبية قريبًا",
