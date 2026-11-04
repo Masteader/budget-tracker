@@ -3,9 +3,11 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import make_junction
@@ -321,6 +323,263 @@ def test_a_file_system_error_is_a_clear_sync_error(engine, data_root, npm, monke
     monkeypatch.setattr(sync_module.shutil, "copytree", refuse)
     with pytest.raises(RemotionSyncError, match="locked"):
         sync(engine, data_root)
+
+
+# --- The work folder itself has to be a real folder ------------------------------------
+
+windows_only = pytest.mark.skipif(sys.platform != "win32", reason="junctions need Windows")
+
+
+def tree(folder: Path) -> dict[str, str | None]:
+    return {
+        path.relative_to(folder).as_posix(): path.read_text("utf-8") if path.is_file() else None
+        for path in folder.rglob("*")
+    }
+
+
+@pytest.fixture
+def outside(tmp_path) -> Path:
+    folder = tmp_path / "outside"
+    (folder / "nested").mkdir(parents=True)
+    (folder / "keep.txt").write_text("keep", encoding="utf-8")
+    (folder / "nested" / "keep.txt").write_text("keep too", encoding="utf-8")
+    return folder
+
+
+@pytest.fixture
+def stale_work(data_root) -> Path:
+    """A real work folder holding a file that any rebuild would delete."""
+    folder = work(data_root)
+    folder.mkdir(parents=True)
+    (folder / "stale.txt").write_text("stale", encoding="utf-8")
+    return folder
+
+
+def pretend(monkeypatch, method: str, faked: Path) -> None:
+    """Creating a real symlink needs developer mode, so a link can be faked for one path."""
+    real = getattr(Path, method)
+    monkeypatch.setattr(Path, method, lambda self: self == faked or real(self))
+
+
+@windows_only
+def test_a_junction_as_the_work_folder_is_refused_and_its_target_keeps_everything(
+    engine, data_root, npm, outside
+):
+    data_root.mkdir()
+    make_junction(work(data_root), outside)
+    before = tree(outside)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert tree(outside) == before
+    assert work(data_root).is_junction()
+    assert npm.count == 0
+
+
+@windows_only
+def test_the_command_line_refuses_a_junction_as_the_work_folder(
+    engine, data_root, npm, outside, monkeypatch, capsys
+):
+    monkeypatch.setattr(sync_module, "ENGINE_ROOT", engine)
+    data_root.mkdir()
+    make_junction(work(data_root), outside)
+    before = tree(outside)
+    assert main(["--data-root", str(data_root)]) == 1
+    assert "remotion_work" in capsys.readouterr().err
+    assert tree(outside) == before
+    assert npm.count == 0
+
+
+@windows_only
+def test_a_junction_with_a_missing_target_is_refused(engine, data_root, npm, tmp_path):
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    data_root.mkdir()
+    make_junction(work(data_root), gone)
+    gone.rmdir()
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert work(data_root).is_junction()
+
+
+@windows_only
+def test_a_junction_pointing_back_inside_the_data_root_is_refused(engine, data_root, npm):
+    real_folder = data_root / "elsewhere"
+    real_folder.mkdir(parents=True)
+    (real_folder / "keep.txt").write_text("keep", encoding="utf-8")
+    make_junction(work(data_root), real_folder)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert (real_folder / "keep.txt").exists()
+
+
+@windows_only
+def test_pull_lock_refuses_a_junction_as_the_work_folder(engine, data_root, npm, outside):
+    (outside / "package-lock.json").write_text('{"foreign": 1}', encoding="utf-8")
+    data_root.mkdir()
+    make_junction(work(data_root), outside)
+    before = tree(outside)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        pull_lock(engine, data_root)
+    assert (engine / "remotion_studio" / "package-lock.json").read_text("utf-8") == '{"v": 1}'
+    assert tree(outside) == before
+
+
+@windows_only
+def test_a_junction_that_appears_while_the_folder_is_made_is_refused(
+    engine, data_root, npm, outside, monkeypatch
+):
+    before = tree(outside)
+    real_mkdir = Path.mkdir
+
+    def racing_mkdir(self, *args, **kwargs):
+        if self == work(data_root):
+            real_mkdir(data_root, parents=True)
+            make_junction(self, outside)
+        else:
+            real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", racing_mkdir)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert tree(outside) == before
+
+
+def test_a_real_symlink_as_the_work_folder_is_refused(engine, data_root, npm, outside):
+    data_root.mkdir()
+    try:
+        work(data_root).symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("creating symlinks needs developer mode on Windows")
+    before = tree(outside)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert tree(outside) == before
+
+
+@pytest.mark.parametrize("method", ["is_symlink", "is_junction"])
+def test_a_faked_link_as_the_work_folder_is_refused(
+    engine, data_root, npm, stale_work, monkeypatch, method
+):
+    pretend(monkeypatch, method, stale_work)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert (stale_work / "stale.txt").exists()
+    assert npm.count == 0
+
+
+def test_a_faked_link_is_refused_by_pull_lock_too(engine, data_root, npm, stale_work, monkeypatch):
+    (stale_work / "package-lock.json").write_text('{"foreign": 1}', encoding="utf-8")
+    pretend(monkeypatch, "is_symlink", stale_work)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        pull_lock(engine, data_root)
+    assert (engine / "remotion_studio" / "package-lock.json").read_text("utf-8") == '{"v": 1}'
+
+
+def test_any_other_reparse_point_as_the_work_folder_is_refused(
+    engine, data_root, npm, stale_work, monkeypatch
+):
+    real_lstat = os.lstat
+
+    def lstat(path, *args, **kwargs):
+        if os.fspath(path) == str(stale_work):
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR, st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT
+            )
+        return real_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(sync_module.os, "lstat", lstat)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, data_root)
+    assert (stale_work / "stale.txt").exists()
+
+
+def test_a_real_path_outside_the_data_root_is_refused(
+    engine, data_root, npm, stale_work, outside, monkeypatch
+):
+    real_realpath = os.path.realpath
+
+    def realpath(path, *args, **kwargs):
+        if os.fspath(path) == str(stale_work):
+            return str(outside)
+        return real_realpath(path, *args, **kwargs)
+
+    monkeypatch.setattr(sync_module.os.path, "realpath", realpath)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*outside"):
+        sync(engine, data_root)
+    assert (stale_work / "stale.txt").exists()
+
+
+def test_a_real_path_that_cannot_be_worked_out_is_refused(
+    engine, data_root, npm, stale_work, monkeypatch
+):
+    def realpath(path, *args, **kwargs):
+        raise OSError("loop")
+
+    monkeypatch.setattr(sync_module.os.path, "realpath", realpath)
+    with pytest.raises(RemotionSyncError, match="remotion_work"):
+        sync(engine, data_root)
+    assert (stale_work / "stale.txt").exists()
+
+
+def test_a_file_named_like_the_work_folder_is_refused_and_kept(engine, data_root, npm):
+    data_root.mkdir()
+    work(data_root).write_text("not a folder", encoding="utf-8")
+    with pytest.raises(RemotionSyncError, match="remotion_work.*not a folder"):
+        sync(engine, data_root)
+    assert work(data_root).read_text("utf-8") == "not a folder"
+
+
+@windows_only
+def test_a_data_root_that_is_itself_a_junction_still_works(engine, npm, tmp_path):
+    # The check compares real paths, so a link above the work folder is resolved, not refused.
+    real_root = tmp_path / "real_root"
+    (real_root / "remotion_work").mkdir(parents=True)
+    (real_root / "remotion_work" / "stale.txt").write_text("stale", encoding="utf-8")
+    (real_root / "sibling.txt").write_text("keep", encoding="utf-8")
+    link = tmp_path / "root_link"
+    make_junction(link, real_root)
+    sync(engine, link)
+    assert (real_root / "remotion_work" / "package.json").exists()
+    assert not (real_root / "remotion_work" / "stale.txt").exists()
+    assert (real_root / "sibling.txt").exists()
+
+
+@windows_only
+def test_a_junction_higher_up_than_the_data_root_still_works(engine, npm, tmp_path):
+    real_parent = tmp_path / "real_parent"
+    real_parent.mkdir()
+    link = tmp_path / "parent_link"
+    make_junction(link, real_parent)
+    sync(engine, link / "data")
+    assert (real_parent / "data" / "remotion_work" / "package.json").exists()
+
+
+@windows_only
+def test_a_data_root_junction_does_not_hide_a_work_folder_junction(engine, npm, tmp_path, outside):
+    real_root = tmp_path / "real_root"
+    real_root.mkdir()
+    make_junction(real_root / "remotion_work", outside)
+    link = tmp_path / "root_link"
+    make_junction(link, real_root)
+    before = tree(outside)
+    with pytest.raises(RemotionSyncError, match="remotion_work.*link"):
+        sync(engine, link)
+    assert tree(outside) == before
+
+
+def test_dot_dot_in_the_data_root_still_works(engine, data_root, npm, stale_work):
+    roundabout = data_root / "gone" / ".." / ".." / data_root.name
+    sync(engine, roundabout)
+    assert (stale_work / "package.json").exists()
+    assert not (stale_work / "stale.txt").exists()
+
+
+@windows_only
+def test_a_work_folder_in_another_letter_case_still_works(engine, data_root, npm):
+    data_root.mkdir()
+    (data_root / "Remotion_Work").mkdir()
+    sync(engine, data_root)
+    assert (data_root / "Remotion_Work" / "package.json").exists()
 
 
 # --- Pre-flight ------------------------------------------------------------------------

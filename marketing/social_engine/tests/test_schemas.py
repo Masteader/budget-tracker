@@ -724,21 +724,52 @@ def test_props_paths_refuse_windows_tricks_and_huge_names(path):
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "reason"),
     [
-        ("duration_ms", 10**30),
-        ("duration_ms", 180_001),
-        ("hook_text", "x" * 201),
-        ("hook_text", "x" * 10_000_000),
-        ("subtitles_en", "x" * 2001),
-        ("on_screen_text", ["x"] * 21),
-        ("on_screen_text", ["x" * 161]),
-        ("words", [{"text": "x", "start_ms": 0, "end_ms": 1}] * 2001),
+        ("duration_ms", 10**30, "less than or equal to 180000"),
+        ("duration_ms", 180_001, "less than or equal to 180000"),
+        ("hook_text", "x" * 201, "longer than 200 characters"),
+        ("hook_text", "x" * 10_000_000, "longer than 200 characters"),
+        ("subtitles_en", "x" * 2001, "longer than 2000 characters"),
+        ("on_screen_text", ["x"] * 21, "more than 20 items"),
+        ("on_screen_text", ["x" * 161], "longer than 160 characters"),
+        ("words", [{"text": "x", "start_ms": 0, "end_ms": 1}] * 2001, "more than 2000 items"),
+    ],
+    # Named by hand. A value used as the name can overflow PYTEST_CURRENT_TEST on Windows.
+    ids=[
+        "duration-huge",
+        "duration-one-over",
+        "hook-one-over",
+        "hook-ten-million",
+        "subtitles-one-over",
+        "on-screen-too-many",
+        "on-screen-line-one-over",
+        "words-too-many",
     ],
 )
-def test_props_have_size_limits(field, value):
-    with pytest.raises(ValidationError):
+def test_props_have_size_limits(request, field, value, reason):
+    assert len(request.node.nodeid) < 200
+    with pytest.raises(ValidationError) as caught:
         RenderProps.model_validate({**valid_props(), field: value})
+    errors = caught.value.errors()
+    assert [error["loc"][0] for error in errors] == [field]
+    assert reason in errors[0]["msg"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("duration_ms", 180_000),
+        ("hook_text", "x" * 200),
+        ("subtitles_en", "x" * 2000),
+        ("on_screen_text", ["x"] * 20),
+        ("on_screen_text", ["x" * 160]),
+        ("words", [{"text": "x", "start_ms": 0, "end_ms": 1}] * 2000),
+    ],
+    ids=["duration", "hook", "subtitles", "on-screen-count", "on-screen-line", "words"],
+)
+def test_props_accept_values_exactly_at_the_size_limit(field, value):
+    RenderProps.model_validate({**valid_props(), field: value})
 
 
 def test_props_limit_the_number_of_clips_and_masks():

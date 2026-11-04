@@ -10,11 +10,15 @@ moment they act, so a forged callback or a config edit after rendering is still 
 
 from __future__ import annotations
 
+import re
+import stat
 import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
+
+from core.paths import ENGINE_ROOT
 
 if TYPE_CHECKING:
     from core.config import EngineConfig
@@ -52,7 +56,22 @@ _PLACEHOLDERS = {
     "unset",
     "xxx",
 }
-_TEST_LOGO_MARKER = "test_logo"
+# Words that mark a file name as unfinished wherever they stand in it. "na" is left out, because
+# it can be part of a real name, and the empty string is what a run of separators leaves behind.
+_PLACEHOLDER_WORDS = (_PLACEHOLDERS - {"", "na"}) | {
+    "demo",
+    "draft",
+    "dummy",
+    "fake",
+    "mock",
+    "mockup",
+    "temp",
+    "tmp",
+    "wip",
+}
+_PLACEHOLDERS_IN_ANY_FORM = ("placeholder", "changeme")  # no real name contains these letters
+_CAMEL_CASE_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+_NAME_WORD_SEPARATOR = re.compile(r"[\W\d_]+")
 _WITHDRAWN_LOGO_MARKERS = ("flutter_app/", "ic_launcher")
 
 
@@ -125,16 +144,52 @@ def _name_failure(label: str, value: str, full_name: str) -> str | None:
     return None
 
 
+def _name_words(stem: str) -> set[str]:
+    """The words of a file name: logo_draft, logo-draft, logoDraft and draft2 all hold draft."""
+    unmarked = "".join(
+        ch for ch in unicodedata.normalize("NFD", stem) if unicodedata.category(ch) != "Mn"
+    )
+    separated = _CAMEL_CASE_BOUNDARY.sub(" ", unmarked)
+    return {letters_only(word) for word in _NAME_WORD_SEPARATOR.split(separated)}
+
+
+def _names_a_placeholder(stem: str) -> bool:
+    letters = letters_only(stem)
+    return (
+        letters in _PLACEHOLDERS
+        or any(word in letters for word in _PLACEHOLDERS_IN_ANY_FORM)
+        or bool(_name_words(stem) & _PLACEHOLDER_WORDS)
+    )
+
+
+def _is_usable_file(logo: str) -> bool:
+    """Relative paths start at the engine, not at whatever folder the process runs in. A zero
+    byte file counts as missing, because it cannot be a logo."""
+    try:
+        info = (ENGINE_ROOT / logo.replace("\\", "/")).stat()
+    except (OSError, ValueError):
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_size > 0
+
+
 def _logo_failure(config: EngineConfig) -> str | None:
+    """Catches a logo that is plainly not ready: not set, not an image file, named as a test or
+    a placeholder, or, in live mode, not on disk. It reads the name only, and a final file can
+    have any name, so passing here does not approve a logo. The final logo decision is still
+    the owner's, recorded in `brand.clearance.approved_by_owner_on`."""
     logo = config.brand.logo_path
     problem = _text_problem(logo)
     if problem:
         return f"brand.logo_path {problem}"
-    path = PurePosixPath(logo.replace("\\", "/").casefold())
-    if path.suffix not in _LOGO_SUFFIXES or letters_only(path.stem) in _PLACEHOLDERS:
+    path = PurePosixPath(logo.replace("\\", "/"))
+    if path.suffix.casefold() not in _LOGO_SUFFIXES:
         return "brand.logo_path is a placeholder, not an approved logo file"
-    if _TEST_LOGO_MARKER in path.name:
+    if {"test", "logo"} <= _name_words(path.stem):
         return "brand.logo_path is the test logo"
+    if _names_a_placeholder(path.stem):
+        return "brand.logo_path is a placeholder, not an approved logo file"
+    if config.engine.mode == "live" and not _is_usable_file(logo):
+        return "brand.logo_path names no usable file on disk"
     return None
 
 

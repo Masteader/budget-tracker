@@ -2,10 +2,12 @@
 
 import copy
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 import yaml
 
+import core.brand_gate as brand_gate_module
 from core.brand_gate import (
     approval_allowed,
     approve_button_allowed,
@@ -50,6 +52,17 @@ def complete_live_data() -> dict:
 
 def build(data: dict) -> EngineConfig:
     return EngineConfig.model_validate(copy.deepcopy(data))
+
+
+@pytest.fixture(autouse=True)
+def engine_root(monkeypatch, tmp_path) -> Path:
+    """The live gate looks for the logo on disk, so the complete brand needs a real file."""
+    root = tmp_path / "engine"
+    logo = root / "assets" / "branding" / "approved_logo.svg"
+    logo.parent.mkdir(parents=True)
+    logo.write_text("<svg/>", encoding="utf-8")
+    monkeypatch.setattr(brand_gate_module, "ENGINE_ROOT", root)
+    return root
 
 
 # name, logo, handles, hashtags and each clearance field, emptied in turn
@@ -412,6 +425,153 @@ def test_the_configured_test_logo_is_refused_whatever_it_is_called():
     data["brand"]["logo_path"] = "assets/branding/mark.svg"
     with pytest.raises(ValueError, match="test_brand"):
         build(data)
+
+
+# --- The logo file itself ---------------------------------------------------------------
+
+
+def _logo_failures(config: EngineConfig) -> list[str]:
+    return [failure for failure in gate_failures(config) if "logo_path" in failure]
+
+
+def _branding_file(engine_root: Path, name: str, content: str = "<svg/>") -> str:
+    path = engine_root / "assets" / "branding" / name
+    path.write_text(content, encoding="utf-8")
+    return f"assets/branding/{name}"
+
+
+def test_a_logo_file_that_does_not_exist_fails_the_live_gate():
+    config = live_with(logo_path="assets/branding/never_made.svg")
+    assert not is_gate_met(config)
+    assert _logo_failures(config)
+    assert not render_decision(config, test_reel=False).allowed
+    for caller in CALLERS_AFTER_RENDER:
+        assert not caller(config, test_reel=False)
+    with pytest.raises(ValueError, match="logo_path"):
+        brand_for_reel(config, test_reel=False)
+
+
+def test_a_logo_deleted_after_rendering_stops_the_publisher(engine_root):
+    config = build(complete_live_data())
+    assert publish_allowed(config, test_reel=False)
+    (engine_root / "assets" / "branding" / "approved_logo.svg").unlink()
+    assert not publish_allowed(config, test_reel=False)
+
+
+def test_a_folder_with_a_logo_name_is_not_a_logo(engine_root):
+    (engine_root / "assets" / "branding" / "folder_mark.svg").mkdir()
+    assert _logo_failures(live_with(logo_path="assets/branding/folder_mark.svg"))
+
+
+def test_an_empty_logo_file_fails_the_live_gate(engine_root):
+    assert _logo_failures(live_with(logo_path=_branding_file(engine_root, "blank.svg", "")))
+
+
+def test_a_logo_path_written_with_backslashes_is_found():
+    assert is_gate_met(live_with(logo_path="assets\\branding\\approved_logo.svg"))
+
+
+def test_an_absolute_logo_path_is_found(engine_root):
+    absolute = engine_root / "assets" / "branding" / "approved_logo.svg"
+    assert is_gate_met(live_with(logo_path=str(absolute)))
+
+
+def test_the_logo_is_looked_for_under_the_engine_not_the_working_directory(tmp_path, monkeypatch):
+    elsewhere = tmp_path / "elsewhere" / "assets" / "branding"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "only_here.svg").write_text("<svg/>", encoding="utf-8")
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    assert _logo_failures(live_with(logo_path="assets/branding/only_here.svg"))
+
+
+def test_test_mode_does_not_look_for_the_logo_file():
+    data = complete_live_data()
+    data["engine"]["mode"] = "test"
+    data["brand"]["logo_path"] = "assets/branding/never_made.svg"
+    assert not _logo_failures(build(data))
+
+
+def test_a_test_reel_never_needs_the_real_logo_file():
+    config = live_with(logo_path="assets/branding/never_made.svg")
+    assert render_decision(config, test_reel=True).allowed
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "placeholder_logo.svg",
+        "logo_placeholder.webp",
+        "logo-placeholder.png",
+        "PlaceholderLogo.svg",
+        "PLACEHOLDER LOGO.svg",
+        "placeholderlogo.svg",
+        "place_holder.svg",
+        "logo_draft.png",
+        "logo.draft.png",
+        "logoDraft.png",
+        "LOGODraft.png",
+        "Draft Logo.png",
+        "draft2_logo.png",
+        "logo_v2_draft.png",
+        "logo_tmp.png",
+        "temp-logo.svg",
+        "wip_logo.svg",
+        "dummy_logo.svg",
+        "mock_logo.svg",
+        "mockup_logo.svg",
+        "fake_logo.svg",
+        "demo_logo.svg",
+        "sample_logo.svg",
+        "example_logo.svg",
+        "test_mark.svg",
+        "logo_TODO_2.png",
+        "logo_tbd.png",
+        "plаceholder_logo.svg",  # a Cyrillic letter
+        "ｐｌａｃｅｈｏｌｄｅｒ_logo.svg",  # wide
+        "plāceholder_logo.svg",  # a combining mark
+    ],
+)
+def test_a_logo_file_named_as_a_placeholder_fails_even_when_it_exists(engine_root, name):
+    config = live_with(logo_path=_branding_file(engine_root, name))
+    failures = _logo_failures(config)
+    assert failures and "placeholder" in failures[0]
+
+
+@pytest.mark.parametrize(
+    "name", ["test_logo.svg", "logo_test.svg", "Test-Logo.png", "testLogo.png"]
+)
+def test_a_logo_file_named_as_the_test_logo_fails_even_when_it_exists(engine_root, name):
+    data = complete_live_data()
+    data["brand"]["logo_path"] = _branding_file(engine_root, name)
+    data["test_brand"]["logo_path"] = "assets/branding/other_mark.svg"
+    failures = _logo_failures(build(data))
+    assert failures and "test logo" in failures[0]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "logo.svg",
+        "qawam_money_logo.svg",
+        "QawamMoneyLogo.svg",
+        "Logo_Final_V2.PNG",
+        "latest_logo.png",
+        "contest_winner_logo.png",
+        "attempt_3.webp",
+        "drafted_mark.svg",
+        "temporal_mark.svg",
+        "template_mark.svg",
+        "mockingbird.svg",
+        "sampler_mark.svg",
+        "testament.svg",
+        "nanny_mark.svg",
+        "logo_na.svg",
+        "قوام_المال.png",
+    ],
+)
+def test_real_logo_names_are_not_mistaken_for_placeholders(engine_root, name):
+    config = live_with(logo_path=_branding_file(engine_root, name))
+    assert gate_failures(config) == ()
 
 
 def test_the_reproducer_from_review_fails_end_to_end(tmp_path):

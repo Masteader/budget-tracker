@@ -494,6 +494,62 @@ def test_structured_and_encoded_secret_values_are_redacted(text):
     assert LEAK not in redact(text), redact(text)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"Authorization: Token {LEAK}",
+        f"Authorization: Apikey {LEAK}",
+        f"authorization: Custom-Scheme_2 {LEAK}",
+        f"AUTHORIZATION:\tToken\t{LEAK}",
+        f"Authorization: Token {' ' * 40}{LEAK}",
+        f"Proxy-Authorization: Token {LEAK}",
+        f"Authorization=Token {LEAK}",
+        f"GET /reels Authorization: Token {LEAK} status=200",
+        f"Authorization: Token {'a' * 5000} {LEAK}",
+        repr({"Authorization": f"Token {LEAK}"}),
+        repr({"Authorization": f"Bearer {LEAK}"}),
+        repr({"authorization": f"Apikey {LEAK}", "Accept": "json"}),
+        repr([("Authorization", f"Token {LEAK}")]),
+        repr({b"Authorization": f"Token {LEAK}".encode()}),
+        json.dumps({"Authorization": f"Token {LEAK}"}),
+        json.dumps(json.dumps({"Authorization": f"Token {LEAK}"})),
+        f'Authorization: Digest username="bob", realm="r", response="{LEAK}"',
+        f"Authorization: AWS4-HMAC-SHA256 Credential=a/b, SignedHeaders=host, Sig={LEAK}",
+    ],
+    ids=lambda text: text[:40],
+)
+def test_any_scheme_on_an_authorization_header_is_redacted(text):
+    assert LEAK not in redact(text), redact(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "token x",
+        "Token x",
+        "token abc def",
+        "Apikey x",
+        "authorization failed for user 5",
+        "Authorization header is missing",
+    ],
+)
+def test_prose_about_tokens_and_authorization_is_left_alone(text):
+    assert redact(text) == text
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("token: first second", "token: [REDACTED] second"),
+        ("key: value here", "key: [REDACTED] here"),
+        ("Authorization: abc", "Authorization: [REDACTED]"),
+        ("authorization: required\nreel ready", "authorization: [REDACTED]\nreel ready"),
+    ],
+)
+def test_only_the_authorization_line_loses_more_than_one_word(text, expected):
+    assert redact(text) == expected
+
+
 def test_a_url_encoded_telegram_token_is_redacted():
     number, secret = TELEGRAM_TOKEN.split(":")
     url = f"https://api.telegram.org/bot{number}%3A{secret}/getMe"
@@ -515,6 +571,12 @@ def test_a_url_encoded_telegram_token_is_redacted():
         "bearer " * 30_000,
         "sk-" * 70_000,
         "123456:" * 30_000,
+        "authorization: " * 15_000,
+        "authorization: a " * 15_000,
+        "authorization: a\n" * 15_000,
+        "authorization: " + "a" * 200_000,
+        "authorization: a" + " " * 200_000,
+        "authorization: a\t" * 15_000,
     ],
     ids=lambda text: text[:8],
 )

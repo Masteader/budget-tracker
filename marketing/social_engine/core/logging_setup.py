@@ -39,16 +39,19 @@ _AFTER_SECRET_NAME = re.compile(
     (
       (?<![a-z])                                 # so "monkey" is not a key
       (?:api[_-]?key|key|token|secret|password|passwd|pwd
-         |credentials?|authorization|cookie|signature)
+         |credentials?|(?P<header>authorization)|cookie|signature)
       (?:s|[_-][a-z0-9_-]{0,32})?                # tokens, TOKEN_OLD
     )
-    (
+    (?P<separator>
       ["'\\]{0,4}\s{0,4}(?:=>|[:=]|%3D)\s{0,4}   # token=  "token": \"token\":
       | ["']\s{0,4},\s{0,4}(?=["'])              # ('AZURE_SPEECH_KEY', 'value')
     )
     (?:
       [\[({][^\n]{0,4096}                        # a structure: to the end of the line
-      | (?:basic|bearer|digest|negotiate)\s+\S+  # Authorization: Basic value
+      # Authorization: Token value, any scheme. Digest and AWS keep credentials further along
+      # the line, so all of it goes. Only this header: "key: value here" keeps "here".
+      | (?(header)b?["'\\]{0,4}[^\s"',;&\\\])}]+[ \t]+\S[^\n]*|(?!))
+      | (?:basic|bearer|digest|negotiate)\s+\S+  # token: bearer value
       | b?["'\\]{0,4}[^\s"',;&\\\])}]+           # a plain value, perhaps b'...'
     )
     """
@@ -62,7 +65,7 @@ def redact(text: str, known_secrets: Iterable[str] = ()) -> str:
     for secret in sorted({*_known_secrets, *known_secrets}, key=len, reverse=True):
         if len(secret) >= _MIN_KNOWN_SECRET_LENGTH:
             text = text.replace(secret, _MARK)
-    text = _AFTER_SECRET_NAME.sub(rf"\1\2{_MARK}", text)
+    text = _AFTER_SECRET_NAME.sub(rf"\1\g<separator>{_MARK}", text)
     text = _AFTER_BEARER.sub(rf"\1{_MARK}", text)
     for shape in _SECRET_SHAPES:
         text = shape.sub(_MARK, text)

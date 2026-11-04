@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -68,10 +69,56 @@ def _copy_into(source_dir: Path, target_dir: Path) -> None:
     shutil.copytree(source_dir, target_dir, dirs_exist_ok=True)
 
 
-def _rebuild_work_dir(studio: Path, engine_root: Path, work: Path) -> None:
+def _is_link(path: Path, info: os.stat_result) -> bool:
+    """A junction, a symlink, or any other reparse point such as a mounted volume."""
+    attributes = getattr(info, "st_file_attributes", 0)
+    return (
+        path.is_junction()
+        or path.is_symlink()
+        or bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+    )
+
+
+def _checked_work_dir(data_root: Path) -> Path:
+    """Sync deletes inside this folder, so it has to be a real folder in the real data_root.
+    A link would turn that delete on whatever it points at. Links above the work folder are
+    resolved, because both real paths pass through them: only this last step can leave the
+    data_root. A work folder that does not exist yet is fine, and nothing is deleted on any
+    refusal. This looks once and does not lock, so it stops mistakes and not a live attacker."""
+    work = _work_dir(data_root)
+    try:
+        info = os.lstat(work)
+    except FileNotFoundError:
+        return work
+    except OSError as error:
+        raise RemotionSyncError(f"could not check {work}. Nothing was deleted: {error}") from error
+    if _is_link(work, info):
+        raise RemotionSyncError(
+            f"{work} is a link, and sync deletes files inside remotion_work, so the folder it "
+            "points at would be emptied. Nothing was deleted. Remove the link, then sync again."
+        )
+    if not stat.S_ISDIR(info.st_mode):
+        raise RemotionSyncError(f"{work} is not a folder. Nothing was deleted.")
+    try:
+        real_work = os.path.realpath(work, strict=True)
+        real_root = os.path.realpath(data_root, strict=True)
+    except OSError as error:
+        raise RemotionSyncError(f"could not check {work}. Nothing was deleted: {error}") from error
+    expected = os.path.join(real_root, work.name)
+    if os.path.normcase(real_work) != os.path.normcase(expected):
+        raise RemotionSyncError(
+            f"{work} is really at {real_work}, outside the data_root {real_root}. "
+            "Nothing was deleted."
+        )
+    return work
+
+
+def _rebuild_work_dir(studio: Path, engine_root: Path, data_root: Path) -> None:
     """Everything is replaced except what npm and rendering own, so a file deleted from the
     repo cannot linger in the build."""
+    work = _checked_work_dir(data_root)
     work.mkdir(parents=True, exist_ok=True)
+    _checked_work_dir(data_root)  # again now that it exists, right before anything is deleted
     for entry in work.iterdir():
         if entry.name not in _KEPT_IN_WORK:
             _remove(entry)
@@ -118,7 +165,7 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
         raise RemotionSyncError(f"{_FIXTURE.as_posix()} is missing from {engine_root}")
     work = _work_dir(data_root)
     try:
-        _rebuild_work_dir(studio, engine_root, work)
+        _rebuild_work_dir(studio, engine_root, data_root)
     except OSError as error:
         raise RemotionSyncError(f"could not copy the studio to {work}: {error}") from error
 
@@ -139,7 +186,7 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
 def pull_lock(engine_root: Path, data_root: Path) -> Path:
     """The pulled lockfile came from that `node_modules`, so it needs no reinstall."""
     studio = _preflight(engine_root)
-    work = _work_dir(data_root)
+    work = _checked_work_dir(data_root)
     source = work / LOCKFILE
     if not source.is_file():
         raise RemotionSyncError(f"{LOCKFILE} not found in {work}. Run npm install there first.")

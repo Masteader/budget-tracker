@@ -452,7 +452,7 @@ There is no code, so no failing test. It edits nothing outside its report, becau
 
 | Batch | Runs | Needs | Files it owns (under `marketing/social_engine/`) |
 |---|---|---|---|
-| A | First, alone | Nothing | `pyproject.toml`, `.gitignore`, `.env.example`, `config.yaml`, `core/config.py`, `brand_gate.py`, `paths.py`, `secrets.py`, `logging_setup.py`, `manifest.py`, `render_props.py`, `remotion_sync.py`, `content_engine/schemas.py`, `remotion_studio/props.schema.json`, `tests/conftest.py`, its tests and fixtures |
+| A | First, alone | Nothing | `pyproject.toml`, `.gitignore`, `.env.example`, `config.yaml`, `core/config.py`, `brand_gate.py`, `paths.py`, `secrets.py`, `logging_setup.py`, `manifest.py`, `render_props.py`, `remotion_sync.py`, `core/safe_text.py`, `content_engine/schemas.py`, `remotion_studio/props.schema.json`, `tests/conftest.py`, its tests and fixtures |
 | B | Group 1 | A | `core/state.py`, `locks.py`, `cadence.py`, its tests |
 | C | Group 1 | A | `content_engine/guardrails.py`, `denylists.py`, `cta.py`, `topics.py`, `approved_claims.json`, `finance_topics_repository.json`, its tests |
 | D | Group 1 | A | `content_engine/llm_backends.py`, `researcher.py`, `prompts.py`, its tests |
