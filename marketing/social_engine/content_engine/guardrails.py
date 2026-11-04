@@ -103,6 +103,11 @@ class ClaimsRegister:
     claims: dict[str, Claim]
     rejected: tuple[RejectedClaim, ...]
 
+    @property
+    def approved(self) -> tuple[Claim, ...]:
+        """What the writer may use. A claim the code does not back stays held, as in G1."""
+        return tuple(claim for claim in self.claims.values() if claim.code_check == "supported")
+
 
 @lru_cache(maxsize=4)
 def load_claims_register(path: Path = REGISTER_PATH) -> ClaimsRegister:

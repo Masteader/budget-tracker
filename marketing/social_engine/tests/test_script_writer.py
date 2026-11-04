@@ -6,6 +6,7 @@ from datetime import date
 import pytest
 from fixtures.llm_fakes import ScriptedBackend
 
+from content_engine.guardrails import Claim, ClaimsRegister, RejectedClaim
 from content_engine.llm_backends import (
     BudgetExceeded,
     LlmResult,
@@ -15,13 +16,7 @@ from content_engine.llm_backends import (
     ToolCall,
     UsageLimitReached,
 )
-from content_engine.prompts import (
-    ApprovedClaim,
-    ClaimsRegister,
-    RejectedClaim,
-    review_request,
-    writer_request,
-)
+from content_engine.prompts import review_request, writer_request
 from content_engine.researcher import (
     Excerpt,
     GenerationFailed,
@@ -40,17 +35,42 @@ URL = "https://stats.example.org/report"
 WITHDRAWN_NAME = "Wa" + "feer"
 REAL_NAMES = ("Qawam", "قوام", "QAWAM MONEY", "قوام المال")
 
-REGISTER = ClaimsRegister(
-    approved=(
-        ApprovedClaim(
-            "C01", "ميزانيتك تتبع يوم راتب أسرتك", "Budgets follow your household payday"
+
+def register_of(claims: list[tuple[str, str, str]], rejected: list[tuple[str, str, str]]):
+    """A register small enough to read in a test, in the real shape of `approved_claims.json`."""
+    return ClaimsRegister(
+        {
+            claim_id: Claim(
+                id=claim_id,
+                meaning=english,
+                wording_ar=arabic,
+                wording_en=english,
+                evidence=(),
+                last_checked=date(2026, 11, 4),
+                code_check="supported",
+                code_note="",
+                clip_folders=(),
+            )
+            for claim_id, arabic, english in claims
+        },
+        tuple(
+            RejectedClaim(
+                id=row_id, claim=claim, caught_by=(rule,), samples_ar=(), samples_en=()
+            )
+            for row_id, claim, rule in rejected
         ),
-        ApprovedClaim("C07", "اكتب مصروفك وأكده", "Type an expense and confirm it"),
-    ),
-    rejected=(
-        RejectedClaim("R01", "Any 30% figure", "G2"),
-        RejectedClaim("R02", "A click or tap count", "G22"),
-    ),
+    )
+
+
+REGISTER = register_of(
+    [
+        ("C01", "ميزانيتك تتبع يوم راتب أسرتك", "Budgets follow your household payday"),
+        ("C07", "اكتب مصروفك وأكده", "Type an expense and confirm it"),
+    ],
+    [
+        ("R01", "Any 30% figure", "G2"),
+        ("R02", "A click or tap count", "G22"),
+    ],
 )
 
 BRIEF = ReelBrief(
@@ -202,9 +222,9 @@ def test_the_facts_are_data_and_cannot_close_their_block():
 
 
 def test_the_prompts_fit_a_windows_command_line_for_a_normal_reel():
-    long_register = ClaimsRegister(
-        approved=tuple(ApprovedClaim(f"C{n:02}", "ع" * 160, "e" * 160) for n in range(1, 22)),
-        rejected=tuple(RejectedClaim(f"R{n:02}", "r" * 120, "G2") for n in range(1, 8)),
+    long_register = register_of(
+        [(f"C{n:02}", "ع" * 160, "e" * 160) for n in range(1, 22)],
+        [(f"R{n:02}", "r" * 120, "G2") for n in range(1, 8)],
     )
     fact = RESEARCH.result.facts[0].model_dump(mode="json")
     facts = ResearchResult.model_validate({"facts": [fact] * 8})

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from content_engine.guardrails import ClaimsRegister
 from content_engine.llm_backends import LlmRequest
 from content_engine.schemas import ResearchResult, ReviewVerdict, Script
 from core.config import EngineConfig
@@ -58,28 +59,6 @@ G20: No bank or wallet names, no comparison with banks, no contrast with bank SM
 G21: Price tracking uses only line items from your own receipts. Never tie the QR or the tax \
 authority to prices, inflation or tracking, and never say "market prices".
 G22: No click or tap counts, because none has been measured."""
-
-
-@dataclass(frozen=True)
-class ApprovedClaim:
-    id: str
-    wording_ar: str
-    wording_en: str
-
-
-@dataclass(frozen=True)
-class RejectedClaim:
-    id: str
-    claim: str
-    caught_by: str
-
-
-@dataclass(frozen=True)
-class ClaimsRegister:
-    """What `approved_claims.json` holds, as far as the prompts need it."""
-
-    approved: tuple[ApprovedClaim, ...]
-    rejected: tuple[RejectedClaim, ...]
 
 
 @dataclass(frozen=True)

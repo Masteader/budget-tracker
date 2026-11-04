@@ -583,7 +583,9 @@ OPEN = "open" + "ai"
 @pytest.mark.parametrize(
     "entry",
     [
-        pytest.param(_lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz"), id="an"),
+        pytest.param(
+            _lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz"), id="the sdk"
+        ),
         pytest.param(_lock_entry(f"node_modules/@remotion/{OPEN}"), id="same scope, shorter name"),
         pytest.param(_lock_entry(f"node_modules/{WHISPER}-extra"), id="longer name"),
         pytest.param(_lock_entry(f"node_modules/@evil/{WHISPER_FILE}"), id="another scope"),
