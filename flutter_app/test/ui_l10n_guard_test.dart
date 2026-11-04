@@ -185,7 +185,7 @@ void main() {
 
     test('no value in any language contains an old or withdrawn app name', () {
       final oldNames = RegExp(
-        'budget tracker|بجٹ ٹریکر|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی)ر(?![؀-ۿ])',
+        'budget tracker|بجٹ ٹریکر|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])',
         caseSensitive: false,
       );
       // Add a key here only if a sentence really means "household budget".
@@ -201,11 +201,14 @@ void main() {
     });
 
     test('the withdrawn-name pattern spares words that only contain the same letters', () {
-      final withdrawn = RegExp('(?<![؀-ۿ])وف(?:يي|یی|ی)ر(?![؀-ۿ])');
+      final withdrawn = RegExp('(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])');
       expect(withdrawn.hasMatch('وفيير'), isTrue);
       expect(withdrawn.hasMatch('وفییر'), isTrue);
       expect(withdrawn.hasMatch('وفیر'), isTrue);
       expect(withdrawn.hasMatch('توفیر'), isFalse);
+      expect(withdrawn.hasMatch('وفير'), isTrue);
+      expect(withdrawn.hasMatch('تطبيق وفير'), isTrue);
+      expect(withdrawn.hasMatch('توفير'), isFalse);
     });
 
     test('no Urdu value contains the Arabic-script form of the name', () {

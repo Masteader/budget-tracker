@@ -366,6 +366,8 @@ void main() {
       expect(translations, contains("name: 'Qawam Money قوام المال',"));
       expect(translations, contains("pageTitle: 'قوام المال Qawam Money | "));
       expect(translations, contains("pageTitle: 'Qawam Money قوام المال | "));
+      expect(translations, contains("shortName: 'قوام المال',"));
+      expect(translations, contains("shortName: 'Qawam Money',"));
       final index = File('../web_app/index.html').readAsStringSync();
       expect(index, contains('<title>قوام المال Qawam Money | '));
       expect(index, contains('<meta property="og:site_name" content="قوام المال Qawam Money" />'));
@@ -374,7 +376,9 @@ void main() {
     });
 
     test('no source file contains an old or withdrawn app name', () {
-      final oldNames = RegExp('budget tracker|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی)ر(?![؀-ۿ])', caseSensitive: false);
+      final oldNames = RegExp('budget tracker|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])', caseSensitive: false);
+      expect(oldNames.hasMatch('وفير'), isTrue);
+      expect(oldNames.hasMatch('توفير'), isFalse);
       final offenders = [
         for (final f in webFiles)
           if (oldNames.hasMatch(f.readAsStringSync())) f.path,
