@@ -8,6 +8,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_themes.dart';
 import '../../widgets/onboarding/user_guide_walkthrough_dialog.dart';
+import '../../widgets/settings/settings_section.dart' show isLargeText;
 
 class HelpSupportScreen extends StatefulWidget {
   final String? householdId;
@@ -265,21 +266,24 @@ User: ${widget.userEmail ?? "N/A"}
         ),
         actions: [
           // Independent language selector toggle pill
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: context.chipBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildLanguagePill('ar', '🇸🇦 ع', 'العربية'),
-                _buildLanguagePill('en', '🇺🇸 EN', 'English'),
-                _buildLanguagePill('ur', '🇵🇰 اردو', 'اردو'),
-              ],
+          MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.2,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: context.chipBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildLanguagePill('ar', '🇸🇦 ع', 'العربية'),
+                  _buildLanguagePill('en', '🇺🇸 EN', 'English'),
+                  _buildLanguagePill('ur', '🇵🇰 اردو', 'اردو'),
+                ],
+              ),
             ),
           ),
           IconButton(
@@ -369,6 +373,19 @@ User: ${widget.userEmail ?? "N/A"}
         faqs: matchingFaqs,
       );
     }).where((cat) => cat.faqs.isNotEmpty).toList();
+    final replayButton = ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: context.primaryButtonBg,
+        foregroundColor: context.primaryButtonFg,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      onPressed: () => UserGuideWalkthroughDialog.show(context),
+      child: Text(context.tr('support_replay'),
+          style: const TextStyle(fontWeight: FontWeight.bold)),
+    );
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -423,24 +440,21 @@ User: ${widget.userEmail ?? "N/A"}
                         fontSize: 12,
                       ),
                     ),
+                    if (isLargeText(context))
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: replayButton,
+                      ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.primaryButtonBg,
-                  foregroundColor: context.primaryButtonFg,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+              if (!isLargeText(context)) ...[
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 110),
+                  child: replayButton,
                 ),
-                onPressed: () => UserGuideWalkthroughDialog.show(context),
-                child: Text(context.tr('support_replay'),
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
+              ],
             ],
           ),
         ),
@@ -499,6 +513,8 @@ User: ${widget.userEmail ?? "N/A"}
               data:
                   Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
+                iconColor: context.accentText,
+                collapsedIconColor: context.textSecondary,
                 leading: Icon(cat.icon, color: cat.color, size: 22),
                 title: Text(
                   _t(cat.titleKey),
@@ -567,12 +583,14 @@ User: ${widget.userEmail ?? "N/A"}
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    context.tr('support_direct_dev'),
-                    style: GoogleFonts.outfit(
-                      color: context.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13.5,
+                  Expanded(
+                    child: Text(
+                      context.tr('support_direct_dev'),
+                      style: GoogleFonts.outfit(
+                        color: context.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                 ],
@@ -712,12 +730,14 @@ User: ${widget.userEmail ?? "N/A"}
                                 size: 18,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                context.tr('support_escalate'),
-                                style: GoogleFonts.outfit(
-                                  color: context.textPrimary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12.5,
+                              Expanded(
+                                child: Text(
+                                  context.tr('support_escalate'),
+                                  style: GoogleFonts.outfit(
+                                    color: context.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1019,6 +1039,7 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
               style: GoogleFonts.outfit(color: context.textPrimary, fontSize: 13.5),
               decoration: InputDecoration(
                 hintText: context.tr('support_inquiry_hint'),
+                hintStyle: GoogleFonts.outfit(color: context.textSecondary, fontSize: 13),
                 filled: true,
                 fillColor: context.subtleCardBg,
                 border: OutlineInputBorder(
@@ -1071,6 +1092,8 @@ class _DeveloperInquiryDialogState extends State<_DeveloperInquiryDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: context.primaryButtonBg,
             foregroundColor: context.primaryButtonFg,
+            disabledBackgroundColor: context.primaryButtonBg,
+            disabledForegroundColor: context.primaryButtonFg,
           ),
           onPressed: _sending ? null : _send,
           icon: _sending

@@ -4,7 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show DateFormat;
+import '../l10n/app_localizations.dart';
 import '../theme/app_themes.dart';
 import '../widgets/app_snackbar.dart';
 
@@ -82,15 +83,18 @@ class CsvExportService {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         backgroundColor: context.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.table_view_rounded, color: Color(0xFF00C896), size: 22),
+            Icon(Icons.table_view_rounded, color: context.accentText, size: 22),
             const SizedBox(width: 10),
-            Text(
-              'Export Report (${monthLabel ?? 'Current'})',
-              style: TextStyle(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                context.trArgs('csv_export_title', {'label': monthLabel ?? context.tr('csv_export_current')}),
+                style: TextStyle(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -99,7 +103,10 @@ class CsvExportService {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$count transactions • Total SAR ${totalSum.toStringAsFixed(2)}',
+              context.trArgs('csv_export_summary', {
+                'transactions': context.trPlural('transactions_count', count),
+                'amount': context.sar(totalSum),
+              }),
               style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -112,8 +119,11 @@ class CsvExportService {
                 border: Border.all(color: context.borderColor),
               ),
               child: SingleChildScrollView(
+                // Spreadsheet data: its columns read left to right in every language.
                 child: Text(
                   csvContent,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.left,
                   style: TextStyle(color: context.textPrimary, fontFamily: 'monospace', fontSize: 11),
                 ),
               ),
@@ -123,23 +133,25 @@ class CsvExportService {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Close', style: TextStyle(color: context.textSecondary)),
+            child: Text(context.tr('close'), style: TextStyle(color: context.textSecondary)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C896),
-              foregroundColor: Colors.black,
+              backgroundColor: context.primaryButtonBg,
+              foregroundColor: context.primaryButtonFg,
             ),
             icon: const Icon(Icons.copy_rounded, size: 16),
-            label: const Text('Copy CSV', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(context.tr('csv_copy'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
+              final copiedMessage = context.tr('csv_copied_msg');
+              final copiedTitle = context.tr('csv_copied_title');
               await Clipboard.setData(ClipboardData(text: csvContent));
               if (ctx.mounted) {
                 Navigator.pop(ctx);
                 AppSnackBar.showSuccess(
                   context,
-                  'CSV report copied to clipboard. Ready to paste into Excel or Google Sheets.',
-                  title: 'Report Copied',
+                  copiedMessage,
+                  title: copiedTitle,
                   icon: Icons.table_chart_outlined,
                 );
               }

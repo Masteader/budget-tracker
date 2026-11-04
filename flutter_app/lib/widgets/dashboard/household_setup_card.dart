@@ -302,32 +302,38 @@ class HouseholdSetupCard extends StatelessWidget {
             Icon(_stepIcon(step), size: 18, color: context.textSecondary),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                _stepLabel(context, step),
-                style: TextStyle(
-                  color: context.textPrimary,
-                  fontSize: 13.5,
-                  fontWeight: isDone ? FontWeight.w500 : FontWeight.w700,
-                ),
+              // The confirm button sits beside the label, or under it when they
+              // do not both fit on a line.
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    _stepLabel(context, step),
+                    style: TextStyle(
+                      color: context.textPrimary,
+                      fontSize: 13.5,
+                      fontWeight: isDone ? FontWeight.w500 : FontWeight.w700,
+                    ),
+                  ),
+                  if (step == SetupStep.payday && !isDone)
+                    TextButton(
+                      key: const Key('setup_confirm_payday'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: context.accentText,
+                      ),
+                      onPressed: () async {
+                        await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
+                        onChanged();
+                      },
+                      child: Text(context.tr('setup_confirm')),
+                    ),
+                ],
               ),
             ),
-            if (step == SetupStep.payday && !isDone)
-              TextButton(
-                key: const Key('setup_confirm_payday'),
-                style: TextButton.styleFrom(
-                  foregroundColor: context.accentText,
-                ),
-                onPressed: () async {
-                  await (confirmPayday ?? () => HouseholdSetupPrefs.setPaydayConfirmed(householdId))();
-                  onChanged();
-                },
-                child: Text(context.tr('setup_confirm')),
-              )
-            else
-              Icon(
-                context.isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-                color: context.textSecondary,
-              ),
+            if (step != SetupStep.payday || isDone)
+              // The icon mirrors itself in RTL (matchTextDirection).
+              Icon(Icons.chevron_right_rounded, color: context.textSecondary),
           ],
         ),
       ),
@@ -524,7 +530,7 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
     }
     setState(() {
       _saving = false;
-      _error = context.trArgs('starter_budgets_partial', {'categories': failed.join(context.isArabic ? '، ' : ', ')});
+      _error = context.trArgs('starter_budgets_partial', {'categories': failed.join(context.isRtl ? '، ' : ', ')});
     });
   }
 
@@ -556,6 +562,7 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: context.trCat(r.categoryCode),
+                floatingLabelStyle: TextStyle(color: context.accentText),
                 suffixText: context.tr('sar'),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 isDense: true,
@@ -571,11 +578,13 @@ class _StarterBudgetSheetState extends State<StarterBudgetSheet> {
           style: ElevatedButton.styleFrom(
             backgroundColor: context.primaryButtonBg,
             foregroundColor: context.primaryButtonFg,
+            disabledBackgroundColor: context.primaryButtonBg,
+            disabledForegroundColor: context.primaryButtonFg,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: _saving
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg))
               : Text(context.tr('starter_budgets_create'), style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
@@ -680,6 +689,7 @@ class _HouseholdSetupSheetState extends State<_HouseholdSetupSheet> {
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
                     color: context.textSecondary,
+                    tooltip: context.tr('close'),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -689,10 +699,10 @@ class _HouseholdSetupSheetState extends State<_HouseholdSetupSheet> {
                 future: _future,
                 builder: (ctx, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(
+                    return Center(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: CircularProgressIndicator(),
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: CircularProgressIndicator(color: context.accentText),
                       ),
                     );
                   }

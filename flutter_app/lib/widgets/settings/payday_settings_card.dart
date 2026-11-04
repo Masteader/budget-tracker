@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/widgets/three_d_surface_card.dart';
 import '../../core/widgets/three_d_icon_puck.dart';
 import '../app_snackbar.dart';
+import 'settings_section.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -80,6 +81,26 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
 
   @override
   Widget build(BuildContext context) {
+    final large = isLargeText(context);
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.pillBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: context.borderColor,
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        context.trArgs('pds_of_month', {'day': _ordinal(context, _selectedDay)}),
+        style: TextStyle(
+          color: context.accentText,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
     return ThreeDSurfaceCard(
       padding: const EdgeInsets.all(18),
       borderRadius: 20,
@@ -116,28 +137,18 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
                         fontSize: 12,
                       ),
                     ),
+                    if (large) ...[
+                      const SizedBox(height: 6),
+                      badge,
+                    ],
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: context.pillBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: context.isDark ? VelvetBurgundyColors.roseBorderDark : VelvetBurgundyColors.roseBorderLight,
-                    width: 0.8,
-                  ),
+              if (!large)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 110),
+                  child: badge,
                 ),
-                child: Text(
-                  context.trArgs('pds_of_month', {'day': _ordinal(context, _selectedDay)}),
-                  style: TextStyle(
-                    color: context.accentText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             ],
           ),
 
@@ -245,19 +256,21 @@ class _PaydaySettingsCardState extends State<PaydaySettingsCard> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.primaryButtonBg,
-                foregroundColor: Colors.white,
+                foregroundColor: context.primaryButtonFg,
+                disabledBackgroundColor: context.primaryButtonBg,
+                disabledForegroundColor: context.primaryButtonFg,
                 elevation: 3,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: context.primaryButtonFg,
                       ),
                     )
                   : const Icon(Icons.check_rounded, size: 18),

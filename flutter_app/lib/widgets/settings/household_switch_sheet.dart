@@ -368,6 +368,7 @@ class HouseholdSwitchSheetContent extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: context.textPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: BorderSide(color: context.borderColor),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

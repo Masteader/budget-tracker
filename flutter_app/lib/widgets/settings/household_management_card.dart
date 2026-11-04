@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../theme/app_themes.dart';
 import '../../l10n/app_localizations.dart';
 import 'role_invite_dialog.dart';
+import 'settings_section.dart';
 import '../../services/household_invite_share.dart';
 
 /// Card for managing household membership, invite code, household switching, and dependents.
@@ -53,6 +54,48 @@ class HouseholdManagementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAdmin = userRole.toLowerCase() == 'admin';
+    final large = isLargeText(context);
+    final roleBadge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isAdmin
+            ? context.accentSubtleBg
+            : context.infoSubtleBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isAdmin ? context.accentText : context.infoColor,
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        isAdmin ? context.tr('admin') : context.tr('member'),
+        style: TextStyle(
+          color: isAdmin ? context.accentText : context.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    final joinButton = OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: context.textPrimary,
+        side: BorderSide(color: context.borderColor),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+      ),
+      icon: const Icon(Icons.group_add_outlined, size: 16),
+      label: Text(context.tr('join_with_code'), style: const TextStyle(fontSize: 12)),
+      onPressed: onSwitchHousehold,
+    );
+    final newButton = ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: context.primaryButtonBg,
+        foregroundColor: context.primaryButtonFg,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+      ),
+      icon: const Icon(Icons.add_rounded, size: 16),
+      label: Text(context.tr('new_household'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      onPressed: onCreateHousehold,
+    );
 
     return ThreeDSurfaceCard(
       padding: const EdgeInsets.all(18),
@@ -87,30 +130,14 @@ class HouseholdManagementCard extends StatelessWidget {
                       context.trPlural('hmc_active_members', members.length),
                       style: TextStyle(color: context.textSecondary, fontSize: 12),
                     ),
+                    if (large) ...[
+                      const SizedBox(height: 6),
+                      roleBadge,
+                    ],
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isAdmin
-                      ? context.accentSubtleBg
-                      : context.infoSubtleBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isAdmin ? context.accentText : context.infoColor,
-                    width: 0.8,
-                  ),
-                ),
-                child: Text(
-                  isAdmin ? context.tr('admin') : context.tr('member'),
-                  style: TextStyle(
-                    color: isAdmin ? context.accentText : context.infoColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              if (!large) roleBadge,
             ],
           ),
 
@@ -149,15 +176,18 @@ class HouseholdManagementCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.textPrimary,
-                    side: BorderSide(color: context.borderColor),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 130),
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.textPrimary,
+                      side: BorderSide(color: context.borderColor),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 14),
+                    label: Text(context.tr('copy_code'), style: const TextStyle(fontSize: 11)),
+                    onPressed: onCopyInviteCode,
                   ),
-                  icon: const Icon(Icons.copy_rounded, size: 14),
-                  label: Text(context.tr('copy_code'), style: const TextStyle(fontSize: 11)),
-                  onPressed: onCopyInviteCode,
                 ),
               ],
             ),
@@ -172,7 +202,7 @@ class HouseholdManagementCard extends StatelessWidget {
                   key: const ValueKey('share_invite_button'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: context.primaryButtonBg,
-                    foregroundColor: Colors.white,
+                    foregroundColor: context.primaryButtonFg,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -263,35 +293,19 @@ class HouseholdManagementCard extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Action Buttons: Join Another, Create New, Leave
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: context.textPrimary,
-                    side: BorderSide(color: context.borderColor),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  icon: const Icon(Icons.group_add_outlined, size: 16),
-                  label: Text(context.tr('join_with_code'), style: const TextStyle(fontSize: 12)),
-                  onPressed: onSwitchHousehold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: context.primaryButtonBg,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: Text(context.tr('new_household'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: onCreateHousehold,
-                ),
-              ),
-            ],
-          ),
+          if (large)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [joinButton, const SizedBox(height: 8), newButton],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: joinButton),
+                const SizedBox(width: 8),
+                Expanded(child: newButton),
+              ],
+            ),
           const SizedBox(height: 8),
           Center(
             child: TextButton.icon(
@@ -299,7 +313,7 @@ class HouseholdManagementCard extends StatelessWidget {
                 foregroundColor: context.dangerColor,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               ),
-              icon: const Icon(Icons.logout_rounded, size: 15),
+              icon: Transform.flip(flipX: context.isRtl, child: const Icon(Icons.logout_rounded, size: 15)),
               label: Text(context.tr('leave_household'), style: const TextStyle(fontSize: 12)),
               onPressed: onLeaveHousehold,
             ),
@@ -405,6 +419,32 @@ class HouseholdManagementCard extends StatelessWidget {
         ? context.tr('active_account')
         : (isDependent ? context.tr('hmc_dependent_label') : context.tr('hmc_invite_pending'));
     final statusColor = d.isClaimed ? (context.accentText) : (isDependent ? context.textSecondary : context.warnText);
+    final large = isLargeText(context);
+    final actions = <Widget>[
+      if (!d.isClaimed && householdId != null && householdId!.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+          tooltip: context.tr('invite_linked_profile'),
+          color: context.accentText,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (_) => RoleInviteDialog(
+                householdId: householdId!,
+                initialRole: d.relationship,
+                targetMemberId: d.id,
+                targetMemberName: d.name,
+              ),
+            );
+          },
+        ),
+      if (onRemoveDependent != null)
+        IconButton(
+          icon: Icon(Icons.close_rounded, size: 16, color: context.textSecondary),
+          tooltip: context.tr('set_remove'),
+          onPressed: () => onRemoveDependent!(d),
+        ),
+    ];
 
     if (d.isSpouse) {
       roleColor = context.goldText;
@@ -439,20 +479,20 @@ class HouseholdManagementCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        d.name,
-                        style: GoogleFonts.outfit(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: context.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      d.name,
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -501,34 +541,15 @@ class HouseholdManagementCard extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (large && actions.isNotEmpty)
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+                  ),
               ],
             ),
           ),
-          if (!d.isClaimed && householdId != null && householdId!.isNotEmpty) ...[
-            IconButton(
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-              tooltip: context.tr('invite_linked_profile'),
-              color: context.accentText,
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => RoleInviteDialog(
-                    householdId: householdId!,
-                    initialRole: d.relationship,
-                    targetMemberId: d.id,
-                    targetMemberName: d.name,
-                  ),
-                );
-              },
-            ),
-          ],
-          if (onRemoveDependent != null) ...[
-            IconButton(
-              icon: Icon(Icons.close_rounded, size: 16, color: context.textSecondary),
-              tooltip: context.tr('set_remove'),
-              onPressed: () => onRemoveDependent!(d),
-            ),
-          ],
+          if (!large) ...actions,
         ],
       ),
     );

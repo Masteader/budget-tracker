@@ -321,7 +321,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.primaryButtonBg,
-              foregroundColor: Colors.white,
+              foregroundColor: context.primaryButtonFg,
             ),
             icon: const Icon(Icons.open_in_new, size: 16),
             label: Text(context.tr('open_settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -372,7 +372,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           children: [
             Icon(Icons.warning_amber_rounded, color: context.dangerColor),
             const SizedBox(width: 8),
-            Text(context.tr('leave_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+            Expanded(
+              child: Text(context.tr('leave_household'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary)),
+            ),
           ],
         ),
         content: Text(
@@ -387,7 +389,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.dangerColor,
-              foregroundColor: Colors.white,
+              foregroundColor: context.cardBg,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('leave'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -459,6 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               style: GoogleFonts.jetBrainsMono(color: context.textPrimary, fontSize: 16, letterSpacing: 2),
               decoration: InputDecoration(
                 hintText: context.tr('set_8_16_characters'),
+                hintStyle: TextStyle(color: context.textSecondary),
                 counterText: '',
               ),
             ),
@@ -472,7 +475,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.primaryButtonBg,
-              foregroundColor: Colors.white,
+              foregroundColor: context.primaryButtonFg,
             ),
             child: Text(context.tr('join'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
@@ -532,6 +535,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               style: TextStyle(color: context.textPrimary),
               decoration: InputDecoration(
                 hintText: context.tr('set_e_g_summer_beach_house'),
+                hintStyle: TextStyle(color: context.textSecondary),
               ),
             ),
             const SizedBox(height: 12),
@@ -551,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.primaryButtonBg,
-              foregroundColor: Colors.white,
+              foregroundColor: context.primaryButtonFg,
             ),
             child: Text(context.tr('create'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
@@ -645,9 +649,11 @@ class _SettingsScreenState extends State<SettingsScreen>
           children: [
             Icon(Icons.delete_outline_rounded, color: context.dangerColor),
             const SizedBox(width: 8),
-            Text(
-              context.tr('set_remove_dependent'),
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary),
+            Expanded(
+              child: Text(
+                context.tr('set_remove_dependent'),
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17, color: context.textPrimary),
+              ),
             ),
           ],
         ),
@@ -663,7 +669,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.dangerColor,
-              foregroundColor: Colors.white,
+              foregroundColor: context.cardBg,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('set_remove'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -721,146 +727,106 @@ class _SettingsScreenState extends State<SettingsScreen>
         children: [
           // UX-15: Settings in foldable sections; the everyday ones open,
           // the rarely used ones folded. Nothing is removed.
-          // ── 0. HOUSEHOLD MANAGEMENT & INVITES ──
+          // Who is in the household and how far its setup has come.
           SettingsSection(
+            id: 'household',
             title: context.tr('set_household_membership'),
             subtitle: context.tr('set_manage_shared_budget_group_invite'),
             icon: Icons.home_work_outlined,
             initiallyExpanded: true,
             children: [
-          if (_householdId != null) ...[
-            HouseholdManagementCard(
-              householdName: _householdName ?? context.tr('set_household'),
-              householdId: _householdId,
-              inviteCode: _inviteCode ?? '--------',
-              userRole: _userRole,
-              members: _members,
-              dependents: _dependents,
-              onCopyInviteCode: _copyInviteCode,
-              onShareInvite: _shareInvite,
-              onLeaveHousehold: _confirmLeaveHousehold,
-              onSwitchHousehold: _showHouseholdSwitchSheet,
-              onCreateHousehold: _showCreateHouseholdDialog,
-              onAddDependent: _showAddDependentDialog,
-              onRemoveDependent: _removeDependent,
-              rolesSection: HouseholdRolesCard(
-                householdId: _householdId!,
-                isEmbedded: true,
-                onRolesChanged: _onRolesChanged,
-                onNafaqahProviderChanged: _onNafaqahProviderChanged,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: context.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  HouseholdSetupCard.showChecklistSheet(
-                    context,
+              if (_householdId != null) ...[
+                HouseholdManagementCard(
+                  householdName: _householdName ?? context.tr('set_household'),
+                  householdId: _householdId,
+                  inviteCode: _inviteCode ?? '--------',
+                  userRole: _userRole,
+                  members: _members,
+                  dependents: _dependents,
+                  onCopyInviteCode: _copyInviteCode,
+                  onShareInvite: _shareInvite,
+                  onLeaveHousehold: _confirmLeaveHousehold,
+                  onSwitchHousehold: _showHouseholdSwitchSheet,
+                  onCreateHousehold: _showCreateHouseholdDialog,
+                  onAddDependent: _showAddDependentDialog,
+                  onRemoveDependent: _removeDependent,
+                  rolesSection: HouseholdRolesCard(
                     householdId: _householdId!,
-                  );
-                },
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: context.pillBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.checklist_rtl_rounded,
-                        color: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('household_setup_checklist'),
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: context.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            context.tr('household_setup_checklist_desc'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: context.accentText,
-                      size: 20,
-                    ),
-                  ],
+                    isEmbedded: true,
+                    onRolesChanged: _onRolesChanged,
+                    onNafaqahProviderChanged: _onNafaqahProviderChanged,
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: context.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: context.pillBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_rounded,
-                      color: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
-                      size: 24,
-                    ),
+                const SizedBox(height: 16),
+                _buildRowCard(
+                  icon: context.isRtl ? Icons.checklist_rtl_rounded : Icons.checklist_rounded,
+                  title: context.tr('household_setup_checklist'),
+                  subtitle: context.tr('household_setup_checklist_desc'),
+                  onTap: () {
+                    HouseholdSetupCard.showChecklistSheet(
+                      context,
+                      householdId: _householdId!,
+                    );
+                  },
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: context.accentText,
+                    size: 20,
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.tr('accounts_balances'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: context.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          context.tr('accounts_balances_desc'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: context.cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.borderColor),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
+                  child: Column(
+                    children: [
+                      Text(
+                        context.tr('set_have_not_joined_any_household'),
+                        style: TextStyle(color: context.textSecondary, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const HouseholdScreen()),
+                          );
+                        },
+                        child: Text(context.tr('set_join_create_household'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          // Salary day and the accounts it lands in.
+          if (_householdId != null)
+            SettingsSection(
+              id: 'money',
+              title: context.tr('set_money_section'),
+              subtitle: context.trArgs('set_salary_section_summary', {'day': _paydayDay}),
+              icon: Icons.account_balance_wallet_outlined,
+              children: [
+                PaydaySettingsCard(
+                  initialPayday: _paydayDay,
+                  onSavePayday: _savePayday,
+                ),
+                const SizedBox(height: 16),
+                _buildRowCard(
+                  icon: Icons.account_balance_wallet_rounded,
+                  title: context.tr('accounts_balances'),
+                  subtitle: context.tr('accounts_balances_desc'),
+                  action: ElevatedButton(
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -873,7 +839,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.primaryButtonBg,
-                      foregroundColor: Colors.white,
+                      foregroundColor: context.primaryButtonFg,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -888,136 +854,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: context.cardBg,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: context.borderColor),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    context.tr('set_have_not_joined_any_household'),
-                    style: TextStyle(color: context.textSecondary, fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.primaryButtonBg,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HouseholdScreen()),
-                      );
-                    },
-                    child: Text(context.tr('set_join_create_household'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-            ],
-          ),
-
-          // ── SALARY & BUDGET CYCLE (payday) ──
-          if (_householdId != null)
-            SettingsSection(
-              title: context.tr('set_salary_section'),
-              subtitle: context.trArgs('set_salary_section_summary', {'day': _paydayDay}),
-              icon: Icons.calendar_month_outlined,
-              children: [
-                PaydaySettingsCard(
-                  initialPayday: _paydayDay,
-                  onSavePayday: _savePayday,
                 ),
               ],
             ),
 
-          // ── APPEARANCE & LANGUAGE ──
-          SettingsSection(
-            title: context.tr('appearance_language'),
-            subtitle: context.tr('set_customize_app_theme_system_language'),
-            icon: Icons.palette_outlined,
-            initiallyExpanded: true,
-            children: [_buildAppearanceAndLanguageCard()],
-          ),
-
-          // ── 1. HARDWARE & APP PERMISSIONS ──
-          SettingsSection(
-            title: context.tr('hardware_permissions'),
-            subtitle: context.tr('set_check_manage_camera_microphone_access'),
-            icon: Icons.verified_user_outlined,
-            children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Column(
-              children: [
-                _buildCompactPermissionRow(
-                  icon: Icons.camera_alt_outlined,
-                  title: context.tr('camera_access'),
-                  subtitle: context.tr('camera_access_desc'),
-                  status: _cameraStatus,
-                  onRequest: _requestCameraPermission,
-                  onOpenSettings: openAppSettings,
-                  testAction: _cameraStatus.isGranted || _cameraStatus.isLimited
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
-                          )
-                      : null,
-                  testLabel: context.tr('test_camera'),
-                ),
-                Divider(color: context.borderColor, height: 1),
-                _buildCompactPermissionRow(
-                  icon: Icons.mic_none_outlined,
-                  title: context.tr('microphone_access'),
-                  subtitle: context.tr('microphone_access_desc'),
-                  status: _microphoneStatus,
-                  onRequest: _requestMicrophonePermission,
-                  onOpenSettings: openAppSettings,
-                ),
-                Divider(color: context.borderColor, height: 1),
-                _buildCompactPermissionRow(
-                  icon: Icons.notifications_active_outlined,
-                  title: context.tr('notifications'),
-                  subtitle: context.tr('notifications_desc'),
-                  status: _notificationStatus,
-                  onRequest: () async {
-                    final status = await Permission.notification.request();
-                    setState(() => _notificationStatus = status);
-                  },
-                  onOpenSettings: openAppSettings,
-                ),
-              ],
-            ),
-          ),
-            ],
-          ),
-
-          // ── REMINDERS (local notifications) ──
-          SettingsSection(
-            title: context.tr('reminders_title'),
-            subtitle: context.tr('reminders_desc'),
-            icon: Icons.notifications_none_rounded,
-            children: const [ReminderSettingsCard()],
-          ),
-
-          // ── HOUSEHOLD SETTLEMENT & NAFAQAH ──
+          // What the household members owe each other.
           if (_householdId != null && _members.length > 1)
             SettingsSection(
-              title: context.tr('partner_settlement'),
+              id: 'partner_settlement',
+              title: context.tr('set_partner_settlement_section'),
               subtitle: context.tr('partner_settlement_desc'),
               icon: Icons.handshake_outlined,
               children: [
@@ -1028,10 +873,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                       return Container(
                         height: 90,
                         alignment: Alignment.center,
-                        child: const SizedBox(
+                        child: SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText),
                         ),
                       );
                     }
@@ -1051,252 +896,333 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
 
-          // ── DATA EXPORT & OFFLINE QUEUE ──
+          // How the app looks and reads.
           SettingsSection(
+            id: 'appearance',
+            title: context.tr('appearance_language'),
+            subtitle: context.tr('set_customize_app_theme_system_language'),
+            icon: Icons.palette_outlined,
+            initiallyExpanded: true,
+            children: [_buildAppearanceAndLanguageCard()],
+          ),
+
+          // Reminders, then the device permission they depend on.
+          SettingsSection(
+            id: 'reminders',
+            title: context.tr('set_reminders_section'),
+            subtitle: context.tr('reminders_desc'),
+            icon: Icons.notifications_none_rounded,
+            children: const [ReminderSettingsCard()],
+          ),
+
+          // Device access the app asks for.
+          SettingsSection(
+            id: 'permissions',
+            title: context.tr('hardware_permissions'),
+            subtitle: context.tr('set_check_manage_camera_microphone_access'),
+            icon: Icons.verified_user_outlined,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: context.cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Column(
+                  children: [
+                    _buildCompactPermissionRow(
+                      icon: Icons.camera_alt_outlined,
+                      title: context.tr('camera_access'),
+                      subtitle: context.tr('camera_access_desc'),
+                      status: _cameraStatus,
+                      onRequest: _requestCameraPermission,
+                      onOpenSettings: openAppSettings,
+                      testAction: _cameraStatus.isGranted || _cameraStatus.isLimited
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const ZatcaQrCameraScanner()),
+                              )
+                          : null,
+                      testLabel: context.tr('test_camera'),
+                    ),
+                    Divider(color: context.borderColor, height: 1),
+                    _buildCompactPermissionRow(
+                      icon: Icons.mic_none_outlined,
+                      title: context.tr('microphone_access'),
+                      subtitle: context.tr('microphone_access_desc'),
+                      status: _microphoneStatus,
+                      onRequest: _requestMicrophonePermission,
+                      onOpenSettings: openAppSettings,
+                    ),
+                    Divider(color: context.borderColor, height: 1),
+                    _buildCompactPermissionRow(
+                      icon: Icons.notifications_active_outlined,
+                      title: context.tr('notifications'),
+                      subtitle: context.tr('notifications_desc'),
+                      status: _notificationStatus,
+                      onRequest: () async {
+                        final status = await Permission.notification.request();
+                        setState(() => _notificationStatus = status);
+                      },
+                      onOpenSettings: openAppSettings,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Getting data out, and what is still waiting to sync.
+          SettingsSection(
+            id: 'reports',
             title: context.tr('reports_offline_queue'),
             icon: Icons.table_view_outlined,
             children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.table_view_rounded, color: context.accentText, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
+                    _rowWithAction(
+                      lead: [
+                        Icon(Icons.table_view_rounded, color: context.accentText, size: 20),
+                        const SizedBox(width: 10),
+                      ],
+                      text: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(context.tr('set_export_monthly_report'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                           Text(context.tr('set_generate_standard_csv_date_merchant'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                         ],
                       ),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.primaryButtonBg,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      action: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primaryButtonBg,
+                          foregroundColor: context.primaryButtonFg,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        ),
+                        onPressed: () async {
+                          if (_householdId == null) return;
+                          try {
+                            final res = await supabase
+                                .from('transactions')
+                                .select()
+                                .eq('household_id', _householdId!)
+                                .order('timestamp', ascending: false)
+                                .limit(500);
+                            if (!context.mounted) return;
+                            CsvExportService.showExportDialog(context, List<Map<String, dynamic>>.from(res), monthLabel: context.tr('set_export_monthly_label'));
+                          } catch (e) {
+                            debugPrint('Transaction export failed: $e');
+                            if (!context.mounted) return;
+                            AppSnackBar.showError(
+                              context,
+                              context.tr('load_error_generic'),
+                              title: context.tr('set_export_failed'),
+                            );
+                          }
+                        },
+                        child: Text(context.tr('export_csv'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                      onPressed: () async {
-                        if (_householdId == null) return;
-                        try {
-                          final res = await supabase
-                              .from('transactions')
-                              .select()
-                              .eq('household_id', _householdId!)
-                              .order('timestamp', ascending: false)
-                              .limit(500);
-                          if (!context.mounted) return;
-                          CsvExportService.showExportDialog(context, List<Map<String, dynamic>>.from(res), monthLabel: 'Monthly Export');
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          AppSnackBar.showError(
-                            context,
-                            context.trArgs('set_export_error', {'error': e}),
-                            title: context.tr('set_export_failed'),
-                          );
-                        }
-                      },
-                      child: Text(context.tr('export_csv'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Divider(color: context.borderColor, height: 1),
-                const SizedBox(height: 14),
-                ValueListenableBuilder<int>(
-                  valueListenable: OfflineSyncService.instance.pendingCountNotifier,
-                  builder: (ctx, count, _) {
-                    return Row(
-                      children: [
-                        Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? Colors.orange : context.electricTeal, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
+                    const SizedBox(height: 14),
+                    Divider(color: context.borderColor, height: 1),
+                    const SizedBox(height: 14),
+                    ValueListenableBuilder<int>(
+                      valueListenable: OfflineSyncService.instance.pendingCountNotifier,
+                      builder: (ctx, count, _) {
+                        return _rowWithAction(
+                          lead: [
+                            Icon(count > 0 ? Icons.cloud_off_rounded : Icons.cloud_done_rounded, color: count > 0 ? context.warnText : context.electricTeal, size: 20),
+                            const SizedBox(width: 10),
+                          ],
+                          text: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(context.tr('set_offline_sqlite_queue'), style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                               Text(count > 0 ? context.trPlural('set_transaction_s_pending_sync', count) : context.tr('set_all_transactions_synchronized'), style: TextStyle(color: context.textSecondary, fontSize: 11)),
                             ],
                           ),
-                        ),
-                        if (count > 0)
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: context.electricTeal,
-                              foregroundColor: context.isDark ? Colors.black : Colors.white,
-                            ),
-                            onPressed: () => OfflineSyncService.instance.flushQueue(),
-                            child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                      ],
-                    );
-                  },
+                          action: count > 0
+                              ? ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: context.primaryButtonBg,
+                                    foregroundColor: context.primaryButtonFg,
+                                  ),
+                                  onPressed: () => OfflineSyncService.instance.flushQueue(),
+                                  child: Text(context.tr('sync_now'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                )
+                              : null,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
             ],
           ),
 
-          // ── HELP & SUPPORT ──
+          // Guides, the help centre and the developer contact.
           SettingsSection(
+            id: 'help',
             title: context.tr('set_help_support'),
             subtitle: context.tr('set_explore_user_guides_interactive_walkthroughs'),
             icon: Icons.help_outline_rounded,
             initiallyExpanded: true,
             children: [
-          Card(
-            color: context.cardBg,
-            elevation: 0,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: context.borderColor),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: context.accentSubtleBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.menu_book_rounded, color: context.accentText, size: 20),
-                  ),
-                  title: Text(
-                    context.tr('set_app_guide_tutorial'),
-                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    context.tr('set_replay_5_step_interactive_feature'),
-                    style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
-                  ),
-                  trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
-                  onTap: () => UserGuideWalkthroughDialog.show(context),
+              Card(
+                color: context.cardBg,
+                elevation: 0,
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: context.borderColor),
                 ),
-                Divider(color: context.borderColor, height: 1),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: context.infoSubtleBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.support_agent_rounded, color: context.infoColor, size: 20),
-                  ),
-                  title: Text(
-                    context.tr('set_help_center_ai_support'),
-                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    context.tr('set_searchable_faqs_salary_cycle_guide'),
-                    style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
-                  ),
-                  trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => HelpSupportScreen(
-                          householdId: _householdId,
-                          userEmail: _userEmail,
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.accentSubtleBg,
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Icon(Icons.menu_book_rounded, color: context.accentText, size: 20),
                       ),
-                    );
-                  },
-                ),
-                Divider(color: context.borderColor, height: 1),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: context.alertWarningBg,
-                      borderRadius: BorderRadius.circular(10),
+                      title: Text(
+                        context.tr('set_app_guide_tutorial'),
+                        style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        context.tr('set_replay_5_step_interactive_feature'),
+                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
+                      onTap: () => UserGuideWalkthroughDialog.show(context),
                     ),
-                    child: Icon(Icons.mail_outline_rounded, color: context.warnText, size: 20),
-                  ),
-                  title: Text(
-                    context.tr('contact_developer'),
-                    style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    context.trArgs('set_email_dev_feedback', {'email': 'fmscoinfo@fmsco.com.sa'}),
-                    style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
-                  ),
-                  trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
-                  onTap: () {
-                    Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
-                    AppSnackBar.showSuccess(
-                      context,
-                      context.trArgs('set_dev_email_copied', {'email': 'fmscoinfo@fmsco.com.sa'}),
-                      title: context.tr('set_copied'),
-                      icon: Icons.copy_rounded,
-                    );
-                  },
+                    Divider(color: context.borderColor, height: 1),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.infoSubtleBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.support_agent_rounded, color: context.infoColor, size: 20),
+                      ),
+                      title: Text(
+                        context.tr('set_help_center_ai_support'),
+                        style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        context.tr('set_searchable_faqs_salary_cycle_guide'),
+                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => HelpSupportScreen(
+                              householdId: _householdId,
+                              userEmail: _userEmail,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(color: context.borderColor, height: 1),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.alertWarningBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.mail_outline_rounded, color: context.warnText, size: 20),
+                      ),
+                      title: Text(
+                        context.tr('contact_developer'),
+                        style: GoogleFonts.outfit(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        context.trArgs('set_email_dev_feedback', {'email': 'fmscoinfo@fmsco.com.sa'}),
+                        style: GoogleFonts.outfit(color: context.textSecondary, fontSize: 12),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
+                      onTap: () {
+                        Clipboard.setData(const ClipboardData(text: 'fmscoinfo@fmsco.com.sa'));
+                        AppSnackBar.showSuccess(
+                          context,
+                          context.trArgs('set_dev_email_copied', {'email': 'fmscoinfo@fmsco.com.sa'}),
+                          title: context.tr('set_copied'),
+                          icon: Icons.copy_rounded,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
 
-          // ── 4. HOUSEHOLD & ACCOUNT ──
-          _buildSectionHeader(context.tr('set_household_account')),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_userEmail != null) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.account_circle_outlined, color: context.textSecondary, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _userEmail!,
-                          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: BorderSide(color: context.dangerColor),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: Text(context.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: () => supabase.auth.signOut(),
-                  ),
+          // Who is signed in, and signing out.
+          SettingsSection(
+            id: 'account',
+            title: context.tr('set_account_section'),
+            icon: Icons.manage_accounts_outlined,
+            initiallyExpanded: true,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.borderColor),
                 ),
-              ],
-            ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_userEmail != null) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.account_circle_outlined, color: context.textSecondary, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _userEmail!,
+                              style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: context.dangerColor,
+                          side: BorderSide(color: context.dangerColor),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: Transform.flip(flipX: context.isRtl, child: const Icon(Icons.logout, size: 18)),
+                        label: Text(context.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () => supabase.auth.signOut(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 80),
         ],
       ),
     );
@@ -1355,15 +1281,113 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: GoogleFonts.outfit(
-        fontSize: 12,
-        letterSpacing: 1,
-        fontWeight: FontWeight.w700,
-        color: context.textSecondary,
+  /// Large text: a button moves under its row's text, where it has the whole
+  /// width, so no word in the text or the button has to break.
+  bool get _largeText => isLargeText(context);
+
+  /// A selector's options: side by side and equal in height, or one per line at
+  /// large text, where three in a row would break their words.
+  Widget _optionsRow(List<Widget> options) {
+    if (_largeText) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: options);
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (final option in options) Expanded(child: option)],
       ),
+    );
+  }
+
+  /// [lead] and [text], with the button [action] beside them, or under them at
+  /// large text. Beside them its label wraps between words rather than pushing
+  /// the row past the card. A small [trailing] widget always stays in the row.
+  Widget _rowWithAction({required List<Widget> lead, required Widget text, Widget? action, Widget? trailing}) {
+    if (action != null && _largeText) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [...lead, Expanded(child: text)]),
+          const SizedBox(height: 8),
+          Align(alignment: AlignmentDirectional.centerEnd, child: action),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        ...lead,
+        Expanded(child: text),
+        if (action != null) ...[
+          const SizedBox(width: 8),
+          ConstrainedBox(constraints: const BoxConstraints(maxWidth: 120), child: action),
+        ],
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ],
+    );
+  }
+
+  /// One setting as a card: icon, title and description, then [action] or [trailing].
+  Widget _buildRowCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? action,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    final row = _rowWithAction(
+      lead: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: context.pillBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: context.accentText, size: 24),
+        ),
+        const SizedBox(width: 14),
+      ],
+      text: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      action: action,
+      trailing: trailing,
+    );
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: onTap == null
+          ? row
+          : InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onTap,
+              child: row,
+            ),
     );
   }
 
@@ -1420,34 +1444,35 @@ class _SettingsScreenState extends State<SettingsScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: borderColor),
             ),
-            child: Row(
-              children: [
-                _buildThemeOption(
-                  label: context.tr('theme_system'),
-                  icon: Icons.brightness_auto_rounded,
-                  isSelected: themeProvider.themeMode == ThemeMode.system,
-                  onTap: () => themeProvider.setThemeMode(ThemeMode.system),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-                _buildThemeOption(
-                  label: context.tr('theme_light'),
-                  icon: Icons.light_mode_rounded,
-                  isSelected: themeProvider.themeMode == ThemeMode.light,
-                  onTap: () => themeProvider.setThemeMode(ThemeMode.light),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-                _buildThemeOption(
-                  label: context.tr('theme_dark'),
-                  icon: Icons.dark_mode_rounded,
-                  isSelected: themeProvider.themeMode == ThemeMode.dark,
-                  onTap: () => themeProvider.setThemeMode(ThemeMode.dark),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-              ],
-            ),
+            child: _optionsRow([
+                  _buildThemeOption(
+                    id: 'system',
+                    label: context.tr('theme_system'),
+                    icon: Icons.brightness_auto_rounded,
+                    isSelected: themeProvider.themeMode == ThemeMode.system,
+                    onTap: () => themeProvider.setThemeMode(ThemeMode.system),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+                  _buildThemeOption(
+                    id: 'light',
+                    label: context.tr('theme_light'),
+                    icon: Icons.light_mode_rounded,
+                    isSelected: themeProvider.themeMode == ThemeMode.light,
+                    onTap: () => themeProvider.setThemeMode(ThemeMode.light),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+                  _buildThemeOption(
+                    id: 'dark',
+                    label: context.tr('theme_dark'),
+                    icon: Icons.dark_mode_rounded,
+                    isSelected: themeProvider.themeMode == ThemeMode.dark,
+                    onTap: () => themeProvider.setThemeMode(ThemeMode.dark),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+            ]),
           ),
           const SizedBox(height: 20),
           Divider(color: borderColor, height: 1),
@@ -1486,44 +1511,46 @@ class _SettingsScreenState extends State<SettingsScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: borderColor),
             ),
-            child: Row(
-              children: [
-                _buildLanguageOption(
-                  label: 'English',
-                  code: 'en',
-                  flag: '🇺🇸',
-                  isSelected: localeProvider.languageCode == 'en',
-                  onTap: () => localeProvider.setLanguageCode('en'),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-                _buildLanguageOption(
-                  label: 'العربية',
-                  code: 'ar',
-                  flag: '🇸🇦',
-                  isSelected: localeProvider.languageCode == 'ar',
-                  onTap: () => localeProvider.setLanguageCode('ar'),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-                _buildLanguageOption(
-                  label: 'اردو',
-                  code: 'ur',
-                  flag: '🇵🇰',
-                  isSelected: localeProvider.languageCode == 'ur',
-                  onTap: () => localeProvider.setLanguageCode('ur'),
-                  activeBg: activeBg,
-                  textColor: textColor,
-                ),
-              ],
-            ),
+            child: _optionsRow([
+                  _buildLanguageOption(
+                    label: 'English',
+                    code: 'en',
+                    flag: '🇺🇸',
+                    isSelected: localeProvider.languageCode == 'en',
+                    onTap: () => localeProvider.setLanguageCode('en'),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+                  _buildLanguageOption(
+                    label: 'العربية',
+                    code: 'ar',
+                    flag: '🇸🇦',
+                    isSelected: localeProvider.languageCode == 'ar',
+                    onTap: () => localeProvider.setLanguageCode('ar'),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+                  _buildLanguageOption(
+                    label: 'اردو',
+                    code: 'ur',
+                    flag: '🇵🇰',
+                    isSelected: localeProvider.languageCode == 'ur',
+                    onTap: () => localeProvider.setLanguageCode('ur'),
+                    activeBg: activeBg,
+                    textColor: textColor,
+                  ),
+            ]),
           ),
         ],
       ),
     );
   }
 
+  /// Text and icons on a selected option, which sits on the [ThemeContextExtension.accentText] fill.
+  Color get _onSelectedOption => context.cardBg;
+
   Widget _buildThemeOption({
+    required String id,
     required String label,
     required IconData icon,
     required bool isSelected,
@@ -1531,33 +1558,33 @@ class _SettingsScreenState extends State<SettingsScreen>
     required Color activeBg,
     required Color textColor,
   }) {
-    return Expanded(
+    final foreground = isSelected ? _onSelectedOption : textColor;
+    return Semantics(
+      key: ValueKey('theme_option_$id'),
+      button: true,
+      selected: isSelected,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           decoration: BoxDecoration(
             color: isSelected ? activeBg : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Row(
+          // The icon above the label leaves the label the whole width, and it
+          // wraps rather than being cut off in long languages or large text.
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? (context.cardBg) : textColor,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isSelected ? (context.cardBg) : textColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+              Icon(icon, size: 16, color: foreground),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: foreground,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -1576,11 +1603,14 @@ class _SettingsScreenState extends State<SettingsScreen>
     required Color activeBg,
     required Color textColor,
   }) {
-    return Expanded(
+    return Semantics(
+      key: ValueKey('language_option_$code'),
+      button: true,
+      selected: isSelected,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           decoration: BoxDecoration(
             color: isSelected ? activeBg : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
@@ -1588,8 +1618,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: Center(
             child: Text(
               '$flag $label',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                color: isSelected ? (context.isDark ? Colors.black : Colors.white) : textColor,
+                color: isSelected ? _onSelectedOption : textColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
@@ -1616,9 +1647,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+      child: _rowWithAction(
+        lead: [
           Container(
             width: 36,
             height: 36,
@@ -1633,78 +1663,77 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+        text: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isGranted ? activeColor.withValues(alpha: 0.15) : notGrantedColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
-                        style: TextStyle(
-                          color: isGranted ? activeColor : notGrantedColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
                 Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 11, color: context.textSecondary),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textPrimary),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isGranted ? activeColor.withValues(alpha: 0.15) : notGrantedColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    isGranted ? context.tr('set_granted') : context.tr('set_not_granted'),
+                    style: TextStyle(
+                      color: isGranted ? activeColor : notGrantedColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          if (!isGranted)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: context.primaryButtonBg,
-                foregroundColor: context.primaryButtonFg,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                minimumSize: const Size(48, 40),
-              ),
-              onPressed: onRequest,
-              child: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            )
-          else if (testAction != null)
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: context.textPrimary,
-                side: BorderSide(color: context.borderColor),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                minimumSize: const Size(48, 40),
-              ),
-              onPressed: testAction,
-              child: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 12)),
-            )
-          else
-            IconButton(
-              icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
-              tooltip: context.tr('set_open_app_settings'),
-              onPressed: onOpenSettings,
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 11, color: context.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-        ],
+          ],
+        ),
+        action: !isGranted
+            ? ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  minimumSize: const Size(48, 40),
+                ),
+                onPressed: onRequest,
+                child: Text(context.tr('set_grant_access'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              )
+            : testAction != null
+                ? OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.textPrimary,
+                      side: BorderSide(color: context.borderColor),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: const Size(48, 40),
+                    ),
+                    onPressed: testAction,
+                    child: Text(testLabel ?? context.tr('set_test'), style: const TextStyle(fontSize: 12)),
+                  )
+                : null,
+        trailing: isGranted && testAction == null
+            ? IconButton(
+                icon: Icon(Icons.settings_outlined, size: 18, color: context.textSecondary),
+                tooltip: context.tr('set_open_app_settings'),
+                onPressed: onOpenSettings,
+              )
+            : null,
       ),
     );
   }

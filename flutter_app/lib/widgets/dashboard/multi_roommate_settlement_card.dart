@@ -223,7 +223,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                   context.tr('simplify_debts'),
                   style: TextStyle(
                     color: _simplifyDebts
-                        ? (context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight)
+                        ? context.accentText
                         : context.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -233,8 +233,8 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
               ),
               Switch(
                 value: _simplifyDebts,
-                activeThumbColor: context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight,
-                activeTrackColor: (context.isDark ? VelvetBurgundyColors.roseGoldGlow : VelvetBurgundyColors.primaryLight).withValues(alpha: 0.3),
+                activeThumbColor: context.accentText,
+                activeTrackColor: context.accentText.withValues(alpha: 0.3),
                 onChanged: (val) {
                   setState(() => _simplifyDebts = val);
                 },
@@ -288,30 +288,41 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: context.isDarkMode ? 0.12 : 0.08),
+                    color: color.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: color.withValues(alpha: 0.3)),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${entry.key.toUpperCase()}: ',
-                        style: TextStyle(
-                          color: context.textPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  // One paragraph, so name and amount share the width and the name
+                  // breaks between words. The amount is one inline unit: it can
+                  // never split across digits, and it keeps its own bidi order. It
+                  // shrinks only if it is wider than a whole line.
+                  child: Text.rich(
+                    TextSpan(
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        displayAmt,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                      children: [
+                        TextSpan(text: '${entry.key.toUpperCase()}: '),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              displayAmt,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -391,9 +402,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                             Text(
                               context.sar(debt.amount),
                               style: GoogleFonts.outfit(
-                                color: context.isDark
-                                    ? VelvetBurgundyColors.roseGoldGlow
-                                    : VelvetBurgundyColors.primaryLight,
+                                color: context.accentText,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -407,9 +416,7 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                         icon: Icon(
                           Icons.share_rounded,
                           size: 18,
-                          color: context.isDark
-                              ? VelvetBurgundyColors.roseGoldGlow
-                              : VelvetBurgundyColors.primaryLight,
+                          color: context.accentText,
                         ),
                         onPressed: () {
                           HapticFeedback.selectionClick();
@@ -424,31 +431,32 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
                         },
                       ),
                       const SizedBox(width: 4),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.isDark
-                              ? VelvetBurgundyColors.primaryDark
-                              : VelvetBurgundyColors.primaryLight,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 110),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.primaryButtonBg,
+                            foregroundColor: context.primaryButtonFg,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            context.tr('settle_now'),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            _showSettleSheet(
+                              context,
+                              fromId: debt.fromId,
+                              toId: debt.toId,
+                              fromName: debt.fromName,
+                              toName: debt.toName,
+                              amount: debt.amount,
+                            );
+                          },
                         ),
-                        child: Text(
-                          context.tr('settle_now'),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          _showSettleSheet(
-                            context,
-                            fromId: debt.fromId,
-                            toId: debt.toId,
-                            fromName: debt.fromName,
-                            toName: debt.toName,
-                            amount: debt.amount,
-                          );
-                        },
                       ),
                     ],
                   ),
@@ -636,6 +644,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: context.tr('amount_sar'),
+                floatingLabelStyle: TextStyle(color: context.accentText),
                 prefixIcon: const Icon(Icons.attach_money_rounded),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -648,12 +657,13 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Row(
+            // Wraps: three chips do not fit one line in long languages or large text.
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 _buildMethodChip('stc_pay', context.tr('pay_method_stc_pay'), Icons.phone_android_rounded),
-                const SizedBox(width: 8),
                 _buildMethodChip('bank_transfer', context.tr('pay_method_bank_transfer'), Icons.account_balance_rounded),
-                const SizedBox(width: 8),
                 _buildMethodChip('cash', context.tr('pay_method_cash'), Icons.payments_rounded),
               ],
             ),
@@ -662,6 +672,8 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
             // Copy note
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
+                foregroundColor: context.textPrimary,
+                side: BorderSide(color: context.borderColor),
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -688,18 +700,18 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.isDark
-                      ? VelvetBurgundyColors.primaryDark
-                      : VelvetBurgundyColors.primaryLight,
-                  foregroundColor: Colors.white,
+                  backgroundColor: context.primaryButtonBg,
+                  foregroundColor: context.primaryButtonFg,
+                  disabledBackgroundColor: context.primaryButtonBg,
+                  disabledForegroundColor: context.primaryButtonFg,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: _isSubmitting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.primaryButtonFg),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
@@ -718,9 +730,17 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
   Widget _buildMethodChip(String id, String label, IconData icon) {
     final isSelected = _paymentMethod == id;
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? (context.isDark ? context.primaryButtonFg : Colors.white) : context.textSecondary),
+      avatar: Icon(icon, size: 14, color: isSelected ? context.accentText : context.textSecondary),
       label: Text(label),
       selected: isSelected,
+      selectedColor: context.accentSubtleBg,
+      backgroundColor: context.cardBg,
+      checkmarkColor: context.accentText,
+      labelStyle: TextStyle(
+        color: isSelected ? context.accentText : context.textPrimary,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      side: BorderSide(color: isSelected ? context.accentText : context.borderColor),
       onSelected: (val) {
         if (val) setState(() => _paymentMethod = id);
       },
