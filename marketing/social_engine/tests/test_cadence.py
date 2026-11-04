@@ -310,6 +310,28 @@ def test_other_shares_hold_over_a_long_run(share, english):
     assert languages(50, share).count("en") == english
 
 
+def test_a_clock_set_back_cannot_beat_the_weekly_cap():
+    schedule = load_config().schedule
+    real_now = at(SUNDAY + timedelta(days=11), 20)
+    made = [
+        GeneratedReel(day.isoformat(), at(day))
+        for day in (SUNDAY + timedelta(days=7), SUNDAY + timedelta(days=9), real_now.date())
+    ]
+    wrong = real_now - timedelta(days=7)  # a dead CMOS battery, a bad sync
+
+    decision = decide_generation(wrong, schedule, made, waiting=0, max_waiting=MAX_WAITING)
+
+    assert (decision.slot, decision.reason) == (None, CadenceReason.WEEK_CAP)
+
+
+def test_one_reel_from_a_wrong_clock_uses_up_one_place_and_no_more():
+    schedule = load_config().schedule
+    now = at(SUNDAY + timedelta(days=4), 20)
+    far_future = GeneratedReel("2030-01-01", at(date(2030, 1, 1)))
+    decision = decide_generation(now, schedule, [far_future], waiting=0, max_waiting=MAX_WAITING)
+    assert decision.reason == CadenceReason.DUE
+
+
 def test_a_position_cannot_be_negative():
     with pytest.raises(ValueError, match="position"):
         language_for_position(-1, 0.2)

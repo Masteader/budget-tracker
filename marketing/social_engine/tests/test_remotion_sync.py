@@ -89,7 +89,7 @@ def test_npm_ci_installs_from_the_real_committed_lockfile(data_root, npm):
     assert (work(data_root) / "package-lock.json").read_bytes() == committed.read_bytes()
     assert npm.count == 1
     args, kwargs = npm.calls[0]
-    assert args[1:] == ["ci"]
+    assert args[1:] == ["ci", "--ignore-scripts"]
     assert Path(kwargs["cwd"]) == work(data_root)
 
 
@@ -160,7 +160,7 @@ def test_npm_ci_runs_on_the_first_sync_in_the_work_folder(engine, data_root, npm
     assert sync(engine, data_root).ran_npm_ci is True
     assert npm.count == 1
     args, kwargs = npm.calls[0]
-    assert args == ["C:/fake/npm.cmd", "ci"]
+    assert args == ["C:/fake/npm.cmd", "ci", "--ignore-scripts"]
     assert Path(kwargs["cwd"]) == work(data_root)
 
 
@@ -627,15 +627,16 @@ def test_pull_lock_with_no_lockfile_is_an_error(engine, data_root, npm):
         pull_lock(engine, data_root)
 
 
-def test_a_pulled_lockfile_does_not_trigger_npm_ci(engine, data_root, npm):
-    # It came from that very node_modules, so nothing needs reinstalling.
+def test_a_pulled_lockfile_gets_one_clean_install_at_the_next_sync(engine, data_root, npm):
+    # Nothing can show that node_modules matches it, so only a finished `npm ci` writes the stamp.
     (engine / "remotion_studio" / "package-lock.json").unlink()
     sync(engine, data_root)
     (work(data_root) / "node_modules").mkdir()
     (work(data_root) / "package-lock.json").write_text('{"fresh": 1}', encoding="utf-8")
     pull_lock(engine, data_root)
+    assert sync(engine, data_root).ran_npm_ci is True
     assert sync(engine, data_root).ran_npm_ci is False
-    assert npm.count == 0
+    assert npm.count == 1
 
 
 # --- Command line ----------------------------------------------------------------------

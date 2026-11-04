@@ -31,9 +31,9 @@ def rig(tmp_path, monkeypatch) -> Rig:
 def render(rig: Rig, **overrides):
     return render_reel(
         rig.request(**overrides),
+        store=rig.reels,
         config=rig.config,
         paths=rig.paths,
-        test_reel=True,
         engine_root=rig.engine,
     )
 
@@ -47,7 +47,7 @@ def good(path: Path) -> None:
 
 
 def renders_folder(rig: Rig) -> list[str]:
-    return sorted(path.name for path in rig.paths.renders.iterdir())
+    return sorted(path.name for path in rig.paths.renders.iterdir() if path.suffix != ".json")
 
 
 def work_out(rig: Rig) -> list[str]:
@@ -436,9 +436,9 @@ def test_a_change_in_any_input_is_a_new_render(rig, change):
     second = (
         render_reel(
             request,
+            store=rig.reels,
             config=rig.config,
             paths=rig.paths,
-            test_reel=True,
             engine_root=rig.engine,
         )
         if request is not None

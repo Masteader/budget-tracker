@@ -197,7 +197,7 @@ def test_a_file_changed_after_approval_goes_back_to_awaiting_before_any_send(ben
     bench.video.write_bytes(b"swapped after approval")
 
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
     assert refused.value.reason == RefusalReason.HASH_CHANGED
     fresh = bench.refresh(reel)
@@ -223,11 +223,11 @@ def test_an_old_approval_does_not_carry_over_after_a_send_back(bench):
     original = bench.video.read_bytes()
     bench.video.write_bytes(b"swapped")
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.video.write_bytes(original)  # the file comes back, and the owner still has to tap
 
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert (
         bench.store.start_publishing(reel.reel_id, reel.revision, TWO_PLATFORMS, bench.config)
         is False
@@ -346,7 +346,7 @@ def test_regenerating_invalidates_every_older_approval(bench):
     original = bench.video.read_bytes()
     bench.video.write_bytes(b"swapped")
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.video.write_bytes(original)
     assert approvals_of(bench, reel), "the old approval row stays in the record"
 
@@ -355,6 +355,7 @@ def test_regenerating_invalidates_every_older_approval(bench):
     assert bench.store.finish_regeneration(reel.reel_id, reel.revision)
     assert bench.store.record_voiced(reel.reel_id, reel.revision + 1, "S0")
     # The same bytes, so the same hash: only the revision tells the two approvals apart.
+    bench.prove(reel.reel_id, reel.revision + 1)
     assert bench.store.record_rendered(
         reel.reel_id, reel.revision + 1, bench.video, "content-hash", bench.config
     )
@@ -373,7 +374,7 @@ def test_the_old_revision_cannot_publish_during_regeneration(bench):
     reel = bench.awaiting()
     assert bench.store.apply_tap(tap(reel, TapAction.REGENERATE), bench.config).applied
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert bench.store.schedule_reel(reel.reel_id, reel.revision, bench.clock()) is False
 
 
@@ -389,6 +390,7 @@ def test_regeneration_stops_at_the_limit(tmp_path):
             assert store.finish_regeneration(reel.reel_id, reel.revision)
             reel = bench.refresh(reel)
             assert store.record_voiced(reel.reel_id, reel.revision, "S0")
+            bench.prove(reel.reel_id, reel.revision, "h")
             assert store.record_rendered(reel.reel_id, reel.revision, bench.video, "h", config)
             assert store.offer_for_approval(reel.reel_id, reel.revision, config)
             reel = bench.refresh(reel)
@@ -514,6 +516,7 @@ def test_a_real_reel_cannot_be_delivered_as_a_test(bench):
 
 def test_a_test_reel_still_renders_in_the_shipped_test_mode(bench):
     reel = bench.voiced(is_test=True)
+    bench.prove(reel.reel_id, reel.revision, "h")
     assert bench.store.record_rendered(
         reel.reel_id, reel.revision, bench.video, "h", shipped_config()
     )
@@ -564,7 +567,7 @@ def test_the_publisher_re_checks_the_gate_when_publishing_starts(bench):
 def test_the_publisher_re_checks_the_gate_before_each_send(bench):
     reel = bench.publishing()
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], shipped_config())
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0], shipped_config())
     assert refused.value.reason == RefusalReason.BRAND_GATE
     assert {post.status for post in bench.store.posts_for(reel.reel_id)} == {PostStatus.PENDING}
 
@@ -584,11 +587,11 @@ def test_pausing_holds_publishing_at_both_steps(bench):
         )
     assert refused.value.reason == RefusalReason.PAUSED
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(publishing.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(publishing.reel_id, TWO_PLATFORMS[0])
     assert refused.value.reason == RefusalReason.PAUSED
 
     bench.store.set_paused(False)
-    assert bench.store.begin_post(publishing.reel_id, TWO_PLATFORMS[0], bench.config)
+    assert bench.claim(publishing.reel_id, TWO_PLATFORMS[0])
 
 
 @pytest.mark.parametrize(
@@ -598,13 +601,13 @@ def test_pausing_holds_publishing_at_both_steps(bench):
 def test_a_post_can_begin_only_while_publishing(bench, state):
     reel = bench.walk_to(state)
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert refused.value.reason == RefusalReason.NOT_PUBLISHING
 
 
 def test_a_claim_carries_what_the_adapter_needs(bench):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert claim.mp4_path == bench.video
     assert claim.mp4_sha256 == reel.mp4_sha256
     assert claim.idempotency_key == post_idempotency_key(reel.reel_id, TWO_PLATFORMS[0])
@@ -618,16 +621,16 @@ def test_the_idempotency_key_is_the_spec_formula():
 
 def test_a_second_begin_on_the_same_platform_is_refused(bench):
     reel = bench.publishing()
-    bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert refused.value.reason == RefusalReason.NOT_PENDING
 
 
 def test_a_platform_that_was_not_targeted_cannot_be_posted(bench):
     reel = bench.publishing(TWO_PLATFORMS[:1])
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[1])
     assert refused.value.reason == RefusalReason.NOT_PENDING
 
 
@@ -641,7 +644,7 @@ def test_bad_target_lists_are_refused(bench, platforms):
 
 def test_each_send_counts_an_attempt_and_records_the_remote_id(bench):
     reel = bench.publishing(TWO_PLATFORMS[:1])
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
     assert bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc") is True
 
@@ -654,7 +657,7 @@ def test_each_send_counts_an_attempt_and_records_the_remote_id(bench):
 @pytest.mark.parametrize("remote_id", [None, "", "   "])
 def test_success_with_no_remote_id_counts_as_an_unclear_answer(bench, remote_id):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id=remote_id)
 
@@ -665,27 +668,28 @@ def test_success_with_no_remote_id_counts_as_an_unclear_answer(bench, remote_id)
 
 def test_a_definite_rejection_is_failed_and_an_unclear_answer_is_unknown(bench):
     reel = bench.publishing()
-    first = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    first = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(first, PostOutcome.FAILED)
     assert bench.store.posts_for(reel.reel_id)[0].status == PostStatus.FAILED
     assert bench.refresh(reel).state == S.NEEDS_ATTENTION
 
     other = bench.publishing()
-    second = bench.store.begin_post(other.reel_id, TWO_PLATFORMS[0], bench.config)
+    second = bench.claim(other.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(second, PostOutcome.UNKNOWN)
     assert bench.store.posts_for(other.reel_id)[0].status == PostStatus.UNKNOWN_OUTCOME
     assert bench.refresh(other).state == S.NEEDS_ATTENTION
 
 
-def test_a_late_result_for_an_old_attempt_changes_nothing(bench):
+@pytest.mark.parametrize("late", [PostOutcome.FAILED, PostOutcome.UNKNOWN])
+def test_a_late_failure_for_an_old_attempt_changes_nothing(bench, late):
     reel = bench.publishing()
-    first = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    first = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(first, PostOutcome.FAILED)
     tapped = tap(reel, TapAction.RETRY, platform=TWO_PLATFORMS[0])
     assert bench.store.apply_tap(tapped, bench.config).applied
-    second = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    second = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
-    assert bench.store.record_post_result(first, PostOutcome.POSTED, remote_id="old") is False
+    assert bench.store.record_post_result(first, late) is False
 
     post = bench.store.posts_for(reel.reel_id)[0]
     assert (post.status, post.attempts) == (PostStatus.IN_FLIGHT, second.attempt)
@@ -693,7 +697,7 @@ def test_a_late_result_for_an_old_attempt_changes_nothing(bench):
 
 def test_a_result_cannot_be_recorded_twice(bench):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc") is True
     assert bench.store.record_post_result(claim, PostOutcome.FAILED) is False
     assert bench.store.posts_for(reel.reel_id)[0].status == PostStatus.POSTED
@@ -701,7 +705,7 @@ def test_a_result_cannot_be_recorded_twice(bench):
 
 def test_all_platforms_posted_or_skipped_finishes_the_reel(bench):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc")
     assert bench.refresh(reel).state == S.PUBLISHING
 
@@ -712,13 +716,13 @@ def test_all_platforms_posted_or_skipped_finishes_the_reel(bench):
 
 def test_skip_only_takes_a_pending_row(bench):
     reel = bench.publishing()
-    bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert bench.store.skip_platform(reel.reel_id, TWO_PLATFORMS[0]) is False
 
 
 def test_each_post_status_change_writes_an_event(bench):
     reel = bench.publishing(TWO_PLATFORMS[:1])
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc")
     changes = [
         (event.from_state, event.to_state, event.platform)
@@ -764,7 +768,7 @@ def test_posted_tapped_twice_counts_once(bench):
 @pytest.mark.parametrize("action", [TapAction.POSTED, TapAction.RETRY])
 def test_the_owner_cannot_resolve_a_row_that_is_still_in_flight(bench, action):
     reel = bench.publishing()
-    bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     result = bench.store.apply_tap(tap(reel, action, platform=TWO_PLATFORMS[0]), bench.config)
     assert_refused(result, RefusalReason.NOT_PENDING)
     assert bench.store.posts_for(reel.reel_id)[0].status == PostStatus.IN_FLIGHT
@@ -780,7 +784,7 @@ def test_already_posted_resolves_a_row_and_work_on_the_rest_carries_on(bench, ou
 
     assert result.applied
     assert bench.refresh(reel).state == S.PUBLISHING
-    assert bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+    assert bench.claim(reel.reel_id, TWO_PLATFORMS[1])
 
 
 @pytest.mark.parametrize("outcome", [PostOutcome.FAILED, PostOutcome.UNKNOWN])
@@ -795,12 +799,12 @@ def test_retry_sends_the_row_back_to_pending_only_on_the_owners_tap(bench, outco
     assert result.applied
     assert bench.refresh(reel).state == S.PUBLISHING
     assert bench.store.posts_for(reel.reel_id)[0].status == PostStatus.PENDING
-    assert bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config).attempt == 2
+    assert bench.claim(reel.reel_id, TWO_PLATFORMS[0]).attempt == 2
 
 
 def test_retry_on_a_posted_row_is_refused(bench):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc")
     assert_refused(
         bench.store.apply_tap(tap(reel, TapAction.RETRY, platform=TWO_PLATFORMS[0]), bench.config),
@@ -820,12 +824,12 @@ def test_posted_and_retry_need_a_reel_that_is_publishing(bench, state):
 
 def test_posts_survive_a_send_back_and_are_not_sent_again(bench):
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc")
     original = bench.video.read_bytes()
     bench.video.write_bytes(b"swapped")
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[1])
     bench.video.write_bytes(original)
 
     assert bench.store.apply_tap(tap(reel, TapAction.APPROVE), bench.config).applied
@@ -833,35 +837,37 @@ def test_posts_survive_a_send_back_and_are_not_sent_again(bench):
     assert bench.store.start_publishing(reel.reel_id, reel.revision, TWO_PLATFORMS, bench.config)
 
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     assert refused.value.reason == RefusalReason.NOT_PENDING
-    assert bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+    assert bench.claim(reel.reel_id, TWO_PLATFORMS[1])
 
 
 def test_a_new_revision_of_a_posted_platform_is_still_not_posted_again(bench):
     # The row is per reel and platform across revisions: a regenerated reel stays posted there.
     reel = bench.publishing()
-    claim = bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+    claim = bench.claim(reel.reel_id, TWO_PLATFORMS[0])
     bench.store.record_post_result(claim, PostOutcome.POSTED, remote_id="abc")
     original = bench.video.read_bytes()
     bench.video.write_bytes(b"swapped")
     with pytest.raises(ActionRefused):
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[1], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[1])
     bench.video.write_bytes(original)
     assert bench.store.apply_tap(tap(reel, TapAction.REGENERATE), bench.config).applied
     assert bench.store.finish_regeneration(reel.reel_id, reel.revision)
     revision = reel.revision + 1
     assert bench.store.record_voiced(reel.reel_id, revision, "S0")
     bench.video.write_bytes(b"revision two")
+    bench.prove(reel.reel_id, revision, "h2")
     assert bench.store.record_rendered(reel.reel_id, revision, bench.video, "h2", bench.config)
     assert bench.store.offer_for_approval(reel.reel_id, revision, bench.config)
     fresh = bench.refresh(reel)
     assert bench.store.apply_tap(tap(fresh, TapAction.APPROVE), bench.config).applied
     assert bench.store.schedule_reel(reel.reel_id, revision, bench.clock() + timedelta(1))
+    bench.clock.advance(days=1)
     assert bench.store.start_publishing(reel.reel_id, revision, TWO_PLATFORMS, bench.config)
 
     with pytest.raises(ActionRefused) as refused:
-        bench.store.begin_post(reel.reel_id, TWO_PLATFORMS[0], bench.config)
+        bench.claim(reel.reel_id, TWO_PLATFORMS[0])
 
     assert refused.value.reason == RefusalReason.NOT_PENDING
     assert len(bench.store.posts_for(reel.reel_id)) == len(TWO_PLATFORMS)

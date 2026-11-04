@@ -427,6 +427,12 @@ Zernio and Upload-Post adapters are not built here. They wait for the launch gat
   - Run: `PT tests/test_readme.py`.
   - Done: passes.
 
+- [ ] **K6. Wire the built checks into production**
+  - Test first: `tests/test_tick_wiring.py`. `core/tick.py` really reaches each of these, so none is only called from a test: `check_clip_for_reel`, `reel_voice_may_be_approved`, `spend_for_reel` and `check_caption_words`. The `{brand_*}` tokens are filled before a caption or script goes out. Batch C's claims register is mapped to the reel's claim IDs. Screenshots are consumed through the same checks as clips, and masked.
+  - Files: `core/tick.py`, the test, plus wiring fixes at those call sites only.
+  - Run: `PT tests/test_tick_wiring.py`, then the full Python gate.
+  - Done: passes, and a source scan finds a production caller for each of the four functions.
+
 ### Batch L: Copy report, last, report only
 
 There is no code, so no failing test. It edits nothing outside its report, because another session owns `web_app` during the rename.

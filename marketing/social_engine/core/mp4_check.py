@@ -17,6 +17,9 @@ _LARGE_SIZE_MARKER = 1
 _TO_END_OF_FILE_MARKER = 0
 _FIXED_POINT_SHIFT = 16  # tkhd holds width and height as 16.16 numbers
 
+_SAMPLE_ENTRY_SIZE_OFFSET = 40  # in stsd: its own 8, an 8-byte box header, then 24 bytes of fields
+_SAMPLE_COUNT_OFFSET = 8  # in stsz: version and flags, then the fixed size, then the count
+
 _H264 = "avc1"
 _AAC = "mp4a"
 # Rounding to a whole frame and to AAC packets moves the length a little. A render that stopped
@@ -54,6 +57,14 @@ class Mp4Info:
     duration_ms: int
     video_codec: str | None
     audio_codec: str | None
+    video_tracks: int
+    audio_tracks: int
+    stream_width: int | None  # what the video's own sample entry says, as tkhd can differ from it
+    stream_height: int | None
+    video_samples: int
+    audio_samples: int
+    media_bytes: int
+    media_open_ended: bool  # an mdat "to the end of the file" can be cut anywhere and not show it
 
 
 @dataclass(frozen=True)
@@ -61,6 +72,7 @@ class _Box:
     kind: bytes
     start: int  # the first byte after the header
     end: int
+    open_ended: bool = False
 
 
 def _next_box(handle: BinaryIO, position: int, limit: int, *, top_level: bool) -> _Box:
@@ -69,6 +81,7 @@ def _next_box(handle: BinaryIO, position: int, limit: int, *, top_level: bool) -
     handle.seek(position)
     size, kind = struct.unpack(">I4s", handle.read(_HEADER_BYTES))
     start = position + _HEADER_BYTES
+    open_ended = False
     if size == _LARGE_SIZE_MARKER:
         if limit - position < _LARGE_HEADER_BYTES:
             raise TruncatedMp4(f"a box header is cut off at byte {position}")
@@ -78,12 +91,13 @@ def _next_box(handle: BinaryIO, position: int, limit: int, *, top_level: bool) -
         if not top_level:
             raise Mp4Error(f"box {kind!r} at byte {position} has no size")
         size = limit - position
+        open_ended = True
     if size < start - position:
         raise Mp4Error(f"box {kind!r} at byte {position} is smaller than its own header")
     end = position + size
     if end > limit:
         raise TruncatedMp4(f"box {_label(kind)} at byte {position} runs past where it can end")
-    return _Box(kind, start, end)
+    return _Box(kind, start, end, open_ended)
 
 
 def _label(kind: bytes) -> str:
@@ -130,13 +144,30 @@ def _picture_size(handle: BinaryIO, tkhd: _Box) -> tuple[int, int]:
     return width >> _FIXED_POINT_SHIFT, height >> _FIXED_POINT_SHIFT
 
 
-def _sample_codec(handle: BinaryIO, mdia: _Box) -> str | None:
+def _sample_table(handle: BinaryIO, mdia: _Box) -> _Box | None:
     minf = _child(handle, mdia, b"minf")
-    stbl = _child(handle, minf, b"stbl") if minf else None
+    return _child(handle, minf, b"stbl") if minf else None
+
+
+def _sample_codec(handle: BinaryIO, stbl: _Box | None) -> str | None:
     stsd = _child(handle, stbl, b"stsd") if stbl else None
     if stsd is None:
         return None
     return _field(handle, stsd, 12, ">4s")[0].decode("latin-1")
+
+
+def _stream_size(handle: BinaryIO, stbl: _Box | None) -> tuple[int | None, int | None]:
+    stsd = _child(handle, stbl, b"stsd") if stbl else None
+    if stsd is None or stsd.end - stsd.start < _SAMPLE_ENTRY_SIZE_OFFSET + 4:
+        return None, None
+    return _field(handle, stsd, _SAMPLE_ENTRY_SIZE_OFFSET, ">HH")
+
+
+def _sample_count(handle: BinaryIO, stbl: _Box | None) -> int:
+    stsz = _child(handle, stbl, b"stsz") if stbl else None
+    if stsz is None or stsz.end - stsz.start < _SAMPLE_COUNT_OFFSET + 4:
+        return 0
+    return _field(handle, stsz, _SAMPLE_COUNT_OFFSET, ">I")[0]
 
 
 @dataclass
@@ -146,6 +177,12 @@ class _Tracks:
     height: int | None = None
     video_codec: str | None = None
     audio_codec: str | None = None
+    video_tracks: int = 0
+    audio_tracks: int = 0
+    stream_width: int | None = None
+    stream_height: int | None = None
+    video_samples: int = 0
+    audio_samples: int = 0
 
 
 def _read_track(handle: BinaryIO, trak: _Box, tracks: _Tracks) -> None:
@@ -160,11 +197,20 @@ def _read_track(handle: BinaryIO, trak: _Box, tracks: _Tracks) -> None:
     if hdlr is None:
         raise Mp4Error("a track does not say what it holds")
     handler = _field(handle, hdlr, 8, ">4s")[0]
-    if handler == b"vide" and tracks.video_codec is None:
-        tracks.width, tracks.height = _picture_size(handle, tkhd)
-        tracks.video_codec = _sample_codec(handle, mdia)
-    elif handler == b"soun" and tracks.audio_codec is None:
-        tracks.audio_codec = _sample_codec(handle, mdia)
+    if handler == b"vide":
+        tracks.video_tracks += 1
+        if tracks.video_tracks == 1:
+            stbl = _sample_table(handle, mdia)
+            tracks.width, tracks.height = _picture_size(handle, tkhd)
+            tracks.video_codec = _sample_codec(handle, stbl)
+            tracks.stream_width, tracks.stream_height = _stream_size(handle, stbl)
+            tracks.video_samples = _sample_count(handle, stbl)
+    elif handler == b"soun":
+        tracks.audio_tracks += 1
+        if tracks.audio_tracks == 1:
+            stbl = _sample_table(handle, mdia)
+            tracks.audio_codec = _sample_codec(handle, stbl)
+            tracks.audio_samples = _sample_count(handle, stbl)
 
 
 def _top_level_boxes(handle: BinaryIO, size: int) -> list[_Box]:
@@ -210,6 +256,14 @@ def _read(handle: BinaryIO, size: int) -> Mp4Info:
         duration_ms=_duration_ms(handle, mvhd),
         video_codec=tracks.video_codec,
         audio_codec=tracks.audio_codec,
+        video_tracks=tracks.video_tracks,
+        audio_tracks=tracks.audio_tracks,
+        stream_width=tracks.stream_width,
+        stream_height=tracks.stream_height,
+        video_samples=tracks.video_samples,
+        audio_samples=tracks.audio_samples,
+        media_bytes=sum(boxes[index].end - boxes[index].start for index in mdats),
+        media_open_ended=any(boxes[index].open_ended for index in mdats),
     )
 
 
@@ -225,8 +279,12 @@ def read_mp4(path: Path) -> Mp4Info:
 def _problem(info: Mp4Info, width: int, height: int, duration_ms: int) -> str | None:
     if info.video_codec is None:
         return "the file has no video track"
+    if info.video_tracks > 1 or info.audio_tracks > 1:
+        return f"the file has {info.video_tracks} video and {info.audio_tracks} audio tracks"
     if (info.width, info.height) != (width, height):
         return f"the picture is {info.width}x{info.height}, not {width}x{height}"
+    if (info.stream_width, info.stream_height) != (width, height):
+        return f"the video stream is {info.stream_width}x{info.stream_height}, not {width}x{height}"
     if info.video_codec != _H264:
         return f"the video is {info.video_codec}, not H.264"
     if info.audio_codec != _AAC:
@@ -237,6 +295,10 @@ def _problem(info: Mp4Info, width: int, height: int, duration_ms: int) -> str | 
         return "the moov box comes after mdat"
     if info.has_edit_list:
         return "the file has an edit list"
+    if info.media_open_ended:
+        return "the mdat box has no size of its own, so a cut in the file would not show"
+    if info.media_bytes == 0 or info.video_samples == 0 or info.audio_samples == 0:
+        return "the file holds no media"
     return None
 
 

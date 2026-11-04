@@ -9,32 +9,58 @@ Who may do what:
   Telegram callback handler builds, after its owner check (invariant 1, enforced by a source scan
   in tests/test_approval_path.py).
 - `begin_post` commits `in_flight` before a provider is called, and it is the only way to get the
-  claim an adapter needs. It repeats every pre-check itself, so no caller can skip one.
+  claim an adapter needs. It repeats every pre-check itself, so no caller can skip one. It takes
+  the engine lock, held, which is what proves that no recovery can run during the send.
 - `recover_interrupted` turns a leftover `in_flight` into `unknown_outcome`. Nothing sends such a
-  row again without the owner's tap.
+  row again without the owner's tap. It takes the same lock, and never touches a row claimed under
+  the lock it was given, because that send is still alive.
+- `record_post_result` never loses a success. A provider that took the post has the post, so a late
+  answer beats whatever the row says by then, even if recovery or a Retry got there first.
 
 Decisions the spec's table leaves open, taken on the safer side:
 - A file that changes after approval sends the reel back, as invariant 2 says, from `approved`,
-  `scheduled` or `publishing`. The owner must tap again, even if the old file later returns.
+  `scheduled` or `publishing`. The owner must tap again, even if the old file later returns, and
+  the database itself asks for that new tap (`approval_floor`).
+- Audio that stops being allowed sends the reel back the same way, so the owner gets buttons that
+  work: Re-voice or Reject.
+- A file that changed while the reel waits for a tap has its own route, Render Again. It makes a new
+  revision from the same script and audio, uses no Claude, and does not count as a regeneration.
 - Retry works on `unknown_outcome` as well as `failed` (Sections 3.5 and 9.3), on the owner's tap.
+- Posted and Retry answer a question about the world, so on a `failed` or `unknown_outcome` row they
+  work in every reel state. Otherwise a send-back or a Reject could leave a question nobody can
+  answer. Retry only makes the row eligible, and `begin_post` still decides.
+- A reel with a platform already `posted` cannot be rejected, because it is live there.
+- "Never posted late" (Section 3.5) holds at both steps. `start_publishing` needs the window to have
+  opened less than `SEND_GRACE` ago. `begin_post` checks the row's `send_by`, which only
+  `start_publishing` or the owner's Retry can extend. `reschedule` moves a missed reel to the next
+  window, from `scheduled`, or from `publishing` when nothing is in flight.
+- A tap is spent once it is answered, whatever the answer was, so a replay of a refused tap stays
+  refused even after the state it was refused in has changed.
+- `is_test` lives on the reel row. `record_rendered` compares it with the receipt the render wrote
+  beside the file, so a watermarked file cannot reach a live reel, nor an unwatermarked one a test
+  reel, whatever the launch gate says.
+- An emptied, missing or rolled-back database is refused when the marker beside its folder says more
+  reels once existed, because opening it as new would let a posted slot get a second reel.
 - `/requeue` returns an expired reel to `awaiting_approval` and restarts its expiry clock.
 - Re-voice is a new revision through `regenerating`. It uses no Claude, so it does not count
   against `max_regenerations`, and it is offered only on F0 audio that may not go public.
-- `test_delivered` is terminal, so a test reel has no Regenerate, whatever its message shows.
+- `test_delivered` is terminal (Sections 3.3 and 9.3). To change a test reel, create a new one.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sqlite3
 import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -50,8 +76,16 @@ from core.locks import EngineLock
 if TYPE_CHECKING:
     from core.config import EngineConfig
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+ENGINE_LOCK_NAME = "tick.lock"  # beside the database, so a store knows which lock is its own
+# How long after its window opens a reel may still start going out. The shortest configured window
+# is an hour and a tick comes every 30 minutes, so a tick always lands inside this.
+SEND_GRACE = timedelta(hours=1)
 
+_MARKER_SUFFIX = "reels-existed"
+_MARKER_TRIES = 40
+_MARKER_PAUSE_SECONDS = 0.05
+_RECEIPT_SUFFIX = ".receipt.json"
 _BUSY_TIMEOUT_SECONDS = 30
 _WAL_SWITCH_TRIES = 150
 _WAL_SWITCH_PAUSE_SECONDS = 0.1
@@ -62,6 +96,10 @@ _PAUSED_KEY = "paused"
 
 class StateError(RuntimeError):
     """The state store cannot be used. The message says why."""
+
+
+class StateDatabaseLost(StateError):
+    """The database holds fewer reels than it once did. Opening it would forget what was posted."""
 
 
 class IllegalTransition(StateError):
@@ -87,6 +125,12 @@ class RefusalReason(StrEnum):
     NO_APPROVAL = "no_approval"
     PAUSED = "paused"
     STALE_REVISION = "stale_revision"
+    BEFORE_WINDOW = "before_window"
+    WINDOW_PASSED = "window_passed"
+    ALREADY_LIVE = "already_live"
+    FILE_UNCHANGED = "file_unchanged"
+    RENDER_UNPROVEN = "render_unproven"
+    WATERMARK_MISMATCH = "watermark_mismatch"
 
 
 class ActionRefused(StateError):
@@ -135,6 +179,7 @@ class TapAction(StrEnum):
     REGENERATE = "regenerate"
     REVOICE = "revoice"
     REJECT = "reject"
+    RERENDER = "rerender"  # Render Again, when the file changed while the reel waited for a tap
     POSTED = "posted"  # also the "Already posted" button
     RETRY = "retry"
 
@@ -228,6 +273,7 @@ class PostRow:
     remote_id: str | None
     attempts: int
     posted_at: datetime | None
+    send_by: datetime | None
 
 
 @dataclass(frozen=True)
@@ -285,6 +331,62 @@ class RunClaim:
     reel_id: str | None
 
 
+@dataclass(frozen=True)
+class RenderReceipt:
+    """What the render step says it made. It sits beside the file and only `core.render` writes one
+    in production, after the file has passed its checks."""
+
+    reel_id: str
+    revision: int
+    sha256: str
+    content_hash: str
+    watermark: bool
+
+
+def _receipt_path(mp4_path: Path) -> Path:
+    mp4 = Path(mp4_path)
+    return mp4.with_name(mp4.name + _RECEIPT_SUFFIX)
+
+
+def write_render_receipt(mp4_path: Path, receipt: RenderReceipt) -> None:
+    """Replaces the name rather than writing into it, so a link at that name is never written
+    through, and a crash leaves the old receipt or the new one."""
+    _write_replacing(_receipt_path(mp4_path), json.dumps(asdict(receipt)))
+
+
+def remove_render_receipt(mp4_path: Path) -> None:
+    _receipt_path(mp4_path).unlink(missing_ok=True)
+
+
+def read_render_receipt(mp4_path: Path) -> RenderReceipt | None:
+    """None for a missing or unreadable receipt, which every caller treats as no proof."""
+    try:
+        data = json.loads(_receipt_path(mp4_path).read_bytes())
+        receipt = RenderReceipt(**data)
+    except (OSError, ValueError, TypeError):
+        return None
+    return receipt if type(receipt.watermark) is bool else None
+
+
+def _write_replacing(path: Path, text: str) -> None:
+    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with open(temporary, "x", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        for attempt in range(_MARKER_TRIES):  # Windows refuses while another process has it open
+            try:
+                os.replace(temporary, path)
+                return
+            except PermissionError:
+                if attempt == _MARKER_TRIES - 1:
+                    raise
+                time.sleep(_MARKER_PAUSE_SECONDS)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def post_idempotency_key(reel_id: str, platform: str) -> str:
     """`sha256(reel_id + platform)`, from spec Section 3.5. A retry sends the same key, so a
     provider that supports one can refuse the second copy itself."""
@@ -331,6 +433,7 @@ ENGINE_TRANSITIONS = frozenset(
         (_S.REGENERATING, _S.DRAFT),
         (_S.APPROVED, _S.SCHEDULED),
         (_S.SCHEDULED, _S.PUBLISHING),
+        (_S.PUBLISHING, _S.SCHEDULED),  # the window passed before everything went out
         (_S.PUBLISHING, _S.POSTED),
         (_S.PUBLISHING, _S.NEEDS_ATTENTION),
         *((state, _S.FAILED) for state in _BEFORE_APPROVAL_WORK),
@@ -343,6 +446,9 @@ ALLOWED_TRANSITIONS = OWNER_ONLY_TRANSITIONS | ENGINE_TRANSITIONS
 PLAIN_TRANSITIONS = frozenset(
     {(_S.DRAFT, _S.BLOCKED_GUARDRAILS), *((state, _S.FAILED) for state in _BEFORE_APPROVAL_WORK)}
 )
+
+# A rule that only the owner can settle, so the reel goes back to where the owner's buttons work.
+_SEND_BACK_REASONS = (RefusalReason.HASH_CHANGED, RefusalReason.F0_AUDIO)
 
 _P = PostStatus
 _OWNER_CAN_RESOLVE = (_P.FAILED, _P.UNKNOWN_OUTCOME)
@@ -359,6 +465,7 @@ ALLOWED_POST_CHANGES = frozenset(
         (_P.FAILED, _P.POSTED),  # owner taps Already posted
         (_P.UNKNOWN_OUTCOME, _P.PENDING),
         (_P.UNKNOWN_OUTCOME, _P.POSTED),
+        (_P.SKIPPED, _P.POSTED),  # a late success: it went out after all
     }
 )
 
@@ -401,8 +508,9 @@ CREATE TABLE reels (
     mp4_sha256 TEXT,
     voice_tier TEXT CHECK (voice_tier IN ('F0', 'S0')),
     regenerations INTEGER NOT NULL DEFAULT 0,
-    regenerate_kind TEXT CHECK (regenerate_kind IN ('script', 'voice')),
-    scheduled_for TEXT
+    regenerate_kind TEXT CHECK (regenerate_kind IN ('script', 'voice', 'render')),
+    scheduled_for TEXT,
+    approval_floor INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
 CREATE TABLE approvals (
@@ -425,7 +533,16 @@ CREATE TABLE platform_posts (
     remote_id TEXT,
     attempts INTEGER NOT NULL DEFAULT 0,
     posted_at TEXT,
+    send_by TEXT,
+    claimed_by TEXT,
     UNIQUE (reel_id, platform)
+) STRICT;
+
+CREATE TABLE spent_taps (
+    callback_query_id TEXT PRIMARY KEY,
+    reel_id TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    at TEXT NOT NULL
 ) STRICT;
 
 CREATE TABLE runs (
@@ -488,9 +605,23 @@ WHEN NEW.state = 'approved' AND OLD.state <> 'approved' AND (
         SELECT 1 FROM approvals
         WHERE reel_id = OLD.reel_id AND revision = OLD.revision
             AND mp4_sha256 = OLD.mp4_sha256 AND action = 'approve'
+            AND approval_id > OLD.approval_floor
     )
 )
 BEGIN SELECT RAISE(ABORT, 'approved needs the owner tap on this revision and file'); END;
+
+-- Each arrival at awaiting_approval spends every earlier tap, so only a new one can approve.
+CREATE TRIGGER reels_awaiting_needs_a_new_tap AFTER UPDATE OF state ON reels
+WHEN NEW.state = 'awaiting_approval' AND OLD.state <> 'awaiting_approval'
+BEGIN
+    UPDATE reels SET approval_floor = (
+        SELECT COALESCE(MAX(approval_id), 0) FROM approvals WHERE reel_id = NEW.reel_id
+    ) WHERE reel_id = NEW.reel_id;
+END;
+
+CREATE TRIGGER reels_approval_floor_only_goes_up BEFORE UPDATE OF approval_floor ON reels
+WHEN NEW.approval_floor < OLD.approval_floor
+BEGIN SELECT RAISE(ABORT, 'a spent approval cannot be made good again'); END;
 
 CREATE TRIGGER reels_test_stays_test BEFORE UPDATE OF state ON reels
 WHEN (NEW.state = 'awaiting_approval' AND OLD.is_test <> 0)
@@ -517,13 +648,25 @@ BEGIN SELECT RAISE(ABORT, 'the file changes only at render or with a new revisio
 {_refuse_rewrites("reels")}
 
 CREATE TRIGGER approvals_insert BEFORE INSERT ON approvals
-WHEN EXISTS (SELECT 1 FROM approvals WHERE callback_query_id = NEW.callback_query_id)
+WHEN EXISTS (
+    SELECT 1 FROM approvals
+    WHERE callback_query_id = NEW.callback_query_id OR approval_id = NEW.approval_id
+)
 BEGIN SELECT RAISE(ABORT, 'callback_query_id already used'); END;
 
 CREATE TRIGGER approvals_no_update BEFORE UPDATE ON approvals
 BEGIN SELECT RAISE(ABORT, 'approvals are append-only'); END;
 
 {_refuse_rewrites("approvals")}
+
+CREATE TRIGGER spent_taps_insert BEFORE INSERT ON spent_taps
+WHEN EXISTS (SELECT 1 FROM spent_taps WHERE callback_query_id = NEW.callback_query_id)
+BEGIN SELECT RAISE(ABORT, 'callback_query_id already spent'); END;
+
+CREATE TRIGGER spent_taps_no_update BEFORE UPDATE ON spent_taps
+BEGIN SELECT RAISE(ABORT, 'spent taps stay spent'); END;
+
+{_refuse_rewrites("spent_taps")}
 
 CREATE TRIGGER platform_posts_insert BEFORE INSERT ON platform_posts
 WHEN NEW.status <> 'pending'
@@ -546,6 +689,10 @@ WHEN NEW.reel_id <> OLD.reel_id OR NEW.platform <> OLD.platform
 BEGIN SELECT RAISE(ABORT, 'a post row keeps its reel, platform and key'); END;
 
 {_refuse_rewrites("platform_posts")}
+
+CREATE TRIGGER events_insert BEFORE INSERT ON events
+WHEN EXISTS (SELECT 1 FROM events WHERE event_id = NEW.event_id)
+BEGIN SELECT RAISE(ABORT, 'events are append-only'); END;
 
 CREATE TRIGGER events_no_update BEFORE UPDATE ON events
 BEGIN SELECT RAISE(ABORT, 'events are append-only'); END;
@@ -602,6 +749,7 @@ def _post_from(row: sqlite3.Row) -> PostRow:
         remote_id=row["remote_id"],
         attempts=row["attempts"],
         posted_at=_parse_time(row["posted_at"]),
+        send_by=_parse_time(row["send_by"]),
     )
 
 
@@ -612,6 +760,39 @@ def _voice_refused(reel: Reel, config: EngineConfig) -> bool:
     )
 
 
+def _receipt_refusal(
+    reel: Reel, receipt: RenderReceipt | None, file_hash: str, content_hash: str
+) -> RefusalReason | None:
+    """The flag on the row decides. Only a receipt for this very file can agree with it."""
+    if (
+        receipt is None
+        or receipt.reel_id != reel.reel_id
+        or receipt.revision != reel.revision
+        or receipt.sha256 != file_hash
+        or receipt.content_hash != content_hash
+    ):
+        return RefusalReason.RENDER_UNPROVEN
+    return None if receipt.watermark is reel.is_test else RefusalReason.WATERMARK_MISMATCH
+
+
+@cache
+def _expected_schema() -> frozenset[tuple[str, str, str]]:
+    db = sqlite3.connect(":memory:")
+    try:
+        for statement in _split_statements(_SCHEMA):
+            db.execute(statement)
+        return _schema_of(db)
+    finally:
+        db.close()
+
+
+def _schema_of(db: sqlite3.Connection) -> frozenset[tuple[str, str, str]]:
+    rows = db.execute(
+        "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    return frozenset((row[0], row[1], row[2]) for row in rows)
+
+
 class StateStore:
     """One connection to the state database. Open one per process, and use it on one thread."""
 
@@ -619,6 +800,7 @@ class StateStore:
         self.path = Path(path)
         self._clock = clock or (lambda: datetime.now(UTC))
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._refuse_a_lost_file()
         # isolation_level=None: no hidden transactions, only the explicit ones below.
         self._db = sqlite3.connect(self.path, timeout=_BUSY_TIMEOUT_SECONDS, isolation_level=None)
         self._db.row_factory = sqlite3.Row
@@ -630,6 +812,84 @@ class StateStore:
         except StateError:
             self._db.close()
             raise
+        try:
+            self._keep_marker_current()
+        except BaseException:
+            self._db.close()
+            raise
+
+    @property
+    def lock_path(self) -> Path:
+        return self.path.with_name(ENGINE_LOCK_NAME)
+
+    def engine_lock(self) -> EngineLock:
+        """The one lock that proves a send or a recovery owns the work. Not yet acquired."""
+        return EngineLock(self.lock_path)
+
+    def _require_engine_lock(self, lock: EngineLock, what: str) -> None:
+        if (
+            type(lock) is not EngineLock
+            or not lock.held
+            or os.path.normcase(os.path.realpath(lock.path))
+            != os.path.normcase(os.path.realpath(self.lock_path))
+        ):
+            raise StateError(f"{what} needs the engine lock {self.lock_path} to be held")
+
+    # --- The marker that outlives the database ----------------------------------------------
+
+    @property
+    def marker_path(self) -> Path:
+        """Beside the database's folder and not in it, so it survives that folder being wiped."""
+        real = Path(os.path.abspath(self.path))
+        name = f"{real.parent.name}.{real.name}.{_MARKER_SUFFIX}"
+        return real.parent.parent / name
+
+    def _marker_count(self) -> int | None:
+        """How many reels this database has been seen to hold, or None if it never held one."""
+        marker = self.marker_path
+        for attempt in range(_MARKER_TRIES):
+            try:
+                text = marker.read_text(encoding="utf-8")
+                break
+            except FileNotFoundError:
+                return None
+            except OSError as error:  # Windows refuses while another process replaces it
+                if attempt == _MARKER_TRIES - 1:
+                    raise StateError(f"could not read the marker {marker}: {error}") from error
+                time.sleep(_MARKER_PAUSE_SECONDS)
+        try:
+            count = json.loads(text)["reels"]
+        except (ValueError, KeyError, TypeError):
+            count = None
+        if type(count) is not int or count < 1:
+            raise StateError(f"the marker {marker} cannot be read, so {self.path} stays closed")
+        return count
+
+    def _lost(self, count: int, found: str) -> StateDatabaseLost:
+        return StateDatabaseLost(
+            f"{self.path} {found}, but {count} reel(s) existed before. Opening it would forget "
+            "what was posted, and a posted slot could get a second reel. Restore the database "
+            f"from a backup. To start over on purpose, delete {self.marker_path} by hand."
+        )
+
+    def _refuse_a_lost_file(self) -> None:
+        """Before connecting, because connecting would create the missing file."""
+        count = self._marker_count()
+        if count is None:
+            return
+        try:
+            size = self.path.stat().st_size
+        except FileNotFoundError:
+            raise self._lost(count, "is missing") from None
+        if size == 0:
+            raise self._lost(count, "is empty")
+
+    def _keep_marker_current(self) -> None:
+        """After the commit, and never before it, so the marker can only understate. A crash in
+        between costs nothing: the next open sees more reels than the marker and catches up."""
+        reels = self.count_reels()
+        if reels > (self._marker_count() or 0):
+            _write_replacing(self.marker_path, json.dumps({"reels": reels}))
 
     def _prepare(self) -> None:
         self._db.execute("PRAGMA foreign_keys = ON")
@@ -637,15 +897,27 @@ class StateStore:
         self._switch_to_wal()
         with self._transaction() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
+            count = self._marker_count()
             if version == 0:
+                if count is not None:
+                    raise self._lost(count, "holds no tables")
                 for statement in _split_statements(_SCHEMA):
                     db.execute(statement)
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif version != SCHEMA_VERSION:
+                return
+            if version != SCHEMA_VERSION:
                 raise StateError(
                     f"{self.path} has schema version {version}, and this engine "
                     f"needs {SCHEMA_VERSION}"
                 )
+            if _schema_of(db) != _expected_schema():
+                raise StateError(
+                    f"{self.path} has lost or changed its tables or triggers, and they are what "
+                    "stops a double post. Restore the database from a backup."
+                )
+            reels = db.execute("SELECT COUNT(*) FROM reels").fetchone()[0]
+            if count is not None and reels < count:
+                raise self._lost(count, f"holds {reels} reel(s)")
 
     def _switch_to_wal(self) -> None:
         # Two processes opening a new file together can get "locked" here at once, with no wait.
@@ -814,19 +1086,22 @@ class StateStore:
             return RefusalReason.HASH_CHANGED
         approval = db.execute(
             "SELECT 1 FROM approvals WHERE reel_id = ? AND revision = ? AND mp4_sha256 = ? "
-            "AND action = ?",
+            "AND action = ? AND approval_id > "
+            "(SELECT approval_floor FROM reels WHERE reel_id = approvals.reel_id)",
             (reel.reel_id, reel.revision, file_hash, TapAction.APPROVE),
         ).fetchone()
         return None if approval else RefusalReason.NO_APPROVAL
 
-    def _send_back(self, db: sqlite3.Connection, reel: Reel) -> bool:
-        return self._swap(
-            db,
-            reel,
-            _S.AWAITING_APPROVAL,
-            detail=RefusalReason.HASH_CHANGED,
-            scheduled_for=None,
-        )
+    def _window_refusal(self, reel: Reel) -> RefusalReason | None:
+        """Section 3.5: the reel goes out in its window, never before it and never late."""
+        if reel.scheduled_for is None or self._clock() < reel.scheduled_for:
+            return RefusalReason.BEFORE_WINDOW
+        if self._clock() > reel.scheduled_for + SEND_GRACE:
+            return RefusalReason.WINDOW_PASSED
+        return None
+
+    def _send_back(self, db: sqlite3.Connection, reel: Reel, reason: RefusalReason) -> bool:
+        return self._swap(db, reel, _S.AWAITING_APPROVAL, detail=reason, scheduled_for=None)
 
     def _new_revision(
         self, db: sqlite3.Connection, reel: Reel, *, regenerations: int | None = None
@@ -863,7 +1138,8 @@ class StateStore:
         is_test: bool,
     ) -> tuple[Reel, bool]:
         """Returns the slot's reel and whether this call made it. A second call for the slot,
-        such as after a crash, gets the first reel back, so one slot can never hold two."""
+        such as after a crash, gets the first reel back, so one slot can never hold two. The row's
+        test flag wins over the one asked for here: everything after this reads it from the row."""
         now = self._now()
         with self._transaction() as db:
             row = db.execute("SELECT * FROM reels WHERE slot_key = ?", (slot_key,)).fetchone()
@@ -889,7 +1165,9 @@ class StateStore:
                 ),
             )
             self._write_event(db, reel_id, "transition", revision=1, to_state=_S.DRAFT)
-            return self._read_reel(db, reel_id), True
+            made = self._read_reel(db, reel_id)
+        self._keep_marker_current()
+        return made, True
 
     def transition(self, reel_id: str, old: ReelState, new: ReelState, *, detail: str = "") -> bool:
         """A plain engine move. False means the reel is not in `old` any more, and nothing changed.
@@ -922,16 +1200,23 @@ class StateStore:
     def record_rendered(
         self, reel_id: str, revision: int, mp4_path: Path, content_hash: str, config: EngineConfig
     ) -> bool:
-        """The hash is taken here, from the file itself, and the approval binds to this value."""
+        """The hash is taken here, from the file itself, and the approval binds to this value. The
+        receipt beside the file has to say the render made this file for this revision, with the
+        watermark that the row's test flag calls for."""
         file_hash = sha256_of_file(mp4_path)
         if file_hash is None:
             raise ActionRefused(RefusalReason.HASH_CHANGED, reel_id)
+        receipt = read_render_receipt(mp4_path)
         with self._transaction() as db:
             reel = self._current(db, reel_id, _S.VOICED, revision)
             if reel is None:
                 return False
-            refused = not render_decision(config, test_reel=reel.is_test).allowed
-            if not refused:
+            refusal = (
+                None
+                if render_decision(config, test_reel=reel.is_test).allowed
+                else RefusalReason.BRAND_GATE
+            ) or _receipt_refusal(reel, receipt, file_hash, content_hash)
+            if refusal is None:
                 return self._swap(
                     db,
                     reel,
@@ -940,7 +1225,7 @@ class StateStore:
                     mp4_sha256=file_hash,
                     content_hash=content_hash,
                 )
-        raise ActionRefused(RefusalReason.BRAND_GATE, reel_id)
+        raise ActionRefused(refusal, reel_id)
 
     def offer_for_approval(self, reel_id: str, revision: int, config: EngineConfig) -> bool:
         """Call this only after Telegram confirms the message was sent (spec Section 3.3)."""
@@ -1007,11 +1292,25 @@ class StateStore:
             return bool(reel) and self._swap(db, reel, _S.SCHEDULED, scheduled_for=stamp)
 
     def reschedule(self, reel_id: str, revision: int, at: datetime) -> bool:
-        """A passed window moves to the next one. The reel is never posted late (Section 3.5)."""
+        """A passed window moves to the next one. The reel is never posted late (Section 3.5). A
+        reel left in `publishing` goes back to `scheduled`, unless a send may be alive. Rows already
+        answered stay as they are, and the rest get a new deadline when publishing starts again."""
         stamp = _timestamp(at)
         with self._transaction() as db:
-            reel = self._current(db, reel_id, _S.SCHEDULED, revision)
-            if reel is None:
+            reel = self._read_reel(db, reel_id)
+            if reel is None or reel.revision != revision:
+                return False
+            if reel.state == _S.PUBLISHING:
+                in_flight = db.execute(
+                    "SELECT 1 FROM platform_posts WHERE reel_id = ? AND status = ?",
+                    (reel_id, _P.IN_FLIGHT),
+                ).fetchone()
+                if in_flight:
+                    return False
+                return self._swap(
+                    db, reel, _S.SCHEDULED, detail=RefusalReason.WINDOW_PASSED, scheduled_for=stamp
+                )
+            if reel.state != _S.SCHEDULED:
                 return False
             db.execute(
                 "UPDATE reels SET scheduled_for = ? WHERE reel_id = ?", (stamp, reel_id)
@@ -1032,7 +1331,7 @@ class StateStore:
                 or (file_hash is not None and file_hash == reel.mp4_sha256)
             ):
                 return False
-            return self._send_back(db, reel)
+            return self._send_back(db, reel, RefusalReason.HASH_CHANGED)
 
     # --- The owner's taps -------------------------------------------------------------------
 
@@ -1041,11 +1340,13 @@ class StateStore:
         the state change, so a crash leaves either both or neither."""
         if type(tap) is not VerifiedOwnerTap:
             raise TypeError("apply_tap takes a verified owner tap and nothing else")
-        needs_hash = tap.action == TapAction.APPROVE
+        needs_hash = tap.action in (TapAction.APPROVE, TapAction.RERENDER)
         file_hash = self._hash_of_reel_file(tap.reel_id) if needs_hash else None
         with self._transaction() as db:
             seen = db.execute(
-                "SELECT 1 FROM approvals WHERE callback_query_id = ?", (tap.callback_query_id,)
+                "SELECT 1 FROM approvals WHERE callback_query_id = ? "
+                "UNION ALL SELECT 1 FROM spent_taps WHERE callback_query_id = ?",
+                (tap.callback_query_id, tap.callback_query_id),
             ).fetchone()
             if seen:
                 return TapResult(TapOutcome.DUPLICATE)
@@ -1061,6 +1362,7 @@ class StateStore:
                     actor=Actor.OWNER,
                     detail=RefusalReason.STALE_REVISION,
                 )
+                self._spend_tap(db, tap, TapOutcome.STALE)
                 return TapResult(TapOutcome.STALE, RefusalReason.STALE_REVISION)
             refusal = self._apply_action(db, tap, reel, config, file_hash)
             if refusal is not None:
@@ -1079,7 +1381,19 @@ class StateStore:
             actor=Actor.OWNER,
             detail=reason,
         )
+        self._spend_tap(db, tap, TapOutcome.REFUSED)
         return TapResult(TapOutcome.REFUSED, reason)
+
+    def _spend_tap(
+        self, db: sqlite3.Connection, tap: VerifiedOwnerTap, outcome: TapOutcome
+    ) -> None:
+        """Telegram can deliver one update again, so an answered tap must stay answered. `approvals`
+        holds only taps that changed something, and this holds the rest. A new press on the same
+        button has a new callback id, so the owner can always try again."""
+        db.execute(
+            "INSERT INTO spent_taps (callback_query_id, reel_id, outcome, at) VALUES (?, ?, ?, ?)",
+            (tap.callback_query_id, tap.reel_id, outcome, self._now()),
+        )
 
     def _record_tap(
         self, db: sqlite3.Connection, tap: VerifiedOwnerTap, mp4_sha256: str | None
@@ -1132,6 +1446,14 @@ class StateStore:
             self._record_tap(db, tap, reel.mp4_sha256)
             self._swap(db, reel, _S.REGENERATING, actor=Actor.OWNER, regenerate_kind="voice")
             return None
+        if tap.action == TapAction.RERENDER:
+            if file_hash is not None and file_hash == reel.mp4_sha256:
+                return RefusalReason.FILE_UNCHANGED
+            self._record_tap(db, tap, reel.mp4_sha256)
+            self._swap(db, reel, _S.REGENERATING, actor=Actor.OWNER, regenerate_kind="render")
+            return None
+        if any(post.status == _P.POSTED for post in self._posts(db, reel.reel_id)):
+            return RefusalReason.ALREADY_LIVE
         self._record_tap(db, tap, reel.mp4_sha256)
         self._swap(db, reel, _S.REJECTED, actor=Actor.OWNER)
         return None
@@ -1160,10 +1482,12 @@ class StateStore:
         self, db: sqlite3.Connection, tap: VerifiedOwnerTap, reel: Reel
     ) -> RefusalReason | None:
         """Posted reports what the owner did by hand or saw, so it needs no pre-check. Retry only
-        makes a row eligible again, and `begin_post` repeats every check before a send."""
-        if reel.state not in (_S.PUBLISHING, _S.NEEDS_ATTENTION):
-            return RefusalReason.NOT_PUBLISHING
+        makes a row eligible again, and `begin_post` repeats every check before a send. A row that
+        is waiting for the owner's answer takes that answer in any reel state (Section 3.5)."""
         post = self._read_post(db, reel.reel_id, tap.platform)
+        unanswered = post is not None and post.status in _OWNER_CAN_RESOLVE
+        if not unanswered and reel.state not in (_S.PUBLISHING, _S.NEEDS_ATTENTION):
+            return RefusalReason.NOT_PUBLISHING
         if post is None:
             return RefusalReason.NOT_PENDING
         if tap.action == TapAction.POSTED:
@@ -1181,14 +1505,19 @@ class StateStore:
             )
             self._settle(db, reel.reel_id, Actor.OWNER)
             return None
-        if post.status not in _OWNER_CAN_RESOLVE:
+        if not unanswered:
             return RefusalReason.NOT_PENDING
         self._record_tap(db, tap, reel.mp4_sha256)
         self._set_post_status(
-            db, reel.reel_id, tap.platform, post.status, _P.PENDING, actor=Actor.OWNER
+            db,
+            reel.reel_id,
+            tap.platform,
+            post.status,
+            _P.PENDING,
+            actor=Actor.OWNER,
+            send_by=_timestamp(self._clock() + SEND_GRACE),  # the owner asked for it now
         )
-        if reel.state == _S.NEEDS_ATTENTION:
-            self._swap(db, reel, _S.PUBLISHING, actor=Actor.OWNER)
+        self._settle(db, reel.reel_id, Actor.OWNER)  # any other open question still blocks sends
         return None
 
     # --- Publishing ----------------------------------------------------------------------------
@@ -1197,7 +1526,8 @@ class StateStore:
         self, reel_id: str, revision: int, platforms: Iterable[str], config: EngineConfig
     ) -> bool:
         """The window has arrived. Rows are per reel and platform across all revisions, and rows
-        from before a send-back stay as they were, so what was posted is never sent again."""
+        from before a send-back stay as they were, so what was posted is never sent again. A window
+        that has not opened or has passed is refused, and the state stays: use `reschedule`."""
         targets = list(platforms)
         if (
             not targets
@@ -1211,13 +1541,18 @@ class StateStore:
             if reel is None:
                 return False
             refusal = self._publish_refusal(db, reel, config, file_hash)
-            if refusal == RefusalReason.HASH_CHANGED:
-                self._send_back(db, reel)
+            refusal = refusal or self._window_refusal(reel)
+            if refusal in _SEND_BACK_REASONS:
+                self._send_back(db, reel, refusal)
             elif refusal is None:
                 self._swap(db, reel, _S.PUBLISHING)
                 for platform in targets:
                     if self._read_post(db, reel_id, platform) is None:
                         self._add_post(db, reel_id, platform)
+                db.execute(
+                    "UPDATE platform_posts SET send_by = ? WHERE reel_id = ? AND status = ?",
+                    (_timestamp(reel.scheduled_for + SEND_GRACE), reel_id, _P.PENDING),
+                )
                 self._settle(db, reel_id, Actor.ENGINE)
                 return True
         raise ActionRefused(refusal, reel_id)
@@ -1230,18 +1565,24 @@ class StateStore:
         )
         self._write_event(db, reel_id, "post", to_state=_P.PENDING, platform=platform)
 
-    def begin_post(self, reel_id: str, platform: str, config: EngineConfig) -> PostClaim:
+    def begin_post(
+        self, reel_id: str, platform: str, config: EngineConfig, lock: EngineLock
+    ) -> PostClaim:
         """Step 1 of double-post protection: `in_flight` is on disk before this returns. Call the
         provider only with the claim this gives, and report the result to `record_post_result`.
-        If the process dies in between, the row stays `in_flight` until recovery."""
+        If the process dies in between, the row stays `in_flight` until recovery. Keep `lock` held
+        until the result is recorded: recovery needs the same lock, so it cannot run meanwhile."""
+        self._require_engine_lock(lock, "a send")
         file_hash = self._hash_of_reel_file(reel_id)
         with self._transaction() as db:
             reel = self._read_reel(db, reel_id)
             refusal = self._post_refusal(db, reel, platform, config, file_hash)
-            if refusal == RefusalReason.HASH_CHANGED:
-                self._send_back(db, reel)
+            if refusal in _SEND_BACK_REASONS:
+                self._send_back(db, reel, refusal)
             elif refusal is None:
-                self._set_post_status(db, reel_id, platform, _P.PENDING, _P.IN_FLIGHT)
+                self._set_post_status(
+                    db, reel_id, platform, _P.PENDING, _P.IN_FLIGHT, claimed_by=lock.token
+                )
                 db.execute(
                     "UPDATE platform_posts SET attempts = attempts + 1 "
                     "WHERE reel_id = ? AND platform = ?",
@@ -1275,13 +1616,47 @@ class StateStore:
         if refusal is not None:
             return refusal
         post = self._read_post(db, reel.reel_id, platform)
-        return None if post and post.status == _P.PENDING else RefusalReason.NOT_PENDING
+        if post is None or post.status != _P.PENDING:
+            return RefusalReason.NOT_PENDING
+        now = self._clock()
+        if reel.scheduled_for is None or now < reel.scheduled_for:
+            return RefusalReason.BEFORE_WINDOW
+        if post.send_by is None or now > post.send_by:
+            return RefusalReason.WINDOW_PASSED
+        return None
+
+    def _record_late_success(
+        self, db: sqlite3.Connection, claim: PostClaim, post: PostRow, remote_id: str
+    ) -> bool:
+        """The provider took this attempt, so the platform has the reel whatever the row says.
+        A row that already says `posted` under another id means the reel is up twice, and that
+        goes on the record for the owner."""
+        detail = f"attempt {claim.attempt} posted as {remote_id}"
+        if post.status == _P.POSTED:
+            if post.remote_id != remote_id:
+                self._write_event(
+                    db, claim.reel_id, "duplicate_post", platform=claim.platform, detail=detail
+                )
+            return False
+        self._write_event(db, claim.reel_id, "late_success", platform=claim.platform, detail=detail)
+        self._set_post_status(
+            db,
+            claim.reel_id,
+            claim.platform,
+            post.status,
+            _P.POSTED,
+            remote_id=remote_id,
+            posted_at=self._now(),
+        )
+        self._settle(db, claim.reel_id, Actor.ENGINE)
+        return True
 
     def record_post_result(
         self, claim: PostClaim, outcome: PostOutcome, *, remote_id: str | None = None
     ) -> bool:
         """Steps 3 to 5 of double-post protection. A success with no remote id is an unclear
-        answer. False means this attempt no longer owns the row, so its result changes nothing."""
+        answer. It needs no lock, because what happened has happened. False means nothing changed:
+        an attempt that no longer owns the row can only add a success, which is never lost."""
         posted = outcome == PostOutcome.POSTED and bool(remote_id and remote_id.strip())
         new = (
             _P.POSTED
@@ -1303,7 +1678,11 @@ class StateStore:
             )
             if changed:
                 self._settle(db, claim.reel_id, Actor.ENGINE)
-            return changed
+                return True
+            post = self._read_post(db, claim.reel_id, claim.platform)
+            if posted and post is not None:
+                return self._record_late_success(db, claim, post, remote_id)
+            return False
 
     def skip_platform(self, reel_id: str, platform: str) -> bool:
         with self._transaction() as db:
@@ -1315,14 +1694,15 @@ class StateStore:
     def recover_interrupted(self, lock: EngineLock) -> list[PostRow]:
         """At startup, any row still `in_flight` becomes `unknown_outcome`, for the owner to check.
         A row in flight in a live process looks the same as one left by a dead process, so this
-        runs only with the lock held, when no other run can be mid-send."""
-        if not isinstance(lock, EngineLock) or not lock.held:
-            raise StateError("recovery needs the engine lock to be held")
+        runs only with this store's own lock held, when no other run can be mid-send. A row claimed
+        under this very holding of the lock is alive in this run, and is left alone."""
+        self._require_engine_lock(lock, "recovery")
         with self._transaction() as db:
             rows = [
                 _post_from(row)
                 for row in db.execute(
-                    "SELECT * FROM platform_posts WHERE status = ?", (_P.IN_FLIGHT,)
+                    "SELECT * FROM platform_posts WHERE status = ? AND claimed_by IS NOT ?",
+                    (_P.IN_FLIGHT, lock.token),
                 ).fetchall()
             ]
             for post in rows:
@@ -1430,14 +1810,22 @@ class StateStore:
         rows = self._db.execute("SELECT slot_key, created_at FROM reels").fetchall()
         return [GeneratedReel(row["slot_key"], _parse_time(row["created_at"])) for row in rows]
 
-    def posts_for(self, reel_id: str) -> list[PostRow]:
-        rows = self._db.execute(
+    def voiced_reel(self, reel_id: str, revision: int) -> Reel | None:
+        """The stored reel, if this revision is the one waiting to be rendered."""
+        return self._current(self._db, reel_id, _S.VOICED, revision)
+
+    def _posts(self, db: sqlite3.Connection, reel_id: str) -> list[PostRow]:
+        rows = db.execute(
             "SELECT * FROM platform_posts WHERE reel_id = ? ORDER BY rowid", (reel_id,)
         ).fetchall()
         return [_post_from(row) for row in rows]
 
+    def posts_for(self, reel_id: str) -> list[PostRow]:
+        return self._posts(self._db, reel_id)
+
     def unresolved_posts(self) -> list[PostRow]:
-        """What the bot must ask the owner about."""
+        """What the bot must ask the owner about. Each one takes a Posted or a Retry tap, in any
+        reel state, so nothing here can stay unanswerable."""
         rows = self._db.execute(
             "SELECT * FROM platform_posts WHERE status IN (?, ?) ORDER BY rowid",
             _OWNER_CAN_RESOLVE,

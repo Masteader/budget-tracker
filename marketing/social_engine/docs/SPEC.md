@@ -923,13 +923,15 @@ The mockup shows a live reel after the gate, with names filled from config. `{br
 | Button | Mode | Action |
 |---|---|---|
 | Approve & Schedule | Live reels only, when the launch gate is met. **Never offered while the brand is unset or on a test reel** | `approved`, then next window |
-| Regenerate Script | All | New revision, within `approval.max_regenerations` (default 3), to protect Claude usage |
-| Reject | All | `rejected`. Optional typed reason feeds into the topic list |
+| Regenerate Script | Live reels only | New revision, within `approval.max_regenerations` (default 3), to protect Claude usage |
+| Reject | Live reels only | `rejected`. Optional typed reason feeds into the topic list |
 | Send HD File | All | `sendDocument` |
 | Re-voice on paid tier | Replaces Approve on F0 audio while `allow_public_on_f0` is false | New revision with S0 audio. Reel text is unchanged |
 | Posted: Instagram, Facebook, TikTok, YouTube | `telegram_only` | Marks that platform `posted` |
 | Post Now | API mode only | Asks a confirmation tap, then posts. Not shown in Phase 1, because in `telegram_only` it would do nothing |
 | Retry / Already posted | When `failed` or `unknown_outcome` | Owner resolves the outcome |
+
+A test reel has only Send HD File. `test_delivered` is terminal (Section 3.3), so to change a test reel, create a new one.
 
 **Commands:** `/status`, `/queue`, `/pause`, `/resume`, `/requeue <id>`, `/metric <id> <platform> <views> <saves> <shares>`. `/pause` stops generation and publishing at the next tick.
 

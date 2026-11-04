@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import msvcrt
 import os
+import uuid
 from pathlib import Path
 from types import TracebackType
 
@@ -21,10 +22,16 @@ class EngineLock:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self._descriptor: int | None = None
+        self._token: str | None = None
 
     @property
     def held(self) -> bool:
         return self._descriptor is not None
+
+    @property
+    def token(self) -> str | None:
+        """Names this one holding of the lock, and changes each time it is acquired."""
+        return self._token
 
     def acquire(self) -> None:
         if self.held:
@@ -37,11 +44,13 @@ class EngineLock:
             os.close(descriptor)
             raise LockHeld(f"another run holds {self.path}") from error
         self._descriptor = descriptor
+        self._token = uuid.uuid4().hex
 
     def release(self) -> None:
         if self._descriptor is None:
             return
         descriptor, self._descriptor = self._descriptor, None
+        self._token = None
         try:
             os.lseek(descriptor, 0, os.SEEK_SET)
             msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
