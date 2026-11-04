@@ -26,7 +26,8 @@ from core.secrets import ForbiddenEnvironment, check_startup_environment, scrubb
 LOCKFILE = "package-lock.json"
 _STAMP = ".synced-lock.sha256"  # the lockfile that `npm ci` last installed
 _FIXTURE = Path("tests") / "fixtures" / "props_valid.json"
-_KEPT_IN_WORK = {"node_modules", "out", LOCKFILE, _STAMP}
+_KEPT_FOLDERS = ("node_modules", "out")
+_KEPT_IN_WORK = {*_KEPT_FOLDERS, LOCKFILE, _STAMP}
 
 
 class RemotionSyncError(RuntimeError):
@@ -113,12 +114,47 @@ def _checked_work_dir(data_root: Path) -> Path:
     return work
 
 
+def _check_kept_folder(work: Path, name: str, data_root: Path) -> None:
+    kept = work / name
+    try:
+        info = os.lstat(kept)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise RemotionSyncError(f"could not check {kept}: {error}") from error
+    if _is_link(kept, info):
+        raise RemotionSyncError(
+            f"{kept} is a link, and npm ci deletes node_modules and a render writes to out, so "
+            "the folder it points at would be changed. Remove the link, then try again."
+        )
+    if not stat.S_ISDIR(info.st_mode):
+        raise RemotionSyncError(f"{kept} is not a folder.")
+    try:
+        real_kept = os.path.realpath(kept, strict=True)
+        real_root = os.path.realpath(data_root, strict=True)
+    except OSError as error:
+        raise RemotionSyncError(f"could not check {kept}: {error}") from error
+    expected = os.path.join(real_root, work.name, name)
+    if os.path.normcase(real_kept) != os.path.normcase(expected):
+        raise RemotionSyncError(f"{kept} is really at {real_kept}, outside the data_root.")
+
+
+def checked_kept_folders(data_root: Path) -> None:
+    """Sync keeps these two folders, and `npm ci` or a render then deletes and writes inside
+    them, so each has to be a real folder in its real place. A folder that does not exist yet
+    is fine. Like the work folder check, this looks once and does not lock."""
+    work = _work_dir(data_root)
+    for name in _KEPT_FOLDERS:
+        _check_kept_folder(work, name, data_root)
+
+
 def _rebuild_work_dir(studio: Path, engine_root: Path, data_root: Path) -> None:
     """Everything is replaced except what npm and rendering own, so a file deleted from the
     repo cannot linger in the build."""
     work = _checked_work_dir(data_root)
     work.mkdir(parents=True, exist_ok=True)
     _checked_work_dir(data_root)  # again now that it exists, right before anything is deleted
+    checked_kept_folders(data_root)
     for entry in work.iterdir():
         if entry.name not in _KEPT_IN_WORK:
             _remove(entry)
@@ -175,6 +211,7 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
     wanted = _lock_hash(repo_lock)
     stamp = work / _STAMP
     installed = stamp.read_text(encoding="utf-8") if stamp.is_file() else None
+    checked_kept_folders(data_root)  # again, right before node_modules is trusted or deleted
     if installed == wanted and (work / "node_modules").is_dir():
         return SyncResult(work, ran_npm_ci=False)
     stamp.unlink(missing_ok=True)
