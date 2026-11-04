@@ -124,6 +124,33 @@ def test_a_file_with_no_video_track_is_refused(file):
         check(file)
 
 
+# --- The layout real Remotion output has -----------------------------------------------
+
+
+def real_layout(*, edit_lists: bool, duration_ms: int) -> bytes:
+    """Box for box what `remotion render` 4.0.540 and the conform step gave for a 30 s reel when
+    this reader was first run on a real render: `udta` in `moov`, and `free` before `mdat`."""
+    tracks = trak(b"vide", b"avc1", width=1080, height=1920, edit_list=edit_lists)
+    tracks += trak(b"soun", b"mp4a", edit_list=edit_lists)
+    header = box(b"moov", mvhd(duration_ms) + tracks + box(b"udta", box(b"meta", bytes(8))))
+    return FTYP + header + box(b"free") + box(b"mdat", bytes(64))
+
+
+def test_what_remotion_writes_is_refused_until_it_is_conformed(file):
+    # Edit lists hide the 2-frame B-frame delay and the AAC priming, and Instagram bans them.
+    file.write_bytes(real_layout(edit_lists=True, duration_ms=30_016))
+    assert read_mp4(file).moov_before_mdat is True
+    with pytest.raises(Mp4NotConformed, match="edit list"):
+        check(file)
+
+
+def test_what_the_conform_step_writes_passes(file):
+    # Without edit lists FFmpeg starts the picture 67 ms in and stretches the first audio sample
+    # to keep the two in sync, so a 30 s reel really comes out as 30.083 s.
+    file.write_bytes(real_layout(edit_lists=False, duration_ms=30_083))
+    assert check(file).duration_ms == 30_083
+
+
 # --- Oversized -------------------------------------------------------------------------
 
 

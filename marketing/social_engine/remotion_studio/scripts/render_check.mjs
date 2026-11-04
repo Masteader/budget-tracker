@@ -407,10 +407,26 @@ const checkBundledFfmpeg = (input) => {
 	);
 };
 
+/**
+ * Batch G runs `remotion render <template> <file>` with no entry point, so the real CLI has to find
+ * the entry point by itself and list each template as a composition under that exact name.
+ */
+const checkCliFindsEachTemplate = () => {
+	const command = 'npx --no remotion compositions --quiet';
+	const result = spawnSync(command, {cwd: ROOT, shell: true, encoding: 'utf-8'});
+	require(result.status === 0, `${command} failed: ${(result.stderr ?? '').slice(-800)}`);
+	const schema = JSON.parse(readFileSync(join(ROOT, 'props.schema.json'), 'utf-8'));
+	const expected = [...schema.properties.template.enum].sort();
+	const found = result.stdout.trim().split(/\s+/).sort();
+	require(found.join() === expected.join(), `the CLI lists ${found}, and the schema lists ${expected}`);
+	pass('composition IDs', `the CLI found the entry point by itself and lists ${found.join(', ')}`);
+};
+
 const main = async () => {
 	mkdirSync(OUT, {recursive: true});
 	await ensureBrowser();
 	await prepareInputs();
+	checkCliFindsEachTemplate();
 	const since = Date.now();
 	const serveUrl = await bundle({entryPoint: join(ROOT, 'src', 'index.ts'), publicDir: PUBLIC});
 	log(`bundled in ${seconds(since)} s`);
