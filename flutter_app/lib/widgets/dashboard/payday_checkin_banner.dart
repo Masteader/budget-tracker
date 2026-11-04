@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../models/account.dart';
+import '../../services/salary_cycle_service.dart';
 import '../../theme/app_themes.dart';
 import '../salary/payday_income_sheet.dart';
 
@@ -11,10 +12,14 @@ import '../salary/payday_income_sheet.dart';
 /// on or after [since].
 typedef RecentSalaryLookup = Future<bool> Function(String householdId, DateTime since);
 
-/// Dismissible banner shown around payday (e.g. 25th-31st or 1st-3rd)
+/// Dismissible banner shown from the household's payday and the days after it
 /// if no salary has been logged yet for the current cycle.
 class PaydayCheckinBanner extends StatefulWidget {
   final String householdId;
+
+  /// The household's `payday_day`; null (not loaded yet, or unreadable) means
+  /// the default payday.
+  final int? paydayDay;
 
   /// Overrides the Supabase lookup (used by tests).
   final RecentSalaryLookup? salaryLookup;
@@ -25,6 +30,7 @@ class PaydayCheckinBanner extends StatefulWidget {
   const PaydayCheckinBanner({
     super.key,
     required this.householdId,
+    this.paydayDay,
     this.salaryLookup,
     this.clock,
   });
@@ -35,9 +41,27 @@ class PaydayCheckinBanner extends StatefulWidget {
   /// banner never appeared.
   static const String sourceTypeColumn = 'source_type';
 
-  /// Whether [now] falls in the typical Saudi payday window (27th to 3rd).
-  /// Saudi public/private salary deposits occur on the 27th of the month.
-  static bool isPaydayWindow(DateTime now) => now.day >= 27 || now.day <= 3;
+  /// Days the window stays open after payday: the 27th to the 3rd at most.
+  static const int windowFollowingDays = 7;
+
+  /// Whether [now] falls in the payday window of a household paid on
+  /// [paydayDay], by the Asia/Riyadh calendar date like the salary cycle.
+  ///
+  /// It opens on payday, clamped to the month's last day like the salary cycle,
+  /// and closes on a fixed day of the month: [windowFollowingDays] after payday
+  /// counted on a 31-day month (27 closes on the 3rd, 15 on the 22nd, 31 on the
+  /// 7th). That is 8 days, and fewer when a shorter month's end falls inside it,
+  /// exactly as the 27th to the 3rd is 5 days across a 28-day February.
+  static bool isPaydayWindow(DateTime now, {int? paydayDay}) {
+    final today = SalaryCycleService.riyadhDate(now);
+    final payday = SalaryCycleService.normalizePayday(paydayDay);
+    final lastDay = SalaryCycleService.daysInMonth(today.year, today.month);
+    final opens = payday < lastDay ? payday : lastDay;
+    final closes = payday + windowFollowingDays;
+    return closes <= 31
+        ? today.day >= opens && today.day <= closes
+        : today.day >= opens || today.day <= closes - 31;
+  }
 
   /// Default lookup against Supabase.
   static Future<bool> supabaseSalaryLookup(String householdId, DateTime since) async {
@@ -59,16 +83,38 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
   bool _shouldShow = false;
   bool _checked = false;
 
+  /// Dismissed or completed: stays closed if the payday reloads.
+  bool _closed = false;
+
+  /// Only the latest check may decide; an older lookup can finish after it.
+  int _latestCheck = 0;
+
   @override
   void initState() {
     super.initState();
     _checkPaydayStatus();
   }
 
+  @override
+  void didUpdateWidget(PaydayCheckinBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The dashboard loads the household's payday after this banner can mount.
+    if (SalaryCycleService.normalizePayday(oldWidget.paydayDay) !=
+        SalaryCycleService.normalizePayday(widget.paydayDay)) {
+      _checkPaydayStatus();
+    }
+  }
+
   Future<void> _checkPaydayStatus() async {
+    final check = ++_latestCheck;
     final now = (widget.clock ?? DateTime.now)();
-    if (!PaydayCheckinBanner.isPaydayWindow(now)) {
-      if (mounted) setState(() => _checked = true);
+    if (!PaydayCheckinBanner.isPaydayWindow(now, paydayDay: widget.paydayDay)) {
+      if (mounted) {
+        setState(() {
+          _shouldShow = false;
+          _checked = true;
+        });
+      }
       return;
     }
 
@@ -77,7 +123,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
       final lookup = widget.salaryLookup ?? PaydayCheckinBanner.supabaseSalaryLookup;
       final hasSalary = await lookup(widget.householdId, since);
 
-      if (mounted) {
+      if (mounted && check == _latestCheck) {
         setState(() {
           _shouldShow = !hasSalary;
           _checked = true;
@@ -87,13 +133,18 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
       // Do not fail silently: a broken query hides the banner for everyone.
       debugPrint('[PaydayCheckinBanner] salary lookup failed: $e');
       debugPrintStack(stackTrace: st, maxFrames: 5);
-      if (mounted) setState(() => _checked = true);
+      if (mounted && check == _latestCheck) {
+        setState(() {
+          _shouldShow = false;
+          _checked = true;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_checked || !_shouldShow) return const SizedBox.shrink();
+    if (!_checked || !_shouldShow || _closed) return const SizedBox.shrink();
 
     final isDark = context.isDark;
 
@@ -163,7 +214,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
                 context,
                 householdId: widget.householdId,
                 onCompleted: () {
-                  if (mounted) setState(() => _shouldShow = false);
+                  if (mounted) setState(() => _closed = true);
                 },
               );
             },
@@ -189,7 +240,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
             icon: Icon(Icons.close, size: 16, color: context.textSecondary),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             padding: EdgeInsets.zero,
-            onPressed: () => setState(() => _shouldShow = false),
+            onPressed: () => setState(() => _closed = true),
           ),
         ],
       ),

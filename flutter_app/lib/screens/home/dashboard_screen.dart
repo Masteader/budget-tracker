@@ -644,7 +644,7 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
                                   );
                                 },
                               ),
-                              PaydayCheckinBanner(householdId: hid),
+                              PaydayCheckinBanner(householdId: hid, paydayDay: _setup?.paydayDay),
                               Builder(
                                 builder: (ctx) {
                                   final txProvider = ctx.watch<TransactionProvider>();
