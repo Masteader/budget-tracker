@@ -60,6 +60,13 @@ WITHDRAWN_NAMES = ("wa" + "feer", "وف" + "يير")
 GUARD_FILE = "core/secrets.py"
 GUARD_MENTION = DATABASE_SERVICE.upper() + "_"
 
+# The one allowed provider name in a lockfile. Remotion's studio depends on this package for its
+# caption file parser. Its 4.0.540 source was read in full on 2026-11-04: it turns a transcript
+# it is handed into captions, using only zod, with no network call, no client and no key.
+EXCEPTED_LOCKFILE = "remotion_studio/package-lock.json"
+EXCEPTED_LOCKFILE_PACKAGE = "@remotion/" + "open" + "ai-whisper"
+EXCEPTED_LOCKFILE_VERSION = "4.0.540"
+
 SKIPPED_FOLDERS = {
     ".git",
     ".pytest_cache",
@@ -98,6 +105,14 @@ _DYNAMIC_IMPORT_CALLS = {
     "spec_from_file_location",
 }
 _DATABASE_NAME = re.compile(DATABASE_SERVICE, re.IGNORECASE)
+_EXCEPTED_NAME = re.escape(EXCEPTED_LOCKFILE_PACKAGE)
+_EXCEPTED_VERSION = re.escape(EXCEPTED_LOCKFILE_VERSION)
+_EXCEPTED_TARBALL = re.escape(EXCEPTED_LOCKFILE_PACKAGE.split("/")[1])
+_EXCEPTED_LOCK_ENTRIES = re.compile(
+    rf'"node_modules/{_EXCEPTED_NAME}"(?=\s*:\s*\{{)'
+    rf'|"{_EXCEPTED_NAME}":\s*"{_EXCEPTED_VERSION}"'
+    rf'|"https://registry\.npmjs\.org/{_EXCEPTED_NAME}/-/{_EXCEPTED_TARBALL}-{_EXCEPTED_VERSION}\.tgz"'
+)
 
 
 def _is_real_env_file(path: Path) -> bool:
@@ -209,8 +224,16 @@ def _database_findings(relative: str, text: str) -> list[str]:
     return [f"{relative}: names the database service" for _ in hits]
 
 
+def _without_the_excepted_package(relative: str, text: str) -> str:
+    """Only the three exact forms npm writes for the audited version, each in full, so a longer
+    name, a nested package, an alias, another host or another version stays visible to the scan."""
+    if relative != EXCEPTED_LOCKFILE:
+        return text
+    return _EXCEPTED_LOCK_ENTRIES.sub('""', text)
+
+
 def _text_findings(relative: str, text: str, is_python: bool) -> list[str]:
-    normalised = unicodedata.normalize("NFKC", text)
+    normalised = unicodedata.normalize("NFKC", _without_the_excepted_package(relative, text))
     searched = f"{relative}\n{normalised}"
     findings = _database_findings(relative, normalised)
     # Source that shows one thing and means another (bidi controls, zero-width characters).
@@ -500,3 +523,118 @@ def test_an_assembled_name_in_a_python_literal_stays_legal_for_guards(tmp_path):
     head, tail = WITHDRAWN_NAMES[0][:2], WITHDRAWN_NAMES[0][2:]
     _write(tmp_path, "core/a.py", f'NAME = "{head}" + "{tail}"\n')
     assert scan_for_violations(tmp_path) == []
+
+
+# --- The one exception: a caption parser in the Remotion lockfile --------------------------
+
+
+WHISPER = EXCEPTED_LOCKFILE_PACKAGE
+WHISPER_FILE = WHISPER.split("/")[1]
+WHISPER_URL = (
+    f"https://registry.npmjs.org/{WHISPER}/-/{WHISPER_FILE}-{EXCEPTED_LOCKFILE_VERSION}.tgz"
+)
+
+
+def _lock_entry(key: str = f"node_modules/{WHISPER}", resolved: str = WHISPER_URL, **extra) -> str:
+    fields = {"version": EXCEPTED_LOCKFILE_VERSION, "resolved": resolved, **extra}
+    body = ", ".join(f'"{name}": "{value}"' for name, value in fields.items())
+    return f'"{key}": {{{body}}}'
+
+
+def _lockfile(*entries: str, dependency: str | None = None) -> str:
+    """The shape npm writes: the package's own entry, and the studio's line naming it."""
+    line = dependency or f'"{WHISPER}": "{EXCEPTED_LOCKFILE_VERSION}"'
+    studio = f'"node_modules/@remotion/studio": {{"dependencies": {{{line}}}}}'
+    return '{"packages": {' + ", ".join([*entries, studio]) + "}}\n"
+
+
+REAL_LOCKFILE_SHAPE = _lockfile(_lock_entry())
+
+
+def test_the_audited_package_passes_in_exactly_the_remotion_lockfile(tmp_path):
+    _write(tmp_path, EXCEPTED_LOCKFILE, REAL_LOCKFILE_SHAPE)
+    assert scan_for_violations(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "remotion_studio/package.json",
+        "remotion_studio/npm-shrinkwrap.json",
+        "remotion_studio/sub/package-lock.json",
+        "remotion_studio/package-lock.json.bak",
+        "other/remotion_studio/package-lock.json",
+        "REMOTION_STUDIO/PACKAGE-LOCK.JSON",
+        "package-lock.json",
+        "core/a.py",
+        "config.yaml",
+    ],
+)
+def test_that_name_anywhere_else_still_fails(tmp_path, relative):
+    text = f'x = "{WHISPER}"\n' if relative.endswith(".py") else REAL_LOCKFILE_SHAPE
+    _write(tmp_path, relative, text)
+    assert scan_for_violations(tmp_path), f"{relative} was not flagged"
+
+
+ELEVEN = "eleven" + "labs"
+OPEN = "open" + "ai"
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param(_lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz"), id="an"),
+        pytest.param(_lock_entry(f"node_modules/@remotion/{OPEN}"), id="same scope, shorter name"),
+        pytest.param(_lock_entry(f"node_modules/{WHISPER}-extra"), id="longer name"),
+        pytest.param(_lock_entry(f"node_modules/@evil/{WHISPER_FILE}"), id="another scope"),
+        pytest.param(_lock_entry(f"node_modules/{WHISPER}/node_modules/{OPEN}"), id="nested sdk"),
+        pytest.param(_lock_entry(f"node_modules/{WHISPER.upper()}"), id="other letter case"),
+        pytest.param(_lock_entry(f"node_modules/@remotion/{ELEVEN}"), id="the other parser"),
+        pytest.param(_lock_entry("node_modules/" + "gem" + "ini"), id="gem"),
+        pytest.param(_lock_entry("node_modules/" + "lang" + "chain"), id="chain"),
+        pytest.param(_lock_entry("node_modules/" + DATABASE_SERVICE), id="database"),
+        pytest.param(_lock_entry(resolved=f"https://evil.example/{WHISPER}.tgz"), id="other host"),
+        pytest.param(_lock_entry(name=OPEN), id="aliased to the sdk"),
+        pytest.param(_lock_entry(dependencies=f"{OPEN}@4"), id="depends on the sdk"),
+        pytest.param(
+            _lock_entry(resolved=WHISPER_URL.replace(EXCEPTED_LOCKFILE_VERSION, "9.9.9")),
+            id="unaudited version",
+        ),
+    ],
+)
+def test_any_other_such_name_in_the_lockfile_still_fails(tmp_path, entry):
+    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(entry))
+    assert scan_for_violations(tmp_path), f"not flagged: {entry}"
+
+
+@pytest.mark.parametrize(
+    "dependency",
+    [
+        pytest.param(f'"{WHISPER}": "npm:{OPEN}@4"', id="alias"),
+        pytest.param(f'"{WHISPER}": "9.9.9"', id="unaudited version"),
+        pytest.param(f'"{WHISPER}-extra": "{EXCEPTED_LOCKFILE_VERSION}"', id="longer name"),
+    ],
+)
+def test_a_changed_dependency_line_still_fails(tmp_path, dependency):
+    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(_lock_entry(), dependency=dependency))
+    assert scan_for_violations(tmp_path), f"not flagged: {dependency}"
+
+
+def test_the_audited_package_does_not_hide_a_banned_name_beside_it(tmp_path):
+    other = _lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz")
+    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(_lock_entry(), other))
+    findings = scan_for_violations(tmp_path)
+    assert findings == [f"{EXCEPTED_LOCKFILE}: mentions {OPEN}"]
+
+
+def test_a_full_width_spelling_of_the_name_is_not_the_exception(tmp_path):
+    entry = _lock_entry(f"node_modules/@remotion/{_full_width(WHISPER_FILE)}")
+    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(entry))
+    assert scan_for_violations(tmp_path)
+
+
+def test_the_exception_holds_exactly_one_package_in_exactly_one_file():
+    # Widening this is an owner decision, and it needs that package's source read first.
+    assert EXCEPTED_LOCKFILE == "remotion_studio/package-lock.json"
+    assert EXCEPTED_LOCKFILE_PACKAGE == "@remotion/" + OPEN + "-whisper"
+    assert EXCEPTED_LOCKFILE_VERSION == "4.0.540"
