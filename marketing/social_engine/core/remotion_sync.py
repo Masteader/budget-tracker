@@ -17,6 +17,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,7 +28,8 @@ LOCKFILE = "package-lock.json"
 _STAMP = ".synced-lock.sha256"  # the lockfile that `npm ci` last installed
 _FIXTURE = Path("tests") / "fixtures" / "props_valid.json"
 _KEPT_FOLDERS = ("node_modules", "out")
-_KEPT_IN_WORK = {*_KEPT_FOLDERS, LOCKFILE, _STAMP}
+_KEPT_FILES = (LOCKFILE, _STAMP)
+_KEPT_IN_WORK = {*_KEPT_FOLDERS, *_KEPT_FILES}
 
 
 class RemotionSyncError(RuntimeError):
@@ -56,14 +58,46 @@ def _preflight(engine_root: Path) -> Path:
     return studio
 
 
-def _remove(path: Path) -> None:
+def _clear_read_only(path: Path, data_root: Path) -> None:
+    """OneDrive marks repo folders read-only and the copy keeps that flag, so the next sync could
+    not delete it. Only a path really inside the work folder is touched. Its parent is resolved
+    and the path itself is not, so a link is judged by where it sits, and `follow_symlinks=False`
+    clears the flag on the link and never on what it points at."""
+    work = _checked_work_dir(data_root)
+    target = Path(os.path.abspath(path))
+    try:
+        real_work = os.path.normcase(os.path.realpath(work, strict=True))
+        real_parent = os.path.normcase(os.path.realpath(target.parent, strict=True))
+    except OSError as error:
+        raise RemotionSyncError(f"could not check {target}: {error}") from error
+    if real_parent != real_work and not real_parent.startswith(real_work + os.sep):
+        raise RemotionSyncError(f"{target} is outside {work}, so its flags stay as they are.")
+    os.chmod(target, stat.S_IWRITE, follow_symlinks=False)
+
+
+def _delete_clearing_read_only(delete: Callable[[], None], path: Path, data_root: Path) -> None:
+    try:
+        delete()
+    except PermissionError:
+        _clear_read_only(path, data_root)
+        delete()
+
+
+def _remove(path: Path, data_root: Path) -> None:
     """A link is removed on its own, and the folder it points at stays untouched."""
+
+    def clear_and_retry(function, failed: str, error: BaseException) -> None:
+        if function not in (os.rmdir, os.unlink) or not isinstance(error, PermissionError):
+            raise error
+        _clear_read_only(Path(failed), data_root)
+        function(failed)
+
     if path.is_junction():
-        os.rmdir(path)
+        _delete_clearing_read_only(lambda: os.rmdir(path), path, data_root)
     elif path.is_symlink() or not path.is_dir():
-        path.unlink()
+        _delete_clearing_read_only(path.unlink, path, data_root)
     else:
-        shutil.rmtree(path)
+        shutil.rmtree(path, onexc=clear_and_retry)
 
 
 def _copy_into(source_dir: Path, target_dir: Path) -> None:
@@ -114,7 +148,7 @@ def _checked_work_dir(data_root: Path) -> Path:
     return work
 
 
-def _check_kept_folder(work: Path, name: str, data_root: Path) -> None:
+def _check_kept(work: Path, name: str, data_root: Path, *, folder: bool) -> None:
     kept = work / name
     try:
         info = os.lstat(kept)
@@ -123,12 +157,19 @@ def _check_kept_folder(work: Path, name: str, data_root: Path) -> None:
     except OSError as error:
         raise RemotionSyncError(f"could not check {kept}: {error}") from error
     if _is_link(kept, info):
+        if folder:
+            raise RemotionSyncError(
+                f"{kept} is a link, and npm ci deletes node_modules and a render writes to out, "
+                "so the folder it points at would be changed. Remove the link, then try again."
+            )
         raise RemotionSyncError(
-            f"{kept} is a link, and npm ci deletes node_modules and a render writes to out, so "
-            "the folder it points at would be changed. Remove the link, then try again."
+            f"{kept} is a link, and sync reads and overwrites this file, so the file it points "
+            "at would be trusted or changed. Remove the link, then try again."
         )
-    if not stat.S_ISDIR(info.st_mode):
+    if folder and not stat.S_ISDIR(info.st_mode):
         raise RemotionSyncError(f"{kept} is not a folder.")
+    if not folder and not stat.S_ISREG(info.st_mode):
+        raise RemotionSyncError(f"{kept} is not a file.")
     try:
         real_kept = os.path.realpath(kept, strict=True)
         real_root = os.path.realpath(data_root, strict=True)
@@ -145,7 +186,18 @@ def checked_kept_folders(data_root: Path) -> None:
     is fine. Like the work folder check, this looks once and does not lock."""
     work = _work_dir(data_root)
     for name in _KEPT_FOLDERS:
-        _check_kept_folder(work, name, data_root)
+        _check_kept(work, name, data_root, folder=True)
+
+
+def _checked_kept_files(data_root: Path) -> None:
+    """Sync copies over the lockfile and rewrites the stamp, and both decide whether npm runs, so
+    each has to be a real file in its real place. A flag left on either by an earlier copy is
+    cleared. A file that does not exist yet is fine. This looks once and does not lock."""
+    work = _work_dir(data_root)
+    for name in _KEPT_FILES:
+        _check_kept(work, name, data_root, folder=False)
+        if os.path.lexists(work / name):
+            _clear_read_only(work / name, data_root)
 
 
 def _rebuild_work_dir(studio: Path, engine_root: Path, data_root: Path) -> None:
@@ -155,9 +207,10 @@ def _rebuild_work_dir(studio: Path, engine_root: Path, data_root: Path) -> None:
     work.mkdir(parents=True, exist_ok=True)
     _checked_work_dir(data_root)  # again now that it exists, right before anything is deleted
     checked_kept_folders(data_root)
+    _checked_kept_files(data_root)
     for entry in work.iterdir():
         if entry.name not in _KEPT_IN_WORK:
-            _remove(entry)
+            _remove(entry, data_root)
     _copy_into(studio, work)
 
     (work / "public").mkdir(exist_ok=True)
@@ -210,24 +263,41 @@ def sync(engine_root: Path, data_root: Path) -> SyncResult:
         return SyncResult(work, ran_npm_ci=False)  # before the first `npm install`
     wanted = _lock_hash(repo_lock)
     stamp = work / _STAMP
+    # Again, right before node_modules and the stamp are trusted or deleted.
+    checked_kept_folders(data_root)
+    _checked_kept_files(data_root)
     installed = stamp.read_text(encoding="utf-8") if stamp.is_file() else None
-    checked_kept_folders(data_root)  # again, right before node_modules is trusted or deleted
     if installed == wanted and (work / "node_modules").is_dir():
         return SyncResult(work, ran_npm_ci=False)
     stamp.unlink(missing_ok=True)
     _run_npm_ci(work)
+    _checked_kept_files(data_root)  # npm ran for minutes, so look again before writing
     stamp.write_text(wanted, encoding="utf-8")
     return SyncResult(work, ran_npm_ci=True)
+
+
+def _check_repo_lock_is_not_a_link(target: Path) -> None:
+    try:
+        info = os.lstat(target)
+    except FileNotFoundError:
+        return
+    if _is_link(target, info):
+        raise RemotionSyncError(
+            f"{target} is a link, so pulling would write to the file it points at. Nothing was "
+            "copied. Remove the link, then try again."
+        )
 
 
 def pull_lock(engine_root: Path, data_root: Path) -> Path:
     """The pulled lockfile came from that `node_modules`, so it needs no reinstall."""
     studio = _preflight(engine_root)
     work = _checked_work_dir(data_root)
+    _checked_kept_files(data_root)
     source = work / LOCKFILE
     if not source.is_file():
         raise RemotionSyncError(f"{LOCKFILE} not found in {work}. Run npm install there first.")
     target = studio / LOCKFILE
+    _check_repo_lock_is_not_a_link(target)
     shutil.copy2(source, target)
     (work / _STAMP).write_text(_lock_hash(target), encoding="utf-8")
     return target

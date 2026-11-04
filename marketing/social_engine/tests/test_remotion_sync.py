@@ -312,7 +312,7 @@ def test_a_link_to_a_folder_is_unlinked_rather_than_emptied(monkeypatch):
             calls.append("unlink")
 
     monkeypatch.setattr(sync_module.shutil, "rmtree", lambda path: calls.append("rmtree"))
-    sync_module._remove(Link())
+    sync_module._remove(Link(), Path("not_used"))
     assert calls == ["unlink"]
 
 
