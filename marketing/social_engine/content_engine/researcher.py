@@ -5,8 +5,12 @@ login or the budget cap stops at once, so those are not counted as failures and 
 for a later tick. A review that fails raises `ReviewBlocked`, which is not retried.
 
 The checks here hold the job in place whatever a page or the model said: output must keep the
-job's topic and language, cite only pages fetched in this run, and copy no long passage. The
-deterministic guardrails run after this, in `guardrails.py`, and receive `Research.excerpts`.
+job's topic and language, cite only pages fetched in this run, state no figure its page does not
+hold, and copy no long passage. The deterministic guardrails run after this, in `guardrails.py`,
+and receive `Research.excerpts`.
+
+Under `claude_cli` an excerpt is what WebFetch's small model made of the page. So these checks prove
+the output matches that summary. They cannot prove the summary matches the page (spec Section 6.4).
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from urllib.parse import urlsplit
 
+from content_engine.guardrails import figures_missing_from
 from content_engine.llm_backends import LlmBackend, LlmError, LlmResult, LlmRunFailed, SpendTracker
 from content_engine.prompts import (
     BRAND_TOKENS,
@@ -49,6 +54,10 @@ __all__ = [
 ]
 
 _RETRY_DELAYS_SECONDS = (30, 120)  # three tries, so two waits
+_MAX_FACTS = 8  # what the prompt asks for
+# The writer and the review both carry the research on one Windows command line. A reply past this
+# would stop them as a setup error, which nobody retries, so it uses up a try here instead.
+_MAX_RESEARCH_CHARS = 10_000
 _WORD = re.compile(r"\w+")
 _TOKEN = re.compile(r"\{[^{}]*\}")
 _GUARDIANSHIP_WORD = re.compile(r"\S*قوامة\S*")  # a different word, a soft flag under G18
@@ -77,7 +86,8 @@ class ReviewBlocked(Exception):
 
 @dataclass(frozen=True)
 class Excerpt:
-    """Text of a fetched page. Untrusted, and only ever compared against, for the copy check."""
+    """Text a fetch returned. Untrusted, and only ever compared against. Under `claude_cli` it is
+    a model's summary of the page, not the page (spec Section 6.4)."""
 
     url: str
     text: str
@@ -138,17 +148,26 @@ def check_research(run: LlmResult, *, today: date, max_copied_words: int) -> Res
         for call in run.tool_log
         if call.name == "web_fetch" and call.succeeded and call.url
     )
+    if len(result.facts) > _MAX_FACTS:
+        raise ResearchRejected(f"{len(result.facts)} facts, and the limit is {_MAX_FACTS}")
+    if len(result.model_dump_json()) > _MAX_RESEARCH_CHARS:
+        raise ResearchRejected("the facts are too long to carry to the next steps")
     fetched = {_same_page_key(page.url) for page in pages} - {None}
     copied = set().union(*(_runs_of(_words(page.text), max_copied_words) for page in pages), set())
     earliest = today - timedelta(days=1)  # a run can cross midnight
     for number, fact in enumerate(result.facts, start=1):
-        if _same_page_key(fact.source_url) not in fetched:
+        page_key = _same_page_key(fact.source_url)
+        if page_key not in fetched:
             raise ResearchRejected(f"fact {number} cites a URL missing from the tool log")
         if not earliest <= fact.accessed <= today:
             raise ResearchRejected(f"fact {number} has an access date other than this run")
         for text in (fact.claim, fact.paraphrase_ar, fact.paraphrase_en):
             if _runs_of(_words(text), max_copied_words) & copied:
                 raise ResearchRejected(f"fact {number} holds a copied passage")
+        source_text = "\n".join(p.text for p in pages if _same_page_key(p.url) == page_key)
+        for text in (fact.claim, fact.paraphrase_ar, fact.paraphrase_en):
+            if figures_missing_from(text, source_text):
+                raise ResearchRejected(f"fact {number} states a figure its page does not hold")
     return Research(result, pages)
 
 
@@ -202,6 +221,8 @@ def _check_script(
     approved = {claim.id for claim in register.approved}
     if not set(script.claim_ids) <= approved:
         raise ScriptRejected("the script uses a claim id that is not approved")
+    if not set(script.claim_ids) <= set(brief.claim_ids):
+        raise ScriptRejected("the script uses a claim its topic does not carry")
     found = {_same_page_key(fact.source_url) for fact in research.result.facts} - {None}
     cited = [number.source_url for number in script.numbers]
     cited += [source.url for source in script.sources]
@@ -235,13 +256,16 @@ def review_script(
     register: ClaimsRegister,
     spend: SpendTracker,
     *,
+    research: Research,
     sleep: Callable[[float], None] = time.sleep,
 ) -> ReviewVerdict:
-    request = review_request(script, register)
+    """A verdict that passes but lists a problem is a failure. The review named a violation, and
+    which of its two answers is the mistake cannot be told from here."""
+    request = review_request(script, register, research.result)
     verdict: ReviewVerdict = _with_tries(
         "review", lambda: backend.run(request, spend).output, sleep
     )
-    if not verdict.passed:
+    if not verdict.passed or verdict.reasons:
         raise ReviewBlocked(tuple(verdict.reasons))
     return verdict
 
@@ -267,5 +291,5 @@ def generate_script(
         sleep=sleep,
     )
     script = write_script(backend, brief, research, register, config, spend, sleep=sleep)
-    verdict = review_script(backend, script, register, spend, sleep=sleep)
+    verdict = review_script(backend, script, register, spend, research=research, sleep=sleep)
     return Draft(research, script, verdict)

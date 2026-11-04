@@ -4,11 +4,18 @@ Everything here runs before a reel reaches Telegram, on Arabic and English text.
 blocks the reel, and a soft flag is shown to the owner. G15 and G16 run at render time, in
 `core/render.py`.
 
-Word lists alone are easy to walk around, so text is folded first: diacritics, kashida, hidden
-characters, spelling variants, look-alike letters, digit forms and letter-by-letter spacing do
-not change what a rule sees. Terms also match with gaps between their letters, but only where
-the whole term stands as a word, so "teams message" does not hold "sms". Meaning, especially
-in dialect, is the job of the separate Claude review.
+Figures and product statements are checked against what they must match, not against what is
+banned. A figure has to be in a research fact from the source it cites, with the same value and
+unit, or in an approved claim the script uses, or carry an example label in its own sentence. A
+sentence about the app has to stay within the words of its approved claims. Anything else in those
+two areas is refused.
+
+Word lists are the second layer, and they are easy to walk around, so text is folded first:
+diacritics, kashida, hidden characters, spelling variants, look-alike letters, digit forms and
+letter-by-letter spacing do not change what a rule sees. Terms also match with gaps between their
+letters, but only where the whole term stands as a word, so "teams message" does not hold "sms".
+Meaning, especially in dialect, is the job of the separate Claude review, and the owner's tap on
+Telegram is the final check.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ from datetime import date
 from decimal import Decimal
 from functools import cache, lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict
@@ -35,6 +42,7 @@ from content_engine.cta import (
     compose_caption,
     compose_voice,
     fill_tokens,
+    without_engine_lines,
 )
 from content_engine.schemas import GuardrailFinding, GuardrailReport, ResearchFact, Script
 from core.brand_gate import FULL_NAME_AR, FULL_NAME_EN, ReelBrand, contains_withdrawn_name
@@ -48,9 +56,12 @@ _NEAR_BRAND = 8
 _NEAR_EXAMPLE = 6
 _NEAR_SALARY = 6
 _NEAR_COMPARISON = 10
+_NEAR_BANK_CONTRAST = 3
 _NEAR_BASKET = 20
 _NEAR_QR = 12
 _NEAR_AUTHORITY = 5
+_NEAR_MESSAGE = 4
+_NEAR_ASSET = 4
 
 _C18 = "C18"
 _C21 = "C21"
@@ -136,6 +147,19 @@ _FOLDS = {
     "\u066e": "\u0628",  # dotless beh
     "\u06ba": "\u0646",  # dotless noon
     "\u066a": "%",  # Arabic percent sign
+    "\u066b": ".",  # Arabic decimal separator
+    "\u066c": ",",  # Arabic thousands separator
+    "\u06a7": "\u0642",  # qaf variants
+    "\u06a8": "\u0642",
+    "\u06c4": "\u0648",  # waw variants
+    "\u06c5": "\u0648",
+    "\u06c6": "\u0648",
+    "\u06c7": "\u0648",
+    "\u06c8": "\u0648",
+    "\u06c9": "\u0648",
+    "\u06ca": "\u0648",
+    "\u06cb": "\u0648",
+    "\u06cf": "\u0648",
     # Latin look-alikes from Cyrillic and Greek, after case folding.
     "\u0430": "a",
     "\u0435": "e",
@@ -163,6 +187,31 @@ _FOLDS = {
     "\u03ba": "k",
     "\u03c4": "t",
     "\u0131": "i",  # dotless i
+    # Small capitals, which NFKC leaves alone.
+    "\u1d00": "a",
+    "\u0299": "b",
+    "\u1d04": "c",
+    "\u1d05": "d",
+    "\u1d07": "e",
+    "\ua730": "f",
+    "\u0262": "g",
+    "\u029c": "h",
+    "\u026a": "i",
+    "\u1d0a": "j",
+    "\u1d0b": "k",
+    "\u029f": "l",
+    "\u1d0d": "m",
+    "\u0274": "n",
+    "\u1d0f": "o",
+    "\u1d18": "p",
+    "\u0280": "r",
+    "\ua731": "s",
+    "\u1d1b": "t",
+    "\u1d1c": "u",
+    "\u1d20": "v",
+    "\u1d21": "w",
+    "\u028f": "y",
+    "\u1d22": "z",
 }
 _DROPPED_LETTERS = {"\u0640", "\u3164", "\uffa0", "\u115f", "\u1160"}  # kashida, blank letters
 _BLANK_SYMBOLS = {"\u2800"}
@@ -278,7 +327,7 @@ def _near(text: str, first: re.Pattern[str], second: re.Pattern[str], window: in
     return _positions_near(text, _positions(first, text), _positions(second, text), window)
 
 
-_SENTENCE_END = re.compile(r"[!?\u061f\n]+|\.(?!\d)")
+_SENTENCE_END = re.compile(r"[!?\u061f\n]+|(?<!\be)(?<!\be\.g)\.(?!\d)")
 
 
 def _sentences(text: str) -> list[str]:
@@ -296,7 +345,7 @@ class GuardrailContext:
     language: Language | None = None  # sets the brand order on screen. None: no order rule
     spoken: bool = False  # voiceover may say one name. Everything else shows both
     hashtag: bool = False
-    numbers: tuple[str, ...] = ()  # the figures that have a source URL in `numbers[]`
+    numbers: tuple[str, ...] = ()  # text whose figures are proved: facts and the claims in use
     claim_ids: frozenset[str] = frozenset()
     basket: bool = False  # a Smart Basket reel, where any saving wording is tied to the basket
     family: bool = False  # a family reel, where split wording is out wherever it stands
@@ -344,27 +393,98 @@ _FEATURES_WITH_APP = (
     (words.NAFAQAH_NAMES, frozenset({"C11"})),
     (words.QR_TERMS, frozenset({"C05", "C15"})),
 )
+_CONTENTS_OF = re.compile(rf"{_START}مضمون ال")  # "the contents of", not "guaranteed"
+_ELIDED_SUBJECT = re.compile(rf"^\s*(?:it |هو )?{_alternatives(words.PRODUCT_VERBS)}{_END}")
+_AR_WORD_PREFIX = re.compile("^(?:وال|بال|فال|كال|لل|ال|و|ب|ل|ف)(?=..)")
+_AR_WORD_ENDING = re.compile("(?<=..)(?:كم|هم|ها|نا|ات|ين|ون|ك|ه|ي)$")
+_AR_LONG_VOWELS = str.maketrans("", "", "\u0627\u0648\u064a")
+_EN_WORD_ENDING = re.compile(r"(?<=...)(?:ing|ed|es|s)$")
+_FILLER_WORDS = frozenset(lexicon_form(word) for word in words.PRODUCT_FILLER_WORDS)
+
+
+def _stem(word: str) -> str:
+    """Near enough to compare: مصاريف and مصروف, and tracks and tracking, come out alike."""
+    if not _is_arabic(word[0]):
+        return _EN_WORD_ENDING.sub("", word)
+    bare = _AR_WORD_ENDING.sub("", _AR_WORD_PREFIX.sub("", word))
+    return bare.translate(_AR_LONG_VOWELS) or bare
+
+
+def _same_stem(first: str, second: str) -> bool:
+    shorter, longer = sorted((first, second), key=len)
+    if shorter == longer:
+        return True
+    shortest_allowed = 3 if _is_arabic(first[0]) else 4
+    return len(shorter) >= shortest_allowed and longer.startswith(shorter)
+
+
+@lru_cache(maxsize=256)
+def _stems_of(wording: str) -> frozenset[str]:
+    return frozenset(_stem(word) for word in _WORD.findall(lexicon_form(wording)))
+
+
+def _says_what_counts(sentence: str) -> list[str]:
+    """The words of a product sentence that state something, as stems."""
+    found = []
+    for word in _WORD.findall(sentence):
+        plain = _AR_WORD_PREFIX.sub("", word) if _is_arabic(word[0]) else word
+        if word == _TOKEN_MARK or word.isdigit() or len(word) < 2:
+            continue
+        if word not in _FILLER_WORDS and plain not in _FILLER_WORDS:
+            found.append(_stem(word))
+    return found
+
+
+def _goes_beyond_claims(sentence: str, context: GuardrailContext) -> bool:
+    """G1, by what a sentence must match. Most of what it says has to come from the wording of
+    a claim the script names. It cannot prove the meaning is kept: that is the Claude review."""
+    stated = _says_what_counts(sentence)
+    if not stated:
+        return False
+    register = context.claims().claims
+    known = set()
+    for claim_id in context.claim_ids:
+        claim = register.get(claim_id)
+        if claim is not None:
+            known |= _stems_of(claim.wording_ar) | _stems_of(claim.wording_en)
+    backed = sum(any(_same_stem(word, stem) for stem in known) for word in stated)
+    return backed * 2 < len(stated)
+
+
+def _is_about_the_app(sentence: str) -> bool:
+    return (
+        _TOKEN_MARK in sentence
+        or bool(_lexicon(words.APP_MENTIONS).search(sentence))
+        or bool(_ELIDED_SUBJECT.match(sentence))
+    )
 
 
 def _g1(text: _Text, context: GuardrailContext) -> list[_Hit]:
     if context.stage != "script":
         return []  # the CTA names the brand and is not a product statement
     hits = []
-    unapproved = _lexicon(words.UNAPPROVED_FEATURES).search(text.lex)
+    unapproved = _lexicon(words.UNAPPROVED_FEATURES).search(_CONTENTS_OF.sub(" ", text.lex))
     if unapproved:
         hits.append(_Hit("G1", f"no approved claim covers {_quote(unapproved)}"))
     for terms, claim_ids in _FEATURES_ALWAYS:
         found = _lexicon(terms).search(text.lex)
         if found and not claim_ids & context.claim_ids:
             hits.append(_Hit("G1", f"{_quote(found)} needs one of {sorted(claim_ids)}"))
-    mentions_app = _TOKEN_MARK in text.lex or _lexicon(words.APP_MENTIONS).search(text.lex)
-    if mentions_app and not context.hashtag:
-        if not context.claim_ids:
-            hits.append(_Hit("G1", "a product statement carries no claim id"))
-        for terms, claim_ids in _FEATURES_WITH_APP:
-            found = _lexicon(terms).search(text.lex)
-            if found and context.claim_ids and not claim_ids & context.claim_ids:
-                hits.append(_Hit("G1", f"{_quote(found)} needs one of {sorted(claim_ids)}"))
+    if context.hashtag:
+        return hits
+    statements = [sentence for sentence in _sentences(text.lex) if _is_about_the_app(sentence)]
+    if not statements:
+        return hits
+    if not context.claim_ids:
+        hits.append(_Hit("G1", "a product statement carries no claim id"))
+        return hits
+    for terms, claim_ids in _FEATURES_WITH_APP:
+        found = _lexicon(terms).search(text.lex)
+        if found and not claim_ids & context.claim_ids:
+            hits.append(_Hit("G1", f"{_quote(found)} needs one of {sorted(claim_ids)}"))
+    for sentence in statements:
+        if _goes_beyond_claims(sentence, context):
+            hits.append(_Hit("G1", f"says more than its claims: {sentence[:80]!r}"))
     return hits
 
 
@@ -399,77 +519,245 @@ def _clip_hits(folder: str | None, claim_ids: Iterable[str], register: ClaimsReg
 _NUMBER = r"\d(?:[\d,]*\d)?(?:\.\d+)?"
 _NOT_IN_NUMBER = r"(?<![\d.,])"
 _PERCENT_WORDS = _alternatives(words.PERCENT_WORDS)
-_MONEY_WORDS = _alternatives(words.MONEY_WORDS)
-_COUNT_WORDS = _alternatives(words.COUNT_WORDS)
-_NUMBER_WORD_VALUES = dict(  # longest first, so عشرين is not read as عشر
-    sorted(
-        ((lexicon_form(word), value) for word, value in words.NUMBER_WORDS.items()),
-        key=lambda item: -len(item[0]),
-    )
+_PERCENT_LEADS = _alternatives(words.PERCENT_LEAD_WORDS)
+_MONEY_FORMS = sorted(
+    (
+        (re.sub(r"[\W_]", "", lexicon_form(form)), code)
+        for code, forms in words.MONEY_UNITS.items()
+        for form in forms
+    ),
+    key=lambda item: -len(item[0]),
 )
-_NUMBER_WORDS = _alternatives(words.NUMBER_WORDS)
+_MONEY_WORDS = _alternatives(form for forms in words.MONEY_UNITS.values() for form in forms)
+_CURRENCY = "".join(
+    re.escape(ch)
+    for ch in (*(chr(code) for code in range(0x10000)), *words.CURRENCY_SYMBOLS)
+    if unicodedata.category(ch) == "Sc" or ch in words.CURRENCY_SYMBOLS
+)
+_NUMBER_WORD_VALUES = {lexicon_form(word): value for word, value in words.NUMBER_WORDS.items()}
+_NUMBER_WORD = _alternatives(words.NUMBER_WORDS)
+_NUMBER_PHRASE = rf"{_NUMBER_WORD}(?:{_WORD_GAP}(?:and{_WORD_GAP})?{_NUMBER_WORD})*"
+_ONE_NUMBER_WORD = re.compile(
+    "(?:" + "|".join(sorted(map(re.escape, _NUMBER_WORD_VALUES), key=len, reverse=True)) + ")"
+)
+_SCALE_VALUES = {lexicon_form(word): value for word, value in words.NUMBER_SCALES.items()}
+_SCALE = rf"(?:{_WORD_GAP}(?P<scale>{_alternatives(words.NUMBER_SCALES)}){_END})?"
+_DIGITS = rf"(?P<digits>{_NUMBER})(?![.,]?\d)"  # no backing up to read 5,000 as a 5
+_WORDS = rf"(?P<words>{_NUMBER_PHRASE})"
+_UNIT_AFTER = rf"(?:(?P<unit>{_MONEY_WORDS}){_END}|(?P<symbol>[{_CURRENCY}]))"
+_UNIT_BEFORE = rf"(?:{_START}(?P<unit>{_MONEY_WORDS})|(?P<symbol>[{_CURRENCY}]))"
 _COMPARISONS = _alternatives(words.MULTIPLIER_COMPARISONS)
 _TIMES_WORDS = _alternatives(("times", "مرات", "مره"))
-
-_PERCENT_AFTER = re.compile(rf"{_NOT_IN_NUMBER}({_NUMBER}){_WORD_GAP}(?:%|{_PERCENT_WORDS}{_END})")
-_PERCENT_BEFORE = re.compile(rf"(?<!\d)%{_LETTER_GAP}({_NUMBER})")
-_PERCENT_IN_WORDS = re.compile(rf"{_START}({_NUMBER_WORDS}){_WORD_GAP}{_PERCENT_WORDS}{_END}")
-_MONEY_AFTER = re.compile(rf"{_NOT_IN_NUMBER}({_NUMBER}){_WORD_GAP}{_MONEY_WORDS}{_END}")
-_MONEY_BEFORE = re.compile(rf"(?:{_START}{_MONEY_WORDS}|\$){_WORD_GAP}({_NUMBER})")
-_MONEY_IN_WORDS = re.compile(
-    rf"{_START}{_alternatives(words.MONEY_SIZE_WORDS)}{_WORD_GAP}{_MONEY_WORDS}{_END}"
+_COUNT_WORDS = _alternatives(words.COUNT_WORDS)
+_FOLD_WORDS = _alternatives(("fold", "اضعاف"))
+_NON_MONEY = _alternatives(words.NON_MONEY_UNITS)
+_PER_PERIOD = _alternatives(
+    (
+        "every",
+        "each",
+        "a",
+        "an",
+        "per",
+        "monthly",
+        "weekly",
+        "daily",
+        "كل",
+        "بالشهر",
+        "شهريا",
+        "بالاسبوع",
+        "اسبوعيا",
+        "باليوم",
+        "يوميا",
+    )
 )
-_TIMES_X = re.compile(rf"{_NOT_IN_NUMBER}({_NUMBER}) ?x{_END}|{_START}x ?({_NUMBER})")
-_TIMES_MORE = re.compile(
-    rf"{_NOT_IN_NUMBER}(?:({_NUMBER})|{_START}{_COUNT_WORDS}){_WORD_GAP}{_TIMES_WORDS}"
-    rf"{_WORD_GAP}{_COMPARISONS}{_END}"
+_ENDS_THE_AMOUNT = rf"(?=[^\w%]*(?:$|[.,!?\u061f\u060c\n]|{_PER_PERIOD}{_END}))"
+_MONEY_VERBS = _alternatives(words.MONEY_VERBS)
+_FIGURE_PATTERNS = tuple(
+    (re.compile(pattern), kind)
+    for pattern, kind in (
+        (rf"{_NOT_IN_NUMBER}{_DIGITS}{_WORD_GAP}(?:%|{_PERCENT_WORDS}{_END})", "percent"),
+        (rf"(?<!\d)%{_LETTER_GAP}{_DIGITS}", "percent"),
+        (rf"{_START}{_PERCENT_LEADS}{_WORD_GAP}{_DIGITS}", "percent"),
+        (rf"{_START}{_WORDS}{_WORD_GAP}(?:%|{_PERCENT_WORDS}{_END})", "percent"),
+        (rf"(?<!\d)%{_WORD_GAP}{_WORDS}", "percent"),
+        (rf"{_NOT_IN_NUMBER}{_DIGITS}{_SCALE}{_WORD_GAP}{_UNIT_AFTER}", "money"),
+        (rf"{_UNIT_BEFORE}{_WORD_GAP}{_DIGITS}{_SCALE}", "money"),
+        (rf"{_START}{_WORDS}{_WORD_GAP}{_UNIT_AFTER}", "money"),
+        (rf"{_START}(?P<unit>{_MONEY_WORDS}){_WORD_GAP}{_WORDS}{_END}", "money"),
+        (rf"{_START}{_MONEY_VERBS}{_WORD_GAP}{_DIGITS}{_SCALE}{_ENDS_THE_AMOUNT}", "money"),
+        (rf"{_START}{_MONEY_VERBS}{_WORD_GAP}(?:a )?{_WORDS}{_ENDS_THE_AMOUNT}", "money"),
+        (rf"{_NOT_IN_NUMBER}{_DIGITS} ?[x\u00d7]{_END}", "multiplier"),
+        (rf"{_START}[x\u00d7] ?{_DIGITS}", "multiplier"),
+        (rf"{_NOT_IN_NUMBER}{_DIGITS}{_WORD_GAP}{_TIMES_WORDS}{_WORD_GAP}{_COMPARISONS}{_END}",
+         "multiplier"),
+        (rf"{_START}{_WORDS}{_WORD_GAP}{_TIMES_WORDS}{_WORD_GAP}{_COMPARISONS}{_END}",
+         "multiplier"),
+        (rf"{_START}{_COUNT_WORDS}{_WORD_GAP}{_TIMES_WORDS}{_WORD_GAP}{_COMPARISONS}{_END}",
+         "multiplier"),
+        (rf"{_NOT_IN_NUMBER}{_DIGITS}{_WORD_GAP}{_FOLD_WORDS}{_END}", "multiplier"),
+        (rf"{_START}{_WORDS}{_WORD_GAP}{_FOLD_WORDS}{_END}", "multiplier"),
+    )
 )
-_NOT_30_OF_ANYTHING = _alternatives(
-    ("min", "mins", "minute", "minutes", "day", "days", "دقيقه", "دقايق", "يوم", "ايام")
+_MONEY_DUAL_FORMS = {lexicon_form(word): code for word, code in words.MONEY_DUALS.items()}
+_MONEY_DUALS = _lexicon(tuple(words.MONEY_DUALS))
+_MULTIPLIERS = tuple(
+    (_lexicon((term,)), None if value is None else Decimal(value))
+    for term, value in words.MULTIPLIER_TERMS.items()
 )
+_PROPORTIONS = _lexicon(words.PROPORTION_TERMS)
+_ANY_NUMBER = re.compile(rf"{_NOT_IN_NUMBER}{_NUMBER}")
+_BARE_NUMBER = re.compile(
+    rf"(?<![\d.,a-z])(?P<digits>{_NUMBER})(?![a-z\d])(?!{_WORD_GAP}{_NON_MONEY}{_END})"
+)
+_SMALLEST_BARE_FIGURE = 100
 _SAVE_30 = re.compile(
     rf"{_START}{_alternatives(words.SAVE_WORDS)}{_WORD_GAP}30{_END}"
-    rf"(?!{_WORD_GAP}{_NOT_30_OF_ANYTHING})"
+    rf"(?!{_WORD_GAP}{_NON_MONEY})"
 )
 
 
 @dataclass(frozen=True)
 class _Figure:
-    kind: str
+    kind: str  # percent, money, multiplier, or bare: a large number with no unit at all
     number: Decimal | None
     start: int
+    end: int
     shown: str
+    unit: str | None = None  # the currency, for money. None: the text does not say
+
+    @property
+    def key(self) -> tuple[str, Decimal | None, str | None]:
+        return (self.kind, self.number, self.unit)
+
+
+def _phrase_value(phrase: str) -> Decimal | None:
+    """خمسة وعشرين is 25, and five hundred and fifty is 550."""
+    squeezed = re.sub(r"[\W_]", "", phrase)
+    total = current = Decimal(0)
+    position = 0
+    found = False
+    while position < len(squeezed):
+        match = _ONE_NUMBER_WORD.match(squeezed, position)
+        if match is None:
+            position += 1  # an attached prefix, an ending, or "and"
+            continue
+        found = True
+        position = match.end()
+        value = Decimal(_NUMBER_WORD_VALUES[match.group()])
+        if value == 100:
+            current = max(current, Decimal(1)) * value
+        elif value >= 1000:
+            total += max(current, Decimal(1)) * value
+            current = Decimal(0)
+        else:
+            current += value
+    return total + current if found else None
 
 
 def _number_in(match: re.Match[str]) -> Decimal | None:
-    for group in match.groups():
-        if group:
-            return Decimal(group.replace(",", ""))
+    groups = match.groupdict()
+    if groups.get("digits"):
+        number = Decimal(groups["digits"].replace(",", ""))
+        scale = groups.get("scale")
+        if scale:
+            number *= _SCALE_VALUES.get(re.sub(r"[\W_]", "", scale), 1)
+        return number
+    if groups.get("words"):
+        return _phrase_value(groups["words"])
     return None
 
 
-def _figures(text: str) -> list[_Figure]:
+def _unit_in(match: re.Match[str]) -> str | None:
+    groups = match.groupdict()
+    symbol = groups.get("symbol")
+    if symbol:
+        return words.CURRENCY_SYMBOLS.get(symbol, symbol)
+    unit = groups.get("unit")
+    if unit:
+        squeezed = re.sub(r"[\W_]", "", unit)
+        return next((code for form, code in _MONEY_FORMS if form in squeezed), None)
+    return None
+
+
+def _is_a_year(digits: str) -> bool:
+    return "," not in digits and "." not in digits and (
+        1400 <= int(digits) <= 1500 or 1900 <= int(digits) <= 2100
+    )
+
+
+@lru_cache(maxsize=512)
+def _figures(text: str) -> tuple[_Figure, ...]:
     found = []
-    for pattern, kind in (
-        (_PERCENT_AFTER, "percent"),
-        (_PERCENT_BEFORE, "percent"),
-        (_MONEY_AFTER, "money"),
-        (_MONEY_BEFORE, "money"),
-        (_MONEY_IN_WORDS, "money"),
-        (_TIMES_X, "multiplier"),
-        (_TIMES_MORE, "multiplier"),
-    ):
+    for pattern, kind in _FIGURE_PATTERNS:
         for match in pattern.finditer(text):
-            found.append(_Figure(kind, _number_in(match), match.start(), match.group()[:60]))
-    for match in _PERCENT_IN_WORDS.finditer(text):
-        word = re.sub(r"[\W_]", "", match.group(1))
-        number = next((v for k, v in _NUMBER_WORD_VALUES.items() if k in word), None)
-        found.append(
-            _Figure("percent", Decimal(number) if number else None, match.start(), match.group())
+            found.append(
+                _Figure(
+                    kind,
+                    _number_in(match),
+                    match.start(),
+                    match.end(),
+                    match.group()[:60],
+                    _unit_in(match),
+                )
+            )
+    for match in _MONEY_DUALS.finditer(text):
+        squeezed = re.sub(r"[\W_]", "", match.group())
+        unit = next((code for form, code in _MONEY_DUAL_FORMS.items() if form in squeezed), None)
+        found.append(_Figure("money", Decimal(2), match.start(), match.end(), match.group(), unit))
+    for pattern, value in _MULTIPLIERS:
+        for match in pattern.finditer(text):
+            shown = match.group()[:60]
+            found.append(_Figure("multiplier", value, match.start(), match.end(), shown))
+    for match in _PROPORTIONS.finditer(text):
+        found.append(_Figure("percent", None, match.start(), match.end(), match.group()[:60]))
+    named = list(found)
+    for match in _BARE_NUMBER.finditer(text):
+        digits = match.group("digits")
+        number = Decimal(digits.replace(",", ""))
+        if number < _SMALLEST_BARE_FIGURE or _is_a_year(digits):
+            continue
+        if not any(item.start <= match.start() < item.end for item in named):
+            found.append(_Figure("bare", number, match.start(), match.end(), digits[:60]))
+    # 5 آلاف ريال also holds آلاف ريال, and ثلاث أضعاف also holds أضعاف. Only the whole one counts.
+    return tuple(
+        figure
+        for figure in found
+        if not any(
+            other.number is not None
+            and other.start <= figure.start
+            and figure.end <= other.end
+            and (other.start, other.end) != (figure.start, figure.end)
+            for other in found
         )
-    for match in _lexicon(words.MULTIPLIER_TERMS).finditer(text):
-        found.append(_Figure("multiplier", None, match.start(), match.group()[:60]))
-    return found
+        and (
+            figure.number is not None
+            or not any(
+                other.number is not None
+                and (other.start, other.end) == (figure.start, figure.end)
+                for other in found
+            )
+        )
+    )
+
+
+def _numbers_in(text: str) -> set[Decimal]:
+    numbers = {Decimal(item.replace(",", "")) for item in _ANY_NUMBER.findall(text)}
+    numbers.update(figure.number for figure in _figures(text) if figure.number is not None)
+    for match in re.finditer(rf"{_START}{_NUMBER_PHRASE}{_END}", text):
+        value = _phrase_value(match.group())
+        if value is not None:
+            numbers.add(value)
+    return numbers
+
+
+def figures_missing_from(text: str, source_text: str) -> list[str]:
+    """The figures in `text` whose number is nowhere in `source_text`. Only the number is compared,
+    because a page and its paraphrase can word a unit differently."""
+    stated = [figure for figure in _figures(lexicon_form(text)) if figure.number is not None]
+    if not stated:
+        return []
+    held = _numbers_in(lexicon_form(source_text))
+    return [figure.shown for figure in stated if figure.number not in held]
 
 
 def _is_30_percent(figure: _Figure) -> bool:
@@ -489,33 +777,75 @@ def _thirty_percent_hits(text: str) -> list[_Hit]:
     return hits
 
 
-def _sourced_figures(numbers: Sequence[str]) -> tuple[set[tuple[str, Decimal | None]], set]:
-    with_kind: set[tuple[str, Decimal | None]] = set()
-    plain: set[Decimal] = set()
-    for value in numbers:
-        form = lexicon_form(value)
-        figures = _figures(form)
-        with_kind.update((figure.kind, figure.number) for figure in figures)
-        if not figures:
-            plain.update(Decimal(digits.replace(",", "")) for digits in re.findall(_NUMBER, form))
-    return with_kind, plain
+def _proved_figures(proved: Sequence[str]) -> set[tuple[str, Decimal | None, str | None]]:
+    keys = set()
+    for value in proved:
+        keys.update(
+            figure.key for figure in _figures(lexicon_form(value)) if figure.number is not None
+        )
+    return keys
+
+
+def _has_example_label(text: str, figure: _Figure) -> bool:
+    """A label only covers a figure in its own sentence."""
+    stops = list(_SENTENCE_END.finditer(text))
+    start = max((stop.end() for stop in stops if stop.end() <= figure.start), default=0)
+    end = min((stop.start() for stop in stops if stop.start() >= figure.end), default=len(text))
+    labels = [
+        position
+        for position in _positions(_lexicon(words.EXAMPLE_LABELS), text)
+        if start <= position < end
+    ]
+    return _positions_near(text, [figure.start], labels, _NEAR_EXAMPLE)
 
 
 def _g2(text: _Text, context: GuardrailContext) -> list[_Hit]:
     hits = _thirty_percent_hits(text.lex)
-    with_kind, plain = _sourced_figures(context.numbers)
-    example = _lexicon(words.EXAMPLE_LABELS)
+    proved = _proved_figures(context.numbers)
     for figure in _figures(text.lex):
-        if _is_30_percent(figure):
+        if _is_30_percent(figure) or figure.key in proved:
             continue
-        if (figure.kind, figure.number) in with_kind or figure.number in plain:
+        if _has_example_label(text.lex, figure):
             continue
-        if _positions_near(
-            text.lex, [figure.start], _positions(example, text.lex), _NEAR_EXAMPLE
-        ):
-            continue
-        hits.append(_Hit("G2", f"{figure.shown!r} has no source and no example label"))
+        hits.append(_Hit("G2", f"{figure.shown!r} has no matching fact and no example label"))
     return hits
+
+
+def _value_is_stated(value: str, fact_text: str) -> bool:
+    """Value and unit, as the fact words them. A plain number says nothing of what it counts, so
+    it must be in the fact, and it still clears no percentage, amount or multiplier in the text."""
+    wanted, fact = lexicon_form(value), lexicon_form(fact_text)
+    figures = _figures(wanted)
+    if not figures:
+        numbers = _numbers_in(wanted)
+        return bool(numbers) and numbers <= _numbers_in(fact)
+    held = {figure.key for figure in _figures(fact)}
+    numbers = _numbers_in(fact)
+    return all(
+        figure.number is not None
+        and (figure.key in held or (figure.kind == "bare" and figure.number in numbers))
+        for figure in figures
+    )
+
+
+def _check_numbers_against_facts(
+    script: Script, facts: Sequence[ResearchFact]
+) -> tuple[tuple[str, ...], list[_Hit]]:
+    """Each entry of `numbers[]` must be stated by a fact from the URL it cites. Only those that
+    are go on to clear figures in the text."""
+    by_source: dict[str, list[str]] = {}
+    for fact in facts:
+        text = "\n".join((fact.claim, fact.paraphrase_ar, fact.paraphrase_en))
+        by_source.setdefault(_url_key(fact.source_url), []).append(text)
+    proved = []
+    hits = []
+    for number in script.numbers:
+        stated_by = by_source.get(_url_key(number.source_url), [])
+        if any(_value_is_stated(number.value, text) for text in stated_by):
+            proved.append(number.value)
+        else:
+            hits.append(_Hit("G2", f"no fact from the cited source states {number.value}"))
+    return tuple(proved), hits
 
 
 # --- G3: research is cited, not copied -----------------------------------------------------
@@ -542,15 +872,28 @@ def _spoken_and_shown_text(script: Script) -> list[tuple[str, str]]:
     ]
 
 
+class _HasText(Protocol):
+    text: str
+
+
+def _excerpt_text(excerpt: str | _HasText) -> str:
+    return excerpt if isinstance(excerpt, str) else excerpt.text
+
+
 def check_research_use(
     script: Script,
     *,
     facts: Sequence[ResearchFact],
-    excerpts: Sequence[str],
+    excerpts: Sequence[str | _HasText],
     max_copied_words: int,
 ) -> list[GuardrailFinding]:
     """Plain inputs, so this needs nothing from the research step. Spec Section 6.4 calls an
-    overlap of `max_copied_words` consecutive words a long one, so that length itself fails."""
+    overlap of `max_copied_words` consecutive words a long one, so that length itself fails.
+
+    What this can prove depends on the route. Under `claude_cli`, WebFetch hands back what a small
+    model made of the page, so an excerpt is a summary, not the page. A pass then proves the script
+    copies no long run from that summary. It cannot prove the script copies nothing from the page
+    itself, and a citation only proves the URL was fetched (spec Section 6.4)."""
     hits: list[tuple[str, _Hit]] = []
     known = {_url_key(fact.source_url) for fact in facts}
     for source in script.sources:
@@ -563,7 +906,7 @@ def check_research_use(
 
     copied: set[tuple[str, ...]] = set()
     for excerpt in excerpts:
-        copied |= _word_runs(excerpt, max_copied_words)
+        copied |= _word_runs(_excerpt_text(excerpt), max_copied_words)
     message = f"{max_copied_words} or more words in a row copied from a source"
     for location, text in _spoken_and_shown_text(script):
         if _word_runs(BRAND_TOKEN.sub(" ", text), max_copied_words) & copied:
@@ -578,28 +921,55 @@ def check_research_use(
 # --- G4 to G10 -----------------------------------------------------------------------------
 
 
+_SMS_WITH_DIGITS = re.compile(rf"{_START}{_term_body('sms')}\d")
+
+
 def _g4(text: _Text, context: GuardrailContext) -> list[_Hit]:
     searched = text.lex
     if _C18 in context.claim_ids:
         claim = context.claims().claims[_C18]
         for wording in (claim.wording_ar, claim.wording_en):
             searched = searched.replace(lexicon_form(wording).rstrip("."), " ")
-    found = _lexicon(words.SMS_TERMS).search(searched)
+    found = _lexicon(words.SMS_TERMS).search(searched) or _SMS_WITH_DIGITS.search(searched)
     if found:
         return [_Hit("G4", f"only the approved no-SMS claim may mention this: {_quote(found)}")]
+    messages = _lexicon(words.MESSAGE_TERMS)
+    if _near(searched, messages, _lexicon(words.BANK_WORDS), _NEAR_MESSAGE) or _near(
+        searched, messages, _lexicon(words.MESSAGE_READING_TERMS), _NEAR_MESSAGE
+    ):
+        return [_Hit("G4", "implies that the app reads messages or alerts")]
     return []
 
 
-_DAY_WORDS = _alternatives(("day", "days", "يوم", "ايام"))
-_BARE_27 = re.compile(rf"{_NOT_IN_NUMBER}27(?!\d)(?!{_WORD_GAP}{_DAY_WORDS})")
+_THOUSAND_WORDS = _alternatives(("thousand", "k", "الف", "الاف"))
+_CALENDAR = _alternatives(words.CALENDAR_MONTHS)
+_NAMED_MONTH = rf"{_WORD_GAP}(?:(?:of|من){_WORD_GAP})?{_CALENDAR}{_END}"
+_COUNTS_SOMETHING = rf" (?!(?:of|every|each|to|and|is){_END})[a-z]{{2,}}"  # the 27 items you bought
+_BARE_27 = re.compile(
+    rf"{_NOT_IN_NUMBER}27(?!\d)(?!{_WORD_GAP}{_NON_MONEY}{_END})"
+    rf"(?!{_WORD_GAP}{_THOUSAND_WORDS}{_END})(?!{_NAMED_MONTH})(?!{_COUNTS_SOMETHING})"
+)
+_DATE_27 = re.compile(
+    rf"{_START}(?:the|on|day|يوم|بتاريخ){_WORD_GAP}27(?!\d)(?!{_NAMED_MONTH})"
+    rf"(?!{_COUNTS_SOMETHING})"
+)
+
+
+def _with_only_27(text: str) -> str:
+    """27,000 is a sum and 2.27 is a price, so neither may read as the 27th."""
+    return _ANY_NUMBER.sub(lambda match: match.group() if match.group() == "27" else " ", text)
 
 
 def _g5(text: _Text, context: GuardrailContext) -> list[_Hit]:
     hits = []
     fixed = _lexicon(words.FIXED_27_TERMS)
     salary = _lexicon(words.SALARY_TERMS)
-    for sentence in _sentences(text.lex):
-        if not (fixed.search(sentence) or _near(sentence, _BARE_27, salary, _NEAR_SALARY)):
+    searched = _with_only_27(text.lex)
+    # Across the whole text, because "Payday! 27!" is one statement in two sentences.
+    tied_to_salary = _near(searched, _BARE_27, salary, _NEAR_SALARY)
+    for sentence in _sentences(searched):
+        states_27 = fixed.search(sentence) or _DATE_27.search(sentence)
+        if not (states_27 or (tied_to_salary and _BARE_27.search(sentence))):
             continue
         says_default_and_change = (
             _lexicon(words.DEFAULT_WORDS).search(sentence)
@@ -636,12 +1006,17 @@ def _g6(text: _Text, context: GuardrailContext) -> list[_Hit]:
     return []
 
 
+_FULL_STOP = re.compile(r"\n+|\.(?!\d)")
+
+
 def _g7(text: _Text, _context: GuardrailContext) -> list[_Hit]:
     hits = []
     burden = _lexicon(words.WIFE_BURDEN_PHRASES).search(text.lex)
     if burden:
         hits.append(_Hit("G7", f"against family rules 1 to 4: {_quote(burden)}"))
-    for sentence in _sentences(text.lex):
+    freed = _lexicon(words.NOT_HER_OBLIGATION).sub(" ", text.lex)
+    # Only a full stop ends the thought here, because "Your wife? Must pay." is one statement.
+    for sentence in _FULL_STOP.split(freed):
         obliged = (
             _lexicon(words.WIFE_TERMS).search(sentence)
             and _lexicon(words.OBLIGATION_TERMS).search(sentence)
@@ -649,34 +1024,58 @@ def _g7(text: _Text, _context: GuardrailContext) -> list[_Hit]:
         )
         if obliged:
             hits.append(_Hit("G7", f"never imply she should pay: {sentence[:80]!r}"))
+    for sentence in _sentences(text.lex):
         contribution = _lexicon(words.WIFE_CONTRIBUTION_PHRASES).search(sentence)
         if contribution and not _lexicon(words.VOLUNTARY_WORDS).search(sentence):
             hits.append(_Hit("G7", f"her contribution is voluntary: {_quote(contribution)}"))
     return hits
 
 
+_CLAUSE_BREAK = re.compile(r"[,;:\u060c\u061b]")
+_APR_AS_MONTH = re.compile(
+    rf"{_START}(?:in|on|by|from|until|to|next|last|this){_WORD_GAP}apr{_END}"
+    rf"|{_START}apr{_WORD_GAP}(?:(?:or|and|to){_END}|\d)"
+    rf"|\d{_WORD_GAP}apr{_END}"
+)
+
+
 def _g8(text: _Text, _context: GuardrailContext) -> list[_Hit]:
+    """A warning only clears the clause it stands in, so "Don't wait, get a loan" still sells."""
     hits = []
     interest = _lexicon(words.INTEREST_TERMS)
     bnpl = _lexicon(words.BNPL_TERMS)
-    for sentence in _sentences(text.lex):
-        found = interest.search(sentence)
-        plan = bnpl.search(sentence)
-        if not found and not plan:
-            continue
-        promoted = _lexicon(words.PROMOTION_TERMS).search(sentence)
-        warned = _lexicon(words.WARNING_TERMS).search(sentence)
-        if promoted and not warned:
-            named = _quote(found or plan)
-            hits.append(_Hit("G8", f"promotes an interest-based product: {named}"))
-        elif found:
-            hits.append(_Hit("G8", f"neutral mention, for the owner: {_quote(found)}", soft=True))
+    promotion = _lexicon(words.PROMOTION_TERMS)
+    warning = _lexicon(words.WARNING_TERMS)
+    false_warning = _lexicon(words.FALSE_WARNINGS)
+    searched = _lexicon(words.INTEREST_HARMLESS).sub(" ", _APR_AS_MONTH.sub(" ", text.lex))
+    for sentence in _sentences(searched):
+        rest = false_warning.sub(" ", sentence)
+        sold = bool(false_warning.search(sentence)) or bool(promotion.search(rest))
+        warned = bool(warning.search(rest))
+        for clause in _CLAUSE_BREAK.split(rest):
+            found = interest.search(clause)
+            plan = bnpl.search(clause)
+            if not found and not plan:
+                continue
+            clause_sells = promotion.search(clause) and not warning.search(clause)
+            if clause_sells or (sold and not warned):
+                named = _quote(found or plan)
+                hits.append(_Hit("G8", f"promotes an interest-based product: {named}"))
+            elif found:
+                hits.append(
+                    _Hit("G8", f"neutral mention, for the owner: {_quote(found)}", soft=True)
+                )
     return hits
 
 
 def _g9(text: _Text, _context: GuardrailContext) -> list[_Hit]:
-    found = _lexicon(words.PERSONAL_ADVICE_TERMS).search(text.lex)
-    return [_Hit("G9", f"personalised advice: {_quote(found)}")] if found else []
+    searched = _lexicon(words.BEFORE_BUYING).sub(" ", text.lex)
+    found = _lexicon(words.PERSONAL_ADVICE_TERMS).search(searched)
+    if found:
+        return [_Hit("G9", f"personalised advice: {_quote(found)}")]
+    if _near(searched, _lexicon(words.BUYING_TERMS), _lexicon(words.ASSET_TERMS), _NEAR_ASSET):
+        return [_Hit("G9", "telling a viewer to buy an asset is personalised advice")]
+    return []
 
 
 def _g10(text: _Text, _context: GuardrailContext) -> list[_Hit]:
@@ -696,12 +1095,13 @@ _DOMAIN = re.compile(
     + "|".join(words.URL_TLDS)
     + rf"){_END}"
 )
+_SHORT_LINK = re.compile(r"(?<![@#\w.\-])[a-z0-9\-]{1,63}\.[a-z]{2,24}/\S*")
 
 
 def _g11(text: _Text, context: GuardrailContext) -> list[_Hit]:
     hits = []
     allowed_url = lexicon_form(context.landing_url) if context.landing_url else None
-    for pattern in (_URL_PREFIX, _DOMAIN):
+    for pattern in (_URL_PREFIX, _DOMAIN, _SHORT_LINK):
         for match in pattern.finditer(text.lex):
             if allowed_url is None or match.group() not in allowed_url:
                 hits.append(_Hit("G11", f"no link of any kind: {_quote(match)}"))
@@ -731,10 +1131,17 @@ _FULL_NAME = re.compile(
     rf"{_START}{_AR_PREFIX}{_AR_FIRST}{_NAME_GAP}{_AR_SECOND}{_END}"
     rf"|{_START}{_EN_FIRST}{_NAME_GAP}{_EN_SECOND}{_END}"
 )
-_BARE_AR = re.compile(rf"{_START}{_AR_PREFIX}{_term_body(_AR_FIRST)}{_AR_ENDING}{_END}")
+_NOT_AFTER_A_LETTER = r"(?<![^\W\d_])"  # a digit in front of the name does not make it another word
+_AR_NAME = _LETTER_GAP.join(
+    f"{re.escape(ch)}{{1,2}}" if ch == "\u0627" else re.escape(ch) for ch in _AR_FIRST
+)
+_BARE_AR = re.compile(
+    rf"{_NOT_AFTER_A_LETTER}[\u0648\u0641\u0628\u0644\u0643]{{0,3}}(?:\u0627\u0644)?{_AR_NAME}"
+    rf"(?:\u0627|{_AR_ENDING}){_END}"
+)
 _BARE_EN = re.compile(
-    rf"{_START}q{_LETTER_GAP}[a4@]{{1,2}}{_LETTER_GAP}w{{1,2}}{_LETTER_GAP}[a4@]{{1,2}}"
-    rf"{_LETTER_GAP}m"
+    rf"{_NOT_AFTER_A_LETTER}q{_LETTER_GAP}[a4@i]{{0,2}}{_LETTER_GAP}w{{1,2}}{_LETTER_GAP}"
+    rf"[a4@]{{1,2}}{_LETTER_GAP}m"
 )
 _FAMILY_HEADSHIP = re.compile(
     f"{_START}{_alternatives(words.FAMILY_HEADSHIP_WORDS, form=brand_form)}{_END}"
@@ -820,13 +1227,22 @@ def _g12(text: _Text, context: GuardrailContext) -> list[_Hit]:
 # --- G13, G14, G17 -------------------------------------------------------------------------
 
 
-_NAMED_RIVALS = words.STORE_NAMES + words.BANK_AND_WALLET_NAMES + words.COMPETING_APPS
+_NAMED_RIVALS = (
+    words.STORE_NAMES
+    + words.BANK_AND_WALLET_NAMES
+    + words.NAMES_ONLY_WHEN_COMPARED
+    + words.COMPETING_APPS
+)
+
+
+def _without_lookalike_stores(text: str) -> str:
+    return _lexicon(words.NOT_A_STORE_NAME).sub(" ", text)
 
 
 def _g13(text: _Text, _context: GuardrailContext) -> list[_Hit]:
     hits = []
     if _near(
-        text.lex,
+        _without_lookalike_stores(text.lex),
         _lexicon(_NAMED_RIVALS),
         _lexicon(words.COMPARISON_TERMS),
         _NEAR_COMPARISON,
@@ -861,7 +1277,7 @@ def _g17(text: _Text, _context: GuardrailContext) -> list[_Hit]:
 
 def _g19(text: _Text, context: GuardrailContext) -> list[_Hit]:
     hits = []
-    store = _lexicon(words.STORE_NAMES).search(text.lex)
+    store = _lexicon(words.STORE_NAMES).search(_without_lookalike_stores(text.lex))
     if store:
         hits.append(_Hit("G19", f"no store names: {_quote(store)}"))
     saving = _lexicon(words.BASKET_SAVING_TERMS)
@@ -884,7 +1300,9 @@ def _g20(text: _Text, _context: GuardrailContext) -> list[_Hit]:
         hits.append(_Hit("G20", f"there is no bank feature: {_quote(feature)}"))
     bank = _lexicon(words.BANK_WORDS)
     contrast = _lexicon(words.COMPARISON_TERMS + words.BANK_CONTRAST_TERMS)
-    if _near(text.lex, bank, contrast, _NEAR_COMPARISON):
+    # Close by, because "Best practice: check your bank statement" compares nothing with a bank.
+    without_allowances = _lexicon(words.ALLOWANCE_PHRASES).sub(" ", text.lex)
+    if _near(without_allowances, bank, contrast, _NEAR_BANK_CONTRAST):
         hits.append(_Hit("G20", "no comparison or contrast with banks"))
     plain = bank.search(text.lex)
     if plain:
@@ -902,9 +1320,8 @@ def _g21(text: _Text, _context: GuardrailContext) -> list[_Hit]:
     if market:
         hits.append(_Hit("G21", f"there is no market data: {_quote(market)}"))
     searched = _without_qr_denials(text.lex)
-    if _near(
-        searched, _lexicon(words.QR_TERMS), _lexicon(words.PRICE_TRACKING_TERMS), _NEAR_QR
-    ):
+    qr = _lexicon(words.QR_TERMS + words.QR_ALIASES)
+    if _near(searched, qr, _lexicon(words.PRICE_TRACKING_TERMS), _NEAR_QR):
         hits.append(_Hit("G21", "price tracking uses line items from your own receipts, not QR"))
     return hits
 
@@ -1096,17 +1513,21 @@ def _is_basket(script: Script, all_text: str) -> bool:
 
 
 def _script_stage_findings(
-    script: Script, base: GuardrailContext
+    script: Script, base: GuardrailContext, config: EngineConfig
 ) -> list[tuple[GuardrailFinding, bool]]:
+    """The engine's own closing lines are taken out first: they are not the writer's statement."""
     found = []
+    voice = without_engine_lines(script.voice_script, config)
     for location, text, changes in (
         ("hook_ar", script.hook_ar, {"language": "ar"}),
-        ("voice_script", script.voice_script, {"language": script.language, "spoken": True}),
+        ("voice_script", voice, {"language": script.language, "spoken": True}),
         ("subtitles_en", script.subtitles_en, {"language": "en"}),
-        ("caption_ar", script.caption_ar, {"language": "ar"}),
-        ("caption_en", script.caption_en, {"language": "en"}),
+        ("caption_ar", without_engine_lines(script.caption_ar, config), {"language": "ar"}),
+        ("caption_en", without_engine_lines(script.caption_en, config), {"language": "en"}),
     ):
         found += _text_findings(text, replace(base, **changes), location)
+    # A viewer hears the hook and then the voice, so a rule must hold across the two.
+    found += _text_findings(f"{script.hook_ar} {voice}", base, "hook_and_voice")
 
     on_screen = replace(base, language="en")
     for index, item in enumerate(script.on_screen_en):
@@ -1161,7 +1582,7 @@ def check_script(
     brand: ReelBrand,
     register: ClaimsRegister | None = None,
     facts: Sequence[ResearchFact] = (),
-    excerpts: Sequence[str] = (),
+    excerpts: Sequence[str | _HasText] = (),
 ) -> GuardrailReport:
     """Every deterministic rule on a script, as written and again with the brand filled in."""
     register = register or load_claims_register()
@@ -1169,8 +1590,15 @@ def check_script(
         "\n".join(text for _, text in _spoken_and_shown_text(script)) + "\n"
         + "\n".join(script.hashtags)
     )
+    proved, number_hits = _check_numbers_against_facts(script, facts)
+    claim_wording = tuple(
+        wording
+        for claim_id in script.claim_ids
+        if claim_id in register.claims and register.claims[claim_id].code_check == "supported"
+        for wording in (register.claims[claim_id].wording_ar, register.claims[claim_id].wording_en)
+    )
     base = GuardrailContext(
-        numbers=tuple(number.value for number in script.numbers),
+        numbers=(*proved, *claim_wording),
         claim_ids=frozenset(script.claim_ids),
         basket=_is_basket(script, all_text),
         family=_is_family(script, all_text),
@@ -1179,13 +1607,14 @@ def check_script(
         other_brand_names=(config.test_brand.name_ar, config.test_brand.name_en),
         register=register,
     )
-    found = _script_stage_findings(script, base)
+    found = _script_stage_findings(script, base, config)
 
     for hit in (
         *_claim_hits(script.claim_ids, register),
         *_clip_hits(script.feature_clip_folder, script.claim_ids, register),
     ):
         found.append((_finding(hit, "claim_ids"), False))
+    found += [(_finding(hit, "numbers"), False) for hit in number_hits]
     for number in script.numbers:
         for hit in _thirty_percent_hits(lexicon_form(number.value)):
             found.append((_finding(hit, "numbers"), False))

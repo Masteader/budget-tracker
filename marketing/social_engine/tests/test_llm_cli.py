@@ -176,13 +176,13 @@ def test_api_key_runs_add_the_budget_flag_and_nothing_else(tmp_path, cwd):
 
 def test_the_command_starts_with_no_shell_and_closed_stdin(tmp_path, cwd, monkeypatch):
     seen = {}
-    real_run = subprocess.run
+    real_popen = subprocess.Popen
 
     def spy(*args, **kwargs):
         seen.update(kwargs)
-        return real_run(*args, **kwargs)
+        return real_popen(*args, **kwargs)
 
-    monkeypatch.setattr(llm_backends.subprocess, "run", spy)
+    monkeypatch.setattr(llm_backends.subprocess, "Popen", spy)
     exe = build_stub(tmp_path / "bin", answer())
     backend_for(exe, cwd).run(request(), spend())
     assert not seen.get("shell")
@@ -366,7 +366,7 @@ def test_invalid_utf8_on_stdout_is_a_failure(tmp_path, cwd, monkeypatch):
     def fake_run(*args, **kwargs):
         return subprocess.CompletedProcess(args, 0, stdout=b"\xff\xfe", stderr=b"")
 
-    monkeypatch.setattr(llm_backends.subprocess, "run", fake_run)
+    monkeypatch.setattr(llm_backends, "_run_claude", fake_run)
     with pytest.raises(LlmRunFailed):
         backend_for("", cwd, claude_path=str(build_stub(tmp_path / "b"))).run(request(), spend())
 
@@ -375,7 +375,7 @@ def test_a_timeout_is_a_failure(tmp_path, cwd, monkeypatch):
     def fake_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(args, 1)
 
-    monkeypatch.setattr(llm_backends.subprocess, "run", fake_run)
+    monkeypatch.setattr(llm_backends, "_run_claude", fake_run)
     exe = build_stub(tmp_path / "bin", answer())
     with pytest.raises(LlmRunFailed, match="time"):
         backend_for(exe, cwd).run(request(), spend())
@@ -526,7 +526,7 @@ def test_an_api_key_timeout_stops_rather_than_retrying(tmp_path, cwd, monkeypatc
     def fake_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(args, 1)
 
-    monkeypatch.setattr(llm_backends.subprocess, "run", fake_run)
+    monkeypatch.setattr(llm_backends, "_run_claude", fake_run)
     exe = build_stub(tmp_path / "bin", answer())
     with pytest.raises(BudgetExceeded):
         backend_for(exe, cwd, env=API_ENV, auth="api_key").run(request(), spend())

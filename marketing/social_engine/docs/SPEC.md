@@ -79,6 +79,8 @@ Market: Saudi Arabia is where we launch, not the only audience. Content mix is 5
 | D31 | **iOS.** The owner wants the project made ready for iOS, in a separate task. The generic device frame in D16 stays until a real iOS build exists, then an iPhone frame is allowed. | Owner | Owner decision 2026-11-04 | Final |
 | D32 | **Dropped claims.** The 30% figures, "3 clicks", a fixed 27th and "link in bio" are out of all examples and seeds. Price tracking may only be described as using line items from your own receipts, not the ZATCA QR. All are enforced through the rejected claims in Section 6.5. | Owner | Owner decision 2026-11-04 | Final |
 | D33 | **Two transitive parsers in the Remotion lockfile.** `@remotion/openai-whisper` and `@remotion/elevenlabs` 4.0.540 may appear in `remotion_studio/package-lock.json` and nowhere else, because `@remotion/studio` depends on them. Each only parses a transcript it is handed: no network call, no API key, no install script. Neither is in the studio's `package.json` or `src/`. This changes nothing in D8 or D18: Azure stays the only voice provider. Enforced by `tests/test_boundaries.py`. | Orchestrator | Package source read 2026-11-04 | Applied. Owner to confirm, because the boundary test names any widening as an owner decision |
+| D34 | **Research uses `--output-format stream-json --verbose`.** This departs from the command shape in Section 6.3, which gives `json`. The `json` format carries no tool log, and Section 6.4 needs one to prove a URL was fetched. Writing and review have no tools, so they stay on `json`. The stream's `system/init` event also shows which tools and MCP servers the run was given, and the run fails closed on anything it cannot read: a tool or server outside the list, a missing list, or an unknown content block. | Implementer | Review finding, 2026-11-04 | Applied. Flags and event shapes stay subject to LIVE-2 |
+| D35 | **Figures and product statements are checked by what they must match.** Word lists cannot catch everything, especially in dialect, so G2 and G1 are allowlists first and lists second (Section 6.5). The engine alone adds the closing line, disclaimer and disclosure, so a general tip with no claim ids passes G1, and a script says each line once. Seeds g021 and g022 no longer name 50/30/20, because that rule cannot be explained without the 30% that R01 refuses. | Orchestrator | Review findings, 2026-11-04 | Applied. Owner reviews the seeds at LIVE-6 |
 
 ---
 
@@ -435,11 +437,11 @@ Screenshots: one clean PNG of each main screen in light and dark, saved to `scre
 
 | Tier | Share | Topics |
 |---|---|---|
-| Tier 1 Global | 50% | Stopping paycheck-to-paycheck, supermarket traps and grocery budgeting, 50/30/20 versus zero-based, recurring subscriptions, emergency and sinking funds, fair rent and utility splits between roommates |
+| Tier 1 Global | 50% | Stopping paycheck-to-paycheck, supermarket traps and grocery budgeting, three-part splits versus zero-based, recurring subscriptions, emergency and sinking funds, fair rent and utility splits between roommates |
 | Tier 2 Regional Arab | 30% | Ramadan and Eid surges, social pressure spending on gifts and weddings, expat remittances and transfer fees, household maintenance and Nafaqah handled per Section 6.5 |
 | Tier 3 Saudi launch | 20% | Getting through the salary cycle, using VAT QR receipts, tracking several accounts and wallets by hand |
 
-Topics are education first. Mentioning the app is allowed only through an approved claim. Topics may teach an idea the app does not implement, such as 50/30/20, as long as the script does not imply that the app does it.
+Topics are education first. Mentioning the app is allowed only through an approved claim. Topics may teach an idea the app does not implement, such as a three-part salary split, as long as the script does not imply that the app does it. A topic with no claim ids is a general tip, and its script says nothing about the app. The engine still adds the closing line.
 
 Seed topics carry no bank names or bank comparisons (D29), so a transfer-fee topic stays general, with no named bank, exchange house or wallet. No seed uses a 30% figure, a click count, a fixed 27th or "link in bio" (D32).
 
@@ -452,7 +454,7 @@ Claude returns JSON matching a schema. Target structure, from the approved brain
 | Hook | 0-3 s | Relatable pain, e.g. "راتبك وين يروح كل شهر؟" |
 | Problem | 3-15 s | The trap, in plain language |
 | `{brand}` | 15-30 s | One feature that helps, from `approved_claims.json` |
-| CTA | 30-35 s | From config, `coming_soon` by default (Section 6.7), gated on the URL by G11 |
+| CTA | 30-35 s | From config, `coming_soon` by default (Section 6.7), gated on the URL by G11. The engine adds it after the script's text, so the writer never writes it |
 
 Scripts never contain a brand name. Claude writes the tokens `{brand_ar}`, `{brand_en}` and `{brand_hashtag}`, and the engine fills them from config at voice and render time. Schema fields: `topic_id`, `tier`, `template`, `language`, `hook_ar`, `voice_script`, `on_screen_en[]`, `subtitles_en`, `feature_clip_folder`, `claim_ids[]`, `numbers[]` (each number with a source URL), `sources[]`, `caption_ar`, `caption_en`, `hashtags[]`, `speech_seconds_estimate`.
 
@@ -498,6 +500,8 @@ claude -p <prompt> --model <model> --output-format json --json-schema <schema>
        --no-session-persistence --max-turns <n>
 ```
 
+Research uses `--output-format stream-json --verbose` in place of `json`, for its tool log (D34).
+
 **Isolation requirements, each with a test:**
 
 1. Run with the working directory set to the empty `claude_cwd\`, never the repo. A non-bare `-p` run [loads hooks, `.mcp.json` servers and CLAUDE.md without any trust prompt](https://code.claude.com/docs/en/headless). Running inside the repo would pull in the project's agents rules and any configured MCP server.
@@ -521,20 +525,31 @@ Research returns structured facts, not prose:
 
 - Every fact has a real URL that was actually fetched in that run. A URL not seen in the run's tool log fails the check.
 - Scripts paraphrase. A copy check compares script text with fetched excerpts and fails on a long overlap (`guardrails.max_copied_words`, default 12 consecutive words).
+- Every figure in a fact must also be in the text returned for the URL that fact cites. At most 8 facts and 10,000 characters of research go on, because both later steps carry them on one Windows command line.
 - Sources appear in the Telegram message so the owner can check them.
+
+**What the copy check can and cannot prove.** Under `claude_cli`, WebFetch does not return the page. A small model reads the page and returns its answer to the prompt the research session gave it, so an excerpt is a summary written by a model. So the checks prove less than they appear to:
+
+| Check | What a pass proves | What it cannot prove |
+|---|---|---|
+| URL in the tool log | The run fetched that URL, and the fetch returned success | That the page says what the fact says |
+| No long overlap with an excerpt (G3) | The script and the facts copy no long run from what WebFetch returned | That they copy nothing from the page. A passage the summary reworded is invisible here |
+| Figure in the excerpt | The summary holds the same number | That the page does, because a model may have misread it or a page may have instructed it |
+
+The `anthropic_api` route gets the fetched text itself, so its copy check does compare with the page, although a page can still be wrong. On either route the facts are model output, and web pages can carry instructions. The separate review and the owner reading the sources on Telegram cover what these checks cannot.
 
 ### 6.5 Guardrails
 
 Run **before anything reaches Telegram**. Three layers:
 
 1. **Deterministic checks** in `guardrails.py`, on Arabic and English text. Hard fails block the reel.
-2. **Separate Claude review.** A new session with no memory of the writing step checks the script against this section and returns pass or fail with reasons. Catches meaning the word lists miss, especially in dialect.
+2. **Separate Claude review.** A new session with no memory of the writing step checks the script against this section and the research facts, and returns pass or fail with reasons. Catches meaning the word lists miss, especially in dialect, and figures or facts the script bends. A verdict that passes but lists a problem counts as a fail.
 3. **The owner**, on Telegram. The message shows claims used, numbers with sources and any soft flags.
 
 | ID | Rule | Check | Level |
 |---|---|---|---|
-| G1 | Product statements must match what the app does | Each product statement maps to an approved claim ID. Wording stays within the claim's allowed meaning | Hard |
-| G2 | No unverifiable numbers | Any percentage, money amount or multiplier needs a source URL in `numbers[]`, or a visible "example" label. "Save 30%" fails | Hard |
+| G1 | Product statements must match what the app does | Each product statement maps to an approved claim ID. A sentence that names the app, or opens on a verb with the app as its unspoken subject, needs a claim id, and at least half of what it says must come from the wording of the claims the script names. The closing line is not a product statement. Wording stays within the claim's allowed meaning, which the Claude review checks | Hard |
+| G2 | No unverifiable numbers | Any percentage, money amount, multiplier, or bare number of 100 or more must match, in value and unit, a fact from the URL it cites in `numbers[]`, or an approved claim the script uses, or carry a visible "example" label in its own sentence. Anything else is refused. An entry in `numbers[]` that no fact from its URL states also fails. "Save 30%" fails | Hard |
 | G3 | Research is cited, not copied | Section 6.4 | Hard |
 | G4 | No SMS-reading implication (Zero SMS) | Lexicon: SMS, رسائل البنك, رسالة البنك, "reads your messages", "auto-imports from your bank". The only allowed mention is the approved claim that the app does not read SMS | Hard |
 | G5 | Payday is per household | Never "the 27th" as a fixed fact about the app. Allowed: "your household's payday", or "the default is the 27th, and you can change it". `#راتب_27`, "Payday 27th HUD" and "27th-to-27th" fail | Hard |

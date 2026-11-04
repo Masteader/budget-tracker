@@ -10,8 +10,13 @@ path, and only `--strict-mcp-config` and an empty `--setting-sources` keep them 
 folder must be empty and outside the repo, or `-p` would load its hooks, servers and CLAUDE.md.
 
 Spec Section 6.3 gives `--output-format json`, which carries no tool log, while Section 6.4 needs
-one. So research alone uses `stream-json --verbose`, the documented way to see tool calls. Its
-`system/init` event also shows which MCP servers connected. All flags stay subject to LIVE-2.
+one. So research alone uses `stream-json --verbose`, the documented way to see tool calls (decision
+D34). Its `system/init` event also shows which tools and MCP servers the run was given. Anything in
+that stream the code does not recognise fails the run. All flags stay subject to LIVE-2.
+
+WebFetch under `claude -p` hands back what a small model made of the page, not the page. So
+`ToolCall.text` proves what the run was told a page said, and nothing about the page itself (spec
+Section 6.4). The Anthropic API route returns the fetched text as it is.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import math
 import os
 import re
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -117,7 +123,8 @@ class LlmRequest:
 
 @dataclass(frozen=True)
 class ToolCall:
-    """One web tool call in a run. `text` is untrusted page text, kept for the copy check."""
+    """One web tool call in a run. `text` is untrusted and kept for the copy check. Under
+    `claude_cli` it is a model's summary of the page, not the page (spec Section 6.4)."""
 
     name: ToolName
     url: str | None
@@ -167,7 +174,11 @@ _WEB_TOOLS_FLAG = "WebSearch,WebFetch"
 _CLI_TOOL_NAMES: dict[str, ToolName] = {"WebSearch": "web_search", "WebFetch": "web_fetch"}
 _STRUCTURED_OUTPUT_TOOL = "StructuredOutput"  # how `--json-schema` returns its answer
 _MCP_TOOL_PREFIX = "mcp__"
+_TOOLS_A_RESEARCH_RUN_MAY_HOLD = {*_CLI_TOOL_NAMES, _STRUCTURED_OUTPUT_TOOL}
+_ASSISTANT_BLOCKS = {"text", "thinking", "redacted_thinking", "tool_use"}
+_USER_BLOCKS = {"text", "tool_result"}
 _TIMEOUT_SECONDS = 900
+_KILL_SECONDS = 10
 _MAX_COMMAND_CHARS = 32_000  # Windows stops at 32,767 characters and calls it WinError 206
 _SMALLEST_FLAG_BUDGET = 0.01
 _USAGE_ERRORS = {"rate_limit", "billing_error"}
@@ -249,18 +260,83 @@ def _usable_cost(result: Mapping[str, Any]) -> float | None:
     cost = result.get("total_cost_usd")
     if isinstance(cost, bool) or not isinstance(cost, int | float):
         return None
-    return float(cost) if math.isfinite(cost) and cost >= 0 else None
-
-
-def _parse_events(stdout: str, *, streaming: bool) -> list[dict[str, Any]]:
-    """Returns [] when nothing usable came back. A page quoted in a tool result stays inside
-    one JSON-encoded line, so it cannot pose as an event."""
-    lines = stdout.splitlines() if streaming else [stdout]
     try:
-        events = [json.loads(line) for line in lines if line.strip()]
-    except ValueError, RecursionError:
-        return []
-    return events if all(isinstance(event, dict) for event in events) else []
+        value = float(cost)
+    except OverflowError:
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
+def _parse_events(stdout: str, *, streaming: bool) -> tuple[list[dict[str, Any]], bool]:
+    """The events that could be read, and whether every line could. A page quoted in a tool result
+    stays inside one JSON-encoded line, so it cannot pose as an event. Only a newline ends a line:
+    JSON.stringify leaves U+2028 and its like raw in a string, and `str.splitlines` would break
+    the line there."""
+    lines = stdout.split("\n") if streaming else [stdout]
+    events: list[dict[str, Any]] = []
+    whole = True
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError, RecursionError:
+            whole = False
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+        else:
+            whole = False
+    return events, whole
+
+
+def _kill_tree(process: subprocess.Popen[bytes]) -> None:
+    """A child of `claude` would outlive `process.kill()`. The full path keeps a `taskkill` planted
+    on PATH out of it."""
+    taskkill = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32", "taskkill.exe")
+    try:
+        subprocess.run(
+            [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_KILL_SECONDS,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except OSError, subprocess.SubprocessError:
+        pass
+    process.kill()
+    try:
+        process.wait(timeout=_KILL_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _run_claude(
+    argv: list[str], *, cwd: Path, env: Mapping[str, str], timeout: float
+) -> subprocess.CompletedProcess[bytes]:
+    """Output goes to files, not pipes. A pipe stays open as long as any descendant holds it, so
+    `subprocess.run` would wait for that descendant long after the timeout. The files are outside
+    the working folder, which must stay empty, and are gone when this returns."""
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=err,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        try:
+            code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(process)
+            raise
+        out.seek(0)
+        err.seek(0)
+        return subprocess.CompletedProcess(argv, code, out.read(), err.read())
 
 
 def _failure_for(
@@ -316,6 +392,8 @@ def _tool_log_from(events: list[dict[str, Any]]) -> tuple[ToolCall, ...]:
         kind = event.get("type")
         if kind == "assistant":
             for block in _blocks_of(event):
+                if block.get("type") not in _ASSISTANT_BLOCKS:
+                    raise LlmRunFailed("the reply held a block this step does not know")
                 if block.get("type") == "tool_use":
                     name = block.get("name")
                     known = name == _STRUCTURED_OUTPUT_TOOL or (
@@ -325,6 +403,8 @@ def _tool_log_from(events: list[dict[str, Any]]) -> tuple[ToolCall, ...]:
                         raise LlmRunFailed("the run used a tool outside web search and fetch")
                     calls[str(block.get("id"))] = block
         elif kind == "user":
+            if any(block.get("type") not in _USER_BLOCKS for block in _blocks_of(event)):
+                raise LlmRunFailed("a tool answer held a block this step does not know")
             results = [b for b in _blocks_of(event) if b.get("type") == "tool_result"]
             details = event.get("tool_use_result")
             code = details.get("code") if isinstance(details, dict) and len(results) == 1 else None
@@ -345,15 +425,22 @@ def _tool_log_from(events: list[dict[str, Any]]) -> tuple[ToolCall, ...]:
 
 
 def _check_isolation(events: list[dict[str, Any]]) -> None:
-    init = next(
-        (e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None
-    )
-    if init is None:
+    """What the run was offered, not only what it used. Fails on anything it cannot read."""
+    inits = [e for e in events if e.get("type") == "system" and e.get("subtype") == "init"]
+    if not inits:
         raise LlmRunFailed("no init event, so the run's isolation cannot be confirmed")
-    tools = init.get("tools")
-    named = tools if isinstance(tools, list) else []
-    if init.get("mcp_servers") or any(str(tool).startswith(_MCP_TOOL_PREFIX) for tool in named):
-        raise LlmRunFailed("an MCP server was present despite --strict-mcp-config")
+    for init in inits:
+        tools = init.get("tools")
+        named = tools if isinstance(tools, list) else []
+        if init.get("mcp_servers") != [] or any(
+            str(tool).startswith(_MCP_TOOL_PREFIX) for tool in named
+        ):
+            raise LlmRunFailed("an MCP server was present despite --strict-mcp-config")
+        if not isinstance(tools, list) or any(
+            not isinstance(tool, str) or tool not in _TOOLS_A_RESEARCH_RUN_MAY_HOLD
+            for tool in tools
+        ):
+            raise LlmRunFailed("the run was offered a tool outside web search and fetch")
 
 
 class ClaudeCliBackend:
@@ -421,16 +508,7 @@ class ClaudeCliBackend:
         if len(subprocess.list2cmdline(argv)) > _MAX_COMMAND_CHARS:
             raise LlmSetupError("the prompt is too long for a Windows command line")
         try:
-            completed = subprocess.run(
-                argv,
-                cwd=cwd,
-                env=self._env,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                timeout=_TIMEOUT_SECONDS,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            completed = _run_claude(argv, cwd=cwd, env=self._env, timeout=_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             raise self._unknown_spend(f"timed out after {_TIMEOUT_SECONDS} s") from None
         except (OSError, ValueError) as error:
@@ -449,12 +527,13 @@ class ClaudeCliBackend:
             stdout = completed.stdout.decode("utf-8")
         except UnicodeDecodeError:
             raise self._unknown_spend("output is not UTF-8") from None
-        events = _parse_events(stdout, streaming=request.uses_web)
-        result = events[-1] if events and events[-1].get("type") == "result" else None
+        events, whole = _parse_events(stdout, streaming=request.uses_web)
+        result = next((e for e in reversed(events) if e.get("type") == "result"), None)
         if result is None:
             known = _failure_for({}, [], stderr) if code else None
             raise known or self._unknown_spend(f"exit {code}, and no result event at the end")
 
+        # The cost comes first, so a stream that fails below still counts what it spent.
         cost = _usable_cost(result)
         if self._uses_api_key and cost is not None:
             spend.add(cost)
@@ -468,6 +547,10 @@ class ClaudeCliBackend:
             raise LlmRunFailed(f"exit {code}, {subtype}")
         if self._uses_api_key and cost is None:
             raise BudgetExceeded("the run reported no usable cost, so the cap cannot be proved")
+        if cost is None and result.get("total_cost_usd") is not None:
+            raise LlmRunFailed("the run reported a cost that cannot be read")
+        if not whole or events[-1] is not result:
+            raise LlmRunFailed("the stream did not end cleanly in its result")
 
         if result.get("permission_denials"):
             raise LlmRunFailed("a tool call was denied, so the run went outside its job")
