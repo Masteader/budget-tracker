@@ -105,6 +105,17 @@ def test_code_and_config_are_not_ignored(sample):
     assert not _is_ignored(sample), f"{sample} is git-ignored but must be committed"
 
 
+def test_the_studio_lockfile_is_committed():
+    # Sync installs from this file, so without it no fresh data_root gets a pinned `npm ci`.
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "remotion_studio/package-lock.json"],
+        cwd=ENGINE_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_env_example_has_every_secret_name_and_only_empty_values():
     lines = (ENGINE_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     assignments = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]

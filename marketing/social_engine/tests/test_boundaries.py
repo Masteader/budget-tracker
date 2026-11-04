@@ -7,6 +7,7 @@ line-based pattern. Banned names are assembled here, so this file does not flag 
 
 import ast
 import io
+import json
 import re
 import tokenize
 import tomllib
@@ -60,11 +61,16 @@ WITHDRAWN_NAMES = ("wa" + "feer", "وف" + "يير")
 GUARD_FILE = "core/secrets.py"
 GUARD_MENTION = DATABASE_SERVICE.upper() + "_"
 
-# The one allowed provider name in a lockfile. Remotion's studio depends on this package for its
-# caption file parser. Its 4.0.540 source was read in full on 2026-11-04: it turns a transcript
-# it is handed into captions, using only zod, with no network call, no client and no key.
+# The only two provider names allowed, and only in this lockfile. Remotion's studio depends on both
+# for its caption file parsers, and the engine's own source uses neither. Each is a transitive
+# parser, not a voice provider: the voice provider is Azure only (decision D8), and Claude is the
+# only LLM (D9). Their 4.0.540 source was read on 2026-11-04: each turns a transcript it is handed
+# into captions, using only zod, with no network call, no client, no key and no install script.
 EXCEPTED_LOCKFILE = "remotion_studio/package-lock.json"
-EXCEPTED_LOCKFILE_PACKAGE = "@remotion/" + "open" + "ai-whisper"
+EXCEPTED_LOCKFILE_PACKAGES = (
+    "@remotion/" + "open" + "ai-whisper",
+    "@remotion/" + "eleven" + "labs",
+)
 EXCEPTED_LOCKFILE_VERSION = "4.0.540"
 
 SKIPPED_FOLDERS = {
@@ -105,14 +111,20 @@ _DYNAMIC_IMPORT_CALLS = {
     "spec_from_file_location",
 }
 _DATABASE_NAME = re.compile(DATABASE_SERVICE, re.IGNORECASE)
-_EXCEPTED_NAME = re.escape(EXCEPTED_LOCKFILE_PACKAGE)
-_EXCEPTED_VERSION = re.escape(EXCEPTED_LOCKFILE_VERSION)
-_EXCEPTED_TARBALL = re.escape(EXCEPTED_LOCKFILE_PACKAGE.split("/")[1])
-_EXCEPTED_LOCK_ENTRIES = re.compile(
-    rf'"node_modules/{_EXCEPTED_NAME}"(?=\s*:\s*\{{)'
-    rf'|"{_EXCEPTED_NAME}":\s*"{_EXCEPTED_VERSION}"'
-    rf'|"https://registry\.npmjs\.org/{_EXCEPTED_NAME}/-/{_EXCEPTED_TARBALL}-{_EXCEPTED_VERSION}\.tgz"'
-)
+
+
+def _excepted_forms(package: str) -> str:
+    """The two forms npm writes: the package's entry, up to its audited version and its own
+    tarball on the npm registry, and the studio's line naming that version."""
+    name = re.escape(package)
+    version = re.escape(EXCEPTED_LOCKFILE_VERSION)
+    tarball = re.escape(package.split("/")[1])
+    url = rf"https://registry\.npmjs\.org/{name}/-/{tarball}-{version}\.tgz"
+    entry = rf'"node_modules/{name}":\s*\{{\s*"version":\s*"{version}",\s*"resolved":\s*"{url}"'
+    return rf'{entry}|"{name}":\s*"{version}"'
+
+
+_EXCEPTED_LOCK_ENTRIES = re.compile("|".join(map(_excepted_forms, EXCEPTED_LOCKFILE_PACKAGES)))
 
 
 def _is_real_env_file(path: Path) -> bool:
@@ -224,16 +236,16 @@ def _database_findings(relative: str, text: str) -> list[str]:
     return [f"{relative}: names the database service" for _ in hits]
 
 
-def _without_the_excepted_package(relative: str, text: str) -> str:
-    """Only the three exact forms npm writes for the audited version, each in full, so a longer
-    name, a nested package, an alias, another host or another version stays visible to the scan."""
+def _without_the_excepted_packages(relative: str, text: str) -> str:
+    """Only the exact forms npm writes for the audited version, each in full, so a longer name, a
+    nested package, an alias, another host or another version stays visible to the scan."""
     if relative != EXCEPTED_LOCKFILE:
         return text
     return _EXCEPTED_LOCK_ENTRIES.sub('""', text)
 
 
 def _text_findings(relative: str, text: str, is_python: bool) -> list[str]:
-    normalised = unicodedata.normalize("NFKC", _without_the_excepted_package(relative, text))
+    normalised = unicodedata.normalize("NFKC", _without_the_excepted_packages(relative, text))
     searched = f"{relative}\n{normalised}"
     findings = _database_findings(relative, normalised)
     # Source that shows one thing and means another (bidi controls, zero-width characters).
@@ -525,37 +537,59 @@ def test_an_assembled_name_in_a_python_literal_stays_legal_for_guards(tmp_path):
     assert scan_for_violations(tmp_path) == []
 
 
-# --- The one exception: a caption parser in the Remotion lockfile --------------------------
+# --- The one exception: two caption parsers in the Remotion lockfile ----------------------
 
 
-WHISPER = EXCEPTED_LOCKFILE_PACKAGE
+WHISPER, ELEVEN_PARSER = EXCEPTED_LOCKFILE_PACKAGES
 WHISPER_FILE = WHISPER.split("/")[1]
-WHISPER_URL = (
-    f"https://registry.npmjs.org/{WHISPER}/-/{WHISPER_FILE}-{EXCEPTED_LOCKFILE_VERSION}.tgz"
-)
+ELEVEN = "eleven" + "labs"
+OPEN = "open" + "ai"
+VERSION = EXCEPTED_LOCKFILE_VERSION
+
+
+def _tarball(package: str) -> str:
+    return f"https://registry.npmjs.org/{package}/-/{package.split('/')[1]}-{VERSION}.tgz"
+
+
+WHISPER_URL = _tarball(WHISPER)
+ELEVEN_URL = _tarball(ELEVEN_PARSER)
+PLAIN_URL = "https://registry.npmjs.org/x/-/x-1.0.0.tgz"  # names nothing the scan looks for
 
 
 def _lock_entry(key: str = f"node_modules/{WHISPER}", resolved: str = WHISPER_URL, **extra) -> str:
-    fields = {"version": EXCEPTED_LOCKFILE_VERSION, "resolved": resolved, **extra}
+    fields = {"version": VERSION, "resolved": resolved, **extra}
     body = ", ".join(f'"{name}": "{value}"' for name, value in fields.items())
     return f'"{key}": {{{body}}}'
 
 
+def _parser_entry(**extra) -> str:
+    return _lock_entry(f"node_modules/{ELEVEN_PARSER}", ELEVEN_URL, **extra)
+
+
 def _lockfile(*entries: str, dependency: str | None = None) -> str:
     """The shape npm writes: the package's own entry, and the studio's line naming it."""
-    line = dependency or f'"{WHISPER}": "{EXCEPTED_LOCKFILE_VERSION}"'
+    line = dependency or f'"{WHISPER}": "{VERSION}"'
     studio = f'"node_modules/@remotion/studio": {{"dependencies": {{{line}}}}}'
     return '{"packages": {' + ", ".join([*entries, studio]) + "}}\n"
 
 
-REAL_LOCKFILE_SHAPE = _lockfile(_lock_entry())
+BOTH_DEPENDENCIES = f'"{WHISPER}": "{VERSION}", "{ELEVEN_PARSER}": "{VERSION}"'
+REAL_LOCKFILE_SHAPE = _lockfile(_lock_entry(), _parser_entry(), dependency=BOTH_DEPENDENCIES)
 
 
-def test_the_audited_package_passes_in_exactly_the_remotion_lockfile(tmp_path):
+def test_the_audited_packages_pass_in_exactly_the_remotion_lockfile(tmp_path):
     _write(tmp_path, EXCEPTED_LOCKFILE, REAL_LOCKFILE_SHAPE)
     assert scan_for_violations(tmp_path) == []
 
 
+def test_the_exception_still_holds_when_git_writes_the_lockfile_with_crlf(tmp_path):
+    # core.autocrlf is on here, so a checkout turns npm's line ends into CRLF.
+    pretty = REAL_LOCKFILE_SHAPE.replace(", ", ",\r\n    ").replace(": {", ": {\r\n      ")
+    _write(tmp_path, EXCEPTED_LOCKFILE, pretty)
+    assert scan_for_violations(tmp_path) == []
+
+
+@pytest.mark.parametrize("package", EXCEPTED_LOCKFILE_PACKAGES)
 @pytest.mark.parametrize(
     "relative",
     [
@@ -563,6 +597,8 @@ def test_the_audited_package_passes_in_exactly_the_remotion_lockfile(tmp_path):
         "remotion_studio/npm-shrinkwrap.json",
         "remotion_studio/sub/package-lock.json",
         "remotion_studio/package-lock.json.bak",
+        "remotion_studio/src/Root.tsx",
+        "remotion_studio/scripts/a.mjs",
         "other/remotion_studio/package-lock.json",
         "REMOTION_STUDIO/PACKAGE-LOCK.JSON",
         "package-lock.json",
@@ -570,14 +606,14 @@ def test_the_audited_package_passes_in_exactly_the_remotion_lockfile(tmp_path):
         "config.yaml",
     ],
 )
-def test_that_name_anywhere_else_still_fails(tmp_path, relative):
-    text = f'x = "{WHISPER}"\n' if relative.endswith(".py") else REAL_LOCKFILE_SHAPE
+def test_that_name_anywhere_else_still_fails(tmp_path, relative, package):
+    if relative.endswith(".py"):
+        text = f'x = "{package}"\n'
+    else:
+        entry = _lock_entry(f"node_modules/{package}", _tarball(package))
+        text = _lockfile(entry, dependency=f'"{package}": "{VERSION}"')
     _write(tmp_path, relative, text)
     assert scan_for_violations(tmp_path), f"{relative} was not flagged"
-
-
-ELEVEN = "eleven" + "labs"
-OPEN = "open" + "ai"
 
 
 @pytest.mark.parametrize(
@@ -591,7 +627,6 @@ OPEN = "open" + "ai"
         pytest.param(_lock_entry(f"node_modules/@evil/{WHISPER_FILE}"), id="another scope"),
         pytest.param(_lock_entry(f"node_modules/{WHISPER}/node_modules/{OPEN}"), id="nested sdk"),
         pytest.param(_lock_entry(f"node_modules/{WHISPER.upper()}"), id="other letter case"),
-        pytest.param(_lock_entry(f"node_modules/@remotion/{ELEVEN}"), id="the other parser"),
         pytest.param(_lock_entry("node_modules/" + "gem" + "ini"), id="gem"),
         pytest.param(_lock_entry("node_modules/" + "lang" + "chain"), id="chain"),
         pytest.param(_lock_entry("node_modules/" + DATABASE_SERVICE), id="database"),
@@ -599,12 +634,61 @@ OPEN = "open" + "ai"
         pytest.param(_lock_entry(name=OPEN), id="aliased to the sdk"),
         pytest.param(_lock_entry(dependencies=f"{OPEN}@4"), id="depends on the sdk"),
         pytest.param(
-            _lock_entry(resolved=WHISPER_URL.replace(EXCEPTED_LOCKFILE_VERSION, "9.9.9")),
+            _lock_entry(resolved=WHISPER_URL.replace(VERSION, "9.9.9")),
             id="unaudited version",
         ),
+        pytest.param(_lock_entry(resolved=PLAIN_URL), id="tarball that names nothing"),
+        pytest.param(_lock_entry(version="9.9.9", resolved=PLAIN_URL), id="unaudited, plain url"),
+        pytest.param(_lock_entry(resolved=ELEVEN_URL), id="the other tarball"),
+        pytest.param(
+            _lock_entry(f"node_modules/{ELEVEN}", f"https://registry.npmjs.org/{ELEVEN}/-/x.tgz"),
+            id="bare parser name, the real sdk",
+        ),
+        pytest.param(_lock_entry(f"node_modules/{ELEVEN}", PLAIN_URL), id="bare, plain url"),
+        pytest.param(
+            _lock_entry(f"node_modules/{ELEVEN_PARSER}", WHISPER_URL), id="parser, wrong tarball"
+        ),
+        pytest.param(_lock_entry(f"node_modules/{ELEVEN_PARSER}", PLAIN_URL), id="parser, plain"),
+        pytest.param(
+            _lock_entry(f"node_modules/{ELEVEN_PARSER}", PLAIN_URL, version="9.9.9"),
+            id="parser, unaudited",
+        ),
+        pytest.param(_lock_entry(f"node_modules/{ELEVEN_PARSER}-extra"), id="parser, longer name"),
+        pytest.param(_lock_entry(f"node_modules/@evil/{ELEVEN}"), id="parser, another scope"),
+        pytest.param(_lock_entry(f"node_modules/{ELEVEN_PARSER.upper()}"), id="parser, other case"),
+        pytest.param(
+            _lock_entry(f"node_modules/{ELEVEN_PARSER}/node_modules/{ELEVEN}", PLAIN_URL),
+            id="parser, nested",
+        ),
+        pytest.param(
+            _lock_entry(f"node_modules/x/node_modules/{ELEVEN_PARSER}", ELEVEN_URL),
+            id="parser, under another package",
+        ),
+        pytest.param(_parser_entry(name=ELEVEN), id="parser, aliased to the sdk"),
+        pytest.param(_parser_entry(dependencies=f"{ELEVEN}@1"), id="parser, depends on the sdk"),
     ],
 )
 def test_any_other_such_name_in_the_lockfile_still_fails(tmp_path, entry):
+    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(entry))
+    assert scan_for_violations(tmp_path), f"not flagged: {entry}"
+
+
+_SHAPES = ("{}", "@evil/{}", "@remotion/{}", f"{WHISPER}/node_modules/{{}}")
+_BANNED_PACKAGES = sorted(
+    {shape.format(name) for shape in _SHAPES for name in [*BANNED_TEXT, DATABASE_SERVICE]}
+    - set(EXCEPTED_LOCKFILE_PACKAGES)
+)
+
+
+def test_the_list_of_banned_packages_leaves_out_only_the_allowed_spelling():
+    assert f"@remotion/{OPEN}" in _BANNED_PACKAGES
+    assert ELEVEN in _BANNED_PACKAGES
+    assert ELEVEN_PARSER not in _BANNED_PACKAGES
+
+
+@pytest.mark.parametrize("package", _BANNED_PACKAGES)
+def test_every_banned_name_fails_as_a_node_modules_entry(tmp_path, package):
+    entry = _lock_entry(f"node_modules/{package}", PLAIN_URL)
     _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(entry))
     assert scan_for_violations(tmp_path), f"not flagged: {entry}"
 
@@ -614,7 +698,12 @@ def test_any_other_such_name_in_the_lockfile_still_fails(tmp_path, entry):
     [
         pytest.param(f'"{WHISPER}": "npm:{OPEN}@4"', id="alias"),
         pytest.param(f'"{WHISPER}": "9.9.9"', id="unaudited version"),
-        pytest.param(f'"{WHISPER}-extra": "{EXCEPTED_LOCKFILE_VERSION}"', id="longer name"),
+        pytest.param(f'"{WHISPER}-extra": "{VERSION}"', id="longer name"),
+        pytest.param(f'"{ELEVEN_PARSER}": "npm:{ELEVEN}@1"', id="parser alias"),
+        pytest.param(f'"{ELEVEN_PARSER}": "npm:x@{VERSION}"', id="parser alias to a plain name"),
+        pytest.param(f'"{ELEVEN_PARSER}": "9.9.9"', id="parser, unaudited version"),
+        pytest.param(f'"{ELEVEN_PARSER}-extra": "{VERSION}"', id="parser, longer name"),
+        pytest.param(f'"{ELEVEN}": "{VERSION}"', id="the bare package"),
     ],
 )
 def test_a_changed_dependency_line_still_fails(tmp_path, dependency):
@@ -622,21 +711,93 @@ def test_a_changed_dependency_line_still_fails(tmp_path, dependency):
     assert scan_for_violations(tmp_path), f"not flagged: {dependency}"
 
 
-def test_the_audited_package_does_not_hide_a_banned_name_beside_it(tmp_path):
-    other = _lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz")
-    _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(_lock_entry(), other))
-    findings = scan_for_violations(tmp_path)
-    assert findings == [f"{EXCEPTED_LOCKFILE}: mentions {OPEN}"]
+@pytest.mark.parametrize(
+    ("name", "other"),
+    [
+        (OPEN, _lock_entry(f"node_modules/{OPEN}", f"https://r.example/{OPEN}.tgz")),
+        (ELEVEN, _lock_entry(f"node_modules/{ELEVEN}", f"https://r.example/{ELEVEN}.tgz")),
+    ],
+)
+def test_the_audited_packages_do_not_hide_a_banned_name_beside_them(tmp_path, name, other):
+    text = _lockfile(_lock_entry(), _parser_entry(), other, dependency=BOTH_DEPENDENCIES)
+    _write(tmp_path, EXCEPTED_LOCKFILE, text)
+    assert scan_for_violations(tmp_path) == [f"{EXCEPTED_LOCKFILE}: mentions {name}"]
 
 
-def test_a_full_width_spelling_of_the_name_is_not_the_exception(tmp_path):
-    entry = _lock_entry(f"node_modules/@remotion/{_full_width(WHISPER_FILE)}")
+@pytest.mark.parametrize("package", EXCEPTED_LOCKFILE_PACKAGES)
+def test_a_full_width_spelling_of_the_name_is_not_the_exception(tmp_path, package):
+    entry = _lock_entry(f"node_modules/@remotion/{_full_width(package.split('/')[1])}")
     _write(tmp_path, EXCEPTED_LOCKFILE, _lockfile(entry))
     assert scan_for_violations(tmp_path)
 
 
-def test_the_exception_holds_exactly_one_package_in_exactly_one_file():
+def test_the_exception_holds_exactly_two_packages_in_exactly_one_file():
     # Widening this is an owner decision, and it needs that package's source read first.
     assert EXCEPTED_LOCKFILE == "remotion_studio/package-lock.json"
-    assert EXCEPTED_LOCKFILE_PACKAGE == "@remotion/" + OPEN + "-whisper"
+    assert EXCEPTED_LOCKFILE_PACKAGES == ("@remotion/" + OPEN + "-whisper", "@remotion/" + ELEVEN)
     assert EXCEPTED_LOCKFILE_VERSION == "4.0.540"
+
+
+# --- The real studio: both parsers stay transitive -----------------------------------------
+
+
+def _parser_mentions(studio: Path) -> list[str]:
+    """Every file in package.json or src/ that names either parser, in any letter case."""
+    files = [studio / "package.json", *(studio / "src").rglob("*")]
+    names = [package.lower().encode() for package in EXCEPTED_LOCKFILE_PACKAGES]
+    return [
+        path.relative_to(studio).as_posix()
+        for path in files
+        if path.is_file() and any(name in path.read_bytes().lower() for name in names)
+    ]
+
+
+@pytest.mark.parametrize("package", EXCEPTED_LOCKFILE_PACKAGES)
+@pytest.mark.parametrize("relative", ["package.json", "src/a.ts", "src/deep/er/b.tsx"])
+def test_the_parser_check_can_see_a_mention(tmp_path, relative, package):
+    _write(tmp_path, "src/clean.ts", "export {};\n")
+    _write(tmp_path, "package.json", "{}\n")
+    assert _parser_mentions(tmp_path) == []
+    _write(tmp_path, relative, f'import x from "{package.upper()}";\n')
+    assert _parser_mentions(tmp_path) == [relative]
+
+
+def test_neither_parser_is_in_the_studio_package_json_or_source():
+    studio = ENGINE_ROOT / "remotion_studio"
+    assert (studio / "src" / "Root.tsx").is_file(), "the check would look at nothing"
+    assert _parser_mentions(studio) == []
+
+
+def _real_lockfile() -> dict:
+    return json.loads((ENGINE_ROOT / EXCEPTED_LOCKFILE).read_text(encoding="utf-8"))
+
+
+def test_the_committed_lockfile_is_built_from_the_committed_package_json():
+    studio = json.loads((ENGINE_ROOT / "remotion_studio/package.json").read_text(encoding="utf-8"))
+    root = _real_lockfile()["packages"][""]
+    assert root["name"] == studio["name"]
+    assert root["dependencies"] == studio["dependencies"]
+    assert root["devDependencies"] == studio["devDependencies"]
+
+
+@pytest.mark.parametrize("package", EXCEPTED_LOCKFILE_PACKAGES)
+def test_only_the_studio_depends_on_each_parser_in_the_committed_lockfile(package):
+    packages = _real_lockfile()["packages"]
+    entry = packages[f"node_modules/{package}"]
+    assert entry["version"] == VERSION
+    assert entry["resolved"] == _tarball(package)
+    assert "hasInstallScript" not in entry
+    assert set(entry["dependencies"]) == {"@remotion/captions", "zod"}
+    dependents = [key for key, item in packages.items() if package in item.get("dependencies", {})]
+    assert dependents == ["node_modules/@remotion/studio"]
+
+
+def test_every_package_in_the_committed_lockfile_comes_from_the_npm_registry():
+    packages = _real_lockfile()["packages"]
+    assert len(packages) > 100, "the check would look at almost nothing"
+    outside = [
+        key
+        for key, item in packages.items()
+        if key and not item.get("resolved", "").startswith("https://registry.npmjs.org/")
+    ]
+    assert outside == []

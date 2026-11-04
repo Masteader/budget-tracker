@@ -82,6 +82,17 @@ def test_it_copies_all_of_the_studio(engine, data_root, npm):
     assert (work(data_root) / "src" / "compositions" / "A.tsx").read_text("utf-8") == "a"
 
 
+def test_npm_ci_installs_from_the_real_committed_lockfile(data_root, npm):
+    committed = sync_module.ENGINE_ROOT / "remotion_studio" / "package-lock.json"
+    result = sync(sync_module.ENGINE_ROOT, data_root)
+    assert result.ran_npm_ci
+    assert (work(data_root) / "package-lock.json").read_bytes() == committed.read_bytes()
+    assert npm.count == 1
+    args, kwargs = npm.calls[0]
+    assert args[1:] == ["ci"]
+    assert Path(kwargs["cwd"]) == work(data_root)
+
+
 def test_it_copies_branding_into_public(engine, data_root, npm):
     sync(engine, data_root)
     assert (work(data_root) / "public" / "brand_tokens.json").exists()
