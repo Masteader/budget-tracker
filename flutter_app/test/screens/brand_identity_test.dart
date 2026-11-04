@@ -28,8 +28,7 @@ const _logoAsset = 'assets/images/brand_logo.png';
 const _languages = ['en', 'ar', 'ur'];
 const _directions = [TextDirection.rtl, TextDirection.ltr];
 const _rlm = '‏';
-const _latinName = 'Wafeer';
-const _arabicName = 'وفيير';
+const _latinName = 'Qawam Money';
 
 ImageProvider _unwrap(ImageProvider provider) =>
     provider is ResizeImage ? _unwrap(provider.imageProvider) : provider;
@@ -274,11 +273,22 @@ void main() {
       });
     });
 
-    testWidgets('launcher icons have valid dimensions and opaque center', (tester) async {
+    testWidgets('a circular launcher mask only removes the cream tile, never the rim or slice', (tester) async {
       await tester.runAsync(() async {
         final (size, _, data) = await _decode('$res/mipmap-xxxhdpi/ic_launcher.png');
-        expect(size, 192);
-        expect(alpha(data, size, size ~/ 2, size ~/ 2), 255);
+        final radius = size / 2;
+        final clipped = <String>[];
+        for (var y = 0; y < size; y++) {
+          for (var x = 0; x < size; x++) {
+            final dx = x + .5 - radius, dy = y + .5 - radius;
+            if (dx * dx + dy * dy < radius * radius) continue;
+            final i = (y * size + x) * 4;
+            final cream = data.getUint8(i) > 215 && data.getUint8(i + 1) > 215 && data.getUint8(i + 2) > 200;
+            // The rim and slice are opaque; faint pixels are the tile's anti-aliased corners.
+            if (data.getUint8(i + 3) > 127 && !cream) clipped.add('$x,$y');
+          }
+        }
+        expect(clipped, isEmpty);
       });
     });
 
@@ -294,10 +304,9 @@ void main() {
     });
 
     test('the master artwork is committed', () {
-      // master artwork check
-      final master = File('assets/images/wafeer_logo.png').existsSync();
-      expect(master, isTrue);
-      // verified master logo exists
+      final master = File('../docs/brand/qawam_money_logo.svg').readAsStringSync();
+      expect(master, contains('viewBox="0 0 1024 1024"'));
+      expect(master, contains('#F0553F'));
     });
 
     test('the web favicon and logo are the mark, not the old teal calendar', () {
@@ -321,16 +330,14 @@ void main() {
     test('launcher name is English by default and Arabic on Arabic devices', () {
       expect(
         File('$res/values/strings.xml').readAsStringSync(),
-        contains('<string name="app_name">Wafeer وفيير</string>'),
+        contains('<string name="app_name">$_latinName</string>'),
       );
       expect(
         File('$res/values-ar/strings.xml').readAsStringSync(),
-        contains('<string name="app_name">وفيير Wafeer</string>'),
+        contains('<string name="app_name">قوام المال</string>'),
       );
-      expect(
-        File('$res/values-ur/strings.xml').readAsStringSync(),
-        contains('<string name="app_name">وفيير Wafeer</string>'),
-      );
+      // Urdu devices use the default.
+      expect(File('$res/values-ur/strings.xml').existsSync(), isFalse);
     });
 
     test('MaterialApp title is generated from app_title_short', () {
@@ -355,22 +362,22 @@ void main() {
 
     test('name and page titles are the approved values', () {
       final translations = File('../web_app/src/i18n/translations.ts').readAsStringSync();
-      expect(translations, contains("name: 'وفيير Wafeer',"));
-      expect(translations, contains("name: 'Wafeer وفيير',"));
-      expect(translations, contains("pageTitle: 'وفيير Wafeer | "));
-      expect(translations, contains("pageTitle: 'Wafeer وفيير | "));
-      expect(translations, contains("shortName: 'وفيير',"));
-      expect(translations, contains("shortName: 'Wafeer',"));
+      expect(translations, contains("name: 'قوام المال Qawam Money',"));
+      expect(translations, contains("name: 'Qawam Money قوام المال',"));
+      expect(translations, contains("pageTitle: 'قوام المال Qawam Money | "));
+      expect(translations, contains("pageTitle: 'Qawam Money قوام المال | "));
+      expect(translations, contains("shortName: 'قوام المال',"));
+      expect(translations, contains("shortName: 'Qawam Money',"));
       final index = File('../web_app/index.html').readAsStringSync();
-      expect(index, contains('<title>وفيير Wafeer | '));
-      expect(index, contains('<meta property="og:site_name" content="وفيير Wafeer" />'));
-      expect(index, contains('<meta property="og:title" content="وفيير Wafeer | '));
-      expect(index, contains('<h1>وفيير Wafeer</h1>'));
+      expect(index, contains('<title>قوام المال Qawam Money | '));
+      expect(index, contains('<meta property="og:site_name" content="قوام المال Qawam Money" />'));
+      expect(index, contains('<meta property="og:title" content="قوام المال Qawam Money | '));
+      expect(index, contains('<h1>قوام المال Qawam Money</h1>'));
     });
 
     test('no source file contains an old or withdrawn app name', () {
-      final oldNames = RegExp('budget tracker|qawam money|(?<![؀-ۿ])قوام(?![؀-ۿ])', caseSensitive: false);
-      expect(oldNames.hasMatch('qawam money'), isTrue);
+      final oldNames = RegExp('budget tracker|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])', caseSensitive: false);
+      expect(oldNames.hasMatch('وفير'), isTrue);
       expect(oldNames.hasMatch('توفير'), isFalse);
       final offenders = [
         for (final f in webFiles)
@@ -397,7 +404,7 @@ void main() {
     for (final key in [...sharedKeys.keys, ...inAppKeys]) {
       test('$key keeps logical word order in an RTL paragraph', () {
         final text = ur.format(key, samples);
-        expect(text, contains(_arabicName));
+        expect(text, contains(_latinName));
         for (final line in text.split('\n')) {
           if (line.trim().isEmpty) continue;
           expect(_misorderedWords(line), isEmpty, reason: line);
@@ -406,9 +413,12 @@ void main() {
     }
 
     sharedKeys.forEach((key, marks) {
-      test('$key is formatted naturally in RTL', () {
+      test('$key opens every Latin-first line with one RLM, so shared text stays RTL', () {
         final text = ur.format(key, samples);
+        expect(_rlm.allMatches(text).length, marks);
         for (final line in text.split('\n')) {
+          expect(line.startsWith(_latinName), isFalse, reason: line);
+          if (line.contains(_rlm)) expect(line.startsWith('$_rlm$_latinName'), isTrue, reason: line);
           expect(_firstStrongIsRtl(line), isTrue, reason: line);
         }
       });

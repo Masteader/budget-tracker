@@ -6,8 +6,8 @@ void main() {
   group('AppLocalizations Tests', () {
     test('English translations return valid text', () {
       final loc = AppLocalizations(const Locale('en'));
-      expect(loc.get('app_title'), 'Wafeer وفيير');
-      expect(loc.get('app_title_short'), 'Wafeer');
+      expect(loc.get('app_title'), 'Qawam Money قوام المال');
+      expect(loc.get('app_title_short'), 'Qawam Money');
       expect(loc.get('nav_dashboard'), 'Dashboard');
       expect(loc.get('recurring_bills'), 'Recurring Bills & Reserves');
       expect(loc.get('installments_bnpl'), 'Installments & BNPL');
@@ -17,8 +17,8 @@ void main() {
 
     test('Arabic translations return correct Arabic text and RTL readiness', () {
       final loc = AppLocalizations(const Locale('ar'));
-      expect(loc.get('app_title'), 'وفيير Wafeer');
-      expect(loc.get('app_title_short'), 'وفيير');
+      expect(loc.get('app_title'), 'قوام المال Qawam Money');
+      expect(loc.get('app_title_short'), 'قوام المال');
       expect(loc.get('nav_dashboard'), 'الرئيسية');
       expect(loc.get('recurring_bills'), 'الفواتير والاحتياطيات');
       expect(loc.get('installments_bnpl'), 'الأقساط والشراء الآجل');
@@ -28,8 +28,8 @@ void main() {
 
     test('Urdu translations return correct Urdu text', () {
       final loc = AppLocalizations(const Locale('ur'));
-      expect(loc.get('app_title'), 'وفيير Wafeer');
-      expect(loc.get('app_title_short'), 'وفيير');
+      expect(loc.get('app_title'), 'Qawam Money');
+      expect(loc.get('app_title_short'), 'Qawam Money');
       expect(loc.get('nav_dashboard'), 'ڈیش بورڈ');
       expect(loc.get('recurring_bills'), 'باقاعدہ بلز اور ریزرو');
       expect(loc.get('installments_bnpl'), 'اقساط اور بی این پی ایل');

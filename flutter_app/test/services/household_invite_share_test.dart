@@ -16,7 +16,7 @@ void main() {
       }
       expect(
         inviteShareText(AppLocalizations(const Locale('en')), householdName: 'Villa 7', code: 'ABCD1234'),
-        contains('Open Wafeer'),
+        contains('Open Qawam Money'),
       );
     });
 

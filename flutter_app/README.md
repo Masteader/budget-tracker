@@ -1,4 +1,4 @@
-# Wafeer (وفيير) — Flutter App
+# Budget Tracker — Flutter App
 
 Android / iOS client. It talks to Supabase directly (publishable key, Row Level Security, Realtime)
 and to the FastAPI service (`ai_service/`) with the user's Supabase JWT.

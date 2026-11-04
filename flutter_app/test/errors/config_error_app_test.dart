@@ -12,12 +12,12 @@ void main() {
       await tester.pumpWidget(
         ConfigErrorApp(
           problems: problems,
-          error: StateError('Invalid Wafeer build configuration'),
+          error: StateError('Invalid Qawam Money build configuration'),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Wafeer Diagnostic'), findsOneWidget);
+      expect(find.text('Qawam Money Diagnostic'), findsOneWidget);
       expect(find.text('Configuration Error'), findsOneWidget);
       expect(find.text('Application Startup Stopped'), findsOneWidget);
       expect(find.text('Identified Issues'), findsOneWidget);

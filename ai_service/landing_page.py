@@ -18,7 +18,7 @@ FALLBACK_LANDING_HTML = f"""<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wafeer • وفيير</title>
+  <title>Qawam Money • قوام المال</title>
   <style>
     body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
       padding:24px;box-sizing:border-box;background:#f4fafb;color:#0c2530;
@@ -32,7 +32,7 @@ FALLBACK_LANDING_HTML = f"""<!DOCTYPE html>
 </head>
 <body>
   <main>
-    <h1>Wafeer • وفيير</h1>
+    <h1>Qawam Money • قوام المال</h1>
     <p>اعرف كم باقي لك لين الراتب، وسجّل مصروفك بالكلام أو بتصوير الفاتورة.</p>
     <p lang="en" dir="ltr">Household budgeting by salary cycle for Saudi families and shared homes.</p>
     <p>للتواصل · Contact: <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a></p>
@@ -45,7 +45,7 @@ AUTH_CONFIRM_HTML = f"""<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تأكيد البريد الإلكتروني | وفيير</title>
+  <title>تأكيد البريد الإلكتروني | قوام المال</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
     body{{background:#080709;color:#F0EDE8;font-family:'Cairo',system-ui,Tahoma,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}}
@@ -74,7 +74,7 @@ AUTH_CONFIRM_HTML = f"""<!DOCTYPE html>
         var search = window.location.search || '';
         var isRecovery = hash.indexOf('type=recovery') !== -1 || search.indexOf('type=recovery') !== -1;
         if (isRecovery) {{
-          document.title = 'إعادة تعيين كلمة المرور | وفيير';
+          document.title = 'إعادة تعيين كلمة المرور | قوام المال';
           var h1 = document.getElementById('title');
           var desc = document.getElementById('desc');
           var btn = document.getElementById('action-btn');

@@ -52,7 +52,7 @@ void main() {
 
     // Stage 5 elements
     expect(find.text('5. Three Frictionless Ways to Record'), findsOneWidget);
-    expect(find.text('Start Using Wafeer'), findsOneWidget);
+    expect(find.text('Start Using Qawam Money'), findsOneWidget);
     expect(find.text('Finish & Start Tracking'), findsOneWidget);
   });
 

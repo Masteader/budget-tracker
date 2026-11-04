@@ -8,7 +8,7 @@ Providers (picked from the environment at send time; Resend wins when both are s
   "ssl"; defaults to "ssl" on port 465, otherwise "starttls"). TLS is mandatory. The login must
   be the mailbox of the sender address (fmscoinfo@fmsco.com.sa by default).
 
-Sender: MAIL_FROM, default "Wafeer <fmscoinfo@fmsco.com.sa>". SMTP_FROM / RESEND_FROM
+Sender: MAIL_FROM, default "Qawam Money <fmscoinfo@fmsco.com.sa>". SMTP_FROM / RESEND_FROM
 override it for one provider only.
 
 Every message goes to CONTACT_RECIPIENT_EMAIL (default abedmowafaq@gmail.com) with Reply-To
@@ -38,7 +38,7 @@ DEFAULT_RECIPIENT = "abedmowafaq@gmail.com"
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 # Every inquiry email is sent from the company mailbox unless MAIL_FROM (or the
 # provider-specific SMTP_FROM / RESEND_FROM) says otherwise.
-DEFAULT_SENDER = "Wafeer <fmscoinfo@fmsco.com.sa>"
+DEFAULT_SENDER = "Qawam Money <fmscoinfo@fmsco.com.sa>"
 SEND_TIMEOUT_SECONDS = 15.0
 
 _SIMPLE_EMAIL_RE = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")

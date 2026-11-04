@@ -1,5 +1,5 @@
 """
-Monthly PDF Financial Statement Generator for Wafeer.
+Monthly PDF Financial Statement Generator for Qawam Money.
 Generates an executive, branded PDF statement covering salary cycle spending,
 category budgets, partner attribution split, estimated 15% VAT, and transactions.
 """
@@ -160,7 +160,7 @@ def generate_monthly_pdf_statement(
     story = []
 
     # Title and Branding
-    story.append(Paragraph("WAFEER — FINANCIAL STATEMENT", header_style))
+    story.append(Paragraph("QAWAM MONEY — FINANCIAL STATEMENT", header_style))
     date_str = datetime.now(timezone.utc).strftime("%d %B %Y, %H:%M UTC")
     cycle_desc = f"Salary Cycle: <b>{cycle_label}</b> ({cycle_start} to {cycle_end}) &nbsp;|&nbsp; Generated: {date_str}"
     story.append(Paragraph(cycle_desc, subhead_style))
@@ -327,7 +327,7 @@ def generate_monthly_pdf_statement(
     story.append(Spacer(1, 16))
 
     # Footer Notice
-    footer_text = f"Confidential Statement &bull; Generated for Household {household_id} &bull; Wafeer KSA"
+    footer_text = f"Confidential Statement &bull; Generated for Household {household_id} &bull; Qawam Money KSA"
     story.append(Paragraph(footer_text, ParagraphStyle("Footer", parent=subhead_style, alignment=1, fontSize=8)))
 
     # Build PDF

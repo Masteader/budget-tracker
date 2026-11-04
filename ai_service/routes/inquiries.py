@@ -190,7 +190,7 @@ def _compose(
 ) -> mail_service.OutboundEmail:
     label = TYPE_LABELS[inquiry_type]
     received = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    lines = [f"New {label} request from Wafeer", ""]
+    lines = [f"New {label} request from Qawam Money", ""]
     lines.append(f"Type: {label}")
     for name, value in fields:
         lines.append(f"{name}: {value if value else '(not provided)'}")
@@ -201,7 +201,7 @@ def _compose(
     if reply_to:
         lines += ["", "Reply to this email to answer the sender directly."]
     return mail_service.OutboundEmail(
-        subject=f"[Wafeer] {label} — {subject_identity}",
+        subject=f"[Qawam Money] {label} — {subject_identity}",
         body="\n".join(lines) + "\n",
         reply_to=reply_to,
     )

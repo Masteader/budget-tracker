@@ -78,7 +78,7 @@ Future<void> main() async {
 
     runApp(const BudgetTrackerApp());
   } catch (error, stackTrace) {
-    debugPrint('Fatal Wafeer startup initialization error: $error\n$stackTrace');
+    debugPrint('Fatal Qawam Money startup initialization error: $error\n$stackTrace');
     final problems = validateClientConfig(
       supabaseUrl: supabaseUrl,
       supabaseKey: supabasePublishableKey,

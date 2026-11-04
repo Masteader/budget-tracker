@@ -193,8 +193,8 @@ export interface TranslationDictionary {
 export const translations: Record<Language, TranslationDictionary> = {
   ar: {
     brand: {
-      name: 'وفيير Wafeer',
-      shortName: 'وفيير',
+      name: 'قوام المال Qawam Money',
+      shortName: 'قوام المال',
       tagline: 'ميزانية البيت على دورة الراتب',
     },
     nav: {
@@ -424,7 +424,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       monthlyDue: 'القسط الشهري',
     },
     a11y: {
-      pageTitle: 'وفيير Wafeer | اعرف كم باقي لك لين الراتب',
+      pageTitle: 'قوام المال Qawam Money | اعرف كم باقي لك لين الراتب',
       skipToContent: 'تخطَّ إلى المحتوى الرئيسي',
       switchToEnglish: 'التبديل إلى الإنجليزية',
       switchToArabic: 'التبديل إلى العربية',
@@ -436,8 +436,8 @@ export const translations: Record<Language, TranslationDictionary> = {
   },
   en: {
     brand: {
-      name: 'Wafeer وفيير',
-      shortName: 'Wafeer',
+      name: 'Qawam Money قوام المال',
+      shortName: 'Qawam Money',
       tagline: 'Household budget by salary cycle',
     },
     nav: {
@@ -664,7 +664,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       monthlyDue: 'Monthly due',
     },
     a11y: {
-      pageTitle: 'Wafeer وفيير | Know what’s left until payday',
+      pageTitle: 'Qawam Money قوام المال | Know what’s left until payday',
       skipToContent: 'Skip to main content',
       switchToEnglish: 'Switch to English',
       switchToArabic: 'Switch to Arabic',

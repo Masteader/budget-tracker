@@ -57,12 +57,12 @@ async def test_support_chat_litellm_failure_graceful_fallback():
             language="en",
         )
         assert escalate_en is False
-        assert "Welcome to Wafeer Support!" in reply_en
+        assert "Welcome to Qawam Money Support!" in reply_en
 
         reply_ur, escalate_ur, _ = await handle_support_query(
             message="کیسے استعمال کریں؟",
             language="ur",
         )
         assert escalate_ur is False
-        assert "Wafeer سپورٹ میں خوش آمدید" in reply_ur
+        assert "Qawam Money سپورٹ میں خوش آمدید" in reply_ur
 
