@@ -162,3 +162,8 @@ Future<void> initFakeSettingsSupabase(FakeSettingsHttpClient client) async {
     debug: false,
   );
 }
+
+/// Restores the fake authenticated user session if a test signed out.
+Future<void> resetFakeSettingsAuth() async {
+  await Supabase.instance.client.auth.recoverSession(_sessionJson());
+}

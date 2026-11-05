@@ -114,10 +114,12 @@ void main() {
     PermissionHandlerPlatform.instance = _DeniedPermissions();
   });
 
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
     _http.transactions = const [];
     _http.memberCount = 2;
+    OfflineSyncService.instance.pendingCountNotifier.value = 0;
+    await resetFakeSettingsAuth();
     OfflineSyncService.instance.pendingCountNotifier.value = 0;
     final original = ApiService.instance;
     _api = FakeSettingsApi();
@@ -429,6 +431,61 @@ void main() {
         expect(find.byType(SnackBar), findsOneWidget);
       });
     }
+  });
+
+  group('sign out warning for unsynced transactions (TASK-02)', () {
+    testWidgets('sign out with 0 unsynced calls signOut directly without warning dialog', (tester) async {
+      OfflineSyncService.instance.pendingCountNotifier.value = 0;
+      await _pump(tester, lang: 'en');
+      final signOutBtn = find.ancestor(
+        of: find.text('Sign Out'),
+        matching: find.byType(OutlinedButton),
+      );
+      await tester.ensureVisible(signOutBtn);
+      await tester.tap(signOutBtn);
+      await _settle(tester);
+      expect(find.text('Unsynced Transactions'), findsNothing);
+    });
+
+    testWidgets('sign out with unsynced shows warning dialog, cancel keeps user', (tester) async {
+      OfflineSyncService.instance.pendingCountNotifier.value = 3;
+      await _pump(tester, lang: 'en');
+      final signOutBtn = find.ancestor(
+        of: find.text('Sign Out'),
+        matching: find.byType(OutlinedButton),
+      );
+      await tester.ensureVisible(signOutBtn);
+      await tester.tap(signOutBtn);
+      await _settle(tester);
+
+      expect(find.text('Unsynced Transactions'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await _settle(tester);
+      expect(find.byType(AlertDialog), findsNothing);
+
+      OfflineSyncService.instance.pendingCountNotifier.value = 0;
+    });
+
+    testWidgets('sign out warning dialog localized in ar and ur', (tester) async {
+      OfflineSyncService.instance.pendingCountNotifier.value = 2;
+      final ar = AppLocalizations(const Locale('ar'));
+      await _pump(tester, lang: 'ar');
+      final signOutBtn = find.ancestor(
+        of: find.text(ar.get('sign_out')),
+        matching: find.byType(OutlinedButton),
+      );
+      await tester.ensureVisible(signOutBtn);
+      await tester.tap(signOutBtn);
+      await _settle(tester);
+
+      expect(find.text(ar.get('sign_out_unsynced_title')), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text(ar.get('cancel')));
+      await _settle(tester);
+      OfflineSyncService.instance.pendingCountNotifier.value = 0;
+    });
   });
 
   group('colour tokens on the page, both modes', () {

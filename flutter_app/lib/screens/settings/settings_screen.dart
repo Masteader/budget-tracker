@@ -704,6 +704,43 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _confirmSignOut() async {
+    final pending = OfflineSyncService.instance.pendingCountNotifier.value;
+    if (pending > 0) {
+      final shouldSignOut = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ctx.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            ctx.tr('sign_out_unsynced_title'),
+            style: TextStyle(color: ctx.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          content: Text(
+            ctx.trPlural('sign_out_unsynced_warning', pending),
+            style: TextStyle(color: ctx.textSecondary, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(ctx.tr('cancel'), style: TextStyle(color: ctx.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ctx.dangerColor,
+                foregroundColor: ctx.cardBg,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(ctx.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (shouldSignOut != true) return;
+    }
+    await supabase.auth.signOut();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1216,7 +1253,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                         icon: Transform.flip(flipX: context.isRtl, child: const Icon(Icons.logout, size: 18)),
                         label: Text(context.tr('sign_out'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () => supabase.auth.signOut(),
+                        onPressed: _confirmSignOut,
                       ),
                     ),
                   ],

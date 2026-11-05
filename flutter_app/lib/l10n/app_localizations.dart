@@ -680,6 +680,7 @@ class AppLocalizations {
       'help_support': 'Help & Support',
       'ai_chat_entry': 'AI Chat Entry',
       'sign_out': 'Sign Out',
+      'sign_out_unsynced_title': 'Unsynced Transactions',
       'overallocated': 'Over-allocated',
       'remaining': 'Remaining',
       'allocated': 'Allocated',
@@ -2379,6 +2380,7 @@ class AppLocalizations {
       'help_support': 'مركز المساعدة والدعم',
       'ai_chat_entry': 'المساعد الذكي لتسجيل المصاريف',
       'sign_out': 'تسجيل الخروج',
+      'sign_out_unsynced_title': 'معاملات غير متزامنة',
       'overallocated': 'تجاوزت سقف الدخل',
       'remaining': 'المتبقي',
       'allocated': 'المخصص',
@@ -4103,6 +4105,7 @@ class AppLocalizations {
       'help_support': 'مدد اور سپورٹ',
       'ai_chat_entry': 'اے آئی چیٹ اخراجات اندراج',
       'sign_out': 'لاگ آؤٹ',
+      'sign_out_unsynced_title': 'غیر مطابقت پذیر لین دین',
       'overallocated': 'حد سے زیادہ مختص',
       'remaining': 'باقی',
       'allocated': 'مختص شدہ',
@@ -5812,6 +5815,24 @@ class AppLocalizations {
       'ur': {
         'one': '1 لین دین آف لائن محفوظ ہے',
         'other': '{count} لین دین آف لائن محفوظ ہیں',
+      },
+    },
+    'sign_out_unsynced_warning': {
+      'en': {
+        'one': 'You have 1 unsynced offline transaction. If you sign out now, it will remain stored locally until you sign back in. Do you want to sign out anyway?',
+        'other': 'You have {count} unsynced offline transactions. If you sign out now, they will remain stored locally until you sign back in. Do you want to sign out anyway?',
+      },
+      'ar': {
+        'zero': 'لا توجد معاملات مسجلة دون اتصال.',
+        'one': 'لديك معاملة واحدة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟',
+        'two': 'لديك معاملتان غير متزامنتين دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقيان محفوظتين محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟',
+        'few': 'لديك {count} معاملات غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟',
+        'many': 'لديك {count} معاملة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟',
+        'other': 'لديك {count} معاملة غير متزامنة دون اتصال. إذا قمت بتسجيل الخروج الآن، ستبقى محفوظة محلياً حتى تسجل الدخول مجدداً. هل ترغب في تسجيل الخروج على أي حال؟',
+      },
+      'ur': {
+        'one': 'آپ کا 1 لین دین ابھی تک سنک نہیں ہوا ہے۔ اگر آپ ابھی لاگ آؤٹ کرتے ہیں تو یہ دوبارہ لاگ ان ہونے تک محفوظ رہے گا۔ کیا آپ پھر بھی لاگ آؤٹ کرنا چاہتے ہیں؟',
+        'other': 'آپ کے {count} لین دین ابھی تک سنک نہیں ہوئے ہیں۔ اگر آپ ابھی لاگ آؤٹ کرتے ہیں تو یہ دوبارہ لاگ ان ہونے تک محفوظ رہیں گے۔ کیا آپ پھر بھی لاگ آؤٹ کرنا چاہتے ہیں؟',
       },
     },
     'transactions_count': {
