@@ -25,7 +25,8 @@
 -- not pending and promotes a pending one only when nobody else is left, because a
 -- household with members must keep an admin. maintain_household_primary_admin
 -- prefers a non-pending admin in the same way; with nobody pending, both pick exactly
--- what they picked before.
+-- what they picked before. For an account deleted out of band it also removes the
+-- user's invite_attempt_log rows and cancelled deletion requests, which have no FK.
 -- ============================================================================
 
 BEGIN;
@@ -325,6 +326,11 @@ BEGIN
       AND t.to_account_id = d.id
       AND f.owner_user_id = OLD.id
       AND d.owner_user_id = OLD.id;
+
+    -- Rows that only name this user, with no foreign key to take them along, for an account
+    -- deleted out of band (the Auth dashboard). An open request stays: the worker closes it.
+    DELETE FROM public.invite_attempt_log WHERE user_id = OLD.id;
+    DELETE FROM public.account_deletion_requests WHERE user_id = OLD.id AND status = 'cancelled';
 
     RETURN OLD;
 END;
