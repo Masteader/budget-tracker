@@ -65,6 +65,31 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// Bumped when the Nafaqah provider changes so the family card reloads.
   int _nafaqahRevision = 0;
+  SettlementV2Summary? _settlement;
+  bool _settlementLoading = false;
+  bool _settlementFailed = false;
+
+  Future<void> _fetchSettlement(String hid) async {
+    setState(() {
+      _settlementLoading = true;
+      _settlementFailed = false;
+    });
+    try {
+      final summary = await ApiService.instance.getSettlementV2(hid);
+      if (!mounted) return;
+      setState(() {
+        _settlement = summary;
+        _settlementLoading = false;
+        _settlementFailed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _settlementLoading = false;
+        _settlementFailed = true;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -155,7 +180,12 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// A new Nafaqah provider was confirmed: reload the family Nafaqah card.
   void _onNafaqahProviderChanged(NafaqahSummary? _) {
-    if (mounted) setState(() => _nafaqahRevision++);
+    if (mounted) {
+      setState(() => _nafaqahRevision++);
+      if (_householdId != null && _members.length > 1) {
+        _fetchSettlement(_householdId!);
+      }
+    }
   }
 
   Future<void> _loadHouseholdDetails(String hid) async {
@@ -184,6 +214,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   .toList() ??
               [];
         });
+        if (_members.length > 1) {
+          _fetchSettlement(hid);
+        }
       }
 
       // Load configured monthly payday
@@ -739,6 +772,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (shouldSignOut != true) return;
     }
     await supabase.auth.signOut();
+    _settlement = null;
+    _settlementFailed = false;
+    _settlementLoading = false;
   }
 
   @override
@@ -903,33 +939,50 @@ class _SettingsScreenState extends State<SettingsScreen>
               subtitle: context.tr('partner_settlement_desc'),
               icon: Icons.handshake_outlined,
               children: [
-                FutureBuilder<SettlementV2Summary>(
-                  future: ApiService.instance.getSettlementV2(_householdId!),
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-                      return Container(
-                        height: 90,
-                        alignment: Alignment.center,
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText),
+                if (_settlementLoading && _settlement == null)
+                  Container(
+                    height: 90,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: context.accentText),
+                    ),
+                  )
+                else if (_settlementFailed && _settlement == null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            context.tr('load_error_generic'),
+                            style: TextStyle(color: context.dangerColor, fontSize: 12),
+                          ),
                         ),
-                      );
-                    }
-                    if (snap.hasData && snap.data!.isRoommateMode) {
-                      return MultiRoommateSettlementCard(
-                        householdId: _householdId!,
-                        summary: snap.data,
-                      );
-                    }
-                    return FamilyReimbursementCard(
-                      key: ValueKey('family-nafaqah-$_nafaqahRevision'),
-                      householdId: _householdId!,
-                      emptyPlaceholder: _buildNoWifeSettlementPlaceholder(context),
-                    );
-                  },
-                ),
+                        TextButton(
+                          style: TextButton.styleFrom(foregroundColor: context.accentText),
+                          onPressed: () {
+                            if (_householdId != null) {
+                              _fetchSettlement(_householdId!);
+                            }
+                          },
+                          child: Text(context.tr('roles_retry')),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_settlement != null && _settlement!.isRoommateMode)
+                  MultiRoommateSettlementCard(
+                    householdId: _householdId!,
+                    summary: _settlement,
+                  )
+                else
+                  FamilyReimbursementCard(
+                    key: ValueKey('family-nafaqah-$_nafaqahRevision'),
+                    householdId: _householdId!,
+                    emptyPlaceholder: _buildNoWifeSettlementPlaceholder(context),
+                  ),
               ],
             ),
 

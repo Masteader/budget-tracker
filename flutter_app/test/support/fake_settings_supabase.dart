@@ -29,8 +29,18 @@ class FakeSettingsApi extends ApiService {
         HouseholdDependent(id: 'd-2', householdId: fakeSettingsHouseholdId, name: 'Salem', monthlyAllowance: 300),
       ];
 
+  int settlementCallCount = 0;
+  bool failSettlement = false;
+
   @override
-  Future<SettlementV2Summary> getSettlementV2(String householdId, {String? cycleStart}) async => settlement;
+  Future<SettlementV2Summary> getSettlementV2(String householdId, {String? cycleStart}) async {
+    settlementCallCount++;
+    await Future<void>.delayed(Duration.zero);
+    if (failSettlement) {
+      throw Exception('Failed to fetch settlement');
+    }
+    return settlement;
+  }
 
   @override
   Future<HouseholdRoster> getHouseholdMembers(String householdId) async => const HouseholdRoster(

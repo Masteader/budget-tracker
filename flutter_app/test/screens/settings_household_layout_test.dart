@@ -488,6 +488,43 @@ void main() {
     });
   });
 
+  group('settlement fetched once with failures handled (TASK-03)', () {
+    testWidgets('settlement is fetched only once across rebuilds and accordion taps', (tester) async {
+      await _pump(tester);
+      final initialCount = _api.settlementCallCount;
+      expect(initialCount, 1);
+
+      // Rebuild and tap several other sections
+      await tester.tap(find.text('SALARY & ACCOUNTS'));
+      await _settle(tester);
+      await tester.tap(find.text('APPEARANCE & LANGUAGE'));
+      await _settle(tester);
+
+      expect(_api.settlementCallCount, 1);
+    });
+
+    testWidgets('settlement failure shows localized error message and retry button that recovers', (tester) async {
+      _api.failSettlement = true;
+      await _pump(tester);
+
+      // Open partner settlement section
+      await tester.tap(find.text('PARTNER SETTLEMENT'));
+      await _settle(tester);
+
+      final en = AppLocalizations(const Locale('en'));
+      expect(find.text(en.get('load_error_generic')), findsOneWidget);
+      expect(find.text(en.get('roles_retry')), findsOneWidget);
+
+      // When retrying with failure gone:
+      _api.failSettlement = false;
+      await tester.tap(find.text(en.get('roles_retry')));
+      await _settle(tester);
+
+      expect(find.text(en.get('load_error_generic')), findsNothing);
+      expect(_api.settlementCallCount, 2);
+    });
+  });
+
   group('colour tokens on the page, both modes', () {
     for (final dark in [false, true]) {
       final mode = dark ? 'dark' : 'light';
