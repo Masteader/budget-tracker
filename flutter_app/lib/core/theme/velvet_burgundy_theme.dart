@@ -131,8 +131,8 @@ class VelvetBurgundyTheme {
             width: 1.8,
           ),
         ),
-        hintStyle: TextStyle(
-          color: VelvetBurgundyColors.textSecondaryLight.withValues(alpha: 0.8),
+        hintStyle: const TextStyle(
+          color: VelvetBurgundyColors.textSecondaryLight,
           fontFamilyFallback: arabicFallback,
         ),
       ),
@@ -260,12 +260,12 @@ class VelvetBurgundyTheme {
       seedColor: VelvetBurgundyColors.primaryDark,
       brightness: Brightness.dark,
     ).copyWith(
-      primary: VelvetBurgundyColors.primaryDark,
+      primary: VelvetBurgundyColors.roseGoldGlow,
       secondary: VelvetBurgundyColors.roseGoldGlow,
       surface: VelvetBurgundyColors.surfaceDark,
       surfaceContainerHighest: const Color(0xFF2A0F1B),
       outline: VelvetBurgundyColors.roseBorderDark,
-      onPrimary: Colors.white,
+      onPrimary: VelvetBurgundyColors.primaryDarkMaroon,
       onSurface: VelvetBurgundyColors.textPrimaryDark,
     );
 
@@ -321,8 +321,8 @@ class VelvetBurgundyTheme {
             width: 1.8,
           ),
         ),
-        hintStyle: TextStyle(
-          color: VelvetBurgundyColors.textSecondaryDark.withValues(alpha: 0.7),
+        hintStyle: const TextStyle(
+          color: VelvetBurgundyColors.textSecondaryDark,
           fontFamilyFallback: arabicFallback,
         ),
       ),

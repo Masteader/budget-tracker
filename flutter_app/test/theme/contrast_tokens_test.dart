@@ -100,4 +100,27 @@ void main() {
       expect(File(path).readAsStringSync().contains('0xFF008F7A'), isFalse, reason: path);
     }
   });
+
+  test('root dark-mode colorScheme.primary and hintStyle alpha (TASK-05)', () {
+    final dark = AppThemes.darkTheme;
+    final light = AppThemes.lightTheme;
+
+    // Dark mode primary must be luminous roseGoldGlow and contrast against surfaces
+    expect(dark.colorScheme.primary, VelvetBurgundyColors.roseGoldGlow);
+    expect(dark.colorScheme.onPrimary, VelvetBurgundyColors.primaryDarkMaroon);
+    expect(contrast(dark.colorScheme.primary, dark.colorScheme.surface), greaterThanOrEqualTo(4.5));
+    expect(contrast(dark.colorScheme.primary, dark.scaffoldBackgroundColor), greaterThanOrEqualTo(4.5));
+
+    // Light mode primary must be velvet burgundy and contrast against surfaces
+    expect(light.colorScheme.primary, VelvetBurgundyColors.primaryLight);
+    expect(contrast(light.colorScheme.primary, light.colorScheme.surface), greaterThanOrEqualTo(4.5));
+    expect(contrast(light.colorScheme.primary, light.scaffoldBackgroundColor), greaterThanOrEqualTo(4.5));
+
+    // Input hint styles must not degrade alpha and must meet WCAG AA
+    expect(dark.inputDecorationTheme.hintStyle!.color, VelvetBurgundyColors.textSecondaryDark);
+    expect(contrast(dark.inputDecorationTheme.hintStyle!.color!, dark.inputDecorationTheme.fillColor!), greaterThanOrEqualTo(4.5));
+
+    expect(light.inputDecorationTheme.hintStyle!.color, VelvetBurgundyColors.textSecondaryLight);
+    expect(contrast(light.inputDecorationTheme.hintStyle!.color!, light.inputDecorationTheme.fillColor!), greaterThanOrEqualTo(4.5));
+  });
 }
