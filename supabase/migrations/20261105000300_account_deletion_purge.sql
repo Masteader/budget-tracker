@@ -38,7 +38,17 @@
 -- purge aborts with nothing changed (HINT purge_ledger_invariant). The one known way
 -- to hit it is old data: a wife_personal row debiting a pool, written before
 -- trg_enforce_wife_class_account. The job then ends in 'failed', which alerts, rather
--- than quietly crediting the pool.
+-- than quietly crediting the pool. The snapshot covers only the households the purge can
+-- reach (theirs, those of pools they own, those of their wife_personal rows), and those
+-- pools, households and budgets are locked first, in that order and by id, so another
+-- household's expense, or one waiting on these, never trips it.
+--
+-- Locks: the user's advisory lock, then the request row, as account_deletion_cancel.
+--
+-- Identifiers: their id goes from other members' rows in any household. Their address,
+-- matched whole and in any case, goes from every text and JSON column in public. Their
+-- display name goes from their own kept rows' merchant and item names and from the names
+-- of pools handed to another admin; other members' free text keeps it.
 -- ============================================================================
 
 BEGIN;
@@ -250,6 +260,100 @@ AS $$
     END;
 $$;
 
+-- Each pattern's matches, case-insensitive, become deleted_member. NULL patterns are skipped.
+CREATE OR REPLACE FUNCTION public.account_deletion_scrub_text(p_text text, p_patterns text[])
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_pattern text;
+    v_out text := p_text;
+BEGIN
+    IF p_text IS NULL OR p_patterns IS NULL THEN
+        RETURN p_text;
+    END IF;
+    FOREACH v_pattern IN ARRAY p_patterns LOOP
+        IF v_pattern IS NOT NULL THEN
+            v_out := regexp_replace(v_out, v_pattern, 'deleted_member', 'gi');
+        END IF;
+    END LOOP;
+    RETURN v_out;
+END;
+$$;
+
+-- The "name" of each item, through account_deletion_scrub_text. Nothing else in an item changes.
+CREATE OR REPLACE FUNCTION public.account_deletion_scrub_item_names(p_items jsonb, p_patterns text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT CASE
+        WHEN p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN p_items
+        ELSE (
+            SELECT COALESCE(jsonb_agg(
+                CASE
+                    WHEN jsonb_typeof(e.item) = 'object' AND jsonb_typeof(e.item -> 'name') = 'string' THEN
+                        jsonb_set(e.item, '{name}', to_jsonb(public.account_deletion_scrub_text(e.item ->> 'name', p_patterns)))
+                    ELSE e.item
+                END
+                ORDER BY e.ord), '[]'::jsonb)
+            FROM jsonb_array_elements(p_items) WITH ORDINALITY AS e(item, ord)
+        )
+    END;
+$$;
+
+-- Every text and JSON column of every table in public: matches of p_pattern become
+-- deleted_member. p_needle (lowercase) is a cheap pre-filter that every match contains. A
+-- length-limited column keeps a value the sentinel would not fit in, rather than fail the purge.
+CREATE OR REPLACE FUNCTION public.account_deletion_replace_everywhere(p_needle text, p_pattern text)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_col record;
+BEGIN
+    IF COALESCE(p_needle, '') = '' OR p_pattern IS NULL THEN
+        RETURN;
+    END IF;
+    FOR v_col IN
+        SELECT c.oid::regclass AS tbl,
+               a.attname AS col,
+               format_type(a.atttypid, NULL) AS typ,
+               a.atttypid IN ('json'::regtype, 'jsonb'::regtype) AS is_json,
+               CASE WHEN a.atttypid = 'varchar'::regtype AND a.atttypmod > 4 THEN a.atttypmod - 4 END AS max_len
+        FROM pg_class c
+        JOIN pg_attribute a ON a.attrelid = c.oid
+        WHERE c.relnamespace = 'public'::regnamespace
+          AND c.relkind = 'r'
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+          AND a.attgenerated = ''
+          AND a.atttypid IN ('text'::regtype, 'varchar'::regtype, 'json'::regtype, 'jsonb'::regtype)
+          AND has_column_privilege(c.oid, a.attnum, 'UPDATE')
+        ORDER BY c.oid, a.attnum
+    LOOP
+        IF v_col.is_json THEN
+            EXECUTE format(
+                'UPDATE %s SET %I = regexp_replace(%I::text, $1, %L, %L)::%s WHERE strpos(lower(%I::text), $2) > 0 AND %I::text ~* $1',
+                v_col.tbl, v_col.col, v_col.col, 'deleted_member', 'gi', v_col.typ, v_col.col, v_col.col)
+            USING p_pattern, lower(p_needle);
+        ELSE
+            EXECUTE format(
+                'UPDATE %s SET %I = regexp_replace(%I, $1, %L, %L) WHERE strpos(lower(%I), $2) > 0 AND %I ~* $1'
+                || CASE WHEN v_col.max_len IS NOT NULL
+                        THEN format(' AND char_length(regexp_replace(%I, $1, %L, %L)) <= %s', v_col.col, 'deleted_member', 'gi', v_col.max_len)
+                        ELSE '' END,
+                v_col.tbl, v_col.col, v_col.col, 'deleted_member', 'gi', v_col.col, v_col.col)
+            USING p_pattern, lower(p_needle);
+        END IF;
+    END LOOP;
+END;
+$$;
+
 -- ── Service functions ───────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.claim_due_account_deletions(p_limit integer DEFAULT 20, p_lease_minutes integer DEFAULT 30)
@@ -308,13 +412,28 @@ DECLARE
     v_member uuid;
     v_notice timestamptz;
     v_refs text[];
+    v_id_refs text[];
     v_scope uuid[];
+    v_lock_hhs uuid[];
+    v_ledger_hhs uuid[];
     v_keep_pools uuid[];
+    v_reowned uuid[];
+    v_name text;
+    v_name_re text;
+    v_email_re text;
     v_ledger_before text;
     v_ledger_after text;
 BEGIN
     PERFORM public.account_deletion_require_service();
 
+    -- The user's lock, then the request row: the order account_deletion_cancel takes them in.
+    SELECT * INTO v_req FROM public.account_deletion_requests WHERE id = p_request_id;
+    IF v_req.id IS NULL THEN
+        RAISE EXCEPTION 'Account deletion request not found' USING ERRCODE = 'P0002', HINT = 'request_not_found';
+    END IF;
+    IF v_req.user_id IS NOT NULL THEN
+        PERFORM pg_advisory_xact_lock(hashtextextended('account_deletion:' || v_req.user_id::text, 0));
+    END IF;
     SELECT * INTO v_req FROM public.account_deletion_requests WHERE id = p_request_id FOR UPDATE;
     IF v_req.id IS NULL THEN
         RAISE EXCEPTION 'Account deletion request not found' USING ERRCODE = 'P0002', HINT = 'request_not_found';
@@ -330,7 +449,6 @@ BEGIN
     END IF;
 
     v_uid := v_req.user_id;
-    PERFORM pg_advisory_xact_lock(hashtextextended('account_deletion:' || v_uid::text, 0));
 
     -- Deleted out of band during grace: the FKs did the work.
     IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = v_uid) THEN
@@ -340,9 +458,24 @@ BEGIN
         RETURN jsonb_build_object('prepared', true, 'deferred', false, 'user_missing', true, 'deleted_households', 0);
     END IF;
 
+    -- Every household whose ledger the purge can reach: theirs, those of the pools they own
+    -- (re-owned below), and those of the wife_personal rows deleted below. Pools, then
+    -- households, then budgets, each by id: an expense locks its account (a BEFORE trigger),
+    -- then its household (the foreign key), then its budget, so this order cannot deadlock with it.
+    SELECT COALESCE(array_agg(DISTINCT s.household_id), '{}') INTO v_lock_hhs
+    FROM (
+        SELECT m.household_id FROM public.household_memberships m WHERE m.user_id = v_uid
+        UNION ALL
+        SELECT a.household_id FROM public.accounts a WHERE a.owner_user_id = v_uid AND a.is_shared_pool
+        UNION ALL
+        SELECT t.household_id FROM public.transactions t WHERE t.nafaqah_spouse_id = v_uid AND t.nafaqah_class = 'wife_personal'
+    ) s;
+
+    PERFORM 1 FROM public.accounts a WHERE a.is_shared_pool AND a.household_id = ANY (v_lock_hhs) ORDER BY a.id FOR UPDATE;
+
     PERFORM 1
     FROM public.households h
-    WHERE h.id IN (SELECT m.household_id FROM public.household_memberships m WHERE m.user_id = v_uid)
+    WHERE h.id = ANY (v_lock_hhs)
     ORDER BY h.id
     FOR UPDATE;
 
@@ -381,12 +514,30 @@ BEGIN
     END IF;
 
     SELECT lower(email) INTO v_email FROM auth.users WHERE id = v_uid;
+    SELECT NULLIF(btrim(display_name), '') INTO v_name FROM public.users WHERE id = v_uid;
+    -- The whole address or name, any case, never part of a longer one.
+    IF v_email IS NOT NULL AND v_email <> '' THEN
+        v_email_re := '(?<![[:alnum:]._%+-])' || regexp_replace(v_email, '([^[:alnum:][:space:]])', '\\\1', 'g')
+                      || '(?![[:alnum:]_-]|\.[[:alnum:]])';
+    END IF;
+    IF v_name IS NOT NULL THEN
+        v_name_re := '(?<![[:alnum:]_])' || regexp_replace(v_name, '([^[:alnum:][:space:]])', '\\\1', 'g') || '(?![[:alnum:]_])';
+    END IF;
 
-    -- What must not move. A pool in a household with no other admin has nobody to go to.
+    -- What must not move: the surviving households the purge can reach, and nothing else, so
+    -- another household's expense in the meantime is not mistaken for one. Locked above (pools
+    -- and households); a pool made since is locked now, then the budgets, before the snapshot.
+    SELECT COALESCE(array_agg(x), '{}') INTO v_ledger_hhs
+    FROM unnest(v_lock_hhs) AS x
+    WHERE NOT (x = ANY (v_delete));
+    PERFORM 1 FROM public.accounts a WHERE a.is_shared_pool AND a.household_id = ANY (v_ledger_hhs) ORDER BY a.id FOR UPDATE;
+    PERFORM 1 FROM public.budgets b WHERE b.household_id = ANY (v_ledger_hhs) ORDER BY b.id FOR UPDATE;
+
+    -- A pool in a household with no other admin has nobody to go to.
     SELECT COALESCE(array_agg(a.id), '{}') INTO v_keep_pools
     FROM public.accounts a
     WHERE a.is_shared_pool
-      AND NOT (a.household_id = ANY (v_delete))
+      AND a.household_id = ANY (v_ledger_hhs)
       AND (a.owner_user_id <> v_uid
            OR EXISTS (SELECT 1 FROM public.household_memberships o
                       WHERE o.household_id = a.household_id AND o.user_id <> v_uid AND o.role = 'admin'));
@@ -394,7 +545,7 @@ BEGIN
                      FROM public.accounts a WHERE a.id = ANY (v_keep_pools)), '')
         || '|'
         || COALESCE((SELECT string_agg(b.id::text || '=' || b.spent_amount::text, ',' ORDER BY b.id)
-                     FROM public.budgets b WHERE NOT (b.household_id = ANY (v_delete))), '')
+                     FROM public.budgets b WHERE b.household_id = ANY (v_ledger_hhs)), '')
     INTO v_ledger_before;
 
     -- ── Storage queue, while the paths still exist ──────────────────────────
@@ -442,18 +593,30 @@ BEGIN
     WHERE nafaqah_spouse_id = v_uid AND nafaqah_class = 'wife_personal';
 
     -- Every pool they own, including in a household they already left.
-    UPDATE public.accounts a
-    SET owner_user_id = n.user_id,
-        updated_at = now()
-    FROM (
-        SELECT DISTINCT ON (o.household_id) o.household_id, o.user_id
-        FROM public.household_memberships o
-        WHERE o.user_id <> v_uid AND o.role = 'admin'
-        ORDER BY o.household_id, public.account_deletion_user_pending(o.user_id) ASC, o.created_at ASC, o.user_id ASC
-    ) n
-    WHERE a.household_id = n.household_id
-      AND a.owner_user_id = v_uid
-      AND a.is_shared_pool;
+    WITH reowned AS (
+        UPDATE public.accounts a
+        SET owner_user_id = n.user_id,
+            updated_at = now()
+        FROM (
+            SELECT DISTINCT ON (o.household_id) o.household_id, o.user_id
+            FROM public.household_memberships o
+            WHERE o.user_id <> v_uid AND o.role = 'admin'
+            ORDER BY o.household_id, public.account_deletion_user_pending(o.user_id) ASC, o.created_at ASC, o.user_id ASC
+        ) n
+        WHERE a.household_id = n.household_id
+          AND a.owner_user_id = v_uid
+          AND a.is_shared_pool
+        RETURNING a.id
+    )
+    SELECT COALESCE(array_agg(id), '{}') INTO v_reowned FROM reowned;
+
+    -- Its name now belongs to someone else's pool: their name goes from it.
+    IF v_name_re IS NOT NULL THEN
+        UPDATE public.accounts a
+        SET name = regexp_replace(a.name, v_name_re, 'deleted_member', 'gi')
+        WHERE a.id = ANY (v_reowned)
+          AND a.name ~* v_name_re;
+    END IF;
 
     -- What other rows may call them: their id, and any dependent claimed by them.
     SELECT array_agg(DISTINCT r) INTO v_refs
@@ -464,6 +627,10 @@ BEGIN
         UNION ALL
         SELECT lower(trim(d.name)) FROM public.household_dependents d WHERE d.linked_user_id = v_uid
     ) q;
+    -- Ids mean them in any household. A dependent's name only means them in its own.
+    SELECT array_agg(r) INTO v_id_refs
+    FROM unnest(v_refs) AS r
+    WHERE r ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
     SELECT COALESCE(array_agg(DISTINCT s.household_id), '{}') INTO v_scope
     FROM (
@@ -476,17 +643,33 @@ BEGIN
         SELECT a.household_id FROM public.accounts a WHERE a.owner_user_id = v_uid
     ) s;
 
-    -- Their own rows.
+    -- Their own rows. Their name and address go from the merchant and the item names too.
     UPDATE public.transactions t
     SET notes = public.account_deletion_scrub_own_note(t.notes, v_refs),
         receipt_url = NULL,
         beneficiary_id = CASE WHEN lower(trim(t.beneficiary_id)) = ANY (v_refs) THEN 'deleted_member' ELSE t.beneficiary_id END,
         settlement_target_id = CASE WHEN lower(trim(t.settlement_target_id)) = ANY (v_refs) THEN 'deleted_member' ELSE t.settlement_target_id END,
-        items = public.account_deletion_scrub_items(t.items, v_refs),
-        line_items = public.account_deletion_scrub_items(t.line_items, v_refs)
+        merchant = public.account_deletion_scrub_text(t.merchant, ARRAY[v_name_re, v_email_re]),
+        items = public.account_deletion_scrub_item_names(public.account_deletion_scrub_items(t.items, v_refs), ARRAY[v_name_re, v_email_re]),
+        line_items = public.account_deletion_scrub_item_names(public.account_deletion_scrub_items(t.line_items, v_refs), ARRAY[v_name_re, v_email_re])
     WHERE t.user_id = v_uid;
 
-    -- Other members' rows in those households that name them.
+    -- Other members' rows anywhere that name them by id, including in a household they left
+    -- where only others' rows mention them (v_scope below would not reach it).
+    UPDATE public.transactions t
+    SET notes = public.account_deletion_scrub_other_note(t.notes, v_id_refs),
+        beneficiary_id = CASE WHEN lower(trim(t.beneficiary_id)) = ANY (v_id_refs) THEN 'deleted_member' ELSE t.beneficiary_id END,
+        settlement_target_id = CASE WHEN lower(trim(t.settlement_target_id)) = ANY (v_id_refs) THEN 'deleted_member' ELSE t.settlement_target_id END,
+        items = public.account_deletion_scrub_items(t.items, v_id_refs),
+        line_items = public.account_deletion_scrub_items(t.line_items, v_id_refs)
+    WHERE t.user_id IS DISTINCT FROM v_uid
+      AND (lower(trim(t.beneficiary_id)) = ANY (v_id_refs)
+           OR lower(trim(t.settlement_target_id)) = ANY (v_id_refs)
+           OR public.account_deletion_scrub_other_note(t.notes, v_id_refs) IS DISTINCT FROM t.notes
+           OR public.account_deletion_scrub_items(t.items, v_id_refs) IS DISTINCT FROM t.items
+           OR public.account_deletion_scrub_items(t.line_items, v_id_refs) IS DISTINCT FROM t.line_items);
+
+    -- Other members' rows in those households that name them, by id or by a claimed dependent's name.
     UPDATE public.transactions t
     SET notes = public.account_deletion_scrub_other_note(t.notes, v_refs),
         beneficiary_id = CASE WHEN lower(trim(t.beneficiary_id)) = ANY (v_refs) THEN 'deleted_member' ELSE t.beneficiary_id END,
@@ -547,6 +730,10 @@ BEGIN
        OR i.email = v_uid::text || '@auth.internal'
        OR (v_email IS NOT NULL AND lower(i.email) = v_email);
 
+    -- Their address, wherever it still is in public, other members' text included. Their
+    -- display name stays in others' text: a common name could be anyone's.
+    PERFORM public.account_deletion_replace_everywhere(v_email, v_email_re);
+
     -- The shell the Auth Admin delete will cascade from.
     UPDATE public.users
     SET display_name = 'deleted_member',
@@ -560,7 +747,7 @@ BEGIN
                      FROM public.accounts a WHERE a.id = ANY (v_keep_pools)), '')
         || '|'
         || COALESCE((SELECT string_agg(b.id::text || '=' || b.spent_amount::text, ',' ORDER BY b.id)
-                     FROM public.budgets b WHERE NOT (b.household_id = ANY (v_delete))), '')
+                     FROM public.budgets b WHERE b.household_id = ANY (v_ledger_hhs)), '')
     INTO v_ledger_after;
     IF v_ledger_after IS DISTINCT FROM v_ledger_before THEN
         RAISE EXCEPTION 'A surviving pool balance or budget would have moved; nothing was purged'
@@ -792,6 +979,9 @@ REVOKE ALL ON FUNCTION public.account_deletion_note_token(text, text[]) FROM PUB
 REVOKE ALL ON FUNCTION public.account_deletion_scrub_own_note(text, text[]) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.account_deletion_scrub_other_note(text, text[]) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.account_deletion_scrub_items(jsonb, text[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.account_deletion_scrub_text(text, text[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.account_deletion_scrub_item_names(jsonb, text[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.account_deletion_replace_everywhere(text, text) FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.claim_due_account_deletions(integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.prepare_account_purge(uuid) FROM PUBLIC, anon, authenticated;

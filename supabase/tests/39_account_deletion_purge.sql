@@ -432,14 +432,14 @@ BEGIN
     PERFORM pg_temp.request(2, '[]', 'T39 reason from Bilal Uniqueperson');
     v_id := pg_temp.make_due(2);
     PERFORM pg_temp.expect('claimed', pg_temp.claim()::text, '1');
-    PERFORM pg_temp.expect('cancel is refused once claimed',
-        pg_temp.call(pg_temp.u(2), NULL, 'SELECT public.cancel_account_deletion()::text'), 'ERR:deletion_in_progress');
     PERFORM pg_temp.expect('storage cannot be marked before prepare',
         pg_temp.svc(format('SELECT public.mark_account_purge_storage_done(%L)::text', v_id)), 'ERR:purge_stage_invalid');
 
     PERFORM pg_temp.expect('prepare result', (pg_temp.prepare(v_id))->>'prepared', 'true');
     PERFORM pg_temp.expect('stage after prepare',
         (SELECT stage FROM public.account_deletion_requests WHERE id = v_id), 'db_prepared');
+    PERFORM pg_temp.expect('cancel is refused once prepared',
+        pg_temp.call(pg_temp.u(2), NULL, 'SELECT public.cancel_account_deletion()::text'), 'ERR:deletion_in_progress');
     PERFORM pg_temp.expect('ledger unchanged after prepare', pg_temp.ledger(v_keep_hhs), v_before);
 
     -- 6. Prepare twice is a no-op.
@@ -745,8 +745,10 @@ BEGIN
     PERFORM pg_temp.expect('attempt 5 is terminal', v_res->>'status', 'failed');
     PERFORM pg_temp.expect('failed is not claimable', pg_temp.claim()::text, '0');
     PERFORM pg_temp.expect('a failed user stays pending', public.account_deletion_user_pending(pg_temp.u(22))::text, 'true');
-    PERFORM pg_temp.expect('failed cannot be cancelled',
-        pg_temp.call(pg_temp.u(22), NULL, 'SELECT public.cancel_account_deletion()::text'), 'ERR:deletion_in_progress');
+    -- Nothing was deleted (stage none), so the user can still cancel.
+    PERFORM pg_temp.expect('failed before anything was deleted can be cancelled',
+        pg_temp.call(pg_temp.u(22), NULL, 'SELECT (public.cancel_account_deletion()->>''cancelled'')'), 'true');
+    PERFORM pg_temp.expect('no longer pending', public.account_deletion_user_pending(pg_temp.u(22))::text, 'false');
 
     -- A worker that dies five times without recording anything also ends up failed.
     PERFORM pg_temp.request(23);

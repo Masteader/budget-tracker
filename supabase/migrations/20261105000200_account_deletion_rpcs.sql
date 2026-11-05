@@ -107,7 +107,8 @@ BEGIN
         'requested_at', v_req.requested_at,
         'scheduled_for', v_req.scheduled_for,
         'locale', v_req.locale,
-        'can_cancel', v_req.status = 'scheduled',
+        -- Until the purge has deleted anything, whatever the status.
+        'can_cancel', v_req.stage = 'none',
         'marked_households', COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
                        'household_id', h.id,
@@ -364,7 +365,8 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'cancelled', false, 'status', 'none', 'can_cancel', false);
     END IF;
 
-    IF v_req.status <> 'scheduled' THEN
+    -- Once the purge has deleted anything (stage past none), it can only finish.
+    IF v_req.stage <> 'none' THEN
         RAISE EXCEPTION 'This deletion is already in progress'
             USING ERRCODE = '22023', HINT = 'deletion_in_progress';
     END IF;
@@ -372,6 +374,7 @@ BEGIN
     UPDATE public.account_deletion_requests
     SET status = 'cancelled',
         cancelled_at = now(),
+        lease_expires_at = NULL,
         reason = NULL
     WHERE id = v_req.id;
 

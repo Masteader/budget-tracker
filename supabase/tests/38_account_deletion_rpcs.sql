@@ -392,16 +392,16 @@ BEGIN
     PERFORM pg_temp.expect('co-admin of 6 is asked nothing, 7 marked again',
         (SELECT deletion_requested_by::text FROM public.households WHERE id = pg_temp.h(7)), pg_temp.u(21)::text);
 
-    -- Once processing or failed the data may be gone.
-    UPDATE public.account_deletion_requests SET status = 'processing' WHERE user_id = pg_temp.u(21) AND status = 'scheduled';
-    PERFORM pg_temp.expect('cancel while processing',
+    -- Once the purge has deleted anything (stage past none), whatever the status.
+    UPDATE public.account_deletion_requests SET status = 'processing', stage = 'db_prepared' WHERE user_id = pg_temp.u(21) AND status = 'scheduled';
+    PERFORM pg_temp.expect('cancel once prepared',
         pg_temp.call(pg_temp.u(21), NULL, 'SELECT public.cancel_account_deletion()::text'), 'ERR:deletion_in_progress');
     UPDATE public.account_deletion_requests SET status = 'failed' WHERE user_id = pg_temp.u(21) AND status = 'processing';
-    PERFORM pg_temp.expect('cancel after failure',
+    PERFORM pg_temp.expect('cancel after a failure once prepared',
         pg_temp.call(pg_temp.u(21), NULL, 'SELECT public.cancel_account_deletion()::text'), 'ERR:deletion_in_progress');
     PERFORM pg_temp.expect('mark kept while in progress',
         (SELECT deletion_requested_by::text FROM public.households WHERE id = pg_temp.h(7)), pg_temp.u(21)::text);
-    RAISE NOTICE 'PASSED: cancel clears only that user''s marks, keeps transfers, refused once processing.';
+    RAISE NOTICE 'PASSED: cancel clears only that user''s marks, keeps transfers, refused once the purge has deleted anything.';
 END $$;
 
 -- 6. Status never exposes the reason or another user's request ---------------------------

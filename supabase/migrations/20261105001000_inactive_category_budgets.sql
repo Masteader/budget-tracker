@@ -11,11 +11,15 @@
 --    `is_active != false`), so rows with NULL behave exactly as before.
 --    Nothing else changes: wife_personal rows and settlements still reach no budget, and
 --    wife_reimbursable rows still reach the category budget (rule 02).
+--    The triggers still write the matching inactive rows, adding nothing: that locks them, so
+--    an activation running at the same time waits for the expense being saved or deleted, then
+--    counts what is committed. Without it, such an expense was lost or counted after its delete.
 -- 2. A budget row that becomes active for the household's open cycle (inserted active, or
 --    is_active turned from false to true) takes that cycle's spending of its category, by the
 --    rule recompute_budget_spent uses (budget_spent_from_transactions). So expenses recorded
---    while the category was inactive or unbudgeted count in the new budget at once. Rows of any
---    other cycle are left as they are, and so are rows that were already active.
+--    while the category was inactive or unbudgeted count in the new budget at once. Any row
+--    inserted for the open cycle is filled this way, whatever inserts it, the cycle rollover
+--    included. Rows of any other cycle are left as they are, and so are rows that were already active.
 --
 -- No data is changed by this file: no stored spent_amount is rewritten.
 -- Safe to run again (CREATE OR REPLACE, DROP TRIGGER IF EXISTS).
@@ -64,11 +68,12 @@ BEGIN
         RETURN NEW;  -- the wife's allowance only / a transfer between members
     END IF;
 
+    -- Inactive rows are written too, adding nothing: that locks them, so an activation running
+    -- now waits for this expense and then counts it (budget_activation_counts_open_cycle).
     UPDATE public.budgets
-    SET spent_amount = spent_amount + NEW.amount
+    SET spent_amount = spent_amount + CASE WHEN is_active IS NOT FALSE THEN NEW.amount ELSE 0 END
     WHERE household_id  = NEW.household_id
       AND category_code = NEW.category_code
-      AND is_active IS NOT FALSE
       AND (
           (NEW.cycle_key IS NOT NULL AND cycle_key = NEW.cycle_key)
           OR (NEW.cycle_key IS NULL AND month = date_trunc('month', NEW.timestamp)::DATE)
@@ -89,11 +94,11 @@ BEGIN
         RETURN OLD;
     END IF;
 
+    -- Inactive rows are locked too, unchanged, so an activation waits for the delete.
     UPDATE public.budgets
-    SET spent_amount = GREATEST(0, spent_amount - OLD.amount)
+    SET spent_amount = CASE WHEN is_active IS NOT FALSE THEN GREATEST(0, spent_amount - OLD.amount) ELSE spent_amount END
     WHERE household_id  = OLD.household_id
       AND category_code = OLD.category_code
-      AND is_active IS NOT FALSE
       AND (
           (OLD.cycle_key IS NOT NULL AND cycle_key = OLD.cycle_key)
           OR (OLD.cycle_key IS NULL AND month = date_trunc('month', OLD.timestamp)::DATE)
@@ -119,12 +124,12 @@ BEGIN
        OR date_trunc('month', OLD.timestamp) IS DISTINCT FROM date_trunc('month', NEW.timestamp)
        OR v_old_counted IS DISTINCT FROM v_new_counted THEN
 
+        -- Inactive rows are locked too, unchanged, as in the insert and delete triggers.
         IF v_old_counted THEN
             UPDATE public.budgets
-            SET spent_amount = GREATEST(0, spent_amount - OLD.amount)
+            SET spent_amount = CASE WHEN is_active IS NOT FALSE THEN GREATEST(0, spent_amount - OLD.amount) ELSE spent_amount END
             WHERE household_id  = OLD.household_id
               AND category_code = OLD.category_code
-              AND is_active IS NOT FALSE
               AND (
                   (OLD.cycle_key IS NOT NULL AND cycle_key = OLD.cycle_key)
                   OR (OLD.cycle_key IS NULL AND month = date_trunc('month', OLD.timestamp)::DATE)
@@ -133,10 +138,9 @@ BEGIN
 
         IF v_new_counted THEN
             UPDATE public.budgets
-            SET spent_amount = spent_amount + NEW.amount
+            SET spent_amount = spent_amount + CASE WHEN is_active IS NOT FALSE THEN NEW.amount ELSE 0 END
             WHERE household_id  = NEW.household_id
               AND category_code = NEW.category_code
-              AND is_active IS NOT FALSE
               AND (
                   (NEW.cycle_key IS NOT NULL AND cycle_key = NEW.cycle_key)
                   OR (NEW.cycle_key IS NULL AND month = date_trunc('month', NEW.timestamp)::DATE)

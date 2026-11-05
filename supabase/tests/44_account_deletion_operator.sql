@@ -101,11 +101,12 @@ AS $$
     VALUES (p_type, p_email, 'please delete my account', 'ur', p_ref)
 $$;
 
-CREATE FUNCTION pg_temp.schedule_sql(p_user int, p_ref text DEFAULT 'ref-a', p_by text DEFAULT 'dev_one',
+-- One inquiry schedules one person: by default each user has their own, ref-u<n>.
+CREATE FUNCTION pg_temp.schedule_sql(p_user int, p_ref text DEFAULT NULL, p_by text DEFAULT 'dev_one',
                                      p_choices text DEFAULT '[]', p_locale text DEFAULT NULL)
 RETURNS text LANGUAGE sql
 AS $$ SELECT format('SELECT public.schedule_account_deletion_by_operator(%L, %L, %L, %L::jsonb, %L)::text',
-                    pg_temp.u(p_user), p_ref, p_by, p_choices, p_locale) $$;
+                    pg_temp.u(p_user), COALESCE(p_ref, 'ref-u' || p_user), p_by, p_choices, p_locale) $$;
 
 CREATE FUNCTION pg_temp.svc(p_sql text) RETURNS text LANGUAGE sql
 AS $$ SELECT pg_temp.call(NULL, p_sql, 'service_role') $$;
@@ -120,6 +121,7 @@ BEGIN
     FROM generate_series(1, 30) AS n;
     PERFORM pg_temp.inquiry('ref-a', 't44-1@test.local');
     PERFORM pg_temp.inquiry('ref-contact', 't44-1@test.local', 'contact');
+    PERFORM pg_temp.inquiry('ref-u' || n, 't44-' || n || '@test.local') FROM generate_series(1, 30) AS n;
 END $$;
 
 -- 1. Service only ---------------------------------------------------------------------
@@ -230,7 +232,7 @@ BEGIN
     SELECT * INTO v_req FROM public.account_deletion_requests WHERE user_id = pg_temp.u(3);
     PERFORM pg_temp.expect('thirty days out', (v_req.scheduled_for - v_req.requested_at)::text, '30 days');
     PERFORM pg_temp.expect('marked operator', v_req.initiated_by, 'operator');
-    PERFORM pg_temp.expect('reference kept', v_req.operator_inquiry_reference, 'ref-a');
+    PERFORM pg_temp.expect('reference kept', v_req.operator_inquiry_reference, 'ref-u3');
     PERFORM pg_temp.expect('handle kept', v_req.operator_verified_by, 'dev_one');
     PERFORM pg_temp.expect('locale from the inquiry', v_req.locale, 'ur');
     PERFORM pg_temp.expect('no copy of the message', v_req.reason, NULL);
@@ -239,20 +241,20 @@ BEGIN
     PERFORM pg_temp.hh(3);
     PERFORM pg_temp.join(7, 3, 'admin');
     UPDATE public.households SET owner_user_id = pg_temp.u(7) WHERE id = pg_temp.h(3);
-    v_res := pg_temp.svc(pg_temp.schedule_sql(7, 'ref-a', 'dev_one', '[]', 'en'));
+    v_res := pg_temp.svc(pg_temp.schedule_sql(7, NULL, 'dev_one', '[]', 'en'));
     PERFORM pg_temp.expect('sole member marked',
         (SELECT deletion_requested_by::text FROM public.households WHERE id = pg_temp.h(3)), pg_temp.u(7)::text);
     PERFORM pg_temp.expect('an explicit locale wins',
         (SELECT locale FROM public.account_deletion_requests WHERE user_id = pg_temp.u(7)), 'en');
 
     -- Explicit delete choice.
-    v_res := pg_temp.svc(pg_temp.schedule_sql(2, 'ref-a', 'dev_one',
+    v_res := pg_temp.svc(pg_temp.schedule_sql(2, NULL, 'dev_one',
         format('[{"household_id":"%s","action":"delete"}]', pg_temp.h(1))));
     PERFORM pg_temp.expect('delete choice marks',
         (SELECT deletion_requested_by::text FROM public.households WHERE id = pg_temp.h(1)), pg_temp.u(2)::text);
 
     -- Explicit transfer: runs now, and the user stays a co-admin.
-    v_res := pg_temp.svc(pg_temp.schedule_sql(5, 'ref-a', 'dev_one',
+    v_res := pg_temp.svc(pg_temp.schedule_sql(5, NULL, 'dev_one',
         format('[{"household_id":"%s","action":"transfer","successor_user_id":"%s"}]', pg_temp.h(2), pg_temp.u(6))));
     PERFORM pg_temp.expect('transfer ran',
         (SELECT owner_user_id::text FROM public.households WHERE id = pg_temp.h(2)), pg_temp.u(6)::text);
@@ -276,7 +278,7 @@ BEGIN
     PERFORM pg_temp.expect('same date', pg_temp.field(v_again, 'scheduled_for'), pg_temp.field(v_first, 'scheduled_for'));
     PERFORM pg_temp.expect('first reference stays',
         (SELECT operator_inquiry_reference || '/' || operator_verified_by FROM public.account_deletion_requests
-         WHERE user_id = pg_temp.u(8)), 'ref-a/dev_one');
+         WHERE user_id = pg_temp.u(8)), 'ref-u8/dev_one');
 
     INSERT INTO auth.sessions (user_id, created_at) VALUES (pg_temp.u(9), now()) RETURNING id::text INTO v_sess;
     v_first := pg_temp.call(pg_temp.u(9), 'SELECT public.request_account_deletion(''delete'', ''[]''::jsonb, ''moving'', ''en'')::text',
@@ -299,7 +301,7 @@ BEGIN
     v_res := pg_temp.call(pg_temp.u(10), 'SELECT public.get_account_deletion_status()::text');
     PERFORM pg_temp.expect('status shows it', pg_temp.field(v_res, 'status'), 'scheduled');
     PERFORM pg_temp.expect('can cancel', pg_temp.field(v_res, 'can_cancel'), 'true');
-    IF v_res LIKE '%ref-a%' OR v_res LIKE '%dev_one%' THEN
+    IF v_res LIKE '%ref-u10%' OR v_res LIKE '%dev_one%' THEN
         RAISE EXCEPTION 'status exposes the operator record: %', v_res;
     END IF;
     v_res := pg_temp.call(pg_temp.u(10), 'SELECT public.cancel_account_deletion()::text');
@@ -324,9 +326,9 @@ BEGIN
     v_res := pg_temp.svc(format('SELECT public.cancel_account_deletion_by_operator(%L, %L, %L)::text', pg_temp.u(11), 'ref-a', 'dev_two'));
     PERFORM pg_temp.expect('nothing left to cancel', pg_temp.field(v_res, 'cancelled'), 'false');
 
-    -- Refused once processing, like the user's cancel.
+    -- Refused once the purge has deleted anything, like the user's cancel.
     PERFORM pg_temp.svc(pg_temp.schedule_sql(12));
-    UPDATE public.account_deletion_requests SET status = 'processing' WHERE user_id = pg_temp.u(12);
+    UPDATE public.account_deletion_requests SET status = 'processing', stage = 'db_prepared' WHERE user_id = pg_temp.u(12);
     PERFORM pg_temp.expect('too late',
         pg_temp.svc(format('SELECT public.cancel_account_deletion_by_operator(%L, %L, %L)::text', pg_temp.u(12), 'ref-a', 'dev_two')),
         'ERR:deletion_in_progress');

@@ -15,6 +15,14 @@
 -- operator's handle, which must not be an address. No other personal data, and not the
 -- form's message.
 --
+-- The preview says 'ambiguous', and offers no user id, when two accounts' addresses differ
+-- only in letter case. One inquiry schedules one person (inquiry_reused otherwise), and an
+-- operator cancel names a reference that exists.
+--
+-- Cancel, by the user or the operator, works whatever the status until the purge has deleted
+-- anything (stage none). The typed word is folded on the server: see
+-- account_deletion_fold_confirmation.
+--
 -- The reference is plain text with no foreign key, because the worker removes
 -- account_deletion inquiries after 90 days, as the public page promises, and a job can
 -- be open longer than that. Nothing in a job reads the inquiry after it is scheduled.
@@ -203,7 +211,10 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'cancelled', false, 'status', 'none', 'can_cancel', false);
     END IF;
 
-    IF v_req.status <> 'scheduled' THEN
+    -- Whatever the status (scheduled, processing or failed), until the purge has deleted
+    -- anything. prepare_account_purge takes the same two locks in the same order, and moves the
+    -- stage past none in the transaction that deletes, so this read cannot be stale.
+    IF v_req.stage <> 'none' THEN
         RAISE EXCEPTION 'This deletion is already in progress'
             USING ERRCODE = '22023', HINT = 'deletion_in_progress';
     END IF;
@@ -211,6 +222,7 @@ BEGIN
     UPDATE public.account_deletion_requests
     SET status = 'cancelled',
         cancelled_at = now(),
+        lease_expires_at = NULL,
         reason = NULL,
         operator_cancelled_by = p_cancelled_by,
         operator_cancel_reference = p_cancel_reference
@@ -227,6 +239,31 @@ END;
 $$;
 
 -- ── The user's path, on the shared functions ────────────────────────────────
+
+-- The typed confirmation word, folded before it is compared. In this order:
+--   1. NFC.
+--   2. Removed: U+200B-U+200D (zero-width space, non-joiner, joiner), U+202A-U+202E and
+--      U+2066-U+2069 (bidi embeddings and isolates), U+FEFF.
+--   3. A space: any \s, U+0085, U+00A0, U+1680, U+2000-U+200A, U+200E, U+200F, U+2028,
+--      U+2029, U+202F, U+205F, U+3000.
+--   4. Urdu letters as an Arabic keyboard types them: U+06A9 to U+0643, U+06CC to U+064A,
+--      U+06BA to U+0646, and U+0649 to U+064A.
+--   5. Runs of spaces become one, the ends are trimmed, and the text is lowercased.
+CREATE OR REPLACE FUNCTION public.account_deletion_fold_confirmation(p_text text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT lower(btrim(regexp_replace(
+        translate(
+            regexp_replace(
+                regexp_replace(normalize(COALESCE(p_text, ''), NFC),
+                    '[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]', '', 'g'),
+                '[\s\u0085\u00A0\u1680\u2000-\u200A\u200E\u200F\u2028\u2029\u202F\u205F\u3000]', ' ', 'g'),
+            U&'\06A9\06CC\06BA\0649', U&'\0643\064A\0646\064A'),
+        ' {2,}', ' ', 'g'), ' '));
+$$;
 
 CREATE OR REPLACE FUNCTION public.request_account_deletion(
     p_confirmation text,
@@ -252,11 +289,11 @@ BEGIN
             USING ERRCODE = '42501', HINT = 'reauthentication_required';
     END IF;
 
-    -- Drop bidi and zero-width marks a mobile keyboard may add, collapse whitespace.
-    v_phrase := lower(regexp_replace(regexp_replace(
-        regexp_replace(normalize(COALESCE(p_confirmation, ''), NFC), '[​-‏‪-‮⁦-⁩﻿]', '', 'g'),
-        '\s+', ' ', 'g'), '^ | $', '', 'g'));
-    IF v_phrase NOT IN ('delete', 'حذف', 'حذف کریں') THEN
+    -- Both sides folded the same way, so the accepted words match however they were typed.
+    v_phrase := public.account_deletion_fold_confirmation(p_confirmation);
+    IF v_phrase = '' OR v_phrase NOT IN (
+        SELECT public.account_deletion_fold_confirmation(w) FROM unnest(ARRAY['delete', 'حذف', 'حذف کریں']) AS w
+    ) THEN
         RAISE EXCEPTION 'The confirmation word does not match'
             USING ERRCODE = '22023', HINT = 'confirmation_mismatch';
     END IF;
@@ -306,12 +343,18 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_uid uuid;
+    v_matches integer;
     v_address text := lower(trim(COALESCE(p_email, '')));
     v_inquiry public.inquiries%ROWTYPE;
 BEGIN
     PERFORM public.account_deletion_require_service();
 
-    SELECT u.id INTO v_uid FROM auth.users u WHERE lower(u.email) = v_address;
+    -- Auth compares addresses exactly, so two accounts can differ only in letter case. Then
+    -- the address does not say which one is meant, and no user id is offered.
+    SELECT count(*), min(u.id::text)::uuid INTO v_matches, v_uid FROM auth.users u WHERE lower(u.email) = v_address;
+    IF v_matches > 1 THEN
+        v_uid := NULL;
+    END IF;
 
     SELECT * INTO v_inquiry
     FROM public.inquiries i
@@ -321,7 +364,8 @@ BEGIN
     RETURN jsonb_build_object(
         'inquiry_valid', v_inquiry.id IS NOT NULL,
         'inquiry_email_matches', v_inquiry.id IS NOT NULL AND lower(v_inquiry.email) = v_address,
-        'account_found', v_uid IS NOT NULL,
+        'ambiguous', v_matches > 1,
+        'account_found', v_matches > 0,
         'user_id', v_uid,
         'deletion', CASE WHEN v_uid IS NULL THEN NULL ELSE (
             SELECT jsonb_build_object('status', s ->> 'status', 'scheduled_for', s ->> 'scheduled_for',
@@ -360,13 +404,23 @@ BEGIN
     PERFORM public.account_deletion_require_service();
     PERFORM public.account_deletion_require_operator_handle(p_verified_by);
 
+    -- Locked, so two operators cannot use one inquiry for two people at once.
     SELECT * INTO v_inquiry
     FROM public.inquiries i
     WHERE i.type = 'account_deletion'
-      AND (i.reference = p_inquiry_reference OR i.id::text = p_inquiry_reference);
+      AND (i.reference = p_inquiry_reference OR i.id::text = p_inquiry_reference)
+    FOR UPDATE;
     IF v_inquiry.id IS NULL THEN
         RAISE EXCEPTION 'No account deletion inquiry with that reference'
             USING ERRCODE = '22023', HINT = 'inquiry_invalid';
+    END IF;
+
+    -- One inquiry is one person's request.
+    IF EXISTS (SELECT 1 FROM public.account_deletion_requests r
+               WHERE r.operator_inquiry_reference = v_inquiry.reference
+                 AND r.user_id IS DISTINCT FROM p_user_id) THEN
+        RAISE EXCEPTION 'That inquiry already scheduled the deletion of another account'
+            USING ERRCODE = '22023', HINT = 'inquiry_reused';
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = p_user_id)
@@ -391,10 +445,31 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+    v_reference text;
 BEGIN
     PERFORM public.account_deletion_require_service();
     PERFORM public.account_deletion_require_operator_handle(p_verified_by);
-    RETURN public.account_deletion_cancel(p_user_id, p_verified_by, left(p_inquiry_reference, 64));
+
+    -- The reference must exist: an account_deletion inquiry (by reference or id), or the one
+    -- this user's open request was scheduled from, whose inquiry may be past its 90 days.
+    SELECT i.reference INTO v_reference
+    FROM public.inquiries i
+    WHERE i.type = 'account_deletion'
+      AND (i.reference = p_inquiry_reference OR i.id::text = p_inquiry_reference);
+    IF v_reference IS NULL THEN
+        SELECT r.operator_inquiry_reference INTO v_reference
+        FROM public.account_deletion_requests r
+        WHERE r.user_id = p_user_id
+          AND r.status IN ('scheduled', 'processing', 'failed')
+          AND r.operator_inquiry_reference = p_inquiry_reference;
+    END IF;
+    IF v_reference IS NULL THEN
+        RAISE EXCEPTION 'No account deletion inquiry with that reference'
+            USING ERRCODE = '22023', HINT = 'inquiry_invalid';
+    END IF;
+
+    RETURN public.account_deletion_cancel(p_user_id, p_verified_by, v_reference);
 END;
 $$;
 
@@ -453,6 +528,7 @@ $$;
 REVOKE ALL ON FUNCTION public.account_deletion_schedule(uuid, jsonb, text, text, text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.account_deletion_cancel(uuid, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.account_deletion_require_operator_handle(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.account_deletion_fold_confirmation(text) FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.get_account_deletion_operator_preview(text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.schedule_account_deletion_by_operator(uuid, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
