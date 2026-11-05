@@ -8,6 +8,13 @@ import {
 } from '../i18n/translations';
 import { useAuth } from '../context/useAuth';
 import { CONTACT_EMAIL, submitDeletionRequest, type DeletionRequestResult } from '../lib/inquiries';
+import {
+  deletionView,
+  isAcceptedConfirmation,
+  offersCancel,
+  type DeletionStatusName,
+  type DeletionView,
+} from '../lib/accountDeletion';
 import { supabase } from '../lib/supabaseClient';
 import { Logo } from './Header';
 
@@ -25,7 +32,7 @@ type Household = {
 };
 
 type DeletionStatus = {
-  status: 'none' | 'scheduled' | 'processing' | 'failed';
+  status: DeletionStatusName;
   scheduled_for?: string;
   can_cancel: boolean;
   marked_households?: { household_id: string; household_name: string | null; scheduled_for: string }[];
@@ -34,18 +41,6 @@ type DeletionStatus = {
 type Preflight = { deletion: DeletionStatus; households: Household[] };
 
 type HouseholdChoice = { action?: 'transfer' | 'delete'; successor?: string };
-
-/** Same normalization as request_account_deletion, which has the final say. */
-const ACCEPTED_WORDS = ['delete', 'حذف', 'حذف کریں'];
-
-function normalizeWord(value: string): string {
-  return value
-    .normalize('NFC')
-    .replace(/[​-‏‪-‮⁦-⁩﻿]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
 
 function initialLanguage(): DeleteAccountLanguage {
   const asked = new URLSearchParams(window.location.search).get('lang');
@@ -294,20 +289,30 @@ const RequestCard: React.FC<{ t: DeleteAccountDictionary; lang: DeleteAccountLan
 
 // ── Signed in: already scheduled ─────────────────────────────────────────────
 
+// Scheduled, or started or stopped before deleting anything: the server still lets it be cancelled.
 const PendingCard: React.FC<{
   t: DeleteAccountDictionary;
+  view: Extract<DeletionView, 'pending' | 'starting' | 'stopped'>;
   deletion: DeletionStatus;
   onCancel: () => Promise<void>;
   busy: boolean;
   error: string | null;
-}> = ({ t, deletion, onCancel, busy, error }) => {
+}> = ({ t, view, deletion, onCancel, busy, error }) => {
   const marked = deletion.marked_households ?? [];
+  const title =
+    view === 'starting' ? t.account.startingTitle : view === 'stopped' ? t.account.stoppedTitle : t.account.pendingTitle;
   return (
-    <Card title={t.account.pendingTitle}>
-      <p className="text-lg font-bold text-ink">
-        {t.account.pendingDate} <bdi>{formatDate(deletion.scheduled_for, t.dateLocale)}</bdi>
-      </p>
-      <p>{t.account.pendingUsable}</p>
+    <Card title={title}>
+      {view === 'pending' ? (
+        <>
+          <p className="text-lg font-bold text-ink">
+            {t.account.pendingDate} <bdi>{formatDate(deletion.scheduled_for, t.dateLocale)}</bdi>
+          </p>
+          <p>{t.account.pendingUsable}</p>
+        </>
+      ) : (
+        <p>{view === 'starting' ? t.account.startingBody : t.account.stoppedBody}</p>
+      )}
       <p className="rounded-xl bg-sand-soft px-4 py-3 font-semibold text-sand-ink">{t.account.pendingSignIn}</p>
       {marked.length > 0 && (
         <div>
@@ -366,7 +371,7 @@ const ScheduleCard: React.FC<{
       setError(errors.choiceMissing);
       return;
     }
-    if (!ACCEPTED_WORDS.includes(normalizeWord(word))) {
+    if (!isAcceptedConfirmation(word)) {
       setError(errors.confirmationMismatch);
       return;
     }
@@ -590,6 +595,7 @@ const AccountCard: React.FC<{
   };
 
   const status = preflight?.deletion.status;
+  const view = preflight ? deletionView(preflight.deletion) : null;
 
   return (
     <>
@@ -620,9 +626,16 @@ const AccountCard: React.FC<{
         <p role="status" className="rounded-2xl border border-line bg-white p-5">
           {t.account.loading}
         </p>
-      ) : status === 'scheduled' ? (
-        <PendingCard t={t} deletion={preflight.deletion} onCancel={handleCancel} busy={cancelBusy} error={cancelError} />
-      ) : status === 'none' ? (
+      ) : view && offersCancel(view) ? (
+        <PendingCard
+          t={t}
+          view={view}
+          deletion={preflight.deletion}
+          onCancel={handleCancel}
+          busy={cancelBusy}
+          error={cancelError}
+        />
+      ) : view === 'schedule' ? (
         <ScheduleCard
           t={t}
           lang={lang}
@@ -634,6 +647,10 @@ const AccountCard: React.FC<{
             setPreflight({ ...preflight, deletion });
           }}
         />
+      ) : view === 'stoppedPartway' ? (
+        <Card title={t.account.stoppedPartwayTitle}>
+          <p>{t.account.stoppedPartwayBody}</p>
+        </Card>
       ) : (
         <Card title={t.account.inProgressTitle}>
           <p>{t.account.inProgressBody}</p>

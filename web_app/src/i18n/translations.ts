@@ -809,6 +809,12 @@ export interface DeleteAccountDictionary {
     cancelled: string;
     inProgressTitle: string;
     inProgressBody: string;
+    startingTitle: string;
+    startingBody: string;
+    stoppedTitle: string;
+    stoppedBody: string;
+    stoppedPartwayTitle: string;
+    stoppedPartwayBody: string;
     errors: {
       password: string;
       reauthenticationRequired: string;
@@ -977,7 +983,13 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
       cancelling: 'جارٍ الإلغاء...',
       cancelled: 'أُلغي الحذف ويبقى حسابك. ما تم من تعيين مشرف أساسي يبقى كما هو.',
       inProgressTitle: 'بدأ حذف حسابك',
-      inProgressBody: 'لم يعد بالإمكان إلغاء الحذف، لأن بياناتك قد تكون حُذفت. إذا كان عندك سؤال فراسلنا على البريد أدناه.',
+      inProgressBody: 'حُذف بعض بياناتك بالفعل، لذلك لم يعد بالإمكان إلغاء الحذف. إذا كان عندك سؤال فراسلنا على البريد أدناه.',
+      startingTitle: 'حذف حسابك يبدأ الآن',
+      startingBody: 'لم يُحذف شيء بعد، لذلك ما زال بإمكانك إلغاء الحذف.',
+      stoppedTitle: 'توقف حذف حسابك قبل أن يُحذف أي شيء',
+      stoppedBody: 'تعثرت إحدى خطوات الحذف. لم يُحذف شيء بعد، لذلك ما زال بإمكانك إلغاء الحذف، وإلا فسنتابع الأمر.',
+      stoppedPartwayTitle: 'توقف حذف حسابك في منتصفه',
+      stoppedPartwayBody: 'حُذف بعض بياناتك بالفعل، لذلك لم يعد بالإمكان إلغاء الحذف. سنتابع الأمر. إذا كان عندك سؤال فراسلنا على البريد أدناه.',
       errors: {
         password: 'تعذر تأكيد كلمة المرور. تحقق منها وحاول مرة أخرى.',
         reauthenticationRequired: 'لتأكيد الطلب أدخل كلمة المرور مرة أخرى.',
@@ -986,7 +998,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         choiceInvalid: 'تغيّرت منازلك. حدّث الصفحة واختر مرة أخرى.',
         successorInvalid: 'اختر عضواً آخر من هذا المنزل.',
         successorPending: 'هذا العضو مجدول للحذف. اختر عضواً آخر.',
-        inProgress: 'بدأ الحذف ولا يمكن إلغاؤه.',
+        inProgress: 'حُذف بعض بياناتك بالفعل، لذلك لا يمكن إلغاء الحذف.',
         generic: 'تعذر إتمام الطلب، ولم يتغير شيء في حسابك. حاول مرة أخرى.',
       },
     },
@@ -1144,7 +1156,13 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
       cancelling: 'Cancelling...',
       cancelled: 'The deletion is cancelled and your account stays. A primary admin assignment already made stays as it is.',
       inProgressTitle: 'Your account’s deletion has started',
-      inProgressBody: 'It can no longer be cancelled, because your data may already be gone. If you have a question, email us at the address below.',
+      inProgressBody: 'Some of your data has already been deleted, so it can no longer be cancelled. If you have a question, email us at the address below.',
+      startingTitle: 'Your account’s deletion is starting',
+      startingBody: 'Nothing has been deleted yet, so you can still cancel it.',
+      stoppedTitle: 'Your account’s deletion stopped before deleting anything',
+      stoppedBody: 'One of its steps failed. Nothing has been deleted yet, so you can still cancel it; otherwise we will look into it.',
+      stoppedPartwayTitle: 'Your account’s deletion stopped partway',
+      stoppedPartwayBody: 'Some of your data has already been deleted, so it can no longer be cancelled. We will look into it. If you have a question, email us at the address below.',
       errors: {
         password: 'Could not confirm your password. Check it and try again.',
         reauthenticationRequired: 'To confirm this request, enter your password again.',
@@ -1153,7 +1171,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         choiceInvalid: 'Your households have changed. Reload the page and choose again.',
         successorInvalid: 'Choose another member of this household.',
         successorPending: 'This member is scheduled for deletion. Choose another member.',
-        inProgress: 'Deletion has started and cannot be cancelled.',
+        inProgress: 'Some of your data has already been deleted, so the deletion cannot be cancelled.',
         generic: 'That did not go through, and nothing changed on your account. Please try again.',
       },
     },
@@ -1311,7 +1329,13 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
       cancelling: 'منسوخ ہو رہا ہے...',
       cancelled: 'حذف منسوخ ہو گیا اور آپ کا اکاؤنٹ برقرار ہے۔ بنیادی منتظم کی جو تقرری ہو چکی ہے وہ ویسی ہی رہے گی۔',
       inProgressTitle: 'آپ کے اکاؤنٹ کا حذف شروع ہو چکا ہے',
-      inProgressBody: 'اب یہ منسوخ نہیں ہو سکتا، کیونکہ ہو سکتا ہے آپ کا ڈیٹا ہٹ چکا ہو۔ کوئی سوال ہو تو نیچے دیے گئے پتے پر ای میل کریں۔',
+      inProgressBody: 'آپ کا کچھ ڈیٹا حذف ہو چکا ہے، اس لیے اب یہ منسوخ نہیں ہو سکتا۔ کوئی سوال ہو تو نیچے دیے گئے پتے پر ای میل کریں۔',
+      startingTitle: 'آپ کے اکاؤنٹ کا حذف شروع ہو رہا ہے',
+      startingBody: 'ابھی کچھ حذف نہیں ہوا، اس لیے آپ اب بھی حذف منسوخ کر سکتے ہیں۔',
+      stoppedTitle: 'کچھ حذف ہونے سے پہلے ہی آپ کے اکاؤنٹ کا حذف رک گیا',
+      stoppedBody: 'حذف کا ایک مرحلہ ناکام ہو گیا۔ ابھی کچھ حذف نہیں ہوا، اس لیے آپ اب بھی حذف منسوخ کر سکتے ہیں، ورنہ ہم اسے دیکھیں گے۔',
+      stoppedPartwayTitle: 'آپ کے اکاؤنٹ کا حذف ادھورا رک گیا',
+      stoppedPartwayBody: 'آپ کا کچھ ڈیٹا حذف ہو چکا ہے، اس لیے اب یہ منسوخ نہیں ہو سکتا۔ ہم اسے دیکھیں گے۔ کوئی سوال ہو تو نیچے دیے گئے پتے پر ای میل کریں۔',
       errors: {
         password: 'پاس ورڈ کی تصدیق نہیں ہو سکی۔ جانچ کر دوبارہ کوشش کریں۔',
         reauthenticationRequired: 'اس درخواست کی تصدیق کے لیے اپنا پاس ورڈ دوبارہ درج کریں۔',
@@ -1320,7 +1344,7 @@ export const deleteAccountTranslations: Record<DeleteAccountLanguage, DeleteAcco
         choiceInvalid: 'آپ کے گھرانے بدل گئے ہیں۔ صفحہ دوبارہ لوڈ کر کے پھر انتخاب کریں۔',
         successorInvalid: 'اس گھرانے کا کوئی دوسرا رکن منتخب کریں۔',
         successorPending: 'یہ رکن حذف کے لیے طے ہے۔ کوئی دوسرا رکن منتخب کریں۔',
-        inProgress: 'حذف شروع ہو چکا ہے اور منسوخ نہیں ہو سکتا۔',
+        inProgress: 'آپ کا کچھ ڈیٹا حذف ہو چکا ہے، اس لیے حذف منسوخ نہیں ہو سکتا۔',
         generic: 'یہ مکمل نہیں ہو سکا، اور آپ کے اکاؤنٹ میں کچھ نہیں بدلا۔ دوبارہ کوشش کریں۔',
       },
     },

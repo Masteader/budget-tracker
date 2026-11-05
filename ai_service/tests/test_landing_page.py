@@ -254,6 +254,39 @@ def test_served_deletion_page_states_its_promises_in_each_language(lang):
     assert not missing, f"{lang}: {missing}"
 
 
+_DELETE_PAGE_STATUS_COPY = {
+    # Started or stopped before deleting anything: Cancel is still offered (can_cancel).
+    "en": ("Nothing has been deleted yet, so you can still cancel it.",
+           "Your account’s deletion stopped before deleting anything",
+           # Past that point, and why it cannot be cancelled.
+           "Some of your data has already been deleted, so it can no longer be cancelled."),
+    "ar": ("لم يُحذف شيء بعد، لذلك ما زال بإمكانك إلغاء الحذف.",
+           "توقف حذف حسابك قبل أن يُحذف أي شيء",
+           "حُذف بعض بياناتك بالفعل، لذلك لم يعد بالإمكان إلغاء الحذف."),
+    "ur": ("ابھی کچھ حذف نہیں ہوا، اس لیے آپ اب بھی حذف منسوخ کر سکتے ہیں۔",
+           "کچھ حذف ہونے سے پہلے ہی آپ کے اکاؤنٹ کا حذف رک گیا",
+           "آپ کا کچھ ڈیٹا حذف ہو چکا ہے، اس لیے اب یہ منسوخ نہیں ہو سکتا۔"),
+}
+
+
+@pytest.mark.parametrize("lang", sorted(_DELETE_PAGE_STATUS_COPY))
+def test_served_deletion_page_words_each_status_accurately(lang):
+    bundle = _served_bundle()
+    missing = [phrase for phrase in _DELETE_PAGE_STATUS_COPY[lang] if phrase not in bundle]
+    assert not missing, f"{lang}: {missing}"
+    # The old wording guessed ("may already be gone") where the server knows.
+    assert "your data may already be gone" not in bundle
+
+
+def test_served_deletion_page_offers_cancel_from_can_cancel_and_folds_like_the_server():
+    bundle = _served_bundle()
+    assert "can_cancel" in bundle
+    # The Urdu letters the server folds, and the direction marks it reads as spaces.
+    for char in ("ک", "ی", "ں", "ى", "ك", "ي", "ن"):
+        assert char in bundle or "\\u%04x" % ord(char) in bundle.lower(), hex(ord(char))
+    assert "u200e" in bundle.lower() and "u200f" in bundle.lower()
+
+
 def test_served_bundle_routes_the_deletion_page_and_supports_urdu():
     bundle = _served_bundle()
     assert "/delete-account" in bundle
