@@ -6,7 +6,6 @@ import 'package:budget_tracker/screens/settings/help_support_screen.dart';
 import 'package:budget_tracker/screens/settings/settings_screen.dart';
 import 'package:budget_tracker/services/api_service.dart';
 import 'package:budget_tracker/services/offline_sync_service.dart';
-import 'package:budget_tracker/widgets/nafaqah/wife_allowance_card.dart';
 import 'package:budget_tracker/widgets/settings/settings_section.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -64,8 +63,6 @@ void main() {
               find.byType(SettingsScreen),
               // Data, not words: an address or code may need to wrap anywhere.
               ignore: (t) => t.contains('@') || t == '--------',
-              // Outside the Settings scope, reported separately.
-              excluding: find.byType(WifeAllowanceCard),
             ),
             isEmpty,
           );

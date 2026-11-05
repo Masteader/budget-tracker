@@ -1385,7 +1385,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                   children: [
                     IconButton(
                       tooltip: context.tr('a11y_previous'),
-                      icon: Icon(context.isRtl ? Icons.chevron_right_rounded : Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
+                      icon: Icon(Icons.chevron_left_rounded, color: context.textPrimary.withValues(alpha: 0.7)),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex < _cycles.length - 1)
                           ? () => setState(() {
                               _userNavigatedManually = true;
@@ -1412,7 +1412,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                     ),
                     IconButton(
                       tooltip: context.tr('a11y_next'),
-                      icon: Icon(context.isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, color: context.textSecondary),
+                      icon: Icon(Icons.chevron_right_rounded, color: context.textSecondary),
                       onPressed: (_cycles.isNotEmpty && _currentCycleIndex > 0)
                           ? () => setState(() {
                               _userNavigatedManually = true;
@@ -2057,7 +2057,7 @@ class _BudgetManagementScreenState extends State<BudgetManagementScreen> {
                                 ],
                               ),
                             ],
-                            Icon(context.isRtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, size: 18, color: context.accentText),
+                            Icon(Icons.chevron_right_rounded, size: 18, color: context.accentText),
                           ],
                         ),
                         if (existing != null && allocated > 0) ...[

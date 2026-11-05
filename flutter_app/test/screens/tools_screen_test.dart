@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tool_affordability')), findsOneWidget);
     expect(find.text('الأدوات'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_left_rounded), findsWidgets);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

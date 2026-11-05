@@ -4,6 +4,8 @@ import 'package:budget_tracker/widgets/nafaqah/wife_allowance_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/settings_test_app.dart';
+
 Widget _host(AllowanceStatus allowance, {bool viewerIsWife = false}) => MaterialApp(
       localizationsDelegates: const [AppLocalizationsDelegate()],
       supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
@@ -57,5 +59,37 @@ void main() {
     expect(const AllowanceStatus(spent: 200, remaining: -200).hasAllowance, isFalse);
     expect(const AllowanceStatus(allocated: 100, spent: 150, remaining: -50).isOverspent, isTrue);
     expect(const AllowanceStatus(isSet: true, allocated: 100, spent: 50, remaining: 50).isOverspent, isFalse);
+  });
+
+  group('WifeAllowanceCard word integrity at large text (TASK-08)', () {
+    setUpAll(() async {
+      await loadRealFontMetrics();
+    });
+
+    for (final lang in ['en', 'ar', 'ur']) {
+      for (final scale in [1.5, 2.0]) {
+        testWidgets('stat labels never break mid-word in $lang at x$scale scale on 320px screen', (tester) async {
+          useViewport(tester, width: 320, height: 1200);
+          await tester.pumpWidget(
+            settingsTestApp(
+              const WifeAllowanceCard(
+                householdId: 'hh',
+                wife: NafaqahWife(
+                  id: 'w1',
+                  displayName: 'Sara',
+                  allowance: AllowanceStatus(cycleKey: '2026-11', isSet: true, allocated: 500, spent: 200, remaining: 300),
+                ),
+                cycleKey: '2026-11',
+              ),
+              lang: lang,
+              scale: scale,
+              scaffold: false,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(brokenWords(tester, find.byType(WifeAllowanceCard)), isEmpty);
+        });
+      }
+    }
   });
 }
