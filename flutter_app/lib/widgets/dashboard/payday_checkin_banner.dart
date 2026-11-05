@@ -168,7 +168,7 @@ class _PaydayCheckinBannerState extends State<PaydayCheckinBanner> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.accentText,
+              backgroundColor: context.primaryButtonBg,
               foregroundColor: context.primaryButtonFg,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               minimumSize: const Size(48, 40),

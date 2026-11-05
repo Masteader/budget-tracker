@@ -1002,7 +1002,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   children: [
                     Icon(Icons.file_download_outlined, size: 18, color: context.infoText),
                     const SizedBox(width: 10),
-                    Text(context.tr('export_csv')),
+                    Flexible(child: Text(context.tr('export_csv'))),
                   ],
                 ),
               ),
@@ -1013,7 +1013,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
                   children: [
                     Icon(Icons.picture_as_pdf_outlined, size: 18, color: context.dangerColor),
                     const SizedBox(width: 10),
-                    Text(context.tr('export_pdf')),
+                    Flexible(child: Text(context.tr('export_pdf'))),
                   ],
                 ),
               ),

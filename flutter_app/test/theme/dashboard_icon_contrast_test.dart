@@ -114,6 +114,15 @@ void main() {
         expect(contrast(Colors.white, color), greaterThanOrEqualTo(4.5),
             reason: 'White icon must reach >= 4.5:1 contrast on gradient color $color');
       }
+
+      // From the theme's tokens, under a rose-gold rim (S13).
+      expect(gradient.colors, const [
+        VelvetBurgundyColors.primaryDarkGradientStart,
+        VelvetBurgundyColors.primaryDark,
+        VelvetBurgundyColors.primaryDarkGradientEnd,
+      ]);
+      final border = decoration.border! as Border;
+      expect(border.top.color, VelvetBurgundyColors.roseGoldGlow.withValues(alpha: 0.6));
     });
   });
 

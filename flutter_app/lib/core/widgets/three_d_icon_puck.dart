@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/velvet_burgundy_theme.dart';
 
 /// Raised 3D circular/squircle burgundy or rose-gold icon puck
-/// casting a 45° diagonal drop shadow.
+/// casting a 45° diagonal drop shadow. In dark mode the rose-gold puck is filled
+/// with burgundy tokens under a rose-gold rim, so its white icon keeps >= 4.5:1.
 class ThreeDIconPuck extends StatefulWidget {
   final IconData? icon;
   final Widget? child;
@@ -62,9 +63,9 @@ class _ThreeDIconPuckState extends State<ThreeDIconPuck> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF8B2643),
+                      VelvetBurgundyColors.primaryDarkGradientStart,
                       VelvetBurgundyColors.primaryDark,
-                      Color(0xFF380814),
+                      VelvetBurgundyColors.primaryDarkGradientEnd,
                     ],
                   )
                 : const LinearGradient(

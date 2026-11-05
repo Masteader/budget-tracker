@@ -719,7 +719,7 @@ class _HeroCommitmentsTip extends StatelessWidget {
             if (onTap != null) ...[
               const SizedBox(width: 4),
               Icon(
-                context.isRtl ? Icons.arrow_back_ios_rounded : Icons.arrow_forward_ios_rounded,
+                Icons.arrow_forward_ios_rounded,
                 size: 9,
                 color: isDeficit ? context.dangerColor : context.textSecondary,
               ),

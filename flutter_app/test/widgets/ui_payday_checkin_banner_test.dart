@@ -1,3 +1,5 @@
+import 'package:budget_tracker/l10n/app_localizations.dart';
+import 'package:budget_tracker/theme/app_themes.dart';
 import 'package:budget_tracker/models/account.dart';
 import 'package:budget_tracker/widgets/dashboard/payday_checkin_banner.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +50,33 @@ void main() {
       expect(find.byIcon(Icons.celebration_rounded), findsOneWidget);
       expect(requestedSince, DateTime(2026, 10, 7, 9));
     });
+
+    for (final dark in [false, true]) {
+      testWidgets('${dark ? 'dark' : 'light'}: the Log Salary button reads (S12)', (tester) async {
+        await tester.pumpWidget(MaterialApp(
+          theme: dark ? AppThemes.darkTheme : AppThemes.lightTheme,
+          localizationsDelegates: const [AppLocalizationsDelegate()],
+          home: Scaffold(
+            body: PaydayCheckinBanner(
+              householdId: 'h1',
+              clock: () => DateTime(2026, 10, 27, 9),
+              salaryLookup: (hid, since) async => false,
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        final style = tester.widget<ElevatedButton>(find.byType(ElevatedButton)).style!;
+        final bg = style.backgroundColor!.resolve({})!;
+        final fg = style.foregroundColor!.resolve({})!;
+        double contrast(Color a, Color b) {
+          final la = a.computeLuminance();
+          final lb = b.computeLuminance();
+          return (la > lb ? la + 0.05 : lb + 0.05) / (la > lb ? lb + 0.05 : la + 0.05);
+        }
+
+        expect(contrast(fg, bg), greaterThanOrEqualTo(4.5));
+      });
+    }
 
     testWidgets('stays hidden when a salary was already logged', (tester) async {
       await tester.pumpWidget(_wrap(PaydayCheckinBanner(

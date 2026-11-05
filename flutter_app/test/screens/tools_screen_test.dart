@@ -1,3 +1,4 @@
+import '../support/painted_direction.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -73,7 +74,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tool_affordability')), findsOneWidget);
     expect(find.text('الأدوات'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
+    // Forward in Arabic is to the left, as painted (the glyph mirrors itself).
+    expect(paintedPointing(tester, find.byIcon(Icons.chevron_right_rounded).first), Pointing.left);
     expect(tester.takeException(), isNull);
   });
 
