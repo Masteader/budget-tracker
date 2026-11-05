@@ -757,11 +757,15 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             'sub_allocations': subAllocsPayload,
           }).eq('id', widget.existingBudget!.id);
         } else {
+          // This cycle's row only (by key, or by month for a legacy row): another
+          // cycle's row keeps its cycle and history.
           final existingCheck = await supabase
               .from('budgets')
               .select('id')
               .eq('household_id', widget.householdId)
               .eq('category_code', widget.categoryCode)
+              .or('cycle_key.eq.$cycleKey,month.eq.$monthStr')
+              .limit(1)
               .maybeSingle();
 
           if (existingCheck != null) {
@@ -784,6 +788,12 @@ class _SubBudgetAllocationDialogState extends State<SubBudgetAllocationDialog> {
             });
           }
         }
+        // A budgeted category is active for the household (the sub-allocation
+        // API does the same); its open-cycle spending counts in the budget.
+        await supabase.from('household_category_settings').upsert(
+          {'household_id': widget.householdId, 'category_code': widget.categoryCode, 'is_active': true},
+          onConflict: 'household_id,category_code',
+        );
       }
 
       if (mounted) {

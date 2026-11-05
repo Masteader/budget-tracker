@@ -83,7 +83,9 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
   Map<String, String> get _nafaqahRequestFields =>
       _nafaqah.requestFields(_nafaqahClass, chosenWifeId: _nafaqahWifeId);
 
-  static const List<String> _categories = CategoryCatalog.pickerCodes;
+  /// The picker's codes plus the chosen one when the list does not offer it (a
+  /// household's own category), so the preview's category is never swapped.
+  List<String> get _categories => CategoryCatalog.pickerCodesIncluding(_selectedCategory);
 
   @override
   void initState() {
@@ -162,7 +164,7 @@ class _BatchItemReviewSheetState extends State<BatchItemReviewSheet> {
             _merchantCtrl.text = merchant;
             _amountCtrl.text = amount > 0 ? amount.toStringAsFixed(2) : '';
             _vatCtrl.text = vat > 0 ? vat.toStringAsFixed(2) : '0.00';
-            _selectedCategory = _categories.contains(cat) ? cat : 'OPEX-GROCERY';
+            _selectedCategory = cat.trim().isEmpty ? 'OPEX-GROCERY' : CategoryCatalog.normalize(cat);
             _isAnalyzing = false;
             _isOfflineDraft = res['is_offline_draft'] as bool? ?? false;
             _applyNafaqahPreview(res);
