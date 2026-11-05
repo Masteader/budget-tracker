@@ -75,6 +75,28 @@ DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
 DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_")
 
+# Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
+# REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
+# household_id column. The release runs the two first, then the batch.
+LIVE_MISSING = ("20261026120000", "20261101000100")
+# 46 rows come from the chain; live has 4 more, made through the API ('sub-' codes).
+LIVE_SEED_SQL = """
+INSERT INTO public.cost_control_sub_categories (parent_code, sub_code, name_en, name_ar) VALUES
+    ('OPEX-MISC', 'sub-gym-membership', 'Gym membership', 'اشتراك النادي'),
+    ('OPEX-MISC', 'sub-pet-food', 'Pet food', 'طعام الحيوانات'),
+    ('OPEX-SHOPPING', 'sub-gifts', 'Gifts', 'هدايا'),
+    ('OPEX-DINING', 'sub-work-lunch', 'Work lunch', 'غداء العمل');
+DO $$
+BEGIN
+    IF (SELECT count(*) FROM public.cost_control_sub_categories) <> 50 THEN
+        RAISE EXCEPTION 'live replica should hold 50 sub-category rows';
+    END IF;
+END $$;
+CREATE SCHEMA IF NOT EXISTS rollout_check;
+CREATE TABLE rollout_check.sub_categories_before AS
+    SELECT id, parent_code, sub_code, name_en, name_ar FROM public.cost_control_sub_categories;
+"""
+
 
 def migration_replay_order(migration_dir):
     """Return migration paths sorted by filename, honouring REPLAY_DEPENDENCIES."""
@@ -178,13 +200,15 @@ def run_sql_text(sql, db_name):
         raise SystemExit(f"Rollout SQL failed: {proc.stderr.decode('utf-8', errors='replace')}")
 
 
-def rollout_order_check(db_name, test_files, suffix="rollout", skip=()):
+def rollout_order_check(db_name, test_files, suffix="rollout", skip=(), seed_sql=None, first=()):
     """Builds the order production gets, and runs the tests against it. Returns what failed.
 
     Production has no migration history: files are run by hand. Some go out early as standalone
     hotfixes, so the chain later runs around them. A later file that redefines what a hotfix fixed
     would quietly undo it, and a filename-order rebuild can never see that, because the hotfix runs
     after it there. ``skip`` leaves older files out, for a database that drifted from the chain.
+    ``seed_sql`` then makes it look like that database, and ``first`` lists older files the
+    release runs before the batch, in that order, after the hotfixes.
 
     Order: everything before the batch, less ``skip``; what has already run by hand on live; the
     hotfixes; the batch in filename order WITHOUT the hotfixes; the tests. Then the files an
@@ -196,6 +220,8 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=()):
           + (f", without {', '.join(skip)}" if skip else ""))
     rebuild_database(rollout_db, stop_before=ROLLOUT_BATCH, skip=skip)
     run_sql_text(ROLLOUT_ALREADY_ON_LIVE, rollout_db)
+    if seed_sql:
+        run_sql_text(seed_sql, rollout_db)
 
     def apply(paths, label):
         for path in paths:
@@ -209,8 +235,9 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=()):
         subprocess.run(["dropdb", "--if-exists", rollout_db], capture_output=True, text=True)
 
     hotfixes = migrations_of(ROLLOUT_HOTFIXES)
-    failed = apply(hotfixes, "hotfix") or apply(
-        [p for p in migrations_of([ROLLOUT_BATCH[:8]]) if p not in hotfixes], "batch migration")
+    failed = (apply(hotfixes, "hotfix")
+              or apply(migrations_of(first), "older migration run first")
+              or apply([p for p in migrations_of([ROLLOUT_BATCH[:8]]) if p not in hotfixes], "batch migration"))
     if failed:
         drop()
         return failed
@@ -291,11 +318,12 @@ def main():
     # A whole rebuild also proves the order production runs the files in.
     rollout_failed = []
     if args.rebuild and not args.stop_before and not args.tests:
-        for suffix, skip, files in (
-            ("rollout", (), test_files),
-            ("drift", DRIFT_MISSING, [t for t in test_files if os.path.basename(t).startswith(DRIFT_TESTS)]),
+        for suffix, skip, files, seed, first in (
+            ("rollout", (), test_files, None, ()),
+            ("drift", DRIFT_MISSING, [t for t in test_files if os.path.basename(t).startswith(DRIFT_TESTS)], None, ()),
+            ("live", LIVE_MISSING, test_files, LIVE_SEED_SQL, LIVE_MISSING),
         ):
-            scenario_failed = rollout_order_check(db_name, files, suffix=suffix, skip=skip)
+            scenario_failed = rollout_order_check(db_name, files, suffix=suffix, skip=skip, seed_sql=seed, first=first)
             print(f"Rollout order ({suffix}): {len(files)} test files, {len(scenario_failed)} failed")
             for f in scenario_failed:
                 print(f"  - {suffix}: {os.path.basename(f)}")

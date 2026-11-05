@@ -34,7 +34,13 @@ Create a Railway Cron service from the same image as the API:
 | `ACCOUNT_DELETION_PURGE_ENABLED` | Leave unset until approved. Only the exact value `1` enables it. |
 | `ACCOUNT_DELETION_EMAILS_ENABLED` | Leave unset until reminder emails to real users are approved. Only the exact value `1` enables them, and only with the purge switch on too. |
 
-Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. Their run order is in [the owner actions](../review/OWNER_ACTIONS.md#supabase). Live has drifted from the chain, so first run section 5 of `docs/review/audit/account_deletion_preflight_checks.sql` to see what it has. `20261105000500` is already on live. A whole `run_tests.py --rebuild` also runs the suite in the hotfix-first order and on a database without `20261026120000`.
+Railway does not start a run while the previous one is active. Apply the migrations first (rule 01), because the worker calls functions they create. The exact production order, with a read-only check before and after each file, is in [the owner actions](../review/OWNER_ACTIONS.md#supabase). In short, after re-running section 5 of `docs/review/audit/account_deletion_preflight_checks.sql`:
+
+1. The two older files live is missing: `20261026120000`, then `20261101000100`.
+2. `20261105000500` is already on live. Re-running it is harmless.
+3. `20261105000000` to `000400`, then `000600`, `000700`, `000800` and `000900`.
+
+A whole `run_tests.py --rebuild` runs the suite on live's measured state in this order.
 
 ## The safety switch
 

@@ -122,16 +122,28 @@ None of this is done, and nothing is deployed. Each step needs explicit approval
 - Purges and emails have separate switches. `ACCOUNT_DELETION_PURGE_ENABLED=1` runs jobs and developer alerts. `ACCOUNT_DELETION_EMAILS_ENABLED=1` emails account holders and household members, only with the purge switch on too, and needs its own approval. To enable purges before approving reminders, set only the first: failure alerts still reach the developer, and completion emails are skipped for those accounts for good. See [the runbook](../runbooks/account-deletion-purge.md#the-email-switch).
 
 ### Supabase
-- **Live has drifted from the migration chain.** Read-only checks on 2026-11-05 found no `cost_control_templates` table and neither `replace_household_category` nor `seed_household_default_taxonomy`, so at least `20261026120000` never ran there, and possibly others. Live runs Postgres 17.6; the local tests run on 16.
-  - **First, establish what live has.** Run section 5 of `docs/review/audit/account_deletion_preflight_checks.sql`, read-only. It lists, per `2026102*` to `202611*` migration, which of its objects exist. Then run section 4. Decide nothing about the batch until you have both.
-  - **Don't apply missing older migrations as part of this rollout.** Whether and how to bring live back in line is a separate decision for you, and it needs its own plan.
-- Apply the batch one file per run, in filename order, with these notes, because production has no migration history and nothing records what has run:
+- **Live had drifted from the migration chain.** Section 5 of `docs/review/audit/account_deletion_preflight_checks.sql` (read-only) found exactly two older files missing on 2026-11-05: `20261026120000_household_autonomous_taxonomy.sql` and `20261101000100_nafaqah_wife_account_owner_guard.sql`. You approved running both in this release, **before** the batch. Live runs Postgres 17.6; the local tests run on 16.
+  - **Before starting, re-run section 5.** If anything else is missing, stop: the order below assumes only those two.
+  - `supabase/tests/run_tests.py --rebuild` reproduces live's state and runs this exact order with every test green (the `live` scenario): the chain without the two files, `000500` and `REVOKE TRUNCATE` on `inquiries` already done, and 50 sub-category rows. Test 48 checks all 50 rows come through unchanged, once each.
+- **Production run order**, one file per run. Run the read-only pre-check first, then the file, then the post-check, and stop if a check is not as stated:
+
+| # | File | Pre-check (read-only) | Post-check (read-only) |
+|---|---|---|---|
+| 1 | `20261026120000_household_autonomous_taxonomy` | Section 5 lists this file and `20261101000100` as missing, and nothing else. `SELECT count(*) FROM cost_control_sub_categories` is 50. | Section 5 shows this file present. The count is still 50, and `SELECT count(*) FROM cost_control_sub_categories WHERE household_id IS NOT NULL` is 0. |
+| 2 | `20261101000100_nafaqah_wife_account_owner_guard` | `SELECT count(*) FROM transactions WHERE nafaqah_class IS NOT NULL` is 0, so the guard rejects nothing. | Section 5 shows this file present. |
+| 3 | `20261105000500` | Already applied (verified 2026-11-05). Skip it, or re-run it; that is harmless. | Section 1a: `rpc_subtracts_too` is false. |
+| 4–8 | `000000`, `000100`, `000200`, `000300`, `000400` | Section 4 (all of it) before `000000`. | Section 4d after `000000` shows only `households.deletion_requested_by`, and after `000100` no rows. Section 5 shows each file present. |
+| 9 | `000600` | Section 2a lists the anon insert policy on `inquiries` and the anon policy on templates. | Section 2a returns no rows. In 2b, everything is false except authenticated reading templates. In 2c, everything is false. |
+| 10 | `000700` | Section 3a lists `_select_autonomous` and the insert, update and delete policies. | Section 3a lists only `cost_control_sub_categories_select_scoped`. In 3b, anon has nothing and authenticated can only select. |
+| 11–12 | `000800`, `000900` | None | Section 5 shows each file present. |
+
+  - **Window between steps 1 and 10.** `20261026120000` opens three things: anonymous read of templates, client execute of the two taxonomy functions, and signed-in read of every household's NULL-household sub-category names plus client writes to them. `000600` and `000700` close them. Run steps 1 to 10 back to back. Both files are safe to run early and again, so if you'd rather close the window at once, run `000600` and `000700` right after step 1, then again in their place.
+- Notes on the batch, because production has no migration history and nothing records what has run:
   - **The void hotfix is on live** (verified 2026-11-05). `20261105000500_void_income_single_subtraction.sql` went first, as a standalone hotfix. Running it again is harmless.
   - **`20261105000000` no longer defines `void_income_record`,** so running it after the hotfix doesn't bring the double subtraction back. It makes `income_records.user_id` nullable, so never run it on a database without `000500`: with the older function, any member could void the income of someone deleted out of band.
-  - **`REVOKE TRUNCATE` on `public.inquiries` is being run by hand.** `20261105000600_limit_anonymous_contact_form.sql` is fine before or after it. On a database without the templates table or the two functions, it skips those parts with a notice and still locks down `inquiries`.
+  - **`REVOKE TRUNCATE` on `public.inquiries` has been run by hand.** `20261105000600_limit_anonymous_contact_form.sql` is fine after it, and removes the anonymous insert policy still on `inquiries`. On a database without the templates table or the two functions, it skips those parts with a notice and still locks down `inquiries`.
   - **`20261105000700_sub_categories_household_scope.sql`** creates its read policy only where `cost_control_sub_categories.household_id` exists, which `20261026120000` adds. Without that column it leaves the existing read policy alone, says so in a notice, and still removes client writes.
-  - `000600` and `000700` are safe to run again. A whole `supabase/tests/run_tests.py --rebuild` proves the batch on the full chain, in the hotfix-first order, and on a database built without `20261026120000`.
-  - Order: `000500` is done. Then `000000`, `000100`, `000200`, `000300`, `000400`, `000600`, `000700`, `000800`, `000900`, each only once the preflight has shown what it will run against.
+  - `000600` and `000700` are safe to run again. A whole `supabase/tests/run_tests.py --rebuild` proves the batch on the full chain, in the hotfix-first order, on a database built without `20261026120000`, and on live's measured state.
 - Confirm the Magic Link email template includes `{{ .Token }}`. The app's forgotten-password fallback at re-auth asks for that code.
 - Drop `budgets_spent_backup_20261019` when ready. It exists only on live, and the purge does not touch it.
 
