@@ -164,4 +164,10 @@ The address you pass with `--email` stays in your shell history, so clear it aft
 
 - After deletion a JWT stays valid until it expires, but with the row gone RLS and membership checks return nothing.
 - Completion email: if the worker dies between the Auth delete and the send, that email is lost, because the address is gone.
+- **The email sweep has limits.** `prepare_account_purge` replaces the account's address with `deleted_member` through `account_deletion_replace_everywhere`.
+  - **What it covers:** every `text`, `varchar`, `json` and `jsonb` column of every table in `public`, and nothing outside `public`. It matches the whole address only, ignoring letter case.
+  - **What it misses:**
+    - `text[]` columns: the `keywords` of `cost_control_codes`, `cost_control_sub_categories` and `cost_control_templates`.
+    - A length-limited `varchar(n)` value that the 14-character `deleted_member` would push past `n`. That can only happen with an address shorter than 14 characters, in a nearly full `transactions.sub_category` (50) or a sub-category or template name (100). Such a value keeps the address, so the purge does not fail.
+  - The page promises the address is replaced in other members' free text "wherever it appears", which these two cases do not meet. See the owner actions.
 - Developer mailbox copies, Railway logs, Supabase backups and `auth.audit_log_entries` are out of reach. The public page and the privacy policy disclose this.

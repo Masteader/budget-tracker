@@ -204,4 +204,9 @@ ORDER BY created_at;
 
 ### Review
 - **Legal:** confirm the position on retained rows ("Deleted member") under PDPL and store policy.
+- **The email sweep's limits.** At the purge, the account's address is replaced with `deleted_member` in every `text`, `varchar`, `json` and `jsonb` column in `public`, matching the whole address and ignoring letter case. Details are in [the runbook](../runbooks/account-deletion-purge.md#limits). Two places are not covered:
+  - `text[]` keyword columns (`cost_control_codes`, `cost_control_sub_categories`, `cost_control_templates`).
+  - A length-limited `varchar` value the replacement would overflow. This only happens with an address under 14 characters in a nearly full sub-category code or name, and that value keeps the address.
+
+  The page's list of what is deleted (login, email address, display name, form messages) stays true. One sentence goes further: other members' free text stays "except that your email address is replaced wherever it appears", which the two cases above do not meet. Decide whether to narrow that sentence (in ar, en and ur) or accept the residue. Either way, nothing outside `public` is touched.
 - **Native speakers:** review the Arabic and Urdu in `ai_service/account_deletion_notices.py` and in `deleteAccountTranslations` (`web_app/src/i18n/translations.ts`).
