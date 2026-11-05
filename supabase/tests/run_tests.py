@@ -73,12 +73,15 @@ REVOKE TRUNCATE ON public.inquiries FROM anon, authenticated;
 # neither function of 20261026120000. The drift scenario builds the chain without that file.
 DRIFT_MISSING = ("20261026120000",)
 # Tests that do not need what the drifted database lacks (42 and 43 test that migration's objects).
-DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_")
+DRIFT_TESTS = ("36_", "37_", "38_", "39_", "40_", "41_", "44_", "45_", "46_", "47_", "49_")
 
 # Live as measured read-only on 2026-11-05: exactly these two older files never ran, 000500 and
 # REVOKE TRUNCATE on inquiries did, and cost_control_sub_categories holds 50 rows with no
 # household_id column. The release runs the two first, then the batch.
 LIVE_MISSING = ("20261026120000", "20261101000100")
+# The production order of those, with 000600 and 000700 moved up: they close at once what
+# 20261026120000 opens, so they run right after it, and again (harmlessly) after the tests.
+LIVE_FIRST = ("20261026120000", "20261105000600", "20261105000700", "20261101000100")
 # 46 rows come from the chain; live has 4 more, made through the API ('sub-' codes).
 LIVE_SEED_SQL = """
 INSERT INTO public.cost_control_sub_categories (parent_code, sub_code, name_en, name_ar) VALUES
@@ -207,11 +210,12 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=(), seed_sql
     hotfixes, so the chain later runs around them. A later file that redefines what a hotfix fixed
     would quietly undo it, and a filename-order rebuild can never see that, because the hotfix runs
     after it there. ``skip`` leaves older files out, for a database that drifted from the chain.
-    ``seed_sql`` then makes it look like that database, and ``first`` lists older files the
-    release runs before the batch, in that order, after the hotfixes.
+    ``seed_sql`` then makes it look like that database, and ``first`` lists files the release
+    runs before the rest of the batch, in that order, after the hotfixes: older files, and batch
+    files moved forward.
 
     Order: everything before the batch, less ``skip``; what has already run by hand on live; the
-    hotfixes; the batch in filename order WITHOUT the hotfixes; the tests. Then the files an
+    hotfixes; ``first``; the rest of the batch in filename order; the tests. Then the files an
     operator may run again, which must be harmless, and the tests again. A migration that fails is
     reported as ``migration:<file>`` and ends the scenario.
     """
@@ -235,9 +239,12 @@ def rollout_order_check(db_name, test_files, suffix="rollout", skip=(), seed_sql
         subprocess.run(["dropdb", "--if-exists", rollout_db], capture_output=True, text=True)
 
     hotfixes = migrations_of(ROLLOUT_HOTFIXES)
+    # In the order given (the production run order), not in filename order.
+    run_first = [m for prefix in first for m in migrations_of([prefix])]
     failed = (apply(hotfixes, "hotfix")
-              or apply(migrations_of(first), "older migration run first")
-              or apply([p for p in migrations_of([ROLLOUT_BATCH[:8]]) if p not in hotfixes], "batch migration"))
+              or apply(run_first, "migration run first")
+              or apply([p for p in migrations_of([ROLLOUT_BATCH[:8]]) if p not in hotfixes and p not in run_first],
+                       "batch migration"))
     if failed:
         drop()
         return failed
@@ -321,7 +328,7 @@ def main():
         for suffix, skip, files, seed, first in (
             ("rollout", (), test_files, None, ()),
             ("drift", DRIFT_MISSING, [t for t in test_files if os.path.basename(t).startswith(DRIFT_TESTS)], None, ()),
-            ("live", LIVE_MISSING, test_files, LIVE_SEED_SQL, LIVE_MISSING),
+            ("live", LIVE_MISSING, test_files, LIVE_SEED_SQL, LIVE_FIRST),
         ):
             scenario_failed = rollout_order_check(db_name, files, suffix=suffix, skip=skip, seed_sql=seed, first=first)
             print(f"Rollout order ({suffix}): {len(files)} test files, {len(scenario_failed)} failed")

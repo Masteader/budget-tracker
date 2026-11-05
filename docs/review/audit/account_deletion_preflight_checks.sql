@@ -518,7 +518,10 @@ WITH created(migration, kind, object_name, on_table, in_full_chain) AS (VALUES
     ('20261105000800_account_deletion_operator_request', 'column', 'operator_cancel_reference', 'account_deletion_requests', True),
     ('20261105000800_account_deletion_operator_request', 'constraint', 'account_deletion_requests_operator_recorded', 'account_deletion_requests', True),
     ('20261105000800_account_deletion_operator_request', 'constraint', 'account_deletion_requests_user_has_no_operator', 'account_deletion_requests', True),
-    ('20261105000900_account_deletion_notice_windows', 'function', 'list_account_deletion_notices_due', NULL, True)
+    ('20261105000900_account_deletion_notice_windows', 'function', 'list_account_deletion_notices_due', NULL, True),
+    ('20261105001000_inactive_category_budgets', 'function', 'budget_spent_from_transactions', NULL, True),
+    ('20261105001000_inactive_category_budgets', 'function', 'budget_activation_counts_open_cycle', NULL, True),
+    ('20261105001000_inactive_category_budgets', 'trigger', 'trg_budget_activation_counts_open_cycle', 'budgets', True)
 ), checked AS (
     SELECT c.*,
            CASE c.kind
