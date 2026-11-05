@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime, timezone
 
 from e2e_harness.zatca import tlv_qr
 
@@ -97,7 +98,9 @@ def test_logic01_old_app_edit_of_a_manual_row_keeps_the_new_payer(world, db):
     row = {  # buildManualExpenseRow(), roommate mode: Omar paid 200 for all
         "id": str(uuid.uuid4()), "household_id": flat.id, "user_id": omar.id, "amount": 200, "currency": "SAR",
         "merchant": "Groceries", "category_code": "OPEX-GROCERY", "spent_by": "both", "beneficiary_type": "all_peers",
-        "beneficiary_id": "all_peers", "account_id": None, "source": "manual", "timestamp": "2026-10-21T10:00:00Z",
+        # Now, not a fixed date: settlement-v2 reads the current cycle only.
+        "beneficiary_id": "all_peers", "account_id": None, "source": "manual",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "notes": f"Manual: Groceries | PaidBy: {omar.id} | Beneficiary: all_peers | SpentBy: both",
         "items": [{"name": "Groceries", "price": 200, "quantity": 1}],
     }

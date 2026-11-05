@@ -149,6 +149,15 @@ def test_family_without_a_wife_is_a_family_with_no_registered_wives(world):
     assert ctx.household_type == "family" and ctx.is_family and ctx.wives == [] and ctx.settlement_mode == "family_nafaqah"
 
 
+def test_family_without_a_wife_is_not_asked_for_a_provider(world):
+    """husband_id needs a wife, so the old check showed "no household provider" with one set, for good."""
+    world.tables["household_memberships"] = [
+        m for m in world.tables["household_memberships"] if not (m["household_id"] == FAMILY and m["user_id"] == WIFE)
+    ]
+    ctx = ns.load_family_context(FAMILY)
+    assert ctx.wives == [] and ctx.husband_id is None and ctx.needs_provider is False
+
+
 def test_family_with_zero_wives_never_splits_50_50(world):
     world.tables["household_memberships"] = [
         m for m in world.tables["household_memberships"] if not (m["household_id"] == FAMILY and m["user_id"] == WIFE)

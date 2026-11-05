@@ -263,8 +263,12 @@ class FamilyContext:
 
     @property
     def needs_provider(self) -> bool:
-        """A family without a (valid) provider: new classified expenses are refused until set."""
-        return self.is_family and not self.husband_id
+        """A family with a wife and no (valid) provider: new classified expenses are refused until set.
+
+        husband_id needs a wife, and without one there is nothing to classify, so a family with no
+        wife is never asked, or the notice would show with a provider set and no way to clear it.
+        """
+        return self.is_family and bool(self.wives) and not self.husband_id
 
     def is_member(self, user_id: Optional[str]) -> bool:
         return bool(user_id) and str(user_id) in self.members

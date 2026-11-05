@@ -160,4 +160,20 @@ def test_wife_leaves_and_her_ledger_goes_with_her(world, db, llm):
                       (family.id,))
     assert float(spent) == 250.0  # the former personal purchase is an ordinary expense now
     summary = husband.api.get(f"/households/{family.id}/nafaqah").json()
-    assert summary["mode"] == "not_family" and summary["wives"] == []
+    # bacdf51: a 'family' household stays a family with no wives, so it can never fall into a split.
+    assert summary["mode"] == "family_nafaqah" and summary["wives"] == []
+    assert summary["household_type"] == "family"
+    # The provider is still set, so nothing should ask for one (it appeared with no way to clear it).
+    assert summary["provider_user_id"] == husband.id and summary["needs_provider"] is False
+
+    # No debt survives her, and nothing is split between the people left.
+    v1 = husband.api.get(f"/households/{family.id}/settlement").json()
+    assert v1["mode"] == "family_nafaqah"
+    assert (v1["owed_to_me"], v1["owed_to_partner"], v1["settlement_amount"]) == (0.0, 0.0, 0.0)
+    v2 = husband.api.get(f"/households/{family.id}/settlement-v2").json()
+    assert v2["family_summary"]["wife_reimbursement_owed"] == 0.0 and v2["pairwise_debts"] == []
+
+    # A new expense carries no class, because there is no wife to attach it to.
+    after = world.chat_commit(husband, family, llm, merchant="Tamimi R9d", amount=40, category_code="OPEX-GROCERY",
+                              paid_by="me", beneficiary="both")
+    assert after.status_code == 200 and after.json()["nafaqah_class"] is None, after.text

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 NEW_CODES = {"OPEX-HOUSING", "OPEX-EDUCATION", "OPEX-DOMESTIC-HELP", "OPEX-FAMILY-SUPPORT",
              "OPEX-CHARITY", "OPEX-TRANSPORT", "OPEX-INSURANCE", "OPEX-REMITTANCE"}
+DEFAULT_ACTIVE_NEW_CODES = {"OPEX-FAMILY-SUPPORT"}
 
 
 # ─── R10: frequency + next_due_at ─────────────────────────────────────────────
@@ -85,9 +86,12 @@ def test_new_categories_are_available_not_budgeted_until_added(world, db):
     cats = hh.members[0].api.get(f"/households/{hh.id}/categories")
     assert cats.status_code == 200, cats.text
     inactive = {c["code"]: c["category"] for c in cats.json()["inactive"]}
-    assert NEW_CODES <= set(inactive), inactive
+    active = {c["code"] for c in cats.json()["active"]}
+    # 4b95d12 made Family Support active by default (initial_core); the others wait to be added.
+    assert NEW_CODES - DEFAULT_ACTIVE_NEW_CODES <= set(inactive), inactive
     assert inactive["OPEX-HOUSING"] == "Housing & Rent" and inactive["OPEX-CHARITY"] == "Charity & Zakat"
-    assert not NEW_CODES & {c["code"] for c in cats.json()["active"]}
+    assert not (NEW_CODES - DEFAULT_ACTIVE_NEW_CODES) & active
+    assert DEFAULT_ACTIVE_NEW_CODES <= active and not DEFAULT_ACTIVE_NEW_CODES & set(inactive)
 
     subs = hh.members[0].api.get("/budgets/sub-categories", params={"parent_code": "OPEX-HOUSING",
                                                                      "household_id": hh.id})
