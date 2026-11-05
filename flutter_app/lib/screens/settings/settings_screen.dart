@@ -258,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// Error text for a failed household-setting save (MOB-27).
   String _settingSaveError(Object e) =>
-      e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : e.toString();
+      e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : context.tr('set_failed_save_payday');
 
   // MOB-27: payday, income and rollover are saved server-first; the local
   // cache and on-screen value change only after the server confirmed, so a
@@ -281,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (mounted) {
         AppSnackBar.showError(
           context,
-          context.trArgs('set_failed_save_payday', {'error': _settingSaveError(e)}),
+          _settingSaveError(e),
           title: context.tr('set_payday_error'),
         );
       }
@@ -453,7 +453,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            context.trArgs('set_failed_leave_household', {'error': e}),
+            context.tr('set_failed_leave_household'),
             title: context.tr('set_leave_household_error'),
           );
         }
@@ -530,7 +530,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    context.trArgs('set_failed_join', {'error': householdJoinErrorText(context, e)}),
+                    householdJoinErrorText(context, e),
                     title: context.tr('set_join_error'),
                   );
                 }
@@ -620,7 +620,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 if (mounted) {
                   AppSnackBar.showError(
                     context,
-                    context.trArgs('set_failed_create_household', {'error': e}),
+                    context.tr('set_failed_create_household'),
                     title: context.tr('set_creation_error'),
                   );
                 }
@@ -661,7 +661,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            context.trArgs('set_failed_add_member', {'error': e}),
+            context.tr('set_failed_add_member'),
             title: context.tr('set_error'),
           );
         }
@@ -729,7 +729,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         if (mounted) {
           AppSnackBar.showError(
             context,
-            context.trArgs('set_failed_remove_dependent', {'error': e}),
+            context.tr('set_failed_remove_dependent'),
             title: context.tr('set_error'),
           );
         }

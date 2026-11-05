@@ -428,7 +428,7 @@ class HouseholdSetupCard extends StatelessWidget {
       if (context.mounted) {
         AppSnackBar.showError(
           context,
-          context.trArgs('set_failed_save_payday', {'error': _saveError(context, e)}),
+          _saveError(context, e),
           title: context.tr('set_payday_error'),
         );
       }
@@ -439,7 +439,7 @@ class HouseholdSetupCard extends StatelessWidget {
 
 
   String _saveError(BuildContext context, Object e) =>
-      e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : e.toString();
+      e is HouseholdSettingNotSavedException ? context.tr('setting_not_saved_server') : context.tr('set_failed_save_payday');
 
   Future<bool> _defaultCreateBudget(String code, String name, double amount) async {
     try {

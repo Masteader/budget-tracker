@@ -117,7 +117,7 @@ class _HouseholdSwitchSheetState extends State<HouseholdSwitchSheet> {
       }
     } catch (e) {
       if (mounted) {
-        AppSnackBar.showError(context, e.toString(), title: context.tr('hss_failed'));
+        AppSnackBar.showError(context, context.tr('load_error_generic'), title: context.tr('hss_failed'));
       }
     } finally {
       if (mounted) setState(() => _switchingToId = null);

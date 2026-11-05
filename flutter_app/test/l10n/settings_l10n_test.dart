@@ -157,4 +157,46 @@ void main() {
       });
     }
   });
+
+  group('settings and settlement error keys have no raw error placeholder (TASK-04)', () {
+    const errorKeys = [
+      'set_failed_save_payday',
+      'set_failed_save_income',
+      'set_failed_save_rollover_policy',
+      'set_failed_leave_household',
+      'set_failed_join',
+      'set_failed_create_household',
+      'set_failed_add_member',
+      'set_failed_remove_dependent',
+      'set_export_error',
+      'roles_update_failed',
+      'nafaqah_provider_failed',
+      'hh_type_failed',
+      'fin_role_failed',
+      'rid_generate_failed',
+      'settle_record_failed_msg',
+    ];
+
+    for (final key in errorKeys) {
+      test('$key has no placeholder and resolves in en, ar and ur', () {
+        final en = AppLocalizations(const Locale('en')).get(key);
+        final ar = AppLocalizations(const Locale('ar')).get(key);
+        final ur = AppLocalizations(const Locale('ur')).get(key);
+
+        expect(en, isNotEmpty);
+        expect(ar, isNotEmpty);
+        expect(ur, isNotEmpty);
+
+        expect(_placeholders(en), isEmpty, reason: '$key en contains placeholder');
+        expect(_placeholders(ar), isEmpty, reason: '$key ar contains placeholder');
+        expect(_placeholders(ur), isEmpty, reason: '$key ur contains placeholder');
+
+        for (final v in [ar, ur]) {
+          expect(v, isNot(key));
+          expect(v, isNot(en));
+          expect(RegExp('[؀-ۿ]').hasMatch(v), isTrue, reason: v);
+        }
+      });
+    }
+  });
 }

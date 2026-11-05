@@ -97,5 +97,5 @@ String householdJoinErrorText(BuildContext context, Object error) {
     return context.tr('action_failed');
   }
   if (error is PostgrestException) return error.message;
-  return error.toString();
+  return context.tr('load_error_generic');
 }

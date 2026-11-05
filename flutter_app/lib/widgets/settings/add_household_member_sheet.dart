@@ -128,7 +128,7 @@ class _AddHouseholdMemberSheetState extends State<AddHouseholdMemberSheet> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = e.toString());
+        setState(() => _errorMessage = context.tr('load_error_generic'));
       }
     } finally {
       if (mounted) {

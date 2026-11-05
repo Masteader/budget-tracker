@@ -1,3 +1,4 @@
+import 'package:budget_tracker/services/household_join.dart';
 // SettingsScreen with a real signed-in household (fake HTTP only): section
 // order, what lives where, overflow in every language and theme, and the export
 // flow's strings. UX-15 still holds: sections fold, nothing is removed.
@@ -638,4 +639,24 @@ void main() {
       expect(find.byIcon(Icons.checklist_rtl_rounded), findsOneWidget);
     });
   });
+
+  group('friendly error messages without raw exceptions (TASK-04)', () {
+    testWidgets('householdJoinErrorText returns load_error_generic for raw exceptions', (tester) async {
+      await _pump(tester);
+      final ctx = tester.element(find.byType(SettingsScreen));
+      final en = AppLocalizations(const Locale('en'));
+
+      final genericError = householdJoinErrorText(ctx, Exception('SocketException: Connection refused'));
+      expect(genericError, en.get('load_error_generic'));
+      expect(genericError, isNot(contains('SocketException')));
+      expect(genericError, isNot(contains('Exception')));
+
+      final mismatchError = householdJoinErrorText(ctx, const HouseholdJoinException('mismatch', code: 'invite_role_mismatch'));
+      expect(mismatchError, en.get('hh_invite_role_mismatch'));
+
+      final alreadyMemberError = householdJoinErrorText(ctx, const HouseholdJoinException('already', code: 'already_member'));
+      expect(alreadyMemberError, en.get('hh_already_member'));
+    });
+  });
+
 }

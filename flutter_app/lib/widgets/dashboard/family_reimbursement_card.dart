@@ -709,7 +709,7 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       } else if (nafaqahWriteRefusalOf(e) != null) {
         message = nafaqahWriteRefusalText(context, nafaqahWriteRefusalOf(e)!);
       } else {
-        message = context.trArgs('settle_record_failed_msg', {'error': e});
+        message = context.tr('settle_record_failed_msg');
       }
       AppSnackBar.showError(context, message, title: context.tr('settle_record_failed'));
       return;

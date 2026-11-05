@@ -113,7 +113,7 @@ class _RoleInviteDialogState extends State<RoleInviteDialog> {
       } else if (status == 404) {
         message = context.tr('rid_target_not_dependent');
       } else {
-        message = context.trArgs('rid_generate_failed', {'error': e});
+        message = context.tr('rid_generate_failed');
       }
       AppSnackBar.showError(context, message);
       return;

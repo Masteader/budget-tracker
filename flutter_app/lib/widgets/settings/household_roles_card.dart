@@ -133,7 +133,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       if (e.code == 'forbidden') return context.tr('roles_forbidden');
       if (e.code == 'last_admin') return context.tr('roles_last_admin');
     }
-    return context.trArgs('roles_update_failed', {'error': e});
+    return context.tr('roles_update_failed');
   }
 
   Future<void> _run(_RoleAction action, HouseholdMember member) async {
@@ -208,7 +208,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       if (e.code == 'type_change_blocked') return e.serverMessage ?? context.tr('hh_type_blocked');
       if (e.code == 'invalid') return context.tr('hh_type_invalid');
     }
-    return context.trArgs('hh_type_failed', {'error': e});
+    return context.tr('hh_type_failed');
   }
 
   String _financialRoleErrorText(Object e) {
@@ -220,7 +220,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       if (e.code == 'spouse_has_ledger') return context.tr('fin_role_spouse_has_ledger');
       if (e.statusCode == 409) return context.tr('fin_role_conflict');
     }
-    return context.trArgs('fin_role_failed', {'error': e});
+    return context.tr('fin_role_failed');
   }
 
   Future<void> _changeHouseholdType(HouseholdRoster roster) async {
@@ -404,7 +404,7 @@ class _HouseholdRolesCardState extends State<HouseholdRolesCard> {
       if (e.code == 'invalid') return context.tr('nafaqah_provider_invalid');
       if (e.code == 'not_family') return context.tr('nafaqah_provider_not_family');
     }
-    return context.trArgs('nafaqah_provider_failed', {'error': e});
+    return context.tr('nafaqah_provider_failed');
   }
 
   Future<void> _chooseProvider(HouseholdRoster roster) async {

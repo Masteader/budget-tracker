@@ -551,7 +551,7 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
       setState(() => _isSubmitting = false);
       AppSnackBar.showError(
         context,
-        context.trArgs('settle_record_failed_msg', {'error': e}),
+        context.tr('settle_record_failed_msg'),
         title: context.tr('settle_record_failed'),
       );
       return;
