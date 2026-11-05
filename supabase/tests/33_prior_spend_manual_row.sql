@@ -57,7 +57,7 @@ BEGIN
             household_id, user_id, amount, currency, merchant, category_code,
             timestamp, notes, source, account_id
         ) VALUES (
-            v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERIES',
+            v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERY',
             '2026-11-01 12:00:00+03', 'Prior spend', 'prior_adjustment', NULL
         );
     EXCEPTION
@@ -71,7 +71,7 @@ BEGIN
         id, household_id, user_id, amount, currency, merchant, category_code,
         timestamp, notes, source, account_id
     ) VALUES (
-        gen_random_uuid(), v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERIES',
+        gen_random_uuid(), v_household_id, v_user, 150.00, 'SAR', 'Prior Spend Grocery', 'OPEX-GROCERY',
         '2026-11-01 12:00:00+03', 'Prior spend adjustment', 'manual', NULL
     ) RETURNING id, cycle_key INTO v_tx_id, v_derived_key;
 

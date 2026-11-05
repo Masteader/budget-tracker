@@ -90,7 +90,7 @@ BEGIN
         id, household_id, user_id, amount, currency, merchant, category_code,
         timestamp, notes, source
     ) VALUES (
-        v_tx_id, v_household_id, v_user, 50.00, 'SAR', 'Test Notes Merchant', 'OPEX-GROCERIES',
+        v_tx_id, v_household_id, v_user, 50.00, 'SAR', 'Test Notes Merchant', 'OPEX-GROCERY',
         now(), 'TDD audit note verification', 'manual'
     );
 
@@ -103,7 +103,7 @@ BEGIN
     v_failed := false;
     BEGIN
         EXECUTE 'INSERT INTO public.transactions (household_id, user_id, amount, currency, merchant, category_code, timestamp, raw_sms, source)
-                 VALUES ($1, $2, 10.00, ''SAR'', ''Invalid raw_sms'', ''OPEX-GROCERIES'', now(), ''legacy note'', ''manual'')'
+                 VALUES ($1, $2, 10.00, ''SAR'', ''Invalid raw_sms'', ''OPEX-GROCERY'', now(), ''legacy note'', ''manual'')'
         USING v_household_id, v_user;
     EXCEPTION
         WHEN undefined_column THEN -- 42703

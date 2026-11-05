@@ -42,9 +42,9 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     -- Fully seed household with owner and nafaqah_provider_user_id
-    INSERT INTO public.households (id, name, invite_code, owner_user_id, nafaqah_provider_user_id) VALUES
-        (v_household_id, 'Test 30 Household', 'TEST30HOUSEHOLD', v_user_h, v_user_h)
-    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h, nafaqah_provider_user_id = v_user_h;
+    INSERT INTO public.households (id, name, invite_code, owner_user_id) VALUES
+        (v_household_id, 'Test 30 Household', 'TEST30HOUSEHOLD', v_user_h)
+    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h;
 
     -- Seed memberships with explicit financial roles
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role) VALUES
@@ -52,8 +52,11 @@ BEGIN
         (v_household_id, v_user_w, 'member', 'spouse')
     ON CONFLICT (household_id, user_id) DO UPDATE SET role = EXCLUDED.role, financial_role = EXCLUDED.financial_role;
 
+    -- The provider must already be a member (households_nafaqah_provider_rules).
+    UPDATE public.households SET nafaqah_provider_user_id = v_user_h WHERE id = v_household_id;
+
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, currency, is_shared_pool) VALUES
-        (v_acc_id, v_household_id, v_user_h, 'Main Account', 'checking', 1000.00, 'SAR', true)
+        (v_acc_id, v_household_id, v_user_h, 'Main Account', 'bank', 1000.00, 'SAR', true)
     ON CONFLICT (id) DO NOTHING;
 
     -- 1. Insert wife_personal with non-null account_id MUST FAIL with transactions_wife_class_no_account

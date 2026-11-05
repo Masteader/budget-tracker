@@ -30,20 +30,20 @@ END;
 $$;
 
 -- 1. Check templates table exists and has default starters
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'cost_control_templates table exists',
     (SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cost_control_templates'),
     '1'
 );
 
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'templates table has at least 7 templates',
     (SELECT (count(*) >= 7)::text FROM public.cost_control_templates),
     'true'
 );
 
 -- 2. Check cost_control_sub_categories has household_id
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'cost_control_sub_categories has household_id column',
     (SELECT count(*)::text FROM information_schema.columns 
      WHERE table_schema = 'public' 
@@ -53,7 +53,7 @@ PERFORM pg_temp.expect(
 );
 
 -- 3. Check replace_household_category function exists
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'replace_household_category function exists',
     (SELECT count(*)::text FROM pg_proc WHERE proname = 'replace_household_category'),
     '1'

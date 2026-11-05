@@ -46,18 +46,21 @@ BEGIN
         (v_user_w, 'test-w31@test.local')
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO public.households (id, name, invite_code, owner_user_id, nafaqah_provider_user_id) VALUES
-        (v_household_id, 'Test 31 Household', 'TEST31HOUSEHOLD', v_user_h, v_user_h)
-    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h, nafaqah_provider_user_id = v_user_h;
+    INSERT INTO public.households (id, name, invite_code, owner_user_id) VALUES
+        (v_household_id, 'Test 31 Household', 'TEST31HOUSEHOLD', v_user_h)
+    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h;
 
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role) VALUES
         (v_household_id, v_user_h, 'admin', 'provider'),
         (v_household_id, v_user_w, 'member', 'spouse')
     ON CONFLICT (household_id, user_id) DO UPDATE SET role = EXCLUDED.role, financial_role = EXCLUDED.financial_role;
 
+    -- The provider must already be a member (households_nafaqah_provider_rules).
+    UPDATE public.households SET nafaqah_provider_user_id = v_user_h WHERE id = v_household_id;
+
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, currency, is_shared_pool) VALUES
-        (v_acc_id, v_household_id, v_user_h, 'Main Account', 'checking', v_initial_bal, 'SAR', true),
-        (v_wife_acc_id, v_household_id, v_user_w, 'Wife Personal Account', 'checking', 1000.00, 'SAR', false)
+        (v_acc_id, v_household_id, v_user_h, 'Main Account', 'bank', v_initial_bal, 'SAR', true),
+        (v_wife_acc_id, v_household_id, v_user_w, 'Wife Personal Account', 'bank', 1000.00, 'SAR', false)
     ON CONFLICT (id) DO NOTHING;
 
     -- Temporarily disable the trigger so we can simulate legacy pre-migration rows linking wife rows to shared pool

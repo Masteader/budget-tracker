@@ -25,7 +25,7 @@ END;
 $$;
 
 -- 1. Table existence and structure
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'inquiries table exists',
     (SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inquiries'),
     '1'
@@ -50,7 +50,7 @@ INSERT INTO public.inquiries (
 );
 
 -- 3. Verify anonymous cannot read the inquiries table (0 rows returned via RLS)
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'anonymous select returns 0 rows',
     (SELECT count(*)::text FROM public.inquiries),
     '0'
@@ -58,7 +58,7 @@ PERFORM pg_temp.expect(
 
 -- 4. Reset role to postgres / service_role and verify record is present
 RESET ROLE;
-PERFORM pg_temp.expect(
+SELECT pg_temp.expect(
     'record was stored and readable by postgres',
     (SELECT count(*)::text FROM public.inquiries WHERE reference = 'ref_anon_test_001'),
     '1'

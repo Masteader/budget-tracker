@@ -45,14 +45,17 @@ BEGIN
         (v_user_w, 'test-w32@test.local')
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO public.households (id, name, invite_code, owner_user_id, nafaqah_provider_user_id) VALUES
-        (v_household_id, 'Test 32 Household', 'TEST32HOUSEHOLD', v_user_h, v_user_h)
-    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h, nafaqah_provider_user_id = v_user_h;
+    INSERT INTO public.households (id, name, invite_code, owner_user_id) VALUES
+        (v_household_id, 'Test 32 Household', 'TEST32HOUSEHOLD', v_user_h)
+    ON CONFLICT (id) DO UPDATE SET owner_user_id = v_user_h;
 
     INSERT INTO public.household_memberships (household_id, user_id, role, financial_role) VALUES
         (v_household_id, v_user_h, 'admin', 'provider'),
         (v_household_id, v_user_w, 'member', 'spouse')
     ON CONFLICT (household_id, user_id) DO UPDATE SET role = EXCLUDED.role, financial_role = EXCLUDED.financial_role;
+
+    -- The provider must already be a member (households_nafaqah_provider_rules).
+    UPDATE public.households SET nafaqah_provider_user_id = v_user_h WHERE id = v_household_id;
 
     -- Shared account (household pool)
     INSERT INTO public.accounts (id, household_id, owner_user_id, name, account_type, balance, currency, is_shared_pool)

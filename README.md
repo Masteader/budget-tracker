@@ -88,6 +88,10 @@ budget-tracker/
       `20261018_multi_source_income_and_accounts.sql` must run **before**
       `20261018_membership_sync_and_shared_account_policies.sql` (same prefix, reversed
       dependency; `supabase/tests/run_tests.py` encodes this order).
+   `schema.sql` is the small original baseline, not a picture of today's schema; the migration chain
+   is the source of truth. A hand-consolidated copy for reading only is in
+   [`docs/reference/schema_consolidated_20261102.sql`](docs/reference/schema_consolidated_20261102.sql);
+   it cannot replace `schema.sql`, because the migrations do not replay on top of it.
 3. Enable Realtime as described in [`supabase/realtime_config.md`](supabase/realtime_config.md).
 
 Do not use `supabase db push` on an existing project until the migration history is re-baselined
