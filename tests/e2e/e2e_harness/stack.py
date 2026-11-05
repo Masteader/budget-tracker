@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import psycopg
+from jose import JWTError, jwt
 
 from . import config
 
@@ -157,7 +158,8 @@ class Gateway:
     """
     Kong stand-in: ``/rest/v1/*`` is proxied byte-for-byte to PostgREST; ``/storage/v1/*`` is a
     minimal in-memory object store; ``/__resend/emails`` captures e-mails the app would send via
-    Resend; ``/auth/v1/.well-known/jwks.json`` serves an empty key set (HS256 only).
+    Resend; ``/auth/v1/.well-known/jwks.json`` serves an empty key set (HS256 only);
+    ``/auth/v1/admin/users/<id>`` is a fake Auth Admin API over the local ``auth.users`` table.
     """
 
     def __init__(self, postgrest_port: int):
@@ -167,6 +169,9 @@ class Gateway:
         self.emails: List[dict] = []
         self.resend_status = 200
         self.rest_log: List[tuple] = []
+        # Fake Auth Admin: every call as (method, user id), and how many deletes should answer 500.
+        self.auth_calls: List[tuple] = []
+        self.auth_delete_failures = 0
         gateway = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -210,11 +215,32 @@ class Gateway:
                     self.wfile.write(data)
                 conn.close()
 
+            def _storage_list(self, bucket: str, body: bytes) -> None:
+                """Storage's list: one level under the prefix, a folder is an entry without an id."""
+                options = json.loads(body or b"{}")
+                root = f"{bucket}/{str(options.get('prefix') or '').strip('/')}".rstrip("/") + "/"
+                names = {}
+                for key in gateway.storage:
+                    if key.startswith(root):
+                        head, _, rest = key[len(root):].partition("/")
+                        names[head] = None if rest else key
+                entries = [{"name": n, "id": names[n]} for n in sorted(names)]
+                offset = int(options.get("offset") or 0)
+                self._send(200, entries[offset:offset + int(options.get("limit") or 100)])
+
             def _storage(self) -> None:
                 body = self._body()
                 parsed = urllib.parse.urlparse(self.path)
                 key = parsed.path[len("/storage/v1/object/"):]
-                if self.command in ("POST", "PUT") and parsed.path.startswith("/storage/v1/object/"):
+                if self.command == "POST" and key.startswith("list/"):
+                    self._storage_list(key[len("list/"):], body)
+                elif self.command == "DELETE" and "/" not in key:
+                    removed = []
+                    for path in json.loads(body or b"{}").get("prefixes", []):
+                        if gateway.storage.pop(f"{key}/{path}", None) is not None:
+                            removed.append({"name": path, "bucket_id": key})
+                    self._send(200, removed)
+                elif self.command in ("POST", "PUT") and parsed.path.startswith("/storage/v1/object/"):
                     gateway.storage[key] = body
                     self._send(200, {"Key": key, "Id": key})
                 elif self.command == "GET" and key in gateway.storage:
@@ -222,11 +248,46 @@ class Gateway:
                 else:
                     self._send(404, {"statusCode": "404", "error": "not_found", "message": "Object not found"})
 
+            def _auth_admin(self) -> None:
+                """GoTrue's admin user routes, service role only, over the local auth.users."""
+                self._body()
+                try:
+                    bearer = (self.headers.get("Authorization") or "").removeprefix("Bearer ")
+                    role = jwt.decode(bearer, config.JWT_SECRET, algorithms=["HS256"], options={"verify_aud": False})["role"]
+                except (JWTError, KeyError):
+                    role = None
+                if role != "service_role":
+                    return self._send(403, {"code": 403, "error_code": "not_admin", "msg": "User not allowed"})
+
+                user_id = urllib.parse.urlparse(self.path).path.rsplit("/", 1)[-1]
+                gateway.auth_calls.append((self.command, user_id))
+                if self.command == "DELETE" and gateway.auth_delete_failures > 0:
+                    gateway.auth_delete_failures -= 1
+                    return self._send(500, {"code": 500, "error_code": "unexpected_failure", "msg": "Database error"})
+                with psycopg.connect(config.pg_dsn(), autocommit=True) as conn:
+                    if self.command == "DELETE":
+                        gone = conn.execute("DELETE FROM auth.users WHERE id = %s RETURNING id", (user_id,)).fetchone()
+                        row = (user_id, None, None) if gone else None
+                    else:
+                        row = conn.execute(
+                            """SELECT id::text, email, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+                               FROM auth.users WHERE id = %s""",
+                            (user_id,),
+                        ).fetchone()
+                if row is None:
+                    return self._send(404, {"code": 404, "error_code": "user_not_found", "msg": "User not found"})
+                if self.command == "DELETE":
+                    return self._send(200, {})
+                self._send(200, {"id": row[0], "email": row[1], "created_at": row[2], "aud": "authenticated",
+                                 "app_metadata": {}, "user_metadata": {}})
+
             def _dispatch(self) -> None:
                 if self.path.startswith("/rest/v1"):
                     return self._proxy()
                 if self.path.startswith("/storage/v1/"):
                     return self._storage()
+                if self.path.startswith("/auth/v1/admin/users/") and self.command in ("GET", "DELETE"):
+                    return self._auth_admin()
                 if self.path.startswith("/__resend/emails") and self.command == "POST":
                     payload = json.loads(self._body() or b"{}")
                     payload["_authorization"] = self.headers.get("Authorization")
