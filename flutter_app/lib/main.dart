@@ -3,6 +3,8 @@
 /// session state.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +25,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/update_password_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/onboarding/household_screen.dart';
+import 'services/auth_deep_link_policy.dart';
 import 'services/household_resolver.dart';
 import 'services/notifications/reminder_preferences.dart';
 import 'services/notifications/reminder_service.dart';
@@ -33,6 +36,7 @@ import 'errors/config_error_app.dart';
 import 'services/secure_session_storage.dart';
 import 'supabase_config.dart';
 import 'theme/app_themes.dart';
+import 'widgets/app_snackbar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +62,7 @@ Future<void> main() async {
           localStorage: SecureSessionLocalStorage(
             persistSessionKey: SecureSessionLocalStorage.sessionKeyFor(supabaseUrl),
           ),
+          detectSessionInUriPredicate: isTrustedAuthDeepLink,
         ),
       );
     }
@@ -73,7 +78,7 @@ Future<void> main() async {
 
     runApp(const BudgetTrackerApp());
   } catch (error, stackTrace) {
-    debugPrint('Fatal Budget Tracker startup initialization error: $error\n$stackTrace');
+    debugPrint('Fatal Qawam Money startup initialization error: $error\n$stackTrace');
     final problems = validateClientConfig(
       supabaseUrl: supabaseUrl,
       supabaseKey: supabasePublishableKey,
@@ -114,7 +119,7 @@ class BudgetTrackerApp extends StatelessWidget {
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (context, themeProvider, localeProvider, child) {
           return MaterialApp(
-            title: 'Budget Tracker',
+            onGenerateTitle: (context) => context.tr('app_title_short'),
             debugShowCheckedModeBanner: false,
             theme: AppThemes.lightTheme,
             darkTheme: AppThemes.darkTheme,
@@ -150,6 +155,9 @@ Future<String?> _fetchHouseholdFromSupabase(String userId) async {
 /// * Household-scoped providers are initialised once per household and reset
 ///   on sign-out, so a second account on the same device never sees the
 ///   previous account's data.
+/// * A stream error is not a sign-out. gotrue reports a failed link or an
+///   offline token refresh that way and keeps the session; a real sign-out or
+///   expiry arrives as a `signedOut` event with no session.
 class AuthGate extends StatefulWidget {
   final Stream<AuthState>? authStates;
   final HouseholdResolver? resolver;
@@ -177,7 +185,19 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final Stream<AuthState> _authStates = widget.authStates ?? supabase.auth.onAuthStateChange;
+  // Errors are dropped here rather than in the builder: StreamBuilder's error
+  // snapshot has no data, and it can replace a session event of the same frame.
+  late final Stream<AuthState> _authStates = (widget.authStates ?? supabase.auth.onAuthStateChange).transform(
+    StreamTransformer.fromHandlers(
+      handleData: (state, sink) {
+        _hasSession = state.session != null;
+        sink.add(state);
+      },
+      handleError: (error, stackTrace, sink) {
+        if (!_hasSession) sink.addError(error, stackTrace);
+      },
+    ),
+  );
   late final HouseholdResolver _resolver =
       widget.resolver ?? const HouseholdResolver(fetchRemote: _fetchHouseholdFromSupabase);
 
@@ -185,6 +205,21 @@ class _AuthGateState extends State<AuthGate> {
   Future<String?>? _householdFuture;
   String? _initializedHouseholdId;
   bool _inPasswordRecovery = false;
+  bool _hasSession = false;
+  Object? _reportedAuthError;
+
+  void _reportAuthError(BuildContext context, Object error) {
+    if (identical(error, _reportedAuthError)) return;
+    _reportedAuthError = error;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      AppSnackBar.showError(
+        context,
+        context.tr('auth_sign_in_unverified'),
+        title: context.tr('auth_error'),
+      );
+    });
+  }
 
   void _ensureLookup(String userId) {
     if (_userId == userId && _householdFuture != null) return;
@@ -256,6 +291,8 @@ class _AuthGateState extends State<AuthGate> {
         if (session == null) {
           _inPasswordRecovery = false;
           _handleSignedOut(context);
+          final authError = snapshot.error;
+          if (authError != null) _reportAuthError(context, authError);
           return (widget.loginBuilder ?? (_) => const LoginScreen())(context);
         }
 

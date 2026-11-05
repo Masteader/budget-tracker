@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 SUPPORT_EMAIL = "fmscoinfo@fmsco.com.sa"
 
 SUPPORT_SYSTEM_PROMPTS = {
-    "ar": """You are the AI Support Assistant for the Budget Tracker mobile application for Saudi households.
+    "ar": """You are the AI Support Assistant for Qawam Money (قوام المال), the mobile application for Saudi households.
+The app's name is قوام المال in Arabic and Qawam Money in English. In Arabic replies write the name as قوام المال; when asked what the app is called, answer قوام المال. Never call the app by any other name. If the user calls this app Budget Tracker or ميزانية الأسرة, that is this app's former name; reply using the correct name.
 You provide clear, friendly, and practical guidance in warm, professional Saudi Arabic.
 App capabilities:
 1. Receipt Scanner: Multi-page photos & Saudi ZATCA QR codes (TLV). Automatic OCR line-items.
@@ -49,7 +50,8 @@ Format your output as:
 [SUMMARY: brief summary or NONE]
 <Your helpful conversational reply to the user in Arabic>
 """,
-    "en": """You are the AI Support Assistant for the Budget Tracker mobile application for Saudi households.
+    "en": """You are the AI Support Assistant for Qawam Money, the mobile application for Saudi households.
+The app's name is Qawam Money in English and قوام المال in Arabic. When asked what the app is called, answer Qawam Money. Never call the app by any other name. If the user calls this app Budget Tracker or ميزانية الأسرة, that is this app's former name; reply using the correct name.
 You provide clear, friendly, and practical guidance in English.
 App capabilities:
 1. Receipt Scanner: Multi-page photos & Saudi ZATCA QR codes (TLV). Automatic OCR line-items.
@@ -66,7 +68,8 @@ Format your output as:
 [SUMMARY: brief summary or NONE]
 <Your helpful conversational reply to the user in English>
 """,
-    "ur": """You are the AI Support Assistant for the Budget Tracker mobile application for Saudi households.
+    "ur": """You are the AI Support Assistant for Qawam Money, the mobile application for Saudi households.
+The app's name is Qawam Money. In Urdu replies always write the name in Latin letters exactly as Qawam Money: the name has no Urdu-script form, so never transliterate it. When asked what the app is called, answer Qawam Money. Never call the app by any other name. If the user calls this app Budget Tracker, ميزانية الأسرة or بجٹ ٹریکر, that is this app's former name; reply using the correct name.
 You provide clear, friendly, and practical guidance in Urdu (اردو زبان میں واضح اور دوستانہ رہنمائی).
 App capabilities:
 1. Receipt Scanner: رسید اسکینر، تصاویر اور سعودی ZATCA QR کوڈز (TLV) خودکار OCR۔
@@ -167,15 +170,15 @@ def general_fallback(lang_key: str, payday_day: Optional[int]) -> str:
 FALLBACK_MESSAGES = {
     "ar": {
         "escalation": "نعتذر عن هذه المشكلة! يمكنك التواصل مباشرة مع المطور عبر الزر أدناه وسيتم فتح بريدك الإلكتروني مع كافة تفاصيل المشكلة.",
-        "general": "أهلاً بك في مركز المساعدة والدعم الذكي! يمكنك الاستفسار عن فواتيرك، دورة الرواتب{payday}، فواتير الأقساط، أو كيفية مسح الفواتير.",
+        "general": "أهلاً بك في مركز المساعدة والدعم الذكي لتطبيق قوام المال! يمكنك الاستفسار عن فواتيرك، دورة الرواتب{payday}، فواتير الأقساط، أو كيفية مسح الفواتير.",
     },
     "en": {
         "escalation": "We apologize for the inconvenience! You can contact the developer directly using the button below to send full diagnostic details.",
-        "general": "Welcome to Budget Tracker Support! Feel free to ask about your bills, salary cycle{payday}, installment plans, or receipt scanning.",
+        "general": "Welcome to Qawam Money Support! Feel free to ask about your bills, salary cycle{payday}, installment plans, or receipt scanning.",
     },
     "ur": {
         "escalation": "اس تکلیف کے لیے معذرت خواہ ہیں! آپ نیچے دیے گئے بٹن کے ذریعے ڈویلپر سے براہ راست رابطہ کر سکتے ہیں۔",
-        "general": "بجٹ ٹریکر سپورٹ میں خوش آمدید! آپ اپنے بلوں، تنخواہ کے سائیکل{payday}، اقساط، یا رسید اسکین کرنے کے بارے میں دریافت کر سکتے ہیں۔",
+        "general": "Qawam Money سپورٹ میں خوش آمدید! آپ اپنے بلوں، تنخواہ کے سائیکل{payday}، اقساط، یا رسید اسکین کرنے کے بارے میں دریافت کر سکتے ہیں۔",
     }
 }
 

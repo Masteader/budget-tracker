@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../supabase_config.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/brand_logo.dart';
 import '../../theme/app_themes.dart';
 import 'forgot_password_screen.dart';
 
@@ -117,29 +118,14 @@ class _LoginScreenState extends State<LoginScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Logo
-                    Container(
-                      width: 84, height: 84,
-                      decoration: BoxDecoration(
-                        gradient: context.icedHeroGradient,
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: context.accentSubtleBorder, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: context.primaryButtonBg.withValues(alpha: 0.35),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Icon(Icons.account_balance_wallet_rounded,
-                          color: context.primaryButtonFg, size: 42),
-                    ),
+                    const BrandLogo(size: 88),
                     const SizedBox(height: 24),
                     Text(
                       context.tr('app_title'),
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 30, fontWeight: FontWeight.w700, color: context.textPrimary,
-                      ),
+                      ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
                     ),
                     const SizedBox(height: 6),
                     Text(

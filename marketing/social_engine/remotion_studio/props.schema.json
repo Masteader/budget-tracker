@@ -1,0 +1,386 @@
+{
+  "$defs": {
+    "CaptionWord": {
+      "additionalProperties": false,
+      "properties": {
+        "end_ms": {
+          "minimum": 0,
+          "title": "End Ms",
+          "type": "integer"
+        },
+        "start_ms": {
+          "minimum": 0,
+          "title": "Start Ms",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "start_ms",
+        "end_ms"
+      ],
+      "title": "CaptionWord",
+      "type": "object"
+    },
+    "FocalPoint": {
+      "additionalProperties": false,
+      "description": "The feature in a clip the camera zooms to, as fractions of the clip's width and height.",
+      "properties": {
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "FocalPoint",
+      "type": "object"
+    },
+    "MaskRegion": {
+      "additionalProperties": false,
+      "description": "A rectangle to blur, as fractions of the clip's width and height, so it holds at any\nrecording resolution.\n\nThe minimums come from the smallest legible store name on a 1080x1920 recording: a line\nof about 20 px high and a name of about 200 px wide, which is 1% of the height, about 20%\nof the width and 0.2% of the frame. The sides may trade off, down to 5% of the width for\na short name, but a region under the area limit cannot hide a whole name. So a tiny mask\nsigned off by mistake fails here. Whether a real mask makes the names unreadable remains\nthe owner's check (G19).",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "MaskRegion",
+      "type": "object"
+    },
+    "PropsBrand": {
+      "additionalProperties": false,
+      "properties": {
+        "hashtag": {
+          "title": "Hashtag",
+          "type": "string"
+        },
+        "logo_src": {
+          "title": "Logo Src",
+          "type": "string"
+        },
+        "name_ar": {
+          "title": "Name Ar",
+          "type": "string"
+        },
+        "name_en": {
+          "title": "Name En",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name_ar",
+        "name_en",
+        "hashtag",
+        "logo_src"
+      ],
+      "title": "PropsBrand",
+      "type": "object"
+    },
+    "PropsClip": {
+      "additionalProperties": false,
+      "properties": {
+        "end_ms": {
+          "minimum": 0,
+          "title": "End Ms",
+          "type": "integer"
+        },
+        "focal_point": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FocalPoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "folder": {
+          "enum": [
+            "payday_cycle",
+            "zatca_receipt_scan",
+            "receipt_photo_scan",
+            "chat_and_voice_entry",
+            "multi_account_ledger",
+            "budget_capacity",
+            "nafaqah_wife_expenses",
+            "roommate_debt_split",
+            "recurring_and_installments",
+            "price_tracker",
+            "smart_basket",
+            "app_experience"
+          ],
+          "title": "Folder",
+          "type": "string"
+        },
+        "mask_regions": {
+          "items": {
+            "$ref": "#/$defs/MaskRegion"
+          },
+          "title": "Mask Regions",
+          "type": "array"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "src": {
+          "title": "Src",
+          "type": "string"
+        },
+        "start_ms": {
+          "minimum": 0,
+          "title": "Start Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "src",
+        "folder",
+        "sha256",
+        "start_ms",
+        "end_ms",
+        "mask_regions",
+        "focal_point"
+      ],
+      "title": "PropsClip",
+      "type": "object"
+    },
+    "SafeZones": {
+      "additionalProperties": false,
+      "properties": {
+        "bottom": {
+          "minimum": 0,
+          "title": "Bottom",
+          "type": "integer"
+        },
+        "left": {
+          "minimum": 0,
+          "title": "Left",
+          "type": "integer"
+        },
+        "right": {
+          "minimum": 0,
+          "title": "Right",
+          "type": "integer"
+        },
+        "top": {
+          "minimum": 0,
+          "title": "Top",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "top",
+        "bottom",
+        "left",
+        "right"
+      ],
+      "title": "SafeZones",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "audio_src": {
+      "title": "Audio Src",
+      "type": "string"
+    },
+    "brand": {
+      "$ref": "#/$defs/PropsBrand"
+    },
+    "clips": {
+      "items": {
+        "$ref": "#/$defs/PropsClip"
+      },
+      "title": "Clips",
+      "type": "array"
+    },
+    "device_frame": {
+      "const": "generic",
+      "title": "Device Frame",
+      "type": "string"
+    },
+    "digits": {
+      "enum": [
+        "western",
+        "arabic_indic"
+      ],
+      "title": "Digits",
+      "type": "string"
+    },
+    "duck_in_pauses": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Duck In Pauses",
+      "type": "number"
+    },
+    "duck_under_voice": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Duck Under Voice",
+      "type": "number"
+    },
+    "duration_ms": {
+      "exclusiveMinimum": 0,
+      "maximum": 180000,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "fps": {
+      "enum": [
+        30,
+        60
+      ],
+      "title": "Fps",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "highlight_color": {
+      "title": "Highlight Color",
+      "type": "string"
+    },
+    "hook_text": {
+      "title": "Hook Text",
+      "type": "string"
+    },
+    "language": {
+      "enum": [
+        "ar",
+        "en"
+      ],
+      "title": "Language",
+      "type": "string"
+    },
+    "music_src": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Music Src"
+    },
+    "on_screen_text": {
+      "items": {
+        "type": "string"
+      },
+      "title": "On Screen Text",
+      "type": "array"
+    },
+    "reel_id": {
+      "title": "Reel Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "safe_zones": {
+      "$ref": "#/$defs/SafeZones"
+    },
+    "subtitles_en": {
+      "title": "Subtitles En",
+      "type": "string"
+    },
+    "template": {
+      "enum": [
+        "FeatureDemo",
+        "DailyTip",
+        "MythVsFact"
+      ],
+      "title": "Template",
+      "type": "string"
+    },
+    "watermark": {
+      "title": "Watermark",
+      "type": "boolean"
+    },
+    "width": {
+      "const": 1080,
+      "title": "Width",
+      "type": "integer"
+    },
+    "words": {
+      "items": {
+        "$ref": "#/$defs/CaptionWord"
+      },
+      "title": "Words",
+      "type": "array"
+    }
+  },
+  "required": [
+    "reel_id",
+    "revision",
+    "template",
+    "language",
+    "width",
+    "height",
+    "fps",
+    "duration_ms",
+    "watermark",
+    "device_frame",
+    "digits",
+    "highlight_color",
+    "safe_zones",
+    "brand",
+    "hook_text",
+    "on_screen_text",
+    "subtitles_en",
+    "audio_src",
+    "music_src",
+    "duck_under_voice",
+    "duck_in_pauses",
+    "words",
+    "clips"
+  ],
+  "title": "RenderProps",
+  "type": "object"
+}

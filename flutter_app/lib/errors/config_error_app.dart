@@ -33,7 +33,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
 
   String _formatDiagnosticReport() {
     final buf = StringBuffer();
-    buf.writeln('=== Budget Tracker Diagnostic Report ===');
+    buf.writeln('=== Qawam Money Diagnostic Report ===');
     buf.writeln('Timestamp: ${DateTime.now().toUtc().toIso8601String()}');
     buf.writeln('Supabase URL: ${supabaseUrl.isEmpty ? '(Empty)' : supabaseUrl}');
     buf.writeln(
@@ -85,7 +85,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Budget Tracker Diagnostics',
+      title: 'Qawam Money Diagnostics',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: bgDark,
         colorScheme: const ColorScheme.dark(
@@ -104,7 +104,7 @@ class _ConfigErrorAppState extends State<ConfigErrorApp> {
               elevation: 0,
               centerTitle: true,
               title: const Text(
-                'Budget Tracker Diagnostic',
+                'Qawam Money Diagnostic',
                 style: TextStyle(
                   color: textPrimary,
                   fontSize: 18,

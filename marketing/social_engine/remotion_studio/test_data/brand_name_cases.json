@@ -1,0 +1,14 @@
+[
+  {"name_en": "Qawam Money", "name_ar": "قوام المال", "real": true},
+  {"name_en": "QAWAM MONEY", "name_ar": "قوام المال", "real": true},
+  {"name_en": "qawam-money", "name_ar": "قوام  المال", "real": true},
+  {"name_en": "Qawam Money", "name_ar": "قِوامُ المالِ", "real": true},
+  {"name_en": "Qawam Money", "name_ar": "قــوام المــال", "real": true},
+  {"name_en": "Qаwаm Money", "name_ar": "قوام المال", "real": true},
+  {"name_en": "Qawam Money 2", "name_ar": "قوام المال", "real": false},
+  {"name_en": "Qawam Money", "name_ar": "قوام المال 2", "real": false},
+  {"name_en": "Qawam", "name_ar": "قوام المال", "real": false},
+  {"name_en": "Qawam Money", "name_ar": "قوام", "real": false},
+  {"name_en": "Qawam Monies", "name_ar": "قوام المال", "real": false},
+  {"name_en": "TEST BRAND", "name_ar": "علامة تجريبية", "real": false}
+]

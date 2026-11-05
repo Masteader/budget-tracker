@@ -217,12 +217,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen>
 
   /// Plain-text diagnostics for the manual email fallback (copied to the clipboard).
   String _diagnostics(String issueSummary) => '''To: $developerEmail
-Subject: [Budget Tracker Support] $issueSummary
+Subject: [Qawam Money Support] $issueSummary
 
 Issue details:
 $issueSummary
 
-App: Budget Tracker (v1.0.0+1)
+App: Qawam Money (v1.0.0+1)
 Household: ${widget.householdId ?? "N/A"}
 User: ${widget.userEmail ?? "N/A"}
 ''';

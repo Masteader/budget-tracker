@@ -9,6 +9,7 @@ live in the root [`README.md`](../README.md).
 ## Quick Links
 
 - 📋 **[Full Project Details](PROJECT_DETAILS.md)** — architecture, features, API endpoints, migrations and test suites.
+- 🍎 **[iOS Readiness](IOS_READINESS.md)** — what is done, Mac build steps, release blockers and everything still unverified.
 - 🔐 **[Operational Runbooks](runbooks/)** — secret rotation.
 - 🔎 **[Review & Audit](review/)** — audit reports, fix log, owner actions, live DB pre-flight and rollback snapshots.
 - 📜 **[Project Rules](../.agents/rules/)** — engineering, design, security and fintech standards.
@@ -22,6 +23,7 @@ live in the root [`README.md`](../README.md).
 docs/
 ├── README.md                    # This index
 ├── PROJECT_DETAILS.md           # Project dossier (features, API, migrations, tests)
+├── IOS_READINESS.md             # iOS status, Mac steps, release blockers, unverified items
 ├── runbooks/
 │   └── security-secret-rotation.md
 ├── review/                      # Audit work (maintained by the review agents)

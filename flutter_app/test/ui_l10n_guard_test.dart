@@ -10,6 +10,7 @@
 //    must exist.
 // 5. Urdu values must not contain Arabic-only letters (ي ك ى ة).
 // 6. The plural table has every CLDR form each language needs.
+// 7. The brand: exact titles, no old or withdrawn app names, Latin-only in Urdu.
 import 'dart:io';
 
 import 'package:budget_tracker/l10n/app_localizations.dart';
@@ -130,11 +131,14 @@ void main() {
   test('Arabic and Urdu values are written in Arabic script', () {
     // Brand names / abbreviations that are legitimately Latin in ar/ur.
     const allowLatin = {'pay_method_stc_pay', 'language_en', 'tib_total_vat', 'bir_vat'};
+    // The brand name is Latin-only in Urdu. Arabic must still contain Arabic script.
+    const allowLatinUrduOnly = {'app_title', 'app_title_short'};
     final arabicScript = RegExp('[؀-ۿ]');
     final offenders = <String>[];
     for (final lang in ['ar', 'ur']) {
       maps[lang]!.forEach((key, value) {
-        if (!allowLatin.contains(key) && !arabicScript.hasMatch(value)) {
+        final exempt = allowLatin.contains(key) || (lang == 'ur' && allowLatinUrduOnly.contains(key));
+        if (!exempt && !arabicScript.hasMatch(value)) {
           offenders.add('$lang:$key=$value');
         }
       });
@@ -158,6 +162,99 @@ void main() {
       });
     });
     expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
+  group('Brand identity', () {
+    Iterable<MapEntry<String, String>> allValues(String lang) sync* {
+      yield* maps[lang]!.entries;
+      for (final plural in AppLocalizations.pluralTable.entries) {
+        for (final form in plural.value[lang]!.entries) {
+          yield MapEntry('${plural.key}.${form.key}', form.value);
+        }
+      }
+    }
+
+    test('app_title and app_title_short have the exact approved value in each language', () {
+      expect(maps['en']!['app_title'], 'Qawam Money قوام المال');
+      expect(maps['ar']!['app_title'], 'قوام المال Qawam Money');
+      expect(maps['ur']!['app_title'], 'Qawam Money');
+      expect(maps['en']!['app_title_short'], 'Qawam Money');
+      expect(maps['ar']!['app_title_short'], 'قوام المال');
+      expect(maps['ur']!['app_title_short'], 'Qawam Money');
+    });
+
+    test('no value in any language contains an old or withdrawn app name', () {
+      final oldNames = RegExp(
+        'budget tracker|بجٹ ٹریکر|wafeer|(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])',
+        caseSensitive: false,
+      );
+      // Add a key here only if a sentence really means "household budget".
+      const householdBudgetKeys = <String>{};
+      final offenders = <String>[];
+      for (final lang in ['en', 'ar', 'ur']) {
+        for (final e in allValues(lang)) {
+          final oldArabicName = e.value.contains('ميزانية الأسرة') && !householdBudgetKeys.contains(e.key);
+          if (oldNames.hasMatch(e.value) || oldArabicName) offenders.add('$lang:${e.key}=${e.value}');
+        }
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the withdrawn-name pattern spares words that only contain the same letters', () {
+      final withdrawn = RegExp('(?<![؀-ۿ])وف(?:يي|یی|ی|ي)ر(?![؀-ۿ])');
+      expect(withdrawn.hasMatch('وفيير'), isTrue);
+      expect(withdrawn.hasMatch('وفییر'), isTrue);
+      expect(withdrawn.hasMatch('وفیر'), isTrue);
+      expect(withdrawn.hasMatch('توفیر'), isFalse);
+      expect(withdrawn.hasMatch('وفير'), isTrue);
+      expect(withdrawn.hasMatch('تطبيق وفير'), isTrue);
+      expect(withdrawn.hasMatch('توفير'), isFalse);
+    });
+
+    test('no Urdu value contains the Arabic-script form of the name', () {
+      // Standalone word only: اقوام ("nations") legitimately contains the same letters.
+      final arabicName = RegExp('(?<![؀-ۿ])قوام(?![؀-ۿ])');
+      final offenders = [
+        for (final e in allValues('ur'))
+          if (arabicName.hasMatch(e.value)) 'ur:${e.key}=${e.value}',
+      ];
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+      expect(arabicName.hasMatch('قوام المال'), isTrue);
+      expect(arabicName.hasMatch('اقوام'), isFalse);
+    });
+
+    test('running text names the app in each language', () {
+      const expected = {
+        'en': (
+          'Qawam Money',
+          [
+            'camera_permission_msg',
+            'set_camera_access_has_been_permanently',
+            'set_microphone_access_has_been_permanently',
+            'support_chat_hint',
+            'scan_qr_cam_perm_required',
+            'invite_share_text',
+            'invite_share_subject',
+            'notif_bill_body',
+            'role_invite_share_text',
+            'tutor_stage_5_btn',
+          ],
+        ),
+        'ar': (
+          'قوام المال',
+          ['camera_permission_msg', 'support_chat_hint', 'invite_share_text', 'invite_share_subject', 'role_invite_share_text'],
+        ),
+        'ur': (
+          'Qawam Money',
+          ['camera_permission_msg', 'support_chat_hint', 'invite_share_text', 'invite_share_subject', 'role_invite_share_text'],
+        ),
+      };
+      expected.forEach((lang, spec) {
+        for (final key in spec.$2) {
+          expect(maps[lang]![key], contains(spec.$1), reason: '$lang:$key');
+        }
+      });
+    });
   });
 
   test('Urdu currency is riyal, never rupees', () {

@@ -1,0 +1,440 @@
+{
+  "schema_version": 1,
+  "claims": [
+    {
+      "id": "C01",
+      "meaning": "Budgets follow your household's payday, not the calendar month. Default is the 27th, an admin can change it",
+      "wording_ar": "الميزانية تتبع يوم راتب أسرتك، لا الشهر الميلادي. الافتراضي هو يوم 27، ويمكن للمشرف تغييره.",
+      "wording_en": "Budgets follow your household's payday, not the calendar month. The default is the 27th, and an admin can change it.",
+      "evidence": [
+        "ai_service/salary_cycle.py",
+        "ai_service/routes/households.py",
+        "flutter_app/lib/widgets/settings/payday_settings_card.dart",
+        "docs/PROJECT_DETAILS.md",
+        ".agents/rules/02-saudi-fintech-and-islamic-compliance.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["payday_cycle"]
+    },
+    {
+      "id": "C02",
+      "meaning": "On payday the app prompts you to record salary, overtime and bonuses",
+      "wording_ar": "في يوم الراتب يذكّرك التطبيق بتسجيل الراتب والعمل الإضافي والعلاوات.",
+      "wording_en": "On payday the app prompts you to record salary, overtime and bonuses.",
+      "evidence": [
+        "flutter_app/lib/widgets/dashboard/payday_checkin_banner.dart",
+        "flutter_app/lib/widgets/salary/payday_income_sheet.dart",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "not_supported",
+      "code_note": "PaydayCheckinBanner.isPaydayWindow is hard-coded to the 27th through the 3rd and ignores households.payday_day, so a household paid on another day is not prompted on its payday. The income sheet does record salary, overtime and bonus.",
+      "clip_folders": ["payday_cycle"]
+    },
+    {
+      "id": "C03",
+      "meaning": "The app can propose transfers from the salary account to under-funded accounts. It proposes; it does not move money on its own",
+      "wording_ar": "يمكن للتطبيق اقتراح تحويلات من حساب الراتب إلى الحسابات التي ينقصها التمويل. هو يقترح فقط، ولا يحرّك المال من نفسه.",
+      "wording_en": "The app can propose transfers from the salary account to under-funded accounts. It proposes; it does not move money on its own.",
+      "evidence": [
+        "flutter_app/lib/widgets/salary/salary_distribution_assistant_sheet.dart",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "not_supported",
+      "code_note": "SalaryDistributionAssistantSheet lists every other account with an empty amount field. It proposes no amounts and does not look at which accounts are under-funded. The owner types each amount, and transfers run only on the owner's tap.",
+      "clip_folders": ["payday_cycle"]
+    },
+    {
+      "id": "C04",
+      "meaning": "The household chooses what happens to leftovers: savings (default), roll into categories, or fresh start",
+      "wording_ar": "الأسرة تختار مصير المتبقي: الادخار (الافتراضي)، أو ترحيله إلى الفئات، أو بداية جديدة.",
+      "wording_en": "The household chooses what happens to leftovers: savings (the default), roll into categories, or a fresh start.",
+      "evidence": [
+        "flutter_app/lib/widgets/settings/rollover_settings_card.dart",
+        "ai_service/routes/households.py",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["payday_cycle"]
+    },
+    {
+      "id": "C05",
+      "meaning": "The app decodes the QR on Saudi e-invoices on the device: seller, VAT number, time, total and VAT amount. The QR has no line items",
+      "wording_ar": "يقرأ التطبيق رمز QR في الفواتير الإلكترونية السعودية على الجهاز: البائع والرقم الضريبي والوقت والإجمالي ومبلغ الضريبة. الرمز لا يحتوي على بنود المشتريات.",
+      "wording_en": "The app decodes the QR on Saudi e-invoices on the device: seller, VAT number, time, total and VAT amount. The QR has no line items.",
+      "evidence": [
+        "flutter_app/lib/services/zatca_decoder.dart",
+        "flutter_app/lib/widgets/zatca_qr_camera_scanner.dart",
+        ".agents/rules/02-saudi-fintech-and-islamic-compliance.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["zatca_receipt_scan"]
+    },
+    {
+      "id": "C06",
+      "meaning": "Photograph a receipt and AI reads merchant, date, payment method and line items. You review before saving",
+      "wording_ar": "صوّر الفاتورة ويقرأ الذكاء الاصطناعي المتجر والتاريخ وطريقة الدفع والبنود، وتراجعها قبل الحفظ.",
+      "wording_en": "Photograph a receipt and AI reads merchant, date, payment method and line items. You review before saving.",
+      "evidence": [
+        "ai_service/receipt_scanner.py",
+        "flutter_app/lib/widgets/scanner/receipt_review_editor.dart",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "not_supported",
+      "code_note": "RECEIPT_PROMPT in receipt_scanner.py asks for merchant, total, VAT, currency, date, category, QR text and items. It does not ask for a payment method, and the review editor shows none. Merchant, date, line items and the review step are real.",
+      "clip_folders": ["receipt_photo_scan"]
+    },
+    {
+      "id": "C07",
+      "meaning": "Type an expense in everyday Arabic, English or Urdu and confirm it",
+      "wording_ar": "اكتب مصروفك بلغتك اليومية، بالعربية أو الإنجليزية أو الأردية، ثم أكّده.",
+      "wording_en": "Type an expense in everyday Arabic, English or Urdu and confirm it.",
+      "evidence": [
+        "ai_service/routes/chat.py",
+        "ai_service/chat_parser.py",
+        "flutter_app/lib/widgets/chat/pending_expense_confirmation_card.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["chat_and_voice_entry"]
+    },
+    {
+      "id": "C08",
+      "meaning": "Speak an expense; speech-to-text runs on the device",
+      "wording_ar": "قل مصروفك بصوتك، وتحويل الكلام إلى نص يعمل على الجهاز.",
+      "wording_en": "Speak an expense; speech-to-text runs on the device.",
+      "evidence": [
+        "flutter_app/lib/screens/chat/chat_entry_screen.dart",
+        "flutter_app/pubspec.yaml",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "not_supported",
+      "code_note": "chat_entry_screen.dart uses the speech_to_text plugin, and its SpeechListenOptions do not set onDevice, so the phone's recogniser decides and may use its own online service. Voice entry is real. Running on the device is not enforced by the code.",
+      "clip_folders": ["chat_and_voice_entry"]
+    },
+    {
+      "id": "C09",
+      "meaning": "Add accounts, wallets, cash and crypto by hand, with balances you can reconcile, and hide balances with a privacy eye. Never implies any outside link or feed (D29)",
+      "wording_ar": "أضف حساباتك ومحافظك ونقدك وعملاتك الرقمية يدويًا، مع أرصدة يمكنك مطابقتها، وأخفِ الأرصدة بزر الخصوصية.",
+      "wording_en": "Add accounts, wallets, cash and crypto by hand, with balances you can reconcile, and hide balances with a privacy eye.",
+      "evidence": [
+        "flutter_app/lib/models/account.dart",
+        "flutter_app/lib/services/account_service.dart",
+        "flutter_app/lib/screens/accounts/accounts_overview_screen.dart",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["multi_account_ledger"]
+    },
+    {
+      "id": "C10",
+      "meaning": "Link a budget to the account that funds it and see Zero-Based, Surplus or Deficit status, with a quick transfer suggestion",
+      "wording_ar": "اربط الميزانية بالحساب الذي يموّلها، وشاهد حالتها: صفرية أو فائض أو عجز، مع اقتراح تحويل سريع.",
+      "wording_en": "Link a budget to the account that funds it and see Zero-Based, Surplus or Deficit status, with a quick transfer suggestion.",
+      "evidence": [
+        "flutter_app/lib/models/account.dart",
+        "flutter_app/lib/widgets/accounts/account_card.dart",
+        "flutter_app/lib/screens/home/budget_management_screen.dart",
+        ".agents/rules/02-saudi-fintech-and-islamic-compliance.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["budget_capacity"]
+    },
+    {
+      "id": "C11",
+      "meaning": "Family mode: shared expenses are the husband's; what the wife pays for shared needs is tracked as a debt he owes her; her personal spending comes from her allowance",
+      "wording_ar": "وضع العائلة: المصاريف المشتركة على الزوج، وما تدفعه الزوجة للاحتياجات المشتركة يُسجَّل دينًا عليه لها، ومصروفها الشخصي من مخصصها.",
+      "wording_en": "Family mode: shared expenses are the husband's; what the wife pays for shared needs is tracked as a debt he owes her; her personal spending comes from her allowance.",
+      "evidence": [
+        "ai_service/nafaqah_service.py",
+        "ai_service/routes/nafaqah.py",
+        "flutter_app/lib/widgets/nafaqah/wife_allowance_card.dart",
+        "flutter_app/lib/widgets/dashboard/family_reimbursement_card.dart",
+        ".agents/rules/02-saudi-fintech-and-islamic-compliance.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["nafaqah_wife_expenses"]
+    },
+    {
+      "id": "C12",
+      "meaning": "Roommates: equal splits, simplified debts, shared pools, a settle message you can copy",
+      "wording_ar": "للسكن المشترك: تقسيم متساوٍ وديون مبسّطة وصناديق مشتركة ورسالة تسوية يمكنك نسخها.",
+      "wording_en": "Roommates: equal splits, simplified debts, shared pools, and a settle message you can copy.",
+      "evidence": [
+        "ai_service/settlement_engine.py",
+        "flutter_app/lib/widgets/dashboard/multi_roommate_settlement_card.dart",
+        "flutter_app/lib/models/account.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["roommate_debt_split"]
+    },
+    {
+      "id": "C13",
+      "meaning": "Finds monthly recurring payments in your history and reserves them against the next payday",
+      "wording_ar": "يجد المدفوعات الشهرية المتكررة في سجلك ويحجز مبالغها قبل الراتب القادم.",
+      "wording_en": "Finds monthly recurring payments in your history and reserves them against the next payday.",
+      "evidence": [
+        "ai_service/recurring_detector.py",
+        "flutter_app/lib/widgets/dashboard/recurring_bills_card.dart",
+        "docs/PROJECT_DETAILS.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["recurring_and_installments"]
+    },
+    {
+      "id": "C14",
+      "meaning": "Tracks installment plans: remaining count, amount and next due date. Tracking only",
+      "wording_ar": "يتابع خطط الأقساط: العدد المتبقي والمبلغ وموعد القسط القادم. متابعة فقط.",
+      "wording_en": "Tracks installment plans: remaining count, amount and next due date. Tracking only.",
+      "evidence": [
+        "ai_service/installment_service.py",
+        "flutter_app/lib/models/installment_plan.dart",
+        "flutter_app/lib/widgets/dashboard/installment_plans_card.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["recurring_and_installments"]
+    },
+    {
+      "id": "C15",
+      "meaning": "Shows how the price of an item you bought changed, using the line items from your own saved receipts, not the ZATCA QR. More useful after many scans",
+      "wording_ar": "يعرض كيف تغيّر سعر سلعة اشتريتها، من بنود فواتيرك المحفوظة أنت، وليس من رمز زاتكا. يفيد أكثر بعد مسح فواتير كثيرة.",
+      "wording_en": "Shows how the price of an item you bought changed, using the line items from your own saved receipts, not the ZATCA QR. More useful after many scans.",
+      "evidence": [
+        "ai_service/price_tracker.py",
+        "flutter_app/lib/screens/analytics/grocery_price_intelligence_screen.dart",
+        "flutter_app/lib/l10n/app_localizations.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["price_tracker"]
+    },
+    {
+      "id": "C16",
+      "meaning": "Keep logging offline; entries sync when you reconnect",
+      "wording_ar": "واصل تسجيل مصاريفك بدون إنترنت، وتتزامن عند عودة الاتصال.",
+      "wording_en": "Keep logging offline; entries sync when you reconnect.",
+      "evidence": [
+        "flutter_app/lib/services/offline_queue_manager.dart",
+        "flutter_app/lib/services/sync_worker.dart",
+        "flutter_app/lib/services/offline_sync_service.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["app_experience"]
+    },
+    {
+      "id": "C17",
+      "meaning": "Arabic first with right-to-left layout, plus English and Urdu",
+      "wording_ar": "العربية أولًا بتخطيط من اليمين إلى اليسار، مع الإنجليزية والأردية.",
+      "wording_en": "Arabic first with right-to-left layout, plus English and Urdu.",
+      "evidence": [
+        "flutter_app/lib/providers/locale_provider.dart",
+        "flutter_app/lib/l10n/app_localizations.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "not_supported",
+      "code_note": "All three languages and right-to-left layout are real. LocaleProvider follows the phone's language and falls back to English, and lists English first, so Arabic is not first by default in code. Whether this wording stands is the owner's call.",
+      "clip_folders": ["app_experience"]
+    },
+    {
+      "id": "C18",
+      "meaning": "The app does not read your SMS",
+      "wording_ar": "التطبيق لا يقرأ رسائلك النصية.",
+      "wording_en": "The app does not read your SMS.",
+      "evidence": [
+        "ai_service/tests/test_sms_removal.py",
+        "flutter_app/android/app/src/main/AndroidManifest.xml",
+        ".agents/rules/04-security-and-privacy.md"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": []
+    },
+    {
+      "id": "C19",
+      "meaning": "Check whether a purchase fits your budget before you buy",
+      "wording_ar": "تحقق هل تناسب المشتريات ميزانيتك قبل أن تشتري.",
+      "wording_en": "Check whether a purchase fits your budget before you buy.",
+      "evidence": [
+        "ai_service/routes/budgets.py",
+        "flutter_app/lib/widgets/simulator/affordability_simulator_sheet.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["app_experience"]
+    },
+    {
+      "id": "C20",
+      "meaning": "Export a PDF statement",
+      "wording_ar": "صدّر كشف حساب بصيغة PDF.",
+      "wording_en": "Export a PDF statement.",
+      "evidence": [
+        "ai_service/routes/reports.py",
+        "ai_service/pdf_statement_generator.py",
+        "flutter_app/lib/services/statement_pdf_service.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": []
+    },
+    {
+      "id": "C21",
+      "meaning": "Smart Basket compares a shopping list across stores inside the app. In a reel it is shown as a feature, with its prices called illustrative. Never a real saving, never a cheaper store, never live or market prices (D30, G19)",
+      "wording_ar": "السلة الذكية تقارن قائمة مشتريات بين المتاجر داخل التطبيق، وأسعارها توضيحية.",
+      "wording_en": "Smart Basket compares a shopping list across stores inside the app. Its prices are illustrative.",
+      "evidence": [
+        "ai_service/price_tracker.py",
+        "flutter_app/lib/widgets/analytics/smart_shopping_basket_sheet.dart",
+        "flutter_app/lib/l10n/app_localizations.dart"
+      ],
+      "last_checked": "2026-11-04",
+      "code_check": "supported",
+      "code_note": "",
+      "clip_folders": ["smart_basket"]
+    }
+  ],
+  "rejected_claims": [
+    {
+      "id": "R01",
+      "claim": "Any 30% figure, such as save 30% or costs you 30% more",
+      "caught_by": ["G2"],
+      "samples_ar": [
+        "كيف توفر 30% من مقاضي البيت؟",
+        "وفر ٣٠٪ من راتبك",
+        "وفّر ثلاثين بالمية كل شهر",
+        "٪٣٠ من مصروفك يضيع"
+      ],
+      "samples_en": [
+        "Save 30% on groceries",
+        "Why grocery shopping without an envelope budget costs you 30% more",
+        "Save thirty percent every month",
+        "30 per cent of your salary is wasted"
+      ]
+    },
+    {
+      "id": "R02",
+      "claim": "3 clicks or any other click or tap count",
+      "caught_by": ["G22"],
+      "samples_ar": [
+        "3 نقرات وخلصت",
+        "ثلاث ضغطات وبس",
+        "بضغطة واحدة",
+        "نقرتين وتسجل مصروفك"
+      ],
+      "samples_en": [
+        "Demonstrates the app feature solving it in 3 clicks",
+        "Done in three taps",
+        "One tap and you are done",
+        "A 2-click budget"
+      ]
+    },
+    {
+      "id": "R03",
+      "claim": "A fixed 27th: the 27th as a fact about the app, 27th-to-27th, the salary-27 hashtag",
+      "caught_by": ["G5"],
+      "samples_ar": [
+        "#راتب_27",
+        "راتبك ينزل يوم 27",
+        "دورة الراتب من ٢٧ إلى ٢٧",
+        "الراتب في السابع والعشرين من كل شهر"
+      ],
+      "samples_en": [
+        "Payday 27th HUD",
+        "27th-to-27th budgeting",
+        "Your payday is the 27th",
+        "Payday cycle 27"
+      ]
+    },
+    {
+      "id": "R04",
+      "claim": "Link in bio, or download wording, while cta.landing_url is empty",
+      "caught_by": ["G11"],
+      "samples_ar": [
+        "الرابط في البايو",
+        "حمّل التطبيق الآن",
+        "نزّل التطبيق",
+        "متوفر الآن على جوجل بلاي"
+      ],
+      "samples_en": [
+        "Link in bio",
+        "Download the app now",
+        "High app downloads",
+        "Available now on the App Store"
+      ]
+    },
+    {
+      "id": "R05",
+      "claim": "Price tracking through the ZATCA QR, or against market prices",
+      "caught_by": ["G21"],
+      "samples_ar": [
+        "امسح رمز زاتكا لتتبع الأسعار",
+        "رمز QR يكشف غلاء الأسعار",
+        "نقارن فواتيرك بأسعار السوق"
+      ],
+      "samples_en": [
+        "Scanning digital ZATCA tax receipts to spot price inflation",
+        "Track prices with the QR",
+        "See how you compare with market prices"
+      ]
+    },
+    {
+      "id": "R06",
+      "claim": "Bank names, bank comparison, or contrast with bank SMS",
+      "caught_by": ["G4", "G20"],
+      "samples_ar": [
+        "أفضل من تطبيق البنك",
+        "حسابك في الراجحي",
+        "بدل رسائل البنك",
+        "اربط حسابك البنكي"
+      ],
+      "samples_en": [
+        "Better than your bank app",
+        "Tracking your Al Rajhi and STC Pay balances",
+        "Messy notes and unorganized bank SMS",
+        "Tracking multiple bank accounts"
+      ]
+    },
+    {
+      "id": "R07",
+      "claim": "A real saving from Smart Basket, or a named store being cheaper",
+      "caught_by": ["G13", "G19"],
+      "samples_ar": [
+        "السلة الذكية وفرت لي 200 ريال",
+        "بنده أرخص من لولو",
+        "وفرت من سلتي الذكية"
+      ],
+      "samples_en": [
+        "Smart Basket saves you real money",
+        "Panda is cheaper than Lulu",
+        "You save on your basket with the cheapest store"
+      ]
+    }
+  ]
+}

@@ -39,6 +39,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/dashboard/app_speed_dial_fab.dart';
 import '../../widgets/dashboard/app_bottom_nav_bar.dart';
 import '../../widgets/reminder_sync.dart';
+import '../../widgets/brand_logo.dart';
 import '../../widgets/lazy_indexed_stack.dart';
 import '../settings/settings_screen.dart';
 import '../settings/help_support_screen.dart';
@@ -778,56 +779,43 @@ class _BudgetDashboardState extends State<BudgetDashboard> {
           iconSize: 20,
           onTap: () => ToolsScreen.open(context, householdId: hid),
         ),
-        titleWidget: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [VelvetBurgundyColors.roseGold, VelvetBurgundyColors.accentRose],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.shield_rounded, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              context.tr('app_title'),
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Text(
-                context.tr('app_title_badge'),
+        titleWidget: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const BrandLogo(size: 26),
+              const SizedBox(width: 8),
+              Text(
+                context.tr('app_title_short'),
                 style: GoogleFonts.outfit(
-                  color: VelvetBurgundyColors.roseGold,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
                 ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: VelvetBurgundyColors.roseGold.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  context.tr('app_title_badge'),
+                  style: GoogleFonts.outfit(
+                    color: VelvetBurgundyColors.roseGold,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ).copyWith(fontFamilyFallback: VelvetBurgundyTheme.arabicFallback),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           ThreeDIconPuck(

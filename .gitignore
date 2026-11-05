@@ -17,6 +17,7 @@ build/
 **/local.properties
 **/android/.gradle/
 *.lock
+!flutter_app/ios/Podfile.lock
 **/dart_defines.json
 !**/dart_defines.example.json
 
@@ -40,3 +41,6 @@ docs/review/MASTER_CODEBASE_AUDIT.md
 # Audit environment (API keys)
 .env.audit
 docs/review/audit_spend.json
+
+# Agent & CLI worktrees
+.claude/

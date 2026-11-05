@@ -1,0 +1,26 @@
+{
+  "source": "flutter_app/lib/core/theme/velvet_burgundy_theme.dart",
+  "colors": {
+    "canvasDark": "#110509",
+    "canvasDarkBg": "#0A0205",
+    "surfaceDark": "#1E0B12",
+    "surfaceDarkGradientStart": "#240E17",
+    "surfaceDarkGradientEnd": "#17080E",
+    "primaryLight": "#4A0E1E",
+    "primaryDarkMaroon": "#2A050E",
+    "primaryLightGradient": "#6C162F",
+    "roseGold": "#E598B0",
+    "roseGoldGlow": "#F0A3BC",
+    "accentRose": "#B83253",
+    "emeraldSafe": "#10B981",
+    "coralDanger": "#F43F5E",
+    "amberCaution": "#F59E0B",
+    "textPrimaryDark": "#FDF8FA",
+    "textSecondaryDark": "#C7AEB6"
+  },
+  "fonts": {
+    "arabic": "Cairo",
+    "latin": "Outfit",
+    "arabic_alternate": "Tajawal"
+  }
+}

@@ -55,6 +55,7 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   sqflite_common_ffi: ^2.4.3
   permission_handler_platform_interface: ^4.4.1
+  xml: ^7.0.1             # Parses the iOS and Android project files in tests
 
 flutter:
   uses-material-design: true

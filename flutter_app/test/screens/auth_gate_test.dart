@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -174,6 +175,176 @@ void main() {
       expect(lookups, ['u-1', 'u-2']);
       expect(ready, ['h-1', 'h-2']);
       await auth.close();
+    });
+  });
+
+  group('auth stream errors', () {
+    late StreamController<AuthState> auth;
+    late int signedOutCalls;
+
+    setUp(() {
+      auth = StreamController<AuthState>();
+      signedOutCalls = 0;
+    });
+    tearDown(() => auth.close());
+
+    Widget gate({Locale? locale}) => MaterialApp(
+          locale: locale,
+          supportedLocales: const [Locale('en'), Locale('ar'), Locale('ur')],
+          localizationsDelegates: const [
+            AppLocalizationsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: AuthGate(
+            authStates: auth.stream,
+            resolver: HouseholdResolver(fetchRemote: (uid) async => 'h-1'),
+            loginBuilder: (_) => const Scaffold(body: Text('login')),
+            onboardingBuilder: (_) => const Text('onboarding'),
+            homeBuilder: (_) => const Scaffold(body: Text('home')),
+            recoveryBuilder: (_) => const Text('recovery'),
+            onHouseholdReady: (_, __) {},
+            onSignedOut: (_) => signedOutCalls++,
+          ),
+        );
+
+    testWidgets('an error keeps a signed-in user on the dashboard and resets nothing', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      await tester.pumpAndSettle();
+
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('home'), findsOneWidget);
+      expect(find.text('login'), findsNothing);
+      expect(signedOutCalls, 0);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('an error delivered in the same frame as the session keeps the session', (tester) async {
+      // Late subscribers get the auth stream's history replayed in one burst.
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('home'), findsOneWidget);
+      expect(signedOutCalls, 0);
+    });
+
+    testWidgets('an offline refresh failure of an expired token keeps the user in the app', (tester) async {
+      // The refresh token still works once back online; gotrue keeps the session.
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      await tester.pumpAndSettle();
+
+      auth.addError(AuthRetryableFetchException(message: 'offline'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('home'), findsOneWidget);
+      expect(signedOutCalls, 0);
+    });
+
+    testWidgets('an error during password recovery stays on the recovery screen', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.passwordRecovery, _session('u-1')));
+      await tester.pumpAndSettle();
+
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('recovery'), findsOneWidget);
+    });
+
+    testWidgets('a real sign-out after an error still goes to login', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      await tester.pumpAndSettle();
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+
+      auth.add(const AuthState(AuthChangeEvent.signedOut, null));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+      expect(find.text('home'), findsNothing);
+      expect(signedOutCalls, 1);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('a really expired session still goes to login', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      await tester.pumpAndSettle();
+
+      auth.add(const AuthState(AuthChangeEvent.signedOut, null, signOutReason: SignOutReason.sessionExpired));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+      expect(signedOutCalls, 1);
+    });
+
+    testWidgets('an error after signing out is not protected by the old session', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.add(AuthState(AuthChangeEvent.initialSession, _session('u-1')));
+      await tester.pumpAndSettle();
+      auth.add(const AuthState(AuthChangeEvent.signedOut, null));
+      await tester.pumpAndSettle();
+
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+      expect(find.text('home'), findsNothing);
+      expect(signedOutCalls, 1);
+    });
+
+    for (final (locale, title) in const [
+      (Locale('en'), 'Authentication Error'),
+      (Locale('ar'), 'خطأ في المصادقة'),
+      (Locale('ur'), 'تصدیق میں خرابی'),
+    ]) {
+      testWidgets('with no session an error shows login and a message once (${locale.languageCode})', (tester) async {
+        await tester.pumpWidget(gate(locale: locale));
+        auth.add(const AuthState(AuthChangeEvent.initialSession, null));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+
+        auth.addError(const AuthException('raw server text'));
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 750));
+
+        expect(find.text('login'), findsOneWidget);
+        expect(find.text(title), findsOneWidget);
+        final message = AppLocalizations(locale).get('auth_sign_in_unverified');
+        expect(find.text(message), findsOneWidget);
+        expect(find.text('raw server text'), findsNothing);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+
+        // A rebuild is not a second error.
+        await tester.pumpWidget(gate(locale: locale));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+      });
+    }
+
+    testWidgets('signing in after an error reaches the dashboard', (tester) async {
+      await tester.pumpWidget(gate());
+      auth.addError(const AuthException('x'));
+      await tester.pumpAndSettle();
+      expect(find.text('login'), findsOneWidget);
+
+      auth.add(AuthState(AuthChangeEvent.signedIn, _session('u-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('home'), findsOneWidget);
     });
   });
 

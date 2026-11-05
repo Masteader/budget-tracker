@@ -14,7 +14,7 @@ export const Footer: React.FC<FooterProps> = ({ dict }) => (
       <div className="flex items-center gap-2.5">
         <Logo className="h-7 w-7" />
         <span>
-          <bdi dir="ltr">© 2026 Budget Tracker</bdi> · {dict.footer.rights}
+          <bdi dir="ltr">© 2026</bdi> {dict.brand.name} · {dict.footer.rights}
         </span>
       </div>
       <nav aria-label={dict.a11y.footerNav} className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">

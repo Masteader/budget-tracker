@@ -43,6 +43,7 @@ export interface LedgerRow {
 export interface TranslationDictionary {
   brand: {
     name: string;
+    shortName: string;
     tagline: string;
   };
   nav: {
@@ -192,7 +193,8 @@ export interface TranslationDictionary {
 export const translations: Record<Language, TranslationDictionary> = {
   ar: {
     brand: {
-      name: 'Budget Tracker',
+      name: 'قوام المال Qawam Money',
+      shortName: 'قوام المال',
       tagline: 'ميزانية البيت على دورة الراتب',
     },
     nav: {
@@ -422,7 +424,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       monthlyDue: 'القسط الشهري',
     },
     a11y: {
-      pageTitle: 'Budget Tracker | اعرف كم باقي لك لين الراتب',
+      pageTitle: 'قوام المال Qawam Money | اعرف كم باقي لك لين الراتب',
       skipToContent: 'تخطَّ إلى المحتوى الرئيسي',
       switchToEnglish: 'التبديل إلى الإنجليزية',
       switchToArabic: 'التبديل إلى العربية',
@@ -434,7 +436,8 @@ export const translations: Record<Language, TranslationDictionary> = {
   },
   en: {
     brand: {
-      name: 'Budget Tracker',
+      name: 'Qawam Money قوام المال',
+      shortName: 'Qawam Money',
       tagline: 'Household budget by salary cycle',
     },
     nav: {
@@ -661,7 +664,7 @@ export const translations: Record<Language, TranslationDictionary> = {
       monthlyDue: 'Monthly due',
     },
     a11y: {
-      pageTitle: 'Budget Tracker | Know what’s left until payday',
+      pageTitle: 'Qawam Money قوام المال | Know what’s left until payday',
       skipToContent: 'Skip to main content',
       switchToEnglish: 'Switch to English',
       switchToArabic: 'Switch to Arabic',
