@@ -87,7 +87,19 @@ void main() {
       expect(find.text(l.get('del_banner_title')), findsOneWidget);
       final date = l.date(_date.toLocal(), 'd MMMM yyyy');
       expect(find.textContaining(date), findsOneWidget);
-      expect(find.text(l.get('del_banner_export')), findsOneWidget);
+      // The export that covers the whole household is the feed's All Records
+      // export; the one in Settings is the current cycle only.
+      final hint = l.format('del_banner_export', {
+        'transactions': l.get('nav_transactions'),
+        'export': l.get('export_csv'),
+        'all': l.get('csv_export_all_records'),
+      });
+      expect(find.text(hint), findsOneWidget);
+      expect(hint, contains(l.get('nav_transactions')));
+      expect(hint, contains(l.get('export_csv')));
+      expect(hint, contains(l.get('csv_export_all_records')));
+      expect(hint, isNot(contains(l.get('nav_settings'))));
+      expect(hint, isNot(contains('{')));
       expect(Directionality.of(tester.element(_banner)), lang == 'en' ? TextDirection.ltr : TextDirection.rtl);
     });
   }
