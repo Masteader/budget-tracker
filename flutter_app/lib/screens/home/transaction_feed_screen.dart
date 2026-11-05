@@ -53,6 +53,10 @@ class TransactionFeedScreen extends StatefulWidget {
   /// a row whose creator deleted their account (injectable for tests).
   final HouseholdRosterLoader? loadRoster;
 
+  /// Every stored row of a household, for the "All Records" export (injectable
+  /// for tests; defaults to paging the server past its row cap).
+  final Future<List<Map<String, dynamic>>> Function(String householdId)? loadAllRecords;
+
   final String initialDatePeriod;
 
   const TransactionFeedScreen({
@@ -62,6 +66,7 @@ class TransactionFeedScreen extends StatefulWidget {
     this.loadCycles,
     this.loadBudgetCoverage,
     this.loadRoster,
+    this.loadAllRecords,
     this.initialDatePeriod = 'CYCLE',
   });
 
@@ -77,6 +82,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
   DateTimeRange? _customDateRange;
   String _selectedSpentByFilter = 'ALL'; // 'ALL' | 'me' | 'partner' | 'both'
   bool _exportingPdf = false;
+  bool _exportingCsv = false;
 
   // Salary Cycles
   List<SalaryCycleInfo> _cycles = SalaryCycleService.getAvailableCycles();
@@ -784,16 +790,37 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
     );
   }
 
-  void _exportCsv(BuildContext context) {
-    final rows = context.read<TransactionProvider>().transactions;
-    if (rows.isEmpty) return;
-    final exportList = rows.map(CsvExportService.exportRowOf).toList();
-    CsvExportService.showExportDialog(
-      context,
-      exportList,
-      monthLabel: context.tr('csv_export_all_records'),
-      memberNames: _memberNames,
-    );
+  /// "All Records" reads every stored row of the household from the server,
+  /// page by page: the feed holds only what one capped read returned, and the
+  /// household deletion banner sends members here to keep their history.
+  Future<void> _exportCsv(BuildContext context, String? householdId) async {
+    if (householdId == null || householdId.isEmpty || _exportingCsv) return;
+    setState(() => _exportingCsv = true);
+    try {
+      final loader = widget.loadAllRecords ??
+          (String hid) => CsvExportService.fetchAllHouseholdRows(supabase, householdId: hid);
+      final stored = await loader(householdId);
+      if (!mounted || !context.mounted) return;
+      if (stored.isEmpty) return;
+      final exportList = stored.map((r) => CsvExportService.exportRowOf(Transaction.fromMap(r))).toList();
+      CsvExportService.showExportDialog(
+        context,
+        exportList,
+        monthLabel: context.tr('csv_export_all_records'),
+        memberNames: _memberNames,
+      );
+    } catch (e) {
+      logFailure('TransactionFeed.exportAllRecords', e);
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          context.tr('load_error_generic'),
+          title: context.tr('set_export_failed'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingCsv = false);
+    }
   }
 
   /// MOB-26: downloads the statement with the user's JWT and opens the system
@@ -1039,7 +1066,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
             icon: Icon(Icons.more_vert_rounded, color: context.textPrimary),
             onSelected: (value) {
               if (value == 'csv') {
-                _exportCsv(context);
+                _exportCsv(context, hid);
               } else if (value == 'pdf') {
                 _exportStatementPdf(context);
               }
@@ -1047,6 +1074,7 @@ class _TransactionFeedScreenState extends State<TransactionFeedScreen> {
             itemBuilder: (menuCtx) => [
               PopupMenuItem(
                 value: 'csv',
+                enabled: !_exportingCsv,
                 child: Row(
                   children: [
                     Icon(Icons.file_download_outlined, size: 18, color: context.infoText),

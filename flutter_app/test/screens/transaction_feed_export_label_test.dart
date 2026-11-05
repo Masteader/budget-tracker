@@ -27,7 +27,7 @@ void main() {
       tester.view.physicalSize = const Size(1170, 2532);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
-      final row = Transaction.fromMap({
+      final stored = {
         'id': 'tx-1',
         'household_id': 'h1',
         'amount': 150.0,
@@ -37,7 +37,8 @@ void main() {
         'timestamp': DateTime(2026, 10, 28).toIso8601String(),
         'created_at': DateTime(2026, 10, 28).toIso8601String(),
         'spent_by': 'me',
-      });
+      };
+      final row = Transaction.fromMap(stored);
       await tester.pumpWidget(MultiProvider(
         providers: [
           ChangeNotifierProvider<TransactionProvider>(create: (_) => _FakeTransactions([row])),
@@ -49,6 +50,7 @@ void main() {
             householdId: 'h1',
             loadNafaqah: (_) async => const NafaqahSummary(mode: 'standard'),
             loadCycles: (_) async => const {'cycles': <Object>[]},
+            loadAllRecords: (_) async => [stored],
           ),
           lang: lang,
           scaffold: false,

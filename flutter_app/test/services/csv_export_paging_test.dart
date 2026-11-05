@@ -48,8 +48,8 @@ class _FakePostgrest extends http.BaseClient {
   List<Map<String, dynamic>> page(Uri url) {
     final q = url.queryParameters;
     final hid = q['household_id']!.replaceFirst('eq.', '');
-    final key = q['cycle_key']!.replaceFirst('eq.', '');
-    final matching = rows.where((r) => r['household_id'] == hid && r['cycle_key'] == key).toList();
+    final key = q['cycle_key']?.replaceFirst('eq.', '');
+    final matching = rows.where((r) => r['household_id'] == hid && (key == null || r['cycle_key'] == key)).toList();
     final clauses = (q['order'] ?? '').split(',').where((c) => c.isNotEmpty).map((c) => c.split('.')).toList();
     // Ties the query did not break come back in whatever order Postgres likes:
     // different on each request.
@@ -202,6 +202,63 @@ void main() {
         for (var i = 1000; i < 1100; i++) _row(i, timestamp: '2026-11-01T10:00:00Z'),
       ]);
       expect((await _fetch(server)).length, 100);
+    });
+  });
+
+  group('"All Records": every row of the household, past any server cap', () {
+    Future<List<Map<String, dynamic>>> fetchAll(_FakePostgrest server) =>
+        CsvExportService.fetchAllHouseholdRows(_client(server), householdId: 'hh-1');
+
+    for (final total in [0, 1, 999, 1000, 1001, 2500]) {
+      test('$total rows over several cycles behind a 1000-row cap all arrive, once each', () async {
+        final server = _FakePostgrest([
+          for (var i = 0; i < total; i++)
+            _row(i, key: i.isEven ? '2026-10' : '2026-11', timestamp: '2026-11-01T10:${(i % 60).toString().padLeft(2, '0')}:00Z'),
+        ]);
+        final rows = await fetchAll(server);
+        expect(rows.length, total);
+        expect(rows.map((r) => r['id']).toSet().length, total);
+      });
+    }
+
+    test('a cap below the requested page size does not end the export early', () async {
+      final server = _FakePostgrest([for (var i = 0; i < 1200; i++) _row(i)], cap: 300);
+      expect((await fetchAll(server)).length, 1200);
+    });
+
+    test('rows sharing one timestamp neither repeat nor vanish across pages', () async {
+      final server = _FakePostgrest([for (var i = 0; i < 2500; i++) _row(i)]);
+      expect((await fetchAll(server)).map((r) => r['id']).toSet().length, 2500);
+    });
+
+    test('asks for this household only, in a stable order, with no cycle filter', () async {
+      final server = _FakePostgrest([_row(1), _row(2, hid: 'hh-2'), _row(3, key: '2026-10')]);
+      final rows = await fetchAll(server);
+      expect(rows.map((r) => r['id']).toSet(), {'tx-00001', 'tx-00003'});
+      final q = server.requests.first.queryParameters;
+      expect(q.containsKey('cycle_key'), isFalse);
+      expect(q['order'], startsWith('timestamp.desc'));
+      expect(q['order'], contains('id.desc'));
+    });
+
+    test('keeps every record: settlements and wife personal purchases included', () async {
+      final server = _FakePostgrest([
+        _row(1),
+        _row(2, settlement: true),
+        _row(3, nafaqahClass: 'wife_personal'),
+      ]);
+      expect((await fetchAll(server)).map((r) => r['id']).toSet(), {'tx-00001', 'tx-00002', 'tx-00003'});
+    });
+
+    test('a server that ignores the offset fails fast instead of looping or truncating', () async {
+      final server = _IgnoresOffset([for (var i = 0; i < 10; i++) _row(i)]);
+      await expectLater(fetchAll(server), throwsStateError);
+      expect(server.requests.length, lessThanOrEqualTo(3));
+    });
+
+    test('a failed page fails the export instead of returning what arrived so far', () async {
+      final server = _FailsSecondPage([for (var i = 0; i < 1500; i++) _row(i)]);
+      await expectLater(fetchAll(server), throwsA(isA<PostgrestException>()));
     });
   });
 

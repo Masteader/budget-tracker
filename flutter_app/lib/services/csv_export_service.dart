@@ -39,37 +39,57 @@ class CsvExportService {
       tx['is_settlement'] != true && tx['nafaqah_class'] != 'wife_personal';
 
   /// Every row of [householdId] in [cycleKey] that the other cycle views count.
-  ///
-  /// Pages on a stable order (rows sharing a timestamp would otherwise repeat or
-  /// vanish across pages) and stops on an empty page, advancing by what actually
-  /// arrived: a server cap below [pageSize] makes every page look short.
   static Future<List<Map<String, dynamic>>> fetchCycleRows(
     SupabaseClient client, {
     required String householdId,
     required String cycleKey,
     int pageSize = exportPageSize,
+  }) =>
+      _fetchAllPages(client, householdId: householdId, cycleKey: cycleKey, pageSize: pageSize, keep: countsAsCycleSpend);
+
+  /// Every row of [householdId], of every cycle and kind: the feed's "All
+  /// Records" export, which members are sent to before a household is deleted.
+  static Future<List<Map<String, dynamic>>> fetchAllHouseholdRows(
+    SupabaseClient client, {
+    required String householdId,
+    int pageSize = exportPageSize,
+  }) =>
+      _fetchAllPages(client, householdId: householdId, pageSize: pageSize);
+
+  /// Pages on a stable order (rows sharing a timestamp would otherwise repeat or
+  /// vanish across pages) and stops on an empty page, advancing by what actually
+  /// arrived: a server cap below [pageSize] makes every page look short.
+  static Future<List<Map<String, dynamic>>> _fetchAllPages(
+    SupabaseClient client, {
+    required String householdId,
+    String? cycleKey,
+    required int pageSize,
+    bool Function(Map<String, dynamic> tx)? keep,
   }) async {
     final rows = <Map<String, dynamic>>[];
     final seenIds = <Object>{};
     var offset = 0;
     for (var page = 0; page < _maxExportPages; page++) {
-      final res = await client
-          .from('transactions')
-          .select()
-          .eq('household_id', householdId)
-          .eq('cycle_key', cycleKey)
+      var query = client.from('transactions').select().eq('household_id', householdId);
+      if (cycleKey != null) query = query.eq('cycle_key', cycleKey);
+      final res = await query
           .order('timestamp', ascending: false)
           .order('id', ascending: false)
           .range(offset, offset + pageSize - 1);
       final batch = List<Map<String, dynamic>>.from(res);
       if (batch.isEmpty) return rows;
       offset += batch.length;
+      var fresh = 0;
       for (final tx in batch) {
         // A row written while paging shifts later pages by one.
         final id = tx['id'];
         if (id != null && !seenIds.add(id)) continue;
-        if (countsAsCycleSpend(tx)) rows.add(tx);
+        fresh++;
+        if (keep == null || keep(tx)) rows.add(tx);
       }
+      // A whole page of rows already seen: the server is not honouring the
+      // offset, and paging on would only repeat it.
+      if (fresh == 0) throw StateError('Transaction export: the server repeated a page');
     }
     throw StateError('Transaction export did not finish within $_maxExportPages pages');
   }
