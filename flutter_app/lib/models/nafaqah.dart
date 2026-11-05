@@ -451,7 +451,14 @@ class NafaqahApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const NafaqahApiException(this.code, this.message, {this.statusCode});
+  const NafaqahApiException(this.code, this.message, {this.statusCode, this.noResponse = false});
+
+  /// No answer arrived at all (offline, DNS, timeout).
+  final bool noResponse;
+
+  /// The request may have taken effect: no answer came back, or the server
+  /// failed without saying what it stored. See `ApiRequestException.outcomeUnknown`.
+  bool get outcomeUnknown => noResponse || (statusCode ?? 0) >= 500;
 
   factory NafaqahApiException.fromResponse(Map<String, dynamic> res) {
     final status = (res['status_code'] as num?)?.toInt();
@@ -469,7 +476,8 @@ class NafaqahApiException implements Exception {
     } else {
       code = 'network';
     }
-    return NafaqahApiException(code, message, statusCode: status);
+    // `BaseApiClient.networkErrorKey`: a model does not depend on the API layer.
+    return NafaqahApiException(code, message, statusCode: status, noResponse: res['network_error'] == true);
   }
 
   @override

@@ -338,7 +338,7 @@ class ApiBinaryResponse {
 /// must not treat the normalised error map as a result. [statusCode] is null
 /// for network errors.
 class ApiRequestException implements Exception {
-  const ApiRequestException(this.message, {this.statusCode, this.code});
+  const ApiRequestException(this.message, {this.statusCode, this.code, this.noResponse = false});
 
   /// Throws when [res] is an error map produced by [BaseApiClient].
   static Map<String, dynamic> check(Map<String, dynamic> res) {
@@ -348,6 +348,7 @@ class ApiRequestException implements Exception {
         res['message']?.toString() ?? 'Request failed',
         statusCode: (res['status_code'] as num?)?.toInt(),
         code: (detail is Map ? detail['code'] : res['code'])?.toString(),
+        noResponse: res[BaseApiClient.networkErrorKey] == true,
       );
     }
     return res;
@@ -358,6 +359,16 @@ class ApiRequestException implements Exception {
 
   /// The server's machine code (`detail.code`), e.g. `ledger_would_be_overpaid`.
   final String? code;
+
+  /// No answer arrived at all (offline, DNS, timeout). A missing [statusCode]
+  /// alone does not say this: a 200 with `{"status": "error"}` has none either.
+  final bool noResponse;
+
+  /// The request may have taken effect: no answer came back, or the server
+  /// failed without saying what it stored. A write that has no idempotency key
+  /// must not be offered again as if it had simply failed. A 4xx refusal, or a
+  /// 200 error body, is the server's verdict that nothing was written.
+  bool get outcomeUnknown => noResponse || (statusCode ?? 0) >= 500;
 
   @override
   String toString() => message;

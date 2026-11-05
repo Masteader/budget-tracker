@@ -701,6 +701,18 @@ class _ReimburseBottomSheetState extends State<_ReimburseBottomSheet> {
       // Never report a repayment as recorded when the server rejected it.
       logFailure('FamilyReimbursement.record', e);
       if (!mounted) return;
+      // The ledger entry may exist and there is no idempotency key; a partial
+      // repayment retried would pass the overpayment check and count twice.
+      if (e is NafaqahApiException && e.outcomeUnknown) {
+        AppSnackBar.showWarning(
+          context,
+          context.tr('settle_unconfirmed_msg'),
+          title: context.tr('settle_unconfirmed_title'),
+        );
+        Navigator.of(context).pop();
+        widget.onConfirmed();
+        return;
+      }
       setState(() => _isSubmitting = false);
       final String message;
       if (e is NafaqahApiException && e.code == 'overpayment') {

@@ -271,6 +271,11 @@ void main() {
         final ctx = tester.element(find.byKey(const Key('host')));
         const refusals = {
           'Too many failed join attempts. Please try again in 15 minutes.': 'hh_join_rate_limited',
+          'Too many failed join attempts. Please try again later.': 'hh_join_rate_limited',
+          'This invite does not fit this household type; ask the admin for a new invite': 'hh_invite_role_mismatch',
+          'Invite code is invalid, expired or could not be claimed.': 'hh_invite_invalid',
+          'Invite code is invalid or expired.': 'hh_invite_invalid',
+          'You are already a member of this household': 'hh_already_member',
           'Invite code has expired': 'hh_invite_expired',
           'Invite code has already been used': 'hh_invite_used',
           'Invalid invite code': 'hh_invite_invalid',
@@ -541,6 +546,29 @@ void main() {
       expect(printed.where((m) => m.contains('Settings.leaveHousehold')), hasLength(1));
     });
 
+    for (final message in [
+      'Insufficient funds: balance (1250.50) is less than 900.00',
+      'Reimbursement of 300.00 exceeds the outstanding 120.00',
+    ]) {
+      test('an amount in a Postgres message never reaches the log: $message', () async {
+        final printed = <String>[];
+        final original = debugPrint;
+        debugPrint = (line, {wrapWidth}) => printed.add(line ?? '');
+        try {
+          logFailure('Test.site', PostgrestException(message: message, code: 'P0001'));
+        } finally {
+          debugPrint = original;
+        }
+        expect(printed, hasLength(1));
+        expect(printed.single, allOf(contains('Test.site'), contains('PostgrestException'), contains('P0001')));
+        for (final amount in RegExp(r'\d+\.\d+').allMatches(message)) {
+          expect(printed.single, isNot(contains(amount.group(0)!)));
+        }
+        expect(printed.single, isNot(contains('funds')));
+        expect(printed.single, isNot(contains('Reimbursement')));
+      });
+    }
+
     testWidgets('a failed settlement fetch is logged', (tester) async {
       _api.failSettlement = true;
       final printed = await capturing(() async {
@@ -555,6 +583,7 @@ void main() {
       const postgrest = PostgrestException(message: 'duplicate key', code: '23505', details: 'Key (merchant)=(Secret Shop) exists');
       expect(describeFailure(postgrest), contains('23505'));
       expect(describeFailure(postgrest), isNot(contains('Secret Shop')));
+      expect(describeFailure(postgrest), isNot(contains('duplicate key')));
       expect(describeFailure(const _RawException()), '_RawException');
       expect(describeFailure(const HouseholdRolesApiException('forbidden', 'Fatima cannot', statusCode: 403)), allOf(contains('forbidden'), isNot(contains('Fatima'))));
       expect(describeFailure(const HouseholdJoinException('code ABC123 refused', code: 'x')), isNot(contains('ABC123')));

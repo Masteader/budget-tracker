@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/models.dart';
+import '../../services/api/base_api_client.dart' show ApiRequestException;
 import '../../services/api_service.dart';
 import '../../theme/app_themes.dart';
 import '../../core/widgets/three_d_surface_card.dart';
@@ -533,6 +534,19 @@ class _MultiRoommateSettlementCardState extends State<MultiRoommateSettlementCar
   }
 }
 
+/// The note stored with a settlement: read by everyone, so in no one's language,
+/// and concatenated, because a name may itself look like a template.
+///
+/// U+2192 does not mirror, so in right-to-left text a bare `payer → recipient`
+/// paints the payer on the right and the arrow pointing at them. The whole note
+/// is therefore a left-to-right isolate, with each name in its own isolate so its
+/// script keeps its own order: payer, arrow, recipient in any paragraph. Bidi
+/// controls in a name are dropped so it cannot break out of its isolate.
+String roommateSettlementNote({required String from, required String to, required String method}) {
+  String name(String value) => '\u2068${value.replaceAll(RegExp('[\u202A-\u202E\u2066-\u2069]'), '')}\u2069';
+  return '\u2066${name(from)} \u2192 ${name(to)} \u00B7 $method\u2069';
+}
+
 class _DebtItem {
   final String fromId;
   final String toId;
@@ -605,15 +619,25 @@ class _RoommateSettleBottomSheetState extends State<_RoommateSettleBottomSheet> 
           recipientId: widget.toId,
           amount: amt,
           paymentMethod: _paymentMethod,
-          // Stored once and read by everyone, so in no one's language: names and
-          // the method code. Concatenated: a name may itself look like a template.
-          notes: '${widget.fromName} \u2192 ${widget.toName} \u00B7 $_paymentMethod',
+          notes: roommateSettlementNote(from: widget.fromName, to: widget.toName, method: _paymentMethod),
         ),
       );
     } catch (e) {
       // Never report a settlement as recorded when the server rejected it.
       logFailure('RoommateSettlementCard.record', e);
       if (!mounted) return;
+      // The server may have stored it, and this endpoint has no idempotency key:
+      // the same amount left ready to tap would record it twice.
+      if (e is ApiRequestException && e.outcomeUnknown) {
+        AppSnackBar.showWarning(
+          context,
+          context.tr('settle_unconfirmed_msg'),
+          title: context.tr('settle_unconfirmed_title'),
+        );
+        Navigator.of(context).pop();
+        widget.onConfirmed();
+        return;
+      }
       setState(() => _isSubmitting = false);
       AppSnackBar.showError(
         context,
