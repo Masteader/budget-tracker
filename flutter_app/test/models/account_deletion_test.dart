@@ -237,6 +237,56 @@ void main() {
       expect(confirmationWordMatches('\u062D\u0630\u0641\u200B\u06A9\u0631\u06CC\u06BA'), isFalse);
     });
 
+    // The cases of `account_deletion_fold_confirmation` (server): the same input
+    // must match, or not, on both sides.
+    group('matches the server fold', () {
+      const hadhf = '\u062D\u0630\u0641';
+      const karen = '\u06A9\u0631\u06CC\u06BA';
+      const arabicKeyboard = '\u0643\u0631\u064A\u0646';
+      final cases = <String, bool>{
+        'delete': true,
+        'DELETE': true,
+        '  DeLeTe\t': true,
+        hadhf: true,
+        '$hadhf $karen': true,
+        '$hadhf $arabicKeyboard': true,
+        '$hadhf \u0643\u0631\u0649\u0646': true,
+        '$hadhf\u00A0$karen': true,
+        '$hadhf\u0085$karen': true,
+        '$hadhf\u1680$karen': true,
+        '$hadhf\u2009$karen': true,
+        '$hadhf\u2028$karen': true,
+        '$hadhf\u205F$karen': true,
+        '$hadhf\u3000$karen': true,
+        '\u200F$hadhf\u200F': true,
+        '$hadhf\u200E$karen': true,
+        '\u202B$hadhf $karen\u202C': true,
+        '\u2067delete\u2069': true,
+        '\uFEFFdelete': true,
+        'del\u200Bete': true,
+        // ZWNJ is removed, not a space: the two words run together.
+        '$hadhf\u200C$karen': false,
+        '$hadhf$karen': false,
+        // Inside a word it is simply dropped, like the other zero-width marks.
+        'حذ‌ف': true,
+        // NFC composes yeh and a combining hamza into another letter (U+0626):
+        // no match on either side.
+        '$hadhf \u0643\u0631\u064A\u0654\u0646': false,
+        'delet': false,
+        '$hadhf \u0643\u0631 \u064A\u0646': false,
+      };
+      cases.forEach((typed, matches) {
+        test('${typed.runes.map((r) => r.toRadixString(16)).join(' ')} -> $matches', () {
+          expect(confirmationWordMatches(typed), matches);
+        });
+      });
+
+      test('folds in the server order to the same text', () {
+        expect(foldConfirmationWord('  $hadhf\u00A0\u200F$karen '), '$hadhf $arabicKeyboard');
+        expect(foldConfirmationWord('DELETE'), 'delete');
+      });
+    });
+
     test('refuses anything else', () {
       for (final typed in ['', ' ', 'delet', 'deletee', 'yes', '\u062D\u0630', '\u06A9\u0631\u06CC\u06BA', '\u0643\u0631\u064A\u0646', '\u062D\u0630\u0641 \u0643\u0631 \u064A\u0646']) {
         expect(confirmationWordMatches(typed), isFalse, reason: typed);

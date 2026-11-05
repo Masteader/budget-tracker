@@ -249,15 +249,24 @@ class AccountDeletionException implements Exception {
   String toString() => 'AccountDeletionException($code)';
 }
 
-// The fold `request_account_deletion` applies before comparing, in its order:
-// 1. Urdu letters an Arabic keyboard lacks become the Arabic ones it types:
-//    U+06A9 (keheh) to U+0643 (kaf), U+06CC (farsi yeh) to U+064A (yeh),
-//    U+06BA (noon ghunna) to U+0646 (noon), and U+0649 (alef maksura) to U+064A.
-// 2. Zero-width and embedding marks a mobile keyboard may add are dropped
-//    (U+200B to U+200D, U+202A to U+202E, U+2066 to U+2069, U+FEFF).
-// 3. The direction marks U+200E and U+200F, U+00A0 and every other space are
-//    spaces; a run of them becomes one, and the ends are trimmed.
-// 4. Case is ignored.
+// The server's fold (`account_deletion_fold_confirmation`), applied in its
+// order to the typed text and to each accepted word:
+// 1. NFC. Dart has no normalizer, and none is needed here: no character of the
+//    accepted words has a canonical decomposition, so composing the input can
+//    never turn a mismatch into a match or back (a composed letter is another
+//    letter, e.g. yeh and combining hamza become U+0626). Proven in the tests.
+// 2. Zero-width and embedding marks are removed: U+200B to U+200D (so ZWNJ
+//    joins the words rather than separating them), U+202A to U+202E, U+2066 to
+//    U+2069 and U+FEFF.
+// 3. Every space becomes a plain space: `\s` and U+0085, U+00A0, U+1680, U+2000
+//    to U+200A, the direction marks U+200E and U+200F, U+2028, U+2029, U+202F,
+//    U+205F and U+3000.
+// 4. Urdu letters an Arabic keyboard lacks become the ones it types: U+06A9 to
+//    U+0643 (kaf), U+06CC to U+064A (yeh), U+06BA to U+0646 (noon), and U+0649
+//    (alef maksura) to U+064A.
+// 5. Runs of spaces become one, the ends are trimmed, case is ignored.
+final RegExp _invisibleMarks = RegExp('[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]');
+final RegExp _spaces = RegExp('[\\s\u0085\u00A0\u1680\u2000-\u200A\u200E\u200F\u2028\u2029\u202F\u205F\u3000]');
 const Map<String, String> _letterFold = {
   '\u06A9': '\u0643',
   '\u06CC': '\u064A',
@@ -265,16 +274,14 @@ const Map<String, String> _letterFold = {
   '\u0649': '\u064A',
 };
 final RegExp _foldedLetters = RegExp('[\u06A9\u06CC\u06BA\u0649]');
-final RegExp _invisibleMarks = RegExp('[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]');
-// Dart's `\s` is Unicode White_Space: U+00A0, U+1680, U+2000 to U+200A, U+2028,
-// U+2029, U+202F, U+205F and U+3000 besides the ASCII ones.
-final RegExp _spaces = RegExp('[\\s\u00A0\u200E\u200F]+');
+final RegExp _spaceRuns = RegExp(' +');
 
 /// [typed] folded the way the server folds it before comparing.
 String foldConfirmationWord(String typed) => typed
-    .replaceAllMapped(_foldedLetters, (m) => _letterFold[m[0]]!)
     .replaceAll(_invisibleMarks, '')
     .replaceAll(_spaces, ' ')
+    .replaceAllMapped(_foldedLetters, (m) => _letterFold[m[0]]!)
+    .replaceAll(_spaceRuns, ' ')
     .trim()
     .toLowerCase();
 

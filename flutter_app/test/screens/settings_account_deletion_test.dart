@@ -283,7 +283,75 @@ void main() {
         expect(_cancelButton, findsNothing);
         expect(find.byKey(const ValueKey('account_deletion_in_progress')), findsOneWidget);
       });
+
+      // The server allows a cancel while no data has been touched (stage 'none'),
+      // whatever the status: Cancel follows can_cancel alone.
+      for (final lang in const ['en', 'ar', 'ur']) {
+        testWidgets('$lang: $status with nothing removed yet still offers Cancel and says so', (tester) async {
+          final l = _l(lang);
+          _http.rpcResults['get_account_deletion_status'] = {'status': status, 'scheduled_for': _scheduledFor, 'can_cancel': true};
+          await _pump(tester, lang: lang);
+          expect(_cancelButton, findsOneWidget);
+          expect(find.byKey(const ValueKey('account_deletion_in_progress')), findsNothing);
+          // Starting, or stopped before deleting anything: each says which.
+          final key = status == 'processing' ? 'del_state_starting_cancellable' : 'del_state_stopped_cancellable';
+          final other = status == 'processing' ? 'del_state_stopped_cancellable' : 'del_state_starting_cancellable';
+          expect(_text(l.get(key)), findsOneWidget);
+          expect(_text(l.get(other)), findsNothing);
+          expect(_text(l.get('del_state_processing_locked')), findsNothing);
+          expect(_text(l.get('del_state_failed_locked')), findsNothing);
+        });
+
+        testWidgets('$lang: $status after data was removed says that, accurately', (tester) async {
+          final l = _l(lang);
+          _http.rpcResults['get_account_deletion_status'] = {'status': status, 'scheduled_for': _scheduledFor, 'can_cancel': false};
+          await _pump(tester, lang: lang);
+          final key = status == 'processing' ? 'del_state_processing_locked' : 'del_state_failed_locked';
+          final other = status == 'processing' ? 'del_state_failed_locked' : 'del_state_processing_locked';
+          expect(_text(l.get(key)), findsOneWidget);
+          expect(_text(l.get(other)), findsNothing);
+          expect(_text(l.get('del_cancel_only_note')), findsNothing, reason: 'Cancel is not offered');
+        });
+      }
     }
+
+    for (final canCancel in [true, false]) {
+      testWidgets('the due and locked states fit at 320px and x2.0 (can_cancel $canCancel)', (tester) async {
+        _http.rpcResults['get_account_deletion_status'] = {'status': 'failed', 'scheduled_for': _scheduledFor, 'can_cancel': canCancel};
+        await _pump(tester, lang: 'ur', width: 320, scale: 2.0);
+        expect(tester.takeException(), isNull);
+        final card = tester.getRect(_pendingCard);
+        expect(card.right, lessThanOrEqualTo(320));
+        expect(card.left, greaterThanOrEqualTo(0));
+      });
+    }
+
+    testWidgets('scheduled offers Cancel without the past-date note', (tester) async {
+      _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
+      await _pump(tester);
+      expect(_cancelButton, findsOneWidget);
+      expect(_text(_l('en').get('del_state_starting_cancellable')), findsNothing);
+      expect(_text(_l('en').get('del_state_stopped_cancellable')), findsNothing);
+    });
+
+    test('every locked wording says some data has already been deleted, in each language', () {
+      // The server's meaning of deletion_in_progress and can_cancel false, as the
+      // web page words it.
+      const phrase = {
+        'en': 'Some of your data has already been deleted',
+        'ar': 'حُذف جزء من بياناتك بالفعل',
+        'ur': 'آپ کا کچھ ڈیٹا پہلے ہی حذف ہو چکا ہے',
+      };
+      for (final lang in const ['en', 'ar', 'ur']) {
+        final l = _l(lang);
+        for (final key in const ['del_err_in_progress', 'del_state_processing_locked', 'del_state_failed_locked']) {
+          expect(l.get(key).toLowerCase(), contains(phrase[lang]!.toLowerCase()), reason: '$lang $key');
+        }
+        for (final key in const ['del_state_starting_cancellable', 'del_state_stopped_cancellable']) {
+          expect(l.get(key), isNot(contains(phrase[lang]!)), reason: '$lang $key');
+        }
+      }
+    });
 
     testWidgets('offline, a user this device knows is pending still sees the date and Cancel', (tester) async {
       await _cleaner.setFlag(fakeSettingsUserId, DateTime.utc(2026, 12, 5, 10));

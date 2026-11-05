@@ -154,8 +154,22 @@ class _AccountDeletionPendingCardState extends State<AccountDeletionPendingCard>
               style: TextStyle(color: context.textSecondary, fontSize: 12.5),
             ),
           ],
-          const SizedBox(height: 8),
-          Text(context.tr('del_cancel_only_note'), style: TextStyle(color: context.textSecondary, fontSize: 12.5)),
+          // Cancel follows the server's can_cancel alone: it stays true for a
+          // deletion that is due, or failed, before any data was touched.
+          if (status.canCancel) ...[
+            const SizedBox(height: 8),
+            Text(context.tr('del_cancel_only_note'), style: TextStyle(color: context.textSecondary, fontSize: 12.5)),
+            if (status.state != AccountDeletionState.scheduled) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.tr(status.state == AccountDeletionState.processing
+                    ? 'del_state_starting_cancellable'
+                    : 'del_state_stopped_cancellable'),
+                key: const ValueKey('account_deletion_due_cancellable'),
+                style: TextStyle(color: context.textPrimary, fontSize: 12.5),
+              ),
+            ],
+          ],
           if (deletion.isFromDevice) ...[
             const SizedBox(height: 8),
             Text(context.tr('del_pending_offline_note'), style: TextStyle(color: context.textSecondary, fontSize: 12)),
@@ -175,7 +189,11 @@ class _AccountDeletionPendingCardState extends State<AccountDeletionPendingCard>
             )
           else
             Text(
-              context.tr('del_err_in_progress'),
+              context.tr(switch (status.state) {
+                AccountDeletionState.processing => 'del_state_processing_locked',
+                AccountDeletionState.failed => 'del_state_failed_locked',
+                _ => 'del_err_in_progress',
+              }),
               key: const ValueKey('account_deletion_in_progress'),
               style: TextStyle(color: context.dangerColor, fontSize: 13, fontWeight: FontWeight.w600),
             ),
