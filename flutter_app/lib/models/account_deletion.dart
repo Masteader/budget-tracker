@@ -208,6 +208,9 @@ class AccountDeletionException implements Exception {
   /// Too many attempts for now.
   static const String rateLimited = 'rate_limited';
 
+  /// The emailed code could not be sent.
+  static const String codeNotSent = 'code_not_sent';
+
   /// No answer arrived.
   static const String network = 'network';
 
@@ -237,6 +240,7 @@ class AccountDeletionException implements Exception {
         invalidCredentials => 'del_err_wrong_password',
         invalidCode => 'del_err_wrong_code',
         rateLimited => 'del_err_rate_limited',
+        codeNotSent => 'del_err_code_not_sent',
         network => 'del_err_network',
         _ => 'del_err_generic',
       };
@@ -245,18 +249,40 @@ class AccountDeletionException implements Exception {
   String toString() => 'AccountDeletionException($code)';
 }
 
-// The characters `request_account_deletion` strips: bidi and zero-width marks a
-// mobile keyboard may add.
-final RegExp _invisibleMarks = RegExp('[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]');
+// The fold `request_account_deletion` applies before comparing, in its order:
+// 1. Urdu letters an Arabic keyboard lacks become the Arabic ones it types:
+//    U+06A9 (keheh) to U+0643 (kaf), U+06CC (farsi yeh) to U+064A (yeh),
+//    U+06BA (noon ghunna) to U+0646 (noon), and U+0649 (alef maksura) to U+064A.
+// 2. Zero-width and embedding marks a mobile keyboard may add are dropped
+//    (U+200B to U+200D, U+202A to U+202E, U+2066 to U+2069, U+FEFF).
+// 3. The direction marks U+200E and U+200F, U+00A0 and every other space are
+//    spaces; a run of them becomes one, and the ends are trimmed.
+// 4. Case is ignored.
+const Map<String, String> _letterFold = {
+  '\u06A9': '\u0643',
+  '\u06CC': '\u064A',
+  '\u06BA': '\u0646',
+  '\u0649': '\u064A',
+};
+final RegExp _foldedLetters = RegExp('[\u06A9\u06CC\u06BA\u0649]');
+final RegExp _invisibleMarks = RegExp('[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]');
+// Dart's `\s` is Unicode White_Space: U+00A0, U+1680, U+2000 to U+200A, U+2028,
+// U+2029, U+202F, U+205F and U+3000 besides the ASCII ones.
+final RegExp _spaces = RegExp('[\\s\u00A0\u200E\u200F]+');
 
-/// The confirmation words the server accepts, in any app language.
-const Set<String> _confirmationWords = {'delete', 'حذف', 'حذف کریں'};
+/// [typed] folded the way the server folds it before comparing.
+String foldConfirmationWord(String typed) => typed
+    .replaceAllMapped(_foldedLetters, (m) => _letterFold[m[0]]!)
+    .replaceAll(_invisibleMarks, '')
+    .replaceAll(_spaces, ' ')
+    .trim()
+    .toLowerCase();
 
-/// Whether [typed] is a word the server would accept, after the same
-/// normalization it applies (no invisible marks, single spaces, case ignored).
-bool confirmationWordMatches(String typed) {
-  final normalized = typed.replaceAll(_invisibleMarks, '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
-  return _confirmationWords.contains(normalized);
-}
+/// The confirmation words the server accepts, in any app language, folded.
+final Set<String> _confirmationWords = {'delete', 'حذف', 'حذف کریں'}.map(foldConfirmationWord).toSet();
+
+/// Whether [typed] is a word the server would accept after the same fold
+/// ([foldConfirmationWord]).
+bool confirmationWordMatches(String typed) => _confirmationWords.contains(foldConfirmationWord(typed));
 
 DateTime? _parseDate(Object? value) => value == null ? null : DateTime.tryParse(value.toString());

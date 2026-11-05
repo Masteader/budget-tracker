@@ -203,8 +203,42 @@ void main() {
       expect(confirmationWordMatches('‏حذف‎'), isTrue);
     });
 
+    test('accepts the Urdu word typed on an Arabic keyboard, as the server folds it', () {
+      // Kaf U+0643 for keheh U+06A9; yeh U+064A or alef maksura U+0649 for farsi
+      // yeh U+06CC; noon U+0646 for noon ghunna U+06BA.
+      const hadhf = '\u062D\u0630\u0641';
+      expect(confirmationWordMatches('$hadhf \u0643\u0631\u064A\u0646'), isTrue);
+      expect(confirmationWordMatches('$hadhf \u0643\u0631\u0649\u0646'), isTrue);
+      expect(confirmationWordMatches('$hadhf \u06A9\u0631\u06CC\u0646'), isTrue);
+      expect(confirmationWordMatches('$hadhf \u0643\u0631\u06CC\u06BA'), isTrue);
+    });
+
+    test('treats no-break spaces and direction marks between words as spaces', () {
+      const hadhf = '\u062D\u0630\u0641';
+      const karen = '\u06A9\u0631\u06CC\u06BA';
+      expect(confirmationWordMatches('$hadhf\u00A0$karen'), isTrue);
+      expect(confirmationWordMatches('$hadhf\u200F$karen'), isTrue);
+      expect(confirmationWordMatches('$hadhf\u200E\u0643\u0631\u064A\u0646'), isTrue);
+      expect(confirmationWordMatches('$hadhf\u2003\u00A0 $karen\u202F'), isTrue);
+      expect(confirmationWordMatches('\u00A0delete\u00A0'), isTrue);
+      expect(confirmationWordMatches('\t\u200F$hadhf\u200E\n'), isTrue);
+    });
+
+    test('still drops zero-width and embedding marks inside a word', () {
+      expect(confirmationWordMatches('\u062D\u0630\u200B\u0641'), isTrue);
+      expect(confirmationWordMatches('del\u200Dete'), isTrue);
+      expect(confirmationWordMatches('\u202B\u062D\u0630\u0641\u202C'), isTrue);
+      expect(confirmationWordMatches('\uFEFFdelete'), isTrue);
+      expect(confirmationWordMatches('\u2067\u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA\u2069'), isTrue);
+    });
+
+    test('a direction mark inside a word splits it, as the server reads it', () {
+      expect(confirmationWordMatches('\u062D\u0630\u200F\u0641'), isFalse);
+      expect(confirmationWordMatches('\u062D\u0630\u0641\u200B\u06A9\u0631\u06CC\u06BA'), isFalse);
+    });
+
     test('refuses anything else', () {
-      for (final typed in ['', ' ', 'delet', 'deletee', 'yes', 'حذ', 'کریں']) {
+      for (final typed in ['', ' ', 'delet', 'deletee', 'yes', '\u062D\u0630', '\u06A9\u0631\u06CC\u06BA', '\u0643\u0631\u064A\u0646', '\u062D\u0630\u0641 \u0643\u0631 \u064A\u0646']) {
         expect(confirmationWordMatches(typed), isFalse, reason: typed);
       }
     });

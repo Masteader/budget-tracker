@@ -1,8 +1,10 @@
 // AccountDeletionService against a real Supabase client whose HTTP never leaves
 // the process: RPC names and payloads as the migration defines them, and every
 // failure reduced to a machine code.
+import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/models/account_deletion.dart';
 import 'package:budget_tracker/services/account_deletion_service.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
@@ -162,6 +164,31 @@ void main() {
       _http.authFailure = (status: 429, code: 'over_request_rate_limit');
       await expectLater(service.reauthenticateWithPassword(fakeSettingsPassword), _refusedWith(AccountDeletionException.rateLimited));
       await expectLater(service.sendEmailCode(), _refusedWith(AccountDeletionException.rateLimited));
+    });
+
+    // No password was typed: a refused send is never "that password is not correct".
+    for (final failure in const [
+      (status: 400, code: 'validation_failed'),
+      (status: 400, code: 'invalid_credentials'),
+      (status: 401, code: 'no_authorization'),
+      (status: 403, code: 'otp_disabled'),
+      (status: 422, code: 'email_address_invalid'),
+      (status: 500, code: 'unexpected_failure'),
+    ]) {
+      test('a code that cannot be sent (${failure.status} ${failure.code}) says so', () async {
+        _http.authFailure = failure;
+        await expectLater(service.sendEmailCode(), _refusedWith(AccountDeletionException.codeNotSent));
+      });
+    }
+
+    test('the code failure has its own message in every language', () {
+      const e = AccountDeletionException(AccountDeletionException.codeNotSent);
+      expect(e.messageKey, 'del_err_code_not_sent');
+      for (final lang in const ['en', 'ar', 'ur']) {
+        final l = AppLocalizations(Locale(lang));
+        expect(l.get(e.messageKey), isNot(e.messageKey), reason: lang);
+        expect(l.get(e.messageKey), isNot(l.get('del_err_wrong_password')), reason: lang);
+      }
     });
   });
 

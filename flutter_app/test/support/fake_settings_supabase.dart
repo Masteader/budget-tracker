@@ -227,6 +227,11 @@ class FakeSettingsHttpClient extends http.BaseClient {
   /// When set, every Auth call fails with this status and error code.
   ({int status, String code})? authFailure;
 
+  /// When set, Auth calls and RPCs answer only after it completes: a test can
+  /// act while a call is still on its way.
+  Completer<void>? authGate;
+  Completer<void>? rpcGate;
+
   void resetScenario() {
     transactions = const [];
     memberCount = 2;
@@ -250,6 +255,8 @@ class FakeSettingsHttpClient extends http.BaseClient {
     validEmailCode = fakeSettingsEmailCode;
     authCalls.clear();
     authFailure = null;
+    authGate = null;
+    rpcGate = null;
   }
 
   @override
@@ -259,6 +266,13 @@ class FakeSettingsHttpClient extends http.BaseClient {
     Object? body = const <Object>[];
     var status = 200;
     if (url.path.contains('/auth/v1/')) {
+      final gate = authGate;
+      if (gate != null) {
+        // Recorded on arrival, as the server would see it.
+        final answer = _answerAuth(request);
+        await gate.future;
+        return answer;
+      }
       return _answerAuth(request);
     }
     if (url.path.endsWith('/rest/v1/users')) {
@@ -298,6 +312,7 @@ class FakeSettingsHttpClient extends http.BaseClient {
       final fn = url.pathSegments.last;
       final sent = request is http.Request && request.body.isNotEmpty ? jsonDecode(request.body) : null;
       rpcCalls.add(FakeRpcCall(fn, sent is Map ? Map<String, dynamic>.from(sent) : const {}));
+      if (rpcGate != null) await rpcGate!.future;
       if (rpcOffline.contains(fn)) throw http.ClientException('Connection refused', url);
       final error = rpcErrors[fn];
       final refusal = rpcRefusals[fn];

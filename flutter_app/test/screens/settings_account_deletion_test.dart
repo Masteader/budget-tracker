@@ -1,6 +1,8 @@
 // The account deletion flow from the real SettingsScreen, through the real
 // provider and service, with Supabase's HTTP answered in the process. Payloads are
 // the shapes supabase/migrations/20261105000200_account_deletion_rpcs.sql builds.
+import 'dart:async';
+
 import 'package:budget_tracker/l10n/app_localizations.dart';
 import 'package:budget_tracker/providers/account_deletion_provider.dart';
 import 'package:budget_tracker/providers/locale_provider.dart';
@@ -719,6 +721,113 @@ void main() {
       expect(_text(_l('en').get('del_err_generic')), findsOneWidget);
       _expectNoRawServerText();
     });
+
+    testWidgets('a request the server took but whose answer was lost shows the date, not an error', (tester) async {
+      await toWord(tester);
+      // The request reaches the server; only its answer never arrives.
+      _http.rpcOffline.add('request_account_deletion');
+      _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
+
+      await _typeWord(tester, 'DELETE');
+
+      expect(_wordStep, findsNothing);
+      expect(find.descendant(of: _flow, matching: _text('5 December 2026')), findsOneWidget);
+      expect(find.descendant(of: _flow, matching: _cancelButton), findsOneWidget);
+      expect(_text(_l('en').get('del_err_network')), findsNothing);
+      expect(_provider.isPending, isTrue);
+      await _tapKey(tester, 'account_deletion_done');
+      expect(_pendingCard, findsOneWidget);
+    });
+
+    testWidgets('a lost answer with nothing scheduled rereads the status and stays on the step', (tester) async {
+      await toWord(tester);
+      _http.rpcOffline.add('request_account_deletion');
+      final statusReads = _http.rpcCalls.where((c) => c.function == 'get_account_deletion_status').length;
+
+      await _typeWord(tester, 'DELETE');
+
+      expect(_http.rpcCalls.where((c) => c.function == 'get_account_deletion_status').length, greaterThan(statusReads));
+      expect(_wordStep, findsOneWidget);
+      expect(_text(_l('en').get('del_err_network')), findsOneWidget);
+      expect(_provider.isPending, isFalse);
+    });
+
+    testWidgets('two quick taps on Delete send one request', (tester) async {
+      _acceptRequest();
+      await toWord(tester);
+      await tester.enterText(_wordStep, 'DELETE');
+      final confirm = find.byKey(const ValueKey('account_deletion_confirm'));
+      await tester.ensureVisible(confirm);
+      await tester.pump();
+      // The first request is still on its way when the second tap lands.
+      _http.rpcGate = Completer<void>();
+      await tester.tap(confirm);
+      await tester.tap(confirm);
+      _http.rpcGate!.complete();
+      await _settle(tester);
+      expect(_requests, hasLength(1));
+      expect(_provider.isPending, isTrue);
+    });
+  });
+
+  group('closing the flow', () {
+    testWidgets('leaving without scheduling rereads the status, so Settings shows the truth', (tester) async {
+      await _pump(tester);
+      await _openFlow(tester);
+      // Scheduled meanwhile, e.g. by a request whose answer was lost.
+      _http.rpcResults['get_account_deletion_status'] = _scheduledStatus();
+      await tester.tap(find.byType(BackButton));
+      await _settle(tester);
+
+      expect(_flow, findsNothing);
+      expect(_pendingCard, findsOneWidget);
+      expect(_deleteButton, findsNothing);
+    });
+  });
+
+  group('double taps in re-authentication', () {
+    testWidgets('two quick taps on Continue check the password once', (tester) async {
+      await _pump(tester);
+      await _openFlow(tester);
+      await _continue(tester);
+      await tester.enterText(_passwordStep, fakeSettingsPassword);
+      final next = find.byKey(const ValueKey('account_deletion_continue'));
+      await tester.ensureVisible(next);
+      await tester.pump();
+      _http.authGate = Completer<void>();
+      await tester.tap(next);
+      await tester.tap(next);
+      _http.authGate!.complete();
+      await _settle(tester);
+      expect(_http.authCalls, ['password:$fakeSettingsEmail']);
+      expect(_wordStep, findsOneWidget);
+    });
+
+    testWidgets('two quick taps on the email code send one code', (tester) async {
+      await _pump(tester);
+      await _openFlow(tester);
+      await _continue(tester);
+      final forgot = find.byKey(const ValueKey('account_deletion_forgot'));
+      await tester.ensureVisible(forgot);
+      await tester.pump();
+      _http.authGate = Completer<void>();
+      await tester.tap(forgot);
+      await tester.tap(forgot);
+      _http.authGate!.complete();
+      await _settle(tester);
+      expect(_http.authCalls, ['otp:$fakeSettingsEmail:false']);
+    });
+  });
+
+  testWidgets('a code that cannot be sent says so, never that the password is wrong', (tester) async {
+    await _pump(tester);
+    await _openFlow(tester);
+    await _continue(tester);
+    _http.authFailure = (status: 400, code: 'validation_failed');
+    await _tapKey(tester, 'account_deletion_forgot');
+    expect(_text(_l('en').get('del_err_code_not_sent')), findsOneWidget);
+    expect(_text(_l('en').get('del_err_wrong_password')), findsNothing);
+    _expectNoRawServerText();
   });
 
   group('the result', () {
